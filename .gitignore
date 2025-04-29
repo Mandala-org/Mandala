@@ -1,1 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual env
+e3gnn4matrix-venv/
+
+# Data & model artefacts
+data/
+runs/
+checkpoints/
+wandb/
+
+# PyTest + coverage
+.pytest_cache/
+coverage.*
+
+# Sphinx build
+docs/_build/
+
+# Ray Tune logs
+ray_results/
+
+# Notes
 notes/
+
+# egg-info
+*.egg-info/
