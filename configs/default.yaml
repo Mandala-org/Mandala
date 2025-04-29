@@ -1,0 +1,36 @@
+defaults:
+  - _self_
+
+# ------------------------------------------------------------------- general --
+seed: 42
+precision: 32   # 32 or 64
+device: cuda
+
+# ----------------------------------------------------------------- dataset --
+dataset:
+  root: "${oc.env:DATA_ROOT, ./data}"
+  cutoffs:
+    message: 5.0
+    matrix: 7.5
+  preload: true
+
+# ------------------------------------------------------------------- model --
+model:
+  num_blocks: 2
+  l_max: 3
+  radial_basis: 64
+  hidden_scalar: 64
+  hidden_vector: 32
+
+# ---------------------------------------------------------------- training --
+training:
+  batch_size: 1
+  lr: 1e-3
+  epochs: 30
+  log_every_n: 10
+  benchmark_level: epoch   # none | layer | epoch
+
+# ------------------------------------------------------------- hyperopt stub --
+tune:
+  enabled: false
+  num_trials: 50
