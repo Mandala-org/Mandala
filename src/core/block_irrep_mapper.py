@@ -117,6 +117,7 @@ class BlockIrrepMapper:
             raise TypeError("orbital_cfg must be an OrbitalIrrepConfig")
 
         self.orbital_cfg = orbital_cfg
+        self.diagonal = diagonal
 
         self._maps: Dict[Tuple[str, str], _IrrepToMatrix] = {}
 

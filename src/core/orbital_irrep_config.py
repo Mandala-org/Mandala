@@ -89,6 +89,17 @@ class OrbitalIrrepConfig:
 
         return cls(element_to_irreps)
 
+    # ---------------------------------------------------------------- serialisation
+    def to_dict(self) -> Dict[str, List[str]]:
+        """
+        Return a plain‑python mapping of the *original* irrep strings so the
+        config can be safely written to YAML / JSON.
+        """
+        return {
+            el: [f"{mul}x{ir.l}{'e' if ir.p == 1 else 'o'}" for mul, ir in irreps]
+            for el, irreps in self.element_to_irreps.items()
+        }
+
     # ---------------------------------------------------------------- helpers
     def max_l(self) -> int:
         """Largest angular momentum encountered across all elements."""

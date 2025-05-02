@@ -2,7 +2,7 @@ import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
-from data.snapshot_block import SnapshotBlockData
+from data.snapshot_block import SnapshotBlockData, SnapshotIrrepsData
 
 
 def make_mock_snapshot():
@@ -59,7 +59,7 @@ def test_dense_roundtrip():
     dense = snap.to_dense()
     re_snap = SnapshotBlockData.from_dense(
         dense,
-        snap.mapper.orbital_cfg,  # pass cfg via a hack
+        snap.mapper.orbital_cfg,
         snap.atoms,
     )
     # check one arbitrary oriented pair
@@ -79,3 +79,31 @@ def test_dense_to_sparse_roundtrip_full_system():
     snap = SnapshotBlockData.from_dense(dense, cfg, atoms)
     dense_back = snap.to_dense()
     assert torch.allclose(dense, dense_back, atol=1e-6)
+
+
+def test_save_load_roundtrip(tmp_path):
+    snap = make_mock_snapshot()
+    file = tmp_path / "snap.pt"
+    snap.save(file)
+
+    snap_loaded = SnapshotBlockData.load(file)
+    # compare two random edges
+    assert torch.allclose(snap[(0, 2)], snap_loaded[(0, 2)], atol=1e-6)
+    assert torch.allclose(snap["H-O"], snap_loaded["H-O"])
+
+
+def test_irreps_save_load(tmp_path):
+    snap_blk = make_mock_snapshot()
+    snap_vec = snap_blk.to_vectors()
+
+    file = tmp_path / "snap_vec.pt"
+    snap_vec.save(file)
+
+    snap_vec_loaded = SnapshotIrrepsData.load(file)
+
+    # compare a random O‑H oriented edge
+    assert torch.allclose(snap_vec[(2, 0)], snap_vec_loaded[(2, 0)], atol=1e-6)
+
+    # convert back to blocks and verify against original blocks
+    snap_blk_reco = snap_vec_loaded.to_blocks()
+    assert torch.allclose(snap_blk["O-H"], snap_blk_reco["O-H"], atol=1e-6)

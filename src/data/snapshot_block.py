@@ -18,8 +18,11 @@ Conversion between the two is a one-liner via `.to_vectors()` / `.to_blocks()`.
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 from typing import Dict, Tuple
+
 
 import torch
 
@@ -108,6 +111,51 @@ class SnapshotBlockData:
             dense[r0 : r0 + d_i, c0 : c0 + d_j] = self.pair_blocks[key][k]
         return dense
 
+    # ------------------ serialisation ------------------------------------
+    def _to_payload(self) -> dict:
+        """Plain python types + **CPU** tensors → ready for torch.save."""
+        blocks_cpu = {k: v.detach().cpu() for k, v in self.pair_blocks.items()}
+        edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
+        return {
+            "atoms": list(self.atoms),
+            "orbital_cfg": self.mapper.orbital_cfg.to_dict(),
+            "diagonal": self.mapper.diagonal,
+            "pair_blocks": blocks_cpu,
+            "pair_edges": edges_cpu,
+            "type": "block",
+        }
+
+    def save(self, path: str | "os.PathLike[str]") -> None:
+        import torch
+
+        torch.save(self._to_payload(), path)
+
+    # ------------------ alternate constructors ---------------------------
+    @classmethod
+    def load(cls, path, device="cpu") -> "SnapshotBlockData":
+        import torch
+        from core.orbital_irrep_config import OrbitalIrrepConfig
+
+        payload = torch.load(path, map_location="cpu")
+        if payload.get("type") != "block":
+            raise ValueError("file does not contain block snapshot")
+
+        orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
+        mapper = BlockIrrepMapper(orb_cfg, diagonal=payload["diagonal"], device="cpu")
+
+        pair_blocks = {k: v.to(device) for k, v in payload["pair_blocks"].items()}
+        pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
+
+        # rebuild lookup
+        lookup = {}
+        for key, edges in pair_edges.items():
+            for idx, (i, j) in enumerate(edges.t().tolist()):
+                lookup[(i, j)] = (key, idx)
+
+        return cls(tuple(payload["atoms"]), pair_blocks, pair_edges, lookup, mapper).to(
+            device
+        )
+
     # ------------------------ alternate constructor -----------------------------
     @classmethod
     def from_dense(
@@ -191,3 +239,50 @@ class SnapshotIrrepsData:
         if isinstance(item, str):
             return self.pair_vectors[item]
         raise KeyError
+
+    # ------------------------------------------------------------------ serialisation
+    def _to_payload(self) -> dict:
+        """
+        Convert to a CPU‑resident, torch‑savable python dict.
+        """
+        vec_cpu = {k: v.detach().cpu() for k, v in self.pair_vectors.items()}
+        edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
+        return {
+            "atoms": list(self.atoms),
+            "orbital_cfg": self.mapper.orbital_cfg.to_dict(),
+            "diagonal": self.mapper.diagonal,
+            "pair_vectors": vec_cpu,
+            "pair_edges": edges_cpu,
+            "type": "irrep",
+        }
+
+    def save(self, path: str | "os.PathLike[str]") -> None:
+        import torch
+
+        torch.save(self._to_payload(), path)
+
+    # --------------------- alternate constructor ----------------------------- #
+    @classmethod
+    def load(cls, path, device="cpu") -> "SnapshotIrrepsData":
+        import torch
+        from core.orbital_irrep_config import OrbitalIrrepConfig
+
+        payload = torch.load(path, map_location="cpu")
+        if payload.get("type") != "irrep":
+            raise ValueError("file does not contain irrep snapshot")
+
+        orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
+        mapper = BlockIrrepMapper(orb_cfg, diagonal=payload["diagonal"], device="cpu")
+
+        pair_vec = {k: v.to(device) for k, v in payload["pair_vectors"].items()}
+        pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
+
+        # rebuild lookup
+        lookup = {}
+        for key, edges in pair_edges.items():
+            for idx, (i, j) in enumerate(edges.t().tolist()):
+                lookup[(i, j)] = (key, idx)
+
+        return cls(tuple(payload["atoms"]), pair_vec, pair_edges, lookup, mapper).to(
+            device
+        )
