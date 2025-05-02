@@ -7,7 +7,7 @@ __pycache__/
 e3gnn4matrix-venv/
 
 # Data & model artefacts
-data/
+./data/
 runs/
 checkpoints/
 wandb/
@@ -27,3 +27,7 @@ notes/
 
 # egg-info
 *.egg-info/
+
+# vscode
+.vscode/
+.vscode-test/
