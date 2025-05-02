@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     # This import is only for mypy/flake8/etc., not at runtime
     from core.orbital_irrep_config import OrbitalIrrepConfig
+    from data.snapshot_block import SnapshotBlockData, SnapshotIrrepsData
 
 
 from dataclasses import dataclass
@@ -115,6 +116,8 @@ class BlockIrrepMapper:
         if not isinstance(orbital_cfg, OrbitalIrrepConfig):
             raise TypeError("orbital_cfg must be an OrbitalIrrepConfig")
 
+        self.orbital_cfg = orbital_cfg
+
         self._maps: Dict[Tuple[str, str], _IrrepToMatrix] = {}
 
         # build for **ordered** pairs (A,B) appearing in Cartesian product
@@ -180,3 +183,10 @@ class BlockIrrepMapper:
             return self._maps[key]
         except KeyError as exc:
             raise MappingKeyError(f"Unknown pair key {key}") from exc
+
+    # ------------------ snapshot helpers ------------------------------------ #
+    def snapshot_blocks_to_vectors(self, snap: SnapshotBlockData) -> SnapshotIrrepsData:
+        return snap.to_vectors()  # delegates to dataclass
+
+    def snapshot_vectors_to_blocks(self, snap: SnapshotIrrepsData) -> SnapshotBlockData:
+        return snap.to_blocks()

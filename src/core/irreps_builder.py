@@ -89,7 +89,7 @@ class IrrepsAutoBuilder:
     # ------------------ tensor-product sanity ------------------------------ #
     @staticmethod
     def tp_path_exists(irreps_in1: Irreps, irreps_in2: Irreps, ir_out: Irrep) -> bool:
-        """Return *True* iff ir_out appears in the Clebsch–Gordan product."""
+        """Return *True* iff ir_out appears in the Clebsch-Gordan product."""
         irreps_in1 = Irreps(irreps_in1).simplify()
         irreps_in2 = Irreps(irreps_in2).simplify()
         ir_out = Irrep(ir_out)
