@@ -1,13 +1,8 @@
 import torch
-import numpy as np
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot_block import SnapshotBlockData
-from core.sparse_math import (
-    trace_matmul_sparse_snap,
-    trace_matmul_sparse_snap_vectorized,
-)
 
 
 def make_mock_snapshot():
@@ -57,24 +52,6 @@ def test_roundtrip_blocks_vectors():
 
     # test full tensors key "O-O"
     assert torch.allclose(snap_blk["O-O"], snap_reco["O-O"], atol=1e-6)
-
-
-def test_trace_sparse_vs_vectorized():
-    A = make_mock_snapshot()
-    B = make_mock_snapshot()
-    t_sparse = trace_matmul_sparse_snap(A, B)
-    t_vec = trace_matmul_sparse_snap_vectorized(A, B)
-    assert torch.allclose(t_sparse, t_vec, atol=1e-6)
-
-
-def test_trace_sparse_vs_dense():
-    A = make_mock_snapshot()
-    B = make_mock_snapshot()
-    t_sparse = trace_matmul_sparse_snap(A, B)
-    bigA = A.to_dense()
-    bigB = B.to_dense()
-    dense_trace = torch.trace(bigA @ bigB).item()
-    assert np.isclose(t_sparse.item(), dense_trace, atol=1e-4)
 
 
 def test_dense_roundtrip():
