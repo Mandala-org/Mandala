@@ -79,6 +79,83 @@ class SnapshotBlockData:
             self.atoms, pair_vec, self.pair_edges, self.lookup, self.mapper
         )
 
+        # ------------------------------------------------------------------ transpose
+
+    def transpose(self) -> "SnapshotBlockData":
+        """
+        Return a **new** snapshot representing the transposed matrix
+        (conjugate-transpose is identical here, blocks are real).
+
+        * Blocks are individually transposed.
+        * Pair-key orientation is flipped (``"A-B"`` → ``"B-A"``).
+        * Edge indices are swapped (i,j) → (j,i).
+        """
+        new_blocks, new_edges = {}, {}
+        for key, blk in self.pair_blocks.items():
+            el_a, el_b = key.split("-")
+            new_key = f"{el_b}-{el_a}"
+            new_blocks[new_key] = blk.transpose(-1, -2).clone()
+            # swap edge orientation
+            edge = self.pair_edges[key].flip(0).clone()  # (2,E) with rows swapped
+            new_edges[new_key] = edge
+
+        # rebuild lookup
+        new_lookup = {}
+        for new_key, edges in new_edges.items():
+            for idx, (i, j) in enumerate(edges.t().tolist()):
+                new_lookup[(i, j)] = (new_key, idx)
+
+        return SnapshotBlockData(
+            atoms=self.atoms,
+            pair_blocks=new_blocks,
+            pair_edges=new_edges,
+            lookup=new_lookup,
+            mapper=self.mapper,
+        )
+
+    # ------------------------------------------------------------------ edge reordering
+    def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "SnapshotBlockData":
+        """
+        Re-order edge *rows* for given keys. ``order_dict`` maps
+        ``key -> permutation indices`` (1-D LongTensor of length ``E_key``).
+
+        Keys **not** in ``order_dict`` keep their original order.
+        """
+        pair_blocks, pair_edges, lookup = {}, {}, {}
+        for key, blk in self.pair_blocks.items():
+            if key in order_dict:
+                idx = order_dict[key]
+                blk = blk[idx]
+                edges = self.pair_edges[key][:, idx]
+            else:
+                edges = self.pair_edges[key]
+            pair_blocks[key] = blk
+            pair_edges[key] = edges
+            for new_k, (i, j) in enumerate(edges.t().tolist()):
+                lookup[(i, j)] = (key, new_k)
+
+        return SnapshotBlockData(
+            atoms=self.atoms,
+            pair_blocks=pair_blocks,
+            pair_edges=pair_edges,
+            lookup=lookup,
+            mapper=self.mapper,
+        )
+
+    # ------------------------------------------------------------------ canonical sort
+    def standardize_edges(self) -> "SnapshotBlockData":
+        """
+        Return a snapshot where *each* pair-key’s edges are sorted by global
+        `(src, dst)` (lexicographic).  Useful for deterministic equality tests.
+        """
+        order_dict = {}
+        n_atoms = len(self.atoms)
+        for key, edges in self.pair_edges.items():
+            score = edges[0] * n_atoms + edges[1]  # monotonic mapping
+            order = torch.argsort(score)
+            order_dict[key] = order
+        return self.reorder_edges(order_dict)
+
     # --------------------- dense helpers --------------------------------------
     # global dim offsets ---------------------------------------------------------
     def _atom_offsets(self) -> Tuple[torch.Tensor, int]:
@@ -243,7 +320,7 @@ class SnapshotIrrepsData:
     # ------------------------------------------------------------------ serialisation
     def _to_payload(self) -> dict:
         """
-        Convert to a CPU‑resident, torch‑savable python dict.
+        Convert to a CPU-resident, torch-savable python dict.
         """
         vec_cpu = {k: v.detach().cpu() for k, v in self.pair_vectors.items()}
         edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
