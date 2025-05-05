@@ -31,3 +31,9 @@ notes/
 # vscode
 .vscode/
 .vscode-test/
+
+# ruff
+.ruff_cache/
+
+# throwaway notebooks
+notebooks/scratchpads

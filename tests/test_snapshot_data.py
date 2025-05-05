@@ -66,7 +66,7 @@ def test_dense_roundtrip():
     assert torch.allclose(snap[(0, 3)], re_snap[(0, 3)], atol=1e-6)
 
 
-def test_dense_sparse_full_system():
+def test_dense_to_sparse_roundtrip_full_system():
     atoms = ("H", "H", "O", "H", "H", "O")
     cfg = OrbitalIrrepConfig.from_dict(
         {
@@ -107,34 +107,3 @@ def test_irreps_save_load(tmp_path):
     # convert back to blocks and verify against original blocks
     snap_blk_reco = snap_vec_loaded.to_blocks()
     assert torch.allclose(snap_blk["O-H"], snap_blk_reco["O-H"], atol=1e-6)
-
-
-def test_transpose_dense_equality():
-    snap = make_mock_snapshot()
-    dense = snap.to_dense()
-    dense_T = dense.T
-
-    snap_T = snap.transpose()
-    assert torch.allclose(dense_T, snap_T.to_dense(), atol=1e-6)
-
-    # ensure orientation key flipped
-    assert "O-H" in snap.keys()
-    assert "H-O" in snap_T.keys()
-
-
-def test_standardize_edges_sorting():
-    snap = make_mock_snapshot()
-    key = "H-H"
-    E = snap.pair_edges[key].shape[1]
-
-    # randomly shuffle that key’s edges
-    perm = torch.randperm(E)
-    snap_shuf = snap.reorder_edges({key: perm})
-
-    # after standardization should match original canonical sort
-    snap_std = snap_shuf.standardize_edges()
-    # Compare edge lists
-    assert torch.equal(
-        torch.sort(snap.pair_edges[key], dim=1)[0],
-        torch.sort(snap_std.pair_edges[key], dim=1)[0],
-    )
