@@ -45,17 +45,11 @@ class OpenMXParseError(RuntimeError):
     """Raised when SCFOUT format is not as expected."""
 
 
-def _canonical_key(el_i: str, el_j: str) -> str:  # keep orientation!
-    return f"{el_i}-{el_j}"
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 def parse_openmx_scfout(
     path: str | Path,
     atoms: List[str] | Tuple[str, ...],
     orbital_cfg: OrbitalIrrepConfig,
-    *,
-    pbc_sum: bool = True,  # kept for API, behaviour now identical whether True/False
 ) -> Dict[str, MatrixBlockData]:
     """
     Parse a single OpenMX ``*.scfout`` file and return snapshots for the three
