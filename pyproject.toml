@@ -32,3 +32,8 @@ dev = [
     "sphinx>=7.2",
     "sphinx-rtd-theme>=2.0",
 ]
+
+# pyproject.toml
+[tool.ruff]
+# ignore E741 Ambiguous variable name
+ignore = ["E741"]

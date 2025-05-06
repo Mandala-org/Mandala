@@ -3,7 +3,7 @@ openmx_parser.py
 ================
 
 Single-file parser that converts one OpenMX ``*.scfout`` file into
-``SnapshotBlockData`` objects for **Hamiltonian**, **Overlap**, and
+``MatrixBlockData`` objects for **Hamiltonian**, **Overlap**, and
 **Density** matrices.
 
 Highlights
@@ -29,7 +29,7 @@ import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
-from data.snapshot_block import SnapshotBlockData
+from data.snapshot_block import MatrixBlockData
 
 __all__ = ["OpenMXParseError", "parse_openmx_scfout"]
 
@@ -56,7 +56,7 @@ def parse_openmx_scfout(
     orbital_cfg: OrbitalIrrepConfig,
     *,
     pbc_sum: bool = True,  # kept for API, behaviour now identical whether True/False
-) -> Dict[str, SnapshotBlockData]:
+) -> Dict[str, MatrixBlockData]:
     """
     Parse a single OpenMX ``*.scfout`` file and return snapshots for the three
     matrices of interest.  Blocks with identical global (i,j) indices are
@@ -144,8 +144,8 @@ def parse_openmx_scfout(
             block_tensor = torch.tensor(rows, dtype=torch.float32)
             _add_block(current_mat, key, i_glob, j_glob, block_tensor)
 
-    # ---------------------------------------------------------------- build SnapshotBlockData
-    out: Dict[str, SnapshotBlockData] = {}
+    # ---------------------------------------------------------------- build MatrixBlockData
+    out: Dict[str, MatrixBlockData] = {}
     for mat, per_key in blocks_sum.items():
         if not per_key:  # matrix absent
             continue
@@ -167,7 +167,7 @@ def parse_openmx_scfout(
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
 
-        snap = SnapshotBlockData(
+        snap = MatrixBlockData(
             atoms=tuple(atoms),
             pair_blocks=pair_blocks_t,
             pair_edges=pair_edges_t,

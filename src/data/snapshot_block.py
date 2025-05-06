@@ -4,8 +4,8 @@ snapshot_block.py
 
 In-memory containers for a *single* snapshot:
 
-* **SnapshotBlockData** – raw sparse blocks (H, D, S, …) grouped by element pair.
-* **SnapshotIrrepsData** – same data after change-of-basis to irrep vectors.
+* **MatrixBlockData** - raw sparse blocks (H, D, S, …) grouped by element pair.
+* **IrrepsBlockData** - same data after change-of-basis to irrep vectors.
 
 Both dataclasses keep:
     * `atoms`          : list[str]  (global order)
@@ -21,7 +21,10 @@ from __future__ import annotations
 import os
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.basis_converter import OpenMXE3NNConverter
 
 
 import torch
@@ -33,12 +36,13 @@ PairKey = str  # canonical "A-B"
 
 # --------------------------------------------------------------------------- #
 @dataclass
-class SnapshotBlockData:
+class MatrixBlockData:
     atoms: Tuple[str, ...]
     pair_blocks: Dict[PairKey, torch.Tensor]  # (E_ab, d_A, d_B)
     pair_edges: Dict[PairKey, torch.Tensor]  # (2, E_ab)
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
     mapper: BlockIrrepMapper
+    basis: str = "openmx"  # "openmx" | "e3nn"
 
     # --------------- convenience constructors ------------------------------ #
     @classmethod
@@ -66,22 +70,22 @@ class SnapshotBlockData:
     def to(self, device):
         new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
         new_edges = {k: v.to(device) for k, v in self.pair_edges.items()}
-        return SnapshotBlockData(
-            self.atoms, new_blocks, new_edges, self.lookup, self.mapper
-        )  # TODO: mapper also changes device
+        return MatrixBlockData(
+            self.atoms, new_blocks, new_edges, self.lookup, self.mapper, self.basis
+        )
 
     # --------------- change-of-basis --------------------------------------- #
-    def to_vectors(self) -> "SnapshotIrrepsData":
+    def to_vectors(self) -> "IrrepsBlockData":
         pair_vec: Dict[PairKey, torch.Tensor] = {}
         for key, blk in self.pair_blocks.items():
             pair_vec[key] = self.mapper.blocks_to_vectors(key, blk)
-        return SnapshotIrrepsData(
+        return IrrepsBlockData(
             self.atoms, pair_vec, self.pair_edges, self.lookup, self.mapper
         )
 
         # ------------------------------------------------------------------ transpose
 
-    def transpose(self) -> "SnapshotBlockData":
+    def transpose(self) -> "MatrixBlockData":
         """
         Return a **new** snapshot representing the transposed matrix
         (conjugate-transpose is identical here, blocks are real).
@@ -105,7 +109,7 @@ class SnapshotBlockData:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 new_lookup[(i, j)] = (new_key, idx)
 
-        return SnapshotBlockData(
+        return MatrixBlockData(
             atoms=self.atoms,
             pair_blocks=new_blocks,
             pair_edges=new_edges,
@@ -114,7 +118,7 @@ class SnapshotBlockData:
         )
 
     # ------------------------------------------------------------------ edge reordering
-    def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "SnapshotBlockData":
+    def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "MatrixBlockData":
         """
         Re-order edge *rows* for given keys. ``order_dict`` maps
         ``key -> permutation indices`` (1-D LongTensor of length ``E_key``).
@@ -134,7 +138,7 @@ class SnapshotBlockData:
             for new_k, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, new_k)
 
-        return SnapshotBlockData(
+        return MatrixBlockData(
             atoms=self.atoms,
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
@@ -143,7 +147,7 @@ class SnapshotBlockData:
         )
 
     # ------------------------------------------------------------------ canonical sort
-    def standardize_edges(self) -> "SnapshotBlockData":
+    def standardize_edges(self) -> "MatrixBlockData":
         """
         Return a snapshot where *each* pair-key’s edges are sorted by global
         `(src, dst)` (lexicographic).  Useful for deterministic equality tests.
@@ -200,6 +204,7 @@ class SnapshotBlockData:
             "pair_blocks": blocks_cpu,
             "pair_edges": edges_cpu,
             "type": "block",
+            "basis": self.basis,
         }
 
     def save(self, path: str | "os.PathLike[str]") -> None:
@@ -209,7 +214,7 @@ class SnapshotBlockData:
 
     # ------------------ alternate constructors ---------------------------
     @classmethod
-    def load(cls, path, device="cpu") -> "SnapshotBlockData":
+    def load(cls, path, device="cpu") -> "MatrixBlockData":
         import torch
         from core.orbital_irrep_config import OrbitalIrrepConfig
 
@@ -229,9 +234,35 @@ class SnapshotBlockData:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
-        return cls(tuple(payload["atoms"]), pair_blocks, pair_edges, lookup, mapper).to(
-            device
+        return cls(
+            tuple(payload["atoms"]),
+            pair_blocks,
+            pair_edges,
+            lookup,
+            mapper,
+            payload.get("basis", "openmx"),
+        ).to(device)
+
+    # ------------- internal helper to clone with new blocks / basis ---------
+    def _replace_pair_blocks(
+        self, new_blocks: Dict[PairKey, torch.Tensor], *, basis: str
+    ):
+        """Return a shallow copy with *pair_blocks* replaced."""
+        return MatrixBlockData(
+            atoms=self.atoms,
+            pair_blocks=new_blocks,
+            pair_edges=self.pair_edges,
+            lookup=self.lookup,
+            mapper=self.mapper,
+            basis=basis,
         )
+
+    # ---------------- basis conversion wrappers ----------------------------
+    def to_e3nn(self, converter: "OpenMXE3NNConverter") -> "MatrixBlockData":
+        return converter.snapshot_to_e3nn(self)
+
+    def to_openmx(self, converter: "OpenMXE3NNConverter") -> "MatrixBlockData":
+        return converter.snapshot_to_openmx(self)
 
     # ------------------------ alternate constructor -----------------------------
     @classmethod
@@ -242,7 +273,7 @@ class SnapshotBlockData:
         atoms: Tuple[str, ...] | list[str],
         *,
         diagonal: bool = False,
-    ) -> "SnapshotBlockData":
+    ) -> "MatrixBlockData":
         """
         Build a block snapshot from a fully dense matrix *in global atom order*.
         Primarily for tests / debugging.
@@ -284,7 +315,7 @@ class SnapshotBlockData:
 
 # --------------------------------------------------------------------------- #
 @dataclass
-class SnapshotIrrepsData:
+class IrrepsBlockData:
     atoms: Tuple[str, ...]
     pair_vectors: Dict[PairKey, torch.Tensor]  # (E_ab, n_vec_AB)
     pair_edges: Dict[PairKey, torch.Tensor]
@@ -295,20 +326,20 @@ class SnapshotIrrepsData:
     def to(self, device):
         vecs = {k: v.to(device) for k, v in self.pair_vectors.items()}
         edges = {k: v.to(device) for k, v in self.pair_edges.items()}
-        return SnapshotIrrepsData(
+        return IrrepsBlockData(
             self.atoms, vecs, edges, self.lookup, self.mapper
         )  # TODO: mapper also changes device
 
     # -------- inverse change-of-basis ----- #
-    def to_blocks(self) -> SnapshotBlockData:
+    def to_blocks(self) -> MatrixBlockData:
         pair_blk: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
             pair_blk[key] = self.mapper.vectors_to_blocks(key, vec)
-        return SnapshotBlockData(
+        return MatrixBlockData(
             self.atoms, pair_blk, self.pair_edges, self.lookup, self.mapper
         )
 
-    # -------- indexing paralleling SnapshotBlockData -------- #
+    # -------- indexing paralleling MatrixBlockData -------- #
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
             key, k = self.lookup[item]
@@ -340,7 +371,7 @@ class SnapshotIrrepsData:
 
     # --------------------- alternate constructor ----------------------------- #
     @classmethod
-    def load(cls, path, device="cpu") -> "SnapshotIrrepsData":
+    def load(cls, path, device="cpu") -> "IrrepsBlockData":
         import torch
         from core.orbital_irrep_config import OrbitalIrrepConfig
 
