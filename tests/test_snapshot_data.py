@@ -54,7 +54,7 @@ def test_roundtrip_blocks_vectors():
     assert torch.allclose(snap_blk["O-O"], snap_reco["O-O"], atol=1e-6)
 
 
-def test_dense_roundtrip():
+def test_denseify_roundtrip():
     snap = make_mock_snapshot()
     dense = snap.to_dense()
     re_snap = SnapshotBlockData.from_dense(
@@ -66,7 +66,7 @@ def test_dense_roundtrip():
     assert torch.allclose(snap[(0, 3)], re_snap[(0, 3)], atol=1e-6)
 
 
-def test_dense_to_sparse_roundtrip_full_system():
+def test_sparsify_roundtrip():
     atoms = ("H", "H", "O", "H", "H", "O")
     cfg = OrbitalIrrepConfig.from_dict(
         {
