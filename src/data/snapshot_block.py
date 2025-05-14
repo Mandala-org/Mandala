@@ -428,6 +428,38 @@ class MatrixBlockData:
             basis=self.basis,
         )
 
+    # ----------------------------------------------------------------- reload from payload
+    @classmethod
+    def from_payload(
+        cls, payload: dict, device: str | torch.device = "cpu"
+    ) -> "MatrixBlockData":
+        """
+        Build :class:`MatrixBlockData` from a dict previously produced by
+        :meth:`_to_payload`.  Used internally by Snapshot.load().
+        """
+        from core.orbital_irrep_config import OrbitalIrrepConfig  # local import
+
+        orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
+        mapper = BlockIrrepMapper(orb_cfg, diagonal=payload["diagonal"], device="cpu")
+
+        pair_blocks = {k: v.to(device) for k, v in payload["pair_blocks"].items()}
+        pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
+
+        # rebuild lookup table
+        lookup: Dict[Tuple[int, int], Tuple[str, int]] = {}
+        for key, edges in pair_edges.items():
+            for idx, (i, j) in enumerate(edges.t().tolist()):
+                lookup[(i, j)] = (key, idx)
+
+        return cls(
+            atoms=tuple(payload["atoms"]),
+            pair_blocks=pair_blocks,
+            pair_edges=pair_edges,
+            lookup=lookup,
+            mapper=mapper,
+            basis=payload.get("basis", "openmx"),
+        )
+
 
 # --------------------------------------------------------------------------- #
 @dataclass
