@@ -160,6 +160,58 @@ class MatrixBlockData:
             order_dict[key] = order
         return self.reorder_edges(order_dict)
 
+    # ------------------------------------------------------------------ arithmetic
+    # private helper ------------------------------------------------------------
+    def _align_with(
+        self, other: "MatrixBlockData"
+    ) -> Tuple["MatrixBlockData", "MatrixBlockData"]:
+        """Return *standardised* copies whose edge order is identical pair-wise."""
+        if not isinstance(other, MatrixBlockData):
+            raise TypeError("Operand must be MatrixBlockData")
+        if self.atoms != other.atoms:
+            raise ValueError("Atoms differ; cannot add/subtract snapshots")
+        if self.basis != other.basis:
+            raise ValueError("Basis differs (openmx vs e3nn)")
+        if self.mapper.orbital_cfg.to_dict() != other.mapper.orbital_cfg.to_dict():
+            raise ValueError("OrbitalIrrepConfig differs")
+
+        a_std = self.standardize_edges()
+        b_std = other.standardize_edges()
+
+        if a_std.keys() != b_std.keys():
+            raise ValueError("Snapshots contain different element-pair keys")
+        for k in a_std.keys():
+            if a_std.pair_blocks[k].shape != b_std.pair_blocks[k].shape:
+                raise ValueError(f"Shape mismatch for key '{k}'")
+        return a_std, b_std
+
+    # -------------- public dunder ops -----------------------------------------
+    def __add__(self, other):
+        if other == 0:  # allow sum() with start=0
+            return self
+        a, b = self._align_with(other)
+        new_blocks = {k: a.pair_blocks[k] + b.pair_blocks[k] for k in a.pair_blocks}
+        return a._replace_pair_blocks(new_blocks, basis=a.basis)
+
+    __radd__ = __add__  # commutative
+
+    def __neg__(self):
+        new_blocks = {k: -v for k, v in self.pair_blocks.items()}
+        return self._replace_pair_blocks(new_blocks, basis=self.basis)
+
+    def __sub__(self, other):
+        if other == 0:
+            return self
+        a, b = self._align_with(other)
+        new_blocks = {k: a.pair_blocks[k] - b.pair_blocks[k] for k in a.pair_blocks}
+        return a._replace_pair_blocks(new_blocks, basis=a.basis)
+
+    def __rsub__(self, other):
+        # allow (0 - snapshot)
+        if other == 0:
+            return -self
+        return NotImplemented
+
     # --------------------- dense helpers --------------------------------------
     # global dim offsets ---------------------------------------------------------
     def _atom_offsets(self) -> Tuple[torch.Tensor, int]:

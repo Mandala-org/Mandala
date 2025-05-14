@@ -173,6 +173,7 @@ def parse_openmx_scfout(
         )
         out[mat] = matrix
     if symmetrize_density:
+        print("HACK FOR TESTING")
         density_dense = out["density"].to_dense()
         density_dense = density_dense + density_dense.transpose(-1, -2)
 
