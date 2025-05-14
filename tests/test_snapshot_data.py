@@ -140,3 +140,45 @@ def test_block_converter_direct():
     blk_e3 = conv.block_openmx_to_e3nn(key, blk)
     blk_open = conv.block_e3nn_to_openmx(key, blk_e3)
     assert torch.allclose(blk, blk_open, atol=1e-6)
+
+
+# --------------------------------------------------------------------------- #
+#  arithmetic tests
+# --------------------------------------------------------------------------- #
+
+
+def _shuffled_snapshot():
+    """Return a snapshot whose edges are randomly permuted inside every key."""
+    snap = make_mock_snapshot()
+    import torch
+
+    order = {}
+    for k, edges in snap.pair_edges.items():
+        idx = torch.randperm(edges.shape[1])
+        order[k] = idx
+    return snap.reorder_edges(order)
+
+
+def test_addition_commutes():
+    A = make_mock_snapshot()
+    B = _shuffled_snapshot()
+
+    C1 = A + B
+    C2 = B + A
+    assert torch.allclose(C1.to_dense(), C2.to_dense(), atol=1e-6)
+
+
+def test_subtraction_vs_dense():
+    A = make_mock_snapshot()
+    B = _shuffled_snapshot()
+    C = A - B
+
+    dense_C = A.to_dense() - B.to_dense()
+    assert torch.allclose(C.to_dense(), dense_C, atol=1e-6)
+
+
+def test_sum_builtin():
+    A = make_mock_snapshot()
+    B = _shuffled_snapshot()
+    total = sum([A, B])  # relies on __radd__ with 0
+    assert torch.allclose(total.to_dense(), A.to_dense() + B.to_dense(), atol=1e-6)
