@@ -273,6 +273,7 @@ class MatrixBlockData:
         atoms: Tuple[str, ...] | list[str],
         *,
         diagonal: bool = False,
+        sparsity_threshold: float = 0.0,
     ) -> "MatrixBlockData":
         """
         Build a block snapshot from a fully dense matrix *in global atom order*.
@@ -310,7 +311,70 @@ class MatrixBlockData:
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
 
-        return cls(atoms, pair_blocks, pair_edges, lookup, mapper)
+        snapshot = cls(atoms, pair_blocks, pair_edges, lookup, mapper)
+        if sparsity_threshold is not None:
+            snapshot = snapshot.sparsify(sparsity_threshold)
+        return snapshot
+
+        # ---------------------------------------------------------------- sparsify
+
+    def sparsify(self, threshold: float) -> "MatrixBlockData":
+        """
+        Return a **new** snapshot in which only blocks whose root-mean-square
+        (RMS) magnitude is **strictly greater** than ``threshold`` are kept.
+
+        A block's RMS is computed as
+        ``rms = sqrt( mean( block**2 ) )`` across its last two dimensions
+        (orbital rows & columns).
+
+        Parameters
+        ----------
+        threshold
+            Cut-off applied *per block*.  A Python float is accepted; it is
+            internally cast to the block's dtype and device.
+
+        Notes
+        -----
+        • Pruning is performed **per block** (first tensor dimension).
+          Keys for which *all* blocks are removed disappear entirely.
+        """
+        if not self.pair_blocks:
+            return self  # nothing to do
+
+        sample_blk = next(iter(self.pair_blocks.values()))
+        thr = torch.as_tensor(
+            threshold, dtype=sample_blk.dtype, device=sample_blk.device
+        )
+
+        new_blocks: Dict[PairKey, torch.Tensor] = {}
+        new_edges: Dict[PairKey, torch.Tensor] = {}
+        new_lookup: Dict[Tuple[int, int], Tuple[PairKey, int]] = {}
+
+        for key, blk in self.pair_blocks.items():
+            # (E, d_i, d_j) → (E,)
+            rms = blk.pow(2).mean(dim=(-2, -1)).sqrt()
+            keep = rms > thr
+
+            if torch.any(keep):
+                blk_kept = blk[keep]
+                edges_kept = self.pair_edges[key][:, keep]
+
+                new_blocks[key] = blk_kept
+                new_edges[key] = edges_kept
+
+                # rebuild lookup for the surviving edges of this key
+                for local_idx, (i, j) in enumerate(edges_kept.t().tolist()):
+                    new_lookup[(i, j)] = (key, local_idx)
+
+        # assemble the sparsified snapshot
+        return MatrixBlockData(
+            atoms=self.atoms,
+            pair_blocks=new_blocks,
+            pair_edges=new_edges,
+            lookup=new_lookup,
+            mapper=self.mapper,
+            basis=self.basis,
+        )
 
 
 # --------------------------------------------------------------------------- #
