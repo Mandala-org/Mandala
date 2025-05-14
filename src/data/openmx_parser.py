@@ -34,9 +34,6 @@ from data.snapshot_block import MatrixBlockData
 
 __all__ = ["OpenMXParseError", "parse_openmx_scfout"]
 
-_SECTION_RE = re.compile(
-    r"^(Kohn-Sham Hamiltonian spin=0|Overlap matrix|Density matrix(?: spin=\d+)?)$"
-)
 _HEADER_RE = re.compile(
     r"global index=(\d+)\s+local index=\d+\s+\(global=(\d+),\s*Rn=([-]?\d+)\)"
 )
@@ -173,16 +170,7 @@ def parse_openmx_scfout(
         )
         out[mat] = matrix
     if symmetrize_density:
-        print("HACK FOR TESTING")
-        density_dense = out["density"].to_dense()
-        density_dense = density_dense + density_dense.transpose(-1, -2)
-
-        out["density"] = MatrixBlockData.from_dense(
-            density_dense,
-            mapper.orbital_cfg,
-            atoms,
-            sparsity_threshold=0.0,
-        )
+        out["density"] = out["density"] + out["density"].transpose()
 
     if convention == "e3nn":
         # convert to e3nn basis
