@@ -1,21 +1,29 @@
-import pytest
 from pathlib import Path
-
 import torch
+import pytest
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.openmx_parser import parse_openmx_scfout
+from data.snapshot import Snapshot
 
 
 @pytest.fixture(scope="module")
 def orbital_cfg():
     # H: 2s + 1p (dim 5);  O: 3s + 2p (dim 7)
-    return OrbitalIrrepConfig.from_dict(
-        {
-            "H": ["2x0e", "1x1o"],
-            "O": ["3x0e", "2x1o"],
-        }
-    )
+    return OrbitalIrrepConfig.from_dict({"H": "2s1p", "O": "3s2p"})
+
+
+def test_parse_returns_snapshot(orbital_cfg):
+    sample = Path("./data/small/H2O/H2O_original.out")
+    atoms = list("HHHHOO")
+
+    snap = parse_openmx_scfout(sample, atoms, orbital_cfg)
+    assert isinstance(snap, Snapshot)
+
+    ham = snap.hamiltonian
+    den = snap.density
+    assert ham["H-O"].shape[-2:] == (5, 9)
+    assert torch.allclose(den["O-H"], den.transpose()["O-H"], atol=1e-5)
 
 
 def test_parse(orbital_cfg: OrbitalIrrepConfig):
@@ -23,7 +31,12 @@ def test_parse(orbital_cfg: OrbitalIrrepConfig):
     atoms = list("HHHHOO")  # global order
 
     mats = parse_openmx_scfout(sample, atoms, orbital_cfg)
-    assert "hamiltonian" in mats and "overlap" in mats and "density" in mats
+    assert mats["hamiltonian"] is not None
+    assert mats["overlap"] is not None
+    assert mats["density"] is not None
+    assert mats.hamiltonian is not None
+    assert mats.overlap is not None
+    assert mats.density is not None
 
     hamiltonian = mats["hamiltonian"]
     overlap = mats["overlap"]
