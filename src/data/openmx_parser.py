@@ -29,6 +29,7 @@ import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
+from core.basis_converter import OpenMXE3NNConverter
 from data.snapshot_block import MatrixBlockData
 
 __all__ = ["OpenMXParseError", "parse_openmx_scfout"]
@@ -50,6 +51,8 @@ def parse_openmx_scfout(
     path: str | Path,
     atoms: List[str] | Tuple[str, ...],
     orbital_cfg: OrbitalIrrepConfig,
+    convention: str = "e3nn",
+    symmetrize_density: bool = True,
 ) -> Dict[str, MatrixBlockData]:
     """
     Parse a single OpenMX ``*.scfout`` file and return snapshots for the three
@@ -161,13 +164,33 @@ def parse_openmx_scfout(
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
 
-        snap = MatrixBlockData(
+        matrix = MatrixBlockData(
             atoms=tuple(atoms),
             pair_blocks=pair_blocks_t,
             pair_edges=pair_edges_t,
             lookup=lookup,
             mapper=mapper,
         )
-        out[mat] = snap
+        out[mat] = matrix
+    if symmetrize_density:
+        density_dense = out["density"].to_dense()
+        density_dense = density_dense + density_dense.transpose(-1, -2)
+
+        out["density"] = MatrixBlockData.from_dense(
+            density_dense,
+            mapper.orbital_cfg,
+            atoms,
+            sparsity_threshold=0.0,
+        )
+
+    if convention == "e3nn":
+        # convert to e3nn basis
+        converter = OpenMXE3NNConverter(orbital_cfg)
+        for key, matrix in out.items():
+            out[key] = converter.snapshot_to_e3nn(matrix)
+    elif convention == "openmx":
+        pass
+    else:
+        raise ValueError(f"Unknown convention '{convention}'")
 
     return out

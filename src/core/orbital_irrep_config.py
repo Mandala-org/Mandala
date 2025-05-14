@@ -52,33 +52,90 @@ class OrbitalIrrepConfig:
 
         return cls.from_dict(payload["orbitals"])
 
+    # --------------------------------------------------------------------- API
     @classmethod
-    def from_dict(cls, dct: Dict[str, Sequence[str]]) -> "OrbitalIrrepConfig":
-        """Validate and build from python dict {element: list_of_irrep_strings}."""
+    def from_dict(cls, dct: Dict[str, Sequence[str] | str]) -> "OrbitalIrrepConfig":
+        """
+        Build an :class:`OrbitalIrrepConfig` from a *python* mapping
+        ``{element: spec}``.
+
+        Accepted **spec** formats
+        ------------------------
+        1. **List / tuple** of tokens::
+
+               {"Si": ["2x0e", "2x1o", "1x2e"]}
+
+        2. **Full Irreps string** (``+``‑separated; whitespace ignored)::
+
+               {"Si": "2x0e + 2x1o + 1x2e"}
+
+        3. **Compact orbital string** – concatenation of ``<n><orbital>`` where
+           *orbital* is one of ``s p d f g h i k l m`` (case‑insensitive).
+           Example::
+
+               {"Si": "3s2p2d1f"}     # → 3x0e + 2x1o + 2x2e + 1x3o
+        """
         if not isinstance(dct, dict):
-            raise OrbitalIrrepConfigError("Input must be a dict[str, list[str]]")
+            raise OrbitalIrrepConfigError("Input must be a dict[element -> irreps]")
+
+        # map orbital letter → ℓ
+        _orbital_to_l = {
+            "s": 0,
+            "p": 1,
+            "d": 2,
+            "f": 3,
+            "g": 4,
+            "h": 5,
+            "i": 6,
+            "k": 7,
+            "l": 8,
+            "m": 9,
+        }
 
         element_to_irreps: Dict[str, Irreps] = {}
-        for element, irrep_list in dct.items():
+        for element, spec in dct.items():
+            # ---------- validate key --------------------------------------
             if not isinstance(element, str):
                 raise OrbitalIrrepConfigError(
-                    f"Element keys must be str ('{element}' is not)"
+                    f"Element keys must be str (got {type(element)})"
                 )
 
-            if not isinstance(irrep_list, (list, tuple)):
+            # ---------- canonicalise spec to '+' notation -----------------
+            if isinstance(spec, str):
+                expr = spec.replace(" ", "")  # drop whitespace
+
+                # detect compact syntax: only digits / orbital letters, no 'x'/'e'/'o'/'+'.
+                if all(ch.isdigit() or ch.lower() in _orbital_to_l for ch in expr):
+                    # parse e.g. "3s2p2d1f"
+                    import re
+
+                    tokens = []
+                    for num, orb in re.findall(
+                        r"(\d*)([spdfghiklm])", expr, flags=re.I
+                    ):
+                        mul = int(num) if num else 1
+                        l = _orbital_to_l[orb.lower()]
+                        parity = "e" if l % 2 == 0 else "o"
+                        tokens.append(f"{mul}x{l}{parity}")
+                    expr = "+".join(tokens)
+                # else: assume user already wrote an Irreps expression
+            elif isinstance(spec, (list, tuple)):
+                expr = "+".join(str(s).replace(" ", "") for s in spec)
+            else:
                 raise OrbitalIrrepConfigError(
-                    f"Value for element '{element}' must be a list/tuple, got {type(irrep_list)}"
+                    f"Value for element '{element}' must be str or list/tuple, "
+                    f"got {type(spec)}"
                 )
 
+            # ---------- parse with e3nn -----------------------------------
             try:
-                # Join list into '+' string e.g. ["1x0e", "1x1o"] -> "1x0e+1x1o"
-                irreps = Irreps("+".join(str(s) for s in irrep_list))
-            except Exception as exc:
+                irreps = Irreps(expr)
+            except Exception as exc:  # pragma: no cover
                 raise OrbitalIrrepConfigError(
                     f"Failed to parse irreps for element '{element}': {exc}"
                 ) from exc
 
-            # quick sanity: only accept orbitals up to l=4 (g) by default
+            # ---------- sanity: ℓ limit -----------------------------------
             l_max_seen = max(ir.l for _, ir in irreps)
             if l_max_seen > 10:
                 raise OrbitalIrrepConfigError(
@@ -92,7 +149,7 @@ class OrbitalIrrepConfig:
     # ---------------------------------------------------------------- serialisation
     def to_dict(self) -> Dict[str, List[str]]:
         """
-        Return a plain‑python mapping of the *original* irrep strings so the
+        Return a plain-python mapping of the *original* irrep strings so the
         config can be safely written to YAML / JSON.
         """
         return {

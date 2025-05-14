@@ -57,7 +57,9 @@ def test_value(orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/H2O_original.out")
     atoms = list("HHHHOO")
 
-    mats = parse_openmx_scfout(sample, atoms, orbital_cfg)
+    mats = parse_openmx_scfout(
+        sample, atoms, orbital_cfg, convention="openmx", symmetrize_density=False
+    )
     hamiltonian = mats["hamiltonian"]
     overlap = mats["overlap"]
     density = mats["density"]
@@ -288,7 +290,9 @@ def test_value_pbc(orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/H2O_pbc_original.out")
     atoms = list("HHHHOO")
 
-    mats = parse_openmx_scfout(sample, atoms, orbital_cfg)
+    mats = parse_openmx_scfout(
+        sample, atoms, orbital_cfg, convention="openmx", symmetrize_density=False
+    )
     hamiltonian = mats["hamiltonian"]
     overlap = mats["overlap"]
     density = mats["density"]
@@ -481,7 +485,7 @@ def test_parse_pbc_shapes(orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/H2O_pbc_original.out")
     atoms = list("HHHHOO")
 
-    mats = parse_openmx_scfout(sample, atoms, orbital_cfg, pbc_sum=True)
+    mats = parse_openmx_scfout(sample, atoms, orbital_cfg)
     density = mats["density"]
     # ensure that duplicate Rn blocks were summed: count of H‑H edges is 16 (fully connected dir graph)
     assert density["H-H"].shape == (16, 5, 5)
