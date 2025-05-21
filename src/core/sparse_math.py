@@ -83,7 +83,7 @@ def trace_matmul_sparse_snap(A, B):
 
 def trace_matmul_sparse_snap_vectorized(A, B):
     """
-    Vectorised per *directed* key.
+    Vectorized per *directed* key.
 
     For each key ``A-B`` we fetch the reverse key ``B-A`` from ``B``.
     This matches the mathematical trace:  Σ_{i,j} Tr( A_{ij} · B_{ji} ).
