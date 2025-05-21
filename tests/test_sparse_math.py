@@ -48,7 +48,7 @@ def make_mock_snapshot():
     pair_edges = {
         k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
     }
-    return MatrixBlockData(atoms, pair_blocks, pair_edges, lookup, mapper)
+    return MatrixBlockData(atoms, pair_blocks, pair_edges, lookup, mapper, "openmx")
 
 
 def test_trace_sparse_vs_vectorized():
