@@ -2,10 +2,10 @@
 openmx_parser.py
 ================
 Parses a single OpenMX ``*.scfout`` into a **Snapshot** object that bundles
-Hamiltonian H, Overlap S and Density D block‑matrices.
+Hamiltonian H, Overlap S and Density D block-matrices.
 
 *  Handles junk header lines automatically (skips until first recognised header)
-*  Sums duplicate periodic‑image blocks (different Rn) automatically
+*  Sums duplicate periodic-image blocks (different Rn) automatically
 *  Discards “position / momentum operator” overlap sections
 *  Returns the matrices either in **OpenMX** or **E3NN** convention
 """
@@ -55,21 +55,21 @@ def parse_openmx_scfout(
     Parameters
     ----------
     path
-        Path to ``*.out`` or ``*.scfout`` produced by OpenMX (single‑k‑point file).
+        Path to ``*.out`` or ``*.scfout`` produced by OpenMX (single-k-point file).
     atoms
         Global atom order (list like ``["H","H","H","H","O","O"]``).
     orbital_cfg
         Same spec that is later passed to `BlockIrrepMapper`.
     convention
-        "openmx"  – keep native basis;
-        "e3nn"    – convert real‑SH ordering to the Wikipedia / e3nn convention.
+        "openmx"  - keep native basis;
+        "e3nn"    - convert real-SH ordering to the Wikipedia / e3nn convention.
     symmetrize_density
-        If *True* (default) replaces ``D`` with ``D + Dᵀ`` **after** parsing.
+        If *True* (default) replaces ``D`` with ``D + Dᵀ`` **after** parsing.
     """
     atoms = list(atoms)
     mapper = BlockIrrepMapper(orbital_cfg, diagonal=False, device="cpu")
 
-    # ───────────────────────────────────────— storage: mat→key→(i,j)→tensor
+    # ─────────────────────────────────────── storage: mat→key→(i,j)→tensor
     accum: Dict[str, Dict[str, Dict[Tuple[int, int], torch.Tensor]]] = {
         "hamiltonian": {},
         "overlap": {},
@@ -80,7 +80,7 @@ def parse_openmx_scfout(
         dct = accum[mat].setdefault(key, {})
         dct[(i, j)] = dct.get((i, j), torch.zeros_like(blk)) + blk
 
-    # ───────────────────────────────────────— parse loop
+    # ─────────────────────────────────────── parse loop
     current: str | None = None  # "hamiltonian" | "overlap" | "density"
     density_seen = False
 
@@ -93,7 +93,7 @@ def parse_openmx_scfout(
             # ---------- section headers ------------------------------------
             if _SECTION_RE.match(line):
                 if line.startswith("Density"):
-                    if density_seen:  # ignore further spin‑resolved density blocks
+                    if density_seen:  # ignore further spin-resolved density blocks
                         current = None
                         continue
                     density_seen = True
@@ -140,7 +140,7 @@ def parse_openmx_scfout(
             block = torch.tensor(rows, dtype=torch.float32)
             _add(current, key, i_glob, j_glob, block)
 
-    # ───────────────────────────────────────— build MatrixBlockData objects
+    # ─────────────────────────────────────── build MatrixBlockData objects
     def _to_mbd(sub: Dict[str, Dict[Tuple[int, int], torch.Tensor]]) -> MatrixBlockData:
         pair_blocks: Dict[str, List[torch.Tensor]] = {}
         pair_edges: Dict[str, List[List[int]]] = {}
@@ -172,7 +172,7 @@ def parse_openmx_scfout(
     if symmetrize_density:
         den = den + den.transpose()
 
-    # ───────────────────────────────────────— optional basis conversion
+    # ─────────────────────────────────────── optional basis conversion
     if convention == "e3nn":
         conv = OpenMXE3NNConverter(orbital_cfg)
         ham = conv.snapshot_to_e3nn(ham)
@@ -181,5 +181,5 @@ def parse_openmx_scfout(
     elif convention != "openmx":
         raise ValueError(f"convention must be 'openmx' or 'e3nn', not '{convention}'")
 
-    # ───────────────────────────────────────— Snapshot aggregation
+    # ─────────────────────────────────────── Snapshot aggregation
     return Snapshot(hamiltonian=ham, overlap=ovl, density=den)
