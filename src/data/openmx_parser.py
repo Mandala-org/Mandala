@@ -163,6 +163,7 @@ def parse_openmx_scfout(
             pair_edges=pair_edges_t,
             lookup=lookup,
             mapper=mapper,
+            basis="openmx",
         )
 
     ham = _to_mbd(accum["hamiltonian"])
