@@ -29,35 +29,11 @@ __all__ = ["OpenMXE3NNConverter"]
 
 
 # --------------------------------------------------------------------- U matrices
-sqrt2 = 2.0**0.5
 _U_OPENMX_TO_WIKI: Dict[int, torch.Tensor] = {
-    0: torch.eye(1),
-    1: torch.tensor(
-        [[0, 0, 1], [-1 / sqrt2, 1 / sqrt2, 0], [1 / sqrt2, 1 / sqrt2, 0]],
-        dtype=torch.float32,
-    ),
-    2: torch.tensor(
-        [
-            [0, 0, 1, 0, 0],
-            [0, 0, 0, -1 / sqrt2, 1 / sqrt2],
-            [1, 0, 0, 0, 0],
-            [0, -1 / sqrt2, 0, 0, -1 / sqrt2],
-            [0, 1 / sqrt2, 0, 0, -1 / sqrt2],
-        ],
-        dtype=torch.float32,
-    ),
-    3: torch.tensor(
-        [
-            [1, 0, 0, 0, 0, 0, 0],
-            [0, -1 / sqrt2, 0, 0, 0, -1 / sqrt2, 0],
-            [0, 1 / sqrt2, 0, 0, 0, -1 / sqrt2, 0],
-            [0, 0, 0, 1, 0, 0, 0],
-            [0, 0, -1 / sqrt2, 0, 0, 0, 1 / sqrt2],
-            [0, 0, 1 / sqrt2, 0, 0, 0, 1 / sqrt2],
-            [0, 0, 0, 0, 1, 0, 0],
-        ],
-        dtype=torch.float32,
-    ),
+    0: torch.eye(1, dtype=torch.float32),
+    1: torch.eye(3, dtype=torch.float32)[[1, 2, 0]],
+    2: torch.eye(5, dtype=torch.float32)[[2, 4, 0, 3, 1]],
+    3: torch.eye(7, dtype=torch.float32)[[6, 4, 2, 0, 1, 3, 5]],
 }
 _U_WIKI_TO_OPENMX = {l: U.T for l, U in _U_OPENMX_TO_WIKI.items()}
 
