@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 import torch
 
+
 from core.block_irrep_mapper import BlockIrrepMapper
 
 PairKey = str  # canonical "A-B"
@@ -464,6 +465,52 @@ class BlockMatrix:
             mapper=mapper,
             basis=payload.get("basis", "openmx"),
         )
+
+    # ════════════════════════════════════════════════════════════════════════════
+    #                                ROTATION
+    # ════════════════════════════════════════════════════════════════════════════
+    def rotate(self, R: torch.Tensor) -> "BlockMatrix":
+        """
+        Return a **new** :class:`BlockMatrix` whose *orbital reference frame*
+        has been rotated by the (3 x 3) matrix **R** (active rotation).
+
+        Notes
+        -----
+        * Rotation is supported **only** for snapshots already in the *e3nn /
+          Wikipedia* real-spherical-harmonics convention because the Wigner-D
+          matrices provided by *e3nn* are defined in that basis.
+        * The operation is block-wise:
+
+              M'_(A,B)  =  U_A · M_(A,B) · U_Bᵀ
+
+          where ``U_A = irreps_A.D_from_matrix(R)`` is block-diagonal with one
+          Wigner-D copy per orbital.
+        """
+
+        if R.shape != (3, 3):
+            raise ValueError("R must be a 3x3 rotation matrix")
+
+        device = next(iter(self.pair_blocks.values())).device
+        R = R.to(device=device, dtype=torch.float32)
+
+        # cache one U per element
+        U_cache: Dict[str, torch.Tensor] = {}
+        for el in self.mapper.orbital_cfg.elements():
+            irr = self.mapper.orbital_cfg.element_to_irreps[el]
+            U_cache[el] = irr.D_from_matrix(R)  # (dim_el, dim_el)
+
+        # rotate every block ------------------------------------------------
+        new_blocks: Dict[PairKey, torch.Tensor] = {}
+        for key, blk in self.pair_blocks.items():
+            el_i, el_j = key.split("-")
+            U_i = U_cache[el_i]
+            U_j = U_cache[el_j]
+            # tensor contraction:  (E,d_i,d_j)
+            blk_rot = U_i @ blk @ U_j.T
+            new_blocks[key] = blk_rot
+
+        # edge indices / lookup are unchanged
+        return self._replace_pair_blocks(new_blocks, basis="e3nn")
 
 
 # --------------------------------------------------------------------------- #
