@@ -4,7 +4,7 @@ snapshot_block.py
 
 In-memory containers for a *single* snapshot:
 
-* **MatrixBlockData** - raw sparse blocks (H, D, S, …) grouped by element pair.
+* **BlockMatrix** - raw sparse blocks (H, D, S, …) grouped by element pair.
 * **IrrepsBlockData** - same data after change-of-basis to irrep vectors.
 
 Both dataclasses keep:
@@ -36,7 +36,7 @@ PairKey = str  # canonical "A-B"
 
 # --------------------------------------------------------------------------- #
 @dataclass
-class MatrixBlockData:
+class BlockMatrix:
     atoms: Tuple[str, ...]
     pair_blocks: Dict[PairKey, torch.Tensor]  # (E_ab, d_A, d_B)
     pair_edges: Dict[PairKey, torch.Tensor]  # (2, E_ab)
@@ -70,7 +70,7 @@ class MatrixBlockData:
     def to(self, device):
         new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
         new_edges = {k: v.to(device) for k, v in self.pair_edges.items()}
-        return MatrixBlockData(
+        return BlockMatrix(
             self.atoms, new_blocks, new_edges, self.lookup, self.mapper, self.basis
         )
 
@@ -85,7 +85,7 @@ class MatrixBlockData:
 
         # ------------------------------------------------------------------ transpose
 
-    def transpose(self) -> "MatrixBlockData":
+    def transpose(self) -> "BlockMatrix":
         """
         Return a **new** snapshot representing the transposed matrix
         (conjugate-transpose is identical here, blocks are real).
@@ -109,7 +109,7 @@ class MatrixBlockData:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 new_lookup[(i, j)] = (new_key, idx)
 
-        return MatrixBlockData(
+        return BlockMatrix(
             atoms=self.atoms,
             pair_blocks=new_blocks,
             pair_edges=new_edges,
@@ -119,7 +119,7 @@ class MatrixBlockData:
         )
 
     # ------------------------------------------------------------------ edge reordering
-    def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "MatrixBlockData":
+    def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
         """
         Re-order edge *rows* for given keys. ``order_dict`` maps
         ``key -> permutation indices`` (1-D LongTensor of length ``E_key``).
@@ -139,7 +139,7 @@ class MatrixBlockData:
             for new_k, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, new_k)
 
-        return MatrixBlockData(
+        return BlockMatrix(
             atoms=self.atoms,
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
@@ -149,7 +149,7 @@ class MatrixBlockData:
         )
 
     # ------------------------------------------------------------------ canonical sort
-    def standardize_edges(self) -> "MatrixBlockData":
+    def standardize_edges(self) -> "BlockMatrix":
         """
         Return a snapshot where *each* pair-key’s edges are sorted by global
         `(src, dst)` (lexicographic).  Useful for deterministic equality tests.
@@ -164,12 +164,10 @@ class MatrixBlockData:
 
     # ------------------------------------------------------------------ arithmetic
     # private helper ------------------------------------------------------------
-    def _align_with(
-        self, other: "MatrixBlockData"
-    ) -> Tuple["MatrixBlockData", "MatrixBlockData"]:
+    def _align_with(self, other: "BlockMatrix") -> Tuple["BlockMatrix", "BlockMatrix"]:
         """Return *standardised* copies whose edge order is identical pair-wise."""
-        if not isinstance(other, MatrixBlockData):
-            raise TypeError("Operand must be MatrixBlockData")
+        if not isinstance(other, BlockMatrix):
+            raise TypeError("Operand must be BlockMatrix")
         if self.atoms != other.atoms:
             raise ValueError("Atoms differ; cannot add/subtract snapshots")
         if self.basis != other.basis:
@@ -268,7 +266,7 @@ class MatrixBlockData:
 
     # ------------------ alternate constructors ---------------------------
     @classmethod
-    def load(cls, path, device="cpu") -> "MatrixBlockData":
+    def load(cls, path, device="cpu") -> "BlockMatrix":
         import torch
         from core.orbital_irrep_config import OrbitalIrrepConfig
 
@@ -302,7 +300,7 @@ class MatrixBlockData:
         self, new_blocks: Dict[PairKey, torch.Tensor], *, basis: str
     ):
         """Return a shallow copy with *pair_blocks* replaced."""
-        return MatrixBlockData(
+        return BlockMatrix(
             atoms=self.atoms,
             pair_blocks=new_blocks,
             pair_edges=self.pair_edges,
@@ -312,13 +310,13 @@ class MatrixBlockData:
         )
 
     # ---------------- basis conversion wrappers ----------------------------
-    def to_e3nn(self, converter: "OpenMXE3NNConverter") -> "MatrixBlockData":
-        matrix = converter.snapshot_to_e3nn(self)
+    def to_e3nn(self, converter: "OpenMXE3NNConverter") -> "BlockMatrix":
+        matrix = converter.matrix_to_e3nn(self)
         matrix.basis = "e3nn"
         return matrix
 
-    def to_openmx(self, converter: "OpenMXE3NNConverter") -> "MatrixBlockData":
-        matrix = converter.snapshot_to_openmx(self)
+    def to_openmx(self, converter: "OpenMXE3NNConverter") -> "BlockMatrix":
+        matrix = converter.matrix_to_openmx(self)
         matrix.basis = "openmx"
         return matrix
 
@@ -333,7 +331,7 @@ class MatrixBlockData:
         diagonal: bool = False,
         sparsity_threshold: float = 0.0,
         basis: str,
-    ) -> "MatrixBlockData":
+    ) -> "BlockMatrix":
         """
         Build a block snapshot from a fully dense matrix *in global atom order*.
         Primarily for tests / debugging.
@@ -377,7 +375,7 @@ class MatrixBlockData:
 
         # ---------------------------------------------------------------- sparsify
 
-    def sparsify(self, threshold: float) -> "MatrixBlockData":
+    def sparsify(self, threshold: float) -> "BlockMatrix":
         """
         Return a **new** snapshot in which only blocks whose root-mean-square
         (RMS) magnitude is **strictly greater** than ``threshold`` are kept.
@@ -426,7 +424,7 @@ class MatrixBlockData:
                     new_lookup[(i, j)] = (key, local_idx)
 
         # assemble the sparsified snapshot
-        return MatrixBlockData(
+        return BlockMatrix(
             atoms=self.atoms,
             pair_blocks=new_blocks,
             pair_edges=new_edges,
@@ -439,9 +437,9 @@ class MatrixBlockData:
     @classmethod
     def from_payload(
         cls, payload: dict, device: str | torch.device = "cpu"
-    ) -> "MatrixBlockData":
+    ) -> "BlockMatrix":
         """
-        Build :class:`MatrixBlockData` from a dict previously produced by
+        Build :class:`BlockMatrix` from a dict previously produced by
         :meth:`_to_payload`.  Used internally by Snapshot.load().
         """
         from core.orbital_irrep_config import OrbitalIrrepConfig  # local import
@@ -487,15 +485,15 @@ class IrrepsBlockData:
         )  # TODO: mapper also changes device
 
     # -------- inverse change-of-basis ----- #
-    def to_blocks(self) -> MatrixBlockData:
+    def to_blocks(self) -> BlockMatrix:
         pair_blk: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
             pair_blk[key] = self.mapper.vectors_to_blocks(key, vec)
-        return MatrixBlockData(
+        return BlockMatrix(
             self.atoms, pair_blk, self.pair_edges, self.lookup, self.mapper, self.basis
         )
 
-    # -------- indexing paralleling MatrixBlockData -------- #
+    # -------- indexing paralleling BlockMatrix -------- #
     def __getitem__(self, item):
         if isinstance(item, tuple) and len(item) == 2:
             key, k = self.lookup[item]
