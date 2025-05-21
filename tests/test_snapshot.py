@@ -48,3 +48,38 @@ def test_save_load_roundtrip(tmp_path):
     assert torch.allclose(
         snap2.get_number_of_electrons(), snap.get_number_of_electrons(), atol=1e-6
     )
+
+
+# ---------------------------------------------------------------- basis conversion
+def test_basis_conversion_roundtrip():
+    snap_open = _load_snapshot()  # native OpenMX basis
+    snap_e3 = snap_open.to_e3nn()
+
+    # sanity checks
+    assert snap_e3.density.basis == "e3nn"
+    assert snap_e3.to_e3nn() is snap_e3  # idempotent
+
+    # back-conversion
+    snap_back = snap_e3.to_openmx()
+    assert snap_back.density.basis == "openmx"
+
+    # numerical invariants -------------------------------------------------
+    # choose one representative block (H-O first edge)
+    key = "H-O"
+    assert torch.allclose(
+        snap_back.density[key][0], snap_open.density[key][0], atol=1e-6
+    )
+
+    # physics helpers unchanged
+    assert torch.allclose(snap_back.get_energy(), snap_open.get_energy(), atol=1e-6)
+    assert torch.allclose(
+        snap_back.get_number_of_electrons(),
+        snap_open.get_number_of_electrons(),
+        atol=1e-6,
+    )
+    assert torch.allclose(snap_e3.get_energy(), snap_open.get_energy(), atol=1e-6)
+    assert torch.allclose(
+        snap_e3.get_number_of_electrons(),
+        snap_open.get_number_of_electrons(),
+        atol=1e-6,
+    )

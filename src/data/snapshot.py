@@ -34,6 +34,7 @@ import torch
 
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot_block import MatrixBlockData
+from core.basis_converter import OpenMXE3NNConverter
 
 __all__ = ["Snapshot"]
 
@@ -163,3 +164,39 @@ class Snapshot:
             f"  basis   = {self.density.basis}\n"
             ")"
         )
+
+    def _change_basis(self, target: str) -> "Snapshot":
+        """
+        Return a **new** snapshot in `target` basis ("openmx" | "e3nn").
+        If already in that basis the current instance is returned unchanged.
+        """
+        if target not in {"openmx", "e3nn"}:
+            raise ValueError("target must be 'openmx' or 'e3nn'")
+
+        if self.density.basis == target:
+            return self  # nothing to do
+
+        cfg = self.density.mapper.orbital_cfg  # shared by all mats
+        conv = OpenMXE3NNConverter(cfg, device=self.density["H-H"].device)  # any device
+
+        if target == "e3nn":
+            ham = conv.snapshot_to_e3nn(self.hamiltonian)
+            ovl = conv.snapshot_to_e3nn(self.overlap)
+            den = conv.snapshot_to_e3nn(self.density)
+        else:  # target == "openmx"
+            ham = conv.snapshot_to_openmx(self.hamiltonian)
+            ovl = conv.snapshot_to_openmx(self.overlap)
+            den = conv.snapshot_to_openmx(self.density)
+
+        # Constructor will re-order edges deterministically (norm is preserved
+        # by orthogonal transforms so ordering identical).
+        return Snapshot(ham, ovl, den)
+
+    # public façade --------------------------------------------------------
+    def to_e3nn(self) -> "Snapshot":
+        """Return a (possibly new) Snapshot in the **E3NN** convention."""
+        return self._change_basis("e3nn")
+
+    def to_openmx(self) -> "Snapshot":
+        """Return a (possibly new) Snapshot in the **OpenMX** convention."""
+        return self._change_basis("openmx")
