@@ -40,7 +40,7 @@ def make_mock_snapshot():
         k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
     }
 
-    return MatrixBlockData(atoms, pair_blocks, pair_edges, lookup, mapper)
+    return MatrixBlockData(atoms, pair_blocks, pair_edges, lookup, mapper, "openmx")
 
 
 def test_roundtrip_blocks_vectors():
@@ -62,6 +62,7 @@ def test_denseify_roundtrip():
         dense,
         snap.mapper.orbital_cfg,
         snap.atoms,
+        basis=snap.basis,
     )
     # check one arbitrary oriented pair
     assert torch.allclose(snap[(0, 3)], re_snap[(0, 3)], atol=1e-6)
@@ -77,7 +78,7 @@ def test_sparsify_roundtrip():
     )
     # total dim = 2+2+4+2+2+4 = 16
     dense = torch.randn(16, 16)
-    snap = MatrixBlockData.from_dense(dense, cfg, atoms)
+    snap = MatrixBlockData.from_dense(dense, cfg, atoms, basis="openmx")
     dense_back = snap.to_dense()
     assert torch.allclose(dense, dense_back, atol=1e-6)
 

@@ -42,7 +42,7 @@ class MatrixBlockData:
     pair_edges: Dict[PairKey, torch.Tensor]  # (2, E_ab)
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
     mapper: BlockIrrepMapper
-    basis: str = "openmx"  # "openmx" | "e3nn"
+    basis: str  # "openmx" | "e3nn"
 
     # --------------- convenience constructors ------------------------------ #
     @classmethod
@@ -115,6 +115,7 @@ class MatrixBlockData:
             pair_edges=new_edges,
             lookup=new_lookup,
             mapper=self.mapper,
+            basis=self.basis,
         )
 
     # ------------------------------------------------------------------ edge reordering
@@ -331,6 +332,7 @@ class MatrixBlockData:
         *,
         diagonal: bool = False,
         sparsity_threshold: float = 0.0,
+        basis: str,
     ) -> "MatrixBlockData":
         """
         Build a block snapshot from a fully dense matrix *in global atom order*.
@@ -368,7 +370,7 @@ class MatrixBlockData:
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
 
-        snapshot = cls(atoms, pair_blocks, pair_edges, lookup, mapper)
+        snapshot = cls(atoms, pair_blocks, pair_edges, lookup, mapper, basis)
         if sparsity_threshold is not None:
             snapshot = snapshot.sparsify(sparsity_threshold)
         return snapshot
@@ -474,6 +476,7 @@ class IrrepsBlockData:
     pair_edges: Dict[PairKey, torch.Tensor]
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
     mapper: BlockIrrepMapper
+    basis: str = "e3nn"  # always "e3nn"
 
     # -------- device -------- #
     def to(self, device):
@@ -489,7 +492,7 @@ class IrrepsBlockData:
         for key, vec in self.pair_vectors.items():
             pair_blk[key] = self.mapper.vectors_to_blocks(key, vec)
         return MatrixBlockData(
-            self.atoms, pair_blk, self.pair_edges, self.lookup, self.mapper
+            self.atoms, pair_blk, self.pair_edges, self.lookup, self.mapper, self.basis
         )
 
     # -------- indexing paralleling MatrixBlockData -------- #
