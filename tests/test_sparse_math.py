@@ -5,7 +5,7 @@ import numpy as np
 from core.sparse_math import trace_matmul_sparse
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
-from data.snapshot_block import MatrixBlockData
+from data.block_matrix import BlockMatrix
 from core.sparse_math import (
     trace_matmul_sparse_snap,
     trace_matmul_sparse_snap_vectorized,
@@ -48,7 +48,7 @@ def make_mock_snapshot():
     pair_edges = {
         k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
     }
-    return MatrixBlockData(atoms, pair_blocks, pair_edges, lookup, mapper, "openmx")
+    return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, mapper, "openmx")
 
 
 def test_trace_sparse_vs_vectorized():

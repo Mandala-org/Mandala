@@ -21,7 +21,7 @@ import torch
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.basis_converter import OpenMXE3NNConverter
-from data.snapshot_block import MatrixBlockData
+from data.block_matrix import BlockMatrix
 from data.snapshot import Snapshot  # <── new aggregate container
 
 __all__ = ["OpenMXParseError", "parse_openmx_scfout"]
@@ -140,8 +140,8 @@ def parse_openmx_scfout(
             block = torch.tensor(rows, dtype=torch.float32)
             _add(current, key, i_glob, j_glob, block)
 
-    # ─────────────────────────────────────── build MatrixBlockData objects
-    def _to_mbd(sub: Dict[str, Dict[Tuple[int, int], torch.Tensor]]) -> MatrixBlockData:
+    # ─────────────────────────────────────── build BlockMatrix objects
+    def _to_mbd(sub: Dict[str, Dict[Tuple[int, int], torch.Tensor]]) -> BlockMatrix:
         pair_blocks: Dict[str, List[torch.Tensor]] = {}
         pair_edges: Dict[str, List[List[int]]] = {}
         lookup: Dict[Tuple[int, int], Tuple[str, int]] = {}
@@ -157,7 +157,7 @@ def parse_openmx_scfout(
         pair_edges_t = {
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
-        return MatrixBlockData(
+        return BlockMatrix(
             atoms=tuple(atoms),
             pair_blocks=pair_blocks_t,
             pair_edges=pair_edges_t,
@@ -176,9 +176,9 @@ def parse_openmx_scfout(
     # ─────────────────────────────────────── optional basis conversion
     if convention == "e3nn":
         conv = OpenMXE3NNConverter(orbital_cfg)
-        ham = conv.snapshot_to_e3nn(ham)
-        ovl = conv.snapshot_to_e3nn(ovl)
-        den = conv.snapshot_to_e3nn(den)
+        ham = conv.matrix_to_e3nn(ham)
+        ovl = conv.matrix_to_e3nn(ovl)
+        den = conv.matrix_to_e3nn(den)
     elif convention != "openmx":
         raise ValueError(f"convention must be 'openmx' or 'e3nn', not '{convention}'")
 

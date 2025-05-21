@@ -8,7 +8,7 @@ utilities.
 
 Key features
 ------------
-* Keeps three :class:`MatrixBlockData` objects (`hamiltonian`, `overlap`,
+* Keeps three :class:`BlockMatrix` objects (`hamiltonian`, `overlap`,
   `density`) under a unified interface.  Access via ``snap["density"]`` **or**
   attribute ``snap.density``.
 * Upon construction **re-orders edges** for every element-pair by *ascending*
@@ -33,7 +33,7 @@ from typing import Dict, Any
 import torch
 
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
-from data.snapshot_block import MatrixBlockData
+from data.block_matrix import BlockMatrix
 from core.basis_converter import OpenMXE3NNConverter
 
 __all__ = ["Snapshot"]
@@ -45,14 +45,14 @@ class Snapshot:
     # --------------------------------------------------------------------- init
     def __init__(
         self,
-        hamiltonian: MatrixBlockData,
-        overlap: MatrixBlockData,
-        density: MatrixBlockData,
+        hamiltonian: BlockMatrix,
+        overlap: BlockMatrix,
+        density: BlockMatrix,
     ) -> None:
         # quick consistency sanity checks
         self._check_compatibility(hamiltonian, overlap, density)
 
-        self._mats: Dict[str, MatrixBlockData] = {
+        self._mats: Dict[str, BlockMatrix] = {
             "hamiltonian": hamiltonian,
             "overlap": overlap,
             "density": density,
@@ -63,7 +63,7 @@ class Snapshot:
 
     # ---------------------------------------------------------------- compatibility
     @staticmethod
-    def _check_compatibility(*mats: MatrixBlockData) -> None:
+    def _check_compatibility(*mats: BlockMatrix) -> None:
         atoms = mats[0].atoms
         mapper_cfg = mats[0].mapper.orbital_cfg.to_dict()
         basis = mats[0].basis
@@ -103,7 +103,7 @@ class Snapshot:
         return trace_matmul_sparse_snap_vectorized(self.hamiltonian, self.density)
 
     # ---------------------------------------------------------------- dunder access
-    def __getitem__(self, item: str) -> MatrixBlockData:
+    def __getitem__(self, item: str) -> BlockMatrix:
         return self._mats[item]
 
     def __getattr__(self, name: str) -> Any:  # noqa: ANN401  (# type: ignore[override]
@@ -118,9 +118,9 @@ class Snapshot:
     def save(self, path: str | os.PathLike) -> None:
         torch.save(self._payload(), path)
 
-    # helper to reconstruct one MatrixBlockData from saved payload ----------
+    # helper to reconstruct one BlockMatrix from saved payload ----------
     @staticmethod
-    def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> MatrixBlockData:
+    def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> BlockMatrix:
         from core.orbital_irrep_config import OrbitalIrrepConfig
         from core.block_irrep_mapper import BlockIrrepMapper
 
@@ -136,7 +136,7 @@ class Snapshot:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
-        return MatrixBlockData(
+        return BlockMatrix(
             tuple(payload["atoms"]),
             pair_blocks,
             pair_edges,
@@ -180,13 +180,13 @@ class Snapshot:
         conv = OpenMXE3NNConverter(cfg, device=self.density["H-H"].device)  # any device
 
         if target == "e3nn":
-            ham = conv.snapshot_to_e3nn(self.hamiltonian)
-            ovl = conv.snapshot_to_e3nn(self.overlap)
-            den = conv.snapshot_to_e3nn(self.density)
+            ham = conv.matrix_to_e3nn(self.hamiltonian)
+            ovl = conv.matrix_to_e3nn(self.overlap)
+            den = conv.matrix_to_e3nn(self.density)
         else:  # target == "openmx"
-            ham = conv.snapshot_to_openmx(self.hamiltonian)
-            ovl = conv.snapshot_to_openmx(self.overlap)
-            den = conv.snapshot_to_openmx(self.density)
+            ham = conv.matrix_to_openmx(self.hamiltonian)
+            ovl = conv.matrix_to_openmx(self.overlap)
+            den = conv.matrix_to_openmx(self.density)
 
         # Constructor will re-order edges deterministically (norm is preserved
         # by orthogonal transforms so ordering identical).

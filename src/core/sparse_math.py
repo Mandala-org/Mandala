@@ -66,7 +66,7 @@ def vectors_to_blocks(mapper, pair, vectors):
 def trace_matmul_sparse_snap(A, B):
     """
     Scalar trace **via per-edge loop** using lookup table.
-    Works for any MatrixBlockData / IrrepsBlockData combination.
+    Works for any BlockMatrix / IrrepsBlockData combination.
     """
     out = torch.zeros(
         (),
