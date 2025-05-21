@@ -35,5 +35,9 @@ dev = [
 
 # pyproject.toml
 [tool.ruff]
+# (any other ruff settings that still belong at the top level,
+#  e.g. version pinning, source-target, etc.)
+
+[tool.ruff.lint]
 # ignore E741 Ambiguous variable name
 ignore = ["E741"]

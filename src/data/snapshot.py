@@ -200,3 +200,14 @@ class Snapshot:
     def to_openmx(self) -> "Snapshot":
         """Return a (possibly new) Snapshot in the **OpenMX** convention."""
         return self._change_basis("openmx")
+
+    # ---------------------------------------------------------------- rotation
+    def rotate(self, R: torch.Tensor) -> "Snapshot":
+        """
+        Return a new **rotated** snapshot where all three matrices have been
+        rotated by the same 3x3 matrix **R**.  Requires `basis == "e3nn"`.
+        """
+        ham = self.hamiltonian.rotate(R)
+        ovl = self.overlap.rotate(R)
+        den = self.density.rotate(R)
+        return Snapshot(ham, ovl, den)
