@@ -82,18 +82,20 @@ class OpenMXE3NNConverter:
         return V_i @ block @ V_j.T
 
     # ---------------- snapshot‑level helpers --------------------------------
-    def snapshot_to_e3nn(self, snap: MatrixBlockData) -> MatrixBlockData:
-        if snap.basis == "e3nn":
-            return snap
+    def snapshot_to_e3nn(self, matrix: MatrixBlockData) -> MatrixBlockData:
+        if matrix.basis == "e3nn":
+            return matrix
         new_blocks = {
-            k: self.block_openmx_to_e3nn(k, blk) for k, blk in snap.pair_blocks.items()
+            k: self.block_openmx_to_e3nn(k, blk)
+            for k, blk in matrix.pair_blocks.items()
         }
-        return snap._replace_pair_blocks(new_blocks, basis="e3nn")
+        return matrix._replace_pair_blocks(new_blocks, basis="e3nn")
 
-    def snapshot_to_openmx(self, snap: MatrixBlockData) -> MatrixBlockData:
-        if snap.basis == "openmx":
-            return snap
+    def snapshot_to_openmx(self, matrix: MatrixBlockData) -> MatrixBlockData:
+        if matrix.basis == "openmx":
+            return matrix
         new_blocks = {
-            k: self.block_e3nn_to_openmx(k, blk) for k, blk in snap.pair_blocks.items()
+            k: self.block_e3nn_to_openmx(k, blk)
+            for k, blk in matrix.pair_blocks.items()
         }
-        return snap._replace_pair_blocks(new_blocks, basis="openmx")
+        return matrix._replace_pair_blocks(new_blocks, basis="openmx")

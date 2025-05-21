@@ -144,6 +144,7 @@ class MatrixBlockData:
             pair_edges=pair_edges,
             lookup=lookup,
             mapper=self.mapper,
+            basis=self.basis,
         )
 
     # ------------------------------------------------------------------ canonical sort
@@ -311,10 +312,14 @@ class MatrixBlockData:
 
     # ---------------- basis conversion wrappers ----------------------------
     def to_e3nn(self, converter: "OpenMXE3NNConverter") -> "MatrixBlockData":
-        return converter.snapshot_to_e3nn(self)
+        matrix = converter.snapshot_to_e3nn(self)
+        matrix.basis = "e3nn"
+        return matrix
 
     def to_openmx(self, converter: "OpenMXE3NNConverter") -> "MatrixBlockData":
-        return converter.snapshot_to_openmx(self)
+        matrix = converter.snapshot_to_openmx(self)
+        matrix.basis = "openmx"
+        return matrix
 
     # ------------------------ alternate constructor -----------------------------
     @classmethod
