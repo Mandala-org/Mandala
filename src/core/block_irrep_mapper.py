@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     # This import is only for mypy/flake8/etc., not at runtime
     from core.orbital_irrep_config import OrbitalIrrepConfig
-    from data.snapshot_block import MatrixBlockData, IrrepsBlockData
+    from data.block_matrix import BlockMatrix, IrrepsBlockData
 
 
 from dataclasses import dataclass
@@ -186,8 +186,8 @@ class BlockIrrepMapper:
             raise MappingKeyError(f"Unknown pair key {key}") from exc
 
     # ------------------ snapshot helpers ------------------------------------ #
-    def snapshot_blocks_to_vectors(self, snap: MatrixBlockData) -> IrrepsBlockData:
+    def snapshot_blocks_to_vectors(self, snap: BlockMatrix) -> IrrepsBlockData:
         return snap.to_vectors()  # delegates to dataclass
 
-    def snapshot_vectors_to_blocks(self, snap: IrrepsBlockData) -> MatrixBlockData:
+    def snapshot_vectors_to_blocks(self, snap: IrrepsBlockData) -> BlockMatrix:
         return snap.to_blocks()

@@ -11,8 +11,8 @@ implemented with constant orthogonal matrices Uₗ (one per ℓ).
 Usage
 -----
 >>> conv = OpenMXE3NNConverter(orbital_cfg)   # knows each element's orbitals
->>> snap_e3 = conv.snapshot_to_e3nn(snap_openmx)
->>> snap_back = conv.snapshot_to_openmx(snap_e3)
+>>> snap_e3 = conv.matrix_to_e3nn(snap_openmx)
+>>> snap_back = conv.matrix_to_openmx(snap_e3)
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import torch
 from e3nn.o3 import Irreps
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
-from data.snapshot_block import MatrixBlockData
+from data.block_matrix import BlockMatrix
 
 __all__ = ["OpenMXE3NNConverter"]
 
@@ -82,7 +82,7 @@ class OpenMXE3NNConverter:
         return V_i @ block @ V_j.T
 
     # ---------------- snapshot‑level helpers --------------------------------
-    def snapshot_to_e3nn(self, matrix: MatrixBlockData) -> MatrixBlockData:
+    def matrix_to_e3nn(self, matrix: BlockMatrix) -> BlockMatrix:
         if matrix.basis == "e3nn":
             return matrix
         new_blocks = {
@@ -91,7 +91,7 @@ class OpenMXE3NNConverter:
         }
         return matrix._replace_pair_blocks(new_blocks, basis="e3nn")
 
-    def snapshot_to_openmx(self, matrix: MatrixBlockData) -> MatrixBlockData:
+    def matrix_to_openmx(self, matrix: BlockMatrix) -> BlockMatrix:
         if matrix.basis == "openmx":
             return matrix
         new_blocks = {
