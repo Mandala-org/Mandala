@@ -476,9 +476,6 @@ class BlockMatrix:
 
         Notes
         -----
-        * Rotation is supported **only** for snapshots already in the *e3nn /
-          Wikipedia* real-spherical-harmonics convention because the Wigner-D
-          matrices provided by *e3nn* are defined in that basis.
         * The operation is block-wise:
 
               M'_(A,B)  =  U_A · M_(A,B) · U_Bᵀ
@@ -510,7 +507,7 @@ class BlockMatrix:
             new_blocks[key] = blk_rot
 
         # edge indices / lookup are unchanged
-        return self._replace_pair_blocks(new_blocks, basis="e3nn")
+        return self._replace_pair_blocks(new_blocks, basis=self.basis)
 
 
 # --------------------------------------------------------------------------- #
