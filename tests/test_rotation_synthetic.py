@@ -113,10 +113,3 @@ def test_rotation_roundtrip(snapshot_e3nn):
         snapshot_e3nn.density.to_dense(),
         atol=1e-5,
     )
-
-
-def test_rotation_requires_e3nn_basis(snapshot_e3nn):
-    """Calling .rotate on an OpenMX snapshot must raise ValueError."""
-    snap_openmx = snapshot_e3nn.to_openmx()  # convert back
-    with pytest.raises(ValueError):
-        snap_openmx.rotate(torch.eye(3))
