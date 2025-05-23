@@ -58,6 +58,7 @@ class _IrrepToMatrix:
         diagonal: bool,
         device: torch.device | str = "cpu",
     ) -> "_IrrepToMatrix":
+        assert diagonal is False, "diagonal=True not supported"
         formula = "ij=ji" if diagonal else "ij"
         rtp = ReducedTensorProducts(formula, i=irreps_i, j=irreps_j)
         q = rtp.change_of_basis.flatten(-2).to(device)
@@ -109,6 +110,8 @@ class BlockIrrepMapper:
         diagonal: bool = False,
         device: torch.device | str = "cpu",
     ):
+        assert diagonal is False, "diagonal=True not supported"
+
         from core.orbital_irrep_config import (
             OrbitalIrrepConfig,
         )  # local import to avoid cycle

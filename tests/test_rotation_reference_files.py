@@ -27,20 +27,16 @@ _CFG = OrbitalIrrepConfig.from_dict({"H": "2s1p", "O": "3s2p"})
 
 
 def _rotation_matrix() -> torch.Tensor:
-    """Return the 3x3 tensor representing the (-π/6) z-rotation."""
+    """Return the 3x3 tensor representing the (-π/6) y-rotation."""
     theta = -math.pi / 6.0
     c, s = math.cos(theta), math.sin(theta)
-    return torch.tensor(
-        [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float32
-    )
+    return torch.tensor([[c, 0.0, s], [0.0, 1, 0.0], [-s, 0.0, c]], dtype=torch.float32)
 
 
 def _load_pair(orig_name: str, rot_name: str):
     base = Path("./data/small/H2O")
-    snap_orig = parse_openmx_scfout(base / orig_name, _ATOMS, _CFG, convention="openmx")
-    snap_rot_ref = parse_openmx_scfout(
-        base / rot_name, _ATOMS, _CFG, convention="openmx"
-    )
+    snap_orig = parse_openmx_scfout(base / orig_name, _ATOMS, _CFG, convention="e3nn")
+    snap_rot_ref = parse_openmx_scfout(base / rot_name, _ATOMS, _CFG, convention="e3nn")
     # canonicalise edge order → lexicographic (avoids ties w/ equal norms)
     snap_orig = snap_orig
     snap_rot_ref = snap_rot_ref
