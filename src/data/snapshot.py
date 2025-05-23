@@ -102,15 +102,6 @@ class Snapshot:
         """Return *scalar* Tr(D·H)."""
         return trace_matmul_sparse_snap_vectorized(self.hamiltonian, self.density)
 
-    # ---------------------------------------------------------------- dunder access
-    def __getitem__(self, item: str) -> BlockMatrix:
-        return self._mats[item]
-
-    def __getattr__(self, name: str) -> Any:  # noqa: ANN401  (# type: ignore[override]
-        if name in self._mats:
-            return self._mats[name]
-        raise AttributeError(name)
-
     # ---------------------------------------------------------------- serialisation
     def _payload(self):
         return {k: v._to_payload() for k, v in self._mats.items()}
@@ -205,9 +196,18 @@ class Snapshot:
     def rotate(self, R: torch.Tensor) -> "Snapshot":
         """
         Return a new **rotated** snapshot where all three matrices have been
-        rotated by the same 3x3 matrix **R**.  Requires `basis == "e3nn"`.
+        rotated by the same 3x3 matrix **R**.
         """
         ham = self.hamiltonian.rotate(R)
         ovl = self.overlap.rotate(R)
         den = self.density.rotate(R)
         return Snapshot(ham, ovl, den)
+
+    # ---------------------------------------------------------------- dunder access
+    def __getitem__(self, item: str) -> BlockMatrix:
+        return self._mats[item]
+
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401  (# type: ignore[override]
+        if name in self._mats:
+            return self._mats[name]
+        raise AttributeError(name)
