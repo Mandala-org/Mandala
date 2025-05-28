@@ -61,8 +61,8 @@ class Snapshot:
             "density": density,
         }
 
-        self.positions = positions  # may be None for non-periodic test cases
-        self.box = box  # ditto
+        self.positions = positions
+        self.box = box  # may be None for non-periodic test cases
 
         # edge ordering according to |D| magnitude -------------------------
         self._order_edges_by_density()
