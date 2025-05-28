@@ -48,6 +48,9 @@ class Snapshot:
         hamiltonian: BlockMatrix,
         overlap: BlockMatrix,
         density: BlockMatrix,
+        *,
+        positions: torch.Tensor | None = None,  # (N,3)
+        box: torch.Tensor | None = None,  # (3,3)
     ) -> None:
         # quick consistency sanity checks
         self._check_compatibility(hamiltonian, overlap, density)
@@ -57,6 +60,9 @@ class Snapshot:
             "overlap": overlap,
             "density": density,
         }
+
+        self.positions = positions  # may be None for non-periodic test cases
+        self.box = box  # ditto
 
         # edge ordering according to |D| magnitude -------------------------
         self._order_edges_by_density()
@@ -104,7 +110,11 @@ class Snapshot:
 
     # ---------------------------------------------------------------- serialisation
     def _payload(self):
-        return {k: v._to_payload() for k, v in self._mats.items()}
+        return {
+            "positions": self.positions.cpu() if self.positions is not None else None,
+            "box": self.box.cpu() if self.box is not None else None,
+            "mats": {k: v._to_payload() for k, v in self._mats.items()},
+        }
 
     def save(self, path: str | os.PathLike) -> None:
         torch.save(self._payload(), path)
@@ -142,9 +152,21 @@ class Snapshot:
         payload_top = torch.load(path, map_location="cpu")
         mats = {
             name: cls._matrix_from_payload(pld, device)
-            for name, pld in payload_top.items()
+            for name, pld in payload_top["mats"].items()
         }
-        return cls(mats["hamiltonian"], mats["overlap"], mats["density"])
+        pos = payload_top.get("positions", None)
+        box = payload_top.get("box", None)
+        if pos is not None:
+            pos = pos.to(device)
+        if box is not None:
+            box = box.to(device)
+        return cls(
+            mats["hamiltonian"],
+            mats["overlap"],
+            mats["density"],
+            positions=pos,
+            box=box,
+        )
 
     # ---------------------------------------------------------------- repr
     def __repr__(self):  # pragma: no cover
@@ -202,6 +224,78 @@ class Snapshot:
         ovl = self.overlap.rotate(R)
         den = self.density.rotate(R)
         return Snapshot(ham, ovl, den)
+
+        # -------------------------------------------------------------------- helpers
+
+    # -------------------- minimal-image displacements ---------------------------
+    def _edge_displacements(
+        self, mat: BlockMatrix | None = None
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Return dict ``key → (E,3)`` of minimal-image displacement vectors.
+
+        Requires ``self.positions`` **and** ``self.box``.
+        """
+        if self.positions is None or self.box is None:
+            raise RuntimeError("Snapshot has no position/box information")
+
+        if mat is None:
+            mat = self.density  # default
+
+        inv_box = torch.inverse(self.box.to(self.positions))  # (3,3)
+        vecs: Dict[str, torch.Tensor] = {}
+
+        for key, edges in mat.pair_edges.items():  # edges (2,E)
+            src, dst = edges
+            delta = self.positions[dst] - self.positions[src]  # (E,3)
+
+            # fractional coordinates & wrap to (-0.5,0.5]
+            frac = delta @ inv_box
+            frac_wrapped = frac - torch.round(frac)
+
+            vecs[key] = frac_wrapped @ self.box.to(self.positions)
+
+        return vecs
+
+    def _edge_distances(
+        self, mat: BlockMatrix | None = None
+    ) -> Dict[str, torch.Tensor]:
+        """Return dict ``key → (E,)`` with minimal-image distances."""
+        disp = self._edge_displacements(mat)
+        return {k: torch.linalg.norm(v, dim=-1) for k, v in disp.items()}
+
+    # -------------------- public API -------------------------------------------
+    def max_distance(self, which: str = "density") -> torch.Tensor:
+        """
+        Largest minimal-image distance appearing in *which* sparse matrix
+        (\"hamiltonian\" | \"overlap\" | \"density\").
+        """
+        mat = self._mats[which]
+        d = self._edge_distances(mat)
+        return torch.stack([v.max() for v in d.values()]).max()
+
+    def filter_by_distance(self, cutoff: float, which: str = "density") -> "Snapshot":
+        """
+        Return a **new** snapshot where edges whose minimal-image distance
+        exceeds ``cutoff`` (Å) are removed *in **all** three matrices*.
+
+        Edge set is taken from *which* (defaults to \"density\").
+        """
+        dist = self._edge_distances(self._mats[which])
+        mask_dict = {k: (v <= cutoff) for k, v in dist.items()}
+
+        ham = self.hamiltonian._apply_edge_mask(mask_dict)
+        ovl = self.overlap._apply_edge_mask(mask_dict)
+        den = self.density._apply_edge_mask(mask_dict)
+
+        # Constructor will re-order edges by |D| again
+        return Snapshot(
+            ham,
+            ovl,
+            den,
+            positions=self.positions,
+            box=self.box,
+        )
 
     # ---------------------------------------------------------------- dunder access
     def __getitem__(self, item: str) -> BlockMatrix:

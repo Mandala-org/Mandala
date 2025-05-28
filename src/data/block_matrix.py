@@ -22,6 +22,7 @@ import os
 
 from dataclasses import dataclass
 from typing import Dict, Tuple, TYPE_CHECKING
+from typing import Sequence
 
 if TYPE_CHECKING:
     from core.basis_converter import OpenMXE3NNConverter
@@ -308,6 +309,51 @@ class BlockMatrix:
             lookup=self.lookup,
             mapper=self.mapper,
             basis=basis,
+        )
+
+    def _apply_edge_mask(
+        self,
+        mask_dict: Dict[PairKey, torch.Tensor | Sequence[bool]],
+        *,
+        drop_empty: bool = True,
+    ) -> "BlockMatrix":
+        """
+        Internal utility - return a **new** BlockMatrix where, for every
+        ``key`` contained in ``mask_dict``, only the edges with a *True*
+        entry in the 1-D boolean mask are kept.
+
+        Keys **not** present in the dict are copied unchanged.
+        """
+        pair_blocks, pair_edges, lookup = {}, {}, {}
+
+        for key, blk in self.pair_blocks.items():
+            if key in mask_dict:
+                mask = torch.as_tensor(
+                    mask_dict[key], dtype=torch.bool, device=blk.device
+                )
+                if mask.ndim != 1 or mask.numel() != blk.shape[0]:
+                    raise ValueError(f"Mask for '{key}' has wrong shape")
+                blk_kept = blk[mask]
+                edges_kept = self.pair_edges[key][:, mask]
+            else:  # untouched
+                blk_kept = blk
+                edges_kept = self.pair_edges[key]
+
+            if blk_kept.shape[0] == 0 and drop_empty:
+                continue  # drop key entirely
+
+            pair_blocks[key] = blk_kept
+            pair_edges[key] = edges_kept
+            for idx, (i, j) in enumerate(edges_kept.t().tolist()):
+                lookup[(i, j)] = (key, idx)
+
+        return BlockMatrix(
+            atoms=self.atoms,
+            pair_blocks=pair_blocks,
+            pair_edges=pair_edges,
+            lookup=lookup,
+            mapper=self.mapper,
+            basis=self.basis,
         )
 
     # ---------------- basis conversion wrappers ----------------------------
