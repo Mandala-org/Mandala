@@ -73,8 +73,8 @@ _RE_XYZ_START = re.compile(r"<coordinates\.forces", re.I)
 _RE_XYZ_END = re.compile(r"coordinates\.forces>", re.I)
 
 # Fractional coordinates
-_RE_FRAC_START = re.compile(r"<coordinates\.fractional", re.I)
-_RE_FRAC_END = re.compile(r"coordinates\.fractional>", re.I)
+
+_FRAC_HEADER = re.compile(r"^.*Fractional coordinates of the final structure", re.I)
 
 _ORB_ORDER = "spdfghijklmnopqrstuvwxyz"
 
@@ -183,19 +183,28 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
     forces = torch.tensor(f_list, dtype=torch.float64) if f_list else torch.tensor([])
 
     # 5b) Fractional coords -------------------------------------------------
-    frac_list = []
-    in_frac = False
-    for ln in lines:
-        if _RE_FRAC_START.search(ln):
-            in_frac = True
-            continue
-        if in_frac and _RE_FRAC_END.search(ln):
+    frac_list: list[list[float]] = []
+    i = 0
+    while i < len(lines):
+        if _FRAC_HEADER.search(lines[i]):
+            # Skip banner (4-5 lines of stars / blank)
+            i += 1
+            while i < len(lines) and (not lines[i].strip() or lines[i].startswith("*")):
+                i += 1
+            # Now numeric block
+            while i < len(lines):
+                ln = lines[i]
+                if not ln.strip():  # blank line ends block
+                    break
+                # Expected: idx  Elem  f1 f2 f3   (≥5 tokens)
+                parts = ln.split()
+                if len(parts) >= 5 and parts[0].isdigit():
+                    frac_list.append([float(v) for v in parts[2:5]])
+                else:  # header-like row → stop
+                    break
+                i += 1
             break
-        if not in_frac:
-            continue
-        parts = ln.split()
-        if len(parts) >= 5:  # idx Elem fx fy fz
-            frac_list.append([float(v) for v in parts[2:5]])
+        i += 1
 
     frac = (
         torch.tensor(frac_list, dtype=torch.float64) if frac_list else torch.tensor([])

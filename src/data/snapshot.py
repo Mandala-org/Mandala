@@ -350,6 +350,7 @@ class Snapshot:
 
         # ── ③  Attach geometry (positions, later box) and return ────────────
         snap.positions = info.xyz if info.xyz.numel() else None
+        snap.box = info.box if info.box.numel() else None
         # OpenMX writes lattice vectors in other sections - not yet parsed.
         # Users can still `.rotate(...)` / `.filter_by_distance(...)`
         # without PBC if `box` stays *None*.
