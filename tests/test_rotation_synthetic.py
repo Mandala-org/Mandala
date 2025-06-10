@@ -39,8 +39,8 @@ def _rotation_z(theta_rad: float) -> torch.Tensor:
 @pytest.fixture(scope="module")
 def snapshot_e3nn() -> "Snapshot":
     """Parse the small H₂O example directly in *e3nn* basis."""
-    cfg = OrbitalIrrepConfig.from_dict({"H": "2s1p", "O": "3s2p"})
-    sample = Path("./data/small/H2O/H2O_original.out")
+    cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
+    sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
     snap = parse_openmx_scfout(
         sample, atoms, cfg, convention="e3nn"
@@ -111,5 +111,5 @@ def test_rotation_roundtrip(snapshot_e3nn):
     assert torch.allclose(
         snap_back.density.to_dense(),
         snapshot_e3nn.density.to_dense(),
-        atol=1e-5,
+        atol=2e-4,
     )

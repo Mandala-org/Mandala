@@ -35,6 +35,7 @@ import torch
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.block_matrix import BlockMatrix
 from core.basis_converter import OpenMXE3NNConverter
+from core.orbital_irrep_config import OrbitalIrrepConfig
 
 __all__ = ["Snapshot"]
 
@@ -305,3 +306,51 @@ class Snapshot:
         if name in self._mats:
             return self._mats[name]
         raise AttributeError(name)
+
+    # ════════════════════════════════════════════════════════════════════════
+    #                Convenient constructor from  *both*  OpenMX files
+    # ════════════════════════════════════════════════════════════════════════
+    @staticmethod
+    def from_openmx(
+        matrix_path: str | os.PathLike,
+        info_path: str | os.PathLike,
+        *,
+        convention: str = "e3nn",
+        symmetrize_density: bool = True,
+    ) -> "Snapshot":
+        """
+        Build a :class:`Snapshot` directly from an **OpenMX SCF output pair**:
+
+        * ``matrix_path`` - the ``*.scfout`` file containing H/S/D blocks
+        * ``info_path``   - the corresponding ``*.out`` / ``*.info`` file
+          parsed by :func:`data.openmx_info_parser.parse_info_out`
+        """
+
+        from data.openmx_info_parser import parse_info_out
+        from data.openmx_parser import parse_openmx_scfout
+
+        # ── ①  Parse auxiliary info file (atoms, positions, orbital spec…) ──
+        info = parse_info_out(info_path)
+
+        atoms: list[str] = info.elements
+        if not atoms:
+            raise RuntimeError("Info-file does not contain <coordinates.forces>")
+
+        # orbital_set maps element -> compact string  ("3s2p2d1f")
+        orb_cfg = OrbitalIrrepConfig.from_dict(info.orbital_set)
+
+        # ── ②  Let the existing parser build the block-matrix snapshot ──────
+        snap = parse_openmx_scfout(
+            matrix_path,
+            atoms,
+            orb_cfg,
+            convention=convention,
+            symmetrize_density=symmetrize_density,
+        )
+
+        # ── ③  Attach geometry (positions, later box) and return ────────────
+        snap.positions = info.xyz if info.xyz.numel() else None
+        # OpenMX writes lattice vectors in other sections - not yet parsed.
+        # Users can still `.rotate(...)` / `.filter_by_distance(...)`
+        # without PBC if `box` stays *None*.
+        return snap
