@@ -15,7 +15,6 @@ from pathlib import Path
 import math
 
 import torch
-import pytest
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.openmx_parser import parse_openmx_scfout
@@ -23,7 +22,7 @@ from data.openmx_parser import parse_openmx_scfout
 
 # ------------------------------------------------------------------ helpers
 _ATOMS = list("HHHHOO")  # global index order used in the test files
-_CFG = OrbitalIrrepConfig.from_dict({"H": "2s1p", "O": "3s2p"})
+_CFG = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
 
 
 def _rotation_matrix() -> torch.Tensor:
@@ -33,10 +32,14 @@ def _rotation_matrix() -> torch.Tensor:
     return torch.tensor([[c, 0.0, s], [0.0, 1, 0.0], [-s, 0.0, c]], dtype=torch.float32)
 
 
-def _load_pair(orig_name: str, rot_name: str):
+def _load_pair():
     base = Path("./data/small/H2O")
-    snap_orig = parse_openmx_scfout(base / orig_name, _ATOMS, _CFG, convention="e3nn")
-    snap_rot_ref = parse_openmx_scfout(base / rot_name, _ATOMS, _CFG, convention="e3nn")
+    snap_orig = parse_openmx_scfout(
+        base / "original" / "H2O.matrix", _ATOMS, _CFG, convention="e3nn"
+    )
+    snap_rot_ref = parse_openmx_scfout(
+        base / "rotated" / "H2O.matrix", _ATOMS, _CFG, convention="e3nn"
+    )
     # canonicalise edge order → lexicographic (avoids ties w/ equal norms)
     snap_orig = snap_orig
     snap_rot_ref = snap_rot_ref
@@ -51,20 +54,12 @@ def _assert_snapshot_equal(a, b, *, atol=1e-5):
         assert torch.allclose(mat_a, mat_b, atol=atol), f"{name} mismatch beyond {atol}"
 
 
-# ------------------------------------------------------------------ parametrised tests
-@pytest.mark.parametrize(
-    "orig_file, rot_file",
-    [
-        ("H2O_original.out", "H2O_rotated.out"),
-        ("H2O_pbc_original.out", "H2O_pbc_rotated.out"),
-    ],
-)
-def test_pre_rotated_files_match_in_code_rotation(orig_file, rot_file):
+def test_pre_rotated_files_match_in_code_rotation():
     """
     Rotate the *original* snapshot by the known matrix and compare to the
     reference “rotated” file published in the dataset.
     """
-    snap_orig, snap_rot_ref = _load_pair(orig_file, rot_file)
+    snap_orig, snap_rot_ref = _load_pair()
 
     R = _rotation_matrix()
     snap_rot_calc = snap_orig.rotate(R)

@@ -8,8 +8,8 @@ from data.snapshot import Snapshot
 
 
 def _load_snapshot():
-    cfg = OrbitalIrrepConfig.from_dict({"H": "2s1p", "O": "3s2p"})
-    sample = Path("./data/small/H2O/H2O_original.out")
+    cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
+    sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
     return parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
 

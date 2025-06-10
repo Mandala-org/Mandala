@@ -160,6 +160,14 @@ class BlockIrrepMapper:
         itm = self._lookup(pair)
         return itm.vectors_to_blocks(vectors)
 
+    def to(self, device: torch.device | str) -> BlockIrrepMapper:
+        """
+        Move all change-of-basis matrices to a different device.
+        """
+        for itm in self._maps.values():
+            itm.q = itm.q.to(device)
+        return self
+
     # ------------------------- meta-info ------------------------------------ #
     def vector_dim(self, pair: Tuple[str, str] | str) -> int:
         """Number of irrep coefficients for *one* block of `pair`."""
