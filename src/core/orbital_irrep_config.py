@@ -65,12 +65,12 @@ class OrbitalIrrepConfig:
 
                {"Si": ["2x0e", "2x1o", "1x2e"]}
 
-        2. **Full Irreps string** (``+``‑separated; whitespace ignored)::
+        2. **Full Irreps string** (``+``-separated; whitespace ignored)::
 
                {"Si": "2x0e + 2x1o + 1x2e"}
 
-        3. **Compact orbital string** – concatenation of ``<n><orbital>`` where
-           *orbital* is one of ``s p d f g h i k l m`` (case‑insensitive).
+        3. **Compact orbital string** - concatenation of ``<n><orbital>`` where
+           *orbital* is one of ``s p d f g h i k l m`` (case-insensitive).
            Example::
 
                {"Si": "3s2p2d1f"}     # → 3x0e + 2x1o + 2x2e + 1x3o

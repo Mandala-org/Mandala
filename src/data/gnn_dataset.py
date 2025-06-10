@@ -1,0 +1,243 @@
+"""
+gnn_dataset.py
+==============
+
+In-memory dataset that converts :class:`Snapshot` objects into two graph inputs:
+
+* **x_gnn**    → small-cutoff graph used by message-passing layers
+* **x_matrix** → larger graph (no self-edges) used only by the readout head
+
+Diagonal / off-diagonal overlap features are kept **as IrrepsBlockData**
+instead of being concatenated, because different pair-keys carry different
+irreps.
+
+Targets *y* (Hamiltonian / Overlap / Density + energy, electrons) are exactly
+the same as before;  training code can access diagonal / off-diagonal parts
+through the new ``.diag()`` / ``.offdiag()`` helpers.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict, List, Sequence, Tuple
+
+import torch
+from torch.utils.data import Dataset
+from e3nn.o3 import Irreps, spherical_harmonics
+from e3nn.math import soft_one_hot_linspace
+
+from core.orbital_irrep_config import OrbitalIrrepConfig
+from core.block_irrep_mapper import BlockIrrepMapper
+from data.snapshot import Snapshot
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+class E3GNNDataset(Dataset):
+    """
+    Fully in-memory dataset that yields **(x_gnn, x_matrix, y)** tuples.
+
+    *x_gnn*    - tensors built with the *small* cutoff (no self-edges)
+    *x_matrix* - tensors built with the *large* cutoff (superset of edges)
+    *y*        - targets (unchanged Snap-level information)
+    """
+
+    # --------------------------------------------------------------------- init
+    def __init__(
+        self,
+        snapshots: Sequence[Snapshot | str | Path],
+        global_cfg: OrbitalIrrepConfig | None = None,
+        *,
+        cutoff_gnn: float = 5.0,
+        cutoff_matrix: float = 7.5,
+        l_max_sh: int = 3,
+        n_radial: int = 64,
+        keep_snapshots: bool = False,
+        device: torch.device | str = "cpu",
+    ):
+        if cutoff_gnn >= cutoff_matrix:
+            raise ValueError("cutoff_gnn must be < cutoff_matrix")
+
+        self.device = torch.device(device)
+        self.keep_snapshots = keep_snapshots
+
+        # shared helpers ------------------------------------------------------
+        # self.global_cfg = global_cfg
+        # self.mapper = BlockIrrepMapper(global_cfg, device="cpu")   # tiny
+        if global_cfg is None:
+            self.global_cfg = snapshots[
+                0
+            ].hamiltonian.mapper.orbital_cfg  #! WARNING: temporary, we should always have one global config
+            self.mapper = snapshots[
+                0
+            ].hamiltonian.mapper  #! WARNING: temporary, we should always have one global config
+        else:
+            self.global_cfg = global_cfg
+            self.mapper = BlockIrrepMapper(global_cfg, device="cpu")
+        self.l_max_sh = int(l_max_sh)
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.l_max_sh)
+        self.n_radial = int(n_radial)
+        self.cut_gnn = float(cutoff_gnn)
+        self.cut_mat = float(cutoff_matrix)
+
+        # edge-type encoding (ordered pairs)
+        elems = self.global_cfg.elements()
+        self.edge_types: List[str] = [f"{a}-{b}" for a in elems for b in elems]
+        self.edge_type2idx: Dict[str, int] = {
+            k: i for i, k in enumerate(self.edge_types)
+        }
+        self.n_edge_types = len(self.edge_types)
+
+        # preprocess all snapshots -------------------------------------------
+        self.samples: List[Tuple[Dict, Dict, Dict]] = []
+        for item in snapshots:
+            snap = item if isinstance(item, Snapshot) else Snapshot.load(item)
+            self.samples.append(self._process_snapshot(snap))
+
+    # ---------------------------------------------------------------- helpers
+    # ---------- minimal-image displacements ----------------------------------
+    @staticmethod
+    def _minimal_disp(pos: torch.Tensor, edges: torch.Tensor, box: torch.Tensor | None):
+        if box is None:
+            return pos[edges[1]] - pos[edges[0]]
+        inv_box = torch.inverse(box)
+        delta = pos[edges[1]] - pos[edges[0]]  # cart
+        frac = delta @ inv_box
+        frac = frac - torch.round(frac)
+        return frac @ box
+
+    # ---------- build edge tensors for a given cutoff ------------------------
+    def _edge_tensors(
+        self,
+        snap: Snapshot,
+        dist_dict: Dict[str, torch.Tensor],
+        cutoff: float,
+    ):
+        """
+        Returns
+        -------
+        edge_index : (2,E)  long
+        edge_one_hot : (E,n_types)  float
+        edge_length_emb : (E,n_radial)  float
+        edge_sh : (E, sh_dim)  float
+        keep_mask_dict : dict[key] → bool mask (E_key,)  (needed to subset vectors)
+        """
+        edge_src, edge_dst, etype_idx = [], [], []
+        keep_mask_dict: Dict[str, torch.Tensor] = {}
+
+        for key in sorted(snap.density.keys()):
+            edges = snap.density.pair_edges[key]  # (2,E_key)
+            dists = dist_dict[key]  # (E_key,)
+            diag_mask = edges[0] == edges[1]
+            keep = (~diag_mask) & (dists <= cutoff)  # off-diag & within cutoff
+            if torch.any(keep):
+                keep_mask_dict[key] = keep
+                edge_src.extend(edges[0][keep].tolist())
+                edge_dst.extend(edges[1][keep].tolist())
+                etype_idx.extend([self.edge_type2idx[key]] * int(keep.sum()))
+
+        edge_index = torch.tensor(
+            [edge_src, edge_dst], dtype=torch.long, device=self.device
+        )
+        etype_idx = torch.tensor(etype_idx, dtype=torch.long, device=self.device)
+        edge_one_hot = torch.nn.functional.one_hot(
+            etype_idx, num_classes=self.n_edge_types
+        ).to(torch.float32)
+
+        # geometric encodings -------------------------------------------------
+        disp = self._minimal_disp(
+            snap.positions.to(self.device),
+            edge_index,
+            snap.box.to(self.device) if snap.box is not None else None,
+        )
+        dists_kept = torch.linalg.norm(disp, dim=-1)
+
+        edge_length_emb = soft_one_hot_linspace(
+            dists_kept,
+            start=0.0,
+            end=self.cut_mat,  # upper bound irrelevant due to Gaussian tail
+            number=self.n_radial,
+            basis="gaussian",
+            cutoff=False,
+        ).to(torch.float32)
+
+        edge_sh = spherical_harmonics(
+            self.sh_irreps, disp, normalize=True, normalization="component"
+        ).to(torch.float32)
+
+        return edge_index, edge_one_hot, edge_length_emb, edge_sh, keep_mask_dict
+
+    # ---------- main per-snapshot routine -----------------------------------
+    def _process_snapshot(self, snap: Snapshot):
+        # pre-compute distances once for the largest graph
+        dist_dict = snap._edge_distances(snap.density)
+
+        # ---------- build matrices for *both* cutoffs ------------------------
+        (ei_gnn, eo_gnn, el_gnn, es_gnn, keep_gnn) = self._edge_tensors(
+            snap, dist_dict, self.cut_gnn
+        )
+
+        (ei_mat, eo_mat, el_mat, es_mat, keep_mat) = self._edge_tensors(
+            snap, dist_dict, self.cut_mat
+        )
+
+        # ---------- node one-hot --------------------------------------------
+        atoms = snap.density.atoms
+        elem2idx = {el: i for i, el in enumerate(self.global_cfg.elements())}
+        N = len(atoms)
+        node_oh = torch.zeros(N, len(elem2idx), device=self.device)
+        for i, el in enumerate(atoms):
+            node_oh[i, elem2idx[el]] = 1.0
+
+        # ---------- overlap vectors split diag / offdiag --------------------
+        overlap_ir = snap.overlap.to_vectors()  # IrrepsBlockData
+        overlap_diag = overlap_ir.diag()  # dict
+
+        # helper to subset off-diag vectors to the kept edges ----------------
+        def _subset_offdiag(
+            mask_dict: Dict[str, torch.Tensor]
+        ) -> Dict[str, torch.Tensor]:
+            out: Dict[str, torch.Tensor] = {}
+            for key, mask in mask_dict.items():
+                out[key] = overlap_ir.pair_vectors[key][mask]
+            return out
+
+        overlap_off_gnn = _subset_offdiag(keep_gnn)
+        overlap_off_mat = _subset_offdiag(keep_mat)
+
+        # ========== assemble x_gnn / x_matrix ===============================
+        x_gnn = {
+            "node_one_hot": node_oh,
+            "edge_index": ei_gnn,
+            "edge_one_hot": eo_gnn,
+            "edge_length_emb": el_gnn,
+            "edge_sh": es_gnn,
+            "overlap_vectors_diag": overlap_diag,  # dict
+            "overlap_vectors_offdiag": overlap_off_gnn,  # dict
+        }
+        x_matrix = {
+            "edge_index": ei_mat,
+            "edge_one_hot": eo_mat,
+            "edge_length_emb": el_mat,
+            "edge_sh": es_mat,
+            "overlap_vectors_diag": overlap_diag,  # same dict
+            "overlap_vectors_offdiag": overlap_off_mat,  # superset of gnn
+        }
+
+        # ========== targets y ===============================================
+        y = {
+            "hamiltonian": snap.hamiltonian.to_vectors().to(self.device),
+            "overlap": overlap_ir.to(self.device),
+            "density": snap.density.to_vectors().to(self.device),
+            "energy": snap.get_energy().to(self.device),
+            "num_electrons": snap.get_number_of_electrons().to(self.device),
+            "snapshot": snap if self.keep_snapshots else None,
+        }
+
+        return x_gnn, x_matrix, y
+
+    # ------------------- torch Dataset interface ---------------------------
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx: int):
+        return self.samples[idx]

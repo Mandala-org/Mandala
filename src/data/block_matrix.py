@@ -68,6 +68,37 @@ class BlockMatrix:
     def keys(self):
         return self.pair_blocks.keys()
 
+    # ─────────────────────────────────────────────────────────────────────────
+    #   helpers to access diagonal / off-diagonal blocks
+    # ─────────────────────────────────────────────────────────────────────────
+    def diag(self) -> Dict[PairKey, torch.Tensor]:
+        """
+        Return a **dict** ``key → tensor`` that contains *only the blocks whose
+        global source/target atom are identical* (self-edges).
+
+        Off-diagonal blocks are omitted; keys that would become empty disappear.
+        """
+        diag_dict: Dict[PairKey, torch.Tensor] = {}
+        for key, blk in self.pair_blocks.items():
+            edges = self.pair_edges[key]  # (2,E)
+            mask = edges[0] == edges[1]  # (E,)
+            if torch.any(mask):
+                diag_dict[key] = blk[mask]
+        return diag_dict
+
+    def offdiag(self) -> Dict[PairKey, torch.Tensor]:
+        """
+        Same as :meth:`diag` but returns the **off-diagonal** blocks
+        ( *i* ≠ *j* ).
+        """
+        off_dict: Dict[PairKey, torch.Tensor] = {}
+        for key, blk in self.pair_blocks.items():
+            edges = self.pair_edges[key]
+            mask = edges[0] != edges[1]
+            if torch.any(mask):
+                off_dict[key] = blk[mask]
+        return off_dict
+
     # --------------- device handling --------------------------------------- #
     def to(self, device):
         new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
@@ -571,8 +602,8 @@ class IrrepsBlockData:
         vecs = {k: v.to(device) for k, v in self.pair_vectors.items()}
         edges = {k: v.to(device) for k, v in self.pair_edges.items()}
         return IrrepsBlockData(
-            self.atoms, vecs, edges, self.lookup, self.mapper
-        )  # TODO: mapper also changes device
+            self.atoms, vecs, edges, self.lookup, self.mapper.to(device), self.basis
+        )
 
     # -------- inverse change-of-basis ----- #
     def to_blocks(self) -> BlockMatrix:
@@ -582,6 +613,27 @@ class IrrepsBlockData:
         return BlockMatrix(
             self.atoms, pair_blk, self.pair_edges, self.lookup, self.mapper, self.basis
         )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    #   diag / offdiag access for vector form
+    # ─────────────────────────────────────────────────────────────────────────
+    def diag(self) -> Dict[PairKey, torch.Tensor]:
+        diag_dict: Dict[PairKey, torch.Tensor] = {}
+        for key, vec in self.pair_vectors.items():
+            edges = self.pair_edges[key]
+            mask = edges[0] == edges[1]
+            if torch.any(mask):
+                diag_dict[key] = vec[mask]
+        return diag_dict
+
+    def offdiag(self) -> Dict[PairKey, torch.Tensor]:
+        off_dict: Dict[PairKey, torch.Tensor] = {}
+        for key, vec in self.pair_vectors.items():
+            edges = self.pair_edges[key]
+            mask = edges[0] != edges[1]
+            if torch.any(mask):
+                off_dict[key] = vec[mask]
+        return off_dict
 
     # -------- indexing paralleling BlockMatrix -------- #
     def __getitem__(self, item):
