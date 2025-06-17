@@ -158,6 +158,13 @@ class E3GNNDataset(Dataset):
 
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot(self, snap: Snapshot):
+        """
+        Build graph inputs (small and large cutoff) and targets from one Snapshot.
+
+        Returns:
+          Tuple of (x_gnn, x_matrix, y), where x_gnn and x_matrix are input dicts
+          for the GNN and readout, and y contains the target IrrepsBlockData.
+        """
         # pre-compute distances once for the largest graph
         dist_dict = snap._edge_distances(snap.density)
 
