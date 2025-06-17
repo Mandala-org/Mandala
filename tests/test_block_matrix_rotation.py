@@ -6,7 +6,6 @@ import math
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
-from core.block_irrep_mapper import BlockIrrepMapper
 from data.block_matrix import BlockMatrix
 
 
@@ -16,7 +15,6 @@ def _make_small_matrix() -> BlockMatrix:
     directly in *e3nn* basis for fast tests.
     """
     cfg = OrbitalIrrepConfig.from_dict({"H": ["1x0e"], "O": ["1x0e"]})
-    mapper = BlockIrrepMapper(cfg)
     atoms = ("H", "O")
 
     # single 1×1 scalar blocks → easy numerics
@@ -39,7 +37,7 @@ def _make_small_matrix() -> BlockMatrix:
         (1, 1): ("O-O", 0),
     }
 
-    return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, mapper, basis="e3nn")
+    return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, cfg, basis="e3nn")
 
 
 def _rot_y(theta):

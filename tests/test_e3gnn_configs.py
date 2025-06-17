@@ -14,6 +14,7 @@ import torch
 from e3nn.o3 import Irreps
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from core.block_irrep_mapper import BlockIrrepMapper
 from net.common import HyperParams
 from net.e3gnn import E3GNN
 
@@ -54,6 +55,7 @@ HP_VARIANTS = [
 ]
 
 cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+mapper = BlockIrrepMapper(cfg)
 EDGE_TYPES = ["H-H"]
 
 
@@ -61,9 +63,9 @@ EDGE_TYPES = ["H-H"]
 def test_e3gnn_forward_variants(hp_kwargs):
     hp = HyperParams(**hp_kwargs)
     model = E3GNN(
-        orbital_cfg=cfg,
-        edge_types=EDGE_TYPES,
-        hp=hp,
+        mapper,
+        EDGE_TYPES,
+        hp,
         device="cpu",
     )
 

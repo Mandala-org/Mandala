@@ -40,13 +40,13 @@ def make_mock_matrix():
         k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
     }
 
-    return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, mapper, "openmx")
+    return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, cfg, "openmx"), mapper
 
 
 def test_roundtrip_blocks_vectors():
-    snap_blk = make_mock_matrix()
-    snap_vec = snap_blk.to_vectors()
-    snap_reco = snap_vec.to_blocks()
+    snap_blk, mapper = make_mock_matrix()
+    snap_vec = snap_blk.to_vectors(mapper)
+    snap_reco = snap_vec.to_blocks(mapper)
 
     # test one random global pair
     assert torch.allclose(snap_blk[(2, 5)], snap_reco[(2, 5)], atol=1e-6)
@@ -56,11 +56,11 @@ def test_roundtrip_blocks_vectors():
 
 
 def test_denseify_roundtrip():
-    matrix = make_mock_matrix()
+    matrix, mapper = make_mock_matrix()
     dense = matrix.to_dense()
     re_matrix = BlockMatrix.from_dense(
         dense,
-        matrix.mapper.orbital_cfg,
+        mapper.orbital_cfg,
         matrix.atoms,
         basis=matrix.basis,
     )
@@ -84,7 +84,7 @@ def test_sparsify_roundtrip():
 
 
 def test_save_load_roundtrip(tmp_path):
-    matrix = make_mock_matrix()
+    matrix, mapper = make_mock_matrix()
     file = tmp_path / "matrix.pt"
     matrix.save(file)
 
@@ -97,8 +97,8 @@ def test_save_load_roundtrip(tmp_path):
 
 
 def test_irreps_save_load(tmp_path):
-    matrix_blk = make_mock_matrix()
-    matrix_vec = matrix_blk.to_vectors()
+    matrix_blk, mapper = make_mock_matrix()
+    matrix_vec = matrix_blk.to_vectors(mapper)
 
     file = tmp_path / "matrix_vec.pt"
     matrix_vec.save(file)
@@ -109,13 +109,13 @@ def test_irreps_save_load(tmp_path):
     assert torch.allclose(matrix_vec[(2, 0)], matrix_vec_loaded[(2, 0)], atol=1e-6)
 
     # convert back to blocks and verify against original blocks
-    matrix_blk_reco = matrix_vec_loaded.to_blocks()
+    matrix_blk_reco = matrix_vec_loaded.to_blocks(mapper)
     assert torch.allclose(matrix_blk["O-H"], matrix_blk_reco["O-H"], atol=1e-6)
 
 
 def test_basis_converter_roundtrip():
-    matrix_open = make_mock_matrix()  # default basis="openmx"
-    conv = OpenMXE3NNConverter(matrix_open.mapper.orbital_cfg)
+    matrix_open, mapper = make_mock_matrix()  # default basis="openmx"
+    conv = OpenMXE3NNConverter(mapper.orbital_cfg)
 
     matrix_e3 = conv.matrix_to_e3nn(matrix_open)
     assert matrix_e3.basis == "e3nn"
@@ -133,8 +133,8 @@ def test_basis_converter_roundtrip():
 
 
 def test_block_converter_direct():
-    matrix = make_mock_matrix()
-    conv = OpenMXE3NNConverter(matrix.mapper.orbital_cfg)
+    matrix, mapper = make_mock_matrix()
+    conv = OpenMXE3NNConverter(mapper.orbital_cfg)
 
     key = "O-H"
     blk = matrix[key][0]  # (d_O, d_H)
@@ -150,7 +150,7 @@ def test_block_converter_direct():
 
 def _shuffled_matrix():
     """Return a matrix whose edges are randomly permuted inside every key."""
-    matrix = make_mock_matrix()
+    matrix, mapper = make_mock_matrix()
     import torch
 
     order = {}
@@ -161,7 +161,7 @@ def _shuffled_matrix():
 
 
 def test_addition_commutes():
-    A = make_mock_matrix()
+    A, mapper = make_mock_matrix()
     B = _shuffled_matrix()
 
     C1 = A + B
@@ -170,7 +170,7 @@ def test_addition_commutes():
 
 
 def test_subtraction_vs_dense():
-    A = make_mock_matrix()
+    A, mapper = make_mock_matrix()
     B = _shuffled_matrix()
     C = A - B
 
@@ -179,7 +179,7 @@ def test_subtraction_vs_dense():
 
 
 def test_sum_builtin():
-    A = make_mock_matrix()
+    A, mapper = make_mock_matrix()
     B = _shuffled_matrix()
     total = sum([A, B])  # relies on __radd__ with 0
     assert torch.allclose(total.to_dense(), A.to_dense() + B.to_dense(), atol=1e-6)

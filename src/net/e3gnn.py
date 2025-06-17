@@ -17,7 +17,6 @@ from torch import nn
 
 from e3nn.o3 import Irreps
 
-from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 
@@ -36,10 +35,9 @@ class E3GNN(pl.LightningModule):
     `training_step`.
     """
 
-    # ------------------------------------------------------------------ init
     def __init__(
         self,
-        orbital_cfg: OrbitalIrrepConfig,
+        mapper: BlockIrrepMapper,
         edge_types: List[str],
         hp: HyperParams = HyperParams(),
         *,
@@ -48,10 +46,13 @@ class E3GNN(pl.LightningModule):
         dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["orbital_cfg"])  # Lightning checkpointing
+        # check-point everything *except* the (non-serialisable) mapper
+        self.save_hyperparameters(ignore=["mapper"])
         self.hp = hp
         self.lr = lr
         self.device_ = torch.device(device)
+        # shared mapper (no local creation!)
+        self.mapper: BlockIrrepMapper = mapper.to(self.device_)
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
@@ -59,7 +60,7 @@ class E3GNN(pl.LightningModule):
 
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(
-            node_one_hot_dim=len(orbital_cfg.elements()),
+            node_one_hot_dim=len(self.mapper.orbital_cfg.elements()),
             out_irreps=self.hidden_irreps,
             hp=hp,
             device=self.device_,
@@ -94,7 +95,7 @@ class E3GNN(pl.LightningModule):
                 name: DeepHead(
                     in_irreps=self.hidden_irreps,
                     pair_keys=edge_types,
-                    orbital_cfg=orbital_cfg,
+                    mapper=self.mapper,
                     hp=hp,
                     device=self.device_,
                     dtype=dtype,
@@ -102,9 +103,6 @@ class E3GNN(pl.LightningModule):
                 for name in ("hamiltonian", "overlap", "density")
             }
         )
-
-        # tiny mapper for wrapping predictions back to IrrepsBlockData
-        self.mapper = BlockIrrepMapper(orbital_cfg, diagonal=False, device=self.device_)
 
     # ------------------------------------------------------------------ util helpers
     @staticmethod
@@ -137,7 +135,7 @@ class E3GNN(pl.LightningModule):
             pair_vectors=pair_vec,
             pair_edges=pair_edges,
             lookup=lookup,
-            mapper=self.mapper,
+            orbital_cfg=self.mapper.orbital_cfg,
         )
 
     # ------------------------------------------------------------------ forward
