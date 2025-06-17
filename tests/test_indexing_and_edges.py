@@ -10,19 +10,23 @@ import pytest
 
 from data.openmx_parser import parse_openmx_scfout
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from core.block_irrep_mapper import BlockIrrepMapper
 
 
 @pytest.fixture(scope="module")
-def snapshot():
+def data():
     atoms = list("HHHHOO")  # global indices 0…5
     cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
     file = Path("./data/small/H2O/original/H2O.matrix")
-    return parse_openmx_scfout(file, atoms, cfg, convention="openmx")
+    return parse_openmx_scfout(file, atoms, cfg, convention="openmx"), BlockIrrepMapper(
+        cfg
+    )
 
 
 # --------------------------------------------------------------------------- #
-def test_blockmatrix_lookup(snapshot):
+def test_blockmatrix_lookup(data):
     """Global indexing ((i,j)) must hit the *same* tensor as pair-local lookup."""
+    snapshot, mapper = data
     B = snapshot.hamiltonian  # BlockMatrix
     rng = random.Random(2024)
 
@@ -35,8 +39,10 @@ def test_blockmatrix_lookup(snapshot):
         assert torch.allclose(blk_global, blk_local, atol=1e-7)
 
 
-def test_irrepsblockdata_lookup(snapshot):
-    V = snapshot.density.to_vectors()  # IrrepsBlockData
+def test_irrepsblockdata_lookup(data):
+    """Global indexing ((i,j)) must hit the *same* vector as pair-local lookup."""
+    snapshot, mapper = data
+    V = snapshot.density.to_vectors(mapper)  # IrrepsBlockData
     rng = random.Random(17)
 
     for _ in range(10):

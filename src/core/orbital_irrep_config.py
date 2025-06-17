@@ -17,13 +17,20 @@ orbitals:
     - 1x2e
 """
 
+# ! Add: block_dims
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Tuple
 
 import yaml
 from e3nn.o3 import Irreps
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from data.openmx_info_parser import InfoOutData  # type: ignore[import-untyped]
 
 
 class OrbitalIrrepConfigError(ValueError):
@@ -35,6 +42,9 @@ class OrbitalIrrepConfig:
     """Holds per-element orbital irreps and exposes convenience accessors."""
 
     element_to_irreps: Dict[str, Irreps] = field(default_factory=dict)
+    _elem_dim_cache: Dict[str, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     # --------------------------------------------------------------------- API
     @classmethod
@@ -172,3 +182,79 @@ class OrbitalIrrepConfig:
     def __repr__(self) -> str:  # pragma: no cover
         tbl = "\n".join(f"  {el}: {irr}" for el, irr in self.element_to_irreps.items())
         return f"OrbitalIrrepConfig(\n{tbl}\n)"
+
+    # ──────────────────────────────────────────────────────────────────
+    # NEW STATIC HELPERS
+    # ──────────────────────────────────────────────────────────────────
+    @staticmethod
+    def merge(configs: Sequence["OrbitalIrrepConfig"]) -> "OrbitalIrrepConfig":
+        """
+        Union-merge several configs **without duplicating BlockIrrepMappers**.
+
+        * If an element appears in more than one config its irreps must be
+          *identical* – otherwise we raise to avoid silent mismatches.
+        """
+        if len(configs) == 0:
+            raise ValueError("merge() needs at least one OrbitalIrrepConfig")
+
+        merged: Dict[str, Sequence[str] | str] = {}
+        for cfg in configs:
+            for el, spec in cfg.to_dict().items():
+                if el in merged and merged[el] != spec:
+                    raise OrbitalIrrepConfigError(
+                        f"Conflicting irreps for element '{el}': "
+                        f"{merged[el]}  vs  {spec}"
+                    )
+                merged[el] = spec
+        return OrbitalIrrepConfig.from_dict(merged)
+
+    # -----------------------------------------------------------------
+    @staticmethod
+    def from_info_list(info_list: Sequence["InfoOutData"]) -> "OrbitalIrrepConfig":
+        """
+        Convenience helper – derive a **project-wide** config directly from a
+        collection of :class:`data.openmx_info_parser.InfoOutData` objects.
+        """
+        collected: Dict[str, Sequence[str] | str] = {}
+        for info in info_list:
+            for el, spec in info.orbital_set.items():
+                if el in collected and collected[el] != spec:
+                    raise OrbitalIrrepConfigError(
+                        f"Conflicting orbital spec for element '{el}': "
+                        f"{collected[el]}  vs  {spec}"
+                    )
+                collected[el] = spec
+        return OrbitalIrrepConfig.from_dict(collected)
+
+    # ------------------------------------------------------------------ dim helper
+    def block_dims(self, pair: Tuple[str, str] | str) -> Tuple[int, int]:
+        """
+        Return ``(d_i, d_j)`` – the orbital dimensions of the two atoms
+        that form *one* matrix block.
+
+        Parameters
+        ----------
+        pair
+            Either a hyphen-joined string ``"Si-H"`` or a two-tuple
+            ``("Si", "H")``.
+        """
+        # canonicalise ----------------------------------------------
+        if isinstance(pair, str):
+            if "-" not in pair:
+                raise ValueError("String key must look like 'A-B'")
+            el_i, el_j = pair.split("-", 1)
+        elif isinstance(pair, tuple) and len(pair) == 2:
+            el_i, el_j = pair
+        else:
+            raise ValueError("pair must be tuple(str,str) or 'A-B' string")
+
+        # cache per element for efficiency --------------------------
+        if not self._elem_dim_cache:
+            self._elem_dim_cache = {
+                el: irr.dim for el, irr in self.element_to_irreps.items()
+            }
+
+        try:
+            return self._elem_dim_cache[el_i], self._elem_dim_cache[el_j]
+        except KeyError as exc:  # pragma: no cover
+            raise ValueError(f"Unknown element in pair: {pair}") from exc

@@ -72,12 +72,12 @@ class Snapshot:
     @staticmethod
     def _check_compatibility(*mats: BlockMatrix) -> None:
         atoms = mats[0].atoms
-        mapper_cfg = mats[0].mapper.orbital_cfg.to_dict()
+        mapper_cfg = mats[0].orbital_cfg.to_dict()
         basis = mats[0].basis
         for m in mats[1:]:
             if m.atoms != atoms:
                 raise ValueError("All matrices must share the same atom list")
-            if m.mapper.orbital_cfg.to_dict() != mapper_cfg:
+            if m.orbital_cfg.to_dict() != mapper_cfg:
                 raise ValueError("All matrices must share the same orbital config")
             if m.basis != basis:
                 raise ValueError("All matrices must use the same basis (openmx/e3nn)")
@@ -124,10 +124,8 @@ class Snapshot:
     @staticmethod
     def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> BlockMatrix:
         from core.orbital_irrep_config import OrbitalIrrepConfig
-        from core.block_irrep_mapper import BlockIrrepMapper
 
         orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
-        mapper = BlockIrrepMapper(orb_cfg, diagonal=payload["diagonal"], device="cpu")
 
         pair_blocks = {k: v.to(device) for k, v in payload["pair_blocks"].items()}
         pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
@@ -139,12 +137,12 @@ class Snapshot:
                 lookup[(i, j)] = (key, idx)
 
         return BlockMatrix(
-            tuple(payload["atoms"]),
-            pair_blocks,
-            pair_edges,
-            lookup,
-            mapper,
-            payload.get("basis", "openmx"),
+            atoms=tuple(payload["atoms"]),
+            pair_blocks=pair_blocks,
+            pair_edges=pair_edges,
+            lookup=lookup,
+            orbital_cfg=orb_cfg,
+            basis=payload.get("basis", "openmx"),
         )
 
     # public classmethod ----------------------------------------------------
@@ -190,7 +188,7 @@ class Snapshot:
         if self.density.basis == target:
             return self  # nothing to do
 
-        cfg = self.density.mapper.orbital_cfg  # shared by all mats
+        cfg = self.density.orbital_cfg  # shared by all mats
         conv = OpenMXE3NNConverter(cfg, device=self.density["H-H"].device)  # any device
 
         if target == "e3nn":

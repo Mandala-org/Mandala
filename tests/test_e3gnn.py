@@ -2,6 +2,7 @@ import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from net.common import HyperParams
+from core.block_irrep_mapper import BlockIrrepMapper
 from net.e3gnn import E3GNN
 from e3nn.o3 import Irreps
 
@@ -13,7 +14,7 @@ def test_forward_smoke():
 
     hp = HyperParams(num_layers_gnn=1, num_layers_matrix=1)
 
-    model = E3GNN(cfg, edge_types, hp=hp, device="cpu")
+    model = E3GNN(BlockIrrepMapper(cfg), edge_types, hp=hp, device="cpu")
 
     # ------- fake batch ----------------------------
     N, E = 4, 3

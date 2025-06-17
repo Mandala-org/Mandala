@@ -26,7 +26,6 @@ from torch.utils.data import Dataset
 from e3nn.o3 import Irreps, spherical_harmonics
 from e3nn.math import soft_one_hot_linspace
 
-from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
 
@@ -45,7 +44,7 @@ class E3GNNDataset(Dataset):
     def __init__(
         self,
         snapshots: Sequence[Snapshot | str | Path],
-        global_cfg: OrbitalIrrepConfig | None = None,
+        mapper: BlockIrrepMapper,
         *,
         cutoff_gnn: float = 5.0,
         cutoff_matrix: float = 7.5,
@@ -60,19 +59,9 @@ class E3GNNDataset(Dataset):
         self.device = torch.device(device)
         self.keep_snapshots = keep_snapshots
 
-        # shared helpers ------------------------------------------------------
-        # self.global_cfg = global_cfg
-        # self.mapper = BlockIrrepMapper(global_cfg, device="cpu")   # tiny
-        if global_cfg is None:
-            self.global_cfg = snapshots[
-                0
-            ].hamiltonian.mapper.orbital_cfg  #! WARNING: temporary, we should always have one global config
-            self.mapper = snapshots[
-                0
-            ].hamiltonian.mapper  #! WARNING: temporary, we should always have one global config
-        else:
-            self.global_cfg = global_cfg
-            self.mapper = BlockIrrepMapper(global_cfg, device="cpu")
+        # shared, **externally-provided** mapper ------------------------------
+        self.mapper: BlockIrrepMapper = mapper
+        self.global_cfg = mapper.orbital_cfg
         self.l_max_sh = int(l_max_sh)
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.l_max_sh)
         self.n_radial = int(n_radial)
@@ -189,7 +178,7 @@ class E3GNNDataset(Dataset):
             node_oh[i, elem2idx[el]] = 1.0
 
         # ---------- overlap vectors split diag / offdiag --------------------
-        overlap_ir = snap.overlap.to_vectors()  # IrrepsBlockData
+        overlap_ir = snap.overlap.to_vectors(self.mapper)  # IrrepsBlockData
         overlap_diag = overlap_ir.diag()  # dict
 
         # helper to subset off-diag vectors to the kept edges ----------------
@@ -225,9 +214,9 @@ class E3GNNDataset(Dataset):
 
         # ========== targets y ===============================================
         y = {
-            "hamiltonian": snap.hamiltonian.to_vectors().to(self.device),
+            "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
             "overlap": overlap_ir.to(self.device),
-            "density": snap.density.to_vectors().to(self.device),
+            "density": snap.density.to_vectors(self.mapper).to(self.device),
             "energy": snap.get_energy().to(self.device),
             "num_electrons": snap.get_number_of_electrons().to(self.device),
             "snapshot": snap if self.keep_snapshots else None,

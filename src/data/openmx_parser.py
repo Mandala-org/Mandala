@@ -162,7 +162,7 @@ def parse_openmx_scfout(
             pair_blocks=pair_blocks_t,
             pair_edges=pair_edges_t,
             lookup=lookup,
-            mapper=mapper,
+            orbital_cfg=orbital_cfg,
             basis="openmx",
         )
 
