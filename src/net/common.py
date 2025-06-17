@@ -27,6 +27,11 @@ from e3nn.o3 import Irreps
 # ════════════════════════════════════════════════════════════════════════
 @dataclass(slots=True)
 class HyperParams:
+    """
+    Network hyperparameters controlling representations, model depth,
+    nonlinearity, regularization, radial basis, output heads, and loss weighting.
+    """
+
     # -------------- representation shape --------------------------------
     l_max: int = 3
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0

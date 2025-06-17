@@ -27,6 +27,15 @@ from net.activations import make_nonlinearity
 # Edge update
 # ════════════════════════════════════════════════════════════════════════
 class EdgeUpdateBlock(nn.Module):
+    """
+    Compute per-edge updates from source and destination node features.
+
+    For each edge (i → j):
+      • Apply two linear transforms to node[i] and node[j].
+      • Average (and optionally add residual edge features).
+      • Apply equivariant nonlinearity and dropout.
+    """
+
     def __init__(
         self,
         hidden_irreps: Irreps,
@@ -61,6 +70,15 @@ class EdgeUpdateBlock(nn.Module):
 # Node update
 # ════════════════════════════════════════════════════════════════════════
 class NodeUpdateBlock(nn.Module):
+    """
+    Aggregate edge messages to update node features.
+
+    • Linear transform of incoming edge features.
+    • Scatter-sum aggregation by destination node.
+    • Optional self-MLP and residual connection.
+    • Batch normalization, nonlinearity, and dropout.
+    """
+
     def __init__(
         self,
         hidden_irreps: Irreps,
@@ -111,6 +129,18 @@ class NodeUpdateBlock(nn.Module):
 # Message block
 # ════════════════════════════════════════════════════════════════════════
 class MessageBlock(nn.Module):
+    """
+    One message-passing step: optional edge update followed by node update.
+
+    Args:
+      node: Tensor of shape (N, hidden_dim)
+      edge: Tensor of shape (E, hidden_dim)
+      edge_index: LongTensor of shape (2, E) with source/dest indices
+
+    Returns:
+      Tuple (node_updated, edge_updated) of same shapes.
+    """
+
     def __init__(
         self,
         hidden_irreps: Irreps,
