@@ -80,12 +80,22 @@ class NodeEncoder(nn.Module):
 # --------------------------------------------------------------------------- #
 class EdgeEncoder(nn.Module):
     """
-    Args
-    ----
-    n_edge_types   : total number of ordered element-pairs
-    n_radial       : length of radial distance basis
-    sh_irreps      : Irreps of provided spherical harmonic vector
-    offdiag_irrep_dim : size of overlap_offdiag vector (may be 0 / None)
+    Encode per-edge raw features into hidden irreps.
+
+    Inputs:
+      - one_hot: LongTensor[E] of edge-type one-hot indices (n_edge_types).
+      - length_emb: Tensor[E, n_radial] radial distance embeddings.
+      - sh: Tensor[E, sh_irreps.dim] spherical harmonics coefficients.
+      - overlap_off: Tensor[E, offdiag_irrep_dim] (or None).
+
+    Combines:
+      1. Learned edge-type embedding.
+      2. MLP over radial embeddings.
+      3. Optional linear projection of off-diagonal overlap.
+      4. Projection of spherical harmonics.
+
+    Followed by equivariant nonlinearity and dropout to produce
+    Tensor[E, out_irreps.dim].
     """
 
     def __init__(
@@ -162,6 +172,9 @@ class EdgeEncoder(nn.Module):
         *,
         select_indices: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        """
+        Return hidden edge features: Tensor[E, out_irreps.dim].
+        """
         if select_indices is not None:
             one_hot = one_hot[select_indices]
             length_emb = length_emb[select_indices]
