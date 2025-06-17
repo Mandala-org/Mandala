@@ -16,7 +16,6 @@ from e3nn.o3 import Irreps, Linear
 from e3nn.nn import Dropout, BatchNorm
 
 from core.block_irrep_mapper import BlockIrrepMapper
-from core.orbital_irrep_config import OrbitalIrrepConfig
 
 from net.common import HyperParams
 from net.activations import make_nonlinearity
@@ -31,7 +30,7 @@ class DeepHead(nn.Module):
         self,
         in_irreps: Irreps,
         pair_keys: List[str],
-        orbital_cfg: OrbitalIrrepConfig,
+        mapper: BlockIrrepMapper,
         hp: HyperParams,
         *,
         device: torch.device | str = "cpu",
@@ -43,12 +42,8 @@ class DeepHead(nn.Module):
         self.in_irreps = in_irreps
         self.pair_keys = pair_keys
 
-        # 0) mapper (tiny tensors → any device fine)
-        self.mapper = BlockIrrepMapper(
-            orbital_cfg,
-            diagonal=False,
-            device=self.device,
-        )
+        # 0) shared mapper – **passed in**, no local creation
+        self.mapper: BlockIrrepMapper = mapper.to(self.device)
 
         # 1) deep trunk ---------------------------------------------------
         layers: List[nn.Module] = []

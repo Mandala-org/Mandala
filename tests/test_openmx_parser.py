@@ -5,6 +5,7 @@ import pytest
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.openmx_parser import parse_openmx_scfout
 from data.snapshot import Snapshot
+from core.block_irrep_mapper import BlockIrrepMapper
 
 
 # TODO: change to new data (and load ground truth to compare against from numpy files)
@@ -53,9 +54,11 @@ def test_parse(orbital_cfg: OrbitalIrrepConfig):
     E_HO, d_H, d_O = hamiltonian["H-O"].shape
     assert d_H == 9 and d_O == 22
 
+    mapper = BlockIrrepMapper(orbital_cfg)
+
     # round‑trip vector check
-    snap_vec = hamiltonian.to_vectors()
-    assert snap_vec["H-O"].shape[-1] == hamiltonian.mapper.vector_dim("H-O")
+    snap_vec = hamiltonian.to_vectors(mapper)
+    assert snap_vec["H-O"].shape[-1] == mapper.vector_dim("H-O")
 
     assert hamiltonian[0, 0].shape == (9, 9)
     assert hamiltonian[1, 4].shape == (9, 22)

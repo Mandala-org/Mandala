@@ -9,18 +9,22 @@ import pytest
 
 from data.openmx_parser import parse_openmx_scfout
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from core.block_irrep_mapper import BlockIrrepMapper
 
 
 @pytest.fixture(scope="module")
-def snapshot():
+def data():
     atoms = list("HHHHOO")  # global indexing: 0‥5
     cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
     file = Path("./data/small/H2O/original/H2O.matrix")
-    return parse_openmx_scfout(file, atoms, cfg, convention="openmx")
+    return parse_openmx_scfout(file, atoms, cfg, convention="openmx"), BlockIrrepMapper(
+        cfg
+    )
 
 
 # --------------------------------------------------------------------------- #
-def test_blockmatrix_diag_offdiag(snapshot):
+def test_blockmatrix_diag_offdiag(data):
+    snapshot, mapper = data
     D = snapshot.density  # BlockMatrix
 
     diag = D.diag()
@@ -44,8 +48,9 @@ def test_blockmatrix_diag_offdiag(snapshot):
             assert torch.allclose(blk[mask_off], off[key], atol=1e-6)
 
 
-def test_irrepsblockdata_diag_offdiag(snapshot):
-    Ovec = snapshot.overlap.to_vectors()  # IrrepsBlockData
+def test_irrepsblockdata_diag_offdiag(data):
+    snapshot, mapper = data
+    Ovec = snapshot.overlap.to_vectors(mapper)  # IrrepsBlockData
 
     diag = Ovec.diag()
     off = Ovec.offdiag()

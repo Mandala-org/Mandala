@@ -13,6 +13,7 @@ import torch
 import pytest
 
 from data.gnn_dataset import E3GNNDataset
+from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
 
 
@@ -23,8 +24,10 @@ def dataset():
         info_path=Path("data/small/H2O/original/H2O.info.out"),
     )
 
+    mapper = BlockIrrepMapper(snap.density.orbital_cfg)
     return E3GNNDataset(
         [snap],
+        mapper,
         cutoff_gnn=4.0,
         cutoff_matrix=7.5,
         keep_snapshots=True,

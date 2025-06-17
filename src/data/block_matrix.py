@@ -32,6 +32,7 @@ import torch
 
 
 from core.block_irrep_mapper import BlockIrrepMapper
+from core.orbital_irrep_config import OrbitalIrrepConfig
 
 PairKey = str  # canonical "A-B"
 
@@ -43,13 +44,13 @@ class BlockMatrix:
     pair_blocks: Dict[PairKey, torch.Tensor]  # (E_ab, d_A, d_B)
     pair_edges: Dict[PairKey, torch.Tensor]  # (2, E_ab)
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
-    mapper: BlockIrrepMapper
+    orbital_cfg: OrbitalIrrepConfig
     basis: str  # "openmx" | "e3nn"
 
     # --------------- convenience constructors ------------------------------ #
     @classmethod
-    def empty(cls, atoms, mapper):
-        return cls(tuple(atoms), {}, {}, {}, mapper)
+    def empty(cls, atoms, orbital_cfg, basis="e3nn"):
+        return cls(tuple(atoms), {}, {}, {}, orbital_cfg, basis)
 
     # --------------- dict-like access -------------------------------------- #
     def __getitem__(self, item):
@@ -104,16 +105,22 @@ class BlockMatrix:
         new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
         new_edges = {k: v.to(device) for k, v in self.pair_edges.items()}
         return BlockMatrix(
-            self.atoms, new_blocks, new_edges, self.lookup, self.mapper, self.basis
+            self.atoms, new_blocks, new_edges, self.lookup, self.orbital_cfg, self.basis
         )
 
     # --------------- change-of-basis --------------------------------------- #
-    def to_vectors(self) -> "IrrepsBlockData":
+    def to_vectors(self, mapper: BlockIrrepMapper) -> IrrepsBlockData:
+        """Convert blocks to irreducible representation vectors using a mapper."""
         pair_vec: Dict[PairKey, torch.Tensor] = {}
         for key, blk in self.pair_blocks.items():
-            pair_vec[key] = self.mapper.blocks_to_vectors(key, blk)
+            pair_vec[key] = mapper.blocks_to_vectors(key, blk)
         return IrrepsBlockData(
-            self.atoms, pair_vec, self.pair_edges, self.lookup, self.mapper
+            self.atoms,
+            pair_vec,
+            self.pair_edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
         )
 
         # ------------------------------------------------------------------ transpose
@@ -147,7 +154,7 @@ class BlockMatrix:
             pair_blocks=new_blocks,
             pair_edges=new_edges,
             lookup=new_lookup,
-            mapper=self.mapper,
+            orbital_cfg=self.orbital_cfg,
             basis=self.basis,
         )
 
@@ -177,7 +184,7 @@ class BlockMatrix:
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
             lookup=lookup,
-            mapper=self.mapper,
+            orbital_cfg=self.orbital_cfg,
             basis=self.basis,
         )
 
@@ -205,7 +212,7 @@ class BlockMatrix:
             raise ValueError("Atoms differ; cannot add/subtract snapshots")
         if self.basis != other.basis:
             raise ValueError("Basis differs (openmx vs e3nn)")
-        if self.mapper.orbital_cfg.to_dict() != other.mapper.orbital_cfg.to_dict():
+        if self.orbital_cfg.to_dict() != other.orbital_cfg.to_dict():
             raise ValueError("OrbitalIrrepConfig differs")
 
         a_std = self.standardize_edges()
@@ -250,7 +257,7 @@ class BlockMatrix:
     def _atom_offsets(self) -> Tuple[torch.Tensor, int]:
         """Return 1-D tensor of start indices per atom and total dimension."""
         dims = torch.tensor(
-            [self.mapper.block_dims(f"{el}-{el}")[0] for el in self.atoms],
+            [self.orbital_cfg.block_dims(f"{el}-{el}")[0] for el in self.atoms],
             dtype=torch.long,
         )
         offsets = torch.cumsum(
@@ -271,7 +278,7 @@ class BlockMatrix:
         dense = torch.zeros(total, total, device=device, dtype=dtype)
 
         for (i, j), (key, k) in self.lookup.items():
-            d_i, d_j = self.mapper.block_dims(key)
+            d_i, d_j = self.orbital_cfg.block_dims(key)
             r0 = int(offsets[i])
             c0 = int(offsets[j])
             dense[r0 : r0 + d_i, c0 : c0 + d_j] = self.pair_blocks[key][k]
@@ -284,8 +291,7 @@ class BlockMatrix:
         edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
         return {
             "atoms": list(self.atoms),
-            "orbital_cfg": self.mapper.orbital_cfg.to_dict(),
-            "diagonal": self.mapper.diagonal,
+            "orbital_cfg": self.orbital_cfg.to_dict(),
             "pair_blocks": blocks_cpu,
             "pair_edges": edges_cpu,
             "type": "block",
@@ -308,7 +314,6 @@ class BlockMatrix:
             raise ValueError("file does not contain block snapshot")
 
         orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
-        mapper = BlockIrrepMapper(orb_cfg, diagonal=payload["diagonal"], device="cpu")
 
         pair_blocks = {k: v.to(device) for k, v in payload["pair_blocks"].items()}
         pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
@@ -324,7 +329,7 @@ class BlockMatrix:
             pair_blocks,
             pair_edges,
             lookup,
-            mapper,
+            orb_cfg,
             payload.get("basis", "openmx"),
         ).to(device)
 
@@ -338,7 +343,7 @@ class BlockMatrix:
             pair_blocks=new_blocks,
             pair_edges=self.pair_edges,
             lookup=self.lookup,
-            mapper=self.mapper,
+            orbital_cfg=self.orbital_cfg,
             basis=basis,
         )
 
@@ -383,7 +388,7 @@ class BlockMatrix:
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
             lookup=lookup,
-            mapper=self.mapper,
+            orbital_cfg=self.orbital_cfg,
             basis=self.basis,
         )
 
@@ -414,23 +419,20 @@ class BlockMatrix:
         Build a block snapshot from a fully dense matrix *in global atom order*.
         Primarily for tests / debugging.
         """
-        from core.block_irrep_mapper import BlockIrrepMapper  # loc import
-
         atoms = tuple(atoms)
-        mapper = BlockIrrepMapper(orbital_cfg, diagonal=diagonal, device=matrix.device)
 
         offsets = [0]
         for el in atoms[:-1]:
-            d = mapper.block_dims(f"{el}-{el}")[0]
+            d = orbital_cfg.block_dims(f"{el}-{el}")[0]
             offsets.append(offsets[-1] + d)
         offsets_t = torch.tensor(offsets, dtype=torch.long, device=matrix.device)
 
         pair_blocks, pair_edges, lookup = {}, {}, {}
         for i, el_i in enumerate(atoms):
-            d_i = mapper.block_dims(f"{el_i}-{el_i}")[0]
+            d_i = orbital_cfg.block_dims(f"{el_i}-{el_i}")[0]
             r0 = int(offsets_t[i])
             for j, el_j in enumerate(atoms):
-                d_j = mapper.block_dims(f"{el_j}-{el_j}")[0]
+                d_j = orbital_cfg.block_dims(f"{el_j}-{el_j}")[0]
                 c0 = int(offsets_t[j])
                 blk = matrix[r0 : r0 + d_i, c0 : c0 + d_j].clone()
                 key = f"{el_i}-{el_j}"
@@ -446,7 +448,7 @@ class BlockMatrix:
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
 
-        snapshot = cls(atoms, pair_blocks, pair_edges, lookup, mapper, basis)
+        snapshot = cls(atoms, pair_blocks, pair_edges, lookup, orbital_cfg, basis)
         if sparsity_threshold is not None:
             snapshot = snapshot.sparsify(sparsity_threshold)
         return snapshot
@@ -507,7 +509,7 @@ class BlockMatrix:
             pair_blocks=new_blocks,
             pair_edges=new_edges,
             lookup=new_lookup,
-            mapper=self.mapper,
+            orbital_cfg=self.orbital_cfg,
             basis=self.basis,
         )
 
@@ -523,7 +525,6 @@ class BlockMatrix:
         from core.orbital_irrep_config import OrbitalIrrepConfig  # local import
 
         orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
-        mapper = BlockIrrepMapper(orb_cfg, diagonal=payload["diagonal"], device="cpu")
 
         pair_blocks = {k: v.to(device) for k, v in payload["pair_blocks"].items()}
         pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
@@ -539,7 +540,7 @@ class BlockMatrix:
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
             lookup=lookup,
-            mapper=mapper,
+            orbital_cfg=orb_cfg,
             basis=payload.get("basis", "openmx"),
         )
 
@@ -569,8 +570,8 @@ class BlockMatrix:
 
         # cache one U per element
         U_cache: Dict[str, torch.Tensor] = {}
-        for el in self.mapper.orbital_cfg.elements():
-            irr = self.mapper.orbital_cfg.element_to_irreps[el]
+        for el in self.orbital_cfg.elements():
+            irr = self.orbital_cfg.element_to_irreps[el]
             U_cache[el] = irr.D_from_matrix(R)  # (dim_el, dim_el)
 
         # rotate every block ------------------------------------------------
@@ -594,7 +595,7 @@ class IrrepsBlockData:
     pair_vectors: Dict[PairKey, torch.Tensor]  # (E_ab, n_vec_AB)
     pair_edges: Dict[PairKey, torch.Tensor]
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
-    mapper: BlockIrrepMapper
+    orbital_cfg: OrbitalIrrepConfig
     basis: str = "e3nn"  # always "e3nn"
 
     # -------- device -------- #
@@ -602,16 +603,21 @@ class IrrepsBlockData:
         vecs = {k: v.to(device) for k, v in self.pair_vectors.items()}
         edges = {k: v.to(device) for k, v in self.pair_edges.items()}
         return IrrepsBlockData(
-            self.atoms, vecs, edges, self.lookup, self.mapper.to(device), self.basis
+            self.atoms, vecs, edges, self.lookup, self.orbital_cfg, self.basis
         )
 
     # -------- inverse change-of-basis ----- #
-    def to_blocks(self) -> BlockMatrix:
+    def to_blocks(self, mapper: BlockIrrepMapper) -> BlockMatrix:
         pair_blk: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
-            pair_blk[key] = self.mapper.vectors_to_blocks(key, vec)
+            pair_blk[key] = mapper.vectors_to_blocks(key, vec)
         return BlockMatrix(
-            self.atoms, pair_blk, self.pair_edges, self.lookup, self.mapper, self.basis
+            self.atoms,
+            pair_blk,
+            self.pair_edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
         )
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -653,8 +659,7 @@ class IrrepsBlockData:
         edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
         return {
             "atoms": list(self.atoms),
-            "orbital_cfg": self.mapper.orbital_cfg.to_dict(),
-            "diagonal": self.mapper.diagonal,
+            "orbital_cfg": self.orbital_cfg.to_dict(),
             "pair_vectors": vec_cpu,
             "pair_edges": edges_cpu,
             "type": "irrep",
@@ -676,7 +681,6 @@ class IrrepsBlockData:
             raise ValueError("file does not contain irrep snapshot")
 
         orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
-        mapper = BlockIrrepMapper(orb_cfg, diagonal=payload["diagonal"], device="cpu")
 
         pair_vec = {k: v.to(device) for k, v in payload["pair_vectors"].items()}
         pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
@@ -687,6 +691,11 @@ class IrrepsBlockData:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
-        return cls(tuple(payload["atoms"]), pair_vec, pair_edges, lookup, mapper).to(
-            device
-        )
+        return cls(
+            tuple(payload["atoms"]),
+            pair_vec,
+            pair_edges,
+            lookup,
+            orb_cfg,
+            payload.get("basis", "e3nn"),
+        ).to(device)
