@@ -2,7 +2,7 @@
 layers.py
 ~~~~~~~~~
 
-E(3)-equivariant message-passing blocks **v2**:
+E(3)-equivariant message-passing blocks:
 
 *   uses `torch_scatter.scatter` for edge→node aggregation
 *   dropout is `e3nn.nn.Dropout` (acts on *all* irrep coeffs)

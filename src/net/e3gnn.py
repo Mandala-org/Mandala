@@ -70,7 +70,7 @@ class E3GNN(pl.LightningModule):
             n_edge_types=len(edge_types),
             n_radial=hp.n_radial,
             sh_irreps=self.sh_irreps,
-            offdiag_irrep_dim=None,  # no overlap_offdiag in this rev
+            offdiag_irrep_dim=None,  # off-diagonal overlap features disabled
             out_irreps=self.hidden_irreps,
             hp=hp,
             device=self.device_,
@@ -159,7 +159,7 @@ class E3GNN(pl.LightningModule):
             node, edge = blk(node, edge, ei_small)
 
         # ---- lift to large graph --------------------------------------
-        # re-encode the *new* edges only (helper from original skeleton)
+        # re-encode edges for the large graph
         edge_big = self._lift_edge_features(
             edge,
             x_gnn,

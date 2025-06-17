@@ -11,9 +11,10 @@ Diagonal / off-diagonal overlap features are kept **as IrrepsBlockData**
 instead of being concatenated, because different pair-keys carry different
 irreps.
 
-Targets *y* (Hamiltonian / Overlap / Density + energy, electrons) are exactly
-the same as before;  training code can access diagonal / off-diagonal parts
-through the new ``.diag()`` / ``.offdiag()`` helpers.
+Targets *y* (Hamiltonian / Overlap / Density + energy, electrons)
+are provided as snapshot-level information; training code can access
+diagonal / off-diagonal parts through the ``.diag()`` and ``.offdiag()``
+helpers.
 """
 
 from __future__ import annotations

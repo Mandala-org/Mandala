@@ -2,8 +2,7 @@
 heads.py
 ~~~~~~~~
 
-Deep, equivariant read-out heads v2 – fully aligned with the new
-HyperParams & activation system.
+Deep, equivariant per-pair read-out heads.
 """
 
 from __future__ import annotations

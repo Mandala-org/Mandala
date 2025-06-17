@@ -1,13 +1,13 @@
 """
-Encoders for node / edge raw features → hidden irreps.
+Encoders for node and edge raw features → hidden irreps.
 
-Changes in v2
--------------
+Features
+--------
 * NodeEncoder drops overlap-diag input (constant per species).
 * Non-linearity is selected via `net.activations.make_nonlinearity`.
-* Dropout uses `e3nn.nn.Dropout` so it masks every coefficient.
-* Full device awareness: pass `device` to ctor; tensors & Linear weights
-  are allocated on that device.
+* Dropout uses `e3nn.nn.Dropout` to mask every irreducible representation coefficient.
+* Device-aware: pass `device` to the constructor; tensors and Linear weights
+  are allocated accordingly.
 """
 
 from __future__ import annotations
