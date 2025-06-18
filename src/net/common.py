@@ -37,8 +37,8 @@ class HyperParams:
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
 
     # -------------- depth / topology ------------------------------------
-    num_layers_gnn: int = 4
-    num_layers_matrix: int = 2
+    num_layers_gnn: int = 2
+    num_layers_matrix: int = 1
     use_edge_updates: bool = True
     use_self_update: bool = True
 
@@ -60,13 +60,13 @@ class HyperParams:
     share_radial: bool = True
 
     # -------------- output head -----------------------------------------
-    head_depth: int = 3
+    head_depth: int = 1
     head_hidden_mul: float = 1.0  # can be <1 or >1
     hidden_mul_clip: float = 4.0  # safety cap to avoid huge widths
 
     # -------------- loss weighting --------------------------------------
-    energy_loss_coef: float = 0.1
-    electron_loss_coef: float = 0.05
+    energy_loss_coef: float = 0.00001
+    electron_loss_coef: float = 0.00001
 
 
 # ════════════════════════════════════════════════════════════════════════
