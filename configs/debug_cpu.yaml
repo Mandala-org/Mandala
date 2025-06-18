@@ -1,0 +1,51 @@
+# configs/debug_cpu.yaml
+# ─────────────────────
+run_name: "debug-cpu-3ep"
+
+wandb_project: "e3gnn_test"        # change to your own project if needed
+
+# ----------------------------------------------------------------------
+# Dataset: each entry = one Snapshot (matrix+info) and its purpose
+# ----------------------------------------------------------------------
+snapshots:
+  # ─── training ─────────────────────────────────────────────────────────
+  - matrix: data/small/H2O/original/H2O.matrix
+    info:   data/small/H2O/original/H2O.info.out
+    purpose: train
+
+  - matrix: data/big/silicon/900K/Si_DM
+    info:   data/big/silicon/900K/info.txt
+    purpose: train
+
+  # ─── validation ──────────────────────────────────────────────────────
+  - matrix: data/big/silicon/2700K/Si_DM
+    info:   data/big/silicon/2700K/info.txt
+    purpose: val
+
+# ----------------------------------------------------------------------
+# Data-processing hyper-parameters
+# ----------------------------------------------------------------------
+cutoff_gnn:     5.0        # Å
+cutoff_matrix:  7.5        # Å
+l_max_sh:       3
+n_radial:       64
+num_workers:    0          # keep 0 for tiny CPU test
+
+# ----------------------------------------------------------------------
+# Optimiser / training control
+# ----------------------------------------------------------------------
+lr:           3.0e-4
+max_epochs:   3
+precision:    32           # full FP32 on CPU
+accum:        1            # grad-accum (ineffective with bs=1, but explicit)
+
+# ----------------------------------------------------------------------
+# Model hyper-parameters (override only if you want to deviate from defaults)
+# ----------------------------------------------------------------------
+model:
+  hidden_base_dim:   32
+  num_layers_gnn:    2
+  num_layers_matrix: 1
+  dropout:           0.0
+  energy_loss_coef:  0.1
+  electron_loss_coef: 0.1

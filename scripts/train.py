@@ -1,0 +1,182 @@
+# src/scripts/train.py
+# ---------------------------------------------------------------------
+#  Train an E3GNN on OpenMX snapshots with a single shared BlockIrrepMapper.
+#
+#  $ python -m scripts.train --config configs/hydrogen.yaml
+#  $ python -m scripts.train matrix_paths.txt info_paths.txt  # quick ad-hoc run
+#
+#  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
+#  Sweeps:    --tune wandb      → WandB Sweep agent
+#             --tune ray        → Ray-Tune HPO
+# ---------------------------------------------------------------------
+
+from __future__ import annotations
+import sys
+import yaml
+import json
+import argparse
+import datetime as dt
+from pathlib import Path
+
+import torch
+from torch.utils.data import DataLoader
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.loggers import WandbLogger
+from data.factory import DatasetFactory
+from net.common import HyperParams
+from net.e3gnn import E3GNN
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]  # src/
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Helpers
+# ════════════════════════════════════════════════════════════════════════
+def _parse_cfg(path: Path | None) -> dict:
+    if path is None:
+        return {}
+    with open(path) as fh:
+        if path.suffix in {".yml", ".yaml"}:
+            return yaml.safe_load(fh) or {}
+        elif path.suffix == ".json":
+            return json.load(fh)
+        else:
+            raise ValueError("config file must be .yaml/.yml or .json")
+
+
+def _cli() -> argparse.Namespace:
+    p = argparse.ArgumentParser(prog="train.py", description="E3GNN trainer")
+
+    p.add_argument("--config", type=Path, help="YAML/JSON with hyper-params")
+    p.add_argument(
+        "--tune",
+        choices=[None, "wandb", "ray"],
+        default=None,
+        help="run inside a WandB sweep or Ray-Tune session",
+    )
+    p.add_argument(
+        "--gpus",
+        type=str,
+        default="cpu",
+        help="'cpu'  or a comma-separated list of CUDA device ids, e.g. '0,1'",
+    )
+    p.add_argument("--max_epochs", type=int, default=None)
+    p.add_argument("--accum", type=int, default=1, help="grad-accum steps")
+    p.add_argument("--seed", type=int, default=42)
+    return p.parse_args()
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Main entry
+# ════════════════════════════════════════════════════════════════════════
+def main():
+    args = _cli()
+    torch.manual_seed(args.seed)
+
+    cfg = _parse_cfg(args.config)
+
+    # ------------------------------- 1. Dataset factory ----------------
+    fact = DatasetFactory(
+        cutoff_gnn=cfg.get("cutoff_gnn", 5.0),
+        cutoff_matrix=cfg.get("cutoff_matrix", 7.5),
+        l_max_sh=cfg.get("l_max_sh", 3),
+        n_radial=cfg.get("n_radial", 64),
+        device="cpu",
+    )
+
+    # From config:  snapshots: [ {matrix: path, info: path, purpose: train|val}, … ]
+    for entry in cfg.get("snapshots", []):
+        fact.add_snapshot(
+            Path(entry["matrix"]), Path(entry["info"]), entry.get("purpose", "train")
+        )
+
+    # Optional extra CLI lists
+    if not cfg.get("snapshots") and len(sys.argv) >= 3:
+        # quick mode: python … matrix.txt info.txt
+        mat_path, info_path = map(Path, sys.argv[-2:])
+        fact.add_snapshot(mat_path, info_path, "train")
+
+    ds_train, ds_val, mapper = fact.create()
+
+    # ------------------------------- 2. DataLoaders --------------------
+    def _dl(ds, shuffle=False):
+        return DataLoader(
+            ds,
+            batch_size=1,  # ALWAYS 1
+            shuffle=shuffle,
+            num_workers=cfg.get("num_workers", 4),
+            pin_memory=True,
+            collate_fn=lambda b: b[0],  # <- avoid default_collate on custom objects
+        )
+
+    dl_train = _dl(ds_train, shuffle=True)
+    dl_val = _dl(ds_val, shuffle=False)
+
+    # ------------------------------- 3. Hyper-parameters ---------------
+    hp = HyperParams(**cfg.get("model", {}))
+    if args.gpus.lower() == "cpu":
+        accelerator = "cpu"
+        devices = 1
+    else:
+        accelerator = "gpu"
+        devices = [int(i) for i in args.gpus.split(",") if i.strip()]
+
+    # ------------------------------- 4. Model --------------------------
+    model = E3GNN(
+        mapper=mapper,
+        edge_types=ds_train.edge_types,
+        hp=hp,
+        lr=cfg.get("lr", 3e-4),
+        device="cuda" if accelerator == "gpu" else "cpu",
+    )
+
+    # ------------------------------- 5. Logging ------------------------
+    run_name = cfg.get("run_name") or f"e3gnn_{dt.datetime.now():%Y%m%d_%H%M%S}"
+    logger = WandbLogger(
+        project=cfg.get("wandb_project", "e3gnn"),
+        name=run_name,
+        log_model=True,
+        save_dir=str(PROJECT_ROOT / "wandb"),
+    )
+    logger.experiment.config.update(cfg, allow_val_change=True)
+
+    # ------------------------------- 6. Trainer ------------------------
+    callbacks = [
+        ModelCheckpoint(
+            monitor="val_loss",
+            mode="min",
+            save_top_k=3,
+            dirpath=PROJECT_ROOT / "checkpoints" / run_name,
+            filename="{epoch:03d}-{val_loss:.4f}",
+        ),
+        LearningRateMonitor(logging_interval="step"),
+    ]
+
+    trainer = pl.Trainer(
+        logger=logger,
+        accelerator=accelerator,
+        devices=devices,
+        max_epochs=args.max_epochs or cfg.get("max_epochs", 100),
+        accumulate_grad_batches=args.accum,
+        precision=cfg.get("precision", 16),
+        callbacks=callbacks,
+        deterministic=True,
+    )
+
+    # ------------------------------- 7. HPO integration ----------------
+    if args.tune == "wandb":
+        import wandb
+
+        wandb.finish()  # lightning starts its own run inside Trainer
+    elif args.tune == "ray":
+        from ray import tune
+
+        tune.report(loss=0.0)  # Lightning will handle metrics; this is placeholder
+
+    # ------------------------------- 8. Train --------------------------
+    trainer.fit(model, dl_train, dl_val)
+
+
+if __name__ == "__main__":
+    main()

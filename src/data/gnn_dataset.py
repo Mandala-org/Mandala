@@ -51,14 +51,12 @@ class E3GNNDataset(Dataset):
         cutoff_matrix: float = 7.5,
         l_max_sh: int = 3,
         n_radial: int = 64,
-        keep_snapshots: bool = False,
         device: torch.device | str = "cpu",
     ):
         if cutoff_gnn >= cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
 
         self.device = torch.device(device)
-        self.keep_snapshots = keep_snapshots
 
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
@@ -86,10 +84,16 @@ class E3GNNDataset(Dataset):
     # ---------------------------------------------------------------- helpers
     # ---------- minimal-image displacements ----------------------------------
     @staticmethod
-    def _minimal_disp(pos: torch.Tensor, edges: torch.Tensor, box: torch.Tensor | None):
+    def _minimal_disp(
+        pos: torch.Tensor,
+        edges: torch.Tensor,
+        box: torch.Tensor | None,
+        inv_box: torch.Tensor | None = None,
+    ):
         if box is None:
             return pos[edges[1]] - pos[edges[0]]
-        inv_box = torch.inverse(box)
+        if inv_box is None:
+            inv_box = torch.inverse(box)
         delta = pos[edges[1]] - pos[edges[0]]  # cart
         frac = delta @ inv_box
         frac = frac - torch.round(frac)
@@ -134,10 +138,18 @@ class E3GNNDataset(Dataset):
         ).to(torch.float32)
 
         # geometric encodings -------------------------------------------------
+        # minimal-image displacement: compute box and its inverse once
+        if snap.box is not None:
+            box = snap.box.to(self.device)
+            inv_box = torch.inverse(box)
+        else:
+            box = None
+            inv_box = None
         disp = self._minimal_disp(
             snap.positions.to(self.device),
             edge_index,
-            snap.box.to(self.device) if snap.box is not None else None,
+            box,
+            inv_box,
         )
         dists_kept = torch.linalg.norm(disp, dim=-1)
 
@@ -208,8 +220,10 @@ class E3GNNDataset(Dataset):
             "edge_one_hot": eo_gnn,
             "edge_length_emb": el_gnn,
             "edge_sh": es_gnn,
-            "overlap_vectors_diag": overlap_diag,  # dict
-            "overlap_vectors_offdiag": overlap_off_gnn,  # dict
+            "overlap_vectors_diag": overlap_diag,
+            "overlap_vectors_offdiag": overlap_off_gnn,
+            # per-node element symbols
+            "atoms": atoms,
         }
         x_matrix = {
             "edge_index": ei_mat,
@@ -227,7 +241,6 @@ class E3GNNDataset(Dataset):
             "density": snap.density.to_vectors(self.mapper).to(self.device),
             "energy": snap.get_energy().to(self.device),
             "num_electrons": snap.get_number_of_electrons().to(self.device),
-            "snapshot": snap if self.keep_snapshots else None,
         }
 
         return x_gnn, x_matrix, y
@@ -238,3 +251,45 @@ class E3GNNDataset(Dataset):
 
     def __getitem__(self, idx: int):
         return self.samples[idx]
+
+    def to(self, device: torch.device | str) -> E3GNNDataset:
+        """
+        Move all dataset inputs and targets to the specified device.
+        """
+        device = torch.device(device)
+        if device == self.device:
+            return self
+        self.device = device
+        # Explicitly move known fields
+        for idx, (x_gnn, x_matrix, y) in enumerate(self.samples):
+            # x_gnn
+            x_gnn["node_one_hot"] = x_gnn["node_one_hot"].to(device)
+            x_gnn["edge_index"] = x_gnn["edge_index"].to(device)
+            x_gnn["edge_one_hot"] = x_gnn["edge_one_hot"].to(device)
+            x_gnn["edge_length_emb"] = x_gnn["edge_length_emb"].to(device)
+            x_gnn["edge_sh"] = x_gnn["edge_sh"].to(device)
+            for k, v in x_gnn.get("overlap_vectors_diag", {}).items():
+                x_gnn["overlap_vectors_diag"][k] = v.to(device)
+            for k, v in x_gnn.get("overlap_vectors_offdiag", {}).items():
+                x_gnn["overlap_vectors_offdiag"][k] = v.to(device)
+            # atoms list remains unchanged
+
+            # x_matrix
+            x_matrix["edge_index"] = x_matrix["edge_index"].to(device)
+            x_matrix["edge_one_hot"] = x_matrix["edge_one_hot"].to(device)
+            x_matrix["edge_length_emb"] = x_matrix["edge_length_emb"].to(device)
+            x_matrix["edge_sh"] = x_matrix["edge_sh"].to(device)
+            for k, v in x_matrix.get("overlap_vectors_diag", {}).items():
+                x_matrix["overlap_vectors_diag"][k] = v.to(device)
+            for k, v in x_matrix.get("overlap_vectors_offdiag", {}).items():
+                x_matrix["overlap_vectors_offdiag"][k] = v.to(device)
+
+            # y targets
+            y["hamiltonian"] = y["hamiltonian"].to(device)
+            y["overlap"] = y["overlap"].to(device)
+            y["density"] = y["density"].to(device)
+            y["energy"] = y["energy"].to(device)
+            y["num_electrons"] = y["num_electrons"].to(device)
+
+            self.samples[idx] = (x_gnn, x_matrix, y)
+        return self
