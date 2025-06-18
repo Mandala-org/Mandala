@@ -78,11 +78,12 @@ def main():
     cfg = _parse_cfg(args.config)
 
     # ------------------------------- 1. Dataset factory ----------------
+    # Dataset factory with explicit type casting of numeric hyperparams
     fact = DatasetFactory(
-        cutoff_gnn=cfg.get("cutoff_gnn", 5.0),
-        cutoff_matrix=cfg.get("cutoff_matrix", 7.5),
-        l_max_sh=cfg.get("l_max_sh", 3),
-        n_radial=cfg.get("n_radial", 64),
+        cutoff_gnn=float(cfg.get("cutoff_gnn", 5.0)),
+        cutoff_matrix=float(cfg.get("cutoff_matrix", 7.5)),
+        l_max_sh=int(cfg.get("l_max_sh", 3)),
+        n_radial=int(cfg.get("n_radial", 64)),
         device="cpu",
     )
 
@@ -131,7 +132,7 @@ def main():
             ds,
             batch_size=1,  # ALWAYS 1
             shuffle=shuffle,
-            num_workers=cfg.get("num_workers", 7),
+            num_workers=int(cfg.get("num_workers", 7)),
             pin_memory=True,
             collate_fn=lambda b: b[0],  # <- avoid default_collate on custom objects
         )
@@ -149,11 +150,12 @@ def main():
         devices = [int(i) for i in args.gpus.split(",") if i.strip()]
 
     # ------------------------------- 4. Model --------------------------
+    # Model instantiation with explicit casting for learning rate
     model = E3GNN(
         mapper=mapper,
         edge_types=ds_train.edge_types,
         hp=hp,
-        lr=cfg.get("lr", 3e-4),
+        lr=float(cfg.get("lr", 3e-4)),
         device="cuda" if accelerator == "gpu" else "cpu",
     )
 
@@ -180,13 +182,14 @@ def main():
         BenchmarkCallback(),
     ]
 
+    # Trainer with explicit casting for epochs and precision
     trainer = pl.Trainer(
         logger=logger,
         accelerator=accelerator,
         devices=devices,
-        max_epochs=args.max_epochs or cfg.get("max_epochs", 100),
-        accumulate_grad_batches=args.accum,
-        precision=cfg.get("precision", 16),
+        max_epochs=int(args.max_epochs or cfg.get("max_epochs", 100)),
+        accumulate_grad_batches=int(args.accum),
+        precision=int(cfg.get("precision", 16)),
         callbacks=callbacks,
         deterministic=True,
     )
