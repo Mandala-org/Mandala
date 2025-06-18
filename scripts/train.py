@@ -86,11 +86,36 @@ def main():
         device="cpu",
     )
 
-    # From config:  snapshots: [ {matrix: path, info: path, purpose: train|val}, … ]
+    # From config: explicit snapshot listings
     for entry in cfg.get("snapshots", []):
         fact.add_snapshot(
-            Path(entry["matrix"]), Path(entry["info"]), entry.get("purpose", "train")
+            Path(entry["matrix"]),
+            Path(entry["info"]),
+            entry.get("purpose", "train"),
         )
+    # Auto-generate snapshots by temperature and index if configured
+    base = cfg.get("dataset_base_path")
+    temps_train = cfg.get("train_temps")
+    temps_val = cfg.get("val_temps")
+    n_snaps = cfg.get("n_snapshots_per_temp")
+    if base and n_snaps and (temps_train or temps_val):
+        base_p = Path(base)
+        # Training splits
+        for t in temps_train or []:
+            for i in range(n_snaps):
+                fact.add_snapshot(
+                    base_p / f"{t}K" / str(i) / "Si_DM",
+                    base_p / f"{t}K" / str(i) / "info.dat",
+                    purpose="train",
+                )
+        # Validation splits
+        for t in temps_val or []:
+            for i in range(n_snaps):
+                fact.add_snapshot(
+                    base_p / f"{t}K" / str(i) / "Si_DM",
+                    base_p / f"{t}K" / str(i) / "info.dat",
+                    purpose="val",
+                )
 
     # Optional extra CLI lists
     if not cfg.get("snapshots") and len(sys.argv) >= 3:
