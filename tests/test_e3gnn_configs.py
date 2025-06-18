@@ -39,6 +39,7 @@ def make_dummy_graph(hp):
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": edge_index,
+        "atoms": ("H", "H", "H", "H"),
     }
     return x
 
@@ -73,7 +74,7 @@ def test_e3gnn_forward_variants(hp_kwargs):
     x_matrix = x_gnn  # same graph for simple smoke test
     atoms = ("H",) * 4
 
-    preds = model(x_gnn, x_matrix, atoms)
+    preds = model(x_gnn, x_matrix)
 
     # ------------- basic assertions -----------------------------------
     assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}

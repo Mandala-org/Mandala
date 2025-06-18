@@ -179,8 +179,8 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
             xyz_list.append([float(v) for v in parts[2:5]])
             f_list.append([float(v) for v in parts[5:8]])
 
-    xyz = torch.tensor(xyz_list, dtype=torch.float64) if xyz_list else torch.tensor([])
-    forces = torch.tensor(f_list, dtype=torch.float64) if f_list else torch.tensor([])
+    xyz = torch.tensor(xyz_list, dtype=torch.float64)
+    forces = torch.tensor(f_list, dtype=torch.float64)
 
     # 5b) Fractional coords -------------------------------------------------
     frac_list: list[list[float]] = []

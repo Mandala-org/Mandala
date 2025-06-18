@@ -1,0 +1,156 @@
+import pytest
+import torch
+from e3nn.o3 import Irreps
+
+from net.common import HyperParams, build_hidden_irreps
+from net.common import RadialMLP
+from net.activations import scalar_activation, make_nonlinearity
+from net.encoders import NodeEncoder, EdgeEncoder
+from net.layers import EdgeUpdateBlock, NodeUpdateBlock, MessageBlock
+from core.sparse_math import trace_matmul_sparse
+from core.block_irrep_mapper import BlockIrrepMapper, MappingKeyError
+from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigError
+
+
+def test_node_encoder_shape_and_dtype():
+    hp = HyperParams()
+    out_ir = Irreps("4x0e")
+    enc = NodeEncoder(node_one_hot_dim=3, out_irreps=out_ir, hp=hp, device="cpu")
+    x = torch.tensor([[1, 0, 0], [0, 1, 0]], dtype=torch.float32)
+    h = enc(x)
+    assert h.shape == (2, out_ir.dim)
+    assert h.dtype == torch.float32
+
+
+@pytest.mark.parametrize("offdim", [None, 2])
+def test_edge_encoder_forward(offdim):
+    hp = HyperParams()
+    n_types, n_radial = 2, 3
+    sh_ir = Irreps.spherical_harmonics(1)
+    out_ir = Irreps("5x0e")
+    enc = EdgeEncoder(n_types, n_radial, sh_ir, offdim, out_ir, hp, device="cpu")
+    E = 4
+    # one_hot should be one-hot encoded (E, n_types)
+    one_hot = torch.zeros(E, n_types, dtype=torch.long)
+    one_hot[:2, 1] = 1
+    length_emb = torch.rand(E, n_radial)
+    sh = torch.rand(E, sh_ir.dim)
+    overlap_off = torch.rand(E, offdim) if offdim else None
+    h = enc(one_hot, length_emb, sh, overlap_off)
+    assert h.shape == (E, out_ir.dim)
+
+
+@pytest.mark.parametrize("residual", [True, False])
+def test_edge_update_block_shape(residual):
+    hp = HyperParams(residual_connections=residual)
+    hid_ir = Irreps("3x0e")
+    blk = EdgeUpdateBlock(hid_ir, hp, device="cpu")
+    N, E = 5, 3
+    node = torch.randn(N, hid_ir.dim)
+    edge = torch.randn(E, hid_ir.dim)
+    # create simple edge_index linking first E nodes
+    idx = torch.stack([torch.arange(E), torch.arange(E) + 1])
+    out = blk(node, edge, idx)
+    assert out.shape == (E, hid_ir.dim)
+
+
+@pytest.mark.parametrize("self_upd", [True, False])
+@pytest.mark.parametrize("batch_norm", [True, False])
+def test_node_update_block_shape(self_upd, batch_norm):
+    hp = HyperParams(use_self_update=self_upd, batch_norm=batch_norm)
+    hid_ir = Irreps("2x0e")
+    blk = NodeUpdateBlock(hid_ir, hp, device="cpu")
+    N, E = 4, 2
+    node = torch.randn(N, hid_ir.dim)
+    edge = torch.randn(E, hid_ir.dim)
+    idx = torch.tensor([[0, 2], [1, 3]])
+    out = blk(node, edge, idx)
+    assert out.shape == (N, hid_ir.dim)
+
+
+def test_message_block_edge_and_node_update():
+    hp = HyperParams(use_edge_updates=True)
+    hid_ir = Irreps("1x0e")
+    blk = MessageBlock(hid_ir, hp, device="cpu")
+    N, E = 3, 2
+    node = torch.randn(N, hid_ir.dim)
+    edge = torch.randn(E, hid_ir.dim)
+    idx = torch.tensor([[0, 1], [1, 2]])
+    node2, edge2 = blk(node, edge, idx)
+    assert node2.shape == (N, hid_ir.dim)
+    assert edge2.shape == (E, hid_ir.dim)
+
+
+def test_scalar_activation_and_invalid():
+    relu = scalar_activation("ReLU")
+    assert isinstance(relu, torch.nn.Module)
+    with pytest.raises(ValueError):
+        scalar_activation("unknown_act")
+
+
+def test_make_nonlinearity_id_and_fallback():
+    hp = HyperParams(nonlin_kind="id", activation_scalar="relu")
+    ir = Irreps("2x0e+1x1o")
+    m = make_nonlinearity(ir, hp)
+    assert isinstance(m, torch.nn.Sequential)
+    # unsupported kind raises
+    hp2 = HyperParams(nonlin_kind="bogus")
+    with pytest.raises(ValueError):
+        make_nonlinearity(ir, hp2)
+
+
+@pytest.mark.parametrize(
+    "l_max, base_dim, expected",
+    [(2, 4, "4x0e+4x0o+2x1e+2x1o+1x2e+1x2o"), (0, 3, "3x0e+3x0o")],
+)
+def test_build_hidden_irreps(l_max, base_dim, expected):
+    ir = build_hidden_irreps(l_max, base_dim)
+    assert str(ir) == expected
+
+
+def test_radial_mlp_output_shape_and_layers():
+    mlp = RadialMLP(5, out_dim=2, layers=(3,))
+    x = torch.randn(4, 5)
+    y = mlp(x)
+    assert y.shape == (4, 2)
+    # test when layer equals out_dim
+    mlp2 = RadialMLP(5, out_dim=5, layers=(5,))
+    y2 = mlp2(x)
+    assert y2.shape == (4, 5)
+
+
+def test_trace_matmul_sparse_basic():
+    # two blocks: identity and 2*identity
+    I = torch.eye(2)
+    blocks_a = torch.stack([I, I])
+    blocks_b = torch.stack([2 * I, 3 * I])
+    idx = torch.tensor([[0, 1], [1, 0]])
+    # pairs: (0,1),(1,0) so reverse exists for both
+    # Tr(I*3I) + Tr(I*2I) = 2*3 + 2*2 = 6+4=10
+    val = trace_matmul_sparse(blocks_a, blocks_b, idx)
+    assert torch.isclose(val, torch.tensor(10.0))
+
+
+def test_block_irrep_mapper_roundtrip_and_vector_dim():
+    cfg = OrbitalIrrepConfig.from_dict({"A": ["1x0e", "1x1o"], "B": ["2x0e"]})
+    mapper = BlockIrrepMapper(cfg)
+    # random block for A-B
+    d_i, d_j = mapper.block_dims("A-B")
+    blk = torch.randn(3, d_i, d_j)
+    vec = mapper.blocks_to_vectors(("A", "B"), blk)
+    blk2 = mapper.vectors_to_blocks("A-B", vec)
+    assert blk2.shape == blk.shape
+    # unrecognized key
+    with pytest.raises(MappingKeyError):
+        mapper.blocks_to_vectors("C-D", blk)
+
+
+def test_orbital_irrep_config_from_dict_and_to_dict():
+    d = {"X": "2x0e+1x1o", "Y": ["3x0e"]}
+    cfg = OrbitalIrrepConfig.from_dict(d)
+    out = cfg.to_dict()
+    assert out["X"] == ["2x0e", "1x1o"]
+    assert out["Y"] == ["3x0e"]
+    # invalid format
+    with pytest.raises(OrbitalIrrepConfigError):
+        OrbitalIrrepConfig.from_dict({"Z": 42})
