@@ -30,11 +30,12 @@ def test_forward_smoke():
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": torch.tensor([[0, 1, 2], [1, 2, 3]]),
+        "atoms": ("H", "H", "H", "H"),
     }
     x_mat = x_gnn  # small test: same graph
     atoms = ("H", "H", "H", "H")
 
-    preds = model(x_gnn, x_mat, atoms)
+    preds = model(x_gnn, x_mat)
     assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}
     for v in preds.values():
         assert v.atoms == atoms

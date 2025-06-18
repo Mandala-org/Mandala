@@ -189,7 +189,9 @@ class Snapshot:
             return self  # nothing to do
 
         cfg = self.density.orbital_cfg  # shared by all mats
-        conv = OpenMXE3NNConverter(cfg, device=self.density["H-H"].device)  # any device
+        # pick an arbitrary block to determine the device
+        any_block = next(iter(self.density.pair_blocks.values()))
+        conv = OpenMXE3NNConverter(cfg, device=any_block.device)
 
         if target == "e3nn":
             ham = conv.matrix_to_e3nn(self.hamiltonian)

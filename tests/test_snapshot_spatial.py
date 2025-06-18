@@ -7,12 +7,8 @@ Uses the 216-atom diamond-Si cell included under ``data/big/silicon/300K``.
 
 from pathlib import Path
 
-import numpy as np
-import torch
 import pytest
 
-from core.orbital_irrep_config import OrbitalIrrepConfig
-from data.openmx_parser import parse_openmx_scfout
 from data.snapshot import Snapshot
 
 
@@ -20,32 +16,17 @@ from data.snapshot import Snapshot
 @pytest.fixture(scope="module")
 def si_snapshot():
     """
-    Load *matrices* from the OpenMX output, add positions / box information
-    and return a complete :class:`Snapshot`.
+    Build a Snapshot directly from OpenMX SCF output and info files using
+    the Snapshot.from_openmx constructor.
     """
-    base = Path("./data/big/silicon/300K")
-    scf_file = base / "Si_0.out"
-    coords_npy = base / "coords_0.npy"
-
-    # ----- atomic meta-data ------------------------------------------------
-    coords = torch.tensor(np.load(coords_npy), dtype=torch.float32)  # (216,3)
-    box = torch.diag(torch.tensor([16.293, 16.293, 16.293], dtype=torch.float32))
-
-    atoms = ["Si"] * coords.shape[0]
-    cfg = OrbitalIrrepConfig.from_dict(
-        {"Si": ["2x0e", "2x1o", "1x2e"]}  #  13-dim orbital basis
-    )
-
-    # parse matrices (BlockMatrix objects, basis="openmx")
-    snap_raw = parse_openmx_scfout(scf_file, atoms, cfg, convention="openmx")
-
-    # wrap into full Snapshot with geometry -------------------------------
-    return Snapshot(
-        snap_raw.hamiltonian,
-        snap_raw.overlap,
-        snap_raw.density,
-        positions=coords,
-        box=box,
+    base = Path("./data/big/silicon/2700K")
+    matrix_path = base / "Si_DM"
+    info_path = base / "info.txt"
+    # convention="openmx" ensures we keep native basis
+    return Snapshot.from_openmx(
+        str(matrix_path),
+        str(info_path),
+        convention="openmx",
     )
 
 
