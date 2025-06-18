@@ -16,6 +16,7 @@ import pytorch_lightning as pl
 from torch import nn
 
 from e3nn.o3 import Irreps
+import time
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
@@ -143,7 +144,6 @@ class E3GNN(pl.LightningModule):
         self,
         x_gnn: Dict[str, Any],
         x_matrix: Dict[str, Any],
-        atoms: Tuple[str, ...],
     ):
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x_gnn["node_one_hot"])
@@ -169,66 +169,113 @@ class E3GNN(pl.LightningModule):
         for blk in self.mp_large:
             node, edge_big = blk(node, edge_big, ei_big)
 
-        # ---- heads -----------------------------------------------------
+        # ---- combine node & edge features for heads --------------------
+        # node features correspond to diagonal blocks
+        batch_device = node.device
+        # number of atoms / nodes
+        N = node.shape[0]
+        # stack node (diagonal) and edge (off-diagonal) representations
+        h_full = torch.cat([node, edge_big], dim=0)
+        # build full edge_index: self-loops first, then original matrix edges
+        diag_idx = torch.arange(N, device=batch_device)
+        diag_edge_index = torch.stack([diag_idx, diag_idx], dim=0)
+        full_edge_index = torch.cat([diag_edge_index, x_matrix["edge_index"]], dim=1)
+        # compute edge type indices: off-diags from x_matrix, diag from node elements
         edge_type_idx = x_matrix["edge_one_hot"].argmax(dim=-1)
+        node_elem_idx = x_gnn["node_one_hot"].argmax(dim=-1)
+        # lookup pair_keys (shared across heads)
+        pair_keys = next(iter(self.heads.values())).pair_keys
+        # build mapping from element → diag pair index
+        elems = self.mapper.orbital_cfg.elements()
+        diag_pair_idx = torch.tensor(
+            [pair_keys.index(f"{el}-{el}") for el in elems],
+            dtype=torch.long,
+            device=batch_device,
+        )
+        diag_type_idx = diag_pair_idx[node_elem_idx]
+        # concatenate diag + off-diag type indices
+        full_edge_type_idx = torch.cat([diag_type_idx, edge_type_idx], dim=0)
+
+        # ---- heads -----------------------------------------------------
         preds_raw = {
-            name: head(edge_big, edge_type_idx, ei_big)
+            name: head(h_full, full_edge_type_idx, full_edge_index)
             for name, head in self.heads.items()
         }
         preds_wrapped = {
-            name: self._wrap_head_output(raw, atoms) for name, raw in preds_raw.items()
+            name: self._wrap_head_output(raw, tuple(x_gnn["atoms"]))
+            for name, raw in preds_raw.items()
         }
         return preds_wrapped
 
     # ==================== Lightning steps ====================================
-    def training_step(self, batch, batch_idx):
-        x_gnn, x_mat, y = batch  # relies on custom collate_fn!
-        atoms = tuple(y["snapshot"].atoms)  # same for whole batch after collate
-
-        preds = self(x_gnn, x_mat, atoms)
-
-        # ---- block losses ---------------------------------------------
+    def _shared_step(self, batch, batch_idx, stage: str):
+        """
+        Shared logic for training and validation steps.
+        Logs metrics prefixed with stage ('train' or 'val').
+        """
+        x_gnn, x_mat, y = batch
+        # --- forward timing (message-passing + heads) -------------------
+        t_fwd_start = time.perf_counter()
+        preds = self(x_gnn, x_mat)
+        t_fwd_end = time.perf_counter()
+        # block losses
         loss_blocks = 0.0
         for name in ("hamiltonian", "overlap", "density"):
-            p = preds[name].pair_vectors
-            t = y[name].pair_vectors
-            for key in p:
-                loss_blocks = loss_blocks + self._vectors_mse(p[key], t[key])
-
-        # ---- energy / electrons ---------------------------------------
-        E_pred = trace_matmul_sparse_snap_vectorized(
-            preds["hamiltonian"].to_blocks(), preds["density"].to_blocks()
-        )
+            p_vecs = preds[name].pair_vectors
+            t_vecs = y[name].pair_vectors
+            for key in p_vecs:
+                loss_blocks = loss_blocks + self._vectors_mse(p_vecs[key], t_vecs[key])
+        # --- block mapping timing ---------------------------------------
+        t_map_start = time.perf_counter()
+        blk_ham = preds["hamiltonian"].to_blocks(self.mapper)
+        blk_den = preds["density"].to_blocks(self.mapper)
+        blk_ovr = preds["overlap"].to_blocks(self.mapper)
+        t_map_end = time.perf_counter()
+        # --- observable evaluation timing --------------------------------
+        t_obs_start = time.perf_counter()
+        E_pred = trace_matmul_sparse_snap_vectorized(blk_ham, blk_den)
+        N_pred = trace_matmul_sparse_snap_vectorized(blk_ovr, blk_den)
+        t_obs_end = time.perf_counter()
         E_true = y["energy"]
         loss_E = torch.mean((E_pred - E_true) ** 2)
-
+        abs_err_E = torch.mean(torch.abs(E_pred - E_true))
+        # electron count loss and absolute error
         N_pred = trace_matmul_sparse_snap_vectorized(
-            preds["overlap"].to_blocks(), preds["density"].to_blocks()
+            preds["overlap"].to_blocks(self.mapper),
+            preds["density"].to_blocks(self.mapper),
         )
         N_true = y["num_electrons"]
         loss_N = torch.mean((N_pred - N_true) ** 2)
-
+        abs_err_N = torch.mean(torch.abs(N_pred - N_true))
+        # total loss
         loss = (
             loss_blocks
             + self.hp.energy_loss_coef * loss_E
             + self.hp.electron_loss_coef * loss_N
         )
-
-        self.log_dict(
-            {
-                "loss": loss,
-                "loss_blocks": loss_blocks,
-                "loss_E": loss_E,
-                "loss_N": loss_N,
-            },
-            prog_bar=True,
-            on_step=True,
-            on_epoch=True,
-        )
+        # log all metrics
+        metrics = {
+            f"{stage}_loss": loss,
+            f"{stage}_loss_blocks": loss_blocks,
+            f"{stage}_loss_E": loss_E,
+            f"{stage}_loss_N": loss_N,
+            f"{stage}_abs_error_E": abs_err_E,
+            f"{stage}_abs_error_N": abs_err_N,
+        }
+        self.log_dict(metrics, prog_bar=True, on_step=True, on_epoch=True)
+        # record per-batch timings for callback
+        self._last_batch_times = {
+            "forward": t_fwd_end - t_fwd_start,
+            "map": t_map_end - t_map_start,
+            "obs": t_obs_end - t_obs_start,
+        }
         return loss
 
+    def training_step(self, batch, batch_idx):
+        return self._shared_step(batch, batch_idx, stage="train")
+
     def validation_step(self, batch, batch_idx):
-        return self.training_step(batch, batch_idx)  # logs are identical
+        return self._shared_step(batch, batch_idx, stage="val")
 
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
