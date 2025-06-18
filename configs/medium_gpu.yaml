@@ -78,7 +78,7 @@ num_workers:    8
 
 # Optimizer and training
 lr:           3e-4
-max_epochs:   100
+max_epochs:   10
 precision:    32
 accum:        1
 
