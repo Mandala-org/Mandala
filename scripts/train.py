@@ -65,6 +65,13 @@ def _cli() -> argparse.Namespace:
     p.add_argument("--max_epochs", type=int, default=None)
     p.add_argument("--accum", type=int, default=1, help="grad-accum steps")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument(
+        "--bench-verbosity",
+        type=int,
+        choices=[0, 1, 2, 3],
+        default=1,
+        help="Benchmark verbosity: 0=off,1=run summary,2=+epoch,3=+profiler",
+    )
     return p.parse_args()
 
 
@@ -170,7 +177,9 @@ def main():
     logger.experiment.config.update(cfg, allow_val_change=True)
 
     # ------------------------------- 6. Trainer ------------------------
-    callbacks = [
+    # ------------------------------- 6. Trainer ------------------------
+    # build callbacks
+    callbacks: list = [
         ModelCheckpoint(
             monitor="val_loss",
             mode="min",
@@ -179,8 +188,10 @@ def main():
             filename="{epoch:03d}-{val_loss:.4f}",
         ),
         LearningRateMonitor(logging_interval="step"),
-        BenchmarkCallback(),
     ]
+    # add benchmark callback if enabled
+    if args.bench_verbosity > 0:
+        callbacks.append(BenchmarkCallback(args.bench_verbosity))
 
     # Trainer with explicit casting for epochs and precision
     trainer = pl.Trainer(
