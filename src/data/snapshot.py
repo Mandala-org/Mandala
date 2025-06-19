@@ -36,6 +36,12 @@ from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.block_matrix import BlockMatrix
 from core.basis_converter import OpenMXE3NNConverter
 from core.orbital_irrep_config import OrbitalIrrepConfig
+import pickle
+import hashlib
+from pathlib import Path
+
+# on-disk cache directory for parsed Snapshots
+CACHE_ROOT = Path.home() / ".cache" / "e3gnn4matrix" / "snapshots"
 
 __all__ = ["Snapshot"]
 
@@ -317,6 +323,7 @@ class Snapshot:
         *,
         convention: str = "e3nn",
         symmetrize_density: bool = True,
+        use_cache: bool = True,
     ) -> "Snapshot":
         """
         Build a :class:`Snapshot` directly from an **OpenMX SCF output pair**:
@@ -329,7 +336,33 @@ class Snapshot:
         from data.openmx_info_parser import parse_info_out
         from data.openmx_parser import parse_openmx_scfout
 
-        # ── ①  Parse auxiliary info file (atoms, positions, orbital spec…) ──
+        # ── ①  Attempt to load from cache if enabled ─────────────────────
+        if use_cache:
+            try:
+                m_p = Path(matrix_path).expanduser().resolve()
+                i_p = Path(info_path).expanduser().resolve()
+                stat_m = m_p.stat()
+                stat_i = i_p.stat()
+                key = (
+                    str(m_p),
+                    stat_m.st_mtime,
+                    stat_m.st_size,
+                    str(i_p),
+                    stat_i.st_mtime,
+                    stat_i.st_size,
+                    convention,
+                    symmetrize_density,
+                )
+                h = hashlib.sha256(repr(key).encode()).hexdigest()
+                CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+                cache_file = CACHE_ROOT / f"{h}.pkl"
+                if cache_file.is_file():
+                    with open(cache_file, "rb") as f:
+                        return pickle.load(f)
+            except Exception:
+                use_cache = False
+
+        # ── ②  Parse auxiliary info file (atoms, positions, orbital spec…) ──
         info = parse_info_out(info_path)
 
         atoms: list[str] = info.elements
@@ -354,4 +387,13 @@ class Snapshot:
         # OpenMX writes lattice vectors in other sections - not yet parsed.
         # Users can still `.rotate(...)` / `.filter_by_distance(...)`
         # without PBC if `box` stays *None*.
+        # ── ④  Cache to disk ───────────────────────────────────────────────
+        if use_cache:
+            try:
+                tmp = cache_file.with_suffix(".pkl.tmp")
+                with open(tmp, "wb") as f:
+                    pickle.dump(snap, f)
+                tmp.replace(cache_file)
+            except Exception:
+                pass
         return snap
