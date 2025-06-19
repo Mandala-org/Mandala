@@ -5,7 +5,8 @@ import numpy as np
 import torch
 import pytest
 from pathlib import Path
-from data.factory import DatasetFactory
+
+# Delay import of DatasetFactory until after src/ is on PYTHONPATH
 
 # Ensure the project src/ directory is on PYTHONPATH for imports
 sys.path.insert(
@@ -23,6 +24,9 @@ venv_sp = os.path.join(
 )
 if os.path.isdir(venv_sp):
     sys.path.insert(0, venv_sp)
+
+# now that src/ and venv are in path, import DatasetFactory
+from data.factory import DatasetFactory  # noqa: E402
 
 
 def pytest_configure(config):
