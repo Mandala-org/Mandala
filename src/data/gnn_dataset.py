@@ -29,6 +29,7 @@ from e3nn.math import soft_one_hot_linspace
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
+import time
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -250,7 +251,14 @@ class E3GNNDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx: int):
-        return self.samples[idx]
+        t0 = time.perf_counter()
+        sample = self.samples[idx]
+        t1 = time.perf_counter()
+        try:
+            self.loader_times.append(t1 - t0)
+        except Exception:
+            pass
+        return sample
 
     def to(self, device: torch.device | str) -> E3GNNDataset:
         """

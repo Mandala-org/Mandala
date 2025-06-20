@@ -77,40 +77,28 @@ class BenchmarkCallback(pl.Callback):
             "cpu_processor": platform.processor(),
             "gpu": gpu_info,
         }
-        # wrap datasets for precise loader timing
+        # prepare dataset profiling
         self.loader_times = []
-
-        class _ProfilerDataset:
-            def __init__(self, ds, cb):
-                self._ds = ds
-                self._cb = cb
-
-            def __len__(self):
-                return len(self._ds)
-
-            def __getitem__(self, idx):
-                t0 = time.perf_counter()
-                item = self._ds[idx]
-                t1 = time.perf_counter()
-                self._cb.loader_times.append(t1 - t0)
-                return item
-
-        # train loaders
         try:
             tlds = trainer.train_dataloader
             tlds = tlds if isinstance(tlds, (list, tuple)) else [tlds]
         except Exception:
             tlds = []
         for ld in tlds:
-            ld.dataset = _ProfilerDataset(ld.dataset, self)
-        # val loaders
+            try:
+                ld.dataset.loader_times = self.loader_times
+            except Exception:
+                pass
         try:
             vlds = trainer.val_dataloaders
             vlds = vlds if isinstance(vlds, (list, tuple)) else [vlds]
         except Exception:
             vlds = []
         for ld in vlds:
-            ld.dataset = _ProfilerDataset(ld.dataset, self)
+            try:
+                ld.dataset.loader_times = self.loader_times
+            except Exception:
+                pass
         # start torch profiler if requested
         if self.verbosity >= 3:
             try:
