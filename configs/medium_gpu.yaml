@@ -82,6 +82,8 @@ max_epochs:   10
 precision:    32
 accum:        1
 
+log_every_n_steps:  4
+
 # Model hyper-parameters (default unless overridden)
 # model:
 #  hidden_base_dim: 64
