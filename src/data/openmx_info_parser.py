@@ -12,7 +12,8 @@ import torch  # real PyTorch – no stub
 # ---------------------------------------------------------------------------
 
 
-def recover_box(frac_coords, abs_coords):
+def recover_box(frac_coords: torch.Tensor, abs_coords: torch.Tensor) -> torch.Tensor:
+    """Recover the lattice matrix given fractional and absolute coordinates."""
     F = torch.as_tensor(frac_coords, dtype=torch.float64)
     A = torch.as_tensor(abs_coords, dtype=torch.float64)
 
@@ -46,7 +47,8 @@ class InfoOutData:
     forces: torch.Tensor
 
     # convenience
-    def occupancy_by_element(self, el: str):
+    def occupancy_by_element(self, el: str) -> torch.Tensor:
+        """Return occupancy tensor for the given element symbol."""
         mask = [e == el for _idx, e, *_ in self.record_meta]
         return self.occupancies[mask]
 

@@ -10,9 +10,11 @@ is now routed through :class:`core.block_irrep_mapper.BlockIrrepMapper`.
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Tuple, Union
 
 import torch
+from core.block_irrep_mapper import BlockIrrepMapper
+from data.block_matrix import BlockMatrix
 
 
 # --------------------------------------------------------------------------- #
@@ -46,14 +48,18 @@ def trace_matmul_sparse(
 
 
 # thin wrappers kept for convenience --------------------------------------- #
-def blocks_to_vectors(mapper, pair, blocks):
+def blocks_to_vectors(
+    mapper: BlockIrrepMapper, pair: Union[Tuple[str, str], str], blocks: torch.Tensor
+) -> torch.Tensor:
     """
     Convenience shim → delegates to :class:`BlockIrrepMapper`.
     """
     return mapper.blocks_to_vectors(pair, blocks)
 
 
-def vectors_to_blocks(mapper, pair, vectors):
+def vectors_to_blocks(
+    mapper: BlockIrrepMapper, pair: Union[Tuple[str, str], str], vectors: torch.Tensor
+) -> torch.Tensor:
     """
     Inverse shim.
     """
@@ -63,7 +69,7 @@ def vectors_to_blocks(mapper, pair, vectors):
 # ---------------------------------------------------------------------------
 #   Snapshot-level sparse traces
 # ---------------------------------------------------------------------------
-def trace_matmul_sparse_snap(A, B):
+def trace_matmul_sparse_snap(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
     """
     Scalar trace **via per-edge loop** using lookup table.
     Works for any BlockMatrix / IrrepsBlockData combination.
@@ -81,7 +87,7 @@ def trace_matmul_sparse_snap(A, B):
     return out
 
 
-def trace_matmul_sparse_snap_vectorized(A, B):
+def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
     """
     Vectorized per *directed* key.
 
