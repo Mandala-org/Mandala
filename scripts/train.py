@@ -74,6 +74,11 @@ def _cli() -> argparse.Namespace:
         default=1,
         help="Benchmark verbosity: 0=off,1=run summary,2=+epoch,3=+profiler",
     )
+    p.add_argument(
+        "--log-activation-mag",
+        action="store_true",
+        help="Enable logging of activation/feature magnitudes by irrep to WandB and benchmark report",
+    )
     return p.parse_args()
 
 
@@ -181,19 +186,28 @@ def main() -> None:
     # ------------------------------- 6. Trainer ------------------------
     # ------------------------------- 6. Trainer ------------------------
     # build callbacks
-    callbacks: list = [
-        ModelCheckpoint(
-            monitor="val_loss",
-            mode="min",
-            save_top_k=3,
-            dirpath=PROJECT_ROOT / "checkpoints" / run_name,
-            filename="{epoch:03d}-{val_loss:.4f}",
-        ),
-        LearningRateMonitor(logging_interval="step"),
-    ]
+    callbacks: list = []
+    # always include basic callbacks
+    callbacks.extend(
+        [
+            ModelCheckpoint(
+                monitor="val_loss",
+                mode="min",
+                save_top_k=3,
+                dirpath=PROJECT_ROOT / "checkpoints" / run_name,
+                filename="{epoch:03d}-{val_loss:.4f}",
+            ),
+            LearningRateMonitor(logging_interval="step"),
+        ]
+    )
     # add benchmark callback if enabled
     if args.bench_verbosity > 0:
-        callbacks.append(BenchmarkCallback(args.bench_verbosity))
+        callbacks.append(
+            BenchmarkCallback(
+                verbosity=args.bench_verbosity,
+                log_activation_mag=args.log_activation_mag,
+            )
+        )
 
     # Trainer with explicit casting for epochs and precision
     trainer = pl.Trainer(
