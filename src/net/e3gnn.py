@@ -139,24 +139,79 @@ class E3GNN(pl.LightningModule):
             orbital_cfg=self.mapper.orbital_cfg,
         )
 
+    # ------------------------------------------------------------------ activation monitoring helpers
+    def _magnitude_splits(
+        self,
+        features: torch.Tensor,
+        irreps: Irreps,
+    ) -> dict[int, torch.Tensor]:
+        """
+        Split features by irrep and compute magnitude per irreducible component.
+        Returns a mapping from angular momentum l to a 1D tensor of magnitudes.
+        """
+        mags: dict[int, torch.Tensor] = {}
+        # features: (M, D)
+        start = 0
+        for mul, ir in irreps:
+            dim = ir.dim
+            size = mul * dim
+            # slice for this irrep
+            chunk = features[:, start : start + size]
+            # reshape to (M * mul, dim)
+            if mul > 0 and dim > 0:
+                reshaped = chunk.reshape(-1, dim)
+                # magnitude across dim
+                mag = torch.linalg.norm(reshaped, dim=1)
+                mags[ir.l] = mag
+            start += size
+        return mags
+
+    def _record_activation_mags(
+        self,
+        prefix: str,
+        features: torch.Tensor,
+        irreps: Irreps,
+    ) -> None:
+        """
+        Compute activation magnitudes and store in self._activation_mags.
+        """
+        splits = self._magnitude_splits(features, irreps)
+        for l, mag in splits.items():
+            tag = f"mag_{prefix}_l_{l}"
+            self._activation_mags[tag] = mag
+
     # ------------------------------------------------------------------ forward
     def forward(
         self,
         x_gnn: Dict[str, Any],
         x_matrix: Dict[str, Any],
     ):
+        # initialize activation magnitudes storage
+        self._activation_mags: dict[str, torch.Tensor] = {}
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x_gnn["node_one_hot"])
+        # record node encoding magnitudes per irrep
+        self._record_activation_mags("node_encoding", node, self.hidden_irreps)
         edge = self.edge_enc(
             x_gnn["edge_one_hot"],
             x_gnn["edge_length_emb"],
             x_gnn["edge_sh"],
             overlap_off=None,
         )
+        # record edge encoding magnitudes per irrep
+        self._record_activation_mags("edge_encoding", edge, self.hidden_irreps)
 
         ei_small = x_gnn["edge_index"]
-        for blk in self.mp_small:
+        # message-passing on small graph with activation monitoring
+        for idx, blk in enumerate(self.mp_small):
             node, edge = blk(node, edge, ei_small)
+            # record magnitudes after small graph layer
+            self._record_activation_mags(
+                f"node_small_layer_{idx}", node, self.hidden_irreps
+            )
+            self._record_activation_mags(
+                f"edge_small_layer_{idx}", edge, self.hidden_irreps
+            )
 
         # ---- lift to large graph --------------------------------------
         # re-encode edges for the large graph
@@ -166,8 +221,16 @@ class E3GNN(pl.LightningModule):
             x_matrix,
         )
         ei_big = x_matrix["edge_index"]
-        for blk in self.mp_large:
+        # message-passing on large graph with activation monitoring
+        for idx, blk in enumerate(self.mp_large):
             node, edge_big = blk(node, edge_big, ei_big)
+            # record magnitudes after large graph layer
+            self._record_activation_mags(
+                f"node_large_layer_{idx}", node, self.hidden_irreps
+            )
+            self._record_activation_mags(
+                f"edge_large_layer_{idx}", edge_big, self.hidden_irreps
+            )
 
         # ---- combine node & edge features for heads --------------------
         # node features correspond to diagonal blocks
@@ -205,6 +268,8 @@ class E3GNN(pl.LightningModule):
             name: self._wrap_head_output(raw, tuple(x_gnn["atoms"]))
             for name, raw in preds_raw.items()
         }
+        # expose activation magnitudes for callbacks
+        self._last_activation_mags = self._activation_mags
         return preds_wrapped
 
     # ==================== Lightning steps ====================================

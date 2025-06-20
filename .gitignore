@@ -11,6 +11,7 @@ e3gnn4matrix-venv/
 runs/
 checkpoints/
 wandb/
+benchmarks/
 
 # PyTest + coverage
 .pytest_cache/

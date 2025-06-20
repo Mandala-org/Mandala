@@ -22,9 +22,11 @@ class BenchmarkCallback(pl.Callback):
       3 = + operator-level profiling via torch.profiler
     """
 
-    def __init__(self, verbosity: int = 1):
+    def __init__(self, verbosity: int = 1, log_activation_mag: bool = False):
         super().__init__()
         self.verbosity = int(verbosity)
+        # whether to collect activation magnitude statistics
+        self.log_activation_mag = bool(log_activation_mag)
         # overall per-batch stats
         self.train_stats: list[dict] = []
         self.val_stats: list[dict] = []
@@ -40,6 +42,9 @@ class BenchmarkCallback(pl.Callback):
         self.profiler = None
         # record environment
         self.environment: dict = {}
+        # activation magnitudes storage
+        self.train_activation_mags: dict[str, list[np.ndarray]] = {}
+        self.val_activation_mags: dict[str, list[np.ndarray]] = {}
 
     # helper to summarize a list of per-batch dicts
     def _summarize(self, lst: list[dict]) -> dict:
@@ -203,6 +208,15 @@ class BenchmarkCallback(pl.Callback):
             "optimizer_time": optimizer_time,
             "step_time": step_time,
         }
+        # collect activation magnitudes if enabled
+        if self.log_activation_mag:
+            last_mags = getattr(pl_module, "_last_activation_mags", {}) or {}
+            for tag, mag in last_mags.items():
+                try:
+                    arr = mag.detach().cpu().numpy().ravel()
+                except Exception:
+                    continue
+                self.train_activation_mags.setdefault(tag, []).append(arr)
         # record overall stats
         self.train_stats.append(stats)
         # record epoch-level if enabled
@@ -253,6 +267,15 @@ class BenchmarkCallback(pl.Callback):
             "obs_time": times.get("obs", 0.0),
             "step_time": step_time,
         }
+        # collect activation magnitudes if enabled
+        if self.log_activation_mag:
+            last_mags = getattr(pl_module, "_last_activation_mags", {}) or {}
+            for tag, mag in last_mags.items():
+                try:
+                    arr = mag.detach().cpu().numpy().ravel()
+                except Exception:
+                    continue
+                self.val_activation_mags.setdefault(tag, []).append(arr)
         self.val_stats.append(stats)
         if self.verbosity >= 2:
             buf = getattr(self, "_cur_val_stats", None)
@@ -306,6 +329,28 @@ class BenchmarkCallback(pl.Callback):
                 "train": self._epoch_train_stats,
                 "val": self._epoch_val_stats,
             }
+        # activation magnitude summaries if enabled
+        if self.log_activation_mag:
+            act_summary: dict[str, Any] = {"train": {}, "val": {}}
+
+            # helper to summarize 1D numpy arrays
+            def _summ(arrs: list[np.ndarray]) -> dict[str, float]:
+                allv = np.concatenate(arrs) if arrs else np.array([])
+                if allv.size == 0:
+                    return {}
+                return {
+                    "mean": float(allv.mean()),
+                    "median": float(np.median(allv)),
+                    "std": float(allv.std()),
+                    "min": float(allv.min()),
+                    "max": float(allv.max()),
+                }
+
+            for tag, arrs in self.train_activation_mags.items():
+                act_summary["train"][tag] = _summ(arrs)
+            for tag, arrs in self.val_activation_mags.items():
+                act_summary["val"][tag] = _summ(arrs)
+            report["activation_magnitudes"] = act_summary
         # operator profiling (v>=3)
         if self.verbosity >= 3 and self.profiler is not None:
             try:
@@ -352,6 +397,11 @@ class BenchmarkCallback(pl.Callback):
                 ]:
                     if k in ts:
                         metrics[f"bench_train_{k}_mean"] = ts[k]["mean"]
+                # include activation magnitude means
+                if self.log_activation_mag and "activation_magnitudes" in report:
+                    for tag, summ in report["activation_magnitudes"]["train"].items():
+                        if "mean" in summ:
+                            metrics[f"bench_train_{tag}_mean"] = summ["mean"]
                 lm(metrics)
         except Exception:
             pass
