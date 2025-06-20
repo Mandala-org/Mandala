@@ -10,6 +10,7 @@ import time
 import numpy as np
 import pytorch_lightning as pl
 import yaml
+from typing import Any
 
 
 class BenchmarkCallback(pl.Callback):
@@ -57,7 +58,7 @@ class BenchmarkCallback(pl.Callback):
             }
         return summary
 
-    def on_fit_start(self, trainer, pl_module):
+    def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
         if self.verbosity == 0:
             return
         # record environment and timestamp
@@ -116,40 +117,59 @@ class BenchmarkCallback(pl.Callback):
             except Exception:
                 self.profiler = None
 
-    def on_train_epoch_start(self, trainer, pl_module):
+    def on_train_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
         if self.verbosity < 2:
             return
         self._cur_train_stats: list[dict] = []
         self._prev_train_end = None
 
-    def on_validation_epoch_start(self, trainer, pl_module):
+    def on_validation_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
         if self.verbosity < 2:
             return
         self._cur_val_stats: list[dict] = []
         self._prev_val_end = None
 
-    def on_train_epoch_end(self, trainer, pl_module):
+    def on_train_epoch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
         if self.verbosity < 2:
             return
         ep = trainer.current_epoch
         self._epoch_train_stats[ep] = self._summarize(self._cur_train_stats)
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_epoch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
         if self.verbosity < 2:
             return
         ep = trainer.current_epoch
         self._epoch_val_stats[ep] = self._summarize(self._cur_val_stats)
 
     def on_train_batch_start(
-        self, trainer, pl_module, batch, batch_idx, dataloader_idx=0
-    ):
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
         if self.verbosity == 0:
             return
         self._train_start = time.perf_counter()
 
     def on_train_batch_end(
-        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
-    ):
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: Any,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
         if self.verbosity == 0:
             return
         t_end = time.perf_counter()
@@ -199,15 +219,26 @@ class BenchmarkCallback(pl.Callback):
                 pass
 
     def on_validation_batch_start(
-        self, trainer, pl_module, batch, batch_idx, dataloader_idx=0
-    ):
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
         if self.verbosity == 0:
             return
         self._val_start = time.perf_counter()
 
     def on_validation_batch_end(
-        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
-    ):
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: Any,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
         if self.verbosity == 0:
             return
         t_end = time.perf_counter()
@@ -229,7 +260,7 @@ class BenchmarkCallback(pl.Callback):
                 buf.append(stats)
         self._prev_val_end = t_end
 
-    def on_fit_end(self, trainer, pl_module):
+    def on_fit_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
         # skip if disabled
         if self.verbosity == 0:
             return
