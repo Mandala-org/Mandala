@@ -18,18 +18,23 @@ helpers.
 """
 
 from __future__ import annotations
-
+import hashlib
+import pickle
 from pathlib import Path
+
 from typing import Dict, List, Sequence, Tuple
 
 import torch
+import time  # needed for __getitem__ timing
 from torch.utils.data import Dataset
 from e3nn.o3 import Irreps, spherical_harmonics
 from e3nn.math import soft_one_hot_linspace
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
-import time
+
+# on-disk cache directory for processed snapshots
+CACHE_ROOT = Path.home() / ".cache" / "e3gnn4matrix" / "dataset"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -45,7 +50,7 @@ class E3GNNDataset(Dataset):
     # --------------------------------------------------------------------- init
     def __init__(
         self,
-        snapshots: Sequence[Snapshot | str | Path],
+        snapshots: Sequence[Snapshot],
         mapper: BlockIrrepMapper,
         *,
         cutoff_gnn: float = 5.0,
@@ -56,6 +61,9 @@ class E3GNNDataset(Dataset):
     ):
         if cutoff_gnn >= cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
+
+        if not snapshots:
+            raise ValueError("At least one Snapshot must be provided")
 
         self.device = torch.device(device)
 
@@ -76,11 +84,48 @@ class E3GNNDataset(Dataset):
         }
         self.n_edge_types = len(self.edge_types)
 
-        # preprocess all snapshots -------------------------------------------
+        # preprocess all snapshots with caching
         self.samples: List[Tuple[Dict, Dict, Dict]] = []
-        for item in snapshots:
-            snap = item if isinstance(item, Snapshot) else Snapshot.load(item)
-            self.samples.append(self._process_snapshot(snap))
+        for snap in snapshots:
+            if not isinstance(snap, Snapshot):
+                raise TypeError("E3GNNDataset expects only Snapshot instances")
+            sample = self._load_or_process_snapshot(snap)
+            self.samples.append(sample)
+
+    # ---------------------------------------------------------------- snapshot caching & helpers
+    def _load_or_process_snapshot(
+        self,
+        snapshot: Snapshot,
+    ) -> Tuple[Dict, Dict, Dict]:
+        """
+        Load processed snapshot from cache if available, otherwise process and cache it.
+        """
+        # build cache key from snapshot payload and model settings
+        key_obj = (
+            snapshot.matrix_path,
+            snapshot.info_path,
+            self.cut_gnn,
+            self.cut_mat,
+            self.l_max_sh,
+            self.n_radial,
+        )
+        key_bytes = pickle.dumps(key_obj)
+        key_hash = hashlib.md5(key_bytes).hexdigest()
+        cache_file = CACHE_ROOT / f"{key_hash}.pt"
+        # attempt load from cache
+        if cache_file.exists():
+            try:
+                return torch.load(cache_file)
+            except Exception:
+                pass
+        # process snapshot and cache
+        sample = self._process_snapshot(snapshot)
+        try:
+            CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+            torch.save(sample, cache_file)
+        except Exception:
+            pass
+        return sample
 
     # ---------------------------------------------------------------- helpers
     # ---------- minimal-image displacements ----------------------------------
