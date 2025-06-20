@@ -58,6 +58,8 @@ class Snapshot:
         *,
         positions: torch.Tensor | None = None,  # (N,3)
         box: torch.Tensor | None = None,  # (3,3)
+        matrix_path=None,  # optional path to the source file
+        info_path=None,  # optional path to the source info file
     ) -> None:
         # quick consistency sanity checks
         self._check_compatibility(hamiltonian, overlap, density)
@@ -70,6 +72,9 @@ class Snapshot:
 
         self.positions = positions
         self.box = box  # may be None for non-periodic test cases
+
+        self.matrix_path = matrix_path  # optional path to the source file
+        self.info_path = info_path
 
         # edge ordering according to |D| magnitude -------------------------
         self._order_edges_by_density()
@@ -380,6 +385,9 @@ class Snapshot:
             convention=convention,
             symmetrize_density=symmetrize_density,
         )
+
+        snap.matrix_path = matrix_path  # store source file path
+        snap.info_path = info_path
 
         # ── ③  Attach geometry (positions, later box) and return ────────────
         snap.positions = info.xyz if info.xyz.numel() else None

@@ -70,8 +70,8 @@ snapshots:
     purpose: val
 
 # Data-processing hyper-parameters
-cutoff_gnn:     5.0        # Å
-cutoff_matrix:  7.5        # Å
+cutoff_gnn:     4.0        # Å
+cutoff_matrix:  6        # Å
 l_max_sh:       3
 n_radial:       64
 num_workers:    8
@@ -84,9 +84,48 @@ accum:        1
 
 log_every_n_steps:  4
 
-# Model hyper-parameters (default unless overridden)
-# model:
-#  hidden_base_dim: 64
-#  num_layers_gnn: 4
-#  num_layers_matrix: 2
-#  ... other defaults
+# model hyper-parameters
+model:
+  # representation shape
+  l_max: 3                    # highest ℓ carried by learned features
+  hidden_base_dim: 64         # multiplicity at ℓ=0
+
+  # network depth/topology
+  num_layers_gnn: 2            # number of message-passing layers on small graph
+  num_layers_matrix: 1         # number of message-passing layers on large graph
+  use_edge_updates: true       # apply edge-update block in MessageBlock
+  use_self_update: true        # include self-update MLP in NodeUpdateBlock
+
+  # non-linearity & normalization
+  nonlin_kind: "gate"         # "gate" | "normact" | "s2act" | "id"
+  activation_scalar: "silu"   # activation for scalar features
+  batch_norm: false
+  norm_kind: "component"      # "component" or "norm" for NormActivation
+  dropout: 0.0                 # dropout probability on all irrep coefficients
+  residual_connections: true
+
+  # radial basis
+  n_radial: 64
+  radial_layers: [128]         # hidden sizes for radial MLP
+  share_radial: true
+
+  # output heads
+  head_depth: 1
+  head_hidden_mul: 1.0         # multiplier for hidden size in head MLP
+  hidden_mul_clip: 4.0         # cap multiplier to avoid explosion
+
+  # loss weighting
+  energy_loss_coef: 1e-5
+  electron_loss_coef: 1e-5
+
+# ---------------------------------------------------------------- training --
+training:
+  lr: 1e-4
+  epochs: 30
+  log_every_n: 10
+  benchmark_level: epoch   # none | layer | epoch
+
+# ------------------------------------------------------------- hyperopt stub --
+tune:
+  enabled: false
+  num_trials: 50
