@@ -15,6 +15,7 @@ import sys
 import yaml
 import json
 import argparse
+from typing import Any, Dict
 import datetime as dt
 from pathlib import Path
 
@@ -34,7 +35,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]  # src/
 # ════════════════════════════════════════════════════════════════════════
 # Helpers
 # ════════════════════════════════════════════════════════════════════════
-def _parse_cfg(path: Path | None) -> dict:
+def _parse_cfg(path: Path | None) -> Dict[str, Any]:
+    """Load configuration from YAML or JSON file into a dict."""
     if path is None:
         return {}
     with open(path) as fh:
@@ -78,7 +80,7 @@ def _cli() -> argparse.Namespace:
 # ════════════════════════════════════════════════════════════════════════
 # Main entry
 # ════════════════════════════════════════════════════════════════════════
-def main():
+def main() -> None:
     args = _cli()
     torch.manual_seed(args.seed)
 

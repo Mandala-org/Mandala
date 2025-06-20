@@ -90,7 +90,7 @@ class E3GNNDataset(Dataset):
         edges: torch.Tensor,
         box: torch.Tensor | None,
         inv_box: torch.Tensor | None = None,
-    ):
+    ) -> torch.Tensor:
         if box is None:
             return pos[edges[1]] - pos[edges[0]]
         if inv_box is None:
@@ -106,7 +106,9 @@ class E3GNNDataset(Dataset):
         snap: Snapshot,
         dist_dict: Dict[str, torch.Tensor],
         cutoff: float,
-    ):
+    ) -> Tuple[
+        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]
+    ]:
         """
         Returns
         -------
@@ -170,7 +172,11 @@ class E3GNNDataset(Dataset):
         return edge_index, edge_one_hot, edge_length_emb, edge_sh, keep_mask_dict
 
     # ---------- main per-snapshot routine -----------------------------------
-    def _process_snapshot(self, snap: Snapshot):
+    def _process_snapshot(
+        self, snap: Snapshot
+    ) -> Tuple[
+        Dict[str, torch.Tensor], Dict[str, torch.Tensor], Dict[str, torch.Tensor]
+    ]:
         """
         Build graph inputs (small and large cutoff) and targets from one Snapshot.
 
@@ -247,10 +253,14 @@ class E3GNNDataset(Dataset):
         return x_gnn, x_matrix, y
 
     # ------------------- torch Dataset interface ---------------------------
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int):
+    def __getitem__(
+        self, idx: int
+    ) -> Tuple[
+        Dict[str, torch.Tensor], Dict[str, torch.Tensor], Dict[str, torch.Tensor]
+    ]:
         t0 = time.perf_counter()
         sample = self.samples[idx]
         t1 = time.perf_counter()
