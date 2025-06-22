@@ -12,6 +12,7 @@ runs/
 checkpoints/
 wandb/
 benchmarks/
+lightning_logs/
 
 # PyTest + coverage
 .pytest_cache/
