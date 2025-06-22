@@ -11,7 +11,6 @@
 # ---------------------------------------------------------------------
 
 from __future__ import annotations
-import sys
 import yaml
 import json
 import argparse
@@ -130,35 +129,6 @@ def main() -> None:
             Path(entry["info"]),
             entry.get("purpose", "train"),
         )
-    # Auto-generate snapshots by temperature and index if configured
-    base = cfg.get("dataset_base_path")
-    temps_train = cfg.get("train_temps")
-    temps_val = cfg.get("val_temps")
-    n_snaps = cfg.get("n_snapshots_per_temp")
-    if base and n_snaps and (temps_train or temps_val):
-        base_p = Path(base)
-        # Training splits
-        for t in temps_train or []:
-            for i in range(n_snaps):
-                fact.add_snapshot(
-                    base_p / f"{t}K" / str(i) / "Si_DM",
-                    base_p / f"{t}K" / str(i) / "info.dat",
-                    purpose="train",
-                )
-        # Validation splits
-        for t in temps_val or []:
-            for i in range(n_snaps):
-                fact.add_snapshot(
-                    base_p / f"{t}K" / str(i) / "Si_DM",
-                    base_p / f"{t}K" / str(i) / "info.dat",
-                    purpose="val",
-                )
-
-    # Optional extra CLI lists
-    if not cfg.get("snapshots") and len(sys.argv) >= 3:
-        # quick mode: python … matrix.txt info.txt
-        mat_path, info_path = map(Path, sys.argv[-2:])
-        fact.add_snapshot(mat_path, info_path, "train")
 
     ds_train, ds_val, mapper = fact.create()
     vprint(f"Created datasets: train={len(ds_train)}, val={len(ds_val)}")
@@ -169,7 +139,7 @@ def main() -> None:
             ds,
             batch_size=1,  # ALWAYS 1
             shuffle=shuffle,
-            num_workers=int(cfg.get("num_workers", 7)),
+            num_workers=int(cfg.get("num_workers", 0)),
             pin_memory=True,
             collate_fn=lambda b: b[0],  # <- avoid default_collate on custom objects
         )
