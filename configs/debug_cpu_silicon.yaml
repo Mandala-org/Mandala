@@ -31,7 +31,6 @@ accelerator:    cpu
 lr:           3.0e-4
 max_epochs:   3
 precision:    32           # full FP32 on CPU
-accum:        1            # grad-accum (ineffective with bs=1, but explicit)
 
 # ----------------------------------------------------------------------
 # Model hyper-parameters (override only if you want to deviate from defaults)
