@@ -2,7 +2,7 @@
 # ----------------------
 # Medium-sized GPU training on silicon dataset_A (16 train, 4 val snapshots)
 
-run_name: "silicon_medium_gpu"
+run_name: "silicon_medium_gpu_benchmark"
 wandb_project: "e3gnn_silicon"
 
 snapshots:
@@ -71,7 +71,7 @@ snapshots:
 
 # Data-processing hyper-parameters
 cutoff_gnn:     4.0        # Å
-cutoff_matrix:  6        # Å
+cutoff_matrix:  6.0        # Å
 l_max_sh:       3
 n_radial:       64
 num_workers:    8

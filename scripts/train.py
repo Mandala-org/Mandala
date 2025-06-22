@@ -205,16 +205,19 @@ def main() -> None:
 
     # ------------------------------- 5. Logging ------------------------
     run_name = cfg.get("run_name") or f"e3gnn_{dt.datetime.now():%Y%m%d_%H%M%S}"
-    logger = WandbLogger(
-        project=cfg.get("wandb_project", "e3gnn"),
-        name=run_name,
-        log_model=True,
-        save_dir=str(PROJECT_ROOT / "wandb"),
-    )
-    logger.experiment.config.update(cfg, allow_val_change=True)
-    vprint(f"Initialized WandB logger with run name '{run_name}'")
+    if cfg.get("wandb_project", None) is not None:
+        logger = WandbLogger(
+            project=cfg.get("wandb_project"),
+            name=run_name,
+            log_model=True,
+            save_dir=str(PROJECT_ROOT / "wandb"),
+        )
+        logger.experiment.config.update(cfg, allow_val_change=True)
+        vprint(f"Initialized WandB logger with run name '{run_name}'")
+    else:
+        logger = None
+        vprint("Not using a logger")
 
-    # ------------------------------- 6. Trainer ------------------------
     # ------------------------------- 6. Trainer ------------------------
     # build callbacks
     bench_cb = None

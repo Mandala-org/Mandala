@@ -8,28 +8,21 @@ run_name: "debug-cpu-small"
 # Dataset: each entry = one Snapshot (matrix+info) and its purpose
 # ----------------------------------------------------------------------
 snapshots:
-  # ─── training ─────────────────────────────────────────────────────────
-  - matrix: data/small/H2O/original/H2O.matrix
-    info:   data/small/H2O/original/H2O.info.out
+  - matrix: /home/bartek/casus/e3gnn4matrix/data/big/silicon/900K/Si_DM
+    info:   /home/bartek/casus/e3gnn4matrix/data/big/silicon/900K/info.txt
     purpose: train
-
-  - matrix: data/big/silicon/900K/Si_DM
-    info:   data/big/silicon/900K/info.txt
-    purpose: train
-
-  # ─── validation ──────────────────────────────────────────────────────
-  - matrix: data/big/silicon/2700K/Si_DM
-    info:   data/big/silicon/2700K/info.txt
+  - matrix: /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/Si_DM
+    info:   /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/info.txt
     purpose: val
 
 # ----------------------------------------------------------------------
 # Data-processing hyper-parameters
 # ----------------------------------------------------------------------
-cutoff_gnn:     5.0        # Å
-cutoff_matrix:  7.5        # Å
+cutoff_gnn:     4.0        # Å
+cutoff_matrix:  6.0        # Å
 l_max_sh:       3
 n_radial:       64
-num_workers:    2          # keep 0 for tiny CPU test
+num_workers:    2
 accelerator:    cpu
 
 # ----------------------------------------------------------------------
