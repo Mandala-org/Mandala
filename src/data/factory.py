@@ -46,6 +46,7 @@ class DatasetFactory:
         n_radial: int = 64,
         keep_snapshots: bool = False,
         device: torch.device | str = "cpu",
+        cache_root: str | os.PathLike | None = None,
     ):
         self.cutoff_gnn = float(cutoff_gnn)
         self.cutoff_matrix = float(cutoff_matrix)
@@ -53,13 +54,14 @@ class DatasetFactory:
         self.n_radial = int(n_radial)
         self.keep_snapshots = bool(keep_snapshots)
         self.device = torch.device(device)
+        # cache root for processed snapshots; if None, caching is disabled
+        if cache_root is None:
+            self.cache_root = None
+        else:
+            self.cache_root = Path(cache_root).expanduser()
 
         # paths grouped by purpose --------------------------------------
         self._pairs: Dict[Purpose, List[Tuple[Path, Path]]] = {"train": [], "val": []}
-
-        # shallow caches -------------------------------------------------
-        self._info_cache: Dict[Path, InfoOutData] = {}
-        self._snap_cache: Dict[Tuple[Path, Path], Snapshot] = {}
 
     # ------------------------------------------------------------------ public API
     def add_snapshot(
@@ -87,21 +89,15 @@ class DatasetFactory:
 
     # ------------------------------------------------------------------ helpers
     def _load_info(self, path: Path) -> InfoOutData:
-        if path not in self._info_cache:
-            self._info_cache[path] = parse_info_out(path)
-        return self._info_cache[path]
+        return parse_info_out(path)
 
     def _load_snapshot(self, matrix_p: Path, info_p: Path) -> Snapshot:
-        key = (matrix_p, info_p)
-        if key not in self._snap_cache:
-            snap = Snapshot.from_openmx(
-                matrix_path=matrix_p,
-                info_path=info_p,
-                convention="e3nn",
-                symmetrize_density=True,
-            )
-            self._snap_cache[key] = snap
-        return self._snap_cache[key]
+        return Snapshot.from_openmx(
+            matrix_path=matrix_p,
+            info_path=info_p,
+            convention="e3nn",
+            symmetrize_density=True,
+        )
 
     # ------------------------------------------------------------------ create
     def create(
@@ -120,8 +116,7 @@ class DatasetFactory:
             The single :class:`BlockIrrepMapper` used by both datasets.
         """
         # ①  Merge all orbital configs ---------------------------------
-        info_all = [self._load_info(p) for p in self._info_cache]  # cache may be empty
-        # Ensure we also parse info for pairs not cached yet
+        info_all = []
         for _mat, info_p in self._pairs["train"] + self._pairs["val"]:
             info_all.append(self._load_info(info_p))
 
@@ -150,6 +145,8 @@ class DatasetFactory:
             n_radial=self.n_radial,
             device=self.device,
         )
+        # pass cache_root through to dataset
+        ds_kwargs["cache_root"] = self.cache_root
         train_ds = E3GNNDataset(snaps_train, **ds_kwargs)
         val_ds = (
             E3GNNDataset(snaps_val, **ds_kwargs) if snaps_val else None  # type: ignore[arg-type]

@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 import yaml
-import json
 import argparse
 from typing import Any, Dict
 import datetime as dt
@@ -36,16 +35,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]  # src/
 # Helpers
 # ════════════════════════════════════════════════════════════════════════
 def _parse_cfg(path: Path | None) -> Dict[str, Any]:
-    """Load configuration from YAML or JSON file into a dict."""
+    """Load configuration from YAML file into a dict."""
     if path is None:
         return {}
     with open(path) as fh:
         if path.suffix in {".yml", ".yaml"}:
             return yaml.safe_load(fh) or {}
-        elif path.suffix == ".json":
-            return json.load(fh)
         else:
-            raise ValueError("config file must be .yaml/.yml or .json")
+            raise ValueError("config file must be .yaml/.yml")
 
 
 def _cli() -> argparse.Namespace:

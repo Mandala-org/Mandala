@@ -33,9 +33,6 @@ from e3nn.math import soft_one_hot_linspace
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
 
-# on-disk cache directory for processed snapshots
-CACHE_ROOT = Path.home() / ".cache" / "e3gnn4matrix" / "dataset"
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 class E3GNNDataset(Dataset):
@@ -58,6 +55,7 @@ class E3GNNDataset(Dataset):
         l_max_sh: int = 3,
         n_radial: int = 64,
         device: torch.device | str = "cpu",
+        cache_root: str | Path | None = None,
     ):
         if cutoff_gnn >= cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
@@ -84,7 +82,12 @@ class E3GNNDataset(Dataset):
         }
         self.n_edge_types = len(self.edge_types)
 
-        # preprocess all snapshots with caching
+        # configure cache root (if None, caching is disabled)
+        if cache_root is None:
+            self.cache_root = None
+        else:
+            self.cache_root = Path(cache_root).expanduser()
+        # preprocess all snapshots (with optional caching)
         self.samples: List[Tuple[Dict, Dict, Dict]] = []
         for snap in snapshots:
             if not isinstance(snap, Snapshot):
@@ -101,30 +104,32 @@ class E3GNNDataset(Dataset):
         Load processed snapshot from cache if available, otherwise process and cache it.
         """
         # build cache key from snapshot payload and model settings
-        key_obj = (
-            snapshot.matrix_path,
-            snapshot.info_path,
-            self.cut_gnn,
-            self.cut_mat,
-            self.l_max_sh,
-            self.n_radial,
-        )
-        key_bytes = pickle.dumps(key_obj)
-        key_hash = hashlib.md5(key_bytes).hexdigest()
-        cache_file = CACHE_ROOT / f"{key_hash}.pt"
-        # attempt load from cache
-        if cache_file.exists():
+        if self.cache_root is not None:
+            key_obj = (
+                snapshot.matrix_path,
+                snapshot.info_path,
+                self.cut_gnn,
+                self.cut_mat,
+                self.l_max_sh,
+                self.n_radial,
+            )
+            key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
+            cache_file = self.cache_root / f"{key_hash}.pt"
+            # attempt load from cache
+            if cache_file.exists():
+                try:
+                    return torch.load(cache_file)
+                except Exception:
+                    pass
+        # process snapshot
+        sample = self._process_snapshot(snapshot)
+        # save to cache if enabled
+        if self.cache_root is not None:
             try:
-                return torch.load(cache_file)
+                self.cache_root.mkdir(parents=True, exist_ok=True)
+                torch.save(sample, cache_file)
             except Exception:
                 pass
-        # process snapshot and cache
-        sample = self._process_snapshot(snapshot)
-        try:
-            CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-            torch.save(sample, cache_file)
-        except Exception:
-            pass
         return sample
 
     # ---------------------------------------------------------------- helpers
