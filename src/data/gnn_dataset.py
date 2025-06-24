@@ -32,6 +32,7 @@ from e3nn.math import soft_one_hot_linspace
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
+from tqdm.auto import tqdm
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -87,9 +88,9 @@ class E3GNNDataset(Dataset):
             self.cache_root = None
         else:
             self.cache_root = Path(cache_root).expanduser()
-        # preprocess all snapshots (with optional caching)
+        # preprocess all snapshots
         self.samples: List[Tuple[Dict, Dict, Dict]] = []
-        for snap in snapshots:
+        for snap in tqdm(snapshots, desc="Loading snapshots"):
             if not isinstance(snap, Snapshot):
                 raise TypeError("E3GNNDataset expects only Snapshot instances")
             sample = self._load_or_process_snapshot(snap)
