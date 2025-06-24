@@ -70,8 +70,10 @@ snapshots:
     purpose: val
 
 # Data-processing hyper-parameters
-cutoff_gnn:     4.0        # Å
-cutoff_matrix:  6.0        # Å
+# cutoff_gnn:     4.0        # Å
+# cutoff_matrix:  6.0        # Å
+cutoff_gnn:     5.0        # Å
+cutoff_matrix:  7.5        # Å
 l_max_sh:       3
 n_radial:       64
 num_workers:    8

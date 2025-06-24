@@ -11,18 +11,18 @@ snapshots:
   - matrix: /home/bartek/casus/e3gnn4matrix/data/big/silicon/900K/Si_DM
     info:   /home/bartek/casus/e3gnn4matrix/data/big/silicon/900K/info.txt
     purpose: train
-  - matrix: /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/Si_DM
-    info:   /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/info.txt
-    purpose: val
+  # - matrix: /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/Si_DM
+  #   info:   /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/info.txt
+  #   purpose: val
 
 # ----------------------------------------------------------------------
 # Data-processing hyper-parameters
 # ----------------------------------------------------------------------
 cutoff_gnn:     4.0        # Å
 cutoff_matrix:  6.0        # Å
-l_max_sh:       3
+l_max_sh:       2
 n_radial:       64
-num_workers:    2
+num_workers:    0
 accelerator:    cpu
 
 # ----------------------------------------------------------------------
