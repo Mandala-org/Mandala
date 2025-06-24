@@ -131,7 +131,7 @@ def main() -> None:
         )
 
     ds_train, ds_val, mapper = fact.create()
-    vprint(f"Created datasets: train={len(ds_train)}, val={len(ds_val)}")
+    vprint(f"Created datasets: train={len(ds_train)}, val={len(ds_val or [])}, ")
 
     # ------------------------------- 2. DataLoaders --------------------
     def _dl(ds, shuffle=False):
@@ -147,7 +147,7 @@ def main() -> None:
     dl_train = _dl(ds_train, shuffle=True)
     dl_val = _dl(ds_val, shuffle=False)
     vprint(
-        f"Created dataloaders: train batches={len(dl_train)}, val batches={len(dl_val)}"
+        f"Created dataloaders: train batches={len(dl_train)}, val batches={len(dl_val or [])}"
     )
 
     # ------------------------------- 3. Hyper-parameters ---------------
