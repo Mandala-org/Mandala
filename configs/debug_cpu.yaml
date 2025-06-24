@@ -25,11 +25,11 @@ snapshots:
 # ----------------------------------------------------------------------
 # Data-processing hyper-parameters
 # ----------------------------------------------------------------------
-cutoff_gnn:     5.0        # Å
-cutoff_matrix:  7.5        # Å
-l_max_sh:       3
+cutoff_gnn:     4.0        # Å
+cutoff_matrix:  6.0        # Å
+l_max_sh:       2
 n_radial:       64
-num_workers:    2          # keep 0 for tiny CPU test
+num_workers:    0          # keep 0 for tiny CPU test
 accelerator:    cpu
 
 # ----------------------------------------------------------------------
