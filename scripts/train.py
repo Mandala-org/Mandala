@@ -33,7 +33,7 @@ from net.e3gnn import E3GNN
 PROJECT_ROOT = Path(__file__).resolve().parents[1]  # src/
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="../conf", config_name="config", version_base="1.1")
 def main(cfg: DictConfig) -> None:
     # Extract grouped config settings
     verbosity = cfg.logging.verbosity
@@ -95,17 +95,22 @@ def main(cfg: DictConfig) -> None:
     # 3. Model instantiation
     # 3. Model instantiation
     hp = HyperParams(**cfg.model)
-    # Hardware setup
-    # 3. Hardware setup
+    # Hardware setup: interpret training.gpus as "cpu" or a GPU count
     if isinstance(gpus_cfg, str) and gpus_cfg.lower() == "cpu":
         accelerator = "cpu"
         devices = 1
     else:
-        accelerator = "gpu"
-        if isinstance(gpus_cfg, str):
-            devices = [int(i) for i in gpus_cfg.split(",") if i.strip()]
+        # parse GPU count
+        try:
+            count = int(gpus_cfg) if isinstance(gpus_cfg, str) else gpus_cfg
+        except Exception:
+            raise ValueError(f"Invalid training.gpus value: {gpus_cfg}")
+        if count <= 0:
+            accelerator = "cpu"
+            devices = 1
         else:
-            devices = gpus_cfg
+            accelerator = "gpu"
+            devices = list(range(count))
     model = E3GNN(
         mapper=mapper,
         edge_types=ds_train.edge_types,
@@ -168,7 +173,6 @@ def main(cfg: DictConfig) -> None:
         accelerator=accelerator,
         devices=devices,
         max_epochs=cfg.training.max_epochs,
-        accumulate_grad_batches=cfg.training.accumulate_grad_batches,
         precision=cfg.training.precision,
         callbacks=callbacks,
         deterministic=True,

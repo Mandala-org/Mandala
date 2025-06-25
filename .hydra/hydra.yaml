@@ -112,14 +112,11 @@ hydra:
     hydra:
     - hydra.mode=RUN
     task:
-    - data=debug_cpu
-    - model=debug_cpu
-    - training=debug_cpu
-    - logging=debug_cpu
+    - presets=debug_cpu
   job:
     name: train
     chdir: null
-    override_dirname: data=debug_cpu,logging=debug_cpu,model=debug_cpu,training=debug_cpu
+    override_dirname: presets=debug_cpu
     id: ???
     num: ???
     config_name: config
@@ -146,10 +143,11 @@ hydra:
       provider: schema
     output_dir: /home/bartek/casus/e3gnn4matrix
     choices:
-      logging: debug_cpu
-      training: debug_cpu
-      model: debug_cpu
-      data: debug_cpu
+      presets: debug_cpu
+      logging: default
+      training: default
+      model: default
+      data: default
       hydra/env: default
       hydra/callbacks: null
       hydra/job_logging: default

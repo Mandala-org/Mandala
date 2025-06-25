@@ -3,10 +3,11 @@ version_base: 1.1
 defaults:
   - _self_
   - data:     default
-  - override data: debug_cpu
   - model:    default
-  - override model: debug_cpu
   - training: default
+  - logging:  default
+  # Override groups for debug_cpu preset
+  - override data:     debug_cpu
+  - override model:    debug_cpu
   - override training: debug_cpu
-  - logging: default
-  - override logging: debug_cpu
+  - override logging:  debug_cpu

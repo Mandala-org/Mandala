@@ -4,3 +4,5 @@ lr:                      1e-4
 max_epochs:              30
 precision:               32
 log_every_n_steps:       4
+gpus:                    cpu   # "cpu" or number of GPUs to use
+tune:                   null  # HPO mode: "wandb", "ray", or null
