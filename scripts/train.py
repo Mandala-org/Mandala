@@ -3,8 +3,8 @@
 #  Train an E3GNN on OpenMX snapshots with a single shared BlockIrrepMapper.
 #
 #  Usage examples:
-#    python scripts/train.py presets=debug_cpu
-#    python scripts/train.py presets=medium_gpu verbosity=2 bench_verbosity=0
+#    python scripts/train.py --config-name debug_cpu
+#    python scripts/train.py --config-name medium_gpu --verbosity 2 --bench_verbosity 0
 #
 #  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
 #  Sweeps:    tune: 'wandb' → WandB Sweep Agent
@@ -33,7 +33,7 @@ from net.e3gnn import E3GNN
 PROJECT_ROOT = Path(__file__).resolve().parents[1]  # src/
 
 
-@hydra.main(config_path="../conf", config_name="config", version_base="1.1")
+@hydra.main(config_path="../conf", version_base="1.1")
 def main(cfg: DictConfig) -> None:
     # Extract grouped config settings
     verbosity = cfg.logging.verbosity

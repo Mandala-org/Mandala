@@ -1,13 +1,37 @@
-version_base: 1.1
-
-defaults:
-  - _self_
-  - data:     default
-  - model:    default
-  - training: default
-  - logging:  default
-  # Override groups for debug_cpu preset
-  - override data:     debug_cpu
-  - override model:    debug_cpu
-  - override training: debug_cpu
-  - override logging:  debug_cpu
+## Debug CPU preset: small data subset for quick testing on CPU
+data:
+  snapshots:
+    - matrix: /home/bartek/casus/e3gnn4matrix/data/small/H2O/original/H2O.matrix
+      info:   /home/bartek/casus/e3gnn4matrix/data/small/H2O/original/H2O.info.out
+      purpose: train
+    - matrix: /home/bartek/casus/e3gnn4matrix/data/big/silicon/900K/Si_DM
+      info:   /home/bartek/casus/e3gnn4matrix/data/big/silicon/900K/info.txt
+      purpose: train
+    - matrix: /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/Si_DM
+      info:   /home/bartek/casus/e3gnn4matrix/data/big/silicon/2700K/info.txt
+      purpose: val
+  cutoff_gnn:     4.0
+  cutoff_matrix:  6.0
+  l_max_sh:       2
+  n_radial:       64
+  num_workers:    0
+training:
+  lr:           3e-4
+  max_epochs:   3
+  precision:    32
+  gpus:         cpu
+  tune:         None
+  seed:         42
+model:
+  hidden_base_dim:   32
+  num_layers_gnn:    2
+  num_layers_matrix: 1
+  dropout:           0.0
+  energy_loss_coef:   0.0001
+  electron_loss_coef: 0.0001
+logging:
+  run_name:        "debug-cpu-small"
+  verbosity:     2
+  bench_verbosity:     2
+  log_activation_mag: true
+  wandb_project:   null
