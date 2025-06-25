@@ -1,0 +1,7 @@
+# Debug CPU model overrides
+hidden_base_dim:   32
+num_layers_gnn:    2
+num_layers_matrix: 1
+dropout:           0.0
+energy_loss_coef:   0.0001
+electron_loss_coef: 0.0001

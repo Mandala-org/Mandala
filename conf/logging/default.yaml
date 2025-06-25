@@ -1,0 +1,8 @@
+# Default logging settings
+verbosity:        2      # 0=none,1=basic events,2=detailed timings
+bench_verbosity:  2      # 0=off,1=run summary,2=+epoch,3=+profiler
+log_activation_mag: false
+wandb_project:    null
+log_model:        true
+save_dir:         wandb
+run_name:         null

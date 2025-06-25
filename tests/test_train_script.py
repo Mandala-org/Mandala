@@ -67,6 +67,11 @@ accum: 1
     )
     # Set args and environment
     monkeypatch.setenv("WANDB_MODE", "offline")
-    monkeypatch.setattr(sys, "argv", ["train.py", "--config", str(cfg_path)])
+    # Use grouped debug_cpu config
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train.py", "--config-name", "debug_cpu"],
+    )
     # Run main without raising
     train_script.main()

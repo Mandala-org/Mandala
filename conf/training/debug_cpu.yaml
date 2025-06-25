@@ -1,0 +1,4 @@
+# Debug CPU training overrides
+lr:              3e-4
+max_epochs:      3
+precision:       32

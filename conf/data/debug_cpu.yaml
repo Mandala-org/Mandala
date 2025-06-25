@@ -1,0 +1,16 @@
+# Debug CPU data configuration
+snapshots:
+  - matrix: data/small/H2O/original/H2O.matrix
+    info:   data/small/H2O/original/H2O.info.out
+    purpose: train
+  - matrix: data/big/silicon/900K/Si_DM
+    info:   data/big/silicon/900K/info.txt
+    purpose: train
+  - matrix: data/big/silicon/2700K/Si_DM
+    info:   data/big/silicon/2700K/info.txt
+    purpose: val
+cutoff_gnn:     4.0
+cutoff_matrix:  6.0
+l_max_sh:       2
+n_radial:       64
+num_workers:    0
