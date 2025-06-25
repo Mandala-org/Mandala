@@ -1,4 +1,1 @@
-- data=debug_cpu
-- model=debug_cpu
-- training=debug_cpu
-- logging=debug_cpu
+- presets=debug_cpu

@@ -1,0 +1,26 @@
+# Debug CPU Silicon preset: single-snapshot CPU test on silicon data
+data:
+  snapshots:
+    - matrix: data/big/silicon/900K/Si_DM
+      info:   data/big/silicon/900K/info.txt
+      purpose: train
+  cutoff_gnn:     4.0
+  cutoff_matrix:  6.0
+  l_max_sh:       2
+  n_radial:       64
+  num_workers:    0
+training:
+  lr:           3e-4
+  max_epochs:   3
+  precision:    32
+  gpus:         cpu
+model:
+  hidden_base_dim:   32
+  num_layers_gnn:    2
+  num_layers_matrix: 1
+  dropout:           0.0
+  energy_loss_coef:   0.1
+  electron_loss_coef: 0.1
+logging:
+  run_name:        "debug-cpu-small"
+  wandb_project:   null
