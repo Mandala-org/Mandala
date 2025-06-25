@@ -1,4 +1,8 @@
-# Debug CPU training overrides
+# Debug CPU training overrides (merged on top of default training settings)
+seed:            42
 lr:              3e-4
 max_epochs:      3
 precision:       32
+log_every_n_steps: 4
+gpus:            cpu
+tune:            null

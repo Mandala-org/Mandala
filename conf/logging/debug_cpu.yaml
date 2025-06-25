@@ -1,3 +1,8 @@
-# Debug CPU logging overrides
-run_name:          "debug-cpu-small"
-wandb_project:     null
+# Debug CPU logging overrides (deep merged on top of default logging)
+verbosity:           2
+bench_verbosity:     2
+log_activation_mag:  false
+log_model:           true
+save_dir:            wandb
+run_name:            "debug-cpu-small"
+wandb_project:       null

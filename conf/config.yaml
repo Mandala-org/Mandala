@@ -6,6 +6,7 @@ defaults:
   - model:    default
   - training: default
   - logging:  default
+  - presets:  default
 
 hydra:
   run:
