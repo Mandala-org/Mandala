@@ -13,6 +13,7 @@ checkpoints/
 wandb/
 benchmarks/
 lightning_logs/
+outputs/
 slurm-*.out
 
 # PyTest + coverage

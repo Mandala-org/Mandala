@@ -1,0 +1,3 @@
+# Debug CPU logging overrides
+run_name:          "debug-cpu-small"
+wandb_project:     null

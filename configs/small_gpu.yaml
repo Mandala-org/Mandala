@@ -10,13 +10,6 @@ snapshots:
   - matrix: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A/300K/0/Si_DM
     info:   /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A/300K/0/info.dat
     purpose: train
-  - matrix: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A/300K/1/Si_DM
-    info:   /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A/300K/1/info.dat
-    purpose: train
-  # VAL
-  - matrix: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A/900K/0/Si_DM
-    info:   /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A/900K/0/info.dat
-    purpose: val
 
 # Data-processing hyper-parameters
 cutoff_gnn:     4.0        # Å

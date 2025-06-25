@@ -2,20 +2,21 @@
 # ---------------------------------------------------------------------
 #  Train an E3GNN on OpenMX snapshots with a single shared BlockIrrepMapper.
 #
-#  $ python -m scripts.train --config configs/hydrogen.yaml
-#  $ python -m scripts.train matrix_paths.txt info_paths.txt  # quick ad-hoc run
+#  Usage examples:
+#    python scripts/train.py presets=debug_cpu
+#    python scripts/train.py presets=medium_gpu verbosity=2 bench_verbosity=0
 #
 #  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
-#  Sweeps:    --tune wandb      → WandB Sweep agent
-#             --tune ray        → Ray-Tune HPO
+#  Sweeps:    tune: 'wandb' → WandB Sweep Agent
+#             tune: 'ray'   → Ray Tune HPO
 # ---------------------------------------------------------------------
 
 from __future__ import annotations
-import yaml
-import argparse
-from typing import Any, Dict
 import datetime as dt
 from pathlib import Path
+
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 import torch
 from torch.utils.data import DataLoader
@@ -23,6 +24,7 @@ import pytorch_lightning as pl
 import numpy as np
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
+
 from net.benchmark import BenchmarkCallback
 from data.factory import DatasetFactory
 from net.common import HyperParams
@@ -31,138 +33,84 @@ from net.e3gnn import E3GNN
 PROJECT_ROOT = Path(__file__).resolve().parents[1]  # src/
 
 
-# ════════════════════════════════════════════════════════════════════════
-# Helpers
-# ════════════════════════════════════════════════════════════════════════
-def _parse_cfg(path: Path | None) -> Dict[str, Any]:
-    """Load configuration from YAML file into a dict."""
-    if path is None:
-        return {}
-    with open(path) as fh:
-        if path.suffix in {".yml", ".yaml"}:
-            return yaml.safe_load(fh) or {}
-        else:
-            raise ValueError("config file must be .yaml/.yml")
+@hydra.main(config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
+    # Extract grouped config settings
+    verbosity = cfg.logging.verbosity
+    bench_verbosity = cfg.logging.bench_verbosity
+    log_activation_mag = cfg.logging.log_activation_mag
+    gpus_cfg = cfg.training.gpus
+    tune_cfg = cfg.training.tune
 
-
-def _cli() -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="train.py", description="E3GNN trainer")
-
-    p.add_argument("--config", type=Path, help="YAML/JSON with hyper-params")
-    p.add_argument(
-        "--tune",
-        choices=[None, "wandb", "ray"],
-        default=None,
-        help="run inside a WandB sweep or Ray-Tune session",
-    )
-    p.add_argument(
-        "--gpus",
-        type=str,
-        default="cpu",
-        help="'cpu'  or a comma-separated list of CUDA device ids, e.g. '0,1'",
-    )
-    p.add_argument("--max_epochs", type=int, default=None)
-    p.add_argument("--accum", type=int, default=1, help="grad-accum steps")
-    p.add_argument("--seed", type=int, default=42)
-    p.add_argument(
-        "--bench-verbosity",
-        type=int,
-        choices=[0, 1, 2, 3],
-        default=1,
-        help="Benchmark verbosity: 0=off,1=run summary,2=+epoch,3=+profiler",
-    )
-    p.add_argument(
-        "--log-activation-mag",
-        action="store_true",
-        help="Enable logging of activation/feature magnitudes by irrep to WandB and benchmark report",
-    )
-    p.add_argument(
-        "--verbosity",
-        type=int,
-        choices=[0, 1, 2],
-        default=1,
-        help="Verbosity of script output: 0=none, 1=basic events, 2=+detailed timings",
-    )
-    return p.parse_args()
-
-
-# ════════════════════════════════════════════════════════════════════════
-# Main entry
-# ════════════════════════════════════════════════════════════════════════
-def main() -> None:
-    args = _cli()
-
-    # helper for timestamped printing
     def vprint(msg: str) -> None:
-        if args.verbosity >= 1:
+        if verbosity >= 1:
             ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"{ts} {msg}")
 
     def vprint_detail(msg: str) -> None:
-        if args.verbosity >= 2:
+        if verbosity >= 2:
             ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"{ts} {msg}")
 
     vprint("Starting training script")
-    torch.manual_seed(args.seed)
-    vprint(f"Loaded config from {args.config}")
+    torch.manual_seed(cfg.training.seed)
 
-    cfg = _parse_cfg(args.config)
-
-    # ------------------------------- 1. Dataset factory ----------------
-    # Dataset factory with explicit type casting of numeric hyperparams
+    # ------------------------------------------------------------------
+    # 1. Dataset construction
+    # ------------------------------------------------------------------
     fact = DatasetFactory(
-        cutoff_gnn=float(cfg.get("cutoff_gnn", 5.0)),
-        cutoff_matrix=float(cfg.get("cutoff_matrix", 7.5)),
-        l_max_sh=int(cfg.get("l_max_sh", 3)),
-        n_radial=int(cfg.get("n_radial", 64)),
+        cutoff_gnn=cfg.data.cutoff_gnn,
+        cutoff_matrix=cfg.data.cutoff_matrix,
+        l_max_sh=cfg.data.l_max_sh,
+        n_radial=cfg.data.n_radial,
         device="cpu",
     )
-
-    # From config: explicit snapshot listings
-    for entry in cfg.get("snapshots", []):
-        fact.add_snapshot(
-            Path(entry["matrix"]),
-            Path(entry["info"]),
-            entry.get("purpose", "train"),
-        )
-
+    for entry in cfg.data.snapshots:
+        fact.add_snapshot(Path(entry.matrix), Path(entry.info), entry.purpose)
     ds_train, ds_val, mapper = fact.create()
-    vprint(f"Created datasets: train={len(ds_train)}, val={len(ds_val or [])}, ")
+    vprint(f"Created datasets: train={len(ds_train)}, val={len(ds_val or [])}")
 
-    # ------------------------------- 2. DataLoaders --------------------
+    # ------------------------------------------------------------------
+    # 2. DataLoaders
+    # ------------------------------------------------------------------
     def _dl(ds, shuffle=False):
         return DataLoader(
             ds,
-            batch_size=1,  # ALWAYS 1
+            batch_size=1,
             shuffle=shuffle,
-            num_workers=int(cfg.get("num_workers", 0)),
+            num_workers=cfg.data.num_workers,
             pin_memory=True,
-            collate_fn=lambda b: b[0],  # <- avoid default_collate on custom objects
+            collate_fn=lambda b: b[0],
         )
 
     dl_train = _dl(ds_train, shuffle=True)
     dl_val = _dl(ds_val, shuffle=False)
     vprint(
-        f"Created dataloaders: train batches={len(dl_train)}, val batches={len(dl_val or [])}"
+        f"Created dataloaders: train batches={len(dl_train)}, val batches={len(dl_val)}"
     )
 
-    # ------------------------------- 3. Hyper-parameters ---------------
-    hp = HyperParams(**cfg.get("model", {}))
-    if args.gpus.lower() == "cpu":
+    # ------------------------------------------------------------------
+    # 3. Model instantiation
+    # ------------------------------------------------------------------
+    # 3. Model instantiation
+    # 3. Model instantiation
+    hp = HyperParams(**cfg.model)
+    # Hardware setup
+    # 3. Hardware setup
+    if isinstance(gpus_cfg, str) and gpus_cfg.lower() == "cpu":
         accelerator = "cpu"
         devices = 1
     else:
         accelerator = "gpu"
-        devices = [int(i) for i in args.gpus.split(",") if i.strip()]
-
-    # ------------------------------- 4. Model --------------------------
-    # Model instantiation with explicit casting for learning rate
+        if isinstance(gpus_cfg, str):
+            devices = [int(i) for i in gpus_cfg.split(",") if i.strip()]
+        else:
+            devices = gpus_cfg
     model = E3GNN(
         mapper=mapper,
         edge_types=ds_train.edge_types,
         hp=hp,
-        lr=float(cfg.get("lr", 3e-4)),
+        lr=cfg.get("lr", 3e-4),
         device="cuda" if accelerator == "gpu" else "cpu",
     )
     vprint(
@@ -170,23 +118,28 @@ def main() -> None:
         f"layers_gnn={hp.num_layers_gnn}, layers_matrix={hp.num_layers_matrix}"
     )
 
-    # ------------------------------- 5. Logging ------------------------
-    run_name = cfg.get("run_name") or f"e3gnn_{dt.datetime.now():%Y%m%d_%H%M%S}"
-    if cfg.get("wandb_project", None) is not None:
+    # ------------------------------------------------------------------
+    # 4. Logger setup
+    # ------------------------------------------------------------------
+    run_name = cfg.logging.run_name or f"e3gnn_{dt.datetime.now():%Y%m%d_%H%M%S}"
+    if cfg.logging.wandb_project:
         logger = WandbLogger(
-            project=cfg.get("wandb_project"),
+            project=cfg.logging.wandb_project,
             name=run_name,
-            log_model=True,
-            save_dir=str(PROJECT_ROOT / "wandb"),
+            log_model=cfg.logging.log_model,
+            save_dir=str(PROJECT_ROOT / cfg.logging.save_dir),
         )
-        logger.experiment.config.update(cfg, allow_val_change=True)
-        vprint(f"Initialized WandB logger with run name '{run_name}'")
+        logger.experiment.config.update(
+            OmegaConf.to_container(cfg, resolve=True), allow_val_change=True
+        )
+        vprint(f"Initialized WandB logger '{run_name}'")
     else:
         logger = None
         vprint("Not using a logger")
 
-    # ------------------------------- 6. Trainer ------------------------
-    # build callbacks
+    # ------------------------------------------------------------------
+    # 5. Callbacks
+    # ------------------------------------------------------------------
     bench_cb = None
     callbacks = [
         ModelCheckpoint(
@@ -198,59 +151,63 @@ def main() -> None:
         ),
         LearningRateMonitor(logging_interval="step"),
     ]
-    # add benchmark callback if enabled
-    if args.bench_verbosity > 0:
+    if bench_verbosity > 0:
         bench_cb = BenchmarkCallback(
-            verbosity=args.bench_verbosity,
-            log_activation_mag=args.log_activation_mag,
+            verbosity=bench_verbosity,
+            log_activation_mag=log_activation_mag,
         )
         callbacks.append(bench_cb)
     vprint("Configured callbacks")
 
-    # Trainer with explicit casting for epochs and precision
+    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # 6. Trainer
+    # ------------------------------------------------------------------
     trainer = pl.Trainer(
         logger=logger,
         accelerator=accelerator,
         devices=devices,
-        max_epochs=int(args.max_epochs or cfg.get("max_epochs", 100)),
-        accumulate_grad_batches=int(args.accum),
-        precision=int(cfg.get("precision", 16)),
+        max_epochs=cfg.training.max_epochs,
+        accumulate_grad_batches=cfg.training.accumulate_grad_batches,
+        precision=cfg.training.precision,
         callbacks=callbacks,
         deterministic=True,
-        log_every_n_steps=int(cfg.get("log_every_n_steps", 4)),
+        log_every_n_steps=cfg.training.log_every_n_steps,
     )
 
-    # ------------------------------- 7. HPO integration ----------------
-    if args.tune == "wandb":
+    # ------------------------------------------------------------------
+    # 7. HPO integration
+    # ------------------------------------------------------------------
+    if tune_cfg == "wandb":
         import wandb
 
-        wandb.finish()  # lightning starts its own run inside Trainer
-    elif args.tune == "ray":
+        wandb.finish()
+    elif tune_cfg == "ray":
         from ray import tune
 
-        tune.report(loss=0.0)  # Lightning will handle metrics; this is placeholder
+        tune.report(loss=0.0)
 
-    # ------------------------------- 8. Train --------------------------
+    # ------------------------------------------------------------------
+    # 8. Training
+    # ------------------------------------------------------------------
     vprint("Starting training")
     trainer.fit(model, dl_train, dl_val)
     vprint("Training complete")
-    # detailed timing summary
-    if args.verbosity >= 2 and bench_cb is not None:
-        # loader times summary
+
+    # 9. Detailed benchmark summary
+    if verbosity >= 2 and bench_cb is not None:
         lt = np.array(bench_cb.loader_times) if bench_cb.loader_times else np.array([])
         if lt.size:
             vprint_detail(
                 f"Loader times (s): mean={lt.mean():.4f}, median={np.median(lt):.4f}, "
                 f"std={lt.std():.4f}, min={lt.min():.4f}, max={lt.max():.4f}"
             )
-        # train batch timings
         train_sum = bench_cb._summarize(bench_cb.train_stats)
         for k, s in train_sum.items():
             vprint_detail(
                 f"Train {k} (s): mean={s['mean']:.4f}, median={s['median']:.4f}, "
                 f"std={s['std']:.4f}, min={s['min']:.4f}, max={s['max']:.4f}"
             )
-        # val batch timings
         val_sum = bench_cb._summarize(bench_cb.val_stats)
         for k, s in val_sum.items():
             vprint_detail(
