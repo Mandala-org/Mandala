@@ -1,0 +1,8 @@
+# Default dataset settings and snapshot listings
+# snapshots: list of {'matrix': str, 'info': str, 'purpose': str}
+snapshots: []
+cutoff_gnn: 5.0
+cutoff_matrix: 7.5
+l_max_sh: 3
+n_radial: 64
+num_workers: 4
