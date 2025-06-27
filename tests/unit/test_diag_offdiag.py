@@ -3,9 +3,9 @@ Unit-tests for the new ``diag()`` / ``offdiag()`` helpers of
 :class:`BlockMatrix` *and* :class:`IrrepsBlockData`.
 """
 
+import pytest
 from pathlib import Path
 import torch
-import pytest
 
 from data.openmx_parser import parse_openmx_scfout
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -23,6 +23,9 @@ def data():
 
 
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.unit
 def test_blockmatrix_diag_offdiag(data):
     snapshot, mapper = data
     D = snapshot.density  # BlockMatrix
@@ -48,6 +51,7 @@ def test_blockmatrix_diag_offdiag(data):
             assert torch.allclose(blk[mask_off], off[key], atol=1e-6)
 
 
+@pytest.mark.unit
 def test_irrepsblockdata_diag_offdiag(data):
     snapshot, mapper = data
     Ovec = snapshot.overlap.to_vectors(mapper)  # IrrepsBlockData

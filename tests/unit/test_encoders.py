@@ -1,3 +1,4 @@
+import pytest
 import torch
 from e3nn.o3 import Irreps
 
@@ -5,6 +6,7 @@ from net.common import HyperParams, build_hidden_irreps
 from net.encoders import NodeEncoder, EdgeEncoder
 
 
+@pytest.mark.unit
 def test_node_encoder_shape_no_diag():
     hp = HyperParams()
     hid = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
@@ -20,6 +22,7 @@ def test_node_encoder_shape_no_diag():
     assert out.shape == (4, hid.dim)
 
 
+@pytest.mark.unit
 def test_edge_encoder_with_offdiag():
     hp = HyperParams(radial_layers=(64, 32))
     hid = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)

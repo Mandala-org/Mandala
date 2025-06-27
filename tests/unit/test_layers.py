@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from net.common import HyperParams, build_hidden_irreps
@@ -11,6 +12,7 @@ def make_dummy_graph(E=10, N=5, hid_dim=32):
     return node, edge, ei
 
 
+@pytest.mark.unit
 def test_edge_node_update_shapes():
     hp = HyperParams(dropout=0.1, batch_norm=True)
     hid = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
@@ -26,6 +28,7 @@ def test_edge_node_update_shapes():
     assert node2.shape == node.shape
 
 
+@pytest.mark.unit
 def test_message_block_roundtrip():
     hp = HyperParams(use_edge_updates=False, dropout=0.0)
     hid = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
