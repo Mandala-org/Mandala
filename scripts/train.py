@@ -4,7 +4,7 @@
 #
 #  Usage examples:
 #    python scripts/train.py --config-name debug_cpu
-#    python scripts/train.py --config-name medium_gpu --verbosity 2 --bench_verbosity 0
+#    python scripts/train.py --config-name medium_gpu verbosity 2 bench_verbosity 0
 #
 #  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
 #  Sweeps:    tune: 'wandb' → WandB Sweep Agent
@@ -75,7 +75,7 @@ def main(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     def _dl(ds, shuffle=False):
         return DataLoader(
-            ds,
+            ds or [],
             batch_size=1,
             shuffle=shuffle,
             num_workers=cfg.data.num_workers,
@@ -162,7 +162,6 @@ def main(cfg: DictConfig) -> None:
         callbacks.append(bench_cb)
     vprint("Configured callbacks")
 
-    # ------------------------------------------------------------------
     # ------------------------------------------------------------------
     # 6. Trainer
     # ------------------------------------------------------------------
