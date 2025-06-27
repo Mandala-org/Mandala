@@ -11,12 +11,12 @@ Verifies that
 * attempting to rotate an OpenMX-basis snapshot raises a clear error.
 """
 
+import pytest
 from typing import TYPE_CHECKING
 
 from pathlib import Path
 import math
 
-import pytest
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -51,6 +51,10 @@ def snapshot_e3nn() -> "Snapshot":
 
 
 # ------------------------------------------------------------------- tests
+
+
+@pytest.mark.physics
+@pytest.mark.physics
 def test_identity_rotation_keeps_blocks(snapshot_e3nn):
     R = torch.eye(3)
     snap_id = snapshot_e3nn.rotate(R)
@@ -73,6 +77,8 @@ def test_identity_rotation_keeps_blocks(snapshot_e3nn):
         ), f"D block {key} changed under identity rotation"
 
 
+@pytest.mark.physics
+@pytest.mark.physics
 def test_rotation_invariants(snapshot_e3nn):
     """Energy and electron count must be invariant under rigid rotation."""
     theta = math.pi / 7.0
@@ -90,6 +96,8 @@ def test_rotation_invariants(snapshot_e3nn):
     ), "Electron count changed after rotation"
 
 
+@pytest.mark.physics
+@pytest.mark.physics
 def test_rotation_roundtrip(snapshot_e3nn):
     """R · Rᵀ should bring us back to the original snapshot."""
     theta = math.pi / 4.0

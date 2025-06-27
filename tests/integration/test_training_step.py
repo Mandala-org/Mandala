@@ -1,9 +1,12 @@
+import pytest
 import torch
 
 from net.common import HyperParams
 from net.e3gnn import E3GNN
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_training_step_smoke(factory_results):
     """
     Smoke-test that training_step runs without shape errors and returns a scalar loss.

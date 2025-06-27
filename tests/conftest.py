@@ -1,9 +1,9 @@
+import pytest
 import os
 import sys
 import random
 import numpy as np
 import torch
-import pytest
 from pathlib import Path
 
 # Delay import of DatasetFactory until after src/ is on PYTHONPATH

@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -43,6 +44,8 @@ def make_mock_matrix():
     return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, cfg, "openmx"), mapper
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_roundtrip_blocks_vectors():
     snap_blk, mapper = make_mock_matrix()
     snap_vec = snap_blk.to_vectors(mapper)
@@ -55,6 +58,8 @@ def test_roundtrip_blocks_vectors():
     assert torch.allclose(snap_blk["O-O"], snap_reco["O-O"], atol=1e-6)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_denseify_roundtrip():
     matrix, mapper = make_mock_matrix()
     dense = matrix.to_dense()
@@ -68,6 +73,8 @@ def test_denseify_roundtrip():
     assert torch.allclose(matrix[(0, 3)], re_matrix[(0, 3)], atol=1e-6)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_sparsify_roundtrip():
     atoms = ("H", "H", "O", "H", "H", "O")
     cfg = OrbitalIrrepConfig.from_dict(
@@ -83,6 +90,8 @@ def test_sparsify_roundtrip():
     assert torch.allclose(dense, dense_back, atol=1e-6)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_save_load_roundtrip(tmp_path):
     matrix, mapper = make_mock_matrix()
     file = tmp_path / "matrix.pt"
@@ -96,6 +105,8 @@ def test_save_load_roundtrip(tmp_path):
     assert torch.allclose(matrix["H-O"], matrix_loaded["H-O"])
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_irreps_save_load(tmp_path):
     matrix_blk, mapper = make_mock_matrix()
     matrix_vec = matrix_blk.to_vectors(mapper)
@@ -113,6 +124,8 @@ def test_irreps_save_load(tmp_path):
     assert torch.allclose(matrix_blk["O-H"], matrix_blk_reco["O-H"], atol=1e-6)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_basis_converter_roundtrip():
     matrix_open, mapper = make_mock_matrix()  # default basis="openmx"
     conv = OpenMXE3NNConverter(mapper.orbital_cfg)
@@ -132,6 +145,8 @@ def test_basis_converter_roundtrip():
         assert torch.allclose(matrix_open[(i, j)], matrix_back[(i, j)], atol=1e-6)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_block_converter_direct():
     matrix, mapper = make_mock_matrix()
     conv = OpenMXE3NNConverter(mapper.orbital_cfg)
@@ -160,6 +175,8 @@ def _shuffled_matrix():
     return matrix.reorder_edges(order)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_addition_commutes():
     A, mapper = make_mock_matrix()
     B = _shuffled_matrix()
@@ -169,6 +186,8 @@ def test_addition_commutes():
     assert torch.allclose(C1.to_dense(), C2.to_dense(), atol=1e-6)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_subtraction_vs_dense():
     A, mapper = make_mock_matrix()
     B = _shuffled_matrix()
@@ -178,6 +197,8 @@ def test_subtraction_vs_dense():
     assert torch.allclose(C.to_dense(), dense_C, atol=1e-6)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_sum_builtin():
     A, mapper = make_mock_matrix()
     B = _shuffled_matrix()

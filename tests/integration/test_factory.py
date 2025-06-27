@@ -1,7 +1,8 @@
+import pytest
+
 # ────────────────────────────────────────────────────────────────────────────
 # tests/test_dataset_factory.py
 # ────────────────────────────────────────────────────────────────────────────
-import pytest
 from pathlib import Path
 
 
@@ -25,6 +26,10 @@ PAIR_VAL_1 = (
 # ════════════════════════════════════════════════════════════════════════
 # 2.  Basic shapes / split sizes
 # ════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.integration
+@pytest.mark.integration
 def test_dataset_lengths(factory_results):
     train_ds, val_ds, _ = factory_results
     assert len(train_ds) == 2, "train split should contain the two registered pairs"
@@ -34,6 +39,10 @@ def test_dataset_lengths(factory_results):
 # ════════════════════════════════════════════════════════════════════════
 # 3.  OrbitalIrrepConfig must hold **all** elements (H, O, Si)
 # ════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.integration
+@pytest.mark.integration
 def test_orbital_irrep_config_union(factory_results):
     _, _, mapper = factory_results
     elems = set(mapper.orbital_cfg.elements())
@@ -45,6 +54,10 @@ def test_orbital_irrep_config_union(factory_results):
 # ════════════════════════════════════════════════════════════════════════
 # 4.  Mapper instance must be **shared** by all datasets
 # ════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.integration
+@pytest.mark.integration
 def test_shared_mapper_identity(factory_results):
     train_ds, val_ds, mapper = factory_results
     assert train_ds.mapper is mapper
@@ -58,6 +71,8 @@ def test_shared_mapper_identity(factory_results):
     "pair",
     ["H-H", "H-O", "O-H", "O-O", "Si-Si"],  # common ordered pairs
 )
+@pytest.mark.integration
+@pytest.mark.integration
 def test_mapper_vector_dim_positive(factory_results, pair):
     _, _, mapper = factory_results
     # Not all pairs may exist; skip gracefully
@@ -71,6 +86,10 @@ def test_mapper_vector_dim_positive(factory_results, pair):
 # ════════════════════════════════════════════════════════════════════════
 # 6.  Dataset samples contain only known species & coherent tensors
 # ════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.integration
+@pytest.mark.integration
 def test_sample_coherence(factory_results):
     train_ds, _, mapper = factory_results
     known = set(mapper.orbital_cfg.elements())
@@ -96,6 +115,10 @@ def test_sample_coherence(factory_results):
 # ════════════════════════════════════════════════════════════════════════
 # 7.  Forward-pass smoke test with tiny batch (CPU)
 # ════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.integration
+@pytest.mark.integration
 def test_model_forward_cpu(factory_results):
     train_ds, _, mapper = factory_results
 

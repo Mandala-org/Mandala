@@ -17,6 +17,7 @@ orbitals:
     return yaml_text
 
 
+@pytest.mark.unit
 def test_parse_yaml_happy(minimal_cfg):
     cfg = OrbitalIrrepConfig.from_yaml(minimal_cfg)
 
@@ -37,6 +38,7 @@ orbitals:
     return yaml_text
 
 
+@pytest.mark.unit
 def test_parse_yaml_alternative(alternative_cfg):
     cfg = OrbitalIrrepConfig.from_yaml(alternative_cfg)
 
@@ -55,12 +57,14 @@ def test_parse_yaml_alternative(alternative_cfg):
         "orbitals:#test# He:# 1x0e",
     ],
 )
+@pytest.mark.unit
 def test_parse_yaml_errors(bad_yaml):
     with pytest.raises(OrbitalIrrepConfigError):
         conf = OrbitalIrrepConfig.from_yaml(bad_yaml)
         print(conf)
 
 
+@pytest.mark.unit
 def test_dict_interface():
     cfg_dict = {"C": ["1x0e", "1x1o"], "O": ["2x0e", "2x1o", "1x2e"]}
     cfg = OrbitalIrrepConfig.from_dict(cfg_dict)

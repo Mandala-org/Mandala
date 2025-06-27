@@ -25,6 +25,7 @@ requires-python = ">=3.9"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.1",
+    "pytest-cov>=5.0",
     "black>=24.3",
     "ruff>=0.4",
     "mypy>=1.9",
@@ -44,3 +45,8 @@ ignore = ["E741"]
 
 [tool.pytest.ini_options]
 addopts = ['-n', 'auto']
+markers = [
+    "unit: fast, isolated tests",
+    "integration: slower tests on real data",
+    "physics: tests for physical constraints",
+]

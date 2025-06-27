@@ -8,9 +8,9 @@ We critically check:
 * per-edge - per-vector alignment (counts & one-hot types)
 """
 
+import pytest
 from pathlib import Path
 import torch
-import pytest
 
 from data.gnn_dataset import E3GNNDataset
 from core.block_irrep_mapper import BlockIrrepMapper
@@ -35,6 +35,10 @@ def dataset():
 
 
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.integration
+@pytest.mark.integration
 def test_edge_sets(dataset):
     x_gnn, x_mat, y = dataset[0]
 

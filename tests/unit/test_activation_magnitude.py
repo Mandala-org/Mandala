@@ -1,3 +1,4 @@
+import pytest
 import yaml
 import torch
 from types import SimpleNamespace
@@ -5,6 +6,7 @@ from types import SimpleNamespace
 from net.benchmark import BenchmarkCallback
 
 
+@pytest.mark.unit
 def test_activation_magnitude_logging(tmp_path, monkeypatch):
     # Ensure a clean workspace for benchmarks
     monkeypatch.chdir(tmp_path)
