@@ -13,7 +13,7 @@ def test_train_script_setup(monkeypatch):
     by mocking out the Trainer.fit call and WandBLogger.
     """
     # Get the absolute path to the config directory
-    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "conf"))
+    config_path = os.path.abspath("conf")
 
     # Dynamically rewrite the hydra.main decorator to use an absolute path
     with open("scripts/train.py", "r") as f:
@@ -60,6 +60,68 @@ def test_train_script_setup(monkeypatch):
         sys,
         "argv",
         ["train.py", "--config-name", "debug_cpu"],
+    )
+    # Run main without raising, but with the correct config path
+    GlobalHydra.instance().clear()
+    main()  # noqa: F821
+
+
+@pytest.mark.integration
+def test_train_script_full_run(monkeypatch):
+    """
+    Test that scripts/train.py can run a full training and validation step.
+    """
+    # Get the absolute path to the config directory
+    config_path = os.path.abspath("conf")
+
+    # Dynamically rewrite the hydra.main decorator to use an absolute path
+    with open("scripts/train.py", "r") as f:
+        train_script_code = f.read()
+    train_script_code = train_script_code.replace(
+        '@hydra.main(config_path="../conf", version_base="1.1")',
+        f'@hydra.main(config_path="{config_path}", version_base="1.1")',
+    )
+    exec(train_script_code, globals())
+
+    # Import train script as module
+    spec = importlib.util.spec_from_file_location(
+        "train_script", os.path.join(os.getcwd(), "scripts", "train.py")
+    )
+    train_script = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = train_script
+    spec.loader.exec_module(train_script)
+
+    # Monkey-patch WandbLogger to a dummy logger
+    class DummyLogger:
+        def __init__(self, *args, **kwargs):
+            self.experiment = type(
+                "E",
+                (),
+                {
+                    "config": type(
+                        "C", (), {"update": staticmethod(lambda cfg, **kw: None)}
+                    )()
+                },
+            )
+
+        def log_metrics(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(train_script, "WandbLogger", DummyLogger)
+    # Set args and environment
+    monkeypatch.setenv("WANDB_MODE", "offline")
+    # Use grouped debug_cpu config and enable smoke_test
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train.py",
+            "--config-name",
+            "debug_cpu",
+            "training.smoke_test=true",
+            "logging.run_name=test_full_run",
+            "logging.wandb_project=null",
+        ],
     )
     # Run main without raising, but with the correct config path
     GlobalHydra.instance().clear()
