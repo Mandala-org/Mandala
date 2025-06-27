@@ -109,10 +109,10 @@ class E3GNNDataset(Dataset):
             key_obj = (
                 snapshot.matrix_path,
                 snapshot.info_path,
+                snapshot.cutoff_radius,
                 self.cut_gnn,
                 self.cut_mat,
                 self.l_max_sh,
-                self.n_radial,
             )
             key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
             cache_file = self.cache_root / f"{key_hash}.pt"

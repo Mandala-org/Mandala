@@ -44,7 +44,6 @@ class DatasetFactory:
         cutoff_matrix: float = 7.5,
         l_max_sh: int = 3,
         n_radial: int = 64,
-        keep_snapshots: bool = False,
         device: torch.device | str = "cpu",
         cache_root: str | os.PathLike | None = None,
     ):
@@ -52,7 +51,6 @@ class DatasetFactory:
         self.cutoff_matrix = float(cutoff_matrix)
         self.l_max_sh = int(l_max_sh)
         self.n_radial = int(n_radial)
-        self.keep_snapshots = bool(keep_snapshots)
         self.device = torch.device(device)
         # cache root for processed snapshots; if None, caching is disabled
         if cache_root is None:
@@ -97,6 +95,7 @@ class DatasetFactory:
             info_path=info_p,
             convention="e3nn",
             symmetrize_density=True,
+            cutoff_radius=self.cutoff_matrix,
         )
 
     # ------------------------------------------------------------------ create
@@ -163,10 +162,7 @@ def build_datasets(
     val_pairs: Sequence[Tuple[str | os.PathLike, str | os.PathLike]] | None = None,
     **factory_kwargs,
 ) -> Tuple[E3GNNDataset, Optional[E3GNNDataset], BlockIrrepMapper]:
-    """
-    One-shot helper – mirrors the OO factory but keeps the old functional look
-    used in *train.py*.
-
+    """Build datasets from snapshot pairs.
     Example
     -------
     >>> train_ds, val_ds, mapper = build_datasets(

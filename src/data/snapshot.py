@@ -54,6 +54,7 @@ class Snapshot:
         box: torch.Tensor | None = None,  # (3,3)
         matrix_path=None,  # optional path to the source file
         info_path=None,  # optional path to the source info file
+        cutoff_radius: float | None = None,  # optional cutoff radius for filtering
     ) -> None:
         # quick consistency sanity checks
         self._check_compatibility(hamiltonian, overlap, density)
@@ -69,6 +70,7 @@ class Snapshot:
 
         self.matrix_path = matrix_path  # optional path to the source file
         self.info_path = info_path
+        self.cutoff_radius = cutoff_radius
 
         # edge ordering according to |D| magnitude -------------------------
         self._order_edges_by_density()
@@ -170,17 +172,29 @@ class Snapshot:
             mats["density"],
             positions=pos,
             box=box,
+            matrix_path=payload_top.get("matrix_path", None),
+            info_path=payload_top.get("info_path", None),
+            cutoff_radius=payload_top.get("cutoff_radius", None),
         )
 
     # ---------------------------------------------------------------- repr
     def __repr__(self):  # pragma: no cover
-        return (
-            "Snapshot(\n"
-            f"  atoms   = {''.join(self.density.atoms)}\n"
-            f"  keys    = {sorted(self.density.keys())}\n"
-            f"  basis   = {self.density.basis}\n"
-            ")"
-        )
+        if len(self.density.atoms) < 10:
+            return (
+                "Snapshot(\n"
+                f"  atoms   = {''.join(self.density.atoms)}\n"
+                f"  keys    = {sorted(self.density.keys())}\n"
+                f"  basis   = {self.density.basis}\n"
+                ")"
+            )
+        else:
+            return (
+                "Snapshot(\n"
+                f"  atoms   = {len(self.density.atoms)} atoms\n"
+                f"  keys    = {sorted(self.density.keys())[:10]} …\n"
+                f"  basis   = {self.density.basis}\n"
+                ")"
+            )
 
     def _change_basis(self, target: str) -> "Snapshot":
         """
@@ -209,7 +223,16 @@ class Snapshot:
 
         # Constructor will re-order edges deterministically (norm is preserved
         # by orthogonal transforms so ordering identical).
-        return Snapshot(ham, ovl, den)
+        return Snapshot(
+            ham,
+            ovl,
+            den,
+            positions=self.positions,
+            box=self.box,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=self.cutoff_radius,
+        )
 
     # public façade --------------------------------------------------------
     def to_e3nn(self) -> "Snapshot":
@@ -229,7 +252,16 @@ class Snapshot:
         ham = self.hamiltonian.rotate(R)
         ovl = self.overlap.rotate(R)
         den = self.density.rotate(R)
-        return Snapshot(ham, ovl, den)
+        return Snapshot(
+            ham,
+            ovl,
+            den,
+            positions=self.positions @ R.T if self.positions is not None else None,
+            box=self.box @ R.T if self.box is not None else None,
+            matrix_path=None,  # set to None to invalidate the cache
+            info_path=None,
+            cutoff_radius=self.cutoff_radius,
+        )
 
         # -------------------------------------------------------------------- helpers
 
@@ -301,6 +333,9 @@ class Snapshot:
             den,
             positions=self.positions,
             box=self.box,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=cutoff,
         )
 
     # ---------------------------------------------------------------- dunder access
@@ -322,6 +357,7 @@ class Snapshot:
         *,
         convention: str = "e3nn",
         symmetrize_density: bool = True,
+        cutoff_radius: float | None = None,
     ) -> "Snapshot":
         """
         Build a :class:`Snapshot` directly from an **OpenMX SCF output pair**:
@@ -359,7 +395,8 @@ class Snapshot:
         # ── ③  Attach geometry (positions, later box) and return ────────────
         snap.positions = info.xyz if info.xyz.numel() else None
         snap.box = info.box if info.box.numel() else None
-        # OpenMX writes lattice vectors in other sections - not yet parsed.
         # Users can still `.rotate(...)` / `.filter_by_distance(...)`
         # without PBC if `box` stays *None*.
+        if cutoff_radius is not None:
+            snap = snap.filter_by_distance(cutoff_radius)
         return snap
