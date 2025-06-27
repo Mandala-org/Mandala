@@ -6,7 +6,7 @@ data:
       purpose: train
     - matrix: /home/bartek/casus/e3gnn4matrix/data/small/H2O/rotated/H2O.matrix
       info:   /home/bartek/casus/e3gnn4matrix/data/small/H2O/rotated/H2O.info.out
-      purpose: train
+      purpose: val
   cutoff_gnn:     4.0
   cutoff_matrix:  6.0
   n_radial:       64
