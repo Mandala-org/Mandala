@@ -2,6 +2,7 @@
 Unit tests that target *BlockMatrix.rotate* in isolation.
 """
 
+import pytest
 import math
 import torch
 
@@ -47,6 +48,8 @@ def _rot_y(theta):
     )
 
 
+@pytest.mark.physics
+@pytest.mark.physics
 def test_blockmatrix_rotation_invariance():
     mat = _make_small_matrix()
     R = _rot_y(math.pi / 3.0)

@@ -2,11 +2,11 @@
 """
 
 from __future__ import annotations
+import pytest
 
 import re
 from pathlib import Path
 
-import pytest
 
 from data.openmx_info_parser import parse_info_out
 
@@ -23,11 +23,15 @@ def parsed_data():
 
 # --------------------------------------------------------------------------- basic content checks
 @pytest.mark.parametrize("key", ["Ukin", "UH0", "UH1", "Una"])
+@pytest.mark.integration
+@pytest.mark.integration
 def test_energy_keys_present(parsed_data, key):
     """Selected energy labels must be present in the header dictionary."""
     assert key in parsed_data.energies
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_energy_values_are_scalars(parsed_data):
     """Energy tensors should be 0-dimensional scalars."""
     for val in parsed_data.energies.values():
@@ -35,12 +39,16 @@ def test_energy_values_are_scalars(parsed_data):
         assert getattr(val, "shape", ()) == () or getattr(val, "ndim", 0) == 0
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_orbital_set(parsed_data):
     """The compact orbital specification must exactly match the expected reference."""
     expected = {"H": "3s2p", "O": "3s3p2d"}
     assert parsed_data.orbital_set == expected
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_occupancies_shape(parsed_data):
     """Two spin channels per raw row ⇒ second dimension must be 2."""
     assert parsed_data.occupancies.ndim == 2
@@ -49,6 +57,8 @@ def test_occupancies_shape(parsed_data):
     assert parsed_data.occupancies.shape[0] > 0
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_occupancy_by_element_helper(parsed_data):
     """Check that the convenience mask function returns only the requested element."""
     h_occ = parsed_data.occupancy_by_element("H")
@@ -73,6 +83,8 @@ def count_raw_rows(path: Path) -> int:
     return n
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_raw_row_count_matches_tensor(parsed_data):
     """Every raw occupancy line in the file must appear once in the tensor."""
     expected_rows = count_raw_rows(TEST_FILE)
@@ -88,6 +100,8 @@ def test_raw_row_count_matches_tensor(parsed_data):
         ("O", "d"),
     ],
 )
+@pytest.mark.integration
+@pytest.mark.integration
 def test_orbital_parts_present(parsed_data, element: str, part: str):
     """Ensure every expected orbital letter appears in the element's compact spec."""
     assert part in parsed_data.orbital_set[element]

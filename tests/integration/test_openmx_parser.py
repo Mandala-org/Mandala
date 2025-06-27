@@ -1,6 +1,6 @@
+import pytest
 from pathlib import Path
 import torch
-import pytest
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.openmx_parser import parse_openmx_scfout
@@ -16,6 +16,8 @@ def orbital_cfg():
     return OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_parse_returns_snapshot(orbital_cfg):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
@@ -34,6 +36,8 @@ def test_parse_returns_snapshot(orbital_cfg):
     ), "D[O-H] should be the same as D[H-O].T"
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_parse(orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")  # global order
@@ -76,6 +80,8 @@ def test_parse(orbital_cfg: OrbitalIrrepConfig):
     assert density[5, 5].shape == (22, 22)
 
 
+@pytest.mark.integration
+@pytest.mark.integration
 def test_parse_pbc_shapes(orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")

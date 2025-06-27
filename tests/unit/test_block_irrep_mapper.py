@@ -1,5 +1,5 @@
-import torch
 import pytest
+import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper, MappingKeyError
@@ -16,6 +16,7 @@ def mapper():
     return BlockIrrepMapper(cfg)
 
 
+@pytest.mark.unit
 def test_roundtrip_si_si(mapper):
     d_i, d_j = mapper.block_dims(("Si", "Si"))
     assert d_i == d_j == 13
@@ -28,6 +29,7 @@ def test_roundtrip_si_si(mapper):
     assert torch.allclose(blocks, rec, atol=1e-6)
 
 
+@pytest.mark.unit
 def test_unknown_pair(mapper):
     with pytest.raises(MappingKeyError):
         mapper.vector_dim(("C", "H"))

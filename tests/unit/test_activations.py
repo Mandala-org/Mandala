@@ -1,5 +1,5 @@
-import torch
 import pytest
+import torch
 from e3nn.o3 import Irreps
 
 from net.activations import make_nonlinearity, scalar_activation
@@ -23,6 +23,7 @@ IR = Irreps("4x0e + 4x0o + 2x1e + 2x1o")  # simple test irreps
 
 
 @pytest.mark.parametrize("kind", ["gate", "normact", "s2act", "id"])
+@pytest.mark.unit
 def test_factory_builds_and_runs(kind):
     hp = DummyHP(nonlin_kind=kind)
     mod = make_nonlinearity(IR, hp)
@@ -38,6 +39,7 @@ def test_factory_builds_and_runs(kind):
     assert torch.isfinite(x.grad).all()
 
 
+@pytest.mark.unit
 def test_scalar_activation_errors():
     with pytest.raises(ValueError):
         _ = scalar_activation("nosuchactivation")

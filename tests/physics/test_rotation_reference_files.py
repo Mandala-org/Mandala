@@ -11,6 +11,7 @@ We load
 Python, and assert element-wise equality with the “rotated” reference.
 """
 
+import pytest
 from pathlib import Path
 import math
 
@@ -54,6 +55,8 @@ def _assert_snapshot_equal(a, b, *, atol=1e-5):
         assert torch.allclose(mat_a, mat_b, atol=atol), f"{name} mismatch beyond {atol}"
 
 
+@pytest.mark.physics
+@pytest.mark.physics
 def test_pre_rotated_files_match_in_code_rotation():
     """
     Rotate the *original* snapshot by the known matrix and compare to the

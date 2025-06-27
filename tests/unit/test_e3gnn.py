@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -7,6 +8,7 @@ from net.e3gnn import E3GNN
 from e3nn.o3 import Irreps
 
 
+@pytest.mark.unit
 def test_forward_smoke():
     # ------- dummy orbital config ------------------
     cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})

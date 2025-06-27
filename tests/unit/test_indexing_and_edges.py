@@ -3,10 +3,10 @@ Additional low-level checks for (i) global-index access and (ii) edge mappings
 inside BlockMatrix / IrrepsBlockData.
 """
 
+import pytest
 import random
 from pathlib import Path
 import torch
-import pytest
 
 from data.openmx_parser import parse_openmx_scfout
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -24,6 +24,9 @@ def data():
 
 
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.unit
 def test_blockmatrix_lookup(data):
     """Global indexing ((i,j)) must hit the *same* tensor as pair-local lookup."""
     snapshot, mapper = data
@@ -39,6 +42,7 @@ def test_blockmatrix_lookup(data):
         assert torch.allclose(blk_global, blk_local, atol=1e-7)
 
 
+@pytest.mark.unit
 def test_irrepsblockdata_lookup(data):
     """Global indexing ((i,j)) must hit the *same* vector as pair-local lookup."""
     snapshot, mapper = data

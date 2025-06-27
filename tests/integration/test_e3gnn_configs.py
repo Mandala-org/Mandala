@@ -61,6 +61,8 @@ EDGE_TYPES = ["H-H"]
 
 
 @pytest.mark.parametrize("hp_kwargs", HP_VARIANTS)
+@pytest.mark.integration
+@pytest.mark.integration
 def test_e3gnn_forward_variants(hp_kwargs):
     hp = HyperParams(**hp_kwargs)
     model = E3GNN(

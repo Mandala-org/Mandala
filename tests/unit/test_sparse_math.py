@@ -1,3 +1,4 @@
+import pytest
 import itertools
 import torch
 import numpy as np
@@ -51,6 +52,7 @@ def make_mock_snapshot():
     return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, mapper, "openmx")
 
 
+@pytest.mark.unit
 def test_trace_sparse_vs_vectorized():
     A = make_mock_snapshot()
     B = make_mock_snapshot()
@@ -59,6 +61,7 @@ def test_trace_sparse_vs_vectorized():
     assert torch.allclose(t_sparse, t_vec, atol=1e-6)
 
 
+@pytest.mark.unit
 def test_trace_sparse_vs_dense():
     A = make_mock_snapshot()
     B = make_mock_snapshot()
@@ -69,6 +72,7 @@ def test_trace_sparse_vs_dense():
     assert np.isclose(t_sparse.item(), dense_trace, atol=1e-4)
 
 
+@pytest.mark.unit
 def test_trace_matches_dense():
     n_atoms, d = 3, 2
     edge_index, A, B = make_toy_sparse(n_atoms, d)

@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -6,6 +7,7 @@ from net.heads import DeepHead
 from core.block_irrep_mapper import BlockIrrepMapper
 
 
+@pytest.mark.unit
 def test_deep_head_shapes_and_device():
     cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
     pair_keys = ["H-H"]

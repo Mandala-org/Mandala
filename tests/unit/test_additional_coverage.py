@@ -12,6 +12,7 @@ from core.block_irrep_mapper import BlockIrrepMapper, MappingKeyError
 from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigError
 
 
+@pytest.mark.unit
 def test_node_encoder_shape_and_dtype():
     hp = HyperParams()
     out_ir = Irreps("4x0e")
@@ -23,6 +24,7 @@ def test_node_encoder_shape_and_dtype():
 
 
 @pytest.mark.parametrize("offdim", [None, 2])
+@pytest.mark.unit
 def test_edge_encoder_forward(offdim):
     hp = HyperParams()
     n_types, n_radial = 2, 3
@@ -41,6 +43,7 @@ def test_edge_encoder_forward(offdim):
 
 
 @pytest.mark.parametrize("residual", [True, False])
+@pytest.mark.unit
 def test_edge_update_block_shape(residual):
     hp = HyperParams(residual_connections=residual)
     hid_ir = Irreps("3x0e")
@@ -56,6 +59,7 @@ def test_edge_update_block_shape(residual):
 
 @pytest.mark.parametrize("self_upd", [True, False])
 @pytest.mark.parametrize("batch_norm", [True, False])
+@pytest.mark.unit
 def test_node_update_block_shape(self_upd, batch_norm):
     hp = HyperParams(use_self_update=self_upd, batch_norm=batch_norm)
     hid_ir = Irreps("2x0e")
@@ -68,6 +72,7 @@ def test_node_update_block_shape(self_upd, batch_norm):
     assert out.shape == (N, hid_ir.dim)
 
 
+@pytest.mark.unit
 def test_message_block_edge_and_node_update():
     hp = HyperParams(use_edge_updates=True)
     hid_ir = Irreps("1x0e")
@@ -81,6 +86,7 @@ def test_message_block_edge_and_node_update():
     assert edge2.shape == (E, hid_ir.dim)
 
 
+@pytest.mark.unit
 def test_scalar_activation_and_invalid():
     relu = scalar_activation("ReLU")
     assert isinstance(relu, torch.nn.Module)
@@ -88,6 +94,7 @@ def test_scalar_activation_and_invalid():
         scalar_activation("unknown_act")
 
 
+@pytest.mark.unit
 def test_make_nonlinearity_id_and_fallback():
     hp = HyperParams(nonlin_kind="id", activation_scalar="relu")
     ir = Irreps("2x0e+1x1o")
@@ -103,11 +110,13 @@ def test_make_nonlinearity_id_and_fallback():
     "l_max, base_dim, expected",
     [(2, 4, "4x0e+4x0o+2x1e+2x1o+1x2e+1x2o"), (0, 3, "3x0e+3x0o")],
 )
+@pytest.mark.unit
 def test_build_hidden_irreps(l_max, base_dim, expected):
     ir = build_hidden_irreps(l_max, base_dim)
     assert str(ir) == expected
 
 
+@pytest.mark.unit
 def test_radial_mlp_output_shape_and_layers():
     mlp = RadialMLP(5, out_dim=2, layers=(3,))
     x = torch.randn(4, 5)
@@ -119,6 +128,7 @@ def test_radial_mlp_output_shape_and_layers():
     assert y2.shape == (4, 5)
 
 
+@pytest.mark.unit
 def test_trace_matmul_sparse_basic():
     # two blocks: identity and 2*identity
     I = torch.eye(2)
@@ -131,6 +141,7 @@ def test_trace_matmul_sparse_basic():
     assert torch.isclose(val, torch.tensor(10.0))
 
 
+@pytest.mark.unit
 def test_block_irrep_mapper_roundtrip_and_vector_dim():
     cfg = OrbitalIrrepConfig.from_dict({"A": ["1x0e", "1x1o"], "B": ["2x0e"]})
     mapper = BlockIrrepMapper(cfg)
@@ -145,6 +156,7 @@ def test_block_irrep_mapper_roundtrip_and_vector_dim():
         mapper.blocks_to_vectors("C-D", blk)
 
 
+@pytest.mark.unit
 def test_orbital_irrep_config_from_dict_and_to_dict():
     d = {"X": "2x0e+1x1o", "Y": ["3x0e"]}
     cfg = OrbitalIrrepConfig.from_dict(d)
