@@ -1,5 +1,5 @@
 torch>=2.1
-e3nn>=0.7.3
+e3nn>=0.5.6
 metatensor>=0.1.0
 ase>=3.22
 hydra-core>=1.3
