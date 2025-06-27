@@ -6,7 +6,6 @@ from hydra.core.global_hydra import GlobalHydra
 
 
 @pytest.mark.integration
-@pytest.mark.integration
 def test_train_script_setup(monkeypatch):
     """
     Test that scripts/train.py can set up the full training pipeline without errors
