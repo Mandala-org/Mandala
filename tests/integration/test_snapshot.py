@@ -16,7 +16,6 @@ def _load_snapshot():
 
 
 @pytest.mark.integration
-@pytest.mark.integration
 def test_energy_and_electron_count():
     snap = _load_snapshot()
     E = snap.get_energy()
@@ -31,7 +30,6 @@ def test_energy_and_electron_count():
 
 
 @pytest.mark.integration
-@pytest.mark.integration
 def test_density_edge_ordering():
     snap = _load_snapshot()
     D = snap.density
@@ -43,7 +41,6 @@ def test_density_edge_ordering():
         ), f"edge blocks for {key} not ascending by L2 norm"
 
 
-@pytest.mark.integration
 @pytest.mark.integration
 def test_save_load_roundtrip(tmp_path):
     snap = _load_snapshot()
@@ -60,7 +57,6 @@ def test_save_load_roundtrip(tmp_path):
 # ---------------------------------------------------------------- basis conversion
 
 
-@pytest.mark.integration
 @pytest.mark.integration
 def test_basis_conversion_roundtrip():
     snap_open = _load_snapshot()  # native OpenMX basis

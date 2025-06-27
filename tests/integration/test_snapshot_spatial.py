@@ -34,7 +34,6 @@ def si_snapshot():
 
 
 @pytest.mark.integration
-@pytest.mark.integration
 def test_max_distance_periodic(si_snapshot):
     """
     Largest *minimal-image* separation must not exceed half the smallest
@@ -47,7 +46,6 @@ def test_max_distance_periodic(si_snapshot):
     assert max_d >= 2.0
 
 
-@pytest.mark.integration
 @pytest.mark.integration
 def test_filter_by_distance(si_snapshot):
     """

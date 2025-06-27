@@ -38,7 +38,6 @@ def dataset():
 
 
 @pytest.mark.integration
-@pytest.mark.integration
 def test_edge_sets(dataset):
     x_gnn, x_mat, y = dataset[0]
 

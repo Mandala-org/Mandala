@@ -40,7 +40,6 @@ def extract_gnn_edges(ds):
 
 
 @pytest.mark.integration
-@pytest.mark.integration
 def test_dataset_cache_with_real_data(tmp_path, h2o_pair):
     cache_dir = tmp_path / "cache"
     # First load with cutoff 5.0
