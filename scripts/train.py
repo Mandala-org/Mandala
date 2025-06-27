@@ -61,7 +61,7 @@ def main(cfg: DictConfig) -> None:
     fact = DatasetFactory(
         cutoff_gnn=cfg.data.cutoff_gnn,
         cutoff_matrix=cfg.data.cutoff_matrix,
-        l_max_sh=cfg.data.l_max_sh,
+        l_max_sh=cfg.model.l_max,
         n_radial=cfg.data.n_radial,
         device="cpu",
     )
@@ -92,8 +92,6 @@ def main(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     # 3. Model instantiation
     # ------------------------------------------------------------------
-    # 3. Model instantiation
-    # 3. Model instantiation
     hp = HyperParams(**cfg.model)
     # Hardware setup: interpret training.gpus as "cpu" or a GPU count
     if isinstance(gpus_cfg, str) and gpus_cfg.lower() == "cpu":
