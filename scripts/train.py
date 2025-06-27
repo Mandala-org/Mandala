@@ -165,16 +165,25 @@ def main(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     # 6. Trainer
     # ------------------------------------------------------------------
-    trainer = pl.Trainer(
-        logger=logger,
-        accelerator=accelerator,
-        devices=devices,
-        max_epochs=cfg.training.max_epochs,
-        precision=cfg.training.precision,
-        callbacks=callbacks,
-        deterministic=True,
-        log_every_n_steps=cfg.training.log_every_n_steps,
-    )
+    if cfg.training.smoke_test:
+        vprint("Smoke test mode enabled: running one batch of train and val.")
+        trainer = pl.Trainer(
+            accelerator=accelerator,
+            devices=devices,
+            fast_dev_run=True,
+            deterministic=True,
+        )
+    else:
+        trainer = pl.Trainer(
+            logger=logger,
+            accelerator=accelerator,
+            devices=devices,
+            max_epochs=cfg.training.max_epochs,
+            precision=cfg.training.precision,
+            callbacks=callbacks,
+            deterministic=True,
+            log_every_n_steps=cfg.training.log_every_n_steps,
+        )
 
     # ------------------------------------------------------------------
     # 7. HPO integration
