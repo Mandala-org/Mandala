@@ -9,7 +9,7 @@ from data.factory import DatasetFactory
 @pytest.fixture
 def h2o_pair():
     # Use the small H2O data in the repository
-    base = Path(__file__).resolve().parents[1] / "data" / "small" / "H2O" / "original"
+    base = Path("data") / "small" / "H2O" / "original"
     mat = base / "H2O.matrix"
     info = base / "H2O.info.out"
     return mat, info
