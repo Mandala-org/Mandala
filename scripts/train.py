@@ -17,6 +17,7 @@ from pathlib import Path
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from hydra.utils import to_absolute_path
 
 import torch
 from torch.utils.data import DataLoader
@@ -29,8 +30,6 @@ from net.benchmark import BenchmarkCallback
 from data.factory import DatasetFactory
 from net.common import HyperParams
 from net.e3gnn import E3GNN
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]  # src/
 
 
 @hydra.main(config_path="../conf", version_base="1.1")
@@ -66,7 +65,9 @@ def main(cfg: DictConfig) -> None:
         device="cpu",
     )
     for entry in cfg.data.snapshots:
-        fact.add_snapshot(Path(entry.matrix), Path(entry.info), entry.purpose)
+        matrix_path = to_absolute_path(entry.matrix)
+        info_path = to_absolute_path(entry.info)
+        fact.add_snapshot(Path(matrix_path), Path(info_path), entry.purpose)
     ds_train, ds_val, mapper = fact.create()
     vprint(f"Created datasets: train={len(ds_train)}, val={len(ds_val or [])}")
 
@@ -130,7 +131,7 @@ def main(cfg: DictConfig) -> None:
             project=cfg.logging.wandb_project,
             name=run_name,
             log_model=cfg.logging.log_model,
-            save_dir=str(PROJECT_ROOT / cfg.logging.save_dir),
+            save_dir=to_absolute_path(cfg.logging.save_dir),
         )
         logger.experiment.config.update(
             OmegaConf.to_container(cfg, resolve=True), allow_val_change=True
@@ -149,7 +150,7 @@ def main(cfg: DictConfig) -> None:
             monitor="val_loss",
             mode="min",
             save_top_k=3,
-            dirpath=PROJECT_ROOT / "checkpoints" / run_name,
+            dirpath=to_absolute_path(f"checkpoints/{run_name}"),
             filename="{epoch:03d}-{val_loss:.4f}",
         ),
         LearningRateMonitor(logging_interval="step"),
