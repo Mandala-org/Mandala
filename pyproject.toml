@@ -20,7 +20,7 @@ dependencies = [
     "nevergrad>=1.0",
     "optuna>=3.6",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [project.optional-dependencies]
 dev = [
@@ -47,6 +47,6 @@ ignore = ["E741"]
 addopts = ['-n', 'auto']
 markers = [
     "unit: fast, isolated tests",
-    "integration: slower tests on real data",
-    "physics: tests for physical constraints",
+    "integration: slower workflow tests on real data",
+    "physics: tests of physical constraints",
 ]
