@@ -8,20 +8,12 @@ from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
 
 
-# TODO: change to new data (and load ground truth to compare against from numpy files)
-
-
-@pytest.fixture(scope="module")
-def orbital_cfg():
-    return OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
-
-
 @pytest.mark.integration
-def test_parse_returns_snapshot(orbital_cfg):
+def test_parse_returns_snapshot(h2o_orbital_cfg):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
 
-    snap = parse_openmx_scfout(sample, atoms, orbital_cfg)
+    snap = parse_openmx_scfout(sample, atoms, h2o_orbital_cfg)
     assert isinstance(snap, Snapshot)
 
     ham = snap.hamiltonian
@@ -36,11 +28,11 @@ def test_parse_returns_snapshot(orbital_cfg):
 
 
 @pytest.mark.integration
-def test_parse(orbital_cfg: OrbitalIrrepConfig):
+def test_parse(h2o_orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")  # global order
 
-    mats = parse_openmx_scfout(sample, atoms, orbital_cfg)
+    mats = parse_openmx_scfout(sample, atoms, h2o_orbital_cfg)
     assert mats["hamiltonian"] is not None
     assert mats["overlap"] is not None
     assert mats["density"] is not None
@@ -56,7 +48,7 @@ def test_parse(orbital_cfg: OrbitalIrrepConfig):
     E_HO, d_H, d_O = hamiltonian["H-O"].shape
     assert d_H == 9 and d_O == 22
 
-    mapper = BlockIrrepMapper(orbital_cfg)
+    mapper = BlockIrrepMapper(h2o_orbital_cfg)
 
     # round‑trip vector check
     snap_vec = hamiltonian.to_vectors(mapper)
@@ -79,11 +71,11 @@ def test_parse(orbital_cfg: OrbitalIrrepConfig):
 
 
 @pytest.mark.integration
-def test_parse_pbc_shapes(orbital_cfg: OrbitalIrrepConfig):
+def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
 
-    mats = parse_openmx_scfout(sample, atoms, orbital_cfg)
+    mats = parse_openmx_scfout(sample, atoms, h2o_orbital_cfg)
     density = mats["density"]
     # ensure that duplicate Rn blocks were summed: count of H‑H edges is 16 (fully connected dir graph)
     assert density["H-H"].shape == (16, 9, 9)

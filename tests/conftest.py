@@ -1,40 +1,50 @@
 import pytest
-import os
-import sys
-import random
-import numpy as np
-import torch
 from pathlib import Path
 
-# Delay import of DatasetFactory until after src/ is on PYTHONPATH
-
-# Ensure the project src/ directory is on PYTHONPATH for imports
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-)
-# Add venv site-packages to PYTHONPATH to allow importing e3nn, torch, etc.
-venv_dir = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "e3gnn4matrix-venv")
-)
-venv_sp = os.path.join(
-    venv_dir,
-    "lib",
-    f"python{sys.version_info.major}.{sys.version_info.minor}",
-    "site-packages",
-)
-if os.path.isdir(venv_sp):
-    sys.path.insert(0, venv_sp)
-
-# now that src/ and venv are in path, import DatasetFactory
-from data.factory import DatasetFactory  # noqa: E402
+from core.orbital_irrep_config import OrbitalIrrepConfig
+from data.openmx_parser import parse_openmx_scfout
+from data.snapshot import Snapshot
+from data.factory import DatasetFactory
 
 
-def pytest_configure(config):
-    seed = 12345
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.set_printoptions(precision=5)
+@pytest.fixture(scope="session")
+def h2o_orbital_cfg():
+    return OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
+
+
+@pytest.fixture(scope="session")
+def h2o_snapshot(h2o_orbital_cfg):
+    sample = Path("./data/small/H2O/original/H2O.matrix")
+    atoms = list("HHHHOO")
+    return parse_openmx_scfout(sample, atoms, h2o_orbital_cfg, convention="openmx")
+
+
+@pytest.fixture(scope="session")
+def h2o_snapshot_e3nn(h2o_orbital_cfg):
+    sample = Path("./data/small/H2O/original/H2O.matrix")
+    atoms = list("HHHHOO")
+    return parse_openmx_scfout(sample, atoms, h2o_orbital_cfg, convention="e3nn")
+
+
+@pytest.fixture(scope="session")
+def si_snapshot():
+    base = Path("./data/big/silicon/2700K")
+    matrix_path = base / "Si_DM"
+    info_path = base / "info.txt"
+    return Snapshot.from_openmx(
+        str(matrix_path),
+        str(info_path),
+        convention="openmx",
+    )
+
+
+@pytest.fixture(scope="session")
+def silicon_pair():
+    # Use the silicon data in the repository
+    base = Path("data") / "big" / "silicon" / "900K"
+    mat = base / "Si_DM"
+    info = base / "info.txt"
+    return mat, info
 
 
 @pytest.fixture(scope="session")
