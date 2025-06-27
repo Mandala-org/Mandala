@@ -1,6 +1,7 @@
 import os
 import sys
 import importlib
+from hydra.core.global_hydra import GlobalHydra
 
 
 def test_train_script_setup(monkeypatch):
@@ -8,6 +9,18 @@ def test_train_script_setup(monkeypatch):
     Test that scripts/train.py can set up the full training pipeline without errors
     by mocking out the Trainer.fit call and WandBLogger.
     """
+    # Get the absolute path to the config directory
+    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "conf"))
+
+    # Dynamically rewrite the hydra.main decorator to use an absolute path
+    with open("scripts/train.py", "r") as f:
+        train_script_code = f.read()
+    train_script_code = train_script_code.replace(
+        '@hydra.main(config_path="../conf", version_base="1.1")',
+        f'@hydra.main(config_path="{config_path}", version_base="1.1")',
+    )
+    exec(train_script_code, globals())
+
     # Import train script as module
     spec = importlib.util.spec_from_file_location(
         "train_script", os.path.join(os.getcwd(), "scripts", "train.py")
@@ -45,5 +58,6 @@ def test_train_script_setup(monkeypatch):
         "argv",
         ["train.py", "--config-name", "debug_cpu"],
     )
-    # Run main without raising
-    train_script.main()
+    # Run main without raising, but with the correct config path
+    GlobalHydra.instance().clear()
+    main()  # noqa: F821

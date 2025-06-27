@@ -1,11 +1,11 @@
 ## Debug CPU preset: small data subset for quick testing on CPU
 data:
   snapshots:
-    - matrix: /home/bartek/casus/e3gnn4matrix/data/small/H2O/original/H2O.matrix
-      info:   /home/bartek/casus/e3gnn4matrix/data/small/H2O/original/H2O.info.out
+    - matrix: data/small/H2O/original/H2O.matrix
+      info:   data/small/H2O/original/H2O.info.out
       purpose: train
-    - matrix: /home/bartek/casus/e3gnn4matrix/data/small/H2O/rotated/H2O.matrix
-      info:   /home/bartek/casus/e3gnn4matrix/data/small/H2O/rotated/H2O.info.out
+    - matrix: data/small/H2O/rotated/H2O.matrix
+      info:   data/small/H2O/rotated/H2O.info.out
       purpose: val
   cutoff_gnn:     4.0
   cutoff_matrix:  6.0
