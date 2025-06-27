@@ -12,7 +12,6 @@ data:
       purpose: val
   cutoff_gnn:     4.0
   cutoff_matrix:  6.0
-  l_max_sh:       2
   n_radial:       64
   num_workers:    0
 training:
@@ -22,16 +21,18 @@ training:
   gpus:         cpu
   tune:         None
   seed:         42
+  log_every_n_steps: 1
 model:
   hidden_base_dim:   32
+  l_max:             2
   num_layers_gnn:    2
   num_layers_matrix: 1
   dropout:           0.0
   energy_loss_coef:   0.0001
   electron_loss_coef: 0.0001
 logging:
-  run_name:        "debug-cpu-small"
-  verbosity:     2
+  run_name:            "debug-cpu-small"
+  verbosity:           2
   bench_verbosity:     2
   log_activation_mag: true
   wandb_project:   null
