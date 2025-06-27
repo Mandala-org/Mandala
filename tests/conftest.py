@@ -68,7 +68,6 @@ def factory_results():
         cutoff_matrix=7.5,
         l_max_sh=3,
         n_radial=64,
-        keep_snapshots=False,
         device="cpu",
     )
     fac.add_snapshot(*PAIR_TRAIN_1, purpose="train")
