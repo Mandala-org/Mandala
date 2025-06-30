@@ -10,10 +10,16 @@ def test_training_step_smoke(factory_results):
     """
     Smoke-test that training_step runs without shape errors and returns a scalar loss.
     """
+    from omegaconf import OmegaConf
+    from dataclasses import asdict
+
     train_ds, _, mapper = factory_results
     # initialize model with default hyperparameters
     hp = HyperParams()
-    model = E3GNN(mapper, train_ds.edge_types, hp=hp, device="cpu")
+    mock_cfg = OmegaConf.create(
+        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
+    )
+    model = E3GNN(mapper, train_ds.edge_types, mock_cfg, device="cpu")
     # take first sample from training dataset
     x_gnn, x_mat, y = train_ds[0]
     # call training_step and verify scalar loss
