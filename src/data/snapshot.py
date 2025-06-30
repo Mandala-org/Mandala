@@ -79,16 +79,34 @@ class Snapshot:
     # ---------------------------------------------------------------- compatibility
     @staticmethod
     def _check_compatibility(*mats: BlockMatrix) -> None:
-        atoms = mats[0].atoms
-        mapper_cfg = mats[0].orbital_cfg.to_dict()
-        basis = mats[0].basis
-        for m in mats[1:]:
-            if m.atoms != atoms:
-                raise ValueError("All matrices must share the same atom list")
-            if m.orbital_cfg.to_dict() != mapper_cfg:
-                raise ValueError("All matrices must share the same orbital config")
-            if m.basis != basis:
-                raise ValueError("All matrices must use the same basis (openmx/e3nn)")
+        if not mats:
+            return
+
+        first = mats[0]
+        for i, m in enumerate(mats[1:]):
+            if m.atoms != first.atoms:
+                raise ValueError(f"Matrices 0 and {i+1} must share the same atom list")
+
+            if m.atom_counts.keys() != first.atom_counts.keys():
+                raise ValueError(
+                    f"Matrices 0 and {i+1} have different element sets in atom_counts"
+                )
+
+            for key in first.atom_counts:
+                if m.atom_counts[key] != first.atom_counts[key]:
+                    raise ValueError(
+                        f"Matrices 0 and {i+1} have different counts for element {key}"
+                    )
+
+            if m.orbital_cfg.to_dict() != first.orbital_cfg.to_dict():
+                raise ValueError(
+                    f"Matrices 0 and {i+1} must share the same orbital config"
+                )
+
+            if m.basis != first.basis:
+                raise ValueError(
+                    f"Matrices 0 and {i+1} must use the same basis (openmx/e3nn)"
+                )
 
     # ---------------------------------------------------------------- edge ordering
     def canonicalize_edges(self) -> "Snapshot":
@@ -105,16 +123,17 @@ class Snapshot:
         for key, edges in density.pair_edges.items():
             is_diag_mask = edges[0] == edges[1]
 
-            diag_indices = torch.where(is_diag_mask)[0]
-            offdiag_indices = torch.where(~is_diag_mask)[0]
-
             # Get the sorting permutation for the diagonal edges
-            perm_diag = torch.argsort(edges[0] + edges[1] * 1e6)[diag_indices]
+            perm_diag = torch.argsort(edges[0] + edges[1] * 1e6)
+            diag_mask = is_diag_mask[perm_diag]
+            perm_diag = perm_diag[diag_mask]
 
             # Sort off-diagonal edges by density norm
             norms = density.pair_blocks[key].pow(2).sum(dim=(-2, -1)).sqrt()
             # Get the sorting permutation for the off-diagonal edges
-            perm_offdiag = torch.argsort(norms)[offdiag_indices]
+            perm_offdiag = torch.argsort(norms)
+            offdiag_mask = ~is_diag_mask[perm_offdiag]
+            perm_offdiag = perm_offdiag[offdiag_mask]
 
             order_dict[key] = torch.cat([perm_offdiag, perm_diag])
 
@@ -122,6 +141,42 @@ class Snapshot:
         new_mats = {
             name: mat.reorder_edges(order_dict) for name, mat in self._mats.items()
         }
+
+        # # Sanity checks to make sure the graph make sense
+        # for mat in new_mats.values():
+        # lookup = mat.lookup
+        # pair_edges = mat.pair_edges
+        # pair_blocks = mat.pair_blocks
+        # atoms = mat.atoms
+
+        # # 1. Test whether all edges are unique
+        # all_edges = set()
+        # for edges in pair_edges.values():
+        #     for edge in edges.t().tolist():
+        #         all_edges.add(tuple(edge))
+        # if len(all_edges) != sum(len(edges.t()) for edges in pair_edges.values()):
+        #     raise ValueError("Duplicate edges found in pair edges")
+        # # 2. Test whether lookup contains all edges
+        # if len(lookup) != len(all_edges):
+        #     raise ValueError("Lookup size does not match edge count")
+        # for (i, j) in all_edges:
+        #     if (i, j) not in lookup:
+        #         raise ValueError(f"Edge {(i, j)} not found in lookup")
+        #     key, idx = lookup[(i, j)]
+        #     if key not in pair_blocks or idx >= len(pair_blocks[key]):
+        #         raise ValueError(f"Edge {(i, j)} lookup points to invalid block")
+        # # 3. Test whether all self-edges are present
+        # for i, atom in enumerate(atoms):
+        #     key = f"{atom}-{atom}"
+        #     if key not in pair_blocks:
+        #         raise ValueError(f"Self-edge {key} not found in pair blocks")
+        #     if (i, i) not in lookup:
+        #         raise ValueError(f"Self-edge lookup for {key} missing")
+        # # 4. Test whether graph is symmetric
+        # for (i, j) in lookup:
+        #     key, idx = lookup[(i, j)]
+        #     if (j, i) not in lookup:
+        #         raise ValueError(f"Edge {(i, j)} is not symmetric with {(j, i)}")
 
         return Snapshot(
             new_mats["hamiltonian"],
@@ -158,6 +213,7 @@ class Snapshot:
     @staticmethod
     def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> BlockMatrix:
         from core.orbital_irrep_config import OrbitalIrrepConfig
+        from collections import Counter
 
         orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
 
@@ -170,8 +226,12 @@ class Snapshot:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
+        atoms = tuple(payload["atoms"])
+        atom_counts = payload.get("atom_counts", Counter(atoms))
+
         return BlockMatrix(
-            atoms=tuple(payload["atoms"]),
+            atoms=atoms,
+            atom_counts=atom_counts,
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
             lookup=lookup,

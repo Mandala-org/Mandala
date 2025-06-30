@@ -142,6 +142,8 @@ def parse_openmx_scfout(
 
     # ─────────────────────────────────────── build BlockMatrix objects
     def _to_mbd(sub: Dict[str, Dict[Tuple[int, int], torch.Tensor]]) -> BlockMatrix:
+        from collections import Counter
+
         pair_blocks: Dict[str, List[torch.Tensor]] = {}
         pair_edges: Dict[str, List[List[int]]] = {}
         lookup: Dict[Tuple[int, int], Tuple[str, int]] = {}
@@ -157,8 +159,40 @@ def parse_openmx_scfout(
         pair_edges_t = {
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
+
+        # Sanity checks to make sure edges make sense
+        # 1. Test whether all edges are unique
+        all_edges = set()
+        for edges in pair_edges_t.values():
+            for edge in edges.t().tolist():
+                all_edges.add(tuple(edge))
+        if len(all_edges) != sum(len(edges.t()) for edges in pair_edges_t.values()):
+            raise OpenMXParseError("Duplicate edges found in pair edges")
+        # 2. Test whether lookup contains all edges
+        if len(lookup) != len(all_edges):
+            raise OpenMXParseError("Lookup size does not match edge count")
+        for i, j in all_edges:
+            if (i, j) not in lookup:
+                raise OpenMXParseError(f"Edge {(i, j)} not found in lookup")
+            key, idx = lookup[(i, j)]
+            if key not in pair_blocks_t or idx >= len(pair_blocks_t[key]):
+                raise OpenMXParseError(f"Edge {(i, j)} lookup points to invalid block")
+        # 3. Test whether all self-edges are present
+        for i, atom in enumerate(atoms):
+            key = f"{atom}-{atom}"
+            if key not in pair_blocks_t:
+                raise OpenMXParseError(f"Self-edge {key} not found in pair blocks")
+            if (i, i) not in lookup:
+                raise OpenMXParseError(f"Self-edge lookup for {key} missing")
+        # 4. Test whether graph is symmetric
+        for i, j in lookup:
+            key, idx = lookup[(i, j)]
+            if (j, i) not in lookup:
+                raise OpenMXParseError(f"Edge {(i, j)} is not symmetric with {(j, i)}")
+
         return BlockMatrix(
             atoms=tuple(atoms),
+            atom_counts=Counter(atoms),
             pair_blocks=pair_blocks_t,
             pair_edges=pair_edges_t,
             lookup=lookup,
