@@ -27,7 +27,12 @@ def dataset():
     mapper = BlockIrrepMapper(snap_H20.hamiltonian.orbital_cfg)
 
     return E3GNNDataset(
-        [snap_H20],
+        [
+            (
+                Path("data/small/H2O/original/H2O.matrix"),
+                Path("data/small/H2O/original/H2O.info.out"),
+            )
+        ],
         mapper,
         cutoff_gnn=4.0,
         cutoff_matrix=7.5,
