@@ -110,6 +110,7 @@ class E3GNNDataset(Dataset):
                 snapshot.matrix_path,
                 snapshot.info_path,
                 snapshot.cutoff_radius,
+                self.n_radial,
                 self.cut_gnn,
                 self.cut_mat,
                 self.l_max_sh,

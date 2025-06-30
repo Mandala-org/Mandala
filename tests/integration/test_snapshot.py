@@ -12,7 +12,8 @@ def _load_snapshot():
     cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
-    return parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
+    snap = parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
+    return snap.canonicalize_edges()
 
 
 @pytest.mark.integration
@@ -30,15 +31,22 @@ def test_energy_and_electron_count():
 
 
 @pytest.mark.integration
-def test_density_edge_ordering():
+def test_canonical_edge_ordering():
     snap = _load_snapshot()
     D = snap.density
 
     for key in D.keys():
-        norms = D[key].pow(2).sum((-2, -1)).sqrt()  # (E,)
-        assert torch.all(
-            norms[1:] >= norms[:-1]
-        ), f"edge blocks for {key} not ascending by L2 norm"
+        edges = D.pair_edges[key]
+        is_diag = edges[0] == edges[1]
+
+        # Find the first diagonal edge, if any
+        diag_indices = torch.where(is_diag)[0]
+        if len(diag_indices) > 0:
+            first_diag_idx = diag_indices[0]
+            # All edges before the first diagonal edge must be off-diagonal
+            assert not torch.any(is_diag[:first_diag_idx])
+            # All edges from the first diagonal edge onwards must be diagonal
+            assert torch.all(is_diag[first_diag_idx:])
 
 
 @pytest.mark.integration

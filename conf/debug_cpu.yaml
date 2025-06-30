@@ -34,3 +34,4 @@ logging:
   bench_verbosity:     2
   log_activation_mag: true
   wandb_project:   null
+  pedantic:          false

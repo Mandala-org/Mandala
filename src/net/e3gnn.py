@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple, Any
 import torch
 import pytorch_lightning as pl
 from torch import nn
+from omegaconf import DictConfig
 
 from e3nn.o3 import Irreps
 import time
@@ -40,40 +41,42 @@ class E3GNN(pl.LightningModule):
         self,
         mapper: BlockIrrepMapper,
         edge_types: List[str],
-        hp: HyperParams = HyperParams(),
+        cfg: DictConfig,
         *,
-        lr: float = 3e-4,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
         # check-point everything *except* the (non-serialisable) mapper
-        self.save_hyperparameters(ignore=["mapper"])
-        self.hp = hp
-        self.lr = lr
+        self.save_hyperparameters(ignore=["mapper", "cfg"])
+        self.hp = HyperParams(**cfg.model)
+        self.lr = cfg.training.lr
+        self.pedantic = cfg.logging.pedantic
         self.device_ = torch.device(device)
         # shared mapper (no local creation!)
         self.mapper: BlockIrrepMapper = mapper.to(self.device_)
 
         # ---------- shared irreps ---------------------------------------
-        self.hidden_irreps: Irreps = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(hp.l_max)
+        self.hidden_irreps: Irreps = build_hidden_irreps(
+            self.hp.l_max, self.hp.hidden_base_dim
+        )
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.hp.l_max)
 
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(
             node_one_hot_dim=len(self.mapper.orbital_cfg.elements()),
             out_irreps=self.hidden_irreps,
-            hp=hp,
+            hp=self.hp,
             device=self.device_,
             dtype=dtype,
         )
         self.edge_enc = EdgeEncoder(
             n_edge_types=len(edge_types),
-            n_radial=hp.n_radial,
+            n_radial=self.hp.n_radial,
             sh_irreps=self.sh_irreps,
             offdiag_irrep_dim=None,  # off-diagonal overlap features disabled
             out_irreps=self.hidden_irreps,
-            hp=hp,
+            hp=self.hp,
             device=self.device_,
             dtype=dtype,
         )
@@ -82,13 +85,17 @@ class E3GNN(pl.LightningModule):
         def _make_mp():
             return MessageBlock(
                 self.hidden_irreps,
-                hp,
+                self.hp,
                 device=self.device_,
                 dtype=dtype,
             )
 
-        self.mp_small = nn.ModuleList([_make_mp() for _ in range(hp.num_layers_gnn)])
-        self.mp_large = nn.ModuleList([_make_mp() for _ in range(hp.num_layers_matrix)])
+        self.mp_small = nn.ModuleList(
+            [_make_mp() for _ in range(self.hp.num_layers_gnn)]
+        )
+        self.mp_large = nn.ModuleList(
+            [_make_mp() for _ in range(self.hp.num_layers_matrix)]
+        )
 
         # ---------- heads ----------------------------------------------
         self.heads = nn.ModuleDict(
@@ -97,7 +104,7 @@ class E3GNN(pl.LightningModule):
                     in_irreps=self.hidden_irreps,
                     pair_keys=edge_types,
                     mapper=self.mapper,
-                    hp=hp,
+                    hp=self.hp,
                     device=self.device_,
                     dtype=dtype,
                 )
@@ -285,6 +292,15 @@ class E3GNN(pl.LightningModule):
         t_fwd_end = time.perf_counter()
         # block losses
         loss_blocks = 0.0
+        if self.pedantic:
+            for name in ("hamiltonian", "overlap", "density"):
+                pred_edges = preds[name].pair_edges
+                target_edges = y[name].pair_edges
+                for key in target_edges.keys():
+                    assert torch.equal(
+                        pred_edges[key], target_edges[key]
+                    ), f"Pedantic check failed: Edge order mismatch in '{name}' matrix for key '{key}'"
+
         for name in ("hamiltonian", "overlap", "density"):
             p_vecs = preds[name].pair_vectors
             t_vecs = y[name].pair_vectors

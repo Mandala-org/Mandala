@@ -72,8 +72,9 @@ class Snapshot:
         self.info_path = info_path
         self.cutoff_radius = cutoff_radius
 
-        # edge ordering according to |D| magnitude -------------------------
-        self._order_edges_by_density()
+        self.hamiltonian = self._mats["hamiltonian"]
+        self.overlap = self._mats["overlap"]
+        self.density = self._mats["density"]
 
     # ---------------------------------------------------------------- compatibility
     @staticmethod
@@ -90,22 +91,48 @@ class Snapshot:
                 raise ValueError("All matrices must use the same basis (openmx/e3nn)")
 
     # ---------------------------------------------------------------- edge ordering
-    def _order_edges_by_density(self) -> None:
+    def canonicalize_edges(self) -> "Snapshot":
+        """
+        Return a new Snapshot with a canonical edge ordering for each key.
+        The canonical order for each key is:
+        1. Off-diagonal edges, sorted by the L2 norm of their corresponding
+           density matrix block in ascending order.
+        2. Diagonal edges, sorted by their node index.
+        """
         density = self._mats["density"]
         order_dict = {}
-        for key, blk in density.pair_blocks.items():
-            # L2 magnitude of each block tensor
-            mag = blk.pow(2).sum(dim=(-2, -1)).sqrt()
-            order_dict[key] = torch.argsort(mag)
 
-        # apply the SAME permutation to every matrix that has that key
-        for name, mat in self._mats.items():
-            self._mats[name] = mat.reorder_edges(order_dict)
+        for key, edges in density.pair_edges.items():
+            is_diag_mask = edges[0] == edges[1]
 
-        # expose as attributes after ordering so self.density etc. match
-        self.hamiltonian = self._mats["hamiltonian"]
-        self.overlap = self._mats["overlap"]
-        self.density = self._mats["density"]
+            diag_indices = torch.where(is_diag_mask)[0]
+            offdiag_indices = torch.where(~is_diag_mask)[0]
+
+            # Get the sorting permutation for the diagonal edges
+            perm_diag = torch.argsort(edges[0] + edges[1] * 1e6)[diag_indices]
+
+            # Sort off-diagonal edges by density norm
+            norms = density.pair_blocks[key].pow(2).sum(dim=(-2, -1)).sqrt()
+            # Get the sorting permutation for the off-diagonal edges
+            perm_offdiag = torch.argsort(norms)[offdiag_indices]
+
+            order_dict[key] = torch.cat([perm_offdiag, perm_diag])
+
+        # Apply the SAME permutation to every matrix
+        new_mats = {
+            name: mat.reorder_edges(order_dict) for name, mat in self._mats.items()
+        }
+
+        return Snapshot(
+            new_mats["hamiltonian"],
+            new_mats["overlap"],
+            new_mats["density"],
+            positions=self.positions,
+            box=self.box,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=self.cutoff_radius,
+        )
 
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:
@@ -399,4 +426,5 @@ class Snapshot:
         # without PBC if `box` stays *None*.
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
-        return snap
+
+        return snap.canonicalize_edges()

@@ -63,11 +63,20 @@ EDGE_TYPES = ["H-H"]
 @pytest.mark.parametrize("hp_kwargs", HP_VARIANTS)
 @pytest.mark.integration
 def test_e3gnn_forward_variants(hp_kwargs):
+    from omegaconf import OmegaConf
+    from dataclasses import asdict
+
     hp = HyperParams(**hp_kwargs)
+
+    # Create a minimal mock config
+    mock_cfg = OmegaConf.create(
+        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
+    )
+
     model = E3GNN(
         mapper,
         EDGE_TYPES,
-        hp,
+        mock_cfg,
         device="cpu",
     )
 
