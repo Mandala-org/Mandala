@@ -114,6 +114,9 @@ def test_sample_coherence(factory_results):
 
 @pytest.mark.integration
 def test_model_forward_cpu(factory_results):
+    from omegaconf import OmegaConf
+    from dataclasses import asdict
+
     train_ds, _, mapper = factory_results
 
     # Lazy import to avoid heavy deps if not needed
@@ -123,11 +126,15 @@ def test_model_forward_cpu(factory_results):
     sample = train_ds[0]
     x_gnn, x_mat, y = sample
 
+    hp = HyperParams(dropout=0.0, batch_norm=False)
+    mock_cfg = OmegaConf.create(
+        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
+    )
+
     model = E3GNN(
         mapper=mapper,
         edge_types=train_ds.edge_types,
-        hp=HyperParams(dropout=0.0, batch_norm=False),  # keep things small
-        lr=1e-3,
+        cfg=mock_cfg,
         device="cpu",
     )
 

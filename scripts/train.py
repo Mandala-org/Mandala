@@ -113,8 +113,7 @@ def main(cfg: DictConfig) -> None:
     model = E3GNN(
         mapper=mapper,
         edge_types=ds_train.edge_types,
-        hp=hp,
-        lr=cfg.get("lr", 3e-4),
+        cfg=cfg,
         device="cuda" if accelerator == "gpu" else "cpu",
     )
     vprint(

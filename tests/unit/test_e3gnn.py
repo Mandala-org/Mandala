@@ -10,13 +10,19 @@ from e3nn.o3 import Irreps
 
 @pytest.mark.unit
 def test_forward_smoke():
+    from omegaconf import OmegaConf
+    from dataclasses import asdict
+
     # ------- dummy orbital config ------------------
-    cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
     edge_types = ["H-H"]
 
     hp = HyperParams(num_layers_gnn=1, num_layers_matrix=1)
+    mock_cfg = OmegaConf.create(
+        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
+    )
 
-    model = E3GNN(BlockIrrepMapper(cfg), edge_types, hp=hp, device="cpu")
+    model = E3GNN(BlockIrrepMapper(orb_cfg), edge_types, mock_cfg, device="cpu")
 
     # ------- fake batch ----------------------------
     N, E = 4, 3
