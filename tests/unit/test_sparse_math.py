@@ -34,6 +34,9 @@ def dense_from_blocks(blocks, edge_index, d, n_atoms):
 
 def make_mock_snapshot():
     atoms = ("H", "H", "O", "H", "H", "O")
+    from collections import Counter
+
+    atom_counts = Counter(atoms)
     cfg = OrbitalIrrepConfig.from_dict({"H": ["2x0e"], "O": ["1x0e", "1x1o"]})
     mapper = BlockIrrepMapper(cfg)
     pair_blocks, pair_edges, lookup = {}, {}, {}
@@ -49,7 +52,15 @@ def make_mock_snapshot():
     pair_edges = {
         k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
     }
-    return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, mapper, "openmx")
+    return BlockMatrix(
+        atoms,
+        atom_counts,
+        pair_blocks,
+        pair_edges,
+        lookup,
+        mapper.orbital_cfg,
+        "openmx",
+    )
 
 
 @pytest.mark.unit

@@ -127,6 +127,8 @@ class E3GNN(pl.LightningModule):
         """
         Convert DeepHead raw dict → IrrepsBlockData with shared mapper.
         """
+        from collections import Counter
+
         pair_vec, pair_edges, lookup = {}, {}, {}
         for key, payload in raw.items():
             vec = payload["vectors"]
@@ -140,6 +142,7 @@ class E3GNN(pl.LightningModule):
 
         return IrrepsBlockData(
             atoms=atoms,
+            atom_counts=Counter(atoms),
             pair_vectors=pair_vec,
             pair_edges=pair_edges,
             lookup=lookup,

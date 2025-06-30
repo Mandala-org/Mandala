@@ -41,6 +41,7 @@ PairKey = str  # canonical "A-B"
 @dataclass
 class BlockMatrix:
     atoms: Tuple[str, ...]
+    atom_counts: Dict[str, int]
     pair_blocks: Dict[PairKey, torch.Tensor]  # (E_ab, d_A, d_B)
     pair_edges: Dict[PairKey, torch.Tensor]  # (2, E_ab)
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
@@ -50,7 +51,9 @@ class BlockMatrix:
     # --------------- convenience constructors ------------------------------ #
     @classmethod
     def empty(cls, atoms, orbital_cfg, basis="e3nn"):
-        return cls(tuple(atoms), {}, {}, {}, orbital_cfg, basis)
+        from collections import Counter
+
+        return cls(tuple(atoms), Counter(atoms), {}, {}, {}, orbital_cfg, basis)
 
     # --------------- dict-like access -------------------------------------- #
     def __getitem__(self, item):
@@ -81,10 +84,14 @@ class BlockMatrix:
         """
         diag_dict: Dict[PairKey, torch.Tensor] = {}
         for key, blk in self.pair_blocks.items():
-            edges = self.pair_edges[key]  # (2,E)
-            mask = edges[0] == edges[1]  # (E,)
-            if torch.any(mask):
-                diag_dict[key] = blk[mask]
+            el_a, el_b = key.split("-")
+            if el_a != el_b:
+                continue
+
+            n_diag = self.atom_counts[el_a]
+            if blk.shape[0] >= n_diag:
+                diag_dict[key] = blk[-n_diag:]
+
         return diag_dict
 
     def offdiag(self) -> Dict[PairKey, torch.Tensor]:
@@ -94,10 +101,13 @@ class BlockMatrix:
         """
         off_dict: Dict[PairKey, torch.Tensor] = {}
         for key, blk in self.pair_blocks.items():
-            edges = self.pair_edges[key]
-            mask = edges[0] != edges[1]
-            if torch.any(mask):
-                off_dict[key] = blk[mask]
+            el_a, el_b = key.split("-")
+            if el_a == el_b:
+                n_diag = self.atom_counts[el_a]
+                if blk.shape[0] > n_diag:
+                    off_dict[key] = blk[:-n_diag]
+            else:
+                off_dict[key] = blk
         return off_dict
 
     # --------------- device handling --------------------------------------- #
@@ -105,7 +115,13 @@ class BlockMatrix:
         new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
         new_edges = {k: v.to(device) for k, v in self.pair_edges.items()}
         return BlockMatrix(
-            self.atoms, new_blocks, new_edges, self.lookup, self.orbital_cfg, self.basis
+            self.atoms,
+            self.atom_counts,
+            new_blocks,
+            new_edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
         )
 
     # --------------- change-of-basis --------------------------------------- #
@@ -116,6 +132,7 @@ class BlockMatrix:
             pair_vec[key] = mapper.blocks_to_vectors(key, blk)
         return IrrepsBlockData(
             self.atoms,
+            self.atom_counts,
             pair_vec,
             self.pair_edges,
             self.lookup,
@@ -127,32 +144,63 @@ class BlockMatrix:
 
     def transpose(self) -> "BlockMatrix":
         """
-        Return a **new** snapshot representing the transposed matrix
-        (conjugate-transpose is identical here, blocks are real).
-
-        * Blocks are individually transposed.
-        * Pair-key orientation is flipped (``"A-B"`` → ``"B-A"``).
-        * Edge indices are swapped (i,j) → (j,i).
+        Return a **new** snapshot representing the transposed matrix.
+        Edge order is preserved from the original matrix where possible.
         """
-        new_blocks, new_edges = {}, {}
+        # 1. Perform a simple transpose, flipping keys and edges.
+        transposed_blocks = {}
+        transposed_edges = {}
         for key, blk in self.pair_blocks.items():
             el_a, el_b = key.split("-")
             new_key = f"{el_b}-{el_a}"
-            new_blocks[new_key] = blk.transpose(-1, -2).clone()
-            # swap edge orientation
-            edge = self.pair_edges[key].flip(0).clone()  # (2,E) with rows swapped
-            new_edges[new_key] = edge
+            transposed_blocks[new_key] = blk.transpose(-1, -2).clone()
+            transposed_edges[new_key] = self.pair_edges[key].flip(0).clone()
 
-        # rebuild lookup
+        final_blocks = {}
+        final_edges = {}
+
+        # 2. For each key in the transposed matrix, restore original order if the key
+        #    existed in the original matrix. Otherwise, create a canonical order.
+        for key, t_edges in transposed_edges.items():
+            if key in self.pair_edges:
+                # This key existed in the original matrix. We should match its edge order.
+                original_edges = self.pair_edges[key]
+
+                # Build a map from a transposed edge to its current index.
+                map_edge_to_idx = {
+                    tuple(t_edges[:, i].tolist()): i for i in range(t_edges.shape[1])
+                }
+
+                # Create permutation by looking up original edges in the map.
+                try:
+                    perm = torch.tensor(
+                        [
+                            map_edge_to_idx[tuple(original_edges[:, i].tolist())]
+                            for i in range(original_edges.shape[1])
+                        ]
+                    )
+                    final_edges[key] = t_edges[:, perm]
+                    final_blocks[key] = transposed_blocks[key][perm]
+                except KeyError:
+                    raise Exception(
+                        f"Key '{key}' not found in the transposed matrix; matrix not symmetric."
+                    )
+            else:
+                raise Exception(
+                    f"Key '{key}' not found in the original matrix; matrix not symmetric."
+                )
+
+        # Rebuild lookup
         new_lookup = {}
-        for new_key, edges in new_edges.items():
+        for key, edges in final_edges.items():
             for idx, (i, j) in enumerate(edges.t().tolist()):
-                new_lookup[(i, j)] = (new_key, idx)
+                new_lookup[(i, j)] = (key, idx)
 
         return BlockMatrix(
             atoms=self.atoms,
-            pair_blocks=new_blocks,
-            pair_edges=new_edges,
+            atom_counts=self.atom_counts,
+            pair_blocks=final_blocks,
+            pair_edges=final_edges,
             lookup=new_lookup,
             orbital_cfg=self.orbital_cfg,
             basis=self.basis,
@@ -181,6 +229,7 @@ class BlockMatrix:
 
         return BlockMatrix(
             atoms=self.atoms,
+            atom_counts=self.atom_counts,
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
             lookup=lookup,
@@ -188,24 +237,10 @@ class BlockMatrix:
             basis=self.basis,
         )
 
-    # ------------------------------------------------------------------ canonical sort
-    def standardize_edges(self) -> "BlockMatrix":
-        """
-        Return a snapshot where *each* pair-key’s edges are sorted by global
-        `(src, dst)` (lexicographic).  Useful for deterministic equality tests.
-        """
-        order_dict = {}
-        n_atoms = len(self.atoms)
-        for key, edges in self.pair_edges.items():
-            score = edges[0] * n_atoms + edges[1]  # monotonic mapping
-            order = torch.argsort(score)
-            order_dict[key] = order
-        return self.reorder_edges(order_dict)
-
     # ------------------------------------------------------------------ arithmetic
     # private helper ------------------------------------------------------------
     def _align_with(self, other: "BlockMatrix") -> Tuple["BlockMatrix", "BlockMatrix"]:
-        """Return *standardised* copies whose edge order is identical pair-wise."""
+        """Make sure the matrices have the same atoms, basis, orbital_cfg and edge order."""
         if not isinstance(other, BlockMatrix):
             raise TypeError("Operand must be BlockMatrix")
         if self.atoms != other.atoms:
@@ -215,15 +250,36 @@ class BlockMatrix:
         if self.orbital_cfg.to_dict() != other.orbital_cfg.to_dict():
             raise ValueError("OrbitalIrrepConfig differs")
 
-        a_std = self.standardize_edges()
-        b_std = other.standardize_edges()
-
-        if a_std.keys() != b_std.keys():
+        if self.keys() != other.keys():
             raise ValueError("Snapshots contain different element-pair keys")
-        for k in a_std.keys():
-            if a_std.pair_blocks[k].shape != b_std.pair_blocks[k].shape:
+
+        reorder_dict = {}
+        for k in self.keys():
+            if not torch.equal(self.pair_edges[k], other.pair_edges[k]):
+                # If edge order differs, reorder self to match other.
+                map_edge_to_idx = {
+                    tuple(self.pair_edges[k][:, i].tolist()): i
+                    for i in range(self.pair_edges[k].shape[1])
+                }
+                try:
+                    perm = torch.tensor(
+                        [
+                            map_edge_to_idx[tuple(other.pair_edges[k][:, i].tolist())]
+                            for i in range(other.pair_edges[k].shape[1])
+                        ]
+                    )
+                    reorder_dict[k] = perm
+                except KeyError:
+                    raise ValueError(f"Edge sets for key '{k}' differ between matrices")
+
+            if self.pair_blocks[k].shape != other.pair_blocks[k].shape:
                 raise ValueError(f"Shape mismatch for key '{k}'")
-        return a_std, b_std
+
+        if reorder_dict:
+            reordered_self = self.reorder_edges(reorder_dict)
+            return reordered_self, other
+        else:
+            return self, other
 
     # -------------- public dunder ops -----------------------------------------
     def __add__(self, other):
@@ -291,6 +347,7 @@ class BlockMatrix:
         edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
         return {
             "atoms": list(self.atoms),
+            "atom_counts": self.atom_counts,
             "orbital_cfg": self.orbital_cfg.to_dict(),
             "pair_blocks": blocks_cpu,
             "pair_edges": edges_cpu,
@@ -324,8 +381,14 @@ class BlockMatrix:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
+        atoms = tuple(payload["atoms"])
+        from collections import Counter
+
+        atom_counts = payload.get("atom_counts", Counter(atoms))
+
         return cls(
-            tuple(payload["atoms"]),
+            atoms,
+            atom_counts,
             pair_blocks,
             pair_edges,
             lookup,
@@ -340,6 +403,7 @@ class BlockMatrix:
         """Return a shallow copy with *pair_blocks* replaced."""
         return BlockMatrix(
             atoms=self.atoms,
+            atom_counts=self.atom_counts,
             pair_blocks=new_blocks,
             pair_edges=self.pair_edges,
             lookup=self.lookup,
@@ -385,6 +449,7 @@ class BlockMatrix:
 
         return BlockMatrix(
             atoms=self.atoms,
+            atom_counts=self.atom_counts,
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
             lookup=lookup,
@@ -420,6 +485,9 @@ class BlockMatrix:
         Primarily for tests / debugging.
         """
         atoms = tuple(atoms)
+        from collections import Counter
+
+        atom_counts = Counter(atoms)
 
         offsets = [0]
         for el in atoms[:-1]:
@@ -448,7 +516,9 @@ class BlockMatrix:
             k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
 
-        snapshot = cls(atoms, pair_blocks, pair_edges, lookup, orbital_cfg, basis)
+        snapshot = cls(
+            atoms, atom_counts, pair_blocks, pair_edges, lookup, orbital_cfg, basis
+        )
         if sparsity_threshold is not None:
             snapshot = snapshot.sparsify(sparsity_threshold)
         return snapshot
@@ -506,6 +576,7 @@ class BlockMatrix:
         # assemble the sparsified snapshot
         return BlockMatrix(
             atoms=self.atoms,
+            atom_counts=self.atom_counts,
             pair_blocks=new_blocks,
             pair_edges=new_edges,
             lookup=new_lookup,
@@ -535,8 +606,14 @@ class BlockMatrix:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
+        atoms = tuple(payload["atoms"])
+        from collections import Counter
+
+        atom_counts = payload.get("atom_counts", Counter(atoms))
+
         return cls(
-            atoms=tuple(payload["atoms"]),
+            atoms=atoms,
+            atom_counts=atom_counts,
             pair_blocks=pair_blocks,
             pair_edges=pair_edges,
             lookup=lookup,
@@ -546,7 +623,7 @@ class BlockMatrix:
 
     # ════════════════════════════════════════════════════════════════════════════
     #                                ROTATION
-    # ════════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════���════════════════════════════════════════════════════
     def rotate(self, R: torch.Tensor) -> "BlockMatrix":
         """
         Return a **new** :class:`BlockMatrix` whose *orbital reference frame*
@@ -592,6 +669,7 @@ class BlockMatrix:
 @dataclass
 class IrrepsBlockData:
     atoms: Tuple[str, ...]
+    atom_counts: Dict[str, int]
     pair_vectors: Dict[PairKey, torch.Tensor]  # (E_ab, n_vec_AB)
     pair_edges: Dict[PairKey, torch.Tensor]
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
@@ -603,7 +681,13 @@ class IrrepsBlockData:
         vecs = {k: v.to(device) for k, v in self.pair_vectors.items()}
         edges = {k: v.to(device) for k, v in self.pair_edges.items()}
         return IrrepsBlockData(
-            self.atoms, vecs, edges, self.lookup, self.orbital_cfg, self.basis
+            self.atoms,
+            self.atom_counts,
+            vecs,
+            edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
         )
 
     # -------- inverse change-of-basis ----- #
@@ -613,6 +697,7 @@ class IrrepsBlockData:
             pair_blk[key] = mapper.vectors_to_blocks(key, vec)
         return BlockMatrix(
             self.atoms,
+            self.atom_counts,
             pair_blk,
             self.pair_edges,
             self.lookup,
@@ -626,19 +711,25 @@ class IrrepsBlockData:
     def diag(self) -> Dict[PairKey, torch.Tensor]:
         diag_dict: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
-            edges = self.pair_edges[key]
-            mask = edges[0] == edges[1]
-            if torch.any(mask):
-                diag_dict[key] = vec[mask]
+            el_a, el_b = key.split("-")
+            if el_a != el_b:
+                continue
+
+            n_diag = self.atom_counts[el_a]
+            if vec.shape[0] >= n_diag:
+                diag_dict[key] = vec[-n_diag:]
         return diag_dict
 
     def offdiag(self) -> Dict[PairKey, torch.Tensor]:
         off_dict: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
-            edges = self.pair_edges[key]
-            mask = edges[0] != edges[1]
-            if torch.any(mask):
-                off_dict[key] = vec[mask]
+            el_a, el_b = key.split("-")
+            if el_a == el_b:
+                n_diag = self.atom_counts[el_a]
+                if vec.shape[0] > n_diag:
+                    off_dict[key] = vec[:-n_diag]
+            else:
+                off_dict[key] = vec
         return off_dict
 
     # -------- indexing paralleling BlockMatrix -------- #
@@ -659,6 +750,7 @@ class IrrepsBlockData:
         edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
         return {
             "atoms": list(self.atoms),
+            "atom_counts": self.atom_counts,
             "orbital_cfg": self.orbital_cfg.to_dict(),
             "pair_vectors": vec_cpu,
             "pair_edges": edges_cpu,
@@ -691,8 +783,14 @@ class IrrepsBlockData:
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
+        atoms = tuple(payload["atoms"])
+        from collections import Counter
+
+        atom_counts = payload.get("atom_counts", Counter(atoms))
+
         return cls(
-            tuple(payload["atoms"]),
+            atoms,
+            atom_counts,
             pair_vec,
             pair_edges,
             lookup,
