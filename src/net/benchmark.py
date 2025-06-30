@@ -56,11 +56,18 @@ class BenchmarkCallback(pl.Callback):
         for k, arr in arrs.items():
             summary[k] = {
                 "mean": float(arr.mean()),
-                "median": float(np.median(arr)),
                 "std": float(arr.std()),
                 "min": float(arr.min()),
+                "median": float(np.median(arr)),
                 "max": float(arr.max()),
             }
+            # summary[k] = {}
+            # summary[k]["mean"] = float(arr.mean())
+            # summary[k]["std"] = float(arr.std())
+            # summary[k]["min"] = float(arr.min())
+            # summary[k]["median"] = float(np.median(arr))
+            # summary[k]["max"] = float(arr.max())
+
         return summary
 
     def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
@@ -298,9 +305,9 @@ class BenchmarkCallback(pl.Callback):
             for k, arr in arrs.items():
                 summary[k] = {
                     "mean": float(arr.mean()),
-                    "median": float(np.median(arr)),
                     "std": float(arr.std()),
                     "min": float(arr.min()),
+                    "median": float(np.median(arr)),
                     "max": float(arr.max()),
                 }
             return summary
@@ -340,16 +347,23 @@ class BenchmarkCallback(pl.Callback):
                     return {}
                 return {
                     "mean": float(allv.mean()),
-                    "median": float(np.median(allv)),
                     "std": float(allv.std()),
                     "min": float(allv.min()),
+                    "median": float(np.median(allv)),
                     "max": float(allv.max()),
                 }
 
-            for tag, arrs in self.train_activation_mags.items():
-                act_summary["train"][tag] = _summ(arrs)
-            for tag, arrs in self.val_activation_mags.items():
-                act_summary["val"][tag] = _summ(arrs)
+            for split, mags_dict in [
+                ("train", self.train_activation_mags),
+                ("val", self.val_activation_mags),
+            ]:
+                for tag, arrs in mags_dict.items():
+                    parts = tag.split("_")
+                    layer_name = "_".join(parts[1:-1])
+                    irrep_str = parts[-1]
+                    if layer_name not in act_summary[split]:
+                        act_summary[split][layer_name] = {}
+                    act_summary[split][layer_name][irrep_str] = _summ(arrs)
             report["activation_magnitudes"] = act_summary
         # operator profiling (v>=3)
         if self.verbosity >= 3 and self.profiler is not None:
@@ -381,7 +395,7 @@ class BenchmarkCallback(pl.Callback):
             f"{report['run_name']}_{self.environment.get('timestamp')}_bench.yaml",
         )
         with open(fname, "w") as f:
-            yaml.safe_dump(report, f)
+            yaml.safe_dump(report, f, sort_keys=False)
         # log key metrics to logger (e.g. WandB)
         try:
             lm = getattr(trainer.logger, "log_metrics", None)

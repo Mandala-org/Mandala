@@ -26,7 +26,6 @@ import torch
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
-from data.snapshot import Snapshot
 from data.openmx_info_parser import parse_info_out, InfoOutData
 
 Purpose = Literal["train", "val"]
@@ -89,15 +88,6 @@ class DatasetFactory:
     def _load_info(self, path: Path) -> InfoOutData:
         return parse_info_out(path)
 
-    def _load_snapshot(self, matrix_p: Path, info_p: Path) -> Snapshot:
-        return Snapshot.from_openmx(
-            matrix_path=matrix_p,
-            info_path=info_p,
-            convention="e3nn",
-            symmetrize_density=True,
-            cutoff_radius=self.cutoff_matrix,
-        )
-
     # ------------------------------------------------------------------ create
     def create(
         self,
@@ -125,16 +115,6 @@ class DatasetFactory:
         # ②  Global mapper ---------------------------------------------
         mapper = BlockIrrepMapper(orb_cfg, diagonal=False, device=self.device)
 
-        # ③  Load snapshots (they stay on CPU for now) ------------------
-        def _collect(pairs: Sequence[Tuple[Path, Path]]) -> List[Snapshot]:
-            snaps: List[Snapshot] = []
-            for mat_p, info_p in pairs:
-                snaps.append(self._load_snapshot(mat_p, info_p))
-            return snaps
-
-        snaps_train = _collect(self._pairs["train"])
-        snaps_val = _collect(self._pairs["val"]) if self._pairs["val"] else []
-
         # ④  Build datasets --------------------------------------------
         ds_kwargs = dict(
             mapper=mapper,
@@ -146,16 +126,18 @@ class DatasetFactory:
         )
         # pass cache_root through to dataset
         ds_kwargs["cache_root"] = self.cache_root
-        train_ds = E3GNNDataset(snaps_train, **ds_kwargs)
+        train_ds = E3GNNDataset(self._pairs["train"], **ds_kwargs)
         val_ds = (
-            E3GNNDataset(snaps_val, **ds_kwargs) if snaps_val else None  # type: ignore[arg-type]
+            E3GNNDataset(self._pairs["val"], **ds_kwargs)
+            if self._pairs["val"]
+            else None
         )
 
         return train_ds, val_ds, mapper
 
 
 # ════════════════════════════════════════════════════════════════════════
-# Convenience *function* mirroring the old train.py helper
+# Convenience *function* building the train/val datasets
 # ════════════════════════════════════════════════════════════════════════
 def build_datasets(
     train_pairs: Sequence[Tuple[str | os.PathLike, str | os.PathLike]],
