@@ -1,4 +1,4 @@
-## Debug CPU preset: small data subset for quick testing on CPU
+# Debug CPU preset: small data subset for quick testing on CPU
 data:
   snapshots:
     - matrix: data/small/H2O/original/H2O.matrix
@@ -7,31 +7,37 @@ data:
     - matrix: data/small/H2O/rotated/H2O.matrix
       info:   data/small/H2O/rotated/H2O.info.out
       purpose: val
-  cutoff_gnn:     4.0
-  cutoff_matrix:  6.0
-  n_radial:       64
-  num_workers:    0
+  cutoff_gnn: 4.0
+  cutoff_matrix: 6.0
+  n_radial: 64
+  num_workers: 0
+
 training:
-  lr:           3e-4
-  max_epochs:   3
-  precision:    32
-  gpus:         cpu
-  tune:         None
-  seed:         42
+  lr: 3e-4
+  max_epochs: 3
+  precision: 32
+  gpus: cpu
+  tune: null
+  seed: 42
   log_every_n_steps: 1
-  smoke_test:   false
+  smoke_test: false
+
 model:
-  hidden_base_dim:   32
-  l_max:             2
-  num_layers_gnn:    2
+  hidden_base_dim: 32
+  l_max: 2
+  num_layers_gnn: 2
   num_layers_matrix: 1
-  dropout:           0.0
-  energy_loss_coef:   0.0001
+  dropout: 0.0
+  l1_reg_coef: 0.0
+  l2_reg_coef: 0.0
+  grad_clip_val: 0.0
+  energy_loss_coef: 0.0001
   electron_loss_coef: 0.0001
+
 logging:
-  run_name:            "debug-cpu-small"
-  verbosity:           2
-  bench_verbosity:     2
+  run_name: "debug-cpu-small"
+  verbosity: 2
+  bench_verbosity: 1
   log_activation_mag: true
-  wandb_project:   null
-  pedantic:          false
+  wandb_project: null
+  pedantic: false

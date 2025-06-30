@@ -183,6 +183,7 @@ def main(cfg: DictConfig) -> None:
             callbacks=callbacks,
             deterministic=True,
             log_every_n_steps=cfg.training.log_every_n_steps,
+            gradient_clip_val=hp.grad_clip_val,
         )
 
     # ------------------------------------------------------------------

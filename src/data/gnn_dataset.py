@@ -48,7 +48,7 @@ class E3GNNDataset(Dataset):
     # --------------------------------------------------------------------- init
     def __init__(
         self,
-        snapshots: Sequence[Snapshot],
+        snapshot_paths: Sequence[Tuple[Path, Path]],
         mapper: BlockIrrepMapper,
         *,
         cutoff_gnn: float = 5.0,
@@ -61,8 +61,8 @@ class E3GNNDataset(Dataset):
         if cutoff_gnn >= cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
 
-        if not snapshots:
-            raise ValueError("At least one Snapshot must be provided")
+        if not snapshot_paths:
+            raise ValueError("At least one snapshot path must be provided")
 
         self.device = torch.device(device)
 
@@ -90,16 +90,15 @@ class E3GNNDataset(Dataset):
             self.cache_root = Path(cache_root).expanduser()
         # preprocess all snapshots
         self.samples: List[Tuple[Dict, Dict, Dict]] = []
-        for snap in tqdm(snapshots, desc="Loading snapshots"):
-            if not isinstance(snap, Snapshot):
-                raise TypeError("E3GNNDataset expects only Snapshot instances")
-            sample = self._load_or_process_snapshot(snap)
+        for matrix_path, info_path in tqdm(snapshot_paths, desc="Loading snapshots"):
+            sample = self._load_or_process_snapshot(matrix_path, info_path)
             self.samples.append(sample)
 
     # ---------------------------------------------------------------- snapshot caching & helpers
     def _load_or_process_snapshot(
         self,
-        snapshot: Snapshot,
+        matrix_path: Path,
+        info_path: Path,
     ) -> Tuple[Dict, Dict, Dict]:
         """
         Load processed snapshot from cache if available, otherwise process and cache it.
@@ -107,9 +106,8 @@ class E3GNNDataset(Dataset):
         # build cache key from snapshot payload and model settings
         if self.cache_root is not None:
             key_obj = (
-                snapshot.matrix_path,
-                snapshot.info_path,
-                snapshot.cutoff_radius,
+                matrix_path.resolve(),
+                info_path.resolve(),
                 self.n_radial,
                 self.cut_gnn,
                 self.cut_mat,
@@ -123,7 +121,15 @@ class E3GNNDataset(Dataset):
                     return torch.load(cache_file)
                 except Exception:
                     pass
+
         # process snapshot
+        snapshot = Snapshot.from_openmx(
+            matrix_path=matrix_path,
+            info_path=info_path,
+            convention="e3nn",
+            symmetrize_density=True,
+            cutoff_radius=self.cut_mat,
+        )
         sample = self._process_snapshot(snapshot)
         # save to cache if enabled
         if self.cache_root is not None:

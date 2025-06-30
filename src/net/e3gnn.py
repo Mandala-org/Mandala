@@ -16,6 +16,8 @@ import pytorch_lightning as pl
 from torch import nn
 from omegaconf import DictConfig
 
+from collections import OrderedDict
+
 from e3nn.o3 import Irreps
 import time
 
@@ -154,12 +156,12 @@ class E3GNN(pl.LightningModule):
         self,
         features: torch.Tensor,
         irreps: Irreps,
-    ) -> dict[int, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         Split features by irrep and compute magnitude per irreducible component.
         Returns a mapping from angular momentum l to a 1D tensor of magnitudes.
         """
-        mags: dict[int, torch.Tensor] = {}
+        mags: dict[str, torch.Tensor] = OrderedDict()
         # features: (M, D)
         start = 0
         for mul, ir in irreps:
@@ -172,7 +174,7 @@ class E3GNN(pl.LightningModule):
                 reshaped = chunk.reshape(-1, dim)
                 # magnitude across dim
                 mag = torch.linalg.norm(reshaped, dim=1)
-                mags[ir.l] = mag
+                mags[f"{mul}x{ir.l}{'e' if ir.p == 1 else 'o'}"] = mag
             start += size
         return mags
 
@@ -186,8 +188,8 @@ class E3GNN(pl.LightningModule):
         Compute activation magnitudes and store in self._activation_mags.
         """
         splits = self._magnitude_splits(features, irreps)
-        for l, mag in splits.items():
-            tag = f"mag_{prefix}_l_{l}"
+        for ir_str, mag in splits.items():
+            tag = f"mag_{prefix}_{ir_str}"
             self._activation_mags[tag] = mag
 
     # ------------------------------------------------------------------ forward
@@ -197,7 +199,7 @@ class E3GNN(pl.LightningModule):
         x_matrix: Dict[str, Any],
     ):
         # initialize activation magnitudes storage
-        self._activation_mags: dict[str, torch.Tensor] = {}
+        self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x_gnn["node_one_hot"])
         # record node encoding magnitudes per irrep
@@ -337,6 +339,14 @@ class E3GNN(pl.LightningModule):
             + self.hp.energy_loss_coef * loss_E
             + self.hp.electron_loss_coef * loss_N
         )
+        # L1 and L2 regularization
+        if self.hp.l1_reg_coef > 0:
+            l1_reg = sum(p.abs().sum() for p in self.parameters())
+            loss += self.hp.l1_reg_coef * l1_reg
+        if self.hp.l2_reg_coef > 0:
+            l2_reg = sum(p.pow(2).sum() for p in self.parameters())
+            loss += self.hp.l2_reg_coef * l2_reg
+
         # log all metrics
         metrics = {
             f"{stage}_loss": loss,
@@ -346,6 +356,10 @@ class E3GNN(pl.LightningModule):
             f"{stage}_abs_error_E": abs_err_E,
             f"{stage}_abs_error_N": abs_err_N,
         }
+        if self.hp.l1_reg_coef > 0:
+            metrics[f"{stage}_l1_reg"] = l1_reg
+        if self.hp.l2_reg_coef > 0:
+            metrics[f"{stage}_l2_reg"] = l2_reg
         self.log_dict(metrics, prog_bar=True, on_step=True, on_epoch=True)
         # record per-batch timings for callback
         self._last_batch_times = {

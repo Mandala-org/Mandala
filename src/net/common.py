@@ -50,6 +50,9 @@ class HyperParams:
 
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
+    l1_reg_coef: float = 0.0
+    l2_reg_coef: float = 0.0
+    grad_clip_val: float = 0.0
     residual_connections: bool = True
 
     # -------------- radial basis ----------------------------------------
