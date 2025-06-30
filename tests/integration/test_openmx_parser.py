@@ -19,8 +19,8 @@ def test_parse_returns_snapshot(h2o_orbital_cfg):
     ham = snap.hamiltonian
     den = snap.density
     assert ham["H-O"].shape[-2:] == (9, 22)
-    den_OH = den.standardize_edges()["O-H"]
-    den_T = den.transpose().standardize_edges()
+    den_OH = den["O-H"]
+    den_T = den.transpose()
     den_OH_T = den_T["O-H"]
     assert torch.allclose(
         den_OH, den_OH_T, atol=1e-5
@@ -83,8 +83,8 @@ def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
     assert density["H-O"].shape == (8, 9, 22)
     assert density["O-H"].shape == (8, 22, 9)
     # assert O-H is the same as H-O.T
-    density = density.standardize_edges()
-    density_T = density.transpose().standardize_edges()
+    density = density
+    density_T = density.transpose()
     assert torch.allclose(
         density["O-H"], density_T["O-H"], atol=1e-5
     ), "D[O-H] should be the same as D[H-O].T"
@@ -95,8 +95,8 @@ def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
     assert hamiltonian["H-O"].shape == (8, 9, 22)
     assert hamiltonian["O-H"].shape == (8, 22, 9)
     # assert O-H is the same as H-O.T
-    hamiltonian = hamiltonian.standardize_edges()
-    hamiltonian_T = hamiltonian.transpose().standardize_edges()
+    hamiltonian = hamiltonian
+    hamiltonian_T = hamiltonian.transpose()
     assert torch.allclose(
         hamiltonian["O-H"], hamiltonian_T["O-H"], atol=1e-5
     ), "Ham[O-H] should be the same as Ham[H-O].T"
@@ -107,8 +107,8 @@ def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
     assert overlap["H-O"].shape == (8, 9, 22)
     assert overlap["O-H"].shape == (8, 22, 9)
     # assert O-H is the same as H-O.T
-    overlap = overlap.standardize_edges()
-    overlap_T = overlap.transpose().standardize_edges()
+    overlap = overlap
+    overlap_T = overlap.transpose()
     assert torch.allclose(
         overlap["O-H"], overlap_T["O-H"], atol=1e-5
     ), "Overlap[O-H] should be the same as Overlap[H-O].T"

@@ -15,8 +15,11 @@ def _make_small_matrix() -> BlockMatrix:
     Construct a **tiny** 2-atom block matrix (one block per orientation)
     directly in *e3nn* basis for fast tests.
     """
+    from collections import Counter
+
     cfg = OrbitalIrrepConfig.from_dict({"H": ["1x0e"], "O": ["1x0e"]})
     atoms = ("H", "O")
+    atom_counts = Counter(atoms)
 
     # single 1×1 scalar blocks → easy numerics
     pair_blocks = {
@@ -38,7 +41,9 @@ def _make_small_matrix() -> BlockMatrix:
         (1, 1): ("O-O", 0),
     }
 
-    return BlockMatrix(atoms, pair_blocks, pair_edges, lookup, cfg, basis="e3nn")
+    return BlockMatrix(
+        atoms, atom_counts, pair_blocks, pair_edges, lookup, cfg, basis="e3nn"
+    )
 
 
 def _rot_y(theta):
