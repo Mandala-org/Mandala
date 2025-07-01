@@ -66,10 +66,6 @@ def test_edge_sets(dataset):
     assert diag_cnt > 0
     assert diag_cnt == sum(t.shape[0] for t in x_mat["overlap_vectors_diag"].values())
 
-    # ----  one-hot sanity (exactly one ‘1’ per row)
-    oh = x_gnn["edge_one_hot"]
-    assert torch.allclose(oh.sum(dim=1), torch.ones_like(oh[:, 0]))
-
     # ----  SH & radial embed sizes
     assert x_gnn["edge_sh"].shape[1] == dataset.sh_irreps.dim
     assert x_gnn["edge_length_emb"].shape[1] == dataset.n_radial

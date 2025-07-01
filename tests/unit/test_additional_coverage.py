@@ -17,7 +17,7 @@ def test_node_encoder_shape_and_dtype():
     hp = HyperParams()
     out_ir = Irreps("4x0e")
     enc = NodeEncoder(node_one_hot_dim=3, out_irreps=out_ir, hp=hp, device="cpu")
-    x = torch.tensor([[1, 0, 0], [0, 1, 0]], dtype=torch.float32)
+    x = torch.tensor([0, 1], dtype=torch.long)
     h = enc(x)
     assert h.shape == (2, out_ir.dim)
     assert h.dtype == torch.float32
@@ -32,13 +32,11 @@ def test_edge_encoder_forward(offdim):
     out_ir = Irreps("5x0e")
     enc = EdgeEncoder(n_types, n_radial, sh_ir, offdim, out_ir, hp, device="cpu")
     E = 4
-    # one_hot should be one-hot encoded (E, n_types)
-    one_hot = torch.zeros(E, n_types, dtype=torch.long)
-    one_hot[:2, 1] = 1
+    edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.long)
     length_emb = torch.rand(E, n_radial)
     sh = torch.rand(E, sh_ir.dim)
     overlap_off = torch.rand(E, offdim) if offdim else None
-    h = enc(one_hot, length_emb, sh, overlap_off)
+    h = enc(edge_type_idx, length_emb, sh, overlap_off)
     assert h.shape == (E, out_ir.dim)
 
 

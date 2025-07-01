@@ -26,15 +26,15 @@ def test_forward_smoke():
 
     # ------- fake batch ----------------------------
     N, E = 4, 3
-    node_one_hot = torch.eye(1)[torch.zeros(N, dtype=torch.long)]  # all H
-    edge_one_hot = torch.eye(1)[torch.zeros(E, dtype=torch.long)]  # H-H
+    node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
+    edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
     edge_len = torch.randn(E, hp.n_radial)
     sh = Irreps.spherical_harmonics(hp.l_max)
     edge_sh = torch.randn(E, sh.dim)  # random SH features
 
     x_gnn = {
-        "node_one_hot": node_one_hot,
-        "edge_one_hot": edge_one_hot,
+        "node_type_idx": node_type_idx,
+        "edge_type_idx": edge_type_idx,
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": torch.tensor([[0, 1, 2], [1, 2, 3]]),

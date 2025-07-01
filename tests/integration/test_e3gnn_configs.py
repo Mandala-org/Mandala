@@ -24,8 +24,8 @@ from net.e3gnn import E3GNN
 # ──────────────────────────────────────────────────────────────────────
 def make_dummy_graph(hp):
     N, E = 4, 3
-    node_one_hot = torch.eye(1)[torch.zeros(N, dtype=torch.long)]  # all H
-    edge_one_hot = torch.eye(1)[torch.zeros(E, dtype=torch.long)]  # H-H
+    node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
+    edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
 
     edge_len = torch.randn(E, hp.n_radial)
     sh_irreps = Irreps.spherical_harmonics(hp.l_max)
@@ -34,8 +34,8 @@ def make_dummy_graph(hp):
     edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long)
 
     x = {
-        "node_one_hot": node_one_hot,
-        "edge_one_hot": edge_one_hot,
+        "node_type_idx": node_type_idx,
+        "edge_type_idx": edge_type_idx,
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": edge_index,

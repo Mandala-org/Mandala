@@ -194,9 +194,6 @@ class E3GNNDataset(Dataset):
             [edge_src, edge_dst], dtype=torch.long, device=self.device
         )
         etype_idx = torch.tensor(etype_idx, dtype=torch.long, device=self.device)
-        edge_one_hot = torch.nn.functional.one_hot(
-            etype_idx, num_classes=self.n_edge_types
-        ).to(torch.float32)
 
         # geometric encodings -------------------------------------------------
         # minimal-image displacement: compute box and its inverse once
@@ -227,7 +224,7 @@ class E3GNNDataset(Dataset):
             self.sh_irreps, disp, normalize=True, normalization="component"
         ).to(torch.float32)
 
-        return edge_index, edge_one_hot, edge_length_emb, edge_sh, keep_mask_dict
+        return edge_index, etype_idx, edge_length_emb, edge_sh, keep_mask_dict
 
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot(
@@ -246,21 +243,20 @@ class E3GNNDataset(Dataset):
         dist_dict = snap._edge_distances(snap.density)
 
         # ---------- build matrices for *both* cutoffs ------------------------
-        (ei_gnn, eo_gnn, el_gnn, es_gnn, keep_gnn) = self._edge_tensors(
+        (ei_gnn, et_gnn, el_gnn, es_gnn, keep_gnn) = self._edge_tensors(
             snap, dist_dict, self.cut_gnn
         )
 
-        (ei_mat, eo_mat, el_mat, es_mat, keep_mat) = self._edge_tensors(
+        (ei_mat, et_mat, el_mat, es_mat, keep_mat) = self._edge_tensors(
             snap, dist_dict, self.cut_mat
         )
 
-        # ---------- node one-hot --------------------------------------------
+        # ---------- node type index --------------------------------------------
         atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.global_cfg.elements())}
-        N = len(atoms)
-        node_oh = torch.zeros(N, len(elem2idx), device=self.device)
-        for i, el in enumerate(atoms):
-            node_oh[i, elem2idx[el]] = 1.0
+        node_type_idx = torch.tensor(
+            [elem2idx[el] for el in atoms], dtype=torch.long, device=self.device
+        )
 
         # ---------- overlap vectors split diag / offdiag --------------------
         overlap_ir = snap.overlap.to_vectors(self.mapper)  # IrrepsBlockData
@@ -280,9 +276,9 @@ class E3GNNDataset(Dataset):
 
         # ========== assemble x_gnn / x_matrix ===============================
         x_gnn = {
-            "node_one_hot": node_oh,
+            "node_type_idx": node_type_idx,
             "edge_index": ei_gnn,
-            "edge_one_hot": eo_gnn,
+            "edge_type_idx": et_gnn,
             "edge_length_emb": el_gnn,
             "edge_sh": es_gnn,
             "overlap_vectors_diag": overlap_diag,
@@ -292,7 +288,7 @@ class E3GNNDataset(Dataset):
         }
         x_matrix = {
             "edge_index": ei_mat,
-            "edge_one_hot": eo_mat,
+            "edge_type_idx": et_mat,
             "edge_length_emb": el_mat,
             "edge_sh": es_mat,
             "overlap_vectors_diag": overlap_diag,  # same dict
@@ -339,9 +335,9 @@ class E3GNNDataset(Dataset):
         # Explicitly move known fields
         for idx, (x_gnn, x_matrix, y) in enumerate(self.samples):
             # x_gnn
-            x_gnn["node_one_hot"] = x_gnn["node_one_hot"].to(device)
+            x_gnn["node_type_idx"] = x_gnn["node_type_idx"].to(device)
             x_gnn["edge_index"] = x_gnn["edge_index"].to(device)
-            x_gnn["edge_one_hot"] = x_gnn["edge_one_hot"].to(device)
+            x_gnn["edge_type_idx"] = x_gnn["edge_type_idx"].to(device)
             x_gnn["edge_length_emb"] = x_gnn["edge_length_emb"].to(device)
             x_gnn["edge_sh"] = x_gnn["edge_sh"].to(device)
             for k, v in x_gnn.get("overlap_vectors_diag", {}).items():
@@ -352,7 +348,7 @@ class E3GNNDataset(Dataset):
 
             # x_matrix
             x_matrix["edge_index"] = x_matrix["edge_index"].to(device)
-            x_matrix["edge_one_hot"] = x_matrix["edge_one_hot"].to(device)
+            x_matrix["edge_type_idx"] = x_matrix["edge_type_idx"].to(device)
             x_matrix["edge_length_emb"] = x_matrix["edge_length_emb"].to(device)
             x_matrix["edge_sh"] = x_matrix["edge_sh"].to(device)
             for k, v in x_matrix.get("overlap_vectors_diag", {}).items():

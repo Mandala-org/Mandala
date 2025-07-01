@@ -17,8 +17,8 @@ def test_node_encoder_shape_no_diag():
         hp=hp,
     )
 
-    one_hot = torch.eye(4)
-    out = enc(one_hot)
+    node_type_idx = torch.arange(4, dtype=torch.long)
+    out = enc(node_type_idx)
     assert out.shape == (4, hid.dim)
 
 
@@ -38,10 +38,10 @@ def test_edge_encoder_with_offdiag():
     )
 
     E = 7
-    one_hot = torch.nn.functional.one_hot(torch.randint(0, 3, (E,)), 3).float()
+    edge_type_idx = torch.randint(0, 3, (E,))
     length_emb = torch.randn(E, hp.n_radial)
     sh = torch.randn(E, sh_irreps.dim)
     off = torch.randn(E, 10)
 
-    out = enc(one_hot, length_emb, sh, off)
+    out = enc(edge_type_idx, length_emb, sh, off)
     assert out.shape == (E, hid.dim)
