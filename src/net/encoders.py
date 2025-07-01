@@ -68,9 +68,9 @@ class NodeEncoder(nn.Module):
     # ------------------------------------------------------------------
     def forward(
         self,
-        one_hot: torch.Tensor,  # (N, n_elem)
+        node_type_idx: torch.Tensor,  # (N,)
     ) -> torch.Tensor:
-        emb = self.elem_emb(one_hot.argmax(dim=-1))
+        emb = self.elem_emb(node_type_idx)
         h = self.lin(emb)
         h = self.nl(h)
         h = self.dropout(h)
@@ -83,7 +83,7 @@ class EdgeEncoder(nn.Module):
     Encode per-edge raw features into hidden irreps.
 
     Inputs:
-      - one_hot: LongTensor[E] of edge-type one-hot indices (n_edge_types).
+      - edge_type_idx: LongTensor[E] of edge-type indices (n_edge_types).
       - length_emb: Tensor[E, n_radial] radial distance embeddings.
       - sh: Tensor[E, sh_irreps.dim] spherical harmonics coefficients.
       - overlap_off: Tensor[E, offdiag_irrep_dim] (or None).
@@ -165,7 +165,7 @@ class EdgeEncoder(nn.Module):
     # ------------------------------------------------------------------
     def forward(
         self,
-        one_hot: torch.Tensor,
+        edge_type_idx: torch.Tensor,
         length_emb: torch.Tensor,
         sh: torch.Tensor,
         overlap_off: Optional[torch.Tensor] = None,
@@ -176,14 +176,14 @@ class EdgeEncoder(nn.Module):
         Return hidden edge features: Tensor[E, out_irreps.dim].
         """
         if select_indices is not None:
-            one_hot = one_hot[select_indices]
+            edge_type_idx = edge_type_idx[select_indices]
             length_emb = length_emb[select_indices]
             sh = sh[select_indices]
             if overlap_off is not None:
                 overlap_off = overlap_off[select_indices]
 
         scalars = [
-            self.edge_emb(one_hot.argmax(dim=-1)),
+            self.edge_emb(edge_type_idx),
             self.radial_net(length_emb),
         ]
         if self.proj_off is not None and overlap_off is not None:
