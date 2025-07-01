@@ -201,11 +201,11 @@ class E3GNN(pl.LightningModule):
         # initialize activation magnitudes storage
         self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
         # ---- encode ----------------------------------------------------
-        node = self.node_enc(x_gnn["node_one_hot"])
+        node = self.node_enc(x_gnn["node_type_idx"])
         # record node encoding magnitudes per irrep
         self._record_activation_mags("node_encoding", node, self.hidden_irreps)
         edge = self.edge_enc(
-            x_gnn["edge_one_hot"],
+            x_gnn["edge_type_idx"],
             x_gnn["edge_length_emb"],
             x_gnn["edge_sh"],
             overlap_off=None,
@@ -256,8 +256,8 @@ class E3GNN(pl.LightningModule):
         diag_edge_index = torch.stack([diag_idx, diag_idx], dim=0)
         full_edge_index = torch.cat([diag_edge_index, x_matrix["edge_index"]], dim=1)
         # compute edge type indices: off-diags from x_matrix, diag from node elements
-        edge_type_idx = x_matrix["edge_one_hot"].argmax(dim=-1)
-        node_elem_idx = x_gnn["node_one_hot"].argmax(dim=-1)
+        edge_type_idx = x_matrix["edge_type_idx"]
+        node_elem_idx = x_gnn["node_type_idx"]
         # lookup pair_keys (shared across heads)
         pair_keys = next(iter(self.heads.values())).pair_keys
         # build mapping from element → diag pair index
@@ -405,7 +405,7 @@ class E3GNN(pl.LightningModule):
         if missing_idx:
             k_idx = torch.tensor(missing_idx, device=device, dtype=torch.long)
             enc = self.edge_enc(
-                x_large["edge_one_hot"][k_idx],
+                x_large["edge_type_idx"][k_idx],
                 x_large["edge_length_emb"][k_idx],
                 x_large["edge_sh"][k_idx],
                 overlap_off=None,

@@ -1,4 +1,5 @@
 import pytest
+import torch
 
 # ────────────────────────────────────────────────────────────────────────────
 # tests/test_dataset_factory.py
@@ -90,15 +91,14 @@ def test_sample_coherence(factory_results):
     known = set(mapper.orbital_cfg.elements())
 
     for x_gnn, x_mat, y in train_ds:
-        # node_one_hot sanity: argmax maps to known element
-        argmax_idx = x_gnn["node_one_hot"].argmax(dim=-1)
+        # node_type_idx sanity: indices map to known elements
         elem_list = mapper.orbital_cfg.elements()
-        for idx in argmax_idx.tolist():
+        for idx in x_gnn["node_type_idx"].tolist():
             assert elem_list[idx] in known
 
-        # edge_one_hot sanity: indices must match edge_types list length
-        assert x_gnn["edge_one_hot"].shape[1] == len(train_ds.edge_types)
-        assert x_mat["edge_one_hot"].shape[1] == len(train_ds.edge_types)
+        # edge_type_idx sanity: indices must be within range
+        assert torch.all(x_gnn["edge_type_idx"] < len(train_ds.edge_types))
+        assert torch.all(x_mat["edge_type_idx"] < len(train_ds.edge_types))
 
         # target vector shapes agree with mapper dims
         for key, vec in y["hamiltonian"].pair_vectors.items():
