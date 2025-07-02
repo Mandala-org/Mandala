@@ -27,7 +27,7 @@ def test_node_encoder_shape_and_dtype():
 @pytest.mark.unit
 def test_edge_encoder_forward(offdim):
     hp = HyperParams()
-    n_types, n_radial = 2, 3
+    n_types, n_radial = 2, hp.n_radial
     sh_ir = Irreps.spherical_harmonics(1)
     out_ir = Irreps("5x0e")
     enc = EdgeEncoder(n_types, n_radial, sh_ir, offdim, out_ir, hp, device="cpu")

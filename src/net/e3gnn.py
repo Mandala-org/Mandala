@@ -23,6 +23,8 @@ import time
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
+from data.snapshot import Snapshot
+from data.block_matrix import IrrepsBlockData
 
 from net.common import HyperParams, build_hidden_irreps
 from net.encoders import NodeEncoder, EdgeEncoder
@@ -378,6 +380,45 @@ class E3GNN(pl.LightningModule):
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
+
+    # ------------------------------------------------------------------ force prediction
+    def predictions_to_snapshot(
+        self,
+        predictions: Dict[str, IrrepsBlockData],
+        positions: torch.Tensor,
+        box: torch.Tensor,
+    ) -> "Snapshot":
+        from data.snapshot import Snapshot
+
+        return Snapshot(
+            hamiltonian=predictions["hamiltonian"].to_blocks(self.mapper),
+            overlap=predictions["overlap"].to_blocks(self.mapper),
+            density=predictions["density"].to_blocks(self.mapper),
+            positions=positions,
+            box=box,
+        )
+
+    def get_forces(
+        self,
+        predictions: Dict[str, IrrepsBlockData],
+        positions: torch.Tensor,
+        box: torch.Tensor,
+    ) -> torch.Tensor:
+        snapshot = self.predictions_to_snapshot(predictions, positions, box)
+        energy = snapshot.get_energy()
+        grad = torch.autograd.grad(
+            energy,
+            positions,
+            grad_outputs=torch.ones_like(energy),
+            create_graph=True,
+        )[0]
+        return -grad
+
+    def predict_forces(
+        self, x_gnn: Dict[str, Any], x_matrix: Dict[str, Any]
+    ) -> torch.Tensor:
+        predictions = self(x_gnn, x_matrix)
+        return self.get_forces(predictions, x_gnn["positions"], x_gnn["box"])
 
     # ------------------------------------------------------------------ edge lifting helper
     def _lift_edge_features(self, edge_small, x_small, x_large):

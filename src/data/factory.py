@@ -45,12 +45,14 @@ class DatasetFactory:
         n_radial: int = 64,
         device: torch.device | str = "cpu",
         cache_root: str | os.PathLike | None = None,
+        enable_positions_grad: bool = False,
     ):
         self.cutoff_gnn = float(cutoff_gnn)
         self.cutoff_matrix = float(cutoff_matrix)
         self.l_max_sh = int(l_max_sh)
         self.n_radial = int(n_radial)
         self.device = torch.device(device)
+        self.enable_positions_grad = enable_positions_grad
         # cache root for processed snapshots; if None, caching is disabled
         if cache_root is None:
             self.cache_root = None
@@ -126,6 +128,7 @@ class DatasetFactory:
         )
         # pass cache_root through to dataset
         ds_kwargs["cache_root"] = self.cache_root
+        ds_kwargs["enable_positions_grad"] = self.enable_positions_grad
         train_ds = E3GNNDataset(self._pairs["train"], **ds_kwargs)
         val_ds = (
             E3GNNDataset(self._pairs["val"], **ds_kwargs)
