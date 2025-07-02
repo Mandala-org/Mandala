@@ -32,18 +32,19 @@ def test_forward_smoke():
     sh = Irreps.spherical_harmonics(hp.l_max)
     edge_sh = torch.randn(E, sh.dim)  # random SH features
 
-    x_gnn = {
+    x = {
         "node_type_idx": node_type_idx,
         "edge_type_idx": edge_type_idx,
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": torch.tensor([[0, 1, 2], [1, 2, 3]]),
         "atoms": ("H", "H", "H", "H"),
+        "gnn_edge_cutoff_idx": E,
+        "overlap_vectors": torch.randn(E, 1),
     }
-    x_mat = x_gnn  # small test: same graph
     atoms = ("H", "H", "H", "H")
 
-    preds = model(x_gnn, x_mat)
+    preds = model(x)
     assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}
     for v in preds.values():
         assert v.atoms == atoms

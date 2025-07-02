@@ -78,7 +78,6 @@ class E3GNN(pl.LightningModule):
             n_edge_types=len(edge_types),
             n_radial=self.hp.n_radial,
             sh_irreps=self.sh_irreps,
-            offdiag_irrep_dim=None,  # off-diagonal overlap features disabled
             out_irreps=self.hidden_irreps,
             hp=self.hp,
             device=self.device_,
@@ -195,91 +194,45 @@ class E3GNN(pl.LightningModule):
             self._activation_mags[tag] = mag
 
     # ------------------------------------------------------------------ forward
-    def forward(
-        self,
-        x_gnn: Dict[str, Any],
-        x_matrix: Dict[str, Any],
-    ):
+    def forward(self, x: Dict[str, Any]):
         # initialize activation magnitudes storage
         self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
         # ---- encode ----------------------------------------------------
-        node = self.node_enc(x_gnn["node_type_idx"])
+        node = self.node_enc(x["node_type_idx"])
         # record node encoding magnitudes per irrep
         self._record_activation_mags("node_encoding", node, self.hidden_irreps)
         edge = self.edge_enc(
-            x_gnn["edge_type_idx"],
-            x_gnn["edge_length_emb"],
-            x_gnn["edge_sh"],
-            overlap_off=None,
+            x["edge_type_idx"],
+            x["edge_length_emb"],
+            x["edge_sh"],
         )
         # record edge encoding magnitudes per irrep
         self._record_activation_mags("edge_encoding", edge, self.hidden_irreps)
 
-        ei_small = x_gnn["edge_index"]
-        # message-passing on small graph with activation monitoring
+        # ---- message-passing -------------------------------------------
+        gnn_edge_cutoff = x["gnn_edge_cutoff_idx"]
+        edge_small = edge[:gnn_edge_cutoff]
+        ei_small = x["edge_index"][:, :gnn_edge_cutoff]
+
         for idx, blk in enumerate(self.mp_small):
-            node, edge = blk(node, edge, ei_small)
+            node, edge_small = blk(node, edge_small, ei_small)
             # record magnitudes after small graph layer
             self._record_activation_mags(
                 f"node_small_layer_{idx}", node, self.hidden_irreps
             )
             self._record_activation_mags(
-                f"edge_small_layer_{idx}", edge, self.hidden_irreps
+                f"edge_small_layer_{idx}", edge_small, self.hidden_irreps
             )
 
-        # ---- lift to large graph --------------------------------------
-        # re-encode edges for the large graph
-        edge_big = self._lift_edge_features(
-            edge,
-            x_gnn,
-            x_matrix,
-        )
-        ei_big = x_matrix["edge_index"]
-        # message-passing on large graph with activation monitoring
-        for idx, blk in enumerate(self.mp_large):
-            node, edge_big = blk(node, edge_big, ei_big)
-            # record magnitudes after large graph layer
-            self._record_activation_mags(
-                f"node_large_layer_{idx}", node, self.hidden_irreps
-            )
-            self._record_activation_mags(
-                f"edge_large_layer_{idx}", edge_big, self.hidden_irreps
-            )
-
-        # ---- combine node & edge features for heads --------------------
-        # node features correspond to diagonal blocks
-        batch_device = node.device
-        # number of atoms / nodes
-        N = node.shape[0]
-        # stack node (diagonal) and edge (off-diagonal) representations
-        h_full = torch.cat([node, edge_big], dim=0)
-        # build full edge_index: self-loops first, then original matrix edges
-        diag_idx = torch.arange(N, device=batch_device)
-        diag_edge_index = torch.stack([diag_idx, diag_idx], dim=0)
-        full_edge_index = torch.cat([diag_edge_index, x_matrix["edge_index"]], dim=1)
-        # compute edge type indices: off-diags from x_matrix, diag from node elements
-        edge_type_idx = x_matrix["edge_type_idx"]
-        node_elem_idx = x_gnn["node_type_idx"]
-        # lookup pair_keys (shared across heads)
-        pair_keys = next(iter(self.heads.values())).pair_keys
-        # build mapping from element → diag pair index
-        elems = self.mapper.orbital_cfg.elements()
-        diag_pair_idx = torch.tensor(
-            [pair_keys.index(f"{el}-{el}") for el in elems],
-            dtype=torch.long,
-            device=batch_device,
-        )
-        diag_type_idx = diag_pair_idx[node_elem_idx]
-        # concatenate diag + off-diag type indices
-        full_edge_type_idx = torch.cat([diag_type_idx, edge_type_idx], dim=0)
+        edge[:gnn_edge_cutoff] = edge_small
 
         # ---- heads -----------------------------------------------------
         preds_raw = {
-            name: head(h_full, full_edge_type_idx, full_edge_index)
+            name: head(edge, x["edge_type_idx"], x["edge_index"])
             for name, head in self.heads.items()
         }
         preds_wrapped = {
-            name: self._wrap_head_output(raw, tuple(x_gnn["atoms"]))
+            name: self._wrap_head_output(raw, tuple(x["atoms"]))
             for name, raw in preds_raw.items()
         }
         # expose activation magnitudes for callbacks

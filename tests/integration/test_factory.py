@@ -90,15 +90,14 @@ def test_sample_coherence(factory_results):
     train_ds, _, mapper = factory_results
     known = set(mapper.orbital_cfg.elements())
 
-    for x_gnn, x_mat, y in train_ds:
+    for x, y in train_ds:
         # node_type_idx sanity: indices map to known elements
         elem_list = mapper.orbital_cfg.elements()
-        for idx in x_gnn["node_type_idx"].tolist():
+        for idx in x["node_type_idx"].tolist():
             assert elem_list[idx] in known
 
         # edge_type_idx sanity: indices must be within range
-        assert torch.all(x_gnn["edge_type_idx"] < len(train_ds.edge_types))
-        assert torch.all(x_mat["edge_type_idx"] < len(train_ds.edge_types))
+        assert torch.all(x["edge_type_idx"] < len(train_ds.edge_types))
 
         # target vector shapes agree with mapper dims
         for key, vec in y["hamiltonian"].pair_vectors.items():
@@ -124,7 +123,7 @@ def test_model_forward_cpu(factory_results):
     from net.common import HyperParams
 
     sample = train_ds[0]
-    x_gnn, x_mat, y = sample
+    x, y = sample
 
     hp = HyperParams(dropout=0.0, batch_norm=False)
     mock_cfg = OmegaConf.create(
@@ -138,10 +137,7 @@ def test_model_forward_cpu(factory_results):
         device="cpu",
     )
 
-    out = model(
-        x_gnn,
-        x_mat,
-    )
+    out = model(x)
 
     # we expect all three predicted IrrepsBlockData objects
     for key in ("hamiltonian", "overlap", "density"):
