@@ -57,6 +57,7 @@ class E3GNNDataset(Dataset):
         n_radial: int = 64,
         device: torch.device | str = "cpu",
         cache_root: str | Path | None = None,
+        enable_positions_grad: bool = False,
     ):
         if cutoff_gnn >= cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
@@ -65,6 +66,7 @@ class E3GNNDataset(Dataset):
             raise ValueError("At least one snapshot path must be provided")
 
         self.device = torch.device(device)
+        self.enable_positions_grad = enable_positions_grad
 
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
@@ -239,13 +241,19 @@ class E3GNNDataset(Dataset):
           Tuple of (x_gnn, x_matrix, y), where x_gnn and x_matrix are input dicts
           for the GNN and readout, and y contains the target IrrepsBlockData.
         """
+        if self.enable_positions_grad:
+            snap.positions.requires_grad_(True)
+        assert not self.enable_positions_grad or snap.positions.requires_grad
+
         # pre-compute distances once for the largest graph
-        dist_dict = snap._edge_distances(snap.density)
+        dist_dict = snap._edge_distances()
 
         # ---------- build matrices for *both* cutoffs ------------------------
         (ei_gnn, et_gnn, el_gnn, es_gnn, keep_gnn) = self._edge_tensors(
             snap, dist_dict, self.cut_gnn
         )
+        if self.enable_positions_grad:
+            assert es_gnn.requires_grad
 
         (ei_mat, et_mat, el_mat, es_mat, keep_mat) = self._edge_tensors(
             snap, dist_dict, self.cut_mat
@@ -283,9 +291,13 @@ class E3GNNDataset(Dataset):
             "edge_sh": es_gnn,
             "overlap_vectors_diag": overlap_diag,
             "overlap_vectors_offdiag": overlap_off_gnn,
+            "positions": snap.positions,
+            "box": snap.box,
             # per-node element symbols
             "atoms": atoms,
         }
+        if self.enable_positions_grad:
+            assert x_gnn["positions"].requires_grad
         x_matrix = {
             "edge_index": ei_mat,
             "edge_type_idx": et_mat,
