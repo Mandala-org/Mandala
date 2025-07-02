@@ -44,28 +44,24 @@ def dataset():
 
 @pytest.mark.integration
 def test_edge_sets(dataset):
-    x_gnn, x_mat, y = dataset[0]
+    x, y = dataset[0]
 
-    # ----  no self-edges in either graph
-    assert torch.all(x_gnn["edge_index"][0] != x_gnn["edge_index"][1])
-    assert torch.all(x_mat["edge_index"][0] != x_mat["edge_index"][1])
+    # ----  check for self-edges at the beginning of the edge_index
+    num_atoms = len(x["atoms"])
+    self_edges = x["edge_index"][:, :num_atoms]
+    assert torch.all(self_edges[0] == self_edges[1])
+    assert torch.all(self_edges[0] == torch.arange(num_atoms))
 
     # ----  gnn edge set ⊂ matrix edge set
-    gnn_edges = {tuple(e.tolist()) for e in x_gnn["edge_index"].t()}
-    mat_edges = {tuple(e.tolist()) for e in x_mat["edge_index"].t()}
+    gnn_edge_cutoff = x["gnn_edge_cutoff_idx"]
+    gnn_edges = {tuple(e.tolist()) for e in x["edge_index"][:, :gnn_edge_cutoff].t()}
+    mat_edges = {tuple(e.tolist()) for e in x["edge_index"].t()}
     assert gnn_edges.issubset(mat_edges)
 
     # ----  counts of off-diagonal overlap vectors = number of edges
-    n_vec_gnn = sum(t.shape[0] for t in x_gnn["overlap_vectors_offdiag"].values())
-    n_vec_mat = sum(t.shape[0] for t in x_mat["overlap_vectors_offdiag"].values())
-    assert n_vec_gnn == x_gnn["edge_index"].shape[1]
-    assert n_vec_mat == x_mat["edge_index"].shape[1]
-
-    # ----  diagonal vectors unaffected by graph choice
-    diag_cnt = sum(t.shape[0] for t in x_gnn["overlap_vectors_diag"].values())
-    assert diag_cnt > 0
-    assert diag_cnt == sum(t.shape[0] for t in x_mat["overlap_vectors_diag"].values())
+    n_vec = sum(t.shape[0] for t in x["overlap_vectors"].pair_vectors.values())
+    assert n_vec == x["edge_index"].shape[1]
 
     # ----  SH & radial embed sizes
-    assert x_gnn["edge_sh"].shape[1] == dataset.sh_irreps.dim
-    assert x_gnn["edge_length_emb"].shape[1] == dataset.n_radial
+    assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim
+    assert x["edge_length_emb"].shape[1] == dataset.n_radial

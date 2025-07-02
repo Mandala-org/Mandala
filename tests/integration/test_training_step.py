@@ -30,8 +30,8 @@ def test_force_prediction(factory_results):
     )
     model = E3GNN(mapper, train_ds.edge_types, mock_cfg, device="cpu")
     # take first sample from training dataset
-    x_gnn, x_mat, y = train_ds[0]
+    x, y = train_ds[0]
     # predict forces
-    forces = model.predict_forces(x_gnn, x_mat)
+    forces = model.predict_forces(x)
     assert isinstance(forces, torch.Tensor)
-    assert forces.shape == x_gnn["positions"].shape
+    assert forces.shape == x["positions"].shape

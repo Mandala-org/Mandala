@@ -40,11 +40,13 @@ def make_dummy_graph(hp):
         "edge_sh": edge_sh,
         "edge_index": edge_index,
         "atoms": ("H", "H", "H", "H"),
+        "gnn_edge_cutoff_idx": E,
+        "overlap_vectors": torch.randn(E, 1),
     }
     return x
 
 
-# ──────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────���───────────────────────────────────
 # parameter sets – each dict overrides defaults
 # ──────────────────────────────────────────────────────────────────────
 HP_VARIANTS = [
@@ -80,11 +82,10 @@ def test_e3gnn_forward_variants(hp_kwargs):
         device="cpu",
     )
 
-    x_gnn = make_dummy_graph(hp)
-    x_matrix = x_gnn  # same graph for simple smoke test
+    x = make_dummy_graph(hp)
     atoms = ("H",) * 4
 
-    preds = model(x_gnn, x_matrix)
+    preds = model(x)
 
     # ------------- basic assertions -----------------------------------
     assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}
