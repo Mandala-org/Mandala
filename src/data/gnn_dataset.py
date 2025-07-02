@@ -164,159 +164,131 @@ class E3GNNDataset(Dataset):
     def _edge_tensors(
         self,
         snap: Snapshot,
-        dist_dict: Dict[str, torch.Tensor],
-        cutoff: float,
-    ) -> Tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]
-    ]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int]:
         """
         Returns
         -------
-        edge_index : (2,E)  long
-        edge_one_hot : (E,n_types)  float
-        edge_length_emb : (E,n_radial)  float
-        edge_sh : (E, sh_dim)  float
-        keep_mask_dict : dict[key] → bool mask (E_key,)  (needed to subset vectors)
+        edge_index : (2, E_total) long
+        edge_type_idx : (E_total,) long
+        edge_length_emb : (E_total, n_radial) float
+        edge_sh : (E_total, sh_dim) float
+        gnn_edge_cutoff_idx : int
         """
-        edge_src, edge_dst, etype_idx = [], [], []
-        keep_mask_dict: Dict[str, torch.Tensor] = {}
+        # 1. Collect all edges and their properties
+        edges = []
+        for key, pair_edges in snap.density.pair_edges.items():
+            for i in range(pair_edges.shape[1]):
+                src, dst = pair_edges[:, i]
+                edges.append(
+                    {
+                        "src": src.item(),
+                        "dst": dst.item(),
+                        "key": key,
+                    }
+                )
 
-        for key in sorted(snap.density.keys()):
-            edges = snap.density.pair_edges[key]  # (2,E_key)
-            dists = dist_dict[key]  # (E_key,)
-            diag_mask = edges[0] == edges[1]
-            keep = (~diag_mask) & (dists <= cutoff)  # off-diag & within cutoff
-            if torch.any(keep):
-                keep_mask_dict[key] = keep
-                edge_src.extend(edges[0][keep].tolist())
-                edge_dst.extend(edges[1][keep].tolist())
-                etype_idx.extend([self.edge_type2idx[key]] * int(keep.sum()))
+        # 2. Separate self-edges and off-diagonal edges
+        self_edges = sorted(
+            [e for e in edges if e["src"] == e["dst"]], key=lambda e: e["src"]
+        )
+        offdiag_edges = [e for e in edges if e["src"] != e["dst"]]
 
+        # 3. Calculate lengths for off-diagonal edges and sort them
+        if offdiag_edges:
+            offdiag_edge_index = torch.tensor(
+                [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
+                dtype=torch.long,
+                device=self.device,
+            )
+            disp = self._minimal_disp(
+                snap.positions,
+                offdiag_edge_index,
+                snap.box,
+            )
+            lengths = torch.linalg.norm(disp, dim=-1)
+            sorted_indices = torch.argsort(lengths)
+            offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
+
+        # 4. Combine edges in the specified order
+        all_edges = self_edges + offdiag_edges
         edge_index = torch.tensor(
-            [edge_src, edge_dst], dtype=torch.long, device=self.device
+            [[e["src"] for e in all_edges], [e["dst"] for e in all_edges]],
+            dtype=torch.long,
+            device=self.device,
         )
-        etype_idx = torch.tensor(etype_idx, dtype=torch.long, device=self.device)
-
-        # geometric encodings -------------------------------------------------
-        # minimal-image displacement: compute box and its inverse once
-        if snap.box is not None:
-            box = snap.box.to(self.device)
-            inv_box = torch.inverse(box)
-        else:
-            box = None
-            inv_box = None
-        disp = self._minimal_disp(
-            snap.positions.to(self.device),
-            edge_index,
-            box,
-            inv_box,
+        edge_type_idx = torch.tensor(
+            [self.edge_type2idx[e["key"]] for e in all_edges],
+            dtype=torch.long,
+            device=self.device,
         )
-        dists_kept = torch.linalg.norm(disp, dim=-1)
 
+        # 5. Calculate geometric features for the final edge order
+        disp = self._minimal_disp(snap.positions, edge_index, snap.box)
+        lengths = torch.linalg.norm(disp, dim=-1)
+        edge_sh = spherical_harmonics(
+            self.sh_irreps, disp, normalize=True, normalization="component"
+        )
         edge_length_emb = soft_one_hot_linspace(
-            dists_kept,
+            lengths,
             start=0.0,
-            end=self.cut_mat,  # upper bound irrelevant due to Gaussian tail
+            end=self.cut_mat,
             number=self.n_radial,
             basis="gaussian",
             cutoff=False,
-        ).to(torch.float32)
+        )
 
-        edge_sh = spherical_harmonics(
-            self.sh_irreps, disp, normalize=True, normalization="component"
-        ).to(torch.float32)
+        # 6. Determine the GNN cutoff index
+        gnn_edge_cutoff_idx = (
+            len(self_edges) + torch.sum(lengths <= self.cut_gnn).item()
+        )
 
-        return edge_index, etype_idx, edge_length_emb, edge_sh, keep_mask_dict
+        return edge_index, edge_type_idx, edge_length_emb, edge_sh, gnn_edge_cutoff_idx
 
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot(
         self, snap: Snapshot
-    ) -> Tuple[
-        Dict[str, torch.Tensor], Dict[str, torch.Tensor], Dict[str, torch.Tensor]
-    ]:
+    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         """
-        Build graph inputs (small and large cutoff) and targets from one Snapshot.
-
-        Returns:
-          Tuple of (x_gnn, x_matrix, y), where x_gnn and x_matrix are input dicts
-          for the GNN and readout, and y contains the target IrrepsBlockData.
+        Build graph inputs and targets from one Snapshot.
         """
         if self.enable_positions_grad:
             snap.positions.requires_grad_(True)
-        assert not self.enable_positions_grad or snap.positions.requires_grad
 
-        # pre-compute distances once for the largest graph
-        dist_dict = snap._edge_distances()
+        (
+            edge_index,
+            edge_type_idx,
+            edge_length_emb,
+            edge_sh,
+            gnn_edge_cutoff_idx,
+        ) = self._edge_tensors(snap)
 
-        # ---------- build matrices for *both* cutoffs ------------------------
-        (ei_gnn, et_gnn, el_gnn, es_gnn, keep_gnn) = self._edge_tensors(
-            snap, dist_dict, self.cut_gnn
-        )
-        if self.enable_positions_grad:
-            assert es_gnn.requires_grad
-
-        (ei_mat, et_mat, el_mat, es_mat, keep_mat) = self._edge_tensors(
-            snap, dist_dict, self.cut_mat
-        )
-
-        # ---------- node type index --------------------------------------------
         atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.global_cfg.elements())}
         node_type_idx = torch.tensor(
             [elem2idx[el] for el in atoms], dtype=torch.long, device=self.device
         )
 
-        # ---------- overlap vectors split diag / offdiag --------------------
-        overlap_ir = snap.overlap.to_vectors(self.mapper)  # IrrepsBlockData
-        overlap_diag = overlap_ir.diag()  # dict
-
-        # helper to subset off-diag vectors to the kept edges ----------------
-        def _subset_offdiag(
-            mask_dict: Dict[str, torch.Tensor]
-        ) -> Dict[str, torch.Tensor]:
-            out: Dict[str, torch.Tensor] = {}
-            for key, mask in mask_dict.items():
-                out[key] = overlap_ir.pair_vectors[key][mask]
-            return out
-
-        overlap_off_gnn = _subset_offdiag(keep_gnn)
-        overlap_off_mat = _subset_offdiag(keep_mat)
-
-        # ========== assemble x_gnn / x_matrix ===============================
-        x_gnn = {
+        x = {
             "node_type_idx": node_type_idx,
-            "edge_index": ei_gnn,
-            "edge_type_idx": et_gnn,
-            "edge_length_emb": el_gnn,
-            "edge_sh": es_gnn,
-            "overlap_vectors_diag": overlap_diag,
-            "overlap_vectors_offdiag": overlap_off_gnn,
+            "edge_index": edge_index,
+            "edge_type_idx": edge_type_idx,
+            "edge_length_emb": edge_length_emb,
+            "edge_sh": edge_sh,
+            "gnn_edge_cutoff_idx": gnn_edge_cutoff_idx,
             "positions": snap.positions,
             "box": snap.box,
-            # per-node element symbols
             "atoms": atoms,
         }
-        if self.enable_positions_grad:
-            assert x_gnn["positions"].requires_grad
-        x_matrix = {
-            "edge_index": ei_mat,
-            "edge_type_idx": et_mat,
-            "edge_length_emb": el_mat,
-            "edge_sh": es_mat,
-            "overlap_vectors_diag": overlap_diag,  # same dict
-            "overlap_vectors_offdiag": overlap_off_mat,  # superset of gnn
-        }
 
-        # ========== targets y ===============================================
         y = {
             "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
-            "overlap": overlap_ir.to(self.device),
+            "overlap": snap.overlap.to_vectors(self.mapper).to(self.device),
             "density": snap.density.to_vectors(self.mapper).to(self.device),
             "energy": snap.get_energy().to(self.device),
             "num_electrons": snap.get_number_of_electrons().to(self.device),
         }
 
-        return x_gnn, x_matrix, y
+        return x, y
 
     # ------------------- torch Dataset interface ---------------------------
     def __len__(self) -> int:

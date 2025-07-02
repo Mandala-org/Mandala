@@ -39,7 +39,7 @@ def test_dataset_cache_with_silicon_data(tmp_path, silicon_pair):
     # 1. Load with cutoff 5.0
     ds1 = load_dataset(silicon_pair, cache_dir, cutoff_gnn=5.0)
     edges1 = ds1[0][0]["edge_index"]
-    hamiltonian1 = ds1[0][1]
+    hamiltonian1 = ds1[0][1]["hamiltonian"]
 
     # 2. Load with cutoff 3.0
     ds2 = load_dataset(silicon_pair, cache_dir, cutoff_gnn=3.0)
@@ -50,8 +50,10 @@ def test_dataset_cache_with_silicon_data(tmp_path, silicon_pair):
 
     # 4. Load with cutoff 5.0 again (cache hit)
     ds3 = load_dataset(silicon_pair, cache_dir, cutoff_gnn=5.0)
-    hamiltonian3 = ds3[0][1]
+    hamiltonian3 = ds3[0][1]["hamiltonian"]
 
     # 5. Check that some random matrix block is the same as in the first dataset
-    block_key = list(hamiltonian1.keys())[0]
-    assert torch.equal(hamiltonian1[block_key], hamiltonian3[block_key])
+    block_key = list(hamiltonian1.pair_vectors.keys())[0]
+    assert torch.equal(
+        hamiltonian1.pair_vectors[block_key], hamiltonian3.pair_vectors[block_key]
+    )

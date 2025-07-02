@@ -11,7 +11,6 @@ Features
 """
 
 from __future__ import annotations
-from typing import Optional
 
 import torch
 from torch import nn
@@ -86,13 +85,11 @@ class EdgeEncoder(nn.Module):
       - edge_type_idx: LongTensor[E] of edge-type indices (n_edge_types).
       - length_emb: Tensor[E, n_radial] radial distance embeddings.
       - sh: Tensor[E, sh_irreps.dim] spherical harmonics coefficients.
-      - overlap_off: Tensor[E, offdiag_irrep_dim] (or None).
 
     Combines:
       1. Learned edge-type embedding.
       2. MLP over radial embeddings.
-      3. Optional linear projection of off-diagonal overlap.
-      4. Projection of spherical harmonics.
+      3. Projection of spherical harmonics.
 
     Followed by equivariant nonlinearity and dropout to produce
     Tensor[E, out_irreps.dim].
@@ -103,7 +100,6 @@ class EdgeEncoder(nn.Module):
         n_edge_types: int,
         n_radial: int,
         sh_irreps: Irreps,
-        offdiag_irrep_dim: Optional[int],
         out_irreps: Irreps,
         hp: HyperParams,
         *,
@@ -133,15 +129,7 @@ class EdgeEncoder(nn.Module):
             dtype=dtype,
         ).to(self.device)
 
-        if offdiag_irrep_dim:
-            self.proj_off = nn.Linear(
-                offdiag_irrep_dim,
-                sc_width,
-            )
-        else:
-            self.proj_off = None
-
-        scalar_input_ir = Irreps(f"{sc_width * (2 + bool(self.proj_off))}x0e")
+        scalar_input_ir = Irreps(f"{sc_width * 2}x0e")
         self.lin_scalar = Linear(
             scalar_input_ir,
             out_irreps,
@@ -168,26 +156,14 @@ class EdgeEncoder(nn.Module):
         edge_type_idx: torch.Tensor,
         length_emb: torch.Tensor,
         sh: torch.Tensor,
-        overlap_off: Optional[torch.Tensor] = None,
-        *,
-        select_indices: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Return hidden edge features: Tensor[E, out_irreps.dim].
         """
-        if select_indices is not None:
-            edge_type_idx = edge_type_idx[select_indices]
-            length_emb = length_emb[select_indices]
-            sh = sh[select_indices]
-            if overlap_off is not None:
-                overlap_off = overlap_off[select_indices]
-
         scalars = [
             self.edge_emb(edge_type_idx),
             self.radial_net(length_emb),
         ]
-        if self.proj_off is not None and overlap_off is not None:
-            scalars.append(self.proj_off(overlap_off))
 
         h_scalar = self.lin_scalar(torch.cat(scalars, dim=-1))
         h = h_scalar + self.sh_proj(sh)
