@@ -35,9 +35,7 @@ def trace_matmul_sparse(
     pairs = edge_index.t().tolist()
     lookup = {tuple(p): k for k, p in enumerate(pairs)}
 
-    out = torch.zeros(
-        (), dtype=blocks_a.dtype, device=blocks_a.device, requires_grad=False
-    )
+    out = torch.zeros((), dtype=blocks_a.dtype, device=blocks_a.device)
     for k, (i, j) in enumerate(pairs):
         rev = (j, i)
         rev_k = lookup.get(rev, None)

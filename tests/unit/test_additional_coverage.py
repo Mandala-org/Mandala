@@ -23,29 +23,21 @@ def test_node_encoder_shape_and_dtype():
     assert h.dtype == torch.float32
 
 
-@pytest.mark.parametrize("offdim", [None, 2])
 @pytest.mark.unit
-def test_edge_encoder_forward(offdim):
+def test_edge_encoder_forward():
     hp = HyperParams()
     n_types, n_radial = 2, hp.n_radial
     sh_ir = Irreps.spherical_harmonics(1)
     out_ir = Irreps("5x0e")
-    from data.block_matrix import IrrepsBlockData
 
-    enc = EdgeEncoder(n_types, n_radial, sh_ir, offdim, out_ir, hp, device="cpu")
+    enc = EdgeEncoder(
+        n_types, n_radial, sh_ir, out_ir, hp, device="cpu", dtype=torch.float32
+    )
     E = 4
     edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.long)
     length_emb = torch.rand(E, n_radial)
     sh = torch.rand(E, sh_ir.dim)
-    overlap_vectors = IrrepsBlockData(
-        atoms=("H", "H"),
-        atom_counts={"H": 2},
-        pair_vectors={"H-H": torch.rand(E, offdim if offdim else 0)},
-        pair_edges={},
-        lookup={},
-        orbital_cfg=None,
-    )
-    h = enc(edge_type_idx, length_emb, sh, overlap_vectors)
+    h = enc(edge_type_idx, length_emb, sh)
     assert h.shape == (E, out_ir.dim)
 
 

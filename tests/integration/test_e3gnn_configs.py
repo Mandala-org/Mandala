@@ -40,7 +40,7 @@ def make_dummy_graph(hp):
         "edge_sh": edge_sh,
         "edge_index": edge_index,
         "atoms": ("H", "H", "H", "H"),
-        "gnn_edge_cutoff_idx": E,
+        "index_gnn_cutoff": E,
         "overlap_vectors": torch.randn(E, 1),
     }
     return x

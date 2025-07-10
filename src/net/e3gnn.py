@@ -210,9 +210,9 @@ class E3GNN(pl.LightningModule):
         self._record_activation_mags("edge_encoding", edge, self.hidden_irreps)
 
         # ---- message-passing -------------------------------------------
-        gnn_edge_cutoff = x["gnn_edge_cutoff_idx"]
-        edge_small = edge[:gnn_edge_cutoff]
-        ei_small = x["edge_index"][:, :gnn_edge_cutoff]
+        index_gnn_cutoff = x["index_gnn_cutoff"]
+        edge_small = edge[:index_gnn_cutoff]
+        ei_small = x["edge_index"][:, :index_gnn_cutoff]
 
         for idx, blk in enumerate(self.mp_small):
             node, edge_small = blk(node, edge_small, ei_small)
@@ -224,7 +224,7 @@ class E3GNN(pl.LightningModule):
                 f"edge_small_layer_{idx}", edge_small, self.hidden_irreps
             )
 
-        edge[:gnn_edge_cutoff] = edge_small
+        edge[:index_gnn_cutoff] = edge_small  # Does this save the computation graph?
 
         # ---- heads -----------------------------------------------------
         preds_raw = {
@@ -245,10 +245,10 @@ class E3GNN(pl.LightningModule):
         Shared logic for training and validation steps.
         Logs metrics prefixed with stage ('train' or 'val').
         """
-        x_gnn, x_mat, y = batch
+        x, y = batch
         # --- forward timing (message-passing + heads) -------------------
         t_fwd_start = time.perf_counter()
-        preds = self(x_gnn, x_mat)
+        preds = self(x)
         t_fwd_end = time.perf_counter()
         # block losses
         loss_blocks = 0.0
@@ -281,10 +281,6 @@ class E3GNN(pl.LightningModule):
         loss_E = torch.mean((E_pred - E_true) ** 2)
         abs_err_E = torch.mean(torch.abs(E_pred - E_true))
         # electron count loss and absolute error
-        N_pred = trace_matmul_sparse_snap_vectorized(
-            preds["overlap"].to_blocks(self.mapper),
-            preds["density"].to_blocks(self.mapper),
-        )
         N_true = y["num_electrons"]
         loss_N = torch.mean((N_pred - N_true) ** 2)
         abs_err_N = torch.mean(torch.abs(N_pred - N_true))
@@ -362,47 +358,11 @@ class E3GNN(pl.LightningModule):
         grad = torch.autograd.grad(
             energy,
             positions,
-            grad_outputs=torch.ones_like(energy),
-            create_graph=True,
+            # grad_outputs=torch.ones_like(energy), # What does it do?
+            create_graph=True,  # needed for second derivatives (eg. training on forces)
         )[0]
         return -grad
 
-    def predict_forces(
-        self, x_gnn: Dict[str, Any], x_matrix: Dict[str, Any]
-    ) -> torch.Tensor:
-        predictions = self(x_gnn, x_matrix)
-        return self.get_forces(predictions, x_gnn["positions"], x_gnn["box"])
-
-    # ------------------------------------------------------------------ edge lifting helper
-    def _lift_edge_features(self, edge_small, x_small, x_large):
-        """
-        Re-encode only those edges present in x_large but missing in x_small.
-        """
-        ei_small = x_small["edge_index"]
-        ei_big = x_large["edge_index"]
-
-        small_map = {
-            tuple(ei_small[:, k].tolist()): k for k in range(ei_small.shape[1])
-        }
-        E_big = ei_big.shape[1]
-        device = edge_small.device
-        out = torch.zeros(E_big, edge_small.shape[-1], device=device)
-
-        missing_idx = []
-        for k in range(E_big):
-            tup = tuple(ei_big[:, k].tolist())
-            if tup in small_map:
-                out[k] = edge_small[small_map[tup]]
-            else:
-                missing_idx.append(k)
-
-        if missing_idx:
-            k_idx = torch.tensor(missing_idx, device=device, dtype=torch.long)
-            enc = self.edge_enc(
-                x_large["edge_type_idx"][k_idx],
-                x_large["edge_length_emb"][k_idx],
-                x_large["edge_sh"][k_idx],
-                overlap_off=None,
-            )
-            out[k_idx] = enc
-        return out
+    def predict_forces(self, x: Dict[str, Any]) -> torch.Tensor:
+        predictions = self(x)
+        return self.get_forces(predictions, x["positions"], x["box"])
