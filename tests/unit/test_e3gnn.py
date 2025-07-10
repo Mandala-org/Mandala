@@ -39,8 +39,7 @@ def test_forward_smoke():
         "edge_sh": edge_sh,
         "edge_index": torch.tensor([[0, 1, 2], [1, 2, 3]]),
         "atoms": ("H", "H", "H", "H"),
-        "gnn_edge_cutoff_idx": E,
-        "overlap_vectors": torch.randn(E, 1),
+        "index_gnn_cutoff": E,
     }
     atoms = ("H", "H", "H", "H")
 

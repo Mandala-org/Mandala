@@ -44,15 +44,17 @@ class DatasetFactory:
         l_max_sh: int = 3,
         n_radial: int = 64,
         device: torch.device | str = "cpu",
+        dtype: torch.dtype = torch.float32,
         cache_root: str | os.PathLike | None = None,
-        enable_positions_grad: bool = False,
+        enable_forces: bool = False,
     ):
         self.cutoff_gnn = float(cutoff_gnn)
         self.cutoff_matrix = float(cutoff_matrix)
         self.l_max_sh = int(l_max_sh)
         self.n_radial = int(n_radial)
         self.device = torch.device(device)
-        self.enable_positions_grad = enable_positions_grad
+        self.dtype = dtype
+        self.enable_forces = enable_forces
         # cache root for processed snapshots; if None, caching is disabled
         if cache_root is None:
             self.cache_root = None
@@ -115,7 +117,12 @@ class DatasetFactory:
         orb_cfg = OrbitalIrrepConfig.from_info_list(info_all)  # type: ignore[attr-defined]
 
         # ②  Global mapper ---------------------------------------------
-        mapper = BlockIrrepMapper(orb_cfg, diagonal=False, device=self.device)
+        mapper = BlockIrrepMapper(
+            orb_cfg,
+            diagonal=False,
+            device=self.device,
+            dtype=self.dtype,
+        )
 
         # ④  Build datasets --------------------------------------------
         ds_kwargs = dict(
@@ -125,10 +132,11 @@ class DatasetFactory:
             l_max_sh=self.l_max_sh,
             n_radial=self.n_radial,
             device=self.device,
+            dtype=self.dtype,
         )
         # pass cache_root through to dataset
         ds_kwargs["cache_root"] = self.cache_root
-        ds_kwargs["enable_positions_grad"] = self.enable_positions_grad
+        ds_kwargs["enable_forces"] = self.enable_forces
         train_ds = E3GNNDataset(self._pairs["train"], **ds_kwargs)
         val_ds = (
             E3GNNDataset(self._pairs["val"], **ds_kwargs)

@@ -57,11 +57,12 @@ class _IrrepToMatrix:
         irreps_j: Irreps,
         diagonal: bool,
         device: torch.device | str = "cpu",
+        dtype: torch.dtype = torch.float32,
     ) -> "_IrrepToMatrix":
         assert diagonal is False, "diagonal=True not supported"
         formula = "ij=ji" if diagonal else "ij"
         rtp = ReducedTensorProducts(formula, i=irreps_i, j=irreps_j)
-        q = rtp.change_of_basis.flatten(-2).to(device)
+        q = rtp.change_of_basis.flatten(-2).to(device).to(dtype)
 
         return cls(
             rtp=rtp,
@@ -109,6 +110,7 @@ class BlockIrrepMapper:
         *,
         diagonal: bool = False,
         device: torch.device | str = "cpu",
+        dtype: torch.dtype = torch.float32,
     ):
         assert diagonal is False, "diagonal=True not supported"
 
@@ -131,7 +133,7 @@ class BlockIrrepMapper:
                 irreps_a = orbital_cfg.element_to_irreps[el_a]
                 irreps_b = orbital_cfg.element_to_irreps[el_b]
                 itm = _IrrepToMatrix.from_irreps(
-                    irreps_a, irreps_b, diagonal and el_a == el_b, device
+                    irreps_a, irreps_b, diagonal and el_a == el_b, device, dtype
                 )
                 self._maps[(el_a, el_b)] = itm
 

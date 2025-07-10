@@ -6,7 +6,7 @@ from net.e3gnn import E3GNN
 
 
 @pytest.mark.integration
-def test_force_prediction(factory_results):
+def test_force_prediction():
     """
     Test that force prediction runs without errors and returns a tensor of the correct shape.
     """
@@ -15,8 +15,8 @@ def test_force_prediction(factory_results):
     from data.factory import DatasetFactory
     from pathlib import Path
 
-    # Create a new dataset with enable_positions_grad=True
-    fac = DatasetFactory(enable_positions_grad=True)
+    # Create a new dataset with enable_forces=True
+    fac = DatasetFactory(enable_forces=True)
     fac.add_snapshot(
         Path("data/small/H2O/original/H2O.matrix"),
         Path("data/small/H2O/original/H2O.info.out"),

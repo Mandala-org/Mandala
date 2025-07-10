@@ -2,14 +2,9 @@
 gnn_dataset.py
 ==============
 
-In-memory dataset that converts :class:`Snapshot` objects into two graph inputs:
+In-memory dataset that converts :class:`Snapshot` objects into graph dict:
 
-* **x_gnn**    → small-cutoff graph used by message-passing layers
-* **x_matrix** → larger graph (no self-edges) used only by the readout head
-
-Diagonal / off-diagonal overlap features are kept **as IrrepsBlockData**
-instead of being concatenated, because different pair-keys carry different
-irreps.
+* **x**    → Full graph. Sub-graph corresponding to smaller, message-passing edge index available through index_gnn_cutoff
 
 Targets *y* (Hamiltonian / Overlap / Density + energy, electrons)
 are provided as snapshot-level information; training code can access
@@ -38,11 +33,10 @@ from tqdm.auto import tqdm
 # ═══════════════════════════════════════════════════════════════════════════════
 class E3GNNDataset(Dataset):
     """
-    Fully in-memory dataset that yields **(x_gnn, x_matrix, y)** tuples.
+    Fully in-memory dataset that yields **(x, y)** tuples.
 
-    *x_gnn*    - tensors built with the *small* cutoff (no self-edges)
-    *x_matrix* - tensors built with the *large* cutoff (superset of edges)
-    *y*        - targets (unchanged Snap-level information)
+    *x*    - no self-edges
+    *y*    - targets
     """
 
     # --------------------------------------------------------------------- init
@@ -56,8 +50,9 @@ class E3GNNDataset(Dataset):
         l_max_sh: int = 3,
         n_radial: int = 64,
         device: torch.device | str = "cpu",
+        dtype: torch.dtype = torch.float32,
         cache_root: str | Path | None = None,
-        enable_positions_grad: bool = False,
+        enable_forces: bool = False,
     ):
         if cutoff_gnn >= cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
@@ -66,7 +61,8 @@ class E3GNNDataset(Dataset):
             raise ValueError("At least one snapshot path must be provided")
 
         self.device = torch.device(device)
-        self.enable_positions_grad = enable_positions_grad
+        self.dtype = dtype
+        self.enable_forces = enable_forces
 
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
@@ -74,7 +70,7 @@ class E3GNNDataset(Dataset):
         self.l_max_sh = int(l_max_sh)
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.l_max_sh)
         self.n_radial = int(n_radial)
-        self.cut_gnn = float(cutoff_gnn)
+        self.cut = float(cutoff_gnn)
         self.cut_mat = float(cutoff_matrix)
 
         # edge-type encoding (ordered pairs)
@@ -111,7 +107,7 @@ class E3GNNDataset(Dataset):
                 matrix_path.resolve(),
                 info_path.resolve(),
                 self.n_radial,
-                self.cut_gnn,
+                self.cut,
                 self.cut_mat,
                 self.l_max_sh,
             )
@@ -160,7 +156,7 @@ class E3GNNDataset(Dataset):
         frac = frac - torch.round(frac)
         return frac @ box
 
-    # ---------- build edge tensors for a given cutoff ------------------------
+    # ---------- build edge tensors for a given cutoff_gnn ------------------------
     def _edge_tensors(
         self,
         snap: Snapshot,
@@ -172,7 +168,7 @@ class E3GNNDataset(Dataset):
         edge_type_idx : (E_total,) long
         edge_length_emb : (E_total, n_radial) float
         edge_sh : (E_total, sh_dim) float
-        gnn_edge_cutoff_idx : int
+        index_gnn_cutoff : int
         """
         # 1. Collect all edges and their properties
         edges = []
@@ -237,12 +233,16 @@ class E3GNNDataset(Dataset):
             cutoff=False,
         )
 
-        # 6. Determine the GNN cutoff index
-        gnn_edge_cutoff_idx = (
-            len(self_edges) + torch.sum(lengths <= self.cut_gnn).item()
-        )
+        # 6. Determine the GNN cutoff_gnn index
+        index_gnn_cutoff = len(self_edges) + torch.sum(lengths <= self.cut).item()
 
-        return edge_index, edge_type_idx, edge_length_emb, edge_sh, gnn_edge_cutoff_idx
+        return (
+            edge_index,
+            edge_type_idx,
+            edge_length_emb,
+            edge_sh,
+            index_gnn_cutoff,
+        )
 
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot(
@@ -251,7 +251,9 @@ class E3GNNDataset(Dataset):
         """
         Build graph inputs and targets from one Snapshot.
         """
-        if self.enable_positions_grad:
+        snap.positions = snap.positions.to(self.dtype)
+        snap.box = snap.box.to(self.dtype)
+        if self.enable_forces:
             snap.positions.requires_grad_(True)
 
         (
@@ -259,7 +261,7 @@ class E3GNNDataset(Dataset):
             edge_type_idx,
             edge_length_emb,
             edge_sh,
-            gnn_edge_cutoff_idx,
+            index_gnn_cutoff,
         ) = self._edge_tensors(snap)
 
         atoms = snap.density.atoms
@@ -269,23 +271,31 @@ class E3GNNDataset(Dataset):
         )
 
         x = {
-            "node_type_idx": node_type_idx,
-            "edge_index": edge_index,
-            "edge_type_idx": edge_type_idx,
-            "edge_length_emb": edge_length_emb,
-            "edge_sh": edge_sh,
-            "gnn_edge_cutoff_idx": gnn_edge_cutoff_idx,
-            "positions": snap.positions,
-            "box": snap.box,
+            "node_type_idx": node_type_idx.to(self.device),
+            "edge_index": edge_index.to(self.device),
+            "edge_type_idx": edge_type_idx.to(self.device),
+            "index_gnn_cutoff": index_gnn_cutoff,
+            "edge_length_emb": edge_length_emb.to(self.dtype).to(self.device),
+            "edge_sh": edge_sh.to(self.dtype).to(self.device),
+            "positions": snap.positions.to(self.device),
+            "box": snap.box.to(self.dtype).to(self.device),
             "atoms": atoms,
         }
 
         y = {
-            "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
-            "overlap": snap.overlap.to_vectors(self.mapper).to(self.device),
-            "density": snap.density.to_vectors(self.mapper).to(self.device),
-            "energy": snap.get_energy().to(self.device),
-            "num_electrons": snap.get_number_of_electrons().to(self.device),
+            "hamiltonian": snap.hamiltonian.to_vectors(self.mapper)
+            .to(self.dtype)
+            .to(self.device),
+            "overlap": snap.overlap.to_vectors(self.mapper)
+            .to(self.dtype)
+            .to(self.device),
+            "density": snap.density.to_vectors(self.mapper)
+            .to(self.dtype)
+            .to(self.device),
+            "energy": snap.get_energy().to(self.dtype).to(self.device),
+            "num_electrons": snap.get_number_of_electrons()
+            .to(self.dtype)
+            .to(self.device),
         }
 
         return x, y
@@ -317,28 +327,14 @@ class E3GNNDataset(Dataset):
             return self
         self.device = device
         # Explicitly move known fields
-        for idx, (x_gnn, x_matrix, y) in enumerate(self.samples):
-            # x_gnn
-            x_gnn["node_type_idx"] = x_gnn["node_type_idx"].to(device)
-            x_gnn["edge_index"] = x_gnn["edge_index"].to(device)
-            x_gnn["edge_type_idx"] = x_gnn["edge_type_idx"].to(device)
-            x_gnn["edge_length_emb"] = x_gnn["edge_length_emb"].to(device)
-            x_gnn["edge_sh"] = x_gnn["edge_sh"].to(device)
-            for k, v in x_gnn.get("overlap_vectors_diag", {}).items():
-                x_gnn["overlap_vectors_diag"][k] = v.to(device)
-            for k, v in x_gnn.get("overlap_vectors_offdiag", {}).items():
-                x_gnn["overlap_vectors_offdiag"][k] = v.to(device)
-            # atoms list remains unchanged
-
-            # x_matrix
-            x_matrix["edge_index"] = x_matrix["edge_index"].to(device)
-            x_matrix["edge_type_idx"] = x_matrix["edge_type_idx"].to(device)
-            x_matrix["edge_length_emb"] = x_matrix["edge_length_emb"].to(device)
-            x_matrix["edge_sh"] = x_matrix["edge_sh"].to(device)
-            for k, v in x_matrix.get("overlap_vectors_diag", {}).items():
-                x_matrix["overlap_vectors_diag"][k] = v.to(device)
-            for k, v in x_matrix.get("overlap_vectors_offdiag", {}).items():
-                x_matrix["overlap_vectors_offdiag"][k] = v.to(device)
+        for idx, (x, y) in enumerate(self.samples):
+            # x
+            x["node_type_idx"] = x["node_type_idx"].to(device)
+            x["edge_index"] = x["edge_index"].to(device)
+            x["edge_type_idx"] = x["edge_type_idx"].to(device)
+            x["edge_length_emb"] = x["edge_length_emb"].to(device)
+            x["edge_sh"] = x["edge_sh"].to(device)
+            x["index_gnn_cutoff"] = x["index_gnn_cutoff"].to(device)
 
             # y targets
             y["hamiltonian"] = y["hamiltonian"].to(device)
@@ -347,5 +343,5 @@ class E3GNNDataset(Dataset):
             y["energy"] = y["energy"].to(device)
             y["num_electrons"] = y["num_electrons"].to(device)
 
-            self.samples[idx] = (x_gnn, x_matrix, y)
+            self.samples[idx] = (x, y)
         return self
