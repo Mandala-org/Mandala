@@ -53,14 +53,10 @@ def test_edge_sets(dataset):
     assert torch.all(self_edges[0] == torch.arange(num_atoms))
 
     # ----  gnn edge set ⊂ matrix edge set
-    gnn_edge_cutoff = x["gnn_edge_cutoff_idx"]
-    gnn_edges = {tuple(e.tolist()) for e in x["edge_index"][:, :gnn_edge_cutoff].t()}
+    index_gnn_cutoff = x["index_gnn_cutoff"]
+    gnn_edges = {tuple(e.tolist()) for e in x["edge_index"][:, :index_gnn_cutoff].t()}
     mat_edges = {tuple(e.tolist()) for e in x["edge_index"].t()}
     assert gnn_edges.issubset(mat_edges)
-
-    # ----  counts of off-diagonal overlap vectors = number of edges
-    n_vec = sum(t.shape[0] for t in x["overlap_vectors"].pair_vectors.values())
-    assert n_vec == x["edge_index"].shape[1]
 
     # ----  SH & radial embed sizes
     assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim

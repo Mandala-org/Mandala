@@ -5,6 +5,7 @@ from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.openmx_parser import parse_openmx_scfout
 from data.snapshot import Snapshot
 from data.factory import DatasetFactory
+import torch
 
 
 @pytest.fixture(scope="session")
@@ -69,6 +70,7 @@ def factory_results():
         l_max_sh=3,
         n_radial=64,
         device="cpu",
+        dtype=torch.float32,
     )
     fac.add_snapshot(*PAIR_TRAIN_1, purpose="train")
     fac.add_snapshot(*PAIR_TRAIN_2, purpose="train")

@@ -67,7 +67,9 @@ def parse_openmx_scfout(
         If *True* (default) replaces ``D`` with ``D + Dᵀ`` **after** parsing.
     """
     atoms = list(atoms)
-    mapper = BlockIrrepMapper(orbital_cfg, diagonal=False, device="cpu")
+    mapper = BlockIrrepMapper(
+        orbital_cfg, diagonal=False, device="cpu", dtype=torch.float32
+    )
 
     # ─────────────────────────────────────── storage: mat→key→(i,j)→tensor
     accum: Dict[str, Dict[str, Dict[Tuple[int, int], torch.Tensor]]] = {
