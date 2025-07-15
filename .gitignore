@@ -4,7 +4,7 @@ __pycache__/
 *.so
 
 # Virtual env
-e3gnn4matrix-venv/
+mandala-venv/
 
 # Data & model artefacts
 .hydra/
