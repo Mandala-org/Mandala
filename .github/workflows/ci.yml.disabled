@@ -30,8 +30,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m venv e3gnn4matrix-venv
-        source e3gnn4matrix-venv/bin/activate
+        python -m venv mandala-venv
+        source mandala-venv/bin/activate
         pip install --upgrade pip
         pip install -r requirements.txt
         pip install -e .[dev]
@@ -40,11 +40,11 @@ jobs:
       if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
       continue-on-error: true
       run: |
-        source e3gnn4matrix-venv/bin/activate
+        source mandala-venv/bin/activate
         pytest --cov=./ --cov-report=xml -m "unit"
 
     - name: Run all tests on master and PRs
       if: (github.ref == 'refs/heads/master' && github.event_name == 'push') || (github.event_name == 'pull_request')
       run: |
-        source e3gnn4matrix-venv/bin/activate
+        source mandala-venv/bin/activate
         pytest --cov=./ --cov-report=xml
