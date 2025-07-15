@@ -1,4 +1,4 @@
-# E3GNN4Matrix
+# mandala
 
 An E(3)-equivariant Graph Neural Network implementation framework to predict
 **block-sparse DFT matrices** (Hamiltonian **H** and Density **D**)
