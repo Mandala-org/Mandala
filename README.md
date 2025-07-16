@@ -17,6 +17,12 @@ source mandala-venv/bin/activate
 pip install -e .[dev]
 ```
 
+The tests should run pass
+
+```bash
+pytest
+```
+
 To launch training, pick a config and run:
 
 ```bash
