@@ -10,10 +10,14 @@ hyperoptimization and distributed training on A100/V100 clusters.
 To install run
 
 ```bash
+# Clone the repository
 git clone git@github.com:Mandala-org/Mandala.git mandala
 cd mandala
+# Update pip
+python -m pip install --upgrade pip
 python -m venv mandala-venv
 source mandala-venv/bin/activate
+# Install
 pip install -e .[dev]
 ```
 
