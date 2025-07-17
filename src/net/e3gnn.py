@@ -51,13 +51,13 @@ class E3GNN(pl.LightningModule):
         dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
-        # check-point everything *except* the (non-serialisable) mapper
+        # checkpoint
         self.save_hyperparameters(ignore=["mapper", "cfg"])
         self.hp = HyperParams(**cfg.model)
         self.lr = cfg.training.lr
         self.pedantic = cfg.logging.pedantic
         self.device_ = torch.device(device)
-        # shared mapper (no local creation!)
+        # shared mapper
         self.mapper: BlockIrrepMapper = mapper.to(self.device_)
 
         # ---------- shared irreps ---------------------------------------
@@ -128,7 +128,7 @@ class E3GNN(pl.LightningModule):
         atoms: Tuple[str, ...],
     ):
         """
-        Convert DeepHead raw dict → IrrepsBlockData with shared mapper.
+        Convert DeepHead raw dict → IrrepsBlockData with mapper.
         """
         from collections import Counter
 
@@ -206,6 +206,8 @@ class E3GNN(pl.LightningModule):
             x["edge_length_emb"],
             x["edge_sh"],
         )
+        if self.pedantic:
+            assert edge.requires_grad, "Gradients not flowing through edge encoder!"
         # record edge encoding magnitudes per irrep
         self._record_activation_mags("edge_encoding", edge, self.hidden_irreps)
 
@@ -224,7 +226,8 @@ class E3GNN(pl.LightningModule):
                 f"edge_small_layer_{idx}", edge_small, self.hidden_irreps
             )
 
-        edge[:index_gnn_cutoff] = edge_small  # Does this save the computation graph?
+        edge_large = edge[index_gnn_cutoff:]
+        edge = torch.cat([edge_small, edge_large], dim=0)
 
         # ---- heads -----------------------------------------------------
         preds_raw = {
@@ -337,8 +340,6 @@ class E3GNN(pl.LightningModule):
         positions: torch.Tensor,
         box: torch.Tensor,
     ) -> "Snapshot":
-        from data.snapshot import Snapshot
-
         return Snapshot(
             hamiltonian=predictions["hamiltonian"].to_blocks(self.mapper),
             overlap=predictions["overlap"].to_blocks(self.mapper),
@@ -358,7 +359,6 @@ class E3GNN(pl.LightningModule):
         grad = torch.autograd.grad(
             energy,
             positions,
-            # grad_outputs=torch.ones_like(energy), # What does it do?
             create_graph=True,  # needed for second derivatives (eg. training on forces)
         )[0]
         return -grad
