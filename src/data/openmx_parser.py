@@ -4,9 +4,7 @@ openmx_parser.py
 Parses a single OpenMX ``*.scfout`` into a **Snapshot** object that bundles
 Hamiltonian H, Overlap S and Density D block-matrices.
 
-*  Handles junk header lines automatically (skips until first recognised header)
-*  Sums duplicate periodic-image blocks (different Rn) automatically
-*  Discards “position / momentum operator” overlap sections
+*  Sums duplicate periodic-image blocks (different Rn)
 *  Returns the matrices either in **OpenMX** or **E3NN** convention
 """
 
