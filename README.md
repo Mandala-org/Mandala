@@ -14,7 +14,7 @@ To install run
 git clone git@github.com:Mandala-org/Mandala.git mandala
 cd mandala
 # Create venv
-python -m venv mandala-venv
+python3.10 -m venv mandala-venv
 source mandala-venv/bin/activate
 # Update pip
 python -m pip install --upgrade pip
@@ -29,6 +29,7 @@ pip install -e .[dev]
 Installation requires gcc>=9.3.0 and cmake.
 The instructions depend on having cuda12.1 installed.
 Other versions of cuda or torch have not been tested.
+Requires Python 3.10 or older.
 
 The tests should run pass
 
