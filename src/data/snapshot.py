@@ -450,7 +450,7 @@ class Snapshot:
         raise AttributeError(name)
 
     # ════════════════════════════════════════════════════════════════════════
-    #                Convenient constructor from  *both*  OpenMX files
+    #                Convenient constructor from OpenMX files
     # ════════════════════════════════════════════════════════════════════════
     @staticmethod
     def from_openmx(
