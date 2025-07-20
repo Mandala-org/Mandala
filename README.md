@@ -13,10 +13,11 @@ To install run
 # Clone the repository
 git clone git@github.com:Mandala-org/Mandala.git mandala
 cd mandala
-# Update pip
-python -m pip install --upgrade pip
+# Create venv
 python -m venv mandala-venv
 source mandala-venv/bin/activate
+# Update pip
+python -m pip install --upgrade pip
 # Install
 pip install -e .[dev]
 ```
