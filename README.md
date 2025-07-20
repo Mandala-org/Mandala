@@ -26,6 +26,7 @@ pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
 pip install -e .[dev]
 ```
 
+Installation requires gcc>=9.3.0 and cmake.
 The instructions depend on having cuda12.1 installed.
 Other versions of cuda or torch have not been tested.
 
