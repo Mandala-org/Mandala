@@ -9,7 +9,7 @@ utilities.
 Key features
 ------------
 * Keeps three :class:`BlockMatrix` objects (`hamiltonian`, `overlap`,
-  `density`) under a unified interface.  Access via ``snap["density"]`` **or**
+  `density`) under a unified interface.  Access via ``snap[\"density\"]`` **or**
   attribute ``snap.density``.
 * Upon construction **re-orders edges** for every element-pair by *ascending*
   L2-norm of the density blocks - this yields deterministic ordering and is
@@ -34,7 +34,7 @@ import torch
 
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.block_matrix import BlockMatrix
-from core.basis_converter import OpenMXE3NNConverter
+from core.basis_converter import OpenMXE3NNConverter, FHIaimsE3NNConverter
 from core.orbital_irrep_config import OrbitalIrrepConfig
 
 __all__ = ["Snapshot"]
@@ -105,7 +105,7 @@ class Snapshot:
 
             if m.basis != first.basis:
                 raise ValueError(
-                    f"Matrices 0 and {i+1} must use the same basis (openmx/e3nn)"
+                    f"Matrices 0 and {i+1} must use the same basis (openmx/e3nn/fhi-aims)"
                 )
 
     # ---------------------------------------------------------------- edge ordering
@@ -141,42 +141,6 @@ class Snapshot:
         new_mats = {
             name: mat.reorder_edges(order_dict) for name, mat in self._mats.items()
         }
-
-        # # Sanity checks to make sure the graph make sense
-        # for mat in new_mats.values():
-        # lookup = mat.lookup
-        # pair_edges = mat.pair_edges
-        # pair_blocks = mat.pair_blocks
-        # atoms = mat.atoms
-
-        # # 1. Test whether all edges are unique
-        # all_edges = set()
-        # for edges in pair_edges.values():
-        #     for edge in edges.t().tolist():
-        #         all_edges.add(tuple(edge))
-        # if len(all_edges) != sum(len(edges.t()) for edges in pair_edges.values()):
-        #     raise ValueError("Duplicate edges found in pair edges")
-        # # 2. Test whether lookup contains all edges
-        # if len(lookup) != len(all_edges):
-        #     raise ValueError("Lookup size does not match edge count")
-        # for (i, j) in all_edges:
-        #     if (i, j) not in lookup:
-        #         raise ValueError(f"Edge {(i, j)} not found in lookup")
-        #     key, idx = lookup[(i, j)]
-        #     if key not in pair_blocks or idx >= len(pair_blocks[key]):
-        #         raise ValueError(f"Edge {(i, j)} lookup points to invalid block")
-        # # 3. Test whether all self-edges are present
-        # for i, atom in enumerate(atoms):
-        #     key = f"{atom}-{atom}"
-        #     if key not in pair_blocks:
-        #         raise ValueError(f"Self-edge {key} not found in pair blocks")
-        #     if (i, i) not in lookup:
-        #         raise ValueError(f"Self-edge lookup for {key} missing")
-        # # 4. Test whether graph is symmetric
-        # for (i, j) in lookup:
-        #     key, idx = lookup[(i, j)]
-        #     if (j, i) not in lookup:
-        #         raise ValueError(f"Edge {(i, j)} is not symmetric with {(j, i)}")
 
         return Snapshot(
             new_mats["hamiltonian"],
@@ -285,31 +249,42 @@ class Snapshot:
 
     def _change_basis(self, target: str) -> "Snapshot":
         """
-        Return a **new** snapshot in `target` basis ("openmx" | "e3nn").
+        Return a **new** snapshot in `target` basis ("openmx" | "e3nn" | "fhi-aims").
         If already in that basis the current instance is returned unchanged.
         """
-        if target not in {"openmx", "e3nn"}:
-            raise ValueError("target must be 'openmx' or 'e3nn'")
+        if target not in {"openmx", "e3nn", "fhi-aims"}:
+            raise ValueError("target must be 'openmx', 'e3nn', or 'fhi-aims'")
 
         if self.density.basis == target:
-            return self  # nothing to do
+            return self
 
-        cfg = self.density.orbital_cfg  # shared by all mats
-        # pick an arbitrary block to determine the device
+        cfg = self.density.orbital_cfg
         any_block = next(iter(self.density.pair_blocks.values()))
-        conv = OpenMXE3NNConverter(cfg, device=any_block.device)
+        device = any_block.device
 
-        if target == "e3nn":
+        if self.density.basis == "openmx":
+            conv = OpenMXE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-        else:  # target == "openmx"
+        elif self.density.basis == "fhi-aims":
+            conv = FHIaimsE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_e3nn(self.hamiltonian)
+            ovl = conv.matrix_to_e3nn(self.overlap)
+            den = conv.matrix_to_e3nn(self.density)
+        elif target == "openmx":
+            conv = OpenMXE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_openmx(self.hamiltonian)
             ovl = conv.matrix_to_openmx(self.overlap)
             den = conv.matrix_to_openmx(self.density)
+        elif target == "fhi-aims":
+            conv = FHIaimsE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_fhiaims(self.hamiltonian)
+            ovl = conv.matrix_to_fhiaims(self.overlap)
+            den = conv.matrix_to_fhiaims(self.density)
+        else:
+            raise RuntimeError("Should not be reachable")
 
-        # Constructor will re-order edges deterministically (norm is preserved
-        # by orthogonal transforms so ordering identical).
         return Snapshot(
             ham,
             ovl,
@@ -330,20 +305,9 @@ class Snapshot:
         """Return a (possibly new) Snapshot in the **OpenMX** convention."""
         return self._change_basis("openmx")
 
-    def change_basis(self, d_dict: Dict[str, torch.Tensor]) -> "Snapshot":
-        ham = self.hamiltonian.change_basis(d_dict)
-        ovl = self.overlap.change_basis(d_dict)
-        den = self.density.change_basis(d_dict)
-        return Snapshot(
-            ham,
-            ovl,
-            den,
-            positions=self.positions,
-            box=self.box,
-            matrix_path=self.matrix_path,
-            info_path=self.info_path,
-            cutoff_radius=self.cutoff_radius,
-        )
+    def to_fhiaims(self) -> "Snapshot":
+        """Return a (possibly new) Snapshot in the **FHI-AIMS** convention."""
+        return self._change_basis("fhi-aims")
 
     # ---------------------------------------------------------------- rotation
     def rotate(self, R: torch.Tensor) -> "Snapshot":
@@ -360,36 +324,31 @@ class Snapshot:
             den,
             positions=self.positions @ R.T if self.positions is not None else None,
             box=self.box @ R.T if self.box is not None else None,
-            matrix_path=None,  # set to None to invalidate the cache
+            matrix_path=None,
             info_path=None,
             cutoff_radius=self.cutoff_radius,
         )
 
-        # -------------------------------------------------------------------- helpers
-
-    # -------------------- minimal-image displacements ---------------------------
+    # -------------------------------------------------------------------- helpers
     def _edge_displacements(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
         """
         Return dict ``key → (E,3)`` of minimal-image displacement vectors.
-
-        Requires ``self.positions`` **and** ``self.box``.
         """
         if self.positions is None or self.box is None:
             raise RuntimeError("Snapshot has no position/box information")
 
         if mat is None:
-            mat = self.density  # default
+            mat = self.density
 
-        inv_box = torch.inverse(self.box.to(self.positions))  # (3,3)
+        inv_box = torch.inverse(self.box.to(self.positions))
         vecs: Dict[str, torch.Tensor] = {}
 
-        for key, edges in mat.pair_edges.items():  # edges (2,E)
+        for key, edges in mat.pair_edges.items():
             src, dst = edges
-            delta = self.positions[dst] - self.positions[src]  # (E,3)
+            delta = self.positions[dst] - self.positions[src]
 
-            # fractional coordinates & wrap to (-0.5,0.5]
             frac = delta @ inv_box
             frac_wrapped = frac - torch.round(frac)
 
@@ -407,8 +366,7 @@ class Snapshot:
     # -------------------- public API -------------------------------------------
     def max_distance(self, which: str = "density") -> torch.Tensor:
         """
-        Largest minimal-image distance appearing in *which* sparse matrix
-        (\"hamiltonian\" | \"overlap\" | \"density\").
+        Largest minimal-image distance appearing in *which* sparse matrix.
         """
         mat = self._mats[which]
         d = self._edge_distances(mat)
@@ -418,8 +376,6 @@ class Snapshot:
         """
         Return a **new** snapshot where edges whose minimal-image distance
         exceeds ``cutoff`` (Å) are removed *in **all** three matrices*.
-
-        Edge set is taken from *which* (defaults to \"density\").
         """
         dist = self._edge_distances(self._mats[which])
         mask_dict = {k: (v <= cutoff) for k, v in dist.items()}
@@ -428,7 +384,6 @@ class Snapshot:
         ovl = self.overlap._apply_edge_mask(mask_dict)
         den = self.density._apply_edge_mask(mask_dict)
 
-        # Constructor will re-order edges by |D| again
         return Snapshot(
             ham,
             ovl,
@@ -444,14 +399,12 @@ class Snapshot:
     def __getitem__(self, item: str) -> BlockMatrix:
         return self._mats[item]
 
-    def __getattr__(self, name: str) -> Any:  # noqa: ANN401  (# type: ignore[override]
+    def __getattr__(self, name: str) -> Any:
         if name in self._mats:
             return self._mats[name]
         raise AttributeError(name)
 
-    # ════════════════════════════════════════════════════════════════════════
-    #                Convenient constructor from OpenMX files
-    # ════════════════════════════════════════════════════════════════════════
+    # -------------------------------------------------------------------- constructors
     @staticmethod
     def from_openmx(
         matrix_path: str | os.PathLike,
@@ -461,28 +414,16 @@ class Snapshot:
         symmetrize_density: bool = True,
         cutoff_radius: float | None = None,
     ) -> "Snapshot":
-        """
-        Build a :class:`Snapshot` directly from an **OpenMX SCF output pair**:
-
-        * ``matrix_path`` - the ``*.scfout`` file containing H/S/D blocks
-        * ``info_path``   - the corresponding ``*.out`` / ``*.info`` file
-          parsed by :func:`data.openmx_info_parser.parse_info_out`
-        """
-
         from data.openmx_info_parser import parse_info_out
         from data.openmx_parser import parse_openmx_scfout
 
-        # Parse auxiliary info file (atoms, positions, orbital spec…)
         info = parse_info_out(info_path)
-
         atoms: list[str] = info.elements
         if not atoms:
             raise RuntimeError("Info-file does not contain <coordinates.forces>")
 
-        # orbital_set maps element -> compact string  ("3s2p2d1f")
         orb_cfg = OrbitalIrrepConfig.from_dict(info.orbital_set)
 
-        # ── ②  Let the existing parser build the block-matrix snapshot ──────
         snap = parse_openmx_scfout(
             matrix_path,
             atoms,
@@ -491,14 +432,40 @@ class Snapshot:
             symmetrize_density=symmetrize_density,
         )
 
-        snap.matrix_path = matrix_path  # store source file path
+        snap.matrix_path = matrix_path
         snap.info_path = info_path
-
-        # ── ③  Attach geometry (positions, later box) and return ────────────
         snap.positions = info.xyz if info.xyz.numel() else None
         snap.box = info.box if info.box.numel() else None
-        # Users can still `.rotate(...)` / `.filter_by_distance(...)`
-        # without PBC if `box` stays *None*.
+
+        if cutoff_radius is not None:
+            snap = snap.filter_by_distance(cutoff_radius)
+
+        return snap.canonicalize_edges()
+
+    @staticmethod
+    def from_fhiaims(
+        geometry_path: str | os.PathLike,
+        basis_path: str | os.PathLike,
+        hamiltonian_path: str | os.PathLike,
+        overlap_path: str | os.PathLike,
+        density_path: str | os.PathLike,
+        *,
+        convention: str = "e3nn",
+        cutoff_radius: float | None = None,
+    ) -> "Snapshot":
+        from data.fhiaims_parser import parse_fhiaims_output
+
+        snap = parse_fhiaims_output(
+            geometry_path,
+            basis_path,
+            hamiltonian_path,
+            overlap_path,
+            density_path,
+        )
+
+        if convention == "e3nn":
+            snap = snap.to_e3nn()
+
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
 
