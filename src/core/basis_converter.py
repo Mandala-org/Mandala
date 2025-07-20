@@ -34,6 +34,7 @@ _U_OPENMX_TO_WIKI: Dict[int, torch.Tensor] = {
     1: torch.eye(3, dtype=torch.float32)[[1, 2, 0]],
     2: torch.eye(5, dtype=torch.float32)[[2, 4, 0, 3, 1]],
     3: torch.eye(7, dtype=torch.float32)[[6, 4, 2, 0, 1, 3, 5]],
+    4: torch.eye(9, dtype=torch.float32)[[8, 6, 4, 2, 0, 1, 3, 5, 7]],
 }
 _U_WIKI_TO_OPENMX = {l: U.T for l, U in _U_OPENMX_TO_WIKI.items()}
 

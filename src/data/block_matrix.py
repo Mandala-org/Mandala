@@ -468,6 +468,47 @@ class BlockMatrix:
         matrix.basis = "openmx"
         return matrix
 
+    def change_basis(self, d_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
+        """
+        Change the basis of the snapshot using a dictionary of transformation matrices.
+        Each key in `d_dict` corresponds to an element symbol, and the value is a
+        transformation matrix that will be applied to the blocks associated with that element.
+        The transformation is applied as follows:
+        For a block corresponding to the pair (A-B):
+        .. math::
+            \\text{new\_block}_{AB} = d_{A} \\cdot \\text{block}_{AB} \\cdot d_{B}^T
+        where :math:`d_{A}` and :math:`d_{B}` are the transformation matrices for elements A and B,
+        respectively.
+        Parameters
+        ----------
+        d_dict : Dict[str, torch.Tensor]
+            A dictionary mapping element symbols to transformation matrices.
+            Each matrix should have the shape (d_A, d_A) for element A.
+        Returns
+        -------
+        BlockMatrix
+            A new BlockMatrix instance with the transformed blocks.
+        Notes
+        -----
+        This method assumes that the transformation matrices in `d_dict` are square matrices
+        with dimensions matching the orbital dimensions of the respective elements.
+        """
+        new_pair_blocks = {}
+        for key, blk in self.pair_blocks.items():
+            el_i, el_j = key.split("-")
+
+            new_pair_blocks[key] = d_dict[el_i] @ blk @ d_dict[el_j].T
+        # Return a new BlockMatrix with the updated blocks and unchanged edges
+        return BlockMatrix(
+            atoms=self.atoms,
+            atom_counts=self.atom_counts,
+            pair_blocks=new_pair_blocks,
+            pair_edges=self.pair_edges,
+            lookup=self.lookup,
+            orbital_cfg=self.orbital_cfg,
+            basis=self.basis,
+        )
+
     # ------------------------ alternate constructor -----------------------------
     @classmethod
     def from_dense(
