@@ -330,6 +330,21 @@ class Snapshot:
         """Return a (possibly new) Snapshot in the **OpenMX** convention."""
         return self._change_basis("openmx")
 
+    def change_basis(self, d_dict: Dict[str, torch.Tensor]) -> "Snapshot":
+        ham = self.hamiltonian.change_basis(d_dict)
+        ovl = self.overlap.change_basis(d_dict)
+        den = self.density.change_basis(d_dict)
+        return Snapshot(
+            ham,
+            ovl,
+            den,
+            positions=self.positions,
+            box=self.box,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=self.cutoff_radius,
+        )
+
     # ---------------------------------------------------------------- rotation
     def rotate(self, R: torch.Tensor) -> "Snapshot":
         """

@@ -56,7 +56,6 @@ def _assert_snapshot_equal(a, b, *, atol=1e-5):
 
 
 @pytest.mark.physics
-@pytest.mark.physics
 def test_pre_rotated_files_match_in_code_rotation():
     """
     Rotate the *original* snapshot by the known matrix and compare to the
