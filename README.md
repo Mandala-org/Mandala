@@ -31,9 +31,12 @@ The instructions depend on having cuda12.1 installed.
 Other versions of cuda or torch have not been tested.
 Requires Python 3.10 or older.
 
-The tests should run pass
+The tests should run
 
 ```bash
+# Download test data
+git lfs pull
+# Run tests
 pytest
 ```
 
@@ -75,7 +78,7 @@ git lfs install
 git lfs pull
 ```
 
-The tests should run pass
+The tests should run
 
 ```bash
 pytest
