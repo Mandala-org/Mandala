@@ -25,7 +25,7 @@ pip install -e .[dev]
 The tests should run pass
 
 ```bash
-pytest
+python -m pytest
 ```
 
 To launch training, pick a config and run:
