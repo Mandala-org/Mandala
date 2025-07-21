@@ -251,8 +251,8 @@ class E3GNNDataset(Dataset):
         """
         Build graph inputs and targets from one Snapshot.
         """
-        snap.positions = snap.positions.to(self.dtype)
-        snap.box = snap.box.to(self.dtype)
+        snap.positions = snap.positions # how to change dtype without breaking gradient flow?
+        snap.box = snap.box # how to change dtype without breaking gradient flow?
         if self.enable_forces:
             snap.positions.requires_grad_(True)
 
