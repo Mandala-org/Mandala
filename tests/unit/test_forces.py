@@ -24,10 +24,10 @@ def test_non_zero_forces_with_real_data():
 
     # Add a small, real data snapshot
     factory.add_snapshot(
-        # "data/small/H2O/original/H2O.matrix",
-        # "data/small/H2O/original/H2O.info.out",
-        "data/big/silicon/900K/Si_DM",
-        "data/big/silicon/900K/info.txt",
+        "data/small/H2O/original/H2O.matrix",
+        "data/small/H2O/original/H2O.info.out",
+        # "data/big/silicon/900K/Si_DM",
+        # "data/big/silicon/900K/info.txt",
     )
 
     # Create the dataset and mapper
