@@ -354,14 +354,54 @@ class E3GNN(pl.LightningModule):
         positions: torch.Tensor,
         box: torch.Tensor,
     ) -> torch.Tensor:
+        """
+        Compute forces from predictions and positions.
+        Args:
+            predictions: Output from the forward pass, containing hamiltonian,
+                         overlap, and density matrices.
+            positions: Atomic positions (N, 3).
+            box: Lattice box matrix (3, 3).
+        Returns:
+            Forces as a tensor of shape (N, 3).
+        Comments:
+            - Forces are computed as -∂E/∂r, where E is the energy from the hamiltonian.
+            - No Pulay correction
+        """
         snapshot = self.predictions_to_snapshot(predictions, positions, box)
         energy = snapshot.get_energy()
-        grad = torch.autograd.grad(
+        grad_pos = torch.autograd.grad(
             energy,
             positions,
             create_graph=True,  # needed for second derivatives (eg. training on forces)
         )[0]
-        return -grad
+        return -grad_pos
+    
+    def get_stress(energy, box):
+        """
+        Compute stress tensor from energy and box.
+        Args:
+            energy: Scalar energy value.
+            box: Lattice box matrix (3, 3).
+        Returns:
+            Stress tensor as a (3, 3) tensor.
+        Comments:
+            - Stress is defined as σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
+            - No Pulay correction
+        """
+        # 1. get dE/dh
+        grad_box = torch.autograd.grad(
+            energy,
+            box,
+            create_graph=True,
+        )[0]         # (3,3)
+        # 2. compute volume
+        volume = torch.det(box)
+        # 3. form Cauchy stress: σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
+        #    - no minus sign here, since σ =  +∂E/∂ε /Ω
+        stress = torch.matmul(box.t(), grad_box) / volume
+        # 4. optionally symmetrize: σ → (σ+σ^T)/2
+        stress = 0.5 * (stress + stress.transpose(-1, -2))
+        return stress
 
     def predict_forces(self, x: Dict[str, Any]) -> torch.Tensor:
         predictions = self(x)

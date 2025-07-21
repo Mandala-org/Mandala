@@ -17,7 +17,7 @@ Key features
 * Implements
 
     * ``get_number_of_electrons()``  →  Tr(D·S)
-    * ``get_energy()``                →  Tr(D·H)
+    * ``get_energy()``               →  Tr(D·H)
 
   using the highly-optimised
   :func:`core.sparse_math.trace_matmul_sparse_snap_vectorized`.
