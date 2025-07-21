@@ -15,8 +15,8 @@ def test_non_zero_forces_with_real_data():
     """
     # 1. Create a DatasetFactory with position gradients enabled
     factory = DatasetFactory(
-        cutoff_gnn=4.0,
-        cutoff_matrix=6.0,
+        cutoff_gnn=3.0,
+        cutoff_matrix=4.0,
         l_max_sh=2,
         n_radial=64,
         enable_forces=True,  # This is crucial for the test
@@ -26,6 +26,8 @@ def test_non_zero_forces_with_real_data():
     factory.add_snapshot(
         "data/small/H2O/original/H2O.matrix",
         "data/small/H2O/original/H2O.info.out",
+        # "data/big/silicon/900K/Si_DM",
+        # "data/big/silicon/900K/info.txt",
     )
 
     # Create the dataset and mapper
@@ -35,7 +37,7 @@ def test_non_zero_forces_with_real_data():
     x, _ = train_ds[0]
 
     # 2. Set up the model configuration
-    hp = HyperParams(hidden_base_dim=32, l_max=2)
+    hp = HyperParams(hidden_base_dim=16, l_max=2)
     cfg = DictConfig(
         {
             "model": dataclasses.asdict(hp),
@@ -43,7 +45,23 @@ def test_non_zero_forces_with_real_data():
             "logging": {"pedantic": True},  # Enable pedantic checks
         }
     )
+
     model = E3GNN(mapper, train_ds.edge_types, cfg)
+
+    # forces_list = []
+    # for i in trange(100):
+    #     model = E3GNN(mapper, train_ds.edge_types, cfg)
+
+    #     # 3. Predict forces and check that they are not all zero
+    #     forces = model.predict_forces(x)
+
+    #     assert forces.shape == x["positions"].shape
+    #     if not torch.allclose(
+    #         forces, torch.zeros_like(forces)
+    #     ):
+    #         print("Non-zero forces!")
+    #     forces_list.append(forces)
+    # forces = torch.stack(forces_list).mean(dim=0)
 
     # 3. Predict forces and check that they are not all zero
     forces = model.predict_forces(x)
