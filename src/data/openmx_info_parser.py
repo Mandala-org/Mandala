@@ -21,6 +21,7 @@ def recover_box(frac_coords: torch.Tensor, abs_coords: torch.Tensor) -> torch.Te
         raise ValueError("Inputs must both be (N,3) arrays")
 
     cell, *_ = torch.linalg.lstsq(F, A)
+    cell._requires_grad = True
     return cell  # (3,3)
 
 
@@ -181,7 +182,7 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
             xyz_list.append([float(v) for v in parts[2:5]])
             f_list.append([float(v) for v in parts[5:8]])
 
-    xyz = torch.tensor(xyz_list, dtype=torch.float64)
+    xyz = torch.tensor(xyz_list, dtype=torch.float64, requires_grad=True)
     forces = torch.tensor(f_list, dtype=torch.float64)
 
     # 5b) Fractional coords -------------------------------------------------
