@@ -81,7 +81,7 @@ git lfs pull
 The tests should run
 
 ```bash
-pytest
+python -m pytest
 ```
 
 To launch training, pick a config and run:
