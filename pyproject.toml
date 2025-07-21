@@ -17,11 +17,8 @@ dependencies = [
     "wandb>=0.16",
     "tqdm>=4.66",
     "numpy>=1.26",
-    "ray[tune]>=2.9",
-    "nevergrad>=1.0",
-    "optuna>=3.6",
 ]
-requires-python = ">=3.10"
+requires-python = "==3.10.4"
 
 [project.optional-dependencies]
 dev = [
