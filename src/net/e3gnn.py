@@ -376,7 +376,11 @@ class E3GNN(pl.LightningModule):
         )[0]
         return -grad_pos
     
-    def get_stress(energy, box):
+    def get_stress(self,
+        predictions: Dict[str, IrrepsBlockData],
+        positions: torch.Tensor,
+        box: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Compute stress tensor from energy and box.
         Args:
@@ -388,6 +392,8 @@ class E3GNN(pl.LightningModule):
             - Stress is defined as σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
             - No Pulay correction
         """
+        snapshot = self.predictions_to_snapshot(predictions, positions, box)
+        energy = snapshot.get_energy()
         # 1. get dE/dh
         grad_box = torch.autograd.grad(
             energy,
@@ -406,3 +412,7 @@ class E3GNN(pl.LightningModule):
     def predict_forces(self, x: Dict[str, Any]) -> torch.Tensor:
         predictions = self(x)
         return self.get_forces(predictions, x["positions"], x["box"])
+
+    def predict_stress(self, x: Dict[str, Any]) -> torch.Tensor:
+        predictions = self(x)
+        return self.get_stress(predictions, x["positions"], x["box"])
