@@ -42,10 +42,11 @@ class InfoOutData:
     dipole: torch.Tensor
 
     elements: List[str]
-    xyz: torch.Tensor  # Cartesian (Å)
+    positions: torch.Tensor  # Cartesian (Å)
+    forces: torch.Tensor
     frac: torch.Tensor  # fractional (unit-cell)
     box: torch.Tensor  # (3,3) lattice matrix
-    forces: torch.Tensor
+    stress: torch.Tensor
 
     # convenience
     def occupancy_by_element(self, el: str) -> torch.Tensor:
@@ -79,7 +80,7 @@ _RE_XYZ_END = re.compile(r"coordinates\.forces>", re.I)
 
 _FRAC_HEADER = re.compile(r"^.*Fractional coordinates of the final structure", re.I)
 
-_ORB_ORDER = "spdfghijklmnopqrstuvwxyz"
+_ORB_ORDER = "spdfghijklmnopqrstuvwpositions"
 
 
 # ---------------------------------------------------------------------------
@@ -165,24 +166,24 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
             break
 
     # 5a) Cartesian coords/forces ------------------------------------------
-    elements, xyz_list, f_list = [], [], []
-    in_xyz = False
+    elements, positions_list, f_list = [], [], []
+    in_positions = False
     for ln in lines:
         if _RE_XYZ_START.search(ln):
-            in_xyz = True
+            in_positions = True
             continue
-        if in_xyz and _RE_XYZ_END.search(ln):
-            in_xyz = False
+        if in_positions and _RE_XYZ_END.search(ln):
+            in_positions = False
             break
-        if not in_xyz:
+        if not in_positions:
             continue
         parts = ln.split()
         if len(parts) >= 8:
             elements.append(parts[1])
-            xyz_list.append([float(v) for v in parts[2:5]])
+            positions_list.append([float(v) for v in parts[2:5]])
             f_list.append([float(v) for v in parts[5:8]])
 
-    xyz = torch.tensor(xyz_list, dtype=torch.float64, requires_grad=True)
+    positions = torch.tensor(positions_list, dtype=torch.float64)
     forces = torch.tensor(f_list, dtype=torch.float64)
 
     # 5b) Fractional coords -------------------------------------------------
@@ -214,8 +215,8 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
     )
 
     # 5c) lattice matrix ----------------------------------------------------
-    if xyz.numel() and frac.numel() and xyz.shape == frac.shape:
-        box = recover_box(frac, xyz)  # (3,3)
+    if positions.numel() and frac.numel() and positions.shape == frac.shape:
+        box = recover_box(frac, positions)  # (3,3)
     else:
         box = torch.tensor([])
 
@@ -229,7 +230,7 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
         dipole_abs=dip_abs,
         dipole=dip_vec,
         elements=elements,
-        xyz=xyz,
+        positions=positions,
         frac=frac,
         box=box,
         forces=forces,
