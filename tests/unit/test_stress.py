@@ -54,4 +54,4 @@ def test_stress_with_real_data():
     assert stress.shape == x["positions"].shape
     assert not torch.allclose(
         stress, torch.zeros_like(stress)
-    ), "Stress is all zero, something no worky."
+    ), "Stress is all zero, gradients are likely detached."
