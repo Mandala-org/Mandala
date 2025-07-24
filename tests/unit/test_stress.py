@@ -48,9 +48,10 @@ def test_stress_with_real_data():
     )
 
     model = E3GNN(mapper, train_ds.edge_types, cfg)
-    # 3. Predict stress and check that it's not all zero
 
+    # 3. Predict stress and check that it's not all zeros
     stress = model.predict_stress(x)
+
     assert stress.shape == x["positions"].shape
     assert not torch.allclose(
         stress, torch.zeros_like(stress)
