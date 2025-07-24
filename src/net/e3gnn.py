@@ -375,8 +375,9 @@ class E3GNN(pl.LightningModule):
             create_graph=True,  # needed for second derivatives (eg. training on forces)
         )[0]
         return -grad_pos
-    
-    def get_stress(self,
+
+    def get_stress(
+        self,
         predictions: Dict[str, IrrepsBlockData],
         positions: torch.Tensor,
         box: torch.Tensor,
@@ -399,7 +400,9 @@ class E3GNN(pl.LightningModule):
             energy,
             box,
             create_graph=True,
-        )[0]         # (3,3)
+        )[
+            0
+        ]  # (3,3)
         # 2. compute volume
         volume = torch.det(box)
         # 3. form Cauchy stress: σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})

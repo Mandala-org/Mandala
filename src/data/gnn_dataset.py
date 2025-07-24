@@ -251,8 +251,10 @@ class E3GNNDataset(Dataset):
         """
         Build graph inputs and targets from one Snapshot.
         """
-        snap.positions = snap.positions # how to change dtype without breaking gradient flow?
-        snap.box = snap.box # how to change dtype without breaking gradient flow?
+        snap.positions = (
+            snap.positions
+        )  # how to change dtype without breaking gradient flow?
+        snap.box = snap.box  # how to change dtype without breaking gradient flow?
         if self.enable_forces:
             snap.positions.requires_grad_(True)
 
@@ -275,27 +277,19 @@ class E3GNNDataset(Dataset):
             "edge_index": edge_index.to(self.device),
             "edge_type_idx": edge_type_idx.to(self.device),
             "index_gnn_cutoff": index_gnn_cutoff,
-            "edge_length_emb": edge_length_emb.to(self.dtype).to(self.device),
-            "edge_sh": edge_sh.to(self.dtype).to(self.device),
+            "edge_length_emb": edge_length_emb.to(self.device),
+            "edge_sh": edge_sh.to(self.device),
             "positions": snap.positions.to(self.device),
-            "box": snap.box.to(self.dtype).to(self.device),
+            "box": snap.box.to(self.device),
             "atoms": atoms,
         }
 
         y = {
-            "hamiltonian": snap.hamiltonian.to_vectors(self.mapper)
-            .to(self.dtype)
-            .to(self.device),
-            "overlap": snap.overlap.to_vectors(self.mapper)
-            .to(self.dtype)
-            .to(self.device),
-            "density": snap.density.to_vectors(self.mapper)
-            .to(self.dtype)
-            .to(self.device),
-            "energy": snap.get_energy().to(self.dtype).to(self.device),
-            "num_electrons": snap.get_number_of_electrons()
-            .to(self.dtype)
-            .to(self.device),
+            "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
+            "overlap": snap.overlap.to_vectors(self.mapper).to(self.device),
+            "density": snap.density.to_vectors(self.mapper).to(self.device),
+            "energy": snap.get_energy().to(self.device),
+            "num_electrons": snap.get_number_of_electrons().to(self.device),
         }
 
         return x, y

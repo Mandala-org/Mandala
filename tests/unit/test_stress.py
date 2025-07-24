@@ -6,6 +6,7 @@ from net.e3gnn import E3GNN
 from net.common import HyperParams
 from data.factory import DatasetFactory
 
+
 def test_stress_with_real_data():
     """
     Tests that a randomly initialized network produces non-zero forces
@@ -54,4 +55,3 @@ def test_stress_with_real_data():
     assert not torch.allclose(
         stress, torch.zeros_like(stress)
     ), "Stress is all zero, something no worky."
- 
