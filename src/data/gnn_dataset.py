@@ -53,6 +53,9 @@ class E3GNNDataset(Dataset):
         dtype: torch.dtype = torch.float32,
         cache_root: str | Path | None = None,
         enable_forces: bool = False,
+        enable_stress: bool = False,
+        train_on_forces: bool = False,
+        train_on_stress: bool = False,
     ):
         if cutoff_gnn >= cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
@@ -63,6 +66,17 @@ class E3GNNDataset(Dataset):
         self.device = torch.device(device)
         self.dtype = dtype
         self.enable_forces = enable_forces
+        self.enable_stress = enable_stress
+
+        if train_on_forces and not self.enable_forces:
+            raise Exception("Forces must be enabled to train on them")
+        self.train_on_forces = train_on_forces
+        if train_on_stress and not self.enable_stress:
+            raise Exception("Stress must be enabled to train on it")
+        self.train_on_stress = train_on_stress
+
+        if cache_root and (self.enable_forces or self.enable_stress):
+            raise Exception("Caching must be disabled for forces and stress to work")
 
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
@@ -251,12 +265,19 @@ class E3GNNDataset(Dataset):
         """
         Build graph inputs and targets from one Snapshot.
         """
-        snap.positions = (
-            snap.positions
-        )  # how to change dtype without breaking gradient flow?
-        snap.box = snap.box  # how to change dtype without breaking gradient flow?
+        snap.positions = snap.positions.to(self.dtype)
+        snap.box = snap.box.to(self.dtype)
+        snap.forces = snap.forces.to(self.dtype)
+        snap.stress = snap.stress.to(self.dtype)
+
         if self.enable_forces:
             snap.positions.requires_grad_(True)
+        if self.enable_stress:
+            snap.box.requires_grad_(True)
+        if self.train_on_forces:
+            snap.forces.requires_grad_(True)
+        if self.train_on_stress:
+            snap.stress.requires_grad_(True)
 
         (
             edge_index,

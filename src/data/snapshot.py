@@ -54,7 +54,9 @@ class Snapshot:
         density: BlockMatrix,
         *,
         positions: torch.Tensor | None = None,  # (N,3)
+        forces: torch.Tensor | None = None,  # (N,3)
         box: torch.Tensor | None = None,  # (3,3)
+        stress: torch.Tensor | None = None,  # (3,3) stress tensor (multiplicative)
         matrix_path=None,  # optional path to the source file
         info_path=None,  # optional path to the source info file
         cutoff_radius: float | None = None,  # optional cutoff radius for filtering
@@ -69,7 +71,9 @@ class Snapshot:
         }
 
         self.positions = positions
+        self.forces = forces
         self.box = box  # may be None for non-periodic test cases
+        self.stress = stress
 
         self.matrix_path = matrix_path  # optional path to the source file
         self.info_path = info_path
@@ -150,7 +154,9 @@ class Snapshot:
             new_mats["overlap"],
             new_mats["density"],
             positions=self.positions,
+            forces=self.forces,
             box=self.box,
+            stress=self.stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
@@ -170,7 +176,9 @@ class Snapshot:
     def _payload(self):
         return {
             "positions": self.positions.cpu() if self.positions is not None else None,
+            "forces": self.forces.cpu() if self.forces is not None else None,
             "box": self.box.cpu() if self.box is not None else None,
+            "stress": self.stress.cpu() if self.box is not None else None,
             "mats": {k: v._to_payload() for k, v in self._mats.items()},
         }
 
@@ -215,18 +223,26 @@ class Snapshot:
             name: cls._matrix_from_payload(pld, device)
             for name, pld in payload_top["mats"].items()
         }
+        forces = payload_top.get("forces", None)
+        if forces is not None:
+            forces = forces.to(device)
         pos = payload_top.get("positions", None)
-        box = payload_top.get("box", None)
         if pos is not None:
             pos = pos.to(device)
+        box = payload_top.get("box", None)
         if box is not None:
             box = box.to(device)
+        stress = payload_top.get("stress", None)
+        if stress is not None:
+            stress = stress.to(device)
         return cls(
             mats["hamiltonian"],
             mats["overlap"],
             mats["density"],
             positions=pos,
+            forces=forces,
             box=box,
+            stress=stress,
             matrix_path=payload_top.get("matrix_path", None),
             info_path=payload_top.get("info_path", None),
             cutoff_radius=payload_top.get("cutoff_radius", None),
@@ -294,7 +310,9 @@ class Snapshot:
             ovl,
             den,
             positions=self.positions,
+            forces=self.forces,
             box=self.box,
+            stress=self.stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
@@ -327,7 +345,11 @@ class Snapshot:
             ovl,
             den,
             positions=self.positions @ R.T if self.positions is not None else None,
+            forces=self.forces @ R.T if self.positions is not None else None,
             box=self.box @ R.T if self.box is not None else None,
+            stress=(
+                self.stress @ R.T if self.stress is not None else None
+            ),  # ! Check that it's correct
             matrix_path=None,
             info_path=None,
             cutoff_radius=self.cutoff_radius,
@@ -393,7 +415,9 @@ class Snapshot:
             ovl,
             den,
             positions=self.positions,
+            forces=self.forces,
             box=self.box,
+            stress=self.stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=cutoff,
@@ -438,8 +462,10 @@ class Snapshot:
 
         snap.matrix_path = matrix_path
         snap.info_path = info_path
-        snap.positions = info.xyz if info.xyz.numel() else None
+        snap.positions = info.positions if info.positions.numel() else None
+        snap.forces = info.forces if info.forces.numel() else None
         snap.box = info.box if info.box.numel() else None
+        snap.stress = info.stress if info.box.numel() else None
 
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)

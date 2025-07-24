@@ -52,7 +52,7 @@ def test_stress_with_real_data():
     # 3. Predict stress and check that it's not all zeros
     stress = model.predict_stress(x)
 
-    assert stress.shape == x["positions"].shape
+    assert stress.shape == (3, 3)
     assert not torch.allclose(
         stress, torch.zeros_like(stress)
     ), "Stress is all zero, gradients are likely detached."
