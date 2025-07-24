@@ -48,21 +48,6 @@ def test_non_zero_forces_with_real_data():
 
     model = E3GNN(mapper, train_ds.edge_types, cfg)
 
-    # forces_list = []
-    # for i in trange(100):
-    #     model = E3GNN(mapper, train_ds.edge_types, cfg)
-
-    #     # 3. Predict forces and check that they are not all zero
-    #     forces = model.predict_forces(x)
-
-    #     assert forces.shape == x["positions"].shape
-    #     if not torch.allclose(
-    #         forces, torch.zeros_like(forces)
-    #     ):
-    #         print("Non-zero forces!")
-    #     forces_list.append(forces)
-    # forces = torch.stack(forces_list).mean(dim=0)
-
     # 3. Predict forces and check that they are not all zero
     forces = model.predict_forces(x)
 
