@@ -1,6 +1,4 @@
 import torch
-from omegaconf import DictConfig
-import dataclasses
 
 from net.e3gnn import E3GNN
 from net.common import Config
@@ -15,11 +13,13 @@ def test_non_zero_forces_with_real_data():
     """
     # 1. Create a DatasetFactory with position gradients enabled
     factory = DatasetFactory(
-        cutoff_gnn=3.0,
-        cutoff_matrix=4.0,
-        l_max_sh=2,
-        n_radial=64,
-        enable_forces=True,
+        Config(
+            cutoff_gnn=3.0,
+            cutoff_matrix=4.0,
+            l_max=2,
+            n_radial=64,
+            enable_forces=True,
+        )
     )
 
     # Add a small, real data snapshot
@@ -37,16 +37,9 @@ def test_non_zero_forces_with_real_data():
     x, _ = train_ds[0]
 
     # 2. Set up the model configuration
-    cfg = Config(hidden_base_dim=16, l_max=2)
-    cfg = DictConfig(
-        {
-            "model": dataclasses.asdict(cfg),
-            "training": {"lr": 1e-3},
-            "logging": {"pedantic": True},  # Enable pedantic checks
-        }
-    )
+    cfg = Config(hidden_base_dim=16, l_max=2, enable_forces=True)
 
-    model = E3GNN(mapper, train_ds.edge_types, cfg)
+    model = E3GNN(mapper, cfg)
 
     # 3. Predict forces and check that they are not all zero
     forces = model.predict_forces(x)

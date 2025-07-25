@@ -1,9 +1,9 @@
 import pytest
 from pathlib import Path
-
 import torch
 
 from data.factory import DatasetFactory
+from net.common import Config
 
 
 @pytest.fixture
@@ -17,19 +17,18 @@ def silicon_pair():
 
 def load_dataset(pair, cache_dir, cutoff_gnn):
     mat, info = pair
-    fac = DatasetFactory(
+    cfg = Config(
         cutoff_gnn=cutoff_gnn,
         cutoff_matrix=7.5,
-        l_max_sh=3,
+        l_max=3,
         n_radial=64,
         device="cpu",
         cache_root=str(cache_dir),
     )
-    fac.add_snapshot(mat, info, purpose="train")
-    ds, val_ds, _ = fac.create()
-    # Expect only train split
-    assert val_ds is None
-    return ds
+    fac = DatasetFactory(cfg)
+    fac.add_snapshot(mat, info)
+    train_ds, _, _ = fac.create()
+    return train_ds
 
 
 @pytest.mark.integration

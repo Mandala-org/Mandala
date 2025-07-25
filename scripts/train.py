@@ -57,13 +57,9 @@ def main(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     # 1. Dataset construction
     # ------------------------------------------------------------------
-    fact = DatasetFactory(
-        cutoff_gnn=cfg.data.cutoff_gnn,
-        cutoff_matrix=cfg.data.cutoff_matrix,
-        l_max_sh=cfg.model.l_max,
-        n_radial=cfg.data.n_radial,
-        device="cpu",
-    )
+    data_cfg = Config()
+    OmegaConf.update(data_cfg, cfg.data)
+    fact = DatasetFactory(data_cfg)
     for entry in cfg.data.snapshots:
         matrix_path = to_absolute_path(entry.matrix)
         info_path = to_absolute_path(entry.info)
