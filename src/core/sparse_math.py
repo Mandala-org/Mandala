@@ -65,7 +65,7 @@ def vectors_to_blocks(
 
 
 # ---------------------------------------------------------------------------
-#   Snapshot-level sparse traces
+#   BlockMatrix sparse traces
 # ---------------------------------------------------------------------------
 def trace_matmul_sparse_snap(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
     """
@@ -73,9 +73,10 @@ def trace_matmul_sparse_snap(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
     Works for any BlockMatrix / IrrepsBlockData combination.
     """
     out = torch.zeros(
-        (),
+        (1),
         dtype=list(A.pair_blocks.values())[0].dtype,
         device=list(A.pair_blocks.values())[0].device,
+        requires_grad=True,
     )
     for (i, j), (key, k) in A.lookup.items():
         if (j, i) not in B.lookup:
@@ -92,7 +93,11 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
     For each key ``A-B`` we fetch the reverse key ``B-A`` from ``B``.
     This matches the mathematical trace:  Σ_{i,j} Tr( A_{ij} · B_{ji} ).
     """
-    total = 0.0
+    total = torch.tensor(
+        0.0,
+        dtype=list(A.pair_blocks.values())[0].dtype,
+        device=list(A.pair_blocks.values())[0].device,
+    )
     for key in A.keys():
         el_A, el_B = key.split("-")
         rev_key = f"{el_B}-{el_A}"
