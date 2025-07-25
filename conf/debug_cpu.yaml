@@ -1,5 +1,6 @@
 # Debug CPU preset: small data subset for quick testing on CPU
-data:
+
+dataset:
   snapshots:
     - matrix: data/small/H2O/original/H2O.matrix
       info:   data/small/H2O/original/H2O.info.out
@@ -7,6 +8,9 @@ data:
     - matrix: data/small/H2O/rotated/H2O.matrix
       info:   data/small/H2O/rotated/H2O.info.out
       purpose: val
+
+config:
+  # data:
   cutoff_gnn: 4.0
   cutoff_matrix: 6.0
   n_radial: 64
@@ -14,17 +18,18 @@ data:
   enable_forces: false
   enable_stress: false
 
-training:
+  # training:
   lr: 3e-4
+  batch_size: 1
   max_epochs: 3
-  precision: 32
+  dtype: float32
   gpus: cpu
-  tune: null
+  tune: None
   seed: 42
   log_every_n_steps: 1
   smoke_test: false
 
-model:
+  # model:
   hidden_base_dim: 32
   l_max: 2
   num_layers_gnn: 2
@@ -42,7 +47,7 @@ model:
   train_on_energy: true
   train_on_num_electrons: true
 
-logging:
+  # logging:
   run_name: "debug-cpu-small"
   verbosity: 2
   bench_verbosity: 1

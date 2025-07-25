@@ -146,10 +146,10 @@ class MessageBlock(nn.Module):
         super().__init__()
         self.cfg = cfg
         if cfg.use_edge_updates:
-            self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg, dtype=self.cfg.dtype)
+            self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg)
         else:
             self.edge_upd = None
-        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, dtype=self.cfg.dtype)
+        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):

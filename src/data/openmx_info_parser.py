@@ -14,14 +14,14 @@ import torch  # real PyTorch – no stub
 
 def recover_box(frac_coords: torch.Tensor, abs_coords: torch.Tensor) -> torch.Tensor:
     """Recover the lattice matrix given fractional and absolute coordinates."""
-    F = torch.as_tensor(frac_coords, dtype=torch.float64)
-    A = torch.as_tensor(abs_coords, dtype=torch.float64)
+    with torch.no_grad():
+        F = torch.as_tensor(frac_coords)
+        A = torch.as_tensor(abs_coords)
 
-    if F.shape != A.shape or F.ndim != 2 or F.shape[1] != 3:
-        raise ValueError("Inputs must both be (N,3) arrays")
+        if F.shape != A.shape or F.ndim != 2 or F.shape[1] != 3:
+            raise ValueError("Inputs must both be (N,3) arrays")
 
-    cell, *_ = torch.linalg.lstsq(F, A)
-    cell._requires_grad = True
+        cell, *_ = torch.linalg.lstsq(F, A)
     return cell  # (3,3)
 
 
@@ -80,7 +80,7 @@ _RE_XYZ_END = re.compile(r"coordinates\.forces>", re.I)
 
 _FRAC_HEADER = re.compile(r"^.*Fractional coordinates of the final structure", re.I)
 
-_ORB_ORDER = "spdfghijklmnopqrstuvwpositions"
+_ORB_ORDER = "spdfghijklmnopqrstuvwxyz"
 
 
 # ---------------------------------------------------------------------------
@@ -88,14 +88,16 @@ _ORB_ORDER = "spdfghijklmnopqrstuvwpositions"
 # ---------------------------------------------------------------------------
 
 
-def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large fn)
+def parse_info_out(
+    path: str | Path, dtype: torch.dtype = torch.float32
+) -> InfoOutData:  # noqa: C901 (single large fn)
     lines = Path(path).read_text(errors="ignore").splitlines()
 
     # 1) energies -----------------------------------------------------------
     energies: Dict[str, torch.Tensor] = {}
     for ln in lines:
         if m := _RE_ENERGY.match(ln):
-            energies[m.group(1)] = torch.tensor(float(m.group(2)), dtype=torch.float64)
+            energies[m.group(1)] = torch.tensor(float(m.group(2)), dtype=dtype)
 
     # 2) occupancies --------------------------------------------------------
     occup, meta = [], []
@@ -123,7 +125,7 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
             sym, mul_s, up, dn = m.groups()
             l = sym[0].lower()
             mul = int(mul_s)
-            occup.append(torch.tensor([float(up), float(dn)], dtype=torch.float64))
+            occup.append(torch.tensor([float(up), float(dn)], dtype=dtype))
             meta.append((atom_id[cur_el], cur_el, l, mul, 0))
             mul_ctr.setdefault(cur_el, {}).setdefault(l, set()).add(mul)
 
@@ -148,21 +150,19 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
                 continue
             if m := _RE_EIG_ROW.match(ln):
                 eig_rows.append(
-                    torch.tensor(
-                        [float(m.group(1)), float(m.group(2))], dtype=torch.float64
-                    )
+                    torch.tensor([float(m.group(1)), float(m.group(2))], dtype=dtype)
                 )
 
     eigenvalues = torch.stack(eig_rows, dim=0) if eig_rows else torch.tensor([])
 
     # 4) dipole -------------------------------------------------------------
-    dip_abs = torch.tensor(float("nan"), dtype=torch.float64)
-    dip_vec = torch.tensor([float("nan")] * 3, dtype=torch.float64)
+    dip_abs = torch.tensor(float("nan"), dtype=dtype)
+    dip_vec = torch.tensor([float("nan")] * 3, dtype=dtype)
     for ln in lines:
         if m := _RE_DIP_ABS.match(ln):
-            dip_abs = torch.tensor(float(m.group(1)), dtype=torch.float64)
+            dip_abs = torch.tensor(float(m.group(1)), dtype=dtype)
         elif m := _RE_DIP_VEC.match(ln):
-            dip_vec = torch.tensor([float(x) for x in m.groups()], dtype=torch.float64)
+            dip_vec = torch.tensor([float(x) for x in m.groups()], dtype=dtype)
             break
 
     # 5a) Cartesian coords/forces ------------------------------------------
@@ -183,8 +183,8 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
             positions_list.append([float(v) for v in parts[2:5]])
             f_list.append([float(v) for v in parts[5:8]])
 
-    positions = torch.tensor(positions_list, dtype=torch.float64)
-    forces = torch.tensor(f_list, dtype=torch.float64)
+    positions = torch.tensor(positions_list, dtype=dtype)
+    forces = torch.tensor(f_list, dtype=dtype)
 
     # 5b) Fractional coords -------------------------------------------------
     frac_list: list[list[float]] = []
@@ -210,18 +210,17 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
             break
         i += 1
 
-    frac = (
-        torch.tensor(frac_list, dtype=torch.float64) if frac_list else torch.tensor([])
-    )
+    frac = torch.tensor(frac_list, dtype=dtype) if frac_list else torch.tensor([])
 
     # 5c) lattice matrix ----------------------------------------------------
     if positions.numel() and frac.numel() and positions.shape == frac.shape:
         box = recover_box(frac, positions)  # (3,3)
     else:
         box = torch.tensor([])
+    box = box.to(dtype=dtype)
 
     # No stress available at this point
-    stress = torch.tensor([])
+    stress = torch.tensor([]).to(dtype=dtype)
 
     # 6) pack ---------------------------------------------------------------
     return InfoOutData(
