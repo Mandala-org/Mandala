@@ -2,7 +2,7 @@
 Additional coverage for E3GNN:
 
 We instantiate the model under five **categorically different**
-HyperParams settings and run a bare `forward` pass on a dummy mini-batch.
+Config settings and run a bare `forward` pass on a dummy mini-batch.
 
 The test does **not** back-prop or call Lightning’s training loop – it is
 meant to guard against shape / device / construction regressions for the
@@ -15,20 +15,20 @@ from e3nn.o3 import Irreps
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
-from net.common import HyperParams
+from net.common import Config
 from net.e3gnn import E3GNN
 
 
 # ──────────────────────────────────────────────────────────────────────
 # helper to fabricate a minimal synthetic batch
 # ──────────────────────────────────────────────────────────────────────
-def make_dummy_graph(hp):
+def make_dummy_graph(cfg):
     N, E = 4, 3
     node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
     edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
 
-    edge_len = torch.randn(E, hp.n_radial)
-    sh_irreps = Irreps.spherical_harmonics(hp.l_max)
+    edge_len = torch.randn(E, cfg.n_radial)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh_irreps.dim)
 
     edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long)
@@ -68,11 +68,11 @@ def test_e3gnn_forward_variants(hp_kwargs):
     from omegaconf import OmegaConf
     from dataclasses import asdict
 
-    hp = HyperParams(**hp_kwargs)
+    cfg = Config(**hp_kwargs)
 
     # Create a minimal mock config
     mock_cfg = OmegaConf.create(
-        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
+        {"model": asdict(cfg), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
     )
 
     model = E3GNN(
@@ -82,7 +82,7 @@ def test_e3gnn_forward_variants(hp_kwargs):
         device="cpu",
     )
 
-    x = make_dummy_graph(hp)
+    x = make_dummy_graph(cfg)
     atoms = ("H",) * 4
 
     preds = model(x)

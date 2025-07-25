@@ -2,7 +2,7 @@ import pytest
 import torch
 from e3nn.o3 import Irreps
 
-from net.common import HyperParams, build_hidden_irreps
+from net.common import Config, build_hidden_irreps
 from net.common import RadialMLP
 from net.activations import scalar_activation, make_nonlinearity
 from net.encoders import NodeEncoder, EdgeEncoder
@@ -14,9 +14,9 @@ from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigErro
 
 @pytest.mark.unit
 def test_node_encoder_shape_and_dtype():
-    hp = HyperParams()
+    cfg = Config()
     out_ir = Irreps("4x0e")
-    enc = NodeEncoder(node_one_hot_dim=3, out_irreps=out_ir, hp=hp, device="cpu")
+    enc = NodeEncoder(node_one_hot_dim=3, out_irreps=out_ir, cfg=cfg, device="cpu")
     x = torch.tensor([0, 1], dtype=torch.long)
     h = enc(x)
     assert h.shape == (2, out_ir.dim)
@@ -25,13 +25,13 @@ def test_node_encoder_shape_and_dtype():
 
 @pytest.mark.unit
 def test_edge_encoder_forward():
-    hp = HyperParams()
-    n_types, n_radial = 2, hp.n_radial
+    cfg = Config()
+    n_types, n_radial = 2, cfg.n_radial
     sh_ir = Irreps.spherical_harmonics(1)
     out_ir = Irreps("5x0e")
 
     enc = EdgeEncoder(
-        n_types, n_radial, sh_ir, out_ir, hp, device="cpu", dtype=torch.float32
+        n_types, n_radial, sh_ir, out_ir, cfg, device="cpu", dtype=torch.float32
     )
     E = 4
     edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.long)
@@ -44,9 +44,9 @@ def test_edge_encoder_forward():
 @pytest.mark.parametrize("residual", [True, False])
 @pytest.mark.unit
 def test_edge_update_block_shape(residual):
-    hp = HyperParams(residual_connections=residual)
+    cfg = Config(residual_connections=residual)
     hid_ir = Irreps("3x0e")
-    blk = EdgeUpdateBlock(hid_ir, hp, device="cpu")
+    blk = EdgeUpdateBlock(hid_ir, cfg, device="cpu")
     N, E = 5, 3
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
@@ -60,9 +60,9 @@ def test_edge_update_block_shape(residual):
 @pytest.mark.parametrize("batch_norm", [True, False])
 @pytest.mark.unit
 def test_node_update_block_shape(self_upd, batch_norm):
-    hp = HyperParams(use_self_update=self_upd, batch_norm=batch_norm)
+    cfg = Config(use_self_update=self_upd, batch_norm=batch_norm)
     hid_ir = Irreps("2x0e")
-    blk = NodeUpdateBlock(hid_ir, hp, device="cpu")
+    blk = NodeUpdateBlock(hid_ir, cfg, device="cpu")
     N, E = 4, 2
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
@@ -73,9 +73,9 @@ def test_node_update_block_shape(self_upd, batch_norm):
 
 @pytest.mark.unit
 def test_message_block_edge_and_node_update():
-    hp = HyperParams(use_edge_updates=True)
+    cfg = Config(use_edge_updates=True)
     hid_ir = Irreps("1x0e")
-    blk = MessageBlock(hid_ir, hp, device="cpu")
+    blk = MessageBlock(hid_ir, cfg, device="cpu")
     N, E = 3, 2
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
@@ -95,12 +95,12 @@ def test_scalar_activation_and_invalid():
 
 @pytest.mark.unit
 def test_make_nonlinearity_id_and_fallback():
-    hp = HyperParams(nonlin_kind="id", activation_scalar="relu")
+    cfg = Config(nonlin_kind="id", activation_scalar="relu")
     ir = Irreps("2x0e+1x1o")
-    m = make_nonlinearity(ir, hp)
+    m = make_nonlinearity(ir, cfg)
     assert isinstance(m, torch.nn.Sequential)
     # unsupported kind raises
-    hp2 = HyperParams(nonlin_kind="bogus")
+    hp2 = Config(nonlin_kind="bogus")
     with pytest.raises(ValueError):
         make_nonlinearity(ir, hp2)
 

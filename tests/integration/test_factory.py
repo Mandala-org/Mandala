@@ -120,14 +120,14 @@ def test_model_forward_cpu(factory_results):
 
     # Lazy import to avoid heavy deps if not needed
     from net.e3gnn import E3GNN
-    from net.common import HyperParams
+    from net.common import Config
 
     sample = train_ds[0]
     x, y = sample
 
-    hp = HyperParams(dropout=0.0, batch_norm=False)
+    cfg = Config(dropout=0.0, batch_norm=False)
     mock_cfg = OmegaConf.create(
-        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
+        {"model": asdict(cfg), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
     )
 
     model = E3GNN(

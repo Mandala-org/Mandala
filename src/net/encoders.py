@@ -16,7 +16,7 @@ from torch import nn
 from e3nn.o3 import Irreps, Linear
 from e3nn.nn import Dropout
 
-from net.common import HyperParams, RadialMLP
+from net.common import Config, RadialMLP
 from net.activations import make_nonlinearity
 
 
@@ -33,17 +33,17 @@ class NodeEncoder(nn.Module):
         self,
         node_one_hot_dim: int,
         out_irreps: Irreps,
-        hp: HyperParams,
+        cfg: Config,
         *,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
-        self.hp = hp
+        self.cfg = cfg
         self.out_irreps = out_irreps
         self.device = torch.device(device)
 
-        scalar_width = hp.hidden_base_dim
+        scalar_width = cfg.hidden_base_dim
         self.elem_emb = nn.Embedding(
             node_one_hot_dim,
             scalar_width,
@@ -58,9 +58,9 @@ class NodeEncoder(nn.Module):
             internal_weights=True,
         )
 
-        self.nl = make_nonlinearity(out_irreps, hp)
+        self.nl = make_nonlinearity(out_irreps, cfg)
         self.dropout = (
-            Dropout(out_irreps, p=hp.dropout) if hp.dropout > 0.0 else nn.Identity()
+            Dropout(out_irreps, p=cfg.dropout) if cfg.dropout > 0.0 else nn.Identity()
         )
 
     # ------------------------------------------------------------------
@@ -100,18 +100,18 @@ class EdgeEncoder(nn.Module):
         n_radial: int,
         sh_irreps: Irreps,
         out_irreps: Irreps,
-        hp: HyperParams,
+        cfg: Config,
         *,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
-        self.hp = hp
+        self.cfg = cfg
         self.out_irreps = out_irreps
         self.device = torch.device(device)
 
         # 1) scalar embeddings ------------------------------------------------
-        sc_width = hp.hidden_base_dim
+        sc_width = cfg.hidden_base_dim
         self.edge_emb = nn.Embedding(
             n_edge_types,
             sc_width,
@@ -123,8 +123,8 @@ class EdgeEncoder(nn.Module):
         self.radial_net = RadialMLP(
             in_dim=n_radial,
             out_dim=sc_width,
-            layers=hp.radial_layers,
-            act=hp.activation_scalar,
+            layers=cfg.radial_layers,
+            act=cfg.activation_scalar,
             dtype=dtype,
         ).to(self.device)
 
@@ -144,9 +144,9 @@ class EdgeEncoder(nn.Module):
         )
 
         # 3) non-linearity + dropout
-        self.nl = make_nonlinearity(out_irreps, hp)
+        self.nl = make_nonlinearity(out_irreps, cfg)
         self.dropout = (
-            Dropout(out_irreps, p=hp.dropout) if hp.dropout > 0.0 else nn.Identity()
+            Dropout(out_irreps, p=cfg.dropout) if cfg.dropout > 0.0 else nn.Identity()
         )
 
     # ------------------------------------------------------------------

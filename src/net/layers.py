@@ -7,7 +7,7 @@ E(3)-equivariant message-passing blocks:
 *   uses `torch_scatter.scatter` for edge→node aggregation
 *   dropout is `e3nn.nn.Dropout` (acts on *all* irrep coeffs)
 *   normalisation + activation selected via `make_nonlinearity`
-*   optional equivariant `BatchNorm` (`hp.batch_norm`)
+*   optional equivariant `BatchNorm` (`cfg.batch_norm`)
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from torch_scatter import scatter
 from e3nn.o3 import Irreps, Linear
 from e3nn.nn import Dropout, BatchNorm
 
-from net.common import HyperParams
+from net.common import Config
 from net.activations import make_nonlinearity
 
 
@@ -39,27 +39,29 @@ class EdgeUpdateBlock(nn.Module):
     def __init__(
         self,
         hidden_irreps: Irreps,
-        hp: HyperParams,
+        cfg: Config,
         *,
         dtype=torch.float32,
         device: torch.device | str = "cpu",
     ):
         super().__init__()
-        self.hp = hp
+        self.cfg = cfg
 
         self.lin_src = Linear(hidden_irreps, hidden_irreps)
         self.lin_dst = Linear(hidden_irreps, hidden_irreps)
 
-        self.norm_act = make_nonlinearity(hidden_irreps, hp)
+        self.norm_act = make_nonlinearity(hidden_irreps, cfg)
         self.dropout = (
-            Dropout(hidden_irreps, p=hp.dropout) if hp.dropout > 0.0 else nn.Identity()
+            Dropout(hidden_irreps, p=cfg.dropout)
+            if cfg.dropout > 0.0
+            else nn.Identity()
         )
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         src, dst = edge_index
         upd = 0.5 * (self.lin_src(node[src]) + self.lin_dst(node[dst]))
-        if self.hp.residual_connections:
+        if self.cfg.residual_connections:
             upd = upd + edge
         upd = self.norm_act(upd)
         upd = self.dropout(upd)
@@ -82,30 +84,32 @@ class NodeUpdateBlock(nn.Module):
     def __init__(
         self,
         hidden_irreps: Irreps,
-        hp: HyperParams,
+        cfg: Config,
         *,
         dtype=torch.float32,
         device: torch.device | str = "cpu",
     ):
         super().__init__()
-        self.hp = hp
+        self.cfg = cfg
 
         self.lin_msg = Linear(hidden_irreps, hidden_irreps)
 
-        if hp.use_self_update:
+        if cfg.use_self_update:
             self.self_mlp = nn.Sequential(
                 Linear(hidden_irreps, hidden_irreps),
-                make_nonlinearity(hidden_irreps, hp),
+                make_nonlinearity(hidden_irreps, cfg),
             )
         else:
             self.self_mlp = None
 
-        self.norm_act = make_nonlinearity(hidden_irreps, hp)
+        self.norm_act = make_nonlinearity(hidden_irreps, cfg)
         self.dropout = (
-            Dropout(hidden_irreps, p=hp.dropout) if hp.dropout > 0.0 else nn.Identity()
+            Dropout(hidden_irreps, p=cfg.dropout)
+            if cfg.dropout > 0.0
+            else nn.Identity()
         )
 
-        self.bn = BatchNorm(hidden_irreps) if hp.batch_norm else nn.Identity()
+        self.bn = BatchNorm(hidden_irreps) if cfg.batch_norm else nn.Identity()
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
@@ -116,7 +120,7 @@ class NodeUpdateBlock(nn.Module):
         upd = agg
         if self.self_mlp is not None:
             upd = upd + self.self_mlp(node)
-        if self.hp.residual_connections:
+        if self.cfg.residual_connections:
             upd = upd + node
 
         upd = self.bn(upd)
@@ -144,19 +148,19 @@ class MessageBlock(nn.Module):
     def __init__(
         self,
         hidden_irreps: Irreps,
-        hp: HyperParams,
+        cfg: Config,
         *,
         dtype=torch.float32,
         device: torch.device | str = "cpu",
     ):
         super().__init__()
-        if hp.use_edge_updates:
+        if cfg.use_edge_updates:
             self.edge_upd = EdgeUpdateBlock(
-                hidden_irreps, hp, dtype=dtype, device=device
+                hidden_irreps, cfg, dtype=dtype, device=device
             )
         else:
             self.edge_upd = None
-        self.node_upd = NodeUpdateBlock(hidden_irreps, hp, dtype=dtype, device=device)
+        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, dtype=dtype, device=device)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):

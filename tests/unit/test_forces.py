@@ -3,7 +3,7 @@ from omegaconf import DictConfig
 import dataclasses
 
 from net.e3gnn import E3GNN
-from net.common import HyperParams
+from net.common import Config
 from data.factory import DatasetFactory
 
 
@@ -19,7 +19,7 @@ def test_non_zero_forces_with_real_data():
         cutoff_matrix=4.0,
         l_max_sh=2,
         n_radial=64,
-        enable_forces=True,  # This is crucial for the test
+        enable_forces=True,
     )
 
     # Add a small, real data snapshot
@@ -37,10 +37,10 @@ def test_non_zero_forces_with_real_data():
     x, _ = train_ds[0]
 
     # 2. Set up the model configuration
-    hp = HyperParams(hidden_base_dim=16, l_max=2)
+    cfg = Config(hidden_base_dim=16, l_max=2)
     cfg = DictConfig(
         {
-            "model": dataclasses.asdict(hp),
+            "model": dataclasses.asdict(cfg),
             "training": {"lr": 1e-3},
             "logging": {"pedantic": True},  # Enable pedantic checks
         }

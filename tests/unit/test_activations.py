@@ -5,8 +5,8 @@ from e3nn.o3 import Irreps
 from net.activations import make_nonlinearity, scalar_activation
 
 
-class DummyHP:
-    """Mimic HyperParams subset used by make_nonlinearity."""
+class DummyCFG:
+    """Mimic Config subset used by make_nonlinearity."""
 
     def __init__(self, **kw):
         # defaults
@@ -25,8 +25,8 @@ IR = Irreps("4x0e + 4x0o + 2x1e + 2x1o")  # simple test irreps
 @pytest.mark.parametrize("kind", ["gate", "normact", "s2act", "id"])
 @pytest.mark.unit
 def test_factory_builds_and_runs(kind):
-    hp = DummyHP(nonlin_kind=kind)
-    mod = make_nonlinearity(IR, hp)
+    cfg = DummyCFG(nonlin_kind=kind)
+    mod = make_nonlinearity(IR, cfg)
 
     x = torch.randn(8, IR.dim, requires_grad=True)
     y = mod(x)
