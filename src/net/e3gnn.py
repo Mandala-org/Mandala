@@ -367,6 +367,7 @@ class E3GNN(pl.LightningModule):
             energy,
             positions,
             create_graph=self.cfg.train_on_forces,  # needed for second derivatives
+            retain_graph=True,
         )[0]
         return -grad_pos
 
@@ -394,6 +395,7 @@ class E3GNN(pl.LightningModule):
             energy,
             box,
             create_graph=self.cfg.train_on_stress,  # needed for second derivatives
+            retain_graph=True,
         )
         # 2. compute volume
         volume = torch.det(box)

@@ -34,7 +34,6 @@ import torch
 
 from core.sparse_math import (
     trace_matmul_sparse_snap_vectorized,
-    trace_matmul_sparse_snap,
 )
 from data.block_matrix import BlockMatrix
 from core.basis_converter import OpenMXE3NNConverter, FHIaimsE3NNConverter
@@ -170,7 +169,10 @@ class Snapshot:
     def get_energy(self) -> torch.Tensor:
         """Return *scalar* Tr(D·H)."""
         # return trace_matmul_sparse_snap_vectorized(self.hamiltonian, self.density)
-        return trace_matmul_sparse_snap(self.hamiltonian, self.density)
+        # return trace_matmul_sparse_snap(self.hamiltonian, self.density)
+        return torch.trace(
+            self.hamiltonian.to_dense() @ self.density.to_dense()
+        )  # ! Temporary
 
     # ---------------------------------------------------------------- serialisation
     def _payload(self):
