@@ -183,7 +183,7 @@ def parse_info_out(
             positions_list.append([float(v) for v in parts[2:5]])
             f_list.append([float(v) for v in parts[5:8]])
 
-    positions = torch.tensor(positions_list, dtype=dtype)
+    positions = torch.tensor(positions_list, dtype=dtype, requires_grad=True)
     forces = torch.tensor(f_list, dtype=dtype)
 
     # 5b) Fractional coords -------------------------------------------------
