@@ -26,6 +26,8 @@ from e3nn.o3 import Irreps, spherical_harmonics
 from e3nn.math import soft_one_hot_linspace
 
 from core.block_irrep_mapper import BlockIrrepMapper
+from net.common import Config
+
 from data.snapshot import Snapshot
 from tqdm.auto import tqdm
 
@@ -44,51 +46,33 @@ class E3GNNDataset(Dataset):
         self,
         snapshot_paths: Sequence[Tuple[Path, Path]],
         mapper: BlockIrrepMapper,
-        *,
-        cutoff_gnn: float = 5.0,
-        cutoff_matrix: float = 7.5,
-        l_max_sh: int = 3,
-        n_radial: int = 64,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
-        cache_root: str | Path | None = None,
-        enable_forces: bool = False,
-        enable_stress: bool = False,
-        train_on_forces: bool = False,
-        train_on_stress: bool = False,
+        cfg: Config,
     ):
-        if cutoff_gnn >= cutoff_matrix:
+        self.cfg = cfg
+        if cfg.cutoff_gnn >= cfg.cutoff_matrix:
             raise ValueError("cutoff_gnn must be < cutoff_matrix")
 
         if not snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
 
-        self.device = torch.device(device)
-        self.dtype = dtype
-        self.enable_forces = enable_forces
-        self.enable_stress = enable_stress
+        self.device = torch.device(self.cfg.device)
+        self.dtype = self.cfg.dtype
 
-        if train_on_forces and not self.enable_forces:
+        if cfg.train_on_forces and not self.cfg.enable_forces:
             raise Exception("Forces must be enabled to train on them")
-        self.train_on_forces = train_on_forces
-        if train_on_stress and not self.enable_stress:
+        if cfg.train_on_stress and not self.cfg.enable_stress:
             raise Exception("Stress must be enabled to train on it")
-        self.train_on_stress = train_on_stress
 
-        if cache_root and (self.enable_forces or self.enable_stress):
+        if cfg.cache_root and (self.cfg.enable_forces or self.cfg.enable_stress):
             raise Exception("Caching must be disabled for forces and stress to work")
 
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
-        self.global_cfg = mapper.orbital_cfg
-        self.l_max_sh = int(l_max_sh)
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.l_max_sh)
-        self.n_radial = int(n_radial)
-        self.cut = float(cutoff_gnn)
-        self.cut_mat = float(cutoff_matrix)
+        self.orbital_cfg = mapper.orbital_cfg
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
 
         # edge-type encoding (ordered pairs)
-        elems = self.global_cfg.elements()
+        elems = self.orbital_cfg.elements()
         self.edge_types: List[str] = [f"{a}-{b}" for a in elems for b in elems]
         self.edge_type2idx: Dict[str, int] = {
             k: i for i, k in enumerate(self.edge_types)
@@ -96,10 +80,9 @@ class E3GNNDataset(Dataset):
         self.n_edge_types = len(self.edge_types)
 
         # configure cache root (if None, caching is disabled)
-        if cache_root is None:
-            self.cache_root = None
-        else:
-            self.cache_root = Path(cache_root).expanduser()
+        if cfg.cache_root is not None:
+            self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
+
         # preprocess all snapshots
         self.samples: List[Tuple[Dict, Dict, Dict]] = []
         for matrix_path, info_path in tqdm(snapshot_paths, desc="Loading snapshots"):
@@ -116,17 +99,17 @@ class E3GNNDataset(Dataset):
         Load processed snapshot from cache if available, otherwise process and cache it.
         """
         # build cache key from snapshot payload and model settings
-        if self.cache_root is not None:
+        if self.cfg.cache_root is not None:
             key_obj = (
                 matrix_path.resolve(),
                 info_path.resolve(),
-                self.n_radial,
-                self.cut,
-                self.cut_mat,
-                self.l_max_sh,
+                self.cfg.n_radial,
+                self.cfg.cutoff_gnn,
+                self.cfg.cutoff_matrix,
+                self.cfg.l_max,
             )
             key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
-            cache_file = self.cache_root / f"{key_hash}.pt"
+            cache_file = self.cfg.cache_root / f"{key_hash}.pt"
             # attempt load from cache
             if cache_file.exists():
                 try:
@@ -140,13 +123,13 @@ class E3GNNDataset(Dataset):
             info_path=info_path,
             convention="e3nn",
             symmetrize_density=True,
-            cutoff_radius=self.cut_mat,
+            cutoff_radius=self.cfg.cutoff_matrix,
         )
         sample = self._process_snapshot(snapshot)
         # save to cache if enabled
-        if self.cache_root is not None:
+        if self.cfg.cache_root is not None:
             try:
-                self.cache_root.mkdir(parents=True, exist_ok=True)
+                self.cfg.cache_root.mkdir(parents=True, exist_ok=True)
                 torch.save(sample, cache_file)
             except Exception:
                 pass
@@ -170,7 +153,7 @@ class E3GNNDataset(Dataset):
         frac = frac - torch.round(frac)
         return frac @ box
 
-    # ---------- build edge tensors for a given cutoff_gnn ------------------------
+    # ---------- build edge tensors for a given cfg.cutoff_gnn ------------------------
     def _edge_tensors(
         self,
         snap: Snapshot,
@@ -180,7 +163,7 @@ class E3GNNDataset(Dataset):
         -------
         edge_index : (2, E_total) long
         edge_type_idx : (E_total,) long
-        edge_length_emb : (E_total, n_radial) float
+        edge_length_emb : (E_total, cfg.n_radial) float
         edge_sh : (E_total, sh_dim) float
         index_gnn_cutoff : int
         """
@@ -241,14 +224,16 @@ class E3GNNDataset(Dataset):
         edge_length_emb = soft_one_hot_linspace(
             lengths,
             start=0.0,
-            end=self.cut_mat,
-            number=self.n_radial,
+            end=self.cfg.cutoff_matrix,
+            number=self.cfg.n_radial,
             basis="gaussian",
             cutoff=False,
         )
 
-        # 6. Determine the GNN cutoff_gnn index
-        index_gnn_cutoff = len(self_edges) + torch.sum(lengths <= self.cut).item()
+        # 6. Determine the GNN cfg.cutoff_gnn index
+        index_gnn_cutoff = (
+            len(self_edges) + torch.sum(lengths <= self.cfg.cutoff_gnn).item()
+        )
 
         return (
             edge_index,
@@ -270,13 +255,13 @@ class E3GNNDataset(Dataset):
         snap.forces = snap.forces.to(self.dtype)
         snap.stress = snap.stress.to(self.dtype)
 
-        if self.enable_forces:
+        if self.cfg.enable_forces:
             snap.positions.requires_grad_(True)
-        if self.enable_stress:
+        if self.cfg.enable_stress:
             snap.box.requires_grad_(True)
-        if self.train_on_forces:
+        if self.cfg.train_on_forces:
             snap.forces.requires_grad_(True)
-        if self.train_on_stress:
+        if self.cfg.train_on_stress:
             snap.stress.requires_grad_(True)
 
         (
@@ -288,7 +273,7 @@ class E3GNNDataset(Dataset):
         ) = self._edge_tensors(snap)
 
         atoms = snap.density.atoms
-        elem2idx = {el: i for i, el in enumerate(self.global_cfg.elements())}
+        elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
         node_type_idx = torch.tensor(
             [elem2idx[el] for el in atoms], dtype=torch.long, device=self.device
         )

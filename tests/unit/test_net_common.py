@@ -1,7 +1,7 @@
 import pytest
 import torch
 from e3nn.o3 import Irreps
-from net.common import RadialMLP, build_hidden_irreps, HyperParams
+from net.common import RadialMLP, build_hidden_irreps, Config
 
 
 @pytest.mark.unit
@@ -21,6 +21,6 @@ def test_radial_mlp_arbitrary_layers():
 
 @pytest.mark.unit
 def test_hyperparams_defaults():
-    hp = HyperParams()
-    assert hp.nonlin_kind in {"gate", "normact", "s2act", "id"}
-    assert hp.energy_loss_coef > 0
+    cfg = Config()
+    assert cfg.nonlin_kind in {"gate", "normact", "s2act", "id"}
+    assert cfg.loss_coef_energy > 0

@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from net.common import HyperParams
+from net.common import Config
 from net.e3gnn import E3GNN
 
 
@@ -24,9 +24,9 @@ def test_force_prediction():
     train_ds, _, mapper = fac.create()
 
     # initialize model with default hyperparameters
-    hp = HyperParams()
+    cfg = Config()
     mock_cfg = OmegaConf.create(
-        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
+        {"model": asdict(cfg), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
     )
     model = E3GNN(mapper, train_ds.edge_types, mock_cfg, device="cpu")
     # take first sample from training dataset

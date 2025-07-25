@@ -345,7 +345,7 @@ class Snapshot:
             ovl,
             den,
             positions=self.positions @ R.T if self.positions is not None else None,
-            forces=self.forces @ R.T if self.positions is not None else None,
+            forces=self.forces @ R.T if self.forces is not None else None,
             box=self.box @ R.T if self.box is not None else None,
             stress=(
                 self.stress @ R.T if self.stress is not None else None
@@ -368,7 +368,7 @@ class Snapshot:
         if mat is None:
             mat = self.density
 
-        inv_box = torch.inverse(self.box.to(self.positions))
+        inv_box = torch.inverse(self.box)
         vecs: Dict[str, torch.Tensor] = {}
 
         for key, edges in mat.pair_edges.items():
@@ -378,7 +378,7 @@ class Snapshot:
             frac = delta @ inv_box
             frac_wrapped = frac - torch.round(frac)
 
-            vecs[key] = frac_wrapped @ self.box.to(self.positions)
+            vecs[key] = frac_wrapped @ self.box
 
         return vecs
 

@@ -220,6 +220,9 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
     else:
         box = torch.tensor([])
 
+    # No stress available at this point
+    stress = torch.tensor([])
+
     # 6) pack ---------------------------------------------------------------
     return InfoOutData(
         energies=energies,
@@ -231,7 +234,8 @@ def parse_info_out(path: str | Path) -> InfoOutData:  # noqa: C901 (single large
         dipole=dip_vec,
         elements=elements,
         positions=positions,
+        forces=forces,
         frac=frac,
         box=box,
-        forces=forces,
+        stress=stress,
     )

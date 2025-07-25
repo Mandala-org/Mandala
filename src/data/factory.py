@@ -21,12 +21,12 @@ import os
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple, Literal, Optional
 
-import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
 from data.openmx_info_parser import parse_info_out, InfoOutData
+from net.common import Config
 
 Purpose = Literal["train", "val"]
 
@@ -38,28 +38,12 @@ class DatasetFactory:
     # ------------------------------------------------------------------ init
     def __init__(
         self,
-        *,
-        cutoff_gnn: float = 5.0,
-        cutoff_matrix: float = 7.5,
-        l_max_sh: int = 3,
-        n_radial: int = 64,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
-        cache_root: str | os.PathLike | None = None,
-        enable_forces: bool = False,
+        cfg: Config,
     ):
-        self.cutoff_gnn = float(cutoff_gnn)
-        self.cutoff_matrix = float(cutoff_matrix)
-        self.l_max_sh = int(l_max_sh)
-        self.n_radial = int(n_radial)
-        self.device = torch.device(device)
-        self.dtype = dtype
-        self.enable_forces = enable_forces
+        self.cfg = cfg
         # cache root for processed snapshots; if None, caching is disabled
-        if cache_root is None:
-            self.cache_root = None
-        else:
-            self.cache_root = Path(cache_root).expanduser()
+        if self.cfg.cache_root is not None:
+            self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
 
         # paths grouped by purpose --------------------------------------
         self._pairs: Dict[Purpose, List[Tuple[Path, Path]]] = {"train": [], "val": []}
@@ -120,23 +104,23 @@ class DatasetFactory:
         mapper = BlockIrrepMapper(
             orb_cfg,
             diagonal=False,
-            device=self.device,
-            dtype=self.dtype,
+            device=self.cfg.device,
+            dtype=self.cfg.dtype,
         )
 
         # ④  Build datasets --------------------------------------------
         ds_kwargs = dict(
             mapper=mapper,
-            cutoff_gnn=self.cutoff_gnn,
-            cutoff_matrix=self.cutoff_matrix,
-            l_max_sh=self.l_max_sh,
-            n_radial=self.n_radial,
-            device=self.device,
-            dtype=self.dtype,
+            cutoff_gnn=self.cfg.cutoff_gnn,
+            cutoff_matrix=self.cfg.cutoff_matrix,
+            l_max_sh=self.cfg.l_max,
+            n_radial=self.cfg.n_radial,
+            device=self.cfg.device,
+            dtype=self.cfg.dtype,
         )
         # pass cache_root through to dataset
-        ds_kwargs["cache_root"] = self.cache_root
-        ds_kwargs["enable_forces"] = self.enable_forces
+        ds_kwargs["cache_root"] = self.cfg.cache_root
+        ds_kwargs["enable_forces"] = self.cfg.enable_forces
         train_ds = E3GNNDataset(self._pairs["train"], **ds_kwargs)
         val_ds = (
             E3GNNDataset(self._pairs["val"], **ds_kwargs)

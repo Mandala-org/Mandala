@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from net.common import HyperParams, build_hidden_irreps
+from net.common import Config, build_hidden_irreps
 from net.layers import EdgeUpdateBlock, NodeUpdateBlock, MessageBlock
 
 
@@ -14,11 +14,11 @@ def make_dummy_graph(E=10, N=5, hid_dim=32):
 
 @pytest.mark.unit
 def test_edge_node_update_shapes():
-    hp = HyperParams(dropout=0.1, batch_norm=True)
-    hid = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
+    cfg = Config(dropout=0.1, batch_norm=True)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
 
-    edge_blk = EdgeUpdateBlock(hid, hp)
-    node_blk = NodeUpdateBlock(hid, hp)
+    edge_blk = EdgeUpdateBlock(hid, cfg)
+    node_blk = NodeUpdateBlock(hid, cfg)
 
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)
     edge2 = edge_blk(node, edge, ei)
@@ -30,10 +30,10 @@ def test_edge_node_update_shapes():
 
 @pytest.mark.unit
 def test_message_block_roundtrip():
-    hp = HyperParams(use_edge_updates=False, dropout=0.0)
-    hid = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
+    cfg = Config(use_edge_updates=False, dropout=0.0)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
 
-    blk = MessageBlock(hid, hp)
+    blk = MessageBlock(hid, cfg)
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)
     n2, e2 = blk(node, edge, ei)
 

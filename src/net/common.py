@@ -4,7 +4,7 @@ common.py
 
 Light-weight utilities that are shared by *all* network sub-modules:
 
-* Hyper-parameter dataclass : :class:`HyperParams`
+* Hyper-parameter dataclass : :class:`Config`
 * Hidden-width Irreps constructor : :func:`build_hidden_irreps`
 * A flexible N-layer radial MLP   : :class:`RadialMLP`
 
@@ -26,11 +26,15 @@ from e3nn.o3 import Irreps
 # 1.  Hyper-parameters
 # ════════════════════════════════════════════════════════════════════════
 @dataclass(slots=True)
-class HyperParams:
+class Config:
     """
     Network hyperparameters controlling representations, model depth,
     nonlinearity, regularization, radial basis, output heads, and loss weighting.
     """
+
+    # radii
+    cutoff_gnn: float = 5.0
+    cutoff_matrix: float = 8.0
 
     # -------------- representation shape --------------------------------
     l_max: int = 3
@@ -48,6 +52,9 @@ class HyperParams:
     batch_norm: bool = False
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
 
+    # ---------------------- training ------------------------------------
+    lr: float = 3e-4
+
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0
@@ -62,14 +69,36 @@ class HyperParams:
     )  # e.g. (128,) → 2-layer MLP
     share_radial: bool = True
 
-    # -------------- output head -----------------------------------------
+    # -------------- output head ----------------------------------------
     head_depth: int = 1
     head_hidden_mul: float = 1.0  # can be <1 or >1
     hidden_mul_clip: float = 4.0  # safety cap to avoid huge widths
 
+    # --------- additional outputs --------------------------------------
+    enable_forces: bool = False
+    enable_stress: bool = False
+    enable_energy: bool = True
+    enable_num_electrons: bool = True
+
+    # -------------- training targets -----------------------------------
+    train_on_forces: bool = False
+    train_on_stress: bool = False
+    train_on_energy: bool = True
+    train_on_num_electrons: bool = False
+
     # -------------- loss weighting --------------------------------------
-    energy_loss_coef: float = 0.00001
-    electron_loss_coef: float = 0.00001
+    loss_coef_energy: float = 0.00001
+    loss_coef_num_electrons: float = 0.0
+    loss_coef_forces: float = 0.0
+    loss_coef_stress: float = 0.0
+
+    # -------------- misc ------------------------------------------------
+    pedantic: bool = False  # enable strict checks on input data
+    dtype: torch.dtype = torch.float32  # default data type for all layers
+    device: torch.device = torch.device("cpu")  # default device
+
+    # ----------------- caching ------------------------------------------
+    cache_root: str | None = None  # path to cache directory, if any
 
 
 # ════════════════════════════════════════════════════════════════════════
