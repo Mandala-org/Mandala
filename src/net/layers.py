@@ -12,7 +12,6 @@ E(3)-equivariant message-passing blocks:
 
 from __future__ import annotations
 
-import torch
 from torch import nn
 from torch_scatter import scatter
 
@@ -40,9 +39,6 @@ class EdgeUpdateBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
-        *,
-        dtype=torch.float32,
-        device: torch.device | str = "cpu",
     ):
         super().__init__()
         self.cfg = cfg
@@ -85,9 +81,6 @@ class NodeUpdateBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
-        *,
-        dtype=torch.float32,
-        device: torch.device | str = "cpu",
     ):
         super().__init__()
         self.cfg = cfg
@@ -149,18 +142,14 @@ class MessageBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
-        *,
-        dtype=torch.float32,
-        device: torch.device | str = "cpu",
     ):
         super().__init__()
+        self.cfg = cfg
         if cfg.use_edge_updates:
-            self.edge_upd = EdgeUpdateBlock(
-                hidden_irreps, cfg, dtype=dtype, device=device
-            )
+            self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg, dtype=self.cfg.dtype)
         else:
             self.edge_upd = None
-        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, dtype=dtype, device=device)
+        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, dtype=self.cfg.dtype)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):

@@ -16,7 +16,7 @@ from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigErro
 def test_node_encoder_shape_and_dtype():
     cfg = Config()
     out_ir = Irreps("4x0e")
-    enc = NodeEncoder(node_one_hot_dim=3, out_irreps=out_ir, cfg=cfg, device="cpu")
+    enc = NodeEncoder(node_one_hot_dim=3, out_irreps=out_ir, cfg=cfg)
     x = torch.tensor([0, 1], dtype=torch.long)
     h = enc(x)
     assert h.shape == (2, out_ir.dim)
@@ -30,9 +30,7 @@ def test_edge_encoder_forward():
     sh_ir = Irreps.spherical_harmonics(1)
     out_ir = Irreps("5x0e")
 
-    enc = EdgeEncoder(
-        n_types, n_radial, sh_ir, out_ir, cfg, device="cpu", dtype=torch.float32
-    )
+    enc = EdgeEncoder(n_types, n_radial, sh_ir, out_ir, cfg)
     E = 4
     edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.long)
     length_emb = torch.rand(E, n_radial)
@@ -46,7 +44,7 @@ def test_edge_encoder_forward():
 def test_edge_update_block_shape(residual):
     cfg = Config(residual_connections=residual)
     hid_ir = Irreps("3x0e")
-    blk = EdgeUpdateBlock(hid_ir, cfg, device="cpu")
+    blk = EdgeUpdateBlock(hid_ir, cfg)
     N, E = 5, 3
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
@@ -62,7 +60,7 @@ def test_edge_update_block_shape(residual):
 def test_node_update_block_shape(self_upd, batch_norm):
     cfg = Config(use_self_update=self_upd, batch_norm=batch_norm)
     hid_ir = Irreps("2x0e")
-    blk = NodeUpdateBlock(hid_ir, cfg, device="cpu")
+    blk = NodeUpdateBlock(hid_ir, cfg)
     N, E = 4, 2
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
@@ -75,7 +73,7 @@ def test_node_update_block_shape(self_upd, batch_norm):
 def test_message_block_edge_and_node_update():
     cfg = Config(use_edge_updates=True)
     hid_ir = Irreps("1x0e")
-    blk = MessageBlock(hid_ir, cfg, device="cpu")
+    blk = MessageBlock(hid_ir, cfg)
     N, E = 3, 2
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)

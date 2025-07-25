@@ -46,7 +46,7 @@ def make_dummy_graph(cfg):
     return x
 
 
-# ──────────────────────────────────���───────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────
 # parameter sets – each dict overrides defaults
 # ──────────────────────────────────────────────────────────────────────
 HP_VARIANTS = [
@@ -57,29 +57,19 @@ HP_VARIANTS = [
     {"use_self_update": False, "head_hidden_mul": 2.0, "radial_layers": (64, 32)},
 ]
 
-cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
-mapper = BlockIrrepMapper(cfg)
-EDGE_TYPES = ["H-H"]
+orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+mapper = BlockIrrepMapper(orb_cfg)
 
 
 @pytest.mark.parametrize("hp_kwargs", HP_VARIANTS)
 @pytest.mark.integration
 def test_e3gnn_forward_variants(hp_kwargs):
-    from omegaconf import OmegaConf
-    from dataclasses import asdict
 
     cfg = Config(**hp_kwargs)
 
-    # Create a minimal mock config
-    mock_cfg = OmegaConf.create(
-        {"model": asdict(cfg), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
-    )
-
     model = E3GNN(
         mapper,
-        EDGE_TYPES,
-        mock_cfg,
-        device="cpu",
+        cfg,
     )
 
     x = make_dummy_graph(cfg)

@@ -109,21 +109,9 @@ class DatasetFactory:
         )
 
         # ④  Build datasets --------------------------------------------
-        ds_kwargs = dict(
-            mapper=mapper,
-            cutoff_gnn=self.cfg.cutoff_gnn,
-            cutoff_matrix=self.cfg.cutoff_matrix,
-            l_max_sh=self.cfg.l_max,
-            n_radial=self.cfg.n_radial,
-            device=self.cfg.device,
-            dtype=self.cfg.dtype,
-        )
-        # pass cache_root through to dataset
-        ds_kwargs["cache_root"] = self.cfg.cache_root
-        ds_kwargs["enable_forces"] = self.cfg.enable_forces
-        train_ds = E3GNNDataset(self._pairs["train"], **ds_kwargs)
+        train_ds = E3GNNDataset(self._pairs["train"], mapper, self.cfg)
         val_ds = (
-            E3GNNDataset(self._pairs["val"], **ds_kwargs)
+            E3GNNDataset(self._pairs["val"], mapper, self.cfg)
             if self._pairs["val"]
             else None
         )
@@ -137,17 +125,17 @@ class DatasetFactory:
 def build_datasets(
     train_pairs: Sequence[Tuple[str | os.PathLike, str | os.PathLike]],
     val_pairs: Sequence[Tuple[str | os.PathLike, str | os.PathLike]] | None = None,
-    **factory_kwargs,
+    cfg: Config = None,
 ) -> Tuple[E3GNNDataset, Optional[E3GNNDataset], BlockIrrepMapper]:
     """Build datasets from snapshot pairs.
     Example
     -------
     >>> train_ds, val_ds, mapper = build_datasets(
     ...     train_pairs=[("run1.scfout", "run1.info")],
-    ...     cutoff_gnn=4.5,
+    ...     cfg=Config(cutoff_gnn=4.5),
     ... )
     """
-    fac = DatasetFactory(**factory_kwargs)
+    fac = DatasetFactory(cfg)
     for m, i in train_pairs:
         fac.add_snapshot(m, i, purpose="train")
     if val_pairs:
