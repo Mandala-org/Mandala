@@ -30,8 +30,6 @@ def test_edge_encoder_with_offdiag():
 
     enc = EdgeEncoder(
         n_edge_types=3,
-        n_radial=cfg.n_radial,
-        sh_irreps=sh_irreps,
         out_irreps=hid,
         cfg=cfg,
     )

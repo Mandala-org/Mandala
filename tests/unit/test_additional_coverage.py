@@ -25,15 +25,15 @@ def test_node_encoder_shape_and_dtype():
 
 @pytest.mark.unit
 def test_edge_encoder_forward():
-    cfg = Config()
-    n_types, n_radial = 2, cfg.n_radial
-    sh_ir = Irreps.spherical_harmonics(1)
+    cfg = Config(n_radial=16, l_max=2)
+    n_types = 2
+    sh_ir = Irreps.spherical_harmonics(cfg.l_max)
     out_ir = Irreps("5x0e")
 
-    enc = EdgeEncoder(n_types, n_radial, sh_ir, out_ir, cfg)
+    enc = EdgeEncoder(n_types, out_ir, cfg)
     E = 4
     edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.long)
-    length_emb = torch.rand(E, n_radial)
+    length_emb = torch.rand(E, cfg.n_radial)
     sh = torch.rand(E, sh_ir.dim)
     h = enc(edge_type_idx, length_emb, sh)
     assert h.shape == (E, out_ir.dim)

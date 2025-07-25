@@ -117,9 +117,9 @@ def test_train_script_full_run(monkeypatch):
             "train.py",
             "--config-name",
             "debug_cpu",
-            "training.smoke_test=true",
-            "logging.run_name=test_full_run",
-            "logging.wandb_project=null",
+            "config.smoke_test=true",
+            "config.run_name=test_full_run",
+            "config.wandb_project=null",
         ],
     )
     # Run main without raising, but with the correct config path

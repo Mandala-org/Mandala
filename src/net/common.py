@@ -58,6 +58,9 @@ class Config:
 
     # ---------------------- training ------------------------------------
     lr: float = 3e-4
+    max_epochs: int = 100
+    batch_size: int = 1
+    smoke_test: bool = False
 
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
@@ -96,13 +99,35 @@ class Config:
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
 
+    # -------------- logging ---------------------------------------------
+    run_name: str = "mandala-run"
+    verbosity: int = 2
+    bench_verbosity: int = 1
+    log_activation_mag: bool = False
+    wandb_project: str | None = None
+    log_every_n_steps: int = 1
+
     # -------------- misc ------------------------------------------------
     pedantic: bool = False  # enable strict checks on input data
     dtype: torch.dtype = torch.float32  # default data type for all layers
     device: torch.device = torch.device("cpu")  # default device
+    gpus: int = 0  # number of GPUs
+    num_workers: int = 0  # DataLoader workers, 0 for no parallelism
 
     # ----------------- caching ------------------------------------------
     cache_root: str | None = None  # path to cache directory, if any
+    seed: int = 42  # random seed for reproducibility
+
+    # -------------------- hyperopt --------------------------------------
+    tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
+
+
+def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
+    if not isinstance(dtype, torch.dtype):
+        dtype = getattr(torch, dtype)
+        assert isinstance(dtype, torch.dtype)
+
+    return dtype
 
 
 # ════════════════════════════════════════════════════════════════════════

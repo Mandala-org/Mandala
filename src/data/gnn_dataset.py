@@ -250,19 +250,19 @@ class E3GNNDataset(Dataset):
         """
         Build graph inputs and targets from one Snapshot.
         """
-        snap.positions = snap.positions.to(self.dtype)
-        snap.box = snap.box.to(self.dtype)
-        snap.forces = snap.forces.to(self.dtype)
-        snap.stress = snap.stress.to(self.dtype)
+        # snap.positions = snap.positions.to(self.dtype)
+        # snap.box = snap.box.to(self.dtype)
+        # snap.forces = snap.forces.to(self.dtype)
+        # snap.stress = snap.stress.to(self.dtype)
 
         if self.cfg.enable_forces:
-            snap.positions.requires_grad_(True)
+            snap.positions.requires_grad_()
         if self.cfg.enable_stress:
-            snap.box.requires_grad_(True)
+            snap.box.requires_grad_()
         if self.cfg.train_on_forces:
-            snap.forces.requires_grad_(True)
+            snap.forces.requires_grad_()
         if self.cfg.train_on_stress:
-            snap.stress.requires_grad_(True)
+            snap.stress.requires_grad_()
 
         (
             edge_index,
@@ -286,17 +286,19 @@ class E3GNNDataset(Dataset):
             "edge_length_emb": edge_length_emb.to(self.device),
             "edge_sh": edge_sh.to(self.device),
             "positions": snap.positions.to(self.device),
+            "forces": snap.forces.to(self.device),
             "box": snap.box.to(self.device),
+            "stress": snap.stress.to(self.device),
             "atoms": atoms,
         }
-
-        y = {
-            "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
-            "overlap": snap.overlap.to_vectors(self.mapper).to(self.device),
-            "density": snap.density.to_vectors(self.mapper).to(self.device),
-            "energy": snap.get_energy().to(self.device),
-            "num_electrons": snap.get_number_of_electrons().to(self.device),
-        }
+        with torch.no_grad():
+            y = {
+                "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
+                "overlap": snap.overlap.to_vectors(self.mapper).to(self.device),
+                "density": snap.density.to_vectors(self.mapper).to(self.device),
+                "energy": snap.get_energy().to(self.device),
+                "num_electrons": snap.get_number_of_electrons().to(self.device),
+            }
 
         return x, y
 

@@ -441,11 +441,12 @@ class Snapshot:
         convention: str = "e3nn",
         symmetrize_density: bool = True,
         cutoff_radius: float | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> "Snapshot":
         from data.openmx_info_parser import parse_info_out
         from data.openmx_parser import parse_openmx_scfout
 
-        info = parse_info_out(info_path)
+        info = parse_info_out(info_path, dtype)
         atoms: list[str] = info.elements
         if not atoms:
             raise RuntimeError("Info-file does not contain <coordinates.forces>")
