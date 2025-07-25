@@ -9,12 +9,11 @@ E3GNN – PyTorch-Lightning implementation
 """
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Any
+from typing import Dict, Tuple, Any
 
 import torch
 import pytorch_lightning as pl
 from torch import nn
-from omegaconf import DictConfig
 
 from collections import OrderedDict
 
@@ -26,7 +25,7 @@ from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
 
-from net.common import HyperParams, build_hidden_irreps
+from net.common import Config, build_hidden_irreps
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
 from net.heads import DeepHead
@@ -44,78 +43,73 @@ class E3GNN(pl.LightningModule):
     def __init__(
         self,
         mapper: BlockIrrepMapper,
-        edge_types: List[str],
-        cfg: DictConfig,
-        *,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
+        cfg: Config,
     ):
         super().__init__()
-        # checkpoint
-        self.save_hyperparameters(ignore=["mapper", "cfg"])
-        self.hp = HyperParams(**cfg.model)
-        self.lr = cfg.training.lr
-        self.pedantic = cfg.logging.pedantic
-        self.device_ = torch.device(device)
-        # shared mapper
-        self.mapper: BlockIrrepMapper = mapper.to(self.device_)
+        self.cfg = cfg
+        # shared mapper - move to device specified in config, as it's not an nn.Module
+        self.mapper: BlockIrrepMapper = mapper.to(cfg.device)
+
+        if cfg.train_on_energy and cfg.loss_coef_energy == 0.0:
+            raise ValueError("If training on energy, loss_coef_energy must be nonzero.")
+        if cfg.train_on_num_electrons and cfg.loss_coef_num_electrons == 0.0:
+            raise ValueError(
+                "If training on number of electrons, loss_coef_num_electrons must be nonzero."
+            )
+        if cfg.train_on_forces and cfg.loss_coef_forces == 0.0:
+            raise ValueError("If training on forces, loss_coef_forces must be nonzero.")
+        if cfg.train_on_stress and cfg.loss_coef_stress == 0.0:
+            raise ValueError("If training on stress, loss_coef_stress must be nonzero.")
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = build_hidden_irreps(
-            self.hp.l_max, self.hp.hidden_base_dim
+            self.cfg.l_max, self.cfg.hidden_base_dim
         )
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.hp.l_max)
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
 
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(
             node_one_hot_dim=len(self.mapper.orbital_cfg.elements()),
             out_irreps=self.hidden_irreps,
-            hp=self.hp,
-            device=self.device_,
-            dtype=dtype,
+            cfg=self.cfg,
         )
         self.edge_enc = EdgeEncoder(
-            n_edge_types=len(edge_types),
-            n_radial=self.hp.n_radial,
-            sh_irreps=self.sh_irreps,
+            n_edge_types=len(self.mapper._maps.keys()),
             out_irreps=self.hidden_irreps,
-            hp=self.hp,
-            device=self.device_,
-            dtype=dtype,
+            cfg=self.cfg,
         )
 
         # ---------- message-passing stacks -----------------------------
         def _make_mp():
             return MessageBlock(
                 self.hidden_irreps,
-                self.hp,
-                device=self.device_,
-                dtype=dtype,
+                self.cfg,
             )
 
         self.mp_small = nn.ModuleList(
-            [_make_mp() for _ in range(self.hp.num_layers_gnn)]
+            [_make_mp() for _ in range(self.cfg.num_layers_gnn)]
         )
         self.mp_large = nn.ModuleList(
-            [_make_mp() for _ in range(self.hp.num_layers_matrix)]
+            [_make_mp() for _ in range(self.cfg.num_layers_matrix)]
         )
 
         # ---------- heads ----------------------------------------------
+        pair_keys = list(
+            map(lambda pair: f"{pair[0]}-{pair[1]}", self.mapper._maps.keys())
+        )
         self.heads = nn.ModuleDict(
             {
                 name: DeepHead(
                     in_irreps=self.hidden_irreps,
-                    pair_keys=edge_types,
+                    pair_keys=pair_keys,
                     mapper=self.mapper,
-                    hp=self.hp,
-                    device=self.device_,
-                    dtype=dtype,
+                    cfg=self.cfg,
                 )
                 for name in ("hamiltonian", "overlap", "density")
             }
         )
 
-    # ------------------------------------------------------------------ util helpers
+    # ------------------------ util helpers -----------------------------
     @staticmethod
     def _vectors_mse(pred, target):
         if pred.shape != target.shape:
@@ -152,7 +146,7 @@ class E3GNN(pl.LightningModule):
             orbital_cfg=self.mapper.orbital_cfg,
         )
 
-    # ------------------------------------------------------------------ activation monitoring helpers
+    # --------------- activation monitoring helpers ----------------------------
     def _magnitude_splits(
         self,
         features: torch.Tensor,
@@ -206,7 +200,7 @@ class E3GNN(pl.LightningModule):
             x["edge_length_emb"],
             x["edge_sh"],
         )
-        if self.pedantic:
+        if self.cfg.pedantic:
             assert edge.requires_grad, "Gradients not flowing through edge encoder!"
         # record edge encoding magnitudes per irrep
         self._record_activation_mags("edge_encoding", edge, self.hidden_irreps)
@@ -255,7 +249,7 @@ class E3GNN(pl.LightningModule):
         t_fwd_end = time.perf_counter()
         # block losses
         loss_blocks = 0.0
-        if self.pedantic:
+        if self.cfg.pedantic:
             for name in ("hamiltonian", "overlap", "density"):
                 pred_edges = preds[name].pair_edges
                 target_edges = y[name].pair_edges
@@ -290,16 +284,16 @@ class E3GNN(pl.LightningModule):
         # total loss
         loss = (
             loss_blocks
-            + self.hp.energy_loss_coef * loss_E
-            + self.hp.electron_loss_coef * loss_N
+            + self.cfg.loss_coef_energy * loss_E
+            + self.cfg.loss_coef_num_electrons * loss_N
         )
         # L1 and L2 regularization
-        if self.hp.l1_reg_coef > 0:
+        if self.cfg.l1_reg_coef > 0:
             l1_reg = sum(p.abs().sum() for p in self.parameters())
-            loss += self.hp.l1_reg_coef * l1_reg
-        if self.hp.l2_reg_coef > 0:
+            loss += self.cfg.l1_reg_coef * l1_reg
+        if self.cfg.l2_reg_coef > 0:
             l2_reg = sum(p.pow(2).sum() for p in self.parameters())
-            loss += self.hp.l2_reg_coef * l2_reg
+            loss += self.cfg.l2_reg_coef * l2_reg
 
         # log all metrics
         metrics = {
@@ -310,9 +304,9 @@ class E3GNN(pl.LightningModule):
             f"{stage}_abs_error_E": abs_err_E,
             f"{stage}_abs_error_N": abs_err_N,
         }
-        if self.hp.l1_reg_coef > 0:
+        if self.cfg.l1_reg_coef > 0:
             metrics[f"{stage}_l1_reg"] = l1_reg
-        if self.hp.l2_reg_coef > 0:
+        if self.cfg.l2_reg_coef > 0:
             metrics[f"{stage}_l2_reg"] = l2_reg
         self.log_dict(metrics, prog_bar=True, on_step=True, on_epoch=True)
         # record per-batch timings for callback
@@ -331,7 +325,7 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=self.cfg.lr)
 
     # ------------------------------------------------------------------ force prediction
     def predictions_to_snapshot(
@@ -354,15 +348,68 @@ class E3GNN(pl.LightningModule):
         positions: torch.Tensor,
         box: torch.Tensor,
     ) -> torch.Tensor:
+        """
+        Compute forces from predictions and positions.
+        Args:
+            predictions: Output from the forward pass, containing hamiltonian,
+                         overlap, and density matrices.
+            positions: Atomic positions (N, 3).
+            box: Lattice box matrix (3, 3).
+        Returns:
+            Forces as a tensor of shape (N, 3).
+        Comments:
+            - Forces are computed as -∂E/∂r, where E is the energy from the hamiltonian.
+            - No Pulay correction needed
+        """
         snapshot = self.predictions_to_snapshot(predictions, positions, box)
         energy = snapshot.get_energy()
-        grad = torch.autograd.grad(
+        grad_pos = torch.autograd.grad(
             energy,
             positions,
-            create_graph=True,  # needed for second derivatives (eg. training on forces)
+            create_graph=self.cfg.train_on_forces,  # needed for second derivatives
+            retain_graph=True,
         )[0]
-        return -grad
+        return -grad_pos
+
+    def get_stress(
+        self,
+        predictions: Dict[str, IrrepsBlockData],
+        positions: torch.Tensor,
+        box: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute stress tensor from energy and box.
+        Args:
+            energy: Scalar energy value.
+            box: Lattice box matrix (3, 3).
+        Returns:
+            Stress tensor as a (3, 3) tensor.
+        Comments:
+            - Stress is defined as σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
+            - No Pulay correction needed
+        """
+        snapshot = self.predictions_to_snapshot(predictions, positions, box)
+        energy = snapshot.get_energy()
+        # 1. get dE/dh
+        grad_box = torch.autograd.grad(
+            energy,
+            box,
+            create_graph=self.cfg.train_on_stress,  # needed for second derivatives
+            retain_graph=True,
+        )
+        # 2. compute volume
+        volume = torch.det(box)
+        # 3. form Cauchy stress: σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
+        #    - no minus sign here, since σ =  +∂E/∂ε /Ω
+        stress = torch.matmul(box.t(), grad_box) / volume
+        # 4. optionally symmetrize: σ → (σ+σ^T)/2
+        stress = 0.5 * (stress + stress.transpose(-1, -2))
+        return stress
 
     def predict_forces(self, x: Dict[str, Any]) -> torch.Tensor:
         predictions = self(x)
         return self.get_forces(predictions, x["positions"], x["box"])
+
+    def predict_stress(self, x: Dict[str, Any]) -> torch.Tensor:
+        predictions = self(x)
+        return self.get_stress(predictions, x["positions"], x["box"])

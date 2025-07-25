@@ -1,5 +1,5 @@
 # Debug CPU preset: small data subset for quick testing on CPU
-data:
+dataset:
   snapshots:
     - matrix: data/big/silicon/900K/Si_DM
       info:   data/big/silicon/900K/info.txt
@@ -7,22 +7,25 @@ data:
     - matrix: data/big/silicon/2700K/Si_DM
       info:   data/big/silicon/2700K/info.txt
       purpose: val
+
+config:
+  # data:
   cutoff_gnn: 4.0
   cutoff_matrix: 6.0
   n_radial: 64
-  num_workers: 0
 
-training:
+  # training:
   lr: 3e-4
   max_epochs: 3
   precision: 32
   gpus: cpu
+  num_workers: 0
   tune: null
   seed: 42
   log_every_n_steps: 1
   smoke_test: false
 
-model:
+  # model:
   hidden_base_dim: 32
   l_max: 2
   num_layers_gnn: 2
@@ -31,10 +34,10 @@ model:
   l1_reg_coef: 0.0
   l2_reg_coef: 0.0
   grad_clip_val: 0.0
-  energy_loss_coef: 0.0001
-  electron_loss_coef: 0.0001
+  loss_coef_energy: 0.0001
+  loss_coef_num_electrons: 0.0001
 
-logging:
+  # logging:
   run_name: "debug-cpu-silicon"
   verbosity: 2
   bench_verbosity: 1

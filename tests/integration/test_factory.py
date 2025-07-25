@@ -5,10 +5,11 @@ import torch
 # tests/test_dataset_factory.py
 # ────────────────────────────────────────────────────────────────────────────
 from pathlib import Path
-
+from net.common import Config
+from net.e3gnn import E3GNN
 
 # ---------------------------------------------------------------------------
-# Paths to the *actual* data files (relative to repo root)
+# Paths to the data files
 # ---------------------------------------------------------------------------
 PAIR_TRAIN_1 = (
     Path("data/small/H2O/original/H2O.matrix"),
@@ -113,28 +114,15 @@ def test_sample_coherence(factory_results):
 
 @pytest.mark.integration
 def test_model_forward_cpu(factory_results):
-    from omegaconf import OmegaConf
-    from dataclasses import asdict
-
     train_ds, _, mapper = factory_results
-
-    # Lazy import to avoid heavy deps if not needed
-    from net.e3gnn import E3GNN
-    from net.common import HyperParams
 
     sample = train_ds[0]
     x, y = sample
 
-    hp = HyperParams(dropout=0.0, batch_norm=False)
-    mock_cfg = OmegaConf.create(
-        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
-    )
-
+    cfg = Config(dropout=0.0, batch_norm=False)
     model = E3GNN(
         mapper=mapper,
-        edge_types=train_ds.edge_types,
-        cfg=mock_cfg,
-        device="cpu",
+        cfg=cfg,
     )
 
     out = model(x)

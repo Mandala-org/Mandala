@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from net.common import HyperParams
+from net.common import Config
 from net.e3gnn import E3GNN
 
 
@@ -10,25 +10,21 @@ def test_force_prediction():
     """
     Test that force prediction runs without errors and returns a tensor of the correct shape.
     """
-    from omegaconf import OmegaConf
-    from dataclasses import asdict
     from data.factory import DatasetFactory
-    from pathlib import Path
 
-    # Create a new dataset with enable_forces=True
-    fac = DatasetFactory(enable_forces=True)
+    # 1. Create a dataset with enable_forces=True
+    fac = DatasetFactory(Config(enable_forces=True))
+
+    # Add a small, real data snapshot
     fac.add_snapshot(
-        Path("data/small/H2O/original/H2O.matrix"),
-        Path("data/small/H2O/original/H2O.info.out"),
+        "data/small/H2O/original/H2O.matrix",
+        "data/small/H2O/original/H2O.info.out",
     )
     train_ds, _, mapper = fac.create()
 
     # initialize model with default hyperparameters
-    hp = HyperParams()
-    mock_cfg = OmegaConf.create(
-        {"model": asdict(hp), "training": {"lr": 1e-3}, "logging": {"pedantic": False}}
-    )
-    model = E3GNN(mapper, train_ds.edge_types, mock_cfg, device="cpu")
+    cfg = Config()
+    model = E3GNN(mapper, cfg)
     # take first sample from training dataset
     x, y = train_ds[0]
     # predict forces

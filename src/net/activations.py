@@ -12,9 +12,9 @@ Supported kinds
 • "s2act"     →  e3nn.nn.S2Activation
 • "id"        →  identity (no non-linearity)
 
-The choice is controlled by ``hp.nonlin_kind`` (see HyperParams).
+The choice is controlled by ``cfg.nonlin_kind`` (see Config).
 Batch-Norm (equivariant) can be toggled independently through
-``hp.batch_norm`` – if enabled we apply it **before** the non-linearity.
+``cfg.batch_norm`` – if enabled we apply it **before** the non-linearity.
 
 Scalar activation names ("silu", "relu", …) are mapped to the
 corresponding `torch.nn.Module` instances via :func:`scalar_activation`.
@@ -26,6 +26,8 @@ from typing import Dict, Callable
 from torch import nn
 from e3nn.o3 import Irreps
 from e3nn.nn import Gate, NormActivation, BatchNorm
+
+from net.common import Config
 
 # Public ------------------------------------------------------------------- #
 __all__ = [
@@ -53,15 +55,6 @@ def scalar_activation(name: str) -> nn.Module:
         ) from exc
 
 
-# -------------------------------------------------------------------------- #
-# Hyper-parameter stub (avoids circular import: common↔activations)
-class _HPStub:
-    nonlin_kind: str
-    activation_scalar: str
-    batch_norm: bool
-    norm_kind: str
-
-
 def _split_scalars_and_rest(irreps: Irreps):
     """Return (Irreps[0e scalars], Irreps[others])."""
     scalars, nonscalars = [], []
@@ -76,7 +69,7 @@ def _split_scalars_and_rest(irreps: Irreps):
 # -------------------------------------------------------------------------- #
 def make_nonlinearity(
     irreps: Irreps,
-    hp: _HPStub,
+    cfg: Config,
 ) -> nn.Module:
     """
     Build an equivariant **normalisation + activation** module.
@@ -85,7 +78,7 @@ def make_nonlinearity(
     ----------
     irreps
         Input/output representation (unchanged by the non-linearity).
-    hp
+    cfg
         Any object that exposes the attributes used below
         (`nonlin_kind`, `activation_scalar`, `batch_norm`, `norm_kind`).
 
@@ -94,11 +87,11 @@ def make_nonlinearity(
     torch.nn.Module
         Callable that maps (..., irreps.dim) → (..., irreps.dim)
     """
-    kind = hp.nonlin_kind.lower()
+    kind = cfg.nonlin_kind.lower()
 
     # optional BatchNorm (equivariant)
     pre_norm: nn.Module
-    if getattr(hp, "batch_norm", False):
+    if getattr(cfg, "batch_norm", False):
         pre_norm = BatchNorm(irreps)
     else:
         pre_norm = nn.Identity()
@@ -120,7 +113,7 @@ def make_nonlinearity(
             kind = "normact"
         else:
             g_act = scalar_activation("sigmoid")
-            s_act = scalar_activation(hp.activation_scalar)
+            s_act = scalar_activation(cfg.activation_scalar)
             num = scalars_ir.num_irreps
             return nn.Sequential(
                 pre_norm,
@@ -135,12 +128,12 @@ def make_nonlinearity(
 
     if kind == "normact":
         # Norm kind: "component" (default) or "norm"
-        normalise_over = "component" if hp.norm_kind == "component" else "norm"
+        normalise_over = "component" if cfg.norm_kind == "component" else "norm"
         return nn.Sequential(
             pre_norm,
             NormActivation(
                 irreps,
-                scalar_activation(hp.activation_scalar),
+                scalar_activation(cfg.activation_scalar),
                 normalize=normalise_over,
             ),
         )
@@ -148,12 +141,12 @@ def make_nonlinearity(
     if kind == "s2act":
         layer = NormActivation(
             irreps,
-            scalar_activation(hp.activation_scalar),
+            scalar_activation(cfg.activation_scalar),
             normalize="component",
         )
         return nn.Sequential(pre_norm, layer)
 
     raise ValueError(
-        f"Unknown nonlin_kind '{hp.nonlin_kind}'. "
+        f"Unknown nonlin_kind '{cfg.nonlin_kind}'. "
         f"Expected 'gate', 'normact', 's2act', or 'id'."
     )

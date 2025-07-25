@@ -1,11 +1,12 @@
 import pytest
 from pathlib import Path
+import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.openmx_parser import parse_openmx_scfout
 from data.snapshot import Snapshot
 from data.factory import DatasetFactory
-import torch
+from net.common import Config
 
 
 @pytest.fixture(scope="session")
@@ -64,14 +65,15 @@ def factory_results():
         Path("data/big/silicon/2700K/Si_DM"),
         Path("data/big/silicon/2700K/info.txt"),
     )
-    fac = DatasetFactory(
+    cfg = Config(
         cutoff_gnn=4.5,
         cutoff_matrix=7.5,
-        l_max_sh=3,
+        l_max=3,
         n_radial=64,
         device="cpu",
         dtype=torch.float32,
     )
+    fac = DatasetFactory(cfg)
     fac.add_snapshot(*PAIR_TRAIN_1, purpose="train")
     fac.add_snapshot(*PAIR_TRAIN_2, purpose="train")
     fac.add_snapshot(*PAIR_VAL_1, purpose="val")

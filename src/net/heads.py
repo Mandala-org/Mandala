@@ -16,7 +16,7 @@ from e3nn.nn import Dropout, BatchNorm
 
 from core.block_irrep_mapper import BlockIrrepMapper
 
-from net.common import HyperParams
+from net.common import Config
 from net.activations import make_nonlinearity
 
 
@@ -30,43 +30,38 @@ class DeepHead(nn.Module):
         in_irreps: Irreps,
         pair_keys: List[str],
         mapper: BlockIrrepMapper,
-        hp: HyperParams,
-        *,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
+        cfg: Config,
     ):
         super().__init__()
-        self.device = torch.device(device)
-        self.hp = hp
+        self.cfg = cfg
         self.in_irreps = in_irreps
         self.pair_keys = pair_keys
 
-        # 0) shared mapper – **passed in**, no local creation
-        self.mapper: BlockIrrepMapper = mapper.to(self.device)
+        # 0) shared mapper
+        self.mapper: BlockIrrepMapper = mapper
 
         # 1) deep trunk ---------------------------------------------------
         layers: List[nn.Module] = []
         cur_ir = in_irreps
-        for _ in range(max(1, hp.head_depth)):
+        for _ in range(max(1, cfg.head_depth)):
             # scale multiplicities by hidden_mul (clip for safety)
             parts = []
             for mul, ir in cur_ir:
-                mul_new = int(round(mul * hp.head_hidden_mul))
-                mul_new = max(1, min(mul_new, int(mul * hp.hidden_mul_clip)))
+                mul_new = int(round(mul * cfg.head_hidden_mul))
+                mul_new = max(1, min(mul_new, int(mul * cfg.hidden_mul_clip)))
                 parts.append((mul_new, ir))
             next_ir = Irreps(parts).simplify()
 
             lin = Linear(cur_ir, next_ir)
-            lin = lin.to(self.device)
             layers.append(lin)
 
-            if hp.batch_norm:
-                layers.append(BatchNorm(next_ir).to(self.device))
+            if cfg.batch_norm:
+                layers.append(BatchNorm(next_ir))
 
-            layers.append(make_nonlinearity(next_ir, hp))
+            layers.append(make_nonlinearity(next_ir, cfg))
 
-            if hp.dropout > 0.0:
-                layers.append(Dropout(next_ir, p=hp.dropout))
+            if cfg.dropout > 0.0:
+                layers.append(Dropout(next_ir, p=cfg.dropout))
 
             cur_ir = next_ir
 
@@ -78,7 +73,7 @@ class DeepHead(nn.Module):
         for key in pair_keys:
             el_a, el_b = key.split("-")
             out_ir = self.mapper._maps[(el_a, el_b)].rtp.irreps_out
-            proj = Linear(self.trunk_out_irreps, out_ir).to(self.device)
+            proj = Linear(self.trunk_out_irreps, out_ir)
             last[key] = proj
         self.last_mlps = nn.ModuleDict(last)
 
