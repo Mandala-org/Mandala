@@ -34,21 +34,15 @@ class NodeEncoder(nn.Module):
         node_one_hot_dim: int,
         out_irreps: Irreps,
         cfg: Config,
-        *,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
         self.cfg = cfg
         self.out_irreps = out_irreps
-        self.device = torch.device(device)
 
         scalar_width = cfg.hidden_base_dim
         self.elem_emb = nn.Embedding(
             node_one_hot_dim,
             scalar_width,
-            device=self.device,
-            dtype=dtype,
         )
         nn.init.normal_(self.elem_emb.weight, std=0.2)
 
@@ -98,25 +92,19 @@ class EdgeEncoder(nn.Module):
         self,
         n_edge_types: int,
         n_radial: int,
-        sh_irreps: Irreps,
         out_irreps: Irreps,
         cfg: Config,
-        *,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
         self.cfg = cfg
         self.out_irreps = out_irreps
-        self.device = torch.device(device)
 
         # 1) scalar embeddings ------------------------------------------------
         sc_width = cfg.hidden_base_dim
         self.edge_emb = nn.Embedding(
             n_edge_types,
             sc_width,
-            device=self.device,
-            dtype=dtype,
+            dtype=self.cfg.dtype,
         )
         nn.init.normal_(self.edge_emb.weight, std=0.2)
 
@@ -125,8 +113,8 @@ class EdgeEncoder(nn.Module):
             out_dim=sc_width,
             layers=cfg.radial_layers,
             act=cfg.activation_scalar,
-            dtype=dtype,
-        ).to(self.device)
+            dtype=self.cfg.dtype,
+        )
 
         scalar_input_ir = Irreps(f"{sc_width * 2}x0e")
         self.lin_scalar = Linear(
@@ -136,9 +124,9 @@ class EdgeEncoder(nn.Module):
         )
 
         # 2) spherical harmonics projector ------------------------------------
-        self.sh_irreps = sh_irreps
+        self.sh_irreps = self.cfg.sh_irreps
         self.sh_proj = Linear(
-            sh_irreps,
+            self.sh_irreps,
             out_irreps,
             internal_weights=True,
         )

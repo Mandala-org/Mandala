@@ -31,18 +31,14 @@ class DeepHead(nn.Module):
         pair_keys: List[str],
         mapper: BlockIrrepMapper,
         cfg: Config,
-        *,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
-        self.device = torch.device(device)
         self.cfg = cfg
         self.in_irreps = in_irreps
         self.pair_keys = pair_keys
 
-        # 0) shared mapper – **passed in**, no local creation
-        self.mapper: BlockIrrepMapper = mapper.to(self.device)
+        # 0) shared mapper
+        self.mapper: BlockIrrepMapper = mapper
 
         # 1) deep trunk ---------------------------------------------------
         layers: List[nn.Module] = []
@@ -57,11 +53,10 @@ class DeepHead(nn.Module):
             next_ir = Irreps(parts).simplify()
 
             lin = Linear(cur_ir, next_ir)
-            lin = lin.to(self.device)
             layers.append(lin)
 
             if cfg.batch_norm:
-                layers.append(BatchNorm(next_ir).to(self.device))
+                layers.append(BatchNorm(next_ir))
 
             layers.append(make_nonlinearity(next_ir, cfg))
 
@@ -78,7 +73,7 @@ class DeepHead(nn.Module):
         for key in pair_keys:
             el_a, el_b = key.split("-")
             out_ir = self.mapper._maps[(el_a, el_b)].rtp.irreps_out
-            proj = Linear(self.trunk_out_irreps, out_ir).to(self.device)
+            proj = Linear(self.trunk_out_irreps, out_ir)
             last[key] = proj
         self.last_mlps = nn.ModuleDict(last)
 

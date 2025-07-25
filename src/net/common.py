@@ -20,11 +20,15 @@ from typing import List, Sequence
 import torch
 from torch import nn
 from e3nn.o3 import Irreps
-
+from omegaconf import OmegaConf
 
 # ════════════════════════════════════════════════════════════════════════
 # 1.  Hyper-parameters
 # ════════════════════════════════════════════════════════════════════════
+OmegaConf.register_new_resolver("torch_dtype", lambda x: str(x).split(".")[-1])
+OmegaConf.register_new_resolver("torch_device", lambda x: str(x))
+
+
 @dataclass(slots=True)
 class Config:
     """

@@ -47,9 +47,8 @@ class E3GNN(pl.LightningModule):
     ):
         super().__init__()
         self.cfg = cfg
-        self.device = torch.device(cfg.device)
-        # shared mapper
-        self.mapper: BlockIrrepMapper = mapper.to(self.device)
+        # shared mapper - move to device specified in config, as it's not an nn.Module
+        self.mapper: BlockIrrepMapper = mapper.to(cfg.device)
 
         if cfg.train_on_energy and cfg.loss_coef_energy == 0.0:
             raise ValueError("If training on energy, loss_coef_energy must be nonzero.")
@@ -73,8 +72,6 @@ class E3GNN(pl.LightningModule):
             node_one_hot_dim=len(self.mapper.orbital_cfg.elements()),
             out_irreps=self.hidden_irreps,
             cfg=self.cfg,
-            device=self.device,
-            dtype=self.cfg.dtype,
         )
         self.edge_enc = EdgeEncoder(
             n_edge_types=len(self.mapper._maps.keys()),
@@ -82,8 +79,6 @@ class E3GNN(pl.LightningModule):
             sh_irreps=self.sh_irreps,
             out_irreps=self.hidden_irreps,
             cfg=self.cfg,
-            device=self.device,
-            dtype=self.cfg.dtype,
         )
 
         # ---------- message-passing stacks -----------------------------
@@ -91,8 +86,6 @@ class E3GNN(pl.LightningModule):
             return MessageBlock(
                 self.hidden_irreps,
                 self.cfg,
-                device=self.device,
-                dtype=self.cfg.dtype,
             )
 
         self.mp_small = nn.ModuleList(
@@ -113,8 +106,6 @@ class E3GNN(pl.LightningModule):
                     pair_keys=pair_keys,
                     mapper=self.mapper,
                     cfg=self.cfg,
-                    device=self.device,
-                    dtype=self.cfg.dtype,
                 )
                 for name in ("hamiltonian", "overlap", "density")
             }
