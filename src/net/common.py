@@ -4,7 +4,7 @@ common.py
 
 Light-weight utilities that are shared by *all* network sub-modules:
 
-* Hyper-parameter dataclass : :class:`HyperParams`
+* Hyper-parameter dataclass : :class:`Config`
 * Hidden-width Irreps constructor : :func:`build_hidden_irreps`
 * A flexible N-layer radial MLP   : :class:`RadialMLP`
 
@@ -20,17 +20,25 @@ from typing import List, Sequence
 import torch
 from torch import nn
 from e3nn.o3 import Irreps
-
+from omegaconf import OmegaConf
 
 # ════════════════════════════════════════════════════════════════════════
 # 1.  Hyper-parameters
 # ════════════════════════════════════════════════════════════════════════
+OmegaConf.register_new_resolver("torch_dtype", lambda x: str(x).split(".")[-1])
+OmegaConf.register_new_resolver("torch_device", lambda x: str(x))
+
+
 @dataclass(slots=True)
-class HyperParams:
+class Config:
     """
     Network hyperparameters controlling representations, model depth,
     nonlinearity, regularization, radial basis, output heads, and loss weighting.
     """
+
+    # radii
+    cutoff_gnn: float = 5.0
+    cutoff_matrix: float = 8.0
 
     # -------------- representation shape --------------------------------
     l_max: int = 3
@@ -48,6 +56,12 @@ class HyperParams:
     batch_norm: bool = False
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
 
+    # ---------------------- training ------------------------------------
+    lr: float = 3e-4
+    max_epochs: int = 100
+    batch_size: int = 1
+    smoke_test: bool = False
+
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0
@@ -62,14 +76,58 @@ class HyperParams:
     )  # e.g. (128,) → 2-layer MLP
     share_radial: bool = True
 
-    # -------------- output head -----------------------------------------
+    # -------------- output head ----------------------------------------
     head_depth: int = 1
     head_hidden_mul: float = 1.0  # can be <1 or >1
     hidden_mul_clip: float = 4.0  # safety cap to avoid huge widths
 
+    # --------- additional outputs --------------------------------------
+    enable_forces: bool = False
+    enable_stress: bool = False
+    enable_energy: bool = True
+    enable_num_electrons: bool = True
+
+    # -------------- training targets -----------------------------------
+    train_on_forces: bool = False
+    train_on_stress: bool = False
+    train_on_energy: bool = True
+    train_on_num_electrons: bool = False
+
     # -------------- loss weighting --------------------------------------
-    energy_loss_coef: float = 0.00001
-    electron_loss_coef: float = 0.00001
+    loss_coef_energy: float = 0.00001
+    loss_coef_num_electrons: float = 0.0
+    loss_coef_forces: float = 0.0
+    loss_coef_stress: float = 0.0
+
+    # -------------- logging ---------------------------------------------
+    run_name: str = "mandala-run"
+    verbosity: int = 2
+    bench_verbosity: int = 1
+    log_activation_mag: bool = False
+    wandb_project: str | None = None
+    log_every_n_steps: int = 1
+
+    # -------------- misc ------------------------------------------------
+    pedantic: bool = False  # enable strict checks on input data
+    dtype: torch.dtype = torch.float32  # default data type for all layers
+    device: torch.device = torch.device("cpu")  # default device
+    gpus: int = 0  # number of GPUs
+    num_workers: int = 0  # DataLoader workers, 0 for no parallelism
+
+    # ----------------- caching ------------------------------------------
+    cache_root: str | None = None  # path to cache directory, if any
+    seed: int = 42  # random seed for reproducibility
+
+    # -------------------- hyperopt --------------------------------------
+    tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
+
+
+def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
+    if not isinstance(dtype, torch.dtype):
+        dtype = getattr(torch, dtype)
+        assert isinstance(dtype, torch.dtype)
+
+    return dtype
 
 
 # ════════════════════════════════════════════════════════════════════════

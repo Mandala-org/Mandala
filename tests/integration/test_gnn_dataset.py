@@ -15,6 +15,7 @@ import torch
 from data.gnn_dataset import E3GNNDataset
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
+from net.common import Config
 
 
 @pytest.fixture(scope="module")
@@ -34,8 +35,7 @@ def dataset():
             )
         ],
         mapper,
-        cutoff_gnn=4.0,
-        cutoff_matrix=7.5,
+        cfg=Config(cutoff_gnn=4.0, cutoff_matrix=7.5),
     )
 
 
@@ -60,4 +60,4 @@ def test_edge_sets(dataset):
 
     # ----  SH & radial embed sizes
     assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim
-    assert x["edge_length_emb"].shape[1] == dataset.n_radial
+    assert x["edge_length_emb"].shape[1] == dataset.cfg.n_radial
