@@ -28,7 +28,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from net.benchmark import BenchmarkCallback
 from data.factory import DatasetFactory
-from net.common import HyperParams
+from net.common import Config
 from net.e3gnn import E3GNN
 
 
@@ -93,7 +93,7 @@ def main(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     # 3. Model instantiation
     # ------------------------------------------------------------------
-    hp = HyperParams(**cfg.model)
+    cfg = Config(**cfg.model)
     # Hardware setup: interpret training.gpus as "cpu" or a GPU count
     if isinstance(gpus_cfg, str) and gpus_cfg.lower() == "cpu":
         accelerator = "cpu"
@@ -117,8 +117,8 @@ def main(cfg: DictConfig) -> None:
         device="cuda" if accelerator == "gpu" else "cpu",
     )
     vprint(
-        f"Built model: l_max={hp.l_max}, hidden_base_dim={hp.hidden_base_dim}, "
-        f"layers_gnn={hp.num_layers_gnn}, layers_matrix={hp.num_layers_matrix}"
+        f"Built model: l_max={cfg.l_max}, hidden_base_dim={cfg.hidden_base_dim}, "
+        f"layers_gnn={cfg.num_layers_gnn}, layers_matrix={cfg.num_layers_matrix}"
     )
 
     # ------------------------------------------------------------------
@@ -183,7 +183,7 @@ def main(cfg: DictConfig) -> None:
             callbacks=callbacks,
             deterministic=True,
             log_every_n_steps=cfg.training.log_every_n_steps,
-            gradient_clip_val=hp.grad_clip_val,
+            gradient_clip_val=cfg.grad_clip_val,
         )
 
     # ------------------------------------------------------------------

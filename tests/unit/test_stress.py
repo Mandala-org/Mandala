@@ -1,9 +1,7 @@
 import torch
-from omegaconf import DictConfig
-import dataclasses
 
+from net.common import Config
 from net.e3gnn import E3GNN
-from net.common import HyperParams
 from data.factory import DatasetFactory
 
 
@@ -14,14 +12,22 @@ def test_stress_with_real_data():
     the stress computation is functioning correctly.
     """
 
+    # 2. Set up config
+    cfg = {
+        "hidden_base_dim": 16,
+        "l_max": 2,
+        "n_radial": 64,
+        "enable_stress": True,
+        "cutoff_gnn": 3.0,
+        "cutoff_matrix": 4.0,
+        "lr": 1e-3,
+        "pedantic": True,  # Enable pedantic checks
+    }
+
+    cfg = Config(**cfg)
+
     # 1. Create a DatasetFactory with position gradients enabled
-    factory = DatasetFactory(
-        cutoff_gnn=3.0,
-        cutoff_matrix=4.0,
-        l_max_sh=2,
-        n_radial=64,
-        enable_forces=True,  # This is crucial for the test
-    )
+    factory = DatasetFactory(cfg)
 
     # Add a small, real data snapshot
     factory.add_snapshot(
@@ -37,17 +43,7 @@ def test_stress_with_real_data():
     # Get a sample. The dataset should have set requires_grad on positions.
     x, _ = train_ds[0]
 
-    # 2. Set up the model configuration
-    hp = HyperParams(hidden_base_dim=16, l_max=2)
-    cfg = DictConfig(
-        {
-            "model": dataclasses.asdict(hp),
-            "training": {"lr": 1e-3},
-            "logging": {"pedantic": True},  # Enable pedantic checks
-        }
-    )
-
-    model = E3GNN(mapper, train_ds.edge_types, cfg)
+    model = E3GNN(mapper, cfg)
 
     # 3. Predict stress and check that it's not all zeros
     stress = model.predict_stress(x)

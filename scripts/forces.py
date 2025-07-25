@@ -3,7 +3,7 @@ from omegaconf import DictConfig
 import dataclasses
 
 from net.e3gnn import E3GNN
-from net.common import HyperParams
+from net.common import Config
 from data.factory import DatasetFactory
 
 # 1. Create a DatasetFactory with position gradients enabled
@@ -28,10 +28,10 @@ train_ds, _, mapper = factory.create()
 x, _ = train_ds[0]
 
 # 2. Set up the model configuration
-hp = HyperParams(hidden_base_dim=16, l_max=2)
+cfg = Config(hidden_base_dim=16, l_max=2)
 cfg = DictConfig(
     {
-        "model": dataclasses.asdict(hp),
+        "model": dataclasses.asdict(cfg),
         "training": {"lr": 1e-3},
         "logging": {"pedantic": True},  # Enable pedantic checks
     }

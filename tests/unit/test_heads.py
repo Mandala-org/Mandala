@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
-from net.common import HyperParams, build_hidden_irreps
+from net.common import Config, build_hidden_irreps
 from net.heads import DeepHead
 from core.block_irrep_mapper import BlockIrrepMapper
 
@@ -11,16 +11,16 @@ from core.block_irrep_mapper import BlockIrrepMapper
 def test_deep_head_shapes_and_device():
     cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
     pair_keys = ["H-H"]
-    hp = HyperParams(head_depth=2, head_hidden_mul=0.8, dropout=0.1)
+    cfg = Config(head_depth=2, head_hidden_mul=0.8, dropout=0.1)
 
-    hid = build_hidden_irreps(hp.l_max, hp.hidden_base_dim)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
 
     mapper = BlockIrrepMapper(cfg)
     head = DeepHead(
         in_irreps=hid,
         pair_keys=pair_keys,
         mapper=mapper,
-        hp=hp,
+        cfg=cfg,
         device="cpu",
     )
 
