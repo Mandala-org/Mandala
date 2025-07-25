@@ -123,6 +123,8 @@ class BlockIrrepMapper:
 
         self.orbital_cfg = orbital_cfg
         self.diagonal = diagonal
+        self.device = torch.device(device)
+        self.dtype = dtype
 
         self._maps: Dict[Tuple[str, str], _IrrepToMatrix] = {}
 

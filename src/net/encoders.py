@@ -91,16 +91,16 @@ class EdgeEncoder(nn.Module):
     def __init__(
         self,
         n_edge_types: int,
-        n_radial: int,
         out_irreps: Irreps,
         cfg: Config,
     ):
         super().__init__()
         self.cfg = cfg
         self.out_irreps = out_irreps
+        self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
 
         # 1) scalar embeddings ------------------------------------------------
-        sc_width = cfg.hidden_base_dim
+        sc_width = self.cfg.hidden_base_dim
         self.edge_emb = nn.Embedding(
             n_edge_types,
             sc_width,
@@ -109,10 +109,10 @@ class EdgeEncoder(nn.Module):
         nn.init.normal_(self.edge_emb.weight, std=0.2)
 
         self.radial_net = RadialMLP(
-            in_dim=n_radial,
+            in_dim=self.cfg.n_radial,
             out_dim=sc_width,
-            layers=cfg.radial_layers,
-            act=cfg.activation_scalar,
+            layers=self.cfg.radial_layers,
+            act=self.cfg.activation_scalar,
             dtype=self.cfg.dtype,
         )
 
@@ -124,7 +124,7 @@ class EdgeEncoder(nn.Module):
         )
 
         # 2) spherical harmonics projector ------------------------------------
-        self.sh_irreps = self.cfg.sh_irreps
+        self.sh_irreps = self.sh_irreps
         self.sh_proj = Linear(
             self.sh_irreps,
             out_irreps,

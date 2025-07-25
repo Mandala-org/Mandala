@@ -75,8 +75,6 @@ class E3GNN(pl.LightningModule):
         )
         self.edge_enc = EdgeEncoder(
             n_edge_types=len(self.mapper._maps.keys()),
-            n_radial=self.cfg.n_radial,
-            sh_irreps=self.sh_irreps,
             out_irreps=self.hidden_irreps,
             cfg=self.cfg,
         )
@@ -368,7 +366,7 @@ class E3GNN(pl.LightningModule):
         grad_pos = torch.autograd.grad(
             energy,
             positions,
-            create_graph=True,  # needed for second derivatives (eg. training on forces)
+            create_graph=self.cfg.train_on_forces,  # needed for second derivatives
         )[0]
         return -grad_pos
 
@@ -395,7 +393,7 @@ class E3GNN(pl.LightningModule):
         grad_box = torch.autograd.grad(
             energy,
             box,
-            create_graph=True,
+            create_graph=self.cfg.train_on_stress,  # needed for second derivatives
         )
         # 2. compute volume
         volume = torch.det(box)
