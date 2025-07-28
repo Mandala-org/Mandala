@@ -286,9 +286,7 @@ class E3GNNDataset(Dataset):
             "edge_length_emb": edge_length_emb.to(self.device),
             "edge_sh": edge_sh.to(self.device),
             "positions": snap.positions.to(self.device),
-            "forces": snap.forces.to(self.device),
             "box": snap.box.to(self.device),
-            "stress": snap.stress.to(self.device),
             "atoms": atoms,
         }
         with torch.no_grad():
@@ -298,6 +296,8 @@ class E3GNNDataset(Dataset):
                 "density": snap.density.to_vectors(self.mapper).to(self.device),
                 "energy": snap.get_energy().to(self.device),
                 "num_electrons": snap.get_number_of_electrons().to(self.device),
+                "forces": snap.forces.to(self.device),
+                "stress": snap.stress.to(self.device),
             }
 
         return x, y

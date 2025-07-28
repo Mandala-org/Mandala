@@ -213,6 +213,13 @@ class E3GNN(pl.LightningModule):
         for idx, blk in enumerate(self.mp_small):
             node, edge_small = blk(node, edge_small, ei_small)
             # record magnitudes after small graph layer
+
+            # ! Debug: add random connections
+            # node = node + node[torch.randperm(node.shape[0])[:1], :]
+            # edge_small = edge_small + edge_small[torch.randperm(edge_small.shape[0])[:1], :]
+            # node = node * node[torch.randperm(node.shape[0])[:1], :]
+            # edge_small = edge_small * edge_small[torch.randperm(edge_small.shape[0])[:1], :]
+
             self._record_activation_mags(
                 f"node_small_layer_{idx}", node, self.hidden_irreps
             )
@@ -315,7 +322,7 @@ class E3GNN(pl.LightningModule):
             "map": t_map_end - t_map_start,
             "obs": t_obs_end - t_obs_start,
         }
-        return loss
+        return
 
     def training_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, stage="train")
