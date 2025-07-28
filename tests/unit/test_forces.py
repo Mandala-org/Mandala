@@ -17,9 +17,11 @@ def test_non_zero_forces_with_real_data():
         l_max=2,
         n_radial=64,
         num_layers_gnn=3,
-        num_layers_matrix=3,
+        num_layers_matrix=2,
+        hidden_base_dim=16,
+        lr=1e-3,
         enable_forces=True,
-        num_workers=None,
+        pedantic=True,
     )
 
     # 1. Create a DatasetFactory with position gradients enabled
@@ -46,6 +48,7 @@ def test_non_zero_forces_with_real_data():
     forces = model.predict_forces(x)
 
     assert forces.shape == x["positions"].shape
+    assert not torch.isnan(forces).any(), "Forces contain NaN values."
     assert not torch.allclose(
         forces, torch.zeros_like(forces)
     ), "Forces are all zero, gradients are likely detached."

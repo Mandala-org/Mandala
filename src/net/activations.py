@@ -108,9 +108,11 @@ def make_nonlinearity(
             or rest_ir.dim == 0
             or scalars_ir.num_irreps != rest_ir.num_irreps
         ):
-            # fall back – not enough 0e scalars to gate everything
-            # ! WARNING: we should not use the fallback, but think of something else
-            kind = "normact"
+            raise ValueError(
+                "Cannot create Gate nonlinearity: "
+                "expected at least one scalar and one non-scalar irrep, "
+                "and the same number of irreps in both."
+            )
         else:
             g_act = scalar_activation("sigmoid")
             s_act = scalar_activation(cfg.activation_scalar)
