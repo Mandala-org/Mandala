@@ -180,27 +180,26 @@ class E3GNNDataset(Dataset):
                     }
                 )
 
-        # 2. Separate self-edges and off-diagonal edges
+        # # 2. Separate self-edges and off-diagonal edges
         self_edges = sorted(
             [e for e in edges if e["src"] == e["dst"]], key=lambda e: e["src"]
         )
         offdiag_edges = [e for e in edges if e["src"] != e["dst"]]
 
         # 3. Calculate lengths for off-diagonal edges and sort them
-        if offdiag_edges:
-            offdiag_edge_index = torch.tensor(
-                [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
-                dtype=torch.long,
-                device=self.device,
-            )
-            disp = self._minimal_disp(
-                snap.positions,
-                offdiag_edge_index,
-                snap.box,
-            )
-            lengths = torch.linalg.norm(disp, dim=-1)
-            sorted_indices = torch.argsort(lengths)
-            offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
+        offdiag_edge_index = torch.tensor(
+            [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
+            dtype=torch.long,
+            device=self.device,
+        )
+        disp = self._minimal_disp(
+            snap.positions,
+            offdiag_edge_index,
+            snap.box,
+        )
+        lengths = torch.linalg.norm(disp, dim=-1)
+        sorted_indices = torch.argsort(lengths)
+        offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
 
         # 4. Combine edges in the specified order
         all_edges = self_edges + offdiag_edges
@@ -231,9 +230,7 @@ class E3GNNDataset(Dataset):
         )
 
         # 6. Determine the GNN cfg.cutoff_gnn index
-        index_gnn_cutoff = (
-            len(self_edges) + torch.sum(lengths <= self.cfg.cutoff_gnn).item()
-        )
+        index_gnn_cutoff = torch.sum(lengths <= self.cfg.cutoff_gnn).item()
 
         return (
             edge_index,
@@ -241,6 +238,7 @@ class E3GNNDataset(Dataset):
             edge_length_emb,
             edge_sh,
             index_gnn_cutoff,
+            len(self_edges),
         )
 
     # ---------- main per-snapshot routine -----------------------------------
@@ -270,6 +268,7 @@ class E3GNNDataset(Dataset):
             edge_length_emb,
             edge_sh,
             index_gnn_cutoff,
+            num_self_edges,
         ) = self._edge_tensors(snap)
 
         atoms = snap.density.atoms
@@ -283,12 +282,11 @@ class E3GNNDataset(Dataset):
             "edge_index": edge_index.to(self.device),
             "edge_type_idx": edge_type_idx.to(self.device),
             "index_gnn_cutoff": index_gnn_cutoff,
+            "num_self_edges": num_self_edges,
             "edge_length_emb": edge_length_emb.to(self.device),
             "edge_sh": edge_sh.to(self.device),
             "positions": snap.positions.to(self.device),
-            "forces": snap.forces.to(self.device),
             "box": snap.box.to(self.device),
-            "stress": snap.stress.to(self.device),
             "atoms": atoms,
         }
         with torch.no_grad():
@@ -298,6 +296,8 @@ class E3GNNDataset(Dataset):
                 "density": snap.density.to_vectors(self.mapper).to(self.device),
                 "energy": snap.get_energy().to(self.device),
                 "num_electrons": snap.get_number_of_electrons().to(self.device),
+                "forces": snap.forces.to(self.device),
+                "stress": snap.stress.to(self.device),
             }
 
         return x, y
