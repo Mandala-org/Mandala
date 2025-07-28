@@ -11,16 +11,21 @@ def test_non_zero_forces_with_real_data():
     using a real data sample from the E3GNNDataset. This ensures that
     the entire data processing pipeline correctly propagates gradients.
     """
-    # 1. Create a DatasetFactory with position gradients enabled
-    factory = DatasetFactory(
-        Config(
-            cutoff_gnn=3.0,
-            cutoff_matrix=4.0,
-            l_max=2,
-            n_radial=64,
-            enable_forces=True,
-        )
+    cfg = Config(
+        cutoff_gnn=3.0,
+        cutoff_matrix=4.0,
+        l_max=2,
+        n_radial=64,
+        num_layers_gnn=3,
+        num_layers_matrix=2,
+        hidden_base_dim=16,
+        lr=1e-3,
+        enable_forces=True,
+        pedantic=True,
     )
+
+    # 1. Create a DatasetFactory with position gradients enabled
+    factory = DatasetFactory(cfg)
 
     # Add a small, real data snapshot
     factory.add_snapshot(
@@ -36,15 +41,14 @@ def test_non_zero_forces_with_real_data():
     # Get a sample. The dataset should have set requires_grad on positions.
     x, _ = train_ds[0]
 
-    # 2. Set up the model configuration
-    cfg = Config(hidden_base_dim=16, l_max=2, enable_forces=True)
-
+    # 2. Set up the model
     model = E3GNN(mapper, cfg)
 
     # 3. Predict forces and check that they are not all zero
     forces = model.predict_forces(x)
 
     assert forces.shape == x["positions"].shape
+    assert not torch.isnan(forces).any(), "Forces contain NaN values."
     assert not torch.allclose(
         forces, torch.zeros_like(forces)
     ), "Forces are all zero, gradients are likely detached."

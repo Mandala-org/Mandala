@@ -13,18 +13,18 @@ def test_stress_with_real_data():
     """
 
     # 2. Set up config
-    cfg = {
-        "hidden_base_dim": 16,
-        "l_max": 2,
-        "n_radial": 64,
-        "enable_stress": True,
-        "cutoff_gnn": 3.0,
-        "cutoff_matrix": 4.0,
-        "lr": 1e-3,
-        "pedantic": True,  # Enable pedantic checks
-    }
-
-    cfg = Config(**cfg)
+    cfg = Config(
+        cutoff_gnn=3.0,
+        cutoff_matrix=4.0,
+        l_max=2,
+        n_radial=64,
+        num_layers_gnn=3,
+        hidden_base_dim=16,
+        num_layers_matrix=2,
+        lr=1e-3,
+        enable_stress=True,
+        pedantic=True,
+    )
 
     # 1. Create a DatasetFactory with position gradients enabled
     factory = DatasetFactory(cfg)
@@ -49,6 +49,7 @@ def test_stress_with_real_data():
     stress = model.predict_stress(x)
 
     assert stress.shape == (3, 3)
+    assert not torch.isnan(stress).any(), "Stress contains NaN values."
     assert not torch.allclose(
         stress, torch.zeros_like(stress)
     ), "Stress is all zero, gradients are likely detached."

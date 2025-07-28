@@ -135,8 +135,6 @@ class E3GNN(pl.LightningModule):
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
-        from data.block_matrix import IrrepsBlockData  # local import
-
         return IrrepsBlockData(
             atoms=atoms,
             atom_counts=Counter(atoms),
@@ -207,12 +205,15 @@ class E3GNN(pl.LightningModule):
 
         # ---- message-passing -------------------------------------------
         index_gnn_cutoff = x["index_gnn_cutoff"]
-        edge_small = edge[:index_gnn_cutoff]
-        ei_small = x["edge_index"][:, :index_gnn_cutoff]
+        num_self_edges = x["num_self_edges"]
+
+        edge_small = edge[num_self_edges:index_gnn_cutoff]
+        ei_small = x["edge_index"][:, num_self_edges:index_gnn_cutoff]
 
         for idx, blk in enumerate(self.mp_small):
             node, edge_small = blk(node, edge_small, ei_small)
             # record magnitudes after small graph layer
+
             self._record_activation_mags(
                 f"node_small_layer_{idx}", node, self.hidden_irreps
             )
@@ -220,12 +221,26 @@ class E3GNN(pl.LightningModule):
                 f"edge_small_layer_{idx}", edge_small, self.hidden_irreps
             )
 
-        edge_large = edge[index_gnn_cutoff:]
-        edge = torch.cat([edge_small, edge_large], dim=0)
+        edge_only_large = edge[index_gnn_cutoff:]
+        edge_large = torch.cat([edge_small, edge_only_large], dim=0)
+        ei_large = x["edge_index"][:, num_self_edges:]
+
+        for idx, blk in enumerate(self.mp_large):
+            node, edge_large = blk(node, edge_large, ei_large)
+            # record magnitudes after large graph layer
+
+            self._record_activation_mags(
+                f"node_large_layer_{idx}", node, self.hidden_irreps
+            )
+            self._record_activation_mags(
+                f"edge_large_layer_{idx}", edge_large, self.hidden_irreps
+            )
+
+        embeddings = torch.cat([node, edge_large], dim=0)
 
         # ---- heads -----------------------------------------------------
         preds_raw = {
-            name: head(edge, x["edge_type_idx"], x["edge_index"])
+            name: head(embeddings, x["edge_type_idx"], x["edge_index"])
             for name, head in self.heads.items()
         }
         preds_wrapped = {
@@ -315,7 +330,7 @@ class E3GNN(pl.LightningModule):
             "map": t_map_end - t_map_start,
             "obs": t_obs_end - t_obs_start,
         }
-        return loss
+        return
 
     def training_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, stage="train")
@@ -396,7 +411,7 @@ class E3GNN(pl.LightningModule):
             box,
             create_graph=self.cfg.train_on_stress,  # needed for second derivatives
             retain_graph=True,
-        )
+        )[0]
         # 2. compute volume
         volume = torch.det(box)
         # 3. form Cauchy stress: σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
