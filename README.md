@@ -62,7 +62,7 @@ python -m pip install --upgrade pip
 # Install torch if you don't have it
 pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 # Install wheel and then torch-scatter
-pip install wheel 
+pip install wheel
 pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1.html --no-build-isolation
 # Install Mandala
 pip install -e .[dev]
