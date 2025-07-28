@@ -386,11 +386,39 @@ class E3GNN(pl.LightningModule):
         )[0]
         return -grad_pos
 
+    def get_box_grad(
+        self,
+        predictions: Dict[str, IrrepsBlockData],
+        positions: torch.Tensor,
+        box: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute gradient of energy with respect to box.
+        Args:
+            predictions: Output from the forward pass, containing hamiltonian,
+                         overlap, and density matrices.
+            positions: Atomic positions (N, 3).
+            box: Lattice box matrix (3, 3).
+        Returns:
+            Gradient of energy with respect to box as a tensor of shape (3, 3).
+        """
+        snapshot = self.predictions_to_snapshot(predictions, positions, box)
+        energy = snapshot.get_energy()
+        # 1. get dE/dh
+        grad_box = torch.autograd.grad(
+            energy,
+            box,
+            create_graph=self.cfg.train_on_stress,  # needed for second derivatives
+            retain_graph=True,
+        )[0]
+        return grad_box
+
     def get_stress(
         self,
         predictions: Dict[str, IrrepsBlockData],
         positions: torch.Tensor,
         box: torch.Tensor,
+        symmetrize: bool = True,
     ) -> torch.Tensor:
         """
         Compute stress tensor from energy and box.
@@ -403,22 +431,16 @@ class E3GNN(pl.LightningModule):
             - Stress is defined as σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
             - No Pulay correction needed
         """
-        snapshot = self.predictions_to_snapshot(predictions, positions, box)
-        energy = snapshot.get_energy()
         # 1. get dE/dh
-        grad_box = torch.autograd.grad(
-            energy,
-            box,
-            create_graph=self.cfg.train_on_stress,  # needed for second derivatives
-            retain_graph=True,
-        )[0]
+        grad_box = self.get_box_grad(predictions, positions, box)
         # 2. compute volume
         volume = torch.det(box)
-        # 3. form Cauchy stress: σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
-        #    - no minus sign here, since σ =  +∂E/∂ε /Ω
+        # 3. compute stress tensor σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
+        # stress = (1/Ω) * box^T @ grad_box
         stress = torch.matmul(box.t(), grad_box) / volume
         # 4. optionally symmetrize: σ → (σ+σ^T)/2
-        stress = 0.5 * (stress + stress.transpose(-1, -2))
+        if symmetrize:
+            stress = 0.5 * (stress + stress.transpose(-1, -2))
         return stress
 
     def predict_forces(self, x: Dict[str, Any]) -> torch.Tensor:
