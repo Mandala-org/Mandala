@@ -18,7 +18,7 @@ def test_forward_smoke():
     model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
 
     # ------- fake batch ----------------------------
-    N, E = 4, 3
+    N, E = 4, 7
     node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
     edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
     edge_len = torch.randn(E, cfg.n_radial)
@@ -30,8 +30,9 @@ def test_forward_smoke():
         "edge_type_idx": edge_type_idx,
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
-        "edge_index": torch.tensor([[0, 1, 2], [1, 2, 3]]),
+        "edge_index": torch.tensor([[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]]),
         "atoms": ("H", "H", "H", "H"),
+        "num_self_edges": N,
         "index_gnn_cutoff": E,
     }
     atoms = ("H", "H", "H", "H")
