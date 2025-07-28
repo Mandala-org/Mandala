@@ -51,7 +51,7 @@ class Config:
     use_self_update: bool = True
 
     # -------------- non-linearity & norm --------------------------------
-    nonlin_kind: str = "gate"  # "gate" | "normact" | "s2act" | "id"
+    nonlin_kind: str = "normact"  # "gate" | "normact" | "s2act" | "id"
     activation_scalar: str = "silu"  # SiLU by default
     batch_norm: bool = False
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
@@ -79,7 +79,6 @@ class Config:
     # -------------- output head ----------------------------------------
     head_depth: int = 1
     head_hidden_mul: float = 1.0  # can be <1 or >1
-    hidden_mul_clip: float = 4.0  # safety cap to avoid huge widths
 
     # --------- additional outputs --------------------------------------
     enable_forces: bool = False

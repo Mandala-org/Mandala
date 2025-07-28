@@ -16,6 +16,7 @@ from torch import nn
 from torch_scatter import scatter
 
 from e3nn.o3 import Irreps, Linear
+from e3nn.o3 import FullyConnectedTensorProduct
 from e3nn.nn import Dropout, BatchNorm
 
 from net.common import Config
@@ -45,6 +46,9 @@ class EdgeUpdateBlock(nn.Module):
 
         self.lin_src = Linear(hidden_irreps, hidden_irreps)
         self.lin_dst = Linear(hidden_irreps, hidden_irreps)
+        self.tp = FullyConnectedTensorProduct(
+            hidden_irreps, hidden_irreps, hidden_irreps
+        )
 
         self.norm_act = make_nonlinearity(hidden_irreps, cfg)
         self.dropout = (
@@ -56,7 +60,10 @@ class EdgeUpdateBlock(nn.Module):
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         src, dst = edge_index
-        upd = 0.5 * (self.lin_src(node[src]) + self.lin_dst(node[dst]))
+        # upd = 0.5 * (self.lin_src(node[src]) + self.lin_dst(node[dst]))
+        msg_src = self.lin_src(node[src])
+        msg_dst = self.lin_dst(node[dst])
+        upd = self.tp(msg_src, msg_dst)
         if self.cfg.residual_connections:
             upd = upd + edge
         upd = self.norm_act(upd)
