@@ -23,7 +23,7 @@ from net.e3gnn import E3GNN
 # helper to fabricate a minimal synthetic batch
 # ──────────────────────────────────────────────────────────────────────
 def make_dummy_graph(cfg):
-    N, E = 4, 3
+    N, E = 4, 7
     node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
     edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
 
@@ -31,7 +31,9 @@ def make_dummy_graph(cfg):
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh_irreps.dim)
 
-    edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]], dtype=torch.long
+    )
 
     x = {
         "node_type_idx": node_type_idx,
@@ -41,6 +43,7 @@ def make_dummy_graph(cfg):
         "edge_index": edge_index,
         "atoms": ("H", "H", "H", "H"),
         "index_gnn_cutoff": E,
+        "num_self_edges": N,
         "overlap_vectors": torch.randn(E, 1),
     }
     return x
