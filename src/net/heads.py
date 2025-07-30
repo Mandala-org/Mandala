@@ -31,11 +31,13 @@ class DeepHead(nn.Module):
         pair_keys: List[str],
         mapper: BlockIrrepMapper,
         cfg: Config,
+        info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
         self.in_irreps = in_irreps
         self.pair_keys = pair_keys
+        self.info = info
 
         # 0) shared mapper
         self.mapper: BlockIrrepMapper = mapper

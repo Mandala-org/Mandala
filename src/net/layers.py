@@ -12,8 +12,10 @@ E(3)-equivariant message-passing blocks:
 
 from __future__ import annotations
 
+import torch
 from torch import nn
 from torch_scatter import scatter
+from collections import OrderedDict
 
 from e3nn.o3 import Irreps, Linear
 from e3nn.o3 import FullyConnectedTensorProduct
@@ -21,6 +23,32 @@ from e3nn.nn import Dropout, BatchNorm
 
 from net.common import Config
 from net.activations import make_nonlinearity
+
+
+def _magnitude_splits(
+    features: torch.Tensor,
+    irreps: Irreps,
+) -> dict[str, torch.Tensor]:
+    """
+    Split features by irrep and compute magnitude per irreducible component.
+    Returns a mapping from angular momentum l to a 1D tensor of magnitudes.
+    """
+    mags: dict[str, torch.Tensor] = OrderedDict()
+    # features: (M, D)
+    start = 0
+    for mul, ir in irreps:
+        dim = ir.dim
+        size = mul * dim
+        # slice for this irrep
+        chunk = features[:, start : start + size]
+        # reshape to (M * mul, dim)
+        if mul > 0 and dim > 0:
+            reshaped = chunk.reshape(-1, dim)
+            # magnitude across dim
+            mag = torch.linalg.norm(reshaped, dim=1)
+            mags[f"{mul}x{ir.l}{'e' if ir.p == 1 else 'o'}"] = mag
+        start += size
+    return mags
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -40,9 +68,11 @@ class EdgeUpdateBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
+        info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
+        self.info = info
 
         self.lin_src = Linear(hidden_irreps, hidden_irreps)
         self.lin_dst = Linear(hidden_irreps, hidden_irreps)
@@ -88,9 +118,11 @@ class NodeUpdateBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
+        info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
+        self.info = info
 
         self.lin_msg = Linear(hidden_irreps, hidden_irreps)
 
@@ -149,18 +181,38 @@ class MessageBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
+        info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
+        self.info = info or {}
+        self.hidden_irreps = hidden_irreps
         if cfg.use_edge_updates:
-            self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg)
+            self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg, info=info)
         else:
             self.edge_upd = None
-        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg)
+        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, info=info)
 
     # ------------------------------------------------------------------
-    def forward(self, node, edge, edge_index):
+    def forward(self, node, edge, edge_index, activation_mags: dict = None):
         if self.edge_upd is not None:
             edge = self.edge_upd(node, edge, edge_index)
+            if (
+                activation_mags is not None
+                and self.cfg.log_activation_mag
+                and self.info
+            ):
+                prefix = f"mag_edge_{self.info['graph']}_layer_{self.info['layer']}"
+                splits = _magnitude_splits(edge, self.hidden_irreps)
+                for ir_str, mag in splits.items():
+                    tag = f"{prefix}_{ir_str}"
+                    activation_mags[tag] = mag
+
         node = self.node_upd(node, edge, edge_index)
+        if activation_mags is not None and self.cfg.log_activation_mag and self.info:
+            prefix = f"mag_node_{self.info['graph']}_layer_{self.info['layer']}"
+            splits = _magnitude_splits(node, self.hidden_irreps)
+            for ir_str, mag in splits.items():
+                tag = f"{prefix}_{ir_str}"
+                activation_mags[tag] = mag
         return node, edge
