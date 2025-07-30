@@ -53,11 +53,17 @@ def make_dummy_graph(cfg):
 # parameter sets – each dict overrides defaults
 # ──────────────────────────────────────────────────────────────────────
 HP_VARIANTS = [
-    {},  # default (gate, residuals, dropout 0)
-    {"nonlin_kind": "normact", "batch_norm": True},
-    {"nonlin_kind": "s2act", "dropout": 0.2},
-    {"nonlin_kind": "id", "residual_connections": False},
-    {"head_hidden_mul": 2.0, "radial_layers": (64, 32)},
+    {},  # default
+    {"nonlin_kind": "gate", "batch_norm": True},
+    {"edge_update_node_combine": "sum", "edge_update": "concat"},
+    {"node_update_message_agg": "sum", "node_update": "replace"},
+    {
+        "edge_update": "replace",
+        "node_update": "sum",
+        "edge_update_residual": False,
+        "node_update_residual": False,
+    },
+    {"l_max_gnn": 1, "l_max_matrix": 3, "hidden_base_dim": 32},
 ]
 
 orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})

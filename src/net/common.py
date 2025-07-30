@@ -63,7 +63,7 @@ class Config:
 
     # -------------- non-linearity & norm --------------------------------
     nonlin_kind: str = "normact"  # "gate" | "normact" | "s2act" | "id"
-    activation_scalar: str = "silu"  # SiLU by default
+    activation_scalar: str = "leakyrelu"  # SiLU by default
     batch_norm: bool = False
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
 
@@ -87,8 +87,8 @@ class Config:
     share_radial: bool = True
 
     # -------------- output head ----------------------------------------
-    head_depth: int = 1
-    head_hidden_mul: float = 1.0  # can be <1 or >1
+    neck_depth: int = 3
+    head_depth: int = 2
 
     # --------- additional outputs --------------------------------------
     enable_forces: bool = False

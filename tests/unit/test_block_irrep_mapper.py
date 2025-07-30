@@ -33,3 +33,24 @@ def test_roundtrip_si_si(mapper):
 def test_unknown_pair(mapper):
     with pytest.raises(MappingKeyError):
         mapper.vector_dim(("C", "H"))
+
+
+@pytest.mark.unit
+def test_get_pair_irreps(mapper):
+    """Tests the get_pair_irreps method."""
+    si_si_irreps = mapper.get_pair_irreps("Si-Si")
+    h_si_irreps = mapper.get_pair_irreps("H-Si")
+
+    # Check that the returned type is Irreps
+    from e3nn.o3 import Irreps
+
+    assert isinstance(si_si_irreps, Irreps)
+    assert isinstance(h_si_irreps, Irreps)
+
+    # Check that the irreps are not empty
+    assert si_si_irreps.dim > 0
+    assert h_si_irreps.dim > 0
+
+    # Check that Si-H and H-Si have the same irreps (due to "ij" formula)
+    si_h_irreps = mapper.get_pair_irreps("Si-H")
+    assert h_si_irreps == si_h_irreps
