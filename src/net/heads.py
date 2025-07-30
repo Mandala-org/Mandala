@@ -12,7 +12,7 @@ from typing import Dict, List
 import torch
 from torch import nn
 from e3nn.o3 import Irreps, Linear
-from e3nn.nn import Dropout, BatchNorm
+from e3nn.nn import Dropout
 
 from core.block_irrep_mapper import BlockIrrepMapper
 
@@ -27,7 +27,7 @@ class DeepHead(nn.Module):
 
     def __init__(
         self,
-        irreps_in: Irreps,
+        irreps_hidden: Irreps,
         pair_keys: List[str],
         mapper: BlockIrrepMapper,
         cfg: Config,
@@ -35,7 +35,7 @@ class DeepHead(nn.Module):
     ):
         super().__init__()
         self.cfg = cfg
-        self.irreps_in = irreps_in
+        self.irreps_hidden = irreps_hidden
         self.pair_keys = pair_keys
         self.info = info
 
@@ -44,38 +44,27 @@ class DeepHead(nn.Module):
 
         # 1) deep trunk ---------------------------------------------------
         layers: List[nn.Module] = []
-        cur_ir = irreps_in
-        for _ in range(cfg.head_depth):
-            # scale multiplicities by hidden_mul
-            parts = []
-            for mul, ir in cur_ir:
-                mul_new = int(round(mul * cfg.head_hidden_mul))
-                parts.append((mul_new, ir))
-            next_ir = Irreps(parts).simplify()
-
-            lin = Linear(cur_ir, next_ir)
+        for _ in range(self.cfg.neck_depth):
+            lin = Linear(irreps_hidden, irreps_hidden)
             layers.append(lin)
+            layers.append(make_nonlinearity(irreps_hidden, self.cfg))
 
-            if cfg.batch_norm:
-                layers.append(BatchNorm(next_ir))
-
-            layers.append(make_nonlinearity(next_ir, cfg))
-
-            if cfg.dropout > 0.0:
-                layers.append(Dropout(next_ir, p=cfg.dropout))
-
-            cur_ir = next_ir
+            if self.cfg.dropout > 0.0:
+                layers.append(Dropout(irreps_hidden, p=self.cfg.dropout))
 
         self.trunk = nn.Sequential(*layers)
-        self.trunk_irreps_out = cur_ir
 
-        # 2) last-mile Linear per pair -----------------------------------
+        # 2) last-mile MLP per pair -----------------------------------
         last = {}
         for key in pair_keys:
-            el_a, el_b = key.split("-")
-            out_ir = self.mapper._maps[(el_a, el_b)].rtp.irreps_out
-            proj = Linear(self.trunk_irreps_out, out_ir)
-            last[key] = proj
+            layers = []
+            for i in range(self.cfg.head_depth - 1):
+                layers.append(Linear(irreps_hidden, irreps_hidden))
+                layers.append(make_nonlinearity(irreps_hidden, self.cfg))
+                if self.cfg.dropout > 0.0:
+                    layers.append(Dropout(irreps_hidden, p=self.cfg.dropout))
+            # final layer is linear, no nonlinearity
+            layers.append(Linear(irreps_hidden, mapper.get_pair_irreps(key)))
         self.last_mlps = nn.ModuleDict(last)
 
     # ------------------------------------------------------------------

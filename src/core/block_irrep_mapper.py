@@ -182,6 +182,11 @@ class BlockIrrepMapper:
         itm = self._lookup(pair)
         return (itm.dim_i, itm.dim_j)
 
+    def get_pair_irreps(self, pair: Tuple[str, str] | str) -> Irreps:
+        """Return the output Irreps for a given pair."""
+        itm = self._lookup(pair)
+        return itm.rtp.irreps_out
+
     # ------------------------- internals ------------------------------------ #
     def _canonical_pair(self, pair: Tuple[str, str] | str) -> Tuple[str, str]:
         if isinstance(pair, str):
