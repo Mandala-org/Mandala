@@ -16,7 +16,7 @@ def test_stress_with_real_data():
     cfg = Config(
         cutoff_gnn=3.0,
         cutoff_matrix=4.0,
-        l_max=2,
+        l_max_gnn=2,
         n_radial=64,
         num_layers_gnn=3,
         hidden_base_dim=16,

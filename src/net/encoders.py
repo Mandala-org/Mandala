@@ -14,11 +14,9 @@ from __future__ import annotations
 import torch
 from torch import nn
 from e3nn.o3 import Irreps, Linear
-from e3nn.nn import Dropout
 from collections import OrderedDict
 
-from net.common import Config, RadialMLP
-from net.activations import make_nonlinearity
+from net.common import Config
 
 
 def _magnitude_splits(
@@ -68,23 +66,15 @@ class NodeEncoder(nn.Module):
         self.out_irreps = out_irreps
         self.info = info
 
+        if self.out_irreps.lmax > 0:
+            raise ValueError("NodeEncoder can only output scalar irreps (l=0).")
+
         scalar_width = cfg.hidden_base_dim
         self.elem_emb = nn.Embedding(
             node_one_hot_dim,
             scalar_width,
         )
         nn.init.normal_(self.elem_emb.weight, std=0.2)
-
-        self.lin = Linear(
-            Irreps(f"{scalar_width}x0e"),
-            out_irreps,
-            internal_weights=True,
-        )
-
-        self.nl = make_nonlinearity(out_irreps, cfg)
-        self.dropout = (
-            Dropout(out_irreps, p=cfg.dropout) if cfg.dropout > 0.0 else nn.Identity()
-        )
 
     # ------------------------------------------------------------------
     def forward(
@@ -93,16 +83,14 @@ class NodeEncoder(nn.Module):
         activation_mags: dict = None,
     ) -> torch.Tensor:
         emb = self.elem_emb(node_type_idx)
-        h = self.lin(emb)
-        h = self.nl(h)
-        h = self.dropout(h)
+
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_{self.info['name']}"
-            splits = _magnitude_splits(h, self.out_irreps)
+            splits = _magnitude_splits(emb, self.out_irreps)
             for ir_str, mag in splits.items():
                 tag = f"{prefix}_{ir_str}"
                 activation_mags[tag] = mag
-        return h
+        return emb
 
 
 # --------------------------------------------------------------------------- #
@@ -117,10 +105,8 @@ class EdgeEncoder(nn.Module):
 
     Combines:
       1. Learned edge-type embedding.
-      2. MLP over radial embeddings.
-      3. Projection of spherical harmonics.
+      2. Projection of spherical harmonics.
 
-    Followed by equivariant nonlinearity and dropout to produce
     Tensor[E, out_irreps.dim].
     """
 
@@ -134,45 +120,26 @@ class EdgeEncoder(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.out_irreps = out_irreps
-        self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+        self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max_gnn)
         self.info = info
 
         # 1) scalar embeddings ------------------------------------------------
-        sc_width = self.cfg.hidden_base_dim
         self.edge_emb = nn.Embedding(
             n_edge_types,
-            sc_width,
+            self.cfg.hidden_base_dim,
             dtype=self.cfg.dtype,
         )
         nn.init.normal_(self.edge_emb.weight, std=0.2)
 
-        self.radial_net = RadialMLP(
-            in_dim=self.cfg.n_radial,
-            out_dim=sc_width,
-            layers=self.cfg.radial_layers,
-            act=self.cfg.activation_scalar,
+        # 2) Linear projection ------------------------------------------------
+        lin_in_irreps = (
+            Irreps(f"{self.cfg.hidden_base_dim+self.cfg.n_radial}x0e") + self.sh_irreps
+        )
+        lin_in_irreps = lin_in_irreps.simplify()
+        self.linear = Linear(
+            lin_in_irreps,
+            self.out_irreps,
             dtype=self.cfg.dtype,
-        )
-
-        scalar_input_ir = Irreps(f"{sc_width * 2}x0e")
-        self.lin_scalar = Linear(
-            scalar_input_ir,
-            out_irreps,
-            internal_weights=True,
-        )
-
-        # 2) spherical harmonics projector ------------------------------------
-        self.sh_irreps = self.sh_irreps
-        self.sh_proj = Linear(
-            self.sh_irreps,
-            out_irreps,
-            internal_weights=True,
-        )
-
-        # 3) non-linearity + dropout
-        self.nl = make_nonlinearity(out_irreps, cfg)
-        self.dropout = (
-            Dropout(out_irreps, p=cfg.dropout) if cfg.dropout > 0.0 else nn.Identity()
         )
 
     # ------------------------------------------------------------------
@@ -186,19 +153,15 @@ class EdgeEncoder(nn.Module):
         """
         Return hidden edge features: Tensor[E, out_irreps.dim].
         """
-        scalars = [
-            self.edge_emb(edge_type_idx),
-            self.radial_net(length_emb),
-        ]
+        # Concatenate edge type embedding, radial MLP output, and SH projection
+        emb = torch.cat([self.edge_emb(edge_type_idx), length_emb, sh], dim=1)
+        # Project to output irreps
+        emb = self.linear(emb)
 
-        h_scalar = self.lin_scalar(torch.cat(scalars, dim=-1))
-        h = h_scalar + self.sh_proj(sh)
-        h = self.nl(h)
-        h = self.dropout(h)
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_{self.info['name']}"
-            splits = _magnitude_splits(h, self.out_irreps)
+            splits = _magnitude_splits(emb, self.out_irreps)
             for ir_str, mag in splits.items():
                 tag = f"{prefix}_{ir_str}"
                 activation_mags[tag] = mag
-        return h
+        return emb

@@ -41,14 +41,20 @@ class Config:
     cutoff_matrix: float = 8.0
 
     # -------------- representation shape --------------------------------
-    l_max: int = 3
+    l_max_gnn: int = 2
+    l_max_matrix: int = 4
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
 
     # -------------- depth / topology ------------------------------------
     num_layers_gnn: int = 2
     num_layers_matrix: int = 1
-    use_edge_updates: bool = True
-    use_self_update: bool = True
+
+    # -------------- model variants --------------------------------------
+    edge_update_node_combine: str = "tensor_product"  # "sum" | "tensor_product"
+    edge_update_linear: str = "post"  # "pre" | "post" | "none"
+    edge_update: str = "residual"  # "residual" | "concat" | "replace"
+    node_update_use_attention: bool = True  # use attention in node update
+    node_update: str = "residual"  # "residual" | "concat" | "replace"
 
     # -------------- non-linearity & norm --------------------------------
     nonlin_kind: str = "normact"  # "gate" | "normact" | "s2act" | "id"
@@ -67,7 +73,6 @@ class Config:
     l1_reg_coef: float = 0.0
     l2_reg_coef: float = 0.0
     grad_clip_val: float = 0.0
-    residual_connections: bool = True
 
     # -------------- radial basis ----------------------------------------
     n_radial: int = 64
@@ -133,17 +138,17 @@ def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
 # 2.  Hidden irreps auto-builder  (cached – deterministic)
 # ════════════════════════════════════════════════════════════════════════
 @lru_cache(maxsize=None)
-def build_hidden_irreps(l_max: int, base_dim: int) -> Irreps:
+def build_hidden_irreps(l_max_gnn: int, base_dim: int) -> Irreps:
     """
     Create `Irreps` with multiplicity halved for every ℓ > 0
     and *both* parity channels present.
 
-    Example  (base_dim=32, l_max=2) ::
+    Example  (base_dim=32, l_max_gnn=2) ::
 
         32x0e + 32x0o + 16x1e + 16x1o + 8x2e + 8x2o
     """
     parts: List[str] = []
-    for ell in range(l_max + 1):
+    for ell in range(l_max_gnn + 1):
         mul = max(base_dim // (2**ell), 1)
         parts.append(f"{mul}x{ell}e")
         parts.append(f"{mul}x{ell}o")
@@ -203,6 +208,25 @@ class RadialMLP(nn.Module):
     # ------------------------------------------------------------------
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+
+def irreps_div(irreps: Irreps, n: int) -> Irreps:
+    """
+    Divides the multiplicities of all irreps in an Irreps object by n.
+    Raises a ValueError if any multiplicity is not divisible by n.
+    """
+    if not isinstance(n, int) or n <= 0:
+        raise ValueError("n must be a positive integer.")
+
+    new_irreps_list = []
+    for mul, ir in irreps:
+        if mul % n != 0:
+            raise ValueError(
+                f"Multiplicity {mul} for irrep {ir} is not divisible by {n}."
+            )
+        new_irreps_list.append((mul // n, ir))
+
+    return Irreps(new_irreps_list).simplify()
 
 
 # ════════════════════════════════════════════════════════════════════════

@@ -28,7 +28,7 @@ def make_dummy_graph(cfg):
     edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
 
     edge_len = torch.randn(E, cfg.n_radial)
-    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max_gnn)
     edge_sh = torch.randn(E, sh_irreps.dim)
 
     edge_index = torch.tensor(
@@ -55,9 +55,9 @@ def make_dummy_graph(cfg):
 HP_VARIANTS = [
     {},  # default (gate, residuals, dropout 0)
     {"nonlin_kind": "normact", "batch_norm": True},
-    {"nonlin_kind": "s2act", "dropout": 0.2, "use_edge_updates": False},
+    {"nonlin_kind": "s2act", "dropout": 0.2},
     {"nonlin_kind": "id", "residual_connections": False},
-    {"use_self_update": False, "head_hidden_mul": 2.0, "radial_layers": (64, 32)},
+    {"head_hidden_mul": 2.0, "radial_layers": (64, 32)},
 ]
 
 orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
