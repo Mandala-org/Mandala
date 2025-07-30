@@ -63,9 +63,9 @@ class E3GNN(pl.LightningModule):
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = build_hidden_irreps(
-            self.cfg.l_max, self.cfg.hidden_base_dim
+            self.cfg.l_max_gnn, self.cfg.hidden_base_dim
         )
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
 
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(

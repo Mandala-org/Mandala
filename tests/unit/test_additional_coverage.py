@@ -25,9 +25,9 @@ def test_node_encoder_shape_and_dtype():
 
 @pytest.mark.unit
 def test_edge_encoder_forward():
-    cfg = Config(n_radial=16, l_max=2)
+    cfg = Config(n_radial=16, l_max_gnn=2)
     n_types = 2
-    sh_ir = Irreps.spherical_harmonics(cfg.l_max)
+    sh_ir = Irreps.spherical_harmonics(cfg.l_max_gnn)
     out_ir = Irreps("5x0e")
 
     enc = EdgeEncoder(n_types, out_ir, cfg)
@@ -54,11 +54,10 @@ def test_edge_update_block_shape(residual):
     assert out.shape == (E, hid_ir.dim)
 
 
-@pytest.mark.parametrize("self_upd", [True, False])
 @pytest.mark.parametrize("batch_norm", [True, False])
 @pytest.mark.unit
-def test_node_update_block_shape(self_upd, batch_norm):
-    cfg = Config(use_self_update=self_upd, batch_norm=batch_norm)
+def test_node_update_block_shape(batch_norm):
+    cfg = Config(batch_norm=batch_norm)
     hid_ir = Irreps("2x0e")
     blk = NodeUpdateBlock(hid_ir, cfg)
     N, E = 4, 2
@@ -71,7 +70,7 @@ def test_node_update_block_shape(self_upd, batch_norm):
 
 @pytest.mark.unit
 def test_message_block_edge_and_node_update():
-    cfg = Config(use_edge_updates=True)
+    cfg = Config()
     hid_ir = Irreps("1x0e")
     blk = MessageBlock(hid_ir, cfg)
     N, E = 3, 2
@@ -104,12 +103,12 @@ def test_make_nonlinearity_id_and_fallback():
 
 
 @pytest.mark.parametrize(
-    "l_max, base_dim, expected",
+    "l_max_gnn, base_dim, expected",
     [(2, 4, "4x0e+4x0o+2x1e+2x1o+1x2e+1x2o"), (0, 3, "3x0e+3x0o")],
 )
 @pytest.mark.unit
-def test_build_hidden_irreps(l_max, base_dim, expected):
-    ir = build_hidden_irreps(l_max, base_dim)
+def test_build_hidden_irreps(l_max_gnn, base_dim, expected):
+    ir = build_hidden_irreps(l_max_gnn, base_dim)
     assert str(ir) == expected
 
 

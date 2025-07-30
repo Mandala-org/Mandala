@@ -15,7 +15,7 @@ def make_dummy_graph(E=10, N=5, hid_dim=32):
 @pytest.mark.unit
 def test_edge_node_update_shapes():
     cfg = Config(dropout=0.1, batch_norm=True)
-    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
+    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
 
     edge_blk = EdgeUpdateBlock(hid, cfg)
     node_blk = NodeUpdateBlock(hid, cfg)
@@ -30,8 +30,8 @@ def test_edge_node_update_shapes():
 
 @pytest.mark.unit
 def test_message_block_roundtrip():
-    cfg = Config(use_edge_updates=False, dropout=0.0)
-    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
+    cfg = Config(dropout=0.0)
+    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
 
     blk = MessageBlock(hid, cfg)
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)

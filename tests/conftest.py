@@ -68,7 +68,7 @@ def factory_results():
     cfg = Config(
         cutoff_gnn=4.5,
         cutoff_matrix=7.5,
-        l_max=3,
+        l_max_gnn=3,
         n_radial=64,
         device="cpu",
         dtype=torch.float32,

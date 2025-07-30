@@ -69,7 +69,7 @@ class E3GNNDataset(Dataset):
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
         self.orbital_cfg = mapper.orbital_cfg
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
 
         # edge-type encoding (ordered pairs)
         elems = self.orbital_cfg.elements()
@@ -106,7 +106,7 @@ class E3GNNDataset(Dataset):
                 self.cfg.n_radial,
                 self.cfg.cutoff_gnn,
                 self.cfg.cutoff_matrix,
-                self.cfg.l_max,
+                self.cfg.l_max_gnn,
             )
             key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
             cache_file = self.cfg.cache_root / f"{key_hash}.pt"
