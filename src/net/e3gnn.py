@@ -72,25 +72,34 @@ class E3GNN(pl.LightningModule):
             node_one_hot_dim=len(self.mapper.orbital_cfg.elements()),
             out_irreps=self.hidden_irreps,
             cfg=self.cfg,
+            info={"name": "node_encoding"},
         )
         self.edge_enc = EdgeEncoder(
             n_edge_types=len(self.mapper._maps.keys()),
             out_irreps=self.hidden_irreps,
             cfg=self.cfg,
+            info={"name": "edge_encoding"},
         )
 
         # ---------- message-passing stacks -----------------------------
-        def _make_mp():
+        def _make_mp(info):
             return MessageBlock(
                 self.hidden_irreps,
                 self.cfg,
+                info=info,
             )
 
         self.mp_small = nn.ModuleList(
-            [_make_mp() for _ in range(self.cfg.num_layers_gnn)]
+            [
+                _make_mp({"layer": i, "graph": "small"})
+                for i in range(self.cfg.num_layers_gnn)
+            ]
         )
         self.mp_large = nn.ModuleList(
-            [_make_mp() for _ in range(self.cfg.num_layers_matrix)]
+            [
+                _make_mp({"layer": i, "graph": "large"})
+                for i in range(self.cfg.num_layers_matrix)
+            ]
         )
 
         # ---------- heads ----------------------------------------------
@@ -104,6 +113,7 @@ class E3GNN(pl.LightningModule):
                     pair_keys=pair_keys,
                     mapper=self.mapper,
                     cfg=self.cfg,
+                    info={"matrix": name},
                 )
                 for name in ("hamiltonian", "overlap", "density")
             }
@@ -144,64 +154,20 @@ class E3GNN(pl.LightningModule):
             orbital_cfg=self.mapper.orbital_cfg,
         )
 
-    # --------------- activation monitoring helpers ----------------------------
-    def _magnitude_splits(
-        self,
-        features: torch.Tensor,
-        irreps: Irreps,
-    ) -> dict[str, torch.Tensor]:
-        """
-        Split features by irrep and compute magnitude per irreducible component.
-        Returns a mapping from angular momentum l to a 1D tensor of magnitudes.
-        """
-        mags: dict[str, torch.Tensor] = OrderedDict()
-        # features: (M, D)
-        start = 0
-        for mul, ir in irreps:
-            dim = ir.dim
-            size = mul * dim
-            # slice for this irrep
-            chunk = features[:, start : start + size]
-            # reshape to (M * mul, dim)
-            if mul > 0 and dim > 0:
-                reshaped = chunk.reshape(-1, dim)
-                # magnitude across dim
-                mag = torch.linalg.norm(reshaped, dim=1)
-                mags[f"{mul}x{ir.l}{'e' if ir.p == 1 else 'o'}"] = mag
-            start += size
-        return mags
-
-    def _record_activation_mags(
-        self,
-        prefix: str,
-        features: torch.Tensor,
-        irreps: Irreps,
-    ) -> None:
-        """
-        Compute activation magnitudes and store in self._activation_mags.
-        """
-        splits = self._magnitude_splits(features, irreps)
-        for ir_str, mag in splits.items():
-            tag = f"mag_{prefix}_{ir_str}"
-            self._activation_mags[tag] = mag
-
     # ------------------------------------------------------------------ forward
     def forward(self, x: Dict[str, Any]):
         # initialize activation magnitudes storage
         self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
         # ---- encode ----------------------------------------------------
-        node = self.node_enc(x["node_type_idx"])
-        # record node encoding magnitudes per irrep
-        self._record_activation_mags("node_encoding", node, self.hidden_irreps)
+        node = self.node_enc(x["node_type_idx"], activation_mags=self._activation_mags)
         edge = self.edge_enc(
             x["edge_type_idx"],
             x["edge_length_emb"],
             x["edge_sh"],
+            activation_mags=self._activation_mags,
         )
         if self.cfg.pedantic:
             assert edge.requires_grad, "Gradients not flowing through edge encoder!"
-        # record edge encoding magnitudes per irrep
-        self._record_activation_mags("edge_encoding", edge, self.hidden_irreps)
 
         # ---- message-passing -------------------------------------------
         index_gnn_cutoff = x["index_gnn_cutoff"]
@@ -211,14 +177,8 @@ class E3GNN(pl.LightningModule):
         ei_small = x["edge_index"][:, num_self_edges:index_gnn_cutoff]
 
         for idx, blk in enumerate(self.mp_small):
-            node, edge_small = blk(node, edge_small, ei_small)
-            # record magnitudes after small graph layer
-
-            self._record_activation_mags(
-                f"node_small_layer_{idx}", node, self.hidden_irreps
-            )
-            self._record_activation_mags(
-                f"edge_small_layer_{idx}", edge_small, self.hidden_irreps
+            node, edge_small = blk(
+                node, edge_small, ei_small, activation_mags=self._activation_mags
             )
 
         edge_only_large = edge[index_gnn_cutoff:]
@@ -226,14 +186,8 @@ class E3GNN(pl.LightningModule):
         ei_large = x["edge_index"][:, num_self_edges:]
 
         for idx, blk in enumerate(self.mp_large):
-            node, edge_large = blk(node, edge_large, ei_large)
-            # record magnitudes after large graph layer
-
-            self._record_activation_mags(
-                f"node_large_layer_{idx}", node, self.hidden_irreps
-            )
-            self._record_activation_mags(
-                f"edge_large_layer_{idx}", edge_large, self.hidden_irreps
+            node, edge_large = blk(
+                node, edge_large, ei_large, activation_mags=self._activation_mags
             )
 
         embeddings = torch.cat([node, edge_large], dim=0)

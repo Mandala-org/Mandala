@@ -15,7 +15,7 @@ to :pymod:`net.activations` so we avoid a circular import between files.
 from __future__ import annotations
 from functools import lru_cache
 from dataclasses import dataclass, field
-from typing import List, Sequence
+from typing import List, Sequence, Tuple
 
 import torch
 from torch import nn
@@ -203,3 +203,79 @@ class RadialMLP(nn.Module):
     # ------------------------------------------------------------------
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 4.  Irreps splitting helpers
+# ════════════════════════════════════════════════════════════════════════
+def split_in_half(
+    activations: torch.Tensor, irreps: Irreps
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Splits activations into two halves along the multiplicity dimension.
+    Requires all multiplicities in the Irreps to be even.
+    """
+    batch_dim = activations.shape[0]
+    split1_list, split2_list = [], []
+    current_dim = 0
+
+    for mul, ir in irreps:
+        if mul % 2 != 0:
+            raise ValueError(
+                f"Multiplicity {mul} for irrep {ir} is not even, cannot split in half."
+            )
+        half_mul = mul // 2
+        slice_dim = mul * ir.dim
+        act_slice = activations[:, current_dim : current_dim + slice_dim]
+
+        reshaped_slice = act_slice.reshape(batch_dim, 2, half_mul, ir.dim)
+        split1 = reshaped_slice[:, 0, :, :].reshape(batch_dim, half_mul * ir.dim)
+        split2 = reshaped_slice[:, 1, :, :].reshape(batch_dim, half_mul * ir.dim)
+
+        split1_list.append(split1)
+        split2_list.append(split2)
+        current_dim += slice_dim
+
+    return torch.cat(split1_list, dim=1), torch.cat(split2_list, dim=1)
+
+
+def split_into_three(
+    activations: torch.Tensor, irreps: Irreps
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Splits activations into three parts with proportions (1/4, 1/4, 1/2).
+    Requires all multiplicities in the Irreps to be divisible by 4.
+    """
+    batch_dim = activations.shape[0]
+    split1_list, split2_list, split3_list = [], [], []
+    current_dim = 0
+
+    for mul, ir in irreps:
+        if mul % 4 != 0:
+            raise ValueError(
+                f"Multiplicity {mul} for irrep {ir} is not divisible by 4."
+            )
+        quarter_mul = mul // 4
+        half_mul = mul // 2
+        slice_dim = mul * ir.dim
+        act_slice = activations[:, current_dim : current_dim + slice_dim]
+
+        reshaped_slice = act_slice.reshape(batch_dim, mul, ir.dim)
+        s1 = reshaped_slice[:, :quarter_mul, :].reshape(batch_dim, quarter_mul * ir.dim)
+        s2 = reshaped_slice[:, quarter_mul : 2 * quarter_mul, :].reshape(
+            batch_dim, quarter_mul * ir.dim
+        )
+        s3 = reshaped_slice[:, 2 * quarter_mul :, :].reshape(
+            batch_dim, half_mul * ir.dim
+        )
+
+        split1_list.append(s1)
+        split2_list.append(s2)
+        split3_list.append(s3)
+        current_dim += slice_dim
+
+    return (
+        torch.cat(split1_list, dim=1),
+        torch.cat(split2_list, dim=1),
+        torch.cat(split3_list, dim=1),
+    )
