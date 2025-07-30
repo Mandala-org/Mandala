@@ -70,13 +70,12 @@ class E3GNN(pl.LightningModule):
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(
             node_one_hot_dim=len(self.mapper.orbital_cfg.elements()),
-            out_irreps=self.hidden_irreps,
             cfg=self.cfg,
             info={"name": "node_encoding"},
         )
         self.edge_enc = EdgeEncoder(
             n_edge_types=len(self.mapper._maps.keys()),
-            out_irreps=self.hidden_irreps,
+            irreps_out=self.hidden_irreps,
             cfg=self.cfg,
             info={"name": "edge_encoding"},
         )
@@ -86,6 +85,7 @@ class E3GNN(pl.LightningModule):
             return MessageBlock(
                 self.hidden_irreps,
                 self.cfg,
+                initial=self.node_enc.irreps_out if info["layer"] == 0 else None,
                 info=info,
             )
 
@@ -109,7 +109,7 @@ class E3GNN(pl.LightningModule):
         self.heads = nn.ModuleDict(
             {
                 name: DeepHead(
-                    in_irreps=self.hidden_irreps,
+                    irreps_in=self.hidden_irreps,
                     pair_keys=pair_keys,
                     mapper=self.mapper,
                     cfg=self.cfg,

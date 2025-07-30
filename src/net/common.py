@@ -44,17 +44,22 @@ class Config:
     l_max_gnn: int = 2
     l_max_matrix: int = 4
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
+    edge_type_emb_dim: int = 32  # edge type embedding size
+    # node_type_emb_dim: int = 32  # node type embedding size
 
     # -------------- depth / topology ------------------------------------
     num_layers_gnn: int = 2
     num_layers_matrix: int = 1
 
     # -------------- model variants --------------------------------------
-    edge_update_node_combine: str = "tensor_product"  # "sum" | "tensor_product"
+    edge_update_node_combine: str = "concat"  # "sum" | "concat"
     edge_update_linear: str = "post"  # "pre" | "post" | "none"
-    edge_update: str = "residual"  # "residual" | "concat" | "replace"
-    node_update_use_attention: bool = True  # use attention in node update
-    node_update: str = "residual"  # "residual" | "concat" | "replace"
+    edge_update: str = "tensor_product"  # "tensor_product" | "concat" | "replace"
+    edge_update_residual: bool = True  # use residual connections in edge update
+
+    node_update_message_agg: str = "attention"  # "attention" | "sum"
+    node_update: str = "tensor_product"  # "tensor_product" | "concat" | "replace"
+    node_update_residual: bool = True  # use residual connections in node update
 
     # -------------- non-linearity & norm --------------------------------
     nonlin_kind: str = "normact"  # "gate" | "normact" | "s2act" | "id"

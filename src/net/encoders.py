@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import torch
 from torch import nn
-from e3nn.o3 import Irreps, Linear
+from e3nn.o3 import Irreps, FullyConnectedTensorProduct
 from collections import OrderedDict
 
 from net.common import Config
@@ -50,26 +50,25 @@ class NodeEncoder(nn.Module):
     """
     Node features = *only* element one-hot → learned embedding (scalars).
 
-    The embedding is mapped (Linear) to `out_irreps` (scalars only in our
+    The embedding is mapped (Linear) to `irreps_out` (scalars only in our
     current setup, but we keep it general).
     """
 
     def __init__(
         self,
         node_one_hot_dim: int,
-        out_irreps: Irreps,
         cfg: Config,
         info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
-        self.out_irreps = out_irreps
         self.info = info
 
-        if self.out_irreps.lmax > 0:
+        if self.irreps_out.lmax > 0:
             raise ValueError("NodeEncoder can only output scalar irreps (l=0).")
 
         scalar_width = cfg.hidden_base_dim
+        self.irreps_out = Irreps(f"{scalar_width}x0e")
         self.elem_emb = nn.Embedding(
             node_one_hot_dim,
             scalar_width,
@@ -86,7 +85,7 @@ class NodeEncoder(nn.Module):
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_{self.info['name']}"
-            splits = _magnitude_splits(emb, self.out_irreps)
+            splits = _magnitude_splits(emb, self.irreps_out)
             for ir_str, mag in splits.items():
                 tag = f"{prefix}_{ir_str}"
                 activation_mags[tag] = mag
@@ -105,41 +104,37 @@ class EdgeEncoder(nn.Module):
 
     Combines:
       1. Learned edge-type embedding.
-      2. Projection of spherical harmonics.
+      2. Radial distance embeddings.
+      3. Spherical harmonics coefficients.
 
-    Tensor[E, out_irreps.dim].
+    Tensor[E, irreps_out.dim].
     """
 
     def __init__(
         self,
         n_edge_types: int,
-        out_irreps: Irreps,
+        irreps_out: Irreps,
         cfg: Config,
         info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
-        self.out_irreps = out_irreps
+        self.irreps_out = irreps_out
         self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max_gnn)
         self.info = info
 
         # 1) scalar embeddings ------------------------------------------------
         self.edge_emb = nn.Embedding(
             n_edge_types,
-            self.cfg.hidden_base_dim,
+            self.cfg.edge_type_emb_dim,
             dtype=self.cfg.dtype,
         )
         nn.init.normal_(self.edge_emb.weight, std=0.2)
-
-        # 2) Linear projection ------------------------------------------------
-        lin_in_irreps = (
-            Irreps(f"{self.cfg.hidden_base_dim+self.cfg.n_radial}x0e") + self.sh_irreps
-        )
-        lin_in_irreps = lin_in_irreps.simplify()
-        self.linear = Linear(
-            lin_in_irreps,
-            self.out_irreps,
-            dtype=self.cfg.dtype,
+        self.tp = FullyConnectedTensorProduct(
+            Irreps(f"{self.cfg.edge_type_emb_dim}x0e"),
+            (Irreps(f"{self.cfg.n_radial}") + self.sh_irreps).simplify(),
+            self.irreps_out,
+            internal_weights=True,
         )
 
     # ------------------------------------------------------------------
@@ -151,16 +146,16 @@ class EdgeEncoder(nn.Module):
         activation_mags: dict = None,
     ) -> torch.Tensor:
         """
-        Return hidden edge features: Tensor[E, out_irreps.dim].
+        Return hidden edge features: Tensor[E, irreps_out.dim].
         """
         # Concatenate edge type embedding, radial MLP output, and SH projection
-        emb = torch.cat([self.edge_emb(edge_type_idx), length_emb, sh], dim=1)
-        # Project to output irreps
-        emb = self.linear(emb)
+        type_emb = self.edge_emb(edge_type_idx)
+        disp_emb = torch.cat([length_emb, sh], dim=-1)
+        emb = self.tp(type_emb, disp_emb)
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_{self.info['name']}"
-            splits = _magnitude_splits(emb, self.out_irreps)
+            splits = _magnitude_splits(emb, self.irreps_out)
             for ir_str, mag in splits.items():
                 tag = f"{prefix}_{ir_str}"
                 activation_mags[tag] = mag
