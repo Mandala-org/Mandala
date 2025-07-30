@@ -19,7 +19,7 @@ from collections import OrderedDict
 
 from e3nn.o3 import Irreps, Linear
 from e3nn.o3 import FullyConnectedTensorProduct
-from e3nn.nn import Dropout, BatchNorm
+from e3nn.nn import Dropout
 
 from net.common import Config, split_into_three
 from net.activations import make_nonlinearity
@@ -68,51 +68,68 @@ class EdgeUpdateBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
+        initial: Irreps | None = None,
         info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
         self.info = info
-        if self.cfg.edge_update_node_combine == "tensor_product":
-            self.tp = FullyConnectedTensorProduct(
-                hidden_irreps, hidden_irreps, hidden_irreps
-            )
-        if self.cfg.edge_update == "concat":
-            self.lin = Linear(hidden_irreps + hidden_irreps, hidden_irreps)
+
+        if initial:
+            node_irreps = initial
         else:
-            self.lin = Linear(hidden_irreps, hidden_irreps)
+            node_irreps = hidden_irreps
+
+        if self.cfg.edge_update_node_combine == "concat":
+            self.pre_lin = Linear(node_irreps + node_irreps, node_irreps)
+        else:
+            self.pre_lin = Linear(node_irreps, node_irreps)
+
+        self.tp = FullyConnectedTensorProduct(
+            node_irreps, hidden_irreps, hidden_irreps, internal_weights=True
+        )
+        if self.cfg.edge_update == "concat":
+            self.post_lin = Linear(hidden_irreps + hidden_irreps, hidden_irreps)
+        else:
+            self.post_lin = Linear(hidden_irreps, hidden_irreps)
 
         self.norm_act = make_nonlinearity(hidden_irreps, cfg)
+
         if self.cfg.dropout > 0.0:
             self.dropout = Dropout(hidden_irreps, p=self.cfg.dropout)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         src, dst = edge_index
+        edge_old = edge
 
-        if self.cfg.edge_update_node_combine == "tensor_product":
-            msg = self.tp(node[src], node[dst])
+        if self.cfg.edge_update_node_combine == "concat":
+            edge = torch.cat([node[src], node[dst]], dim=-1)
         elif self.cfg.edge_update_node_combine == "sum":
-            msg = node[src] + node[dst]  # this is symmetric
+            edge = node[src] + node[dst]  # this is symmetric
 
-        if self.cfg.edge_update == "residual":
-            msg = self.lin(msg)
-            msg = self.norm_act(msg)
-            if self.dropout:
-                msg = self.dropout(msg)
-            msg = msg + edge
+        edge = self.pre_lin(edge)
+
+        if self.cfg.edge_update == "tensor_product":
+            edge = self.tp(edge, edge_old)
+        elif self.cfg.edge_update == "concat":
+            edge = torch.cat([edge, edge_old], dim=-1)
+        elif self.cfg.edge_update == "replace":
+            pass
         else:
-            if self.cfg.edge_update == "concat":
-                msg = torch.cat([msg, edge], dim=-1)
-            elif self.cfg.edge_update == "replace":
-                msg = edge
-            else:
-                raise ValueError(f"Unknown edge update type: {self.cfg.edge_update}")
-            msg = self.lin(msg)
-            msg = self.norm_act(msg)
-            if self.dropout:
-                msg = self.dropout(msg)
-        return msg
+            raise ValueError(f"Unknown edge update type: {self.cfg.edge_update}")
+
+        edge = self.post_lin(edge)
+
+        edge = self.norm_act(edge)
+
+        if self.dropout:
+            edge = self.dropout(edge)
+
+        if self.cfg.edge_update_residual:
+            edge = edge + edge_old
+
+        return edge
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -132,35 +149,54 @@ class NodeUpdateBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
+        initial: Irreps | None = None,
         info: dict = None,
     ):
         super().__init__()
         self.hidden_irreps = hidden_irreps
         self.cfg = cfg
+        self.initial = initial
         self.info = info
 
-        if cfg.node_update == "concat":
-            self.lin = Linear(hidden_irreps + hidden_irreps, hidden_irreps)
+        if initial:
+            node_irreps = initial
         else:
-            self.lin = Linear(hidden_irreps, hidden_irreps)
+            node_irreps = hidden_irreps
 
-        if self.cfg.node_update_use_attention:
+        self.pre_lin = Linear(hidden_irreps, hidden_irreps)
+
+        if self.cfg.node_update_message_agg == "attention":
             self.attn = Linear(
                 hidden_irreps, (hidden_irreps + hidden_irreps).simplify()
             )
+        elif self.cfg.node_update_message_agg == "sum":
+            pass
+        else:
+            raise ValueError(
+                f"Unknown node update message aggregation: {self.cfg.node_update_message_agg}"
+            )
+
+        self.tp = FullyConnectedTensorProduct(
+            node_irreps, hidden_irreps, hidden_irreps, internal_weights=True
+        )
+
+        if cfg.node_update == "concat":
+            self.post_lin = Linear(node_irreps + hidden_irreps, hidden_irreps)
+        else:
+            self.post_lin = Linear(hidden_irreps, hidden_irreps)
 
         self.norm_act = make_nonlinearity(hidden_irreps, self.cfg)
 
         if self.cfg.dropout > 0.0:
             self.dropout = Dropout(hidden_irreps, p=self.cfg.dropout)
-        if self.cfg.batch_norm:
-            self.bn = BatchNorm(hidden_irreps, affine=True)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         src, dst = edge_index
+        node_old = node
+
         # attention
-        if self.cfg.node_update_use_attention:
+        if self.cfg.node_update_message_agg == "attention":
             kqv = self.attn(edge)
             k, q, v = split_into_three(kqv, self.attn.irreps_out)
             # compute attention scores
@@ -172,29 +208,40 @@ class NodeUpdateBlock(nn.Module):
             # apply attention weights to values
             edge = v * attn_weights.unsqueeze(-1)
 
-        upd = scatter(edge, dst, dim=0, dim_size=node.size(0), reduce="sum")
-        if self.cfg.node_update == "residual":
-            upd = self.lin(upd)
-            if self.bn:
-                upd = self.bn(upd)
-            upd = self.norm_act(upd)
-            if self.dropout > 0.0:
-                upd = self.dropout(upd)
-            upd = upd + node
+        elif self.cfg.node_update_message_agg == "sum":
+            edge = self.pre_lin(edge)
+
+        # aggregate edge messages to nodes
+        agg_msg = scatter(edge, dst, dim=0, dim_size=node.size(0), reduce="sum")
+
+        if self.cfg.node_update == "concat":
+            node = torch.cat([node_old, agg_msg], dim=-1)
+
+        elif self.cfg.node_update == "tensor_product":
+            node = self.tp(node_old, agg_msg)
+
+        elif self.cfg.node_update == "replace" or (
+            self.initial and self.cfg.node_update == "sum"
+        ):
+            node = agg_msg
+
+        elif self.cfg.node_update == "sum":
+            node = node_old + agg_msg
+
         else:
-            if self.cfg.node_update == "replace":
-                upd = self.lin(upd)
-            elif self.cfg.node_update == "concat":
-                upd = torch.cat([upd, node], dim=-1)
-                upd = self.lin(upd)
-            else:
-                raise ValueError(f"Unknown node update type: {self.cfg.node_update}")
-            if self.bn:
-                upd = self.bn(upd)
-            upd = self.norm_act(upd)
-            if self.dropout > 0.0:
-                upd = self.dropout(upd)
-        return upd
+            raise ValueError(f"Unknown node update type: {self.cfg.node_update}")
+
+        node = self.post_lin(node)
+
+        node = self.norm_act(node)
+
+        if self.dropout:
+            node = self.dropout(node)
+
+        if self.cfg.node_update_residual and not self.initial:
+            node = node + node_old
+
+        return node
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -217,14 +264,15 @@ class MessageBlock(nn.Module):
         self,
         hidden_irreps: Irreps,
         cfg: Config,
+        initial: Irreps | None = None,
         info: dict = None,
     ):
         super().__init__()
         self.cfg = cfg
         self.info = info or {}
         self.hidden_irreps = hidden_irreps
-        self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg, info=info)
-        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, info=info)
+        self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg, initial, info=info)
+        self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, initial, info=info)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index, activation_mags: dict = None):

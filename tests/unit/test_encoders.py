@@ -13,7 +13,7 @@ def test_node_encoder_shape_no_diag():
 
     enc = NodeEncoder(
         node_one_hot_dim=4,
-        out_irreps=hid,
+        irreps_out=hid,
         cfg=cfg,
     )
 
@@ -30,7 +30,7 @@ def test_edge_encoder_with_offdiag():
 
     enc = EdgeEncoder(
         n_edge_types=3,
-        out_irreps=hid,
+        irreps_out=hid,
         cfg=cfg,
     )
 
