@@ -20,7 +20,7 @@ def load_dataset(pair, cache_dir, cutoff_gnn):
     cfg = Config(
         cutoff_gnn=cutoff_gnn,
         cutoff_matrix=7.5,
-        l_max=3,
+        l_max_gnn=3,
         n_radial=64,
         device="cpu",
         cache_root=str(cache_dir),

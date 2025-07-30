@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import torch
 from torch import nn
-from torch_scatter import scatter
+from torch_scatter import scatter, scatter_softmax
 from collections import OrderedDict
 
 from e3nn.o3 import Irreps, Linear
 from e3nn.o3 import FullyConnectedTensorProduct
 from e3nn.nn import Dropout, BatchNorm
 
-from net.common import Config
+from net.common import Config, split_into_three
 from net.activations import make_nonlinearity
 
 
@@ -73,32 +73,46 @@ class EdgeUpdateBlock(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.info = info
-
-        self.lin_src = Linear(hidden_irreps, hidden_irreps)
-        self.lin_dst = Linear(hidden_irreps, hidden_irreps)
-        self.tp = FullyConnectedTensorProduct(
-            hidden_irreps, hidden_irreps, hidden_irreps
-        )
+        if self.cfg.edge_update_node_combine == "tensor_product":
+            self.tp = FullyConnectedTensorProduct(
+                hidden_irreps, hidden_irreps, hidden_irreps
+            )
+        if self.cfg.edge_update == "concat":
+            self.lin = Linear(hidden_irreps + hidden_irreps, hidden_irreps)
+        else:
+            self.lin = Linear(hidden_irreps, hidden_irreps)
 
         self.norm_act = make_nonlinearity(hidden_irreps, cfg)
-        self.dropout = (
-            Dropout(hidden_irreps, p=cfg.dropout)
-            if cfg.dropout > 0.0
-            else nn.Identity()
-        )
+        if self.cfg.dropout > 0.0:
+            self.dropout = Dropout(hidden_irreps, p=self.cfg.dropout)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         src, dst = edge_index
-        # upd = 0.5 * (self.lin_src(node[src]) + self.lin_dst(node[dst]))
-        msg_src = self.lin_src(node[src])
-        msg_dst = self.lin_dst(node[dst])
-        upd = self.tp(msg_src, msg_dst)
-        if self.cfg.residual_connections:
-            upd = upd + edge
-        upd = self.norm_act(upd)
-        upd = self.dropout(upd)
-        return upd
+
+        if self.cfg.edge_update_node_combine == "tensor_product":
+            msg = self.tp(node[src], node[dst])
+        elif self.cfg.edge_update_node_combine == "sum":
+            msg = node[src] + node[dst]  # this is symmetric
+
+        if self.cfg.edge_update == "residual":
+            msg = self.lin(msg)
+            msg = self.norm_act(msg)
+            if self.dropout:
+                msg = self.dropout(msg)
+            msg = msg + edge
+        else:
+            if self.cfg.edge_update == "concat":
+                msg = torch.cat([msg, edge], dim=-1)
+            elif self.cfg.edge_update == "replace":
+                msg = edge
+            else:
+                raise ValueError(f"Unknown edge update type: {self.cfg.edge_update}")
+            msg = self.lin(msg)
+            msg = self.norm_act(msg)
+            if self.dropout:
+                msg = self.dropout(msg)
+        return msg
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -121,43 +135,65 @@ class NodeUpdateBlock(nn.Module):
         info: dict = None,
     ):
         super().__init__()
+        self.hidden_irreps = hidden_irreps
         self.cfg = cfg
         self.info = info
 
-        self.lin_msg = Linear(hidden_irreps, hidden_irreps)
-
-        if cfg.use_self_update:
-            self.self_mlp = nn.Sequential(
-                Linear(hidden_irreps, hidden_irreps),
-                make_nonlinearity(hidden_irreps, cfg),
-            )
+        if cfg.node_update == "concat":
+            self.lin = Linear(hidden_irreps + hidden_irreps, hidden_irreps)
         else:
-            self.self_mlp = None
+            self.lin = Linear(hidden_irreps, hidden_irreps)
 
-        self.norm_act = make_nonlinearity(hidden_irreps, cfg)
-        self.dropout = (
-            Dropout(hidden_irreps, p=cfg.dropout)
-            if cfg.dropout > 0.0
-            else nn.Identity()
-        )
+        if self.cfg.node_update_use_attention:
+            self.attn = Linear(
+                hidden_irreps, (hidden_irreps + hidden_irreps).simplify()
+            )
 
-        self.bn = BatchNorm(hidden_irreps) if cfg.batch_norm else nn.Identity()
+        self.norm_act = make_nonlinearity(hidden_irreps, self.cfg)
+
+        if self.cfg.dropout > 0.0:
+            self.dropout = Dropout(hidden_irreps, p=self.cfg.dropout)
+        if self.cfg.batch_norm:
+            self.bn = BatchNorm(hidden_irreps, affine=True)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         src, dst = edge_index
-        msg = self.lin_msg(edge)
-        agg = scatter(msg, dst, dim=0, dim_size=node.size(0), reduce="sum")
+        # attention
+        if self.cfg.node_update_use_attention:
+            kqv = self.attn(edge)
+            k, q, v = split_into_three(kqv, self.attn.irreps_out)
+            # compute attention scores
+            attn_scores = torch.einsum("ie,ie->i", k, q)
+            # apply softmax to get attention weights
+            attn_weights = scatter_softmax(
+                attn_scores, dst, dim=0, dim_size=node.size(0)
+            )
+            # apply attention weights to values
+            edge = v * attn_weights.unsqueeze(-1)
 
-        upd = agg
-        if self.self_mlp is not None:
-            upd = upd + self.self_mlp(node)
-        if self.cfg.residual_connections:
+        upd = scatter(edge, dst, dim=0, dim_size=node.size(0), reduce="sum")
+        if self.cfg.node_update == "residual":
+            upd = self.lin(upd)
+            if self.bn:
+                upd = self.bn(upd)
+            upd = self.norm_act(upd)
+            if self.dropout > 0.0:
+                upd = self.dropout(upd)
             upd = upd + node
-
-        upd = self.bn(upd)
-        upd = self.norm_act(upd)
-        upd = self.dropout(upd)
+        else:
+            if self.cfg.node_update == "replace":
+                upd = self.lin(upd)
+            elif self.cfg.node_update == "concat":
+                upd = torch.cat([upd, node], dim=-1)
+                upd = self.lin(upd)
+            else:
+                raise ValueError(f"Unknown node update type: {self.cfg.node_update}")
+            if self.bn:
+                upd = self.bn(upd)
+            upd = self.norm_act(upd)
+            if self.dropout > 0.0:
+                upd = self.dropout(upd)
         return upd
 
 
@@ -187,26 +223,18 @@ class MessageBlock(nn.Module):
         self.cfg = cfg
         self.info = info or {}
         self.hidden_irreps = hidden_irreps
-        if cfg.use_edge_updates:
-            self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg, info=info)
-        else:
-            self.edge_upd = None
+        self.edge_upd = EdgeUpdateBlock(hidden_irreps, cfg, info=info)
         self.node_upd = NodeUpdateBlock(hidden_irreps, cfg, info=info)
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index, activation_mags: dict = None):
-        if self.edge_upd is not None:
-            edge = self.edge_upd(node, edge, edge_index)
-            if (
-                activation_mags is not None
-                and self.cfg.log_activation_mag
-                and self.info
-            ):
-                prefix = f"mag_edge_{self.info['graph']}_layer_{self.info['layer']}"
-                splits = _magnitude_splits(edge, self.hidden_irreps)
-                for ir_str, mag in splits.items():
-                    tag = f"{prefix}_{ir_str}"
-                    activation_mags[tag] = mag
+        edge = self.edge_upd(node, edge, edge_index)
+        if activation_mags is not None and self.cfg.log_activation_mag and self.info:
+            prefix = f"mag_edge_{self.info['graph']}_layer_{self.info['layer']}"
+            splits = _magnitude_splits(edge, self.hidden_irreps)
+            for ir_str, mag in splits.items():
+                tag = f"{prefix}_{ir_str}"
+                activation_mags[tag] = mag
 
         node = self.node_upd(node, edge, edge_index)
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:

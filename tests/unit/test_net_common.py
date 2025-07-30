@@ -6,7 +6,7 @@ from net.common import RadialMLP, build_hidden_irreps, Config
 
 @pytest.mark.unit
 def test_build_hidden_irreps_basic():
-    ir = build_hidden_irreps(l_max=2, base_dim=4)
+    ir = build_hidden_irreps(l_max_gnn=2, base_dim=4)
     # 4,4,2,2,1,1 multiplicities expected
     assert ir == Irreps("4x0e + 4x0o + 2x1e + 2x1o + 1x2e + 1x2o")
 

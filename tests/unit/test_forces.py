@@ -14,7 +14,7 @@ def test_non_zero_forces_with_real_data():
     cfg = Config(
         cutoff_gnn=3.0,
         cutoff_matrix=4.0,
-        l_max=2,
+        l_max_gnn=2,
         n_radial=64,
         num_layers_gnn=3,
         num_layers_matrix=2,

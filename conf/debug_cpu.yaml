@@ -31,7 +31,7 @@ config:
 
   # model:
   hidden_base_dim: 32
-  l_max: 2
+  l_max_gnn: 2
   num_layers_gnn: 2
   num_layers_matrix: 1
   dropout: 0.0

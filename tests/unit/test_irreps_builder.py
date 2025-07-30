@@ -6,7 +6,7 @@ from core.irreps_builder import IrrepsAutoBuilder, IrrepsBuilderError
 
 @pytest.fixture(scope="module")
 def builder():
-    return IrrepsAutoBuilder(l_max=2, base_dim=16)  # 16 → 8 → 4 multiplicities
+    return IrrepsAutoBuilder(l_max_gnn=2, base_dim=16)  # 16 → 8 → 4 multiplicities
 
 
 @pytest.mark.unit

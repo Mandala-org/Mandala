@@ -9,7 +9,7 @@ from net.encoders import NodeEncoder, EdgeEncoder
 @pytest.mark.unit
 def test_node_encoder_shape_no_diag():
     cfg = Config()
-    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
+    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
 
     enc = NodeEncoder(
         node_one_hot_dim=4,
@@ -25,8 +25,8 @@ def test_node_encoder_shape_no_diag():
 @pytest.mark.unit
 def test_edge_encoder_with_offdiag():
     cfg = Config(radial_layers=(64, 32))
-    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
-    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max_gnn)
 
     enc = EdgeEncoder(
         n_edge_types=3,
