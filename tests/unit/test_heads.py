@@ -17,7 +17,7 @@ def test_deep_head_shapes_and_device():
 
     mapper = BlockIrrepMapper(orb_cfg)
     head = DeepHead(
-        in_irreps=hid,
+        irreps_in=hid,
         pair_keys=pair_keys,
         mapper=mapper,
         cfg=cfg,

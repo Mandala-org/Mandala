@@ -25,7 +25,7 @@ from typing import Dict, Callable
 
 from torch import nn
 from e3nn.o3 import Irreps
-from e3nn.nn import Gate, NormActivation, BatchNorm
+from e3nn.nn import Gate, NormActivation
 
 from net.common import Config
 
@@ -89,16 +89,6 @@ def make_nonlinearity(
     """
     kind = cfg.nonlin_kind.lower()
 
-    # optional BatchNorm (equivariant)
-    pre_norm: nn.Module
-    if getattr(cfg, "batch_norm", False):
-        pre_norm = BatchNorm(irreps)
-    else:
-        pre_norm = nn.Identity()
-
-    if kind == "id":
-        return nn.Sequential(pre_norm)  # nothing else
-
     if kind == "gate":
         scalars_ir, rest_ir = _split_scalars_and_rest(irreps)
 
@@ -117,8 +107,7 @@ def make_nonlinearity(
             g_act = scalar_activation("sigmoid")
             s_act = scalar_activation(cfg.activation_scalar)
             num = scalars_ir.num_irreps
-            return nn.Sequential(
-                pre_norm,
+            return (
                 Gate(
                     irreps_scalars=scalars_ir,
                     act_scalars=[s_act] * num,
@@ -131,22 +120,18 @@ def make_nonlinearity(
     if kind == "normact":
         # Norm kind: "component" (default) or "norm"
         normalise_over = "component" if cfg.norm_kind == "component" else "norm"
-        return nn.Sequential(
-            pre_norm,
-            NormActivation(
-                irreps,
-                scalar_activation(cfg.activation_scalar),
-                normalize=normalise_over,
-            ),
+        return NormActivation(
+            irreps,
+            scalar_activation(cfg.activation_scalar),
+            normalize=normalise_over,
         )
 
     if kind == "s2act":
-        layer = NormActivation(
+        return NormActivation(
             irreps,
             scalar_activation(cfg.activation_scalar),
             normalize="component",
         )
-        return nn.Sequential(pre_norm, layer)
 
     raise ValueError(
         f"Unknown nonlin_kind '{cfg.nonlin_kind}'. "

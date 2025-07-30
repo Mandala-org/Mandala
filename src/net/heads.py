@@ -27,7 +27,7 @@ class DeepHead(nn.Module):
 
     def __init__(
         self,
-        in_irreps: Irreps,
+        irreps_in: Irreps,
         pair_keys: List[str],
         mapper: BlockIrrepMapper,
         cfg: Config,
@@ -35,7 +35,7 @@ class DeepHead(nn.Module):
     ):
         super().__init__()
         self.cfg = cfg
-        self.in_irreps = in_irreps
+        self.irreps_in = irreps_in
         self.pair_keys = pair_keys
         self.info = info
 
@@ -44,9 +44,9 @@ class DeepHead(nn.Module):
 
         # 1) deep trunk ---------------------------------------------------
         layers: List[nn.Module] = []
-        cur_ir = in_irreps
+        cur_ir = irreps_in
         for _ in range(cfg.head_depth):
-            # scale multiplicities by hidden_mul (clip for safety)
+            # scale multiplicities by hidden_mul
             parts = []
             for mul, ir in cur_ir:
                 mul_new = int(round(mul * cfg.head_hidden_mul))
@@ -67,14 +67,14 @@ class DeepHead(nn.Module):
             cur_ir = next_ir
 
         self.trunk = nn.Sequential(*layers)
-        self.trunk_out_irreps = cur_ir
+        self.trunk_irreps_out = cur_ir
 
         # 2) last-mile Linear per pair -----------------------------------
         last = {}
         for key in pair_keys:
             el_a, el_b = key.split("-")
             out_ir = self.mapper._maps[(el_a, el_b)].rtp.irreps_out
-            proj = Linear(self.trunk_out_irreps, out_ir)
+            proj = Linear(self.trunk_irreps_out, out_ir)
             last[key] = proj
         self.last_mlps = nn.ModuleDict(last)
 
