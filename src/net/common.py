@@ -62,8 +62,12 @@ class Config:
     node_update_residual: bool = True  # use residual connections in node update
 
     # -------------- non-linearity & norm --------------------------------
-    nonlin_kind: str = "normact"  # "gate" | "normact" | "s2act" | "id"
-    activation_scalar: str = "leakyrelu"  # SiLU by default
+    nonlin_kind: str = (
+        "normact"  # "normact" | "s2act" | "gate_scalars_mlp" | "gate_magnitudes"
+    )
+    activation_scalar: str = "leakyrelu"
+    activation_magnitude: str = "softplus"
+    s2act_res: int = 128
     batch_norm: bool = False
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
 
