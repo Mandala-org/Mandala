@@ -13,6 +13,7 @@ import torch
 from torch import nn
 from e3nn.o3 import Irreps, Linear
 from e3nn.nn import Dropout
+from e3nn.o3 import TensorSquare
 
 from core.block_irrep_mapper import BlockIrrepMapper
 
@@ -28,6 +29,7 @@ class DeepHead(nn.Module):
     def __init__(
         self,
         irreps_hidden: Irreps,
+        irreps_neck: Irreps,
         pair_keys: List[str],
         mapper: BlockIrrepMapper,
         cfg: Config,
@@ -53,18 +55,20 @@ class DeepHead(nn.Module):
                 layers.append(Dropout(irreps_hidden, p=self.cfg.dropout))
 
         self.trunk = nn.Sequential(*layers)
+        self.tensor_square = TensorSquare(irreps_hidden, irreps_neck)
 
         # 2) last-mile MLP per pair -----------------------------------
         last = {}
         for key in pair_keys:
             layers = []
             for i in range(self.cfg.head_depth - 1):
-                layers.append(Linear(irreps_hidden, irreps_hidden))
-                layers.append(make_nonlinearity(irreps_hidden, self.cfg))
+                layers.append(Linear(irreps_neck, irreps_neck))
+                layers.append(make_nonlinearity(irreps_neck, self.cfg))
                 if self.cfg.dropout > 0.0:
-                    layers.append(Dropout(irreps_hidden, p=self.cfg.dropout))
+                    layers.append(Dropout(irreps_neck, p=self.cfg.dropout))
             # final layer is linear, no nonlinearity
-            layers.append(Linear(irreps_hidden, mapper.get_pair_irreps(key)))
+            layers.append(Linear(irreps_neck, mapper.get_pair_irreps(key)))
+            last[key] = nn.Sequential(*layers)
         self.last_mlps = nn.ModuleDict(last)
 
     # ------------------------------------------------------------------
@@ -75,6 +79,7 @@ class DeepHead(nn.Module):
         edge_index: torch.Tensor,  # (2, E)
     ) -> Dict[str, Dict[str, torch.Tensor]]:
         h = self.trunk(edge_feat)
+        h = self.tensor_square(h)
 
         out_vec = defaultdict(list)
         out_edges = defaultdict(list)
