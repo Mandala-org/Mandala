@@ -68,17 +68,33 @@ class GateScalarsMLP(nn.Module):
         and the non-scalars multiplied by the output of the MLP (per irrep).
     """
 
-    def __init__(self, irreps: Irreps, nonlin: nn.Module):
+    def __init__(
+        self,
+        irreps: Irreps,
+        nonlin_scalars: nn.Module,
+        nonlin_gate: nn.Module = nn.SiLU(),
+    ):
+        """
+        Initialize the GateScalarsMLP module.
+        Parameters
+        ----------
+        irreps : Irreps
+            The irreducible representations of the input features.
+        nonlin_scalars : nn.Module
+            Non-linearity to apply to the scalar features.
+        nonlin_gate : nn.Module
+            Non-linearity to apply to the gate output (default: SiLU).
+        """
         super().__init__()
         self.irreps = irreps
-        self.nonlin = nonlin
+        self.nonlin_scalars = nonlin_scalars
         self.n_scalars = sum(mul for mul, ir in irreps if ir.l == 0 and ir.p == 1)
         self.n_non_scalars = sum(mul for mul, ir in irreps if ir.l > 0 or ir.p == -1)
         self.mlp = nn.Sequential(
             nn.Linear(self.n_scalars, 64),
             nn.LeakyReLU(),
             nn.Linear(64, self.n_non_scalars),
-            nn.LeakyReLU(),
+            nonlin_gate,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -102,7 +118,7 @@ class GateScalarsMLP(nn.Module):
         gate_output = self.mlp(scalars)
 
         # Apply non-linearity to scalars
-        scalars = self.nonlin(scalars)
+        scalars = self.nonlin_scalars(scalars)
 
         output = [scalars]
         start_g = 0
@@ -133,12 +149,12 @@ class GateMagnitudes(nn.Module):
     """
 
     def __init__(
-        self, irreps: Irreps, nonlin_scalars: nn.Module, nonlin_magnitudes: nn.Module
+        self, irreps: Irreps, nonlin_scalars: nn.Module, nonlin_gate: nn.Module
     ):
         super().__init__()
         self.irreps = irreps
         self.nonlin_scalars = nonlin_scalars
-        self.nonlin_magnitudes = nonlin_magnitudes
+        self.nonlin_gate = nonlin_gate
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -167,7 +183,7 @@ class GateMagnitudes(nn.Module):
                 # Compute magnitudes
                 magnitudes = torch.linalg.norm(non_scalars, dim=-1)
                 # Apply non-linearity to magnitudes
-                magnitudes = self.nonlin_magnitudes(magnitudes)
+                magnitudes = self.nonlin_gate(magnitudes)
                 # Multiply non-scalars by magnitudes
                 non_scalars = non_scalars * magnitudes.unsqueeze(-1)
                 # Reshape back to original shape
@@ -217,12 +233,13 @@ def make_nonlinearity(
         return GateScalarsMLP(
             irreps,
             scalar_activation(cfg.activation_scalar),
+            scalar_activation(cfg.activation_gate),
         )
     elif kind == "gate_magnitudes":
         return GateMagnitudes(
             irreps,
             scalar_activation(cfg.activation_scalar),
-            scalar_activation(cfg.activation_magnitude),
+            scalar_activation(cfg.activation_gate),
         )
     else:
         raise ValueError(
