@@ -65,6 +65,9 @@ class E3GNN(pl.LightningModule):
         self.hidden_irreps: Irreps = build_hidden_irreps(
             self.cfg.l_max_gnn, self.cfg.hidden_base_dim
         )
+        self.neck_irreps: Irreps = build_hidden_irreps(
+            self.cfg.l_max_matrix, self.cfg.hidden_base_dim
+        )
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
 
         # ---------- encoders -------------------------------------------
@@ -85,7 +88,11 @@ class E3GNN(pl.LightningModule):
             return MessageBlock(
                 self.hidden_irreps,
                 self.cfg,
-                initial=self.node_enc.irreps_out if info["layer"] == 0 else None,
+                initial=(
+                    self.node_enc.irreps_out
+                    if info["layer"] == 0 and info["graph"] == "small"
+                    else None
+                ),
                 info=info,
             )
 
@@ -109,7 +116,8 @@ class E3GNN(pl.LightningModule):
         self.heads = nn.ModuleDict(
             {
                 name: DeepHead(
-                    irreps_in=self.hidden_irreps,
+                    irreps_hidden=self.hidden_irreps,
+                    irreps_neck=self.neck_irreps,
                     pair_keys=pair_keys,
                     mapper=self.mapper,
                     cfg=self.cfg,

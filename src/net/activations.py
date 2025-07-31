@@ -73,7 +73,7 @@ class GateScalarsMLP(nn.Module):
         self.irreps = irreps
         self.nonlin = nonlin
         self.n_scalars = sum(mul for mul, ir in irreps if ir.l == 0 and ir.p == 1)
-        self.n_non_scalars = sum(mul for mul, ir in irreps if ir.l > 0 or ir.p == 0)
+        self.n_non_scalars = sum(mul for mul, ir in irreps if ir.l > 0 or ir.p == -1)
         self.mlp = nn.Sequential(
             nn.Linear(self.n_scalars, 64),
             nn.LeakyReLU(),

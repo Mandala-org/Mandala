@@ -63,15 +63,14 @@ class NodeEncoder(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.info = info
+        self.irreps_out = Irreps(f"{self.cfg.hidden_base_dim}x0e")
 
         if self.irreps_out.lmax > 0:
             raise ValueError("NodeEncoder can only output scalar irreps (l=0).")
 
-        scalar_width = cfg.hidden_base_dim
-        self.irreps_out = Irreps(f"{scalar_width}x0e")
         self.elem_emb = nn.Embedding(
             node_one_hot_dim,
-            scalar_width,
+            self.cfg.hidden_base_dim,
         )
         nn.init.normal_(self.elem_emb.weight, std=0.2)
 
@@ -132,7 +131,7 @@ class EdgeEncoder(nn.Module):
         nn.init.normal_(self.edge_emb.weight, std=0.2)
         self.tp = FullyConnectedTensorProduct(
             Irreps(f"{self.cfg.edge_type_emb_dim}x0e"),
-            (Irreps(f"{self.cfg.n_radial}") + self.sh_irreps).simplify(),
+            (Irreps(f"{self.cfg.n_radial}x0e") + self.sh_irreps).simplify(),
             self.irreps_out,
             internal_weights=True,
         )

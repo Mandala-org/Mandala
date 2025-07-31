@@ -89,7 +89,9 @@ class EdgeUpdateBlock(nn.Module):
             node_irreps, hidden_irreps, hidden_irreps, internal_weights=True
         )
         if self.cfg.edge_update == "concat":
-            self.post_lin = Linear(hidden_irreps + hidden_irreps, hidden_irreps)
+            self.post_lin = Linear(node_irreps + hidden_irreps, hidden_irreps)
+        elif self.cfg.edge_update == "replace":
+            self.post_lin = Linear(node_irreps, hidden_irreps)
         else:
             self.post_lin = Linear(hidden_irreps, hidden_irreps)
 
@@ -97,6 +99,8 @@ class EdgeUpdateBlock(nn.Module):
 
         if self.cfg.dropout > 0.0:
             self.dropout = Dropout(hidden_irreps, p=self.cfg.dropout)
+        else:
+            self.dropout = None
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
@@ -189,6 +193,8 @@ class NodeUpdateBlock(nn.Module):
 
         if self.cfg.dropout > 0.0:
             self.dropout = Dropout(hidden_irreps, p=self.cfg.dropout)
+        else:
+            self.dropout = None
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):

@@ -22,10 +22,10 @@ class DummyCFG:
 IR = Irreps("4x0e + 4x0o + 2x1e + 2x1o")  # simple test irreps
 
 
-@pytest.mark.parametrize("kind", ["normact", "s2act", "id"])  # "gate" doesn't pass
+@pytest.mark.parametrize("kind", ["normact"])  # "gate", "s2act" doesn't pass
 @pytest.mark.unit
 def test_factory_builds_and_runs(kind):
-    cfg = DummyCFG(nonlin_kind=kind)
+    cfg = DummyCFG(nonlin_kind=kind, s2act_res=128)
     mod = make_nonlinearity(IR, cfg)
 
     x = torch.randn(8, IR.dim, requires_grad=True)

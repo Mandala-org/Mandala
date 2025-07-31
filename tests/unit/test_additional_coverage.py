@@ -15,11 +15,10 @@ from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigErro
 @pytest.mark.unit
 def test_node_encoder_shape_and_dtype():
     cfg = Config()
-    out_ir = Irreps("4x0e")
-    enc = NodeEncoder(node_one_hot_dim=3, irreps_out=out_ir, cfg=cfg)
+    enc = NodeEncoder(node_one_hot_dim=3, cfg=cfg)
     x = torch.tensor([0, 1], dtype=torch.long)
     h = enc(x)
-    assert h.shape == (2, out_ir.dim)
+    assert h.shape == (2, enc.irreps_out.dim)
     assert h.dtype == torch.float32
 
 
@@ -42,7 +41,7 @@ def test_edge_encoder_forward():
 @pytest.mark.parametrize("residual", [True, False])
 @pytest.mark.unit
 def test_edge_update_block_shape(residual):
-    cfg = Config(residual_connections=residual)
+    cfg = Config(edge_update_residual=residual)
     hid_ir = Irreps("3x0e")
     blk = EdgeUpdateBlock(hid_ir, cfg)
     N, E = 5, 3
@@ -70,8 +69,8 @@ def test_node_update_block_shape(batch_norm):
 
 @pytest.mark.unit
 def test_message_block_edge_and_node_update():
-    cfg = Config()
-    hid_ir = Irreps("1x0e")
+    cfg = Config(node_update_message_agg="attention")
+    hid_ir = Irreps("8x0e")
     blk = MessageBlock(hid_ir, cfg)
     N, E = 3, 2
     node = torch.randn(N, hid_ir.dim)
@@ -91,15 +90,11 @@ def test_scalar_activation_and_invalid():
 
 
 @pytest.mark.unit
-def test_make_nonlinearity_id_and_fallback():
-    cfg = Config(nonlin_kind="id", activation_scalar="relu")
+def test_bad_nonlinearity():
     ir = Irreps("2x0e+1x1o")
-    m = make_nonlinearity(ir, cfg)
-    assert isinstance(m, torch.nn.Sequential)
-    # unsupported kind raises
-    hp2 = Config(nonlin_kind="bogus")
+    cfg = Config(nonlin_kind="bogus")
     with pytest.raises(ValueError):
-        make_nonlinearity(ir, hp2)
+        make_nonlinearity(ir, cfg)
 
 
 @pytest.mark.parametrize(

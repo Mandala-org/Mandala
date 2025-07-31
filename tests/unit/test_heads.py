@@ -11,13 +11,15 @@ from core.block_irrep_mapper import BlockIrrepMapper
 def test_deep_head_shapes_and_device():
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
     pair_keys = ["H-H"]
-    cfg = Config(head_depth=2, head_hidden_mul=0.8, dropout=0.1)
+    cfg = Config(head_depth=2, dropout=0.1)
 
     hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
+    neck = build_hidden_irreps(cfg.l_max_matrix, cfg.hidden_base_dim)
 
     mapper = BlockIrrepMapper(orb_cfg)
     head = DeepHead(
-        irreps_in=hid,
+        irreps_hidden=hid,
+        irreps_neck=neck,
         pair_keys=pair_keys,
         mapper=mapper,
         cfg=cfg,
