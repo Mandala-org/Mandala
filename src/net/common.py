@@ -66,7 +66,7 @@ class Config:
         "normact"  # "normact" | "s2act" | "gate_scalars_mlp" | "gate_magnitudes"
     )
     activation_scalar: str = "leakyrelu"
-    activation_magnitude: str = "softplus"
+    activation_gate: str = "softplus"
     s2act_res: int = 128
     batch_norm: bool = False
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
