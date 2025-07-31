@@ -96,6 +96,16 @@ class GateScalarsMLP(nn.Module):
             nn.Linear(64, self.n_non_scalars),
             nonlin_gate,
         )
+        if self.n_scalars == 0:
+            raise ValueError(
+                "No scalar irreps found in the provided Irreps. "
+                "Ensure that there are scalar components in the irreps."
+            )
+        if self.n_non_scalars == 0:
+            raise ValueError(
+                "No non-scalar irreps found in the provided Irreps. "
+                "Ensure that there are non-scalar components in the irreps."
+            )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -112,7 +122,19 @@ class GateScalarsMLP(nn.Module):
             Output tensor of shape (..., irreps.dim).
         """
         # Split scalars and non-scalars
-        scalars = x[..., : self.n_scalars]
+        scalars = []
+        start = 0
+        for mul, ir in self.irreps:
+            if ir.l == 0 and ir.p == 1:
+                # Scalars
+                end = start + mul * ir.dim
+                scalars.append(x[..., start:end])
+                start = end
+            else:
+                # Non-scalars
+                end = start + mul * ir.dim
+                start = end
+        scalars = torch.cat(scalars, dim=-1)
 
         # Apply MLP to scalars and multiply with non-scalars
         gate_output = self.mlp(scalars)
@@ -172,20 +194,27 @@ class GateMagnitudes(nn.Module):
         """
         output = []
         start = 0
-        n_scalars = sum(mul for mul, ir in self.irreps if ir.l == 0 and ir.p == 1)
-        output.append(self.nonlin_scalars(x[..., :n_scalars]))
-        start = n_scalars
         for mul, ir in self.irreps:
-            if not (ir.l == 0 and ir.p == 1):
+            if ir.l == 0 and ir.p == 1:
+                # Scalars
+                end = start + mul * ir.dim
+                scalars = x[..., start:end]
+                # Apply non-linearity to scalars
+                scalars = self.nonlin_scalars(scalars)
+                output.append(scalars)
+                start = end
+            else:
                 # Non-scalars
                 end = start + mul * ir.dim
                 non_scalars = x[..., start:end].reshape(*x.shape[:-1], mul, ir.dim)
                 # Compute magnitudes
                 magnitudes = torch.linalg.norm(non_scalars, dim=-1)
                 # Apply non-linearity to magnitudes
-                magnitudes = self.nonlin_gate(magnitudes)
+                activations = self.nonlin_gate(magnitudes)
                 # Multiply non-scalars by magnitudes
-                non_scalars = non_scalars * magnitudes.unsqueeze(-1)
+                non_scalars = non_scalars * (
+                    activations.unsqueeze(-1) / magnitudes.unsqueeze(-1)
+                )
                 # Reshape back to original shape
                 output.append(non_scalars.reshape(*x.shape[:-1], -1))
                 start = end
