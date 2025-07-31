@@ -9,17 +9,15 @@ from net.encoders import NodeEncoder, EdgeEncoder
 @pytest.mark.unit
 def test_node_encoder_shape_no_diag():
     cfg = Config()
-    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
 
     enc = NodeEncoder(
         node_one_hot_dim=4,
-        irreps_out=hid,
         cfg=cfg,
     )
 
     node_type_idx = torch.arange(4, dtype=torch.long)
     out = enc(node_type_idx)
-    assert out.shape == (4, hid.dim)
+    assert out.shape == (4, enc.irreps_out.dim)
 
 
 @pytest.mark.unit
