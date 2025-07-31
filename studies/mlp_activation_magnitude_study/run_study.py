@@ -205,7 +205,7 @@ def main():
             "Average Activation Magnitude"
         )
         handles, labels = (
-            axes[0] if len(L_MAX_VALUES) > 1 else axes
+            axes[-1] if len(L_MAX_VALUES) > 1 else axes
         ).get_legend_handles_labels()
         fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5))
         fig.tight_layout(rect=[0, 0, 0.9, 1])
