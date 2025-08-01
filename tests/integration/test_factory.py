@@ -119,7 +119,7 @@ def test_model_forward_cpu(factory_results):
     sample = train_ds[0]
     x, y = sample
 
-    cfg = Config(dropout=0.0, batch_norm=False)
+    cfg = Config(dropout=0.0)
     model = E3GNN(
         mapper=mapper,
         cfg=cfg,
