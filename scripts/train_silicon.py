@@ -62,6 +62,12 @@ def setup_argparse():
         default=1500,
         help="Temperature to use for the validation set.",
     )
+    parser.add_argument(
+        "--precision",
+        type=str,
+        default="32-true",
+        help="PyTorch Lightning precision setting (e.g., '32-true', '16-mixed').",
+    )
 
     # --- Dynamically add Config fields as arguments ---
     config_fields = get_type_hints(Config)
@@ -236,6 +242,7 @@ def main():
         accelerator=accelerator,
         log_every_n_steps=cfg.log_every_n_steps,
         gradient_clip_val=cfg.grad_clip_val,
+        precision=args.precision,
     )
 
     # --- Start Training ---
