@@ -100,13 +100,14 @@ class Config:
     enable_num_electrons: bool = True
 
     # -------------- training targets -----------------------------------
+    train_target: str = "irreps"  # "irreps" | "matrix"
     train_on_forces: bool = False
     train_on_stress: bool = False
     train_on_energy: bool = True
     train_on_num_electrons: bool = False
 
     # -------------- loss weighting --------------------------------------
-    loss_coef_energy: float = 0.00001
+    loss_coef_energy: float = 1e-5
     loss_coef_num_electrons: float = 0.0
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
