@@ -224,8 +224,6 @@ class E3GNN(pl.LightningModule):
         t_fwd_start = time.perf_counter()
         preds = self(x)
         t_fwd_end = time.perf_counter()
-        # block losses
-        loss_vectors = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
         if self.cfg.pedantic:
             for name in ("hamiltonian", "overlap", "density"):
                 pred_edges = preds[name].pair_edges
@@ -235,12 +233,6 @@ class E3GNN(pl.LightningModule):
                         pred_edges[key], target_edges[key]
                     ), f"Pedantic check failed: Edge order mismatch in '{name}' matrix for key '{key}'"
 
-        for name in ("hamiltonian", "overlap", "density"):
-            p_vecs = preds[name].pair_vectors
-            t_vecs = y[name].pair_vectors
-            for key in p_vecs:
-                loss_vectors = loss_vectors + self._mse(p_vecs[key], t_vecs[key])
-
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
         blk = {}
@@ -249,12 +241,21 @@ class E3GNN(pl.LightningModule):
         blk["overlap"] = preds["overlap"].to_blocks(self.mapper)
         t_map_end = time.perf_counter()
 
-        loss_blocks = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
-        for name in ("hamiltonian", "overlap", "density"):
-            p_blocks = preds[name].pair_blocks
-            t_blocks = y[name].pair_blocks
-            for key in p_blocks:
-                loss_blocks = loss_blocks + self._mse(p_blocks[key], t_blocks[key])
+        loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
+        if self.cfg.train_target == "matrix":
+            for name in ("hamiltonian", "overlap", "density"):
+                p_blocks = blk[name].pair_blocks
+                t_blocks = y[name].pair_blocks
+                for key in p_blocks:
+                    loss_matrix = loss_matrix + self._mse(p_blocks[key], t_blocks[key])
+        elif self.cfg.train_target == "irreps":
+            for name in ("hamiltonian", "overlap", "density"):
+                p_vecs = preds[name].pair_vectors
+                t_vecs = y[name].pair_vectors
+                for key in p_vecs:
+                    loss_matrix = loss_matrix + self._mse(p_vecs[key], t_vecs[key])
+        else:
+            raise ValueError(f"Unknown target type: {self.cfg.train_target}")
 
         # --- observable evaluation timing --------------------------------
         t_obs_start = time.perf_counter()
@@ -271,12 +272,6 @@ class E3GNN(pl.LightningModule):
         abs_err_N = torch.mean(torch.abs(N_pred - N_true))
 
         # total loss
-        if self.cfg.train_target == "matrix":
-            loss_matrix = loss_blocks
-        elif self.cfg.train_target == "irreps":
-            loss_matrix = loss_vectors
-        else:
-            raise ValueError(f"Unknown target type: {self.cfg.train_target}")
         loss = (
             loss_matrix
             + self.cfg.loss_coef_energy * loss_E
@@ -294,8 +289,7 @@ class E3GNN(pl.LightningModule):
         # log all metrics
         metrics = {
             f"{stage}_loss": loss,
-            f"{stage}_loss_vectors": loss_vectors,
-            f"{stage}_loss_blocks": loss_blocks,
+            f"{stage}_loss_matrix": loss_matrix,
             f"{stage}_loss_E": loss_E,
             f"{stage}_loss_N": loss_N,
             f"{stage}_abs_error_E": abs_err_E,
