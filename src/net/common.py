@@ -106,7 +106,7 @@ class Config:
     train_on_forces: bool = False
     train_on_stress: bool = False
     train_on_energy: bool = True
-    train_on_num_electrons: bool = False
+    train_on_num_electrons: bool = True
 
     # -------------- loss weighting --------------------------------------
     loss_coef_energy: float = 1e-5
