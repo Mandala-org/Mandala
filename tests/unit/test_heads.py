@@ -27,7 +27,7 @@ def test_deep_head_shapes_and_device():
 
     E = 3
     edge_feat = torch.randn(E, hid.dim)
-    edge_type_idx = torch.zeros(E, dtype=torch.long)  # all "H-H"
+    edge_type_idx = torch.zeros(E, dtype=torch.int)  # all "H-H"
     edge_index = torch.vstack([torch.arange(E), torch.flip(torch.arange(E), dims=[0])])
 
     out = head(edge_feat, edge_type_idx, edge_index)

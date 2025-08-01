@@ -15,7 +15,7 @@ def test_node_encoder_shape_no_diag():
         cfg=cfg,
     )
 
-    node_type_idx = torch.arange(4, dtype=torch.long)
+    node_type_idx = torch.arange(4, dtype=torch.int)
     out = enc(node_type_idx)
     assert out.shape == (4, enc.irreps_out.dim)
 

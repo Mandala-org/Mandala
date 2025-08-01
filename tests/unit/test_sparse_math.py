@@ -15,7 +15,7 @@ from core.sparse_math import (
 
 def make_toy_sparse(n_atoms=3, d=2):
     pairs = list(itertools.product(range(n_atoms), repeat=2))
-    edge_index = torch.tensor(pairs, dtype=torch.long).t()
+    edge_index = torch.tensor(pairs, dtype=torch.int).t()
     E = edge_index.shape[1]
     rng = torch.Generator().manual_seed(11)
     a = torch.randn(E, d, d, generator=rng)
@@ -50,7 +50,7 @@ def make_mock_snapshot():
             lookup[(i, j)] = (key, len(pair_blocks[key]) - 1)
     pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
     pair_edges = {
-        k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
+        k: torch.tensor(v, dtype=torch.int).t() for k, v in pair_edges.items()
     }
     return BlockMatrix(
         atoms,
