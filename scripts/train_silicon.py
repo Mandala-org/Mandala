@@ -125,16 +125,17 @@ def main():
     """Main training loop."""
     args = setup_argparse()
 
+    # Create Config object and update it from the parsed arguments
+    cfg = Config()
+    for key, value in vars(args).items():
+        if hasattr(cfg, key):
+            setattr(cfg, key, value)
+
     # --- Initialize W&B ---
     # Use environment variables for W&B project if available, otherwise use default
     wandb_project = os.getenv("WANDB_PROJECT", "mandala-silicon-sweep")
-    wandb_logger = WandbLogger(project=wandb_project, config=vars(args))
-
-    # Create Config object and update it from wandb
-    cfg = Config()
-    for key, value in wandb_logger.experiment.config.items():
-        if hasattr(cfg, key):
-            setattr(cfg, key, value)
+    # Pass the final, correct config to W&B
+    wandb_logger = WandbLogger(project=wandb_project, config=dataclasses.asdict(cfg))
 
     # Post-process special types from argparse/wandb
     if isinstance(cfg.dtype, str):
