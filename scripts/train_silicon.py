@@ -148,10 +148,12 @@ def main():
     if cfg.gpus > 0 and torch.cuda.is_available():
         accelerator = "gpu"
         devices = cfg.gpus
+        cfg.device = torch.device("cuda:0")
         print(f"--- Using {devices} GPU(s) ---")
     else:
         accelerator = "cpu"
         devices = "auto"
+        cfg.device = torch.device("cpu")
         if cfg.gpus > 0:
             print(
                 "--- Warning: --gpus was > 0 but CUDA is not available. Using CPU. ---"
