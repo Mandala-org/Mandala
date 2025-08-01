@@ -127,14 +127,16 @@ def main():
 
     # Create Config object and update it from the parsed arguments
     cfg = Config()
+    print("--- Populating Config from args ---")
     for key, value in vars(args).items():
         if hasattr(cfg, key):
+            print(f"  Setting cfg.{key} = {value} (type: {type(value)})")
             setattr(cfg, key, value)
 
     # --- Initialize W&B ---
     # Use environment variables for W&B project if available, otherwise use default
     wandb_project = os.getenv("WANDB_PROJECT", "mandala-silicon-sweep")
-    # Pass the final, correct config to W&B
+    # Pass the final, correct config to W&B for logging
     wandb_logger = WandbLogger(project=wandb_project, config=dataclasses.asdict(cfg))
 
     # Post-process special types from argparse/wandb
@@ -145,6 +147,12 @@ def main():
     cfg.device = torch.device(
         "cuda:0" if torch.cuda.is_available() and cfg.gpus else "cpu"
     )
+
+    print("\n--- Final Config Values ---")
+    print(f"  cfg.cache_root: {cfg.cache_root} (type: {type(cfg.cache_root)})")
+    print(f"  cfg.lr: {cfg.lr}")
+    print(f"  cfg.device: {cfg.device}")
+    print("---------------------------\n")
 
     # --- Data Loading ---
     print("--- Setting up datasets ---")
@@ -166,8 +174,10 @@ def main():
     val_pairs = []
     val_path = Path(args.data_path) / f"{args.val_temp}K"
     val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
-    # Use all available snapshots for validation
-    for matrix_path in val_snapshot_paths:
+    # Limit validation snapshots as well
+    num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
+    selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
+    for matrix_path in selected_val_paths:
         info_path = Path(matrix_path).parent / "info.dat"
         if info_path.exists():
             val_pairs.append((matrix_path, info_path))
@@ -177,6 +187,7 @@ def main():
     )
 
     fac = DatasetFactory(cfg)
+
     for m, i in train_pairs:
         fac.add_snapshot(m, i, purpose="train")
     for m, i in val_pairs:
