@@ -180,7 +180,7 @@ class E3GNNDataset(Dataset):
                     }
                 )
 
-        # # 2. Separate self-edges and off-diagonal edges
+        # 2. Separate self-edges and off-diagonal edges
         self_edges = sorted(
             [e for e in edges if e["src"] == e["dst"]], key=lambda e: e["src"]
         )
@@ -262,6 +262,12 @@ class E3GNNDataset(Dataset):
         if self.cfg.train_on_stress:
             snap.stress.requires_grad_()
 
+        snap.positions = snap.positions.to(self.device)
+        snap.box = snap.box.to(self.device)
+        snap.hamiltonian = snap.hamiltonian.to(self.device)
+        snap.overlap = snap.overlap.to(self.device)
+        snap.density = snap.density.to(self.device)
+
         (
             edge_index,
             edge_type_idx,
@@ -271,6 +277,11 @@ class E3GNNDataset(Dataset):
             num_self_edges,
         ) = self._edge_tensors(snap)
 
+        edge_index = edge_index.to(self.device)
+        edge_type_idx = edge_type_idx.to(self.device)
+        edge_length_emb = edge_length_emb.to(self.device)
+        edge_sh = edge_sh.to(self.device)
+
         atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
         node_type_idx = torch.tensor(
@@ -278,15 +289,15 @@ class E3GNNDataset(Dataset):
         )
 
         x = {
-            "node_type_idx": node_type_idx.to(self.device),
-            "edge_index": edge_index.to(self.device),
-            "edge_type_idx": edge_type_idx.to(self.device),
+            "node_type_idx": node_type_idx,
+            "edge_index": edge_index,
+            "edge_type_idx": edge_type_idx,
             "index_gnn_cutoff": index_gnn_cutoff,
             "num_self_edges": num_self_edges,
-            "edge_length_emb": edge_length_emb.to(self.device),
-            "edge_sh": edge_sh.to(self.device),
-            "positions": snap.positions.to(self.device),
-            "box": snap.box.to(self.device),
+            "edge_length_emb": edge_length_emb,
+            "edge_sh": edge_sh,
+            "positions": snap.positions,
+            "box": snap.box,
             "atoms": atoms,
         }
         with torch.no_grad():
