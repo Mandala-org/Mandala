@@ -29,10 +29,6 @@ parameters:
     distribution: log_uniform_values
     min: 1.0e-8
     max: 1.0e-5
-  head_hidden_mul:
-    distribution: uniform
-    min: 0.5
-    max: 2.0
   nonlin_kind:
     values: ["normact", "gate_scalars_mlp"]
   activation_scalar:
@@ -43,9 +39,10 @@ parameters:
 command:
   - ${env}
   - python3
+  - -u # Unbuffered output for real-time logging
   - ${program}
   - ${args}
   - --gpus=0  # Specify a single GPU
   - --num_workers=4
-  - --n_snapshots_per_temp=100 # Use a subset for faster sweeps
-  - --max_epochs=50
+  - --n_snapshots_per_temp=2 # Use a subset for faster sweeps
+  - --max_epochs=10
