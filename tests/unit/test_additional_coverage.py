@@ -8,7 +8,7 @@ from net.activations import scalar_activation, make_nonlinearity
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import EdgeUpdateBlock, NodeUpdateBlock, MessageBlock
 from core.sparse_math import trace_matmul_sparse
-from core.block_irrep_mapper import BlockIrrepMapper, MappingKeyError
+from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigError
 
 
@@ -142,7 +142,7 @@ def test_block_irrep_mapper_roundtrip_and_vector_dim():
     blk2 = mapper.vectors_to_blocks("A-B", vec)
     assert blk2.shape == blk.shape
     # unrecognized key
-    with pytest.raises(MappingKeyError):
+    with pytest.raises(KeyError):
         mapper.blocks_to_vectors("C-D", blk)
 
 

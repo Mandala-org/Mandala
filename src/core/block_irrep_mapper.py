@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import Dict, Tuple
 
 import torch
+from torch import nn
 from e3nn.o3 import Irreps, ReducedTensorProducts
 
 
@@ -45,7 +46,6 @@ class _IrrepToMatrix:
     """Lightweight wrapper identical in spirit to mappings.IrrepToMatrix."""
 
     rtp: ReducedTensorProducts
-    q: torch.Tensor  # (d*d, n_vec)
     dim_i: int
     dim_j: int
     n_vec: int
@@ -56,40 +56,38 @@ class _IrrepToMatrix:
         irreps_i: Irreps,
         irreps_j: Irreps,
         diagonal: bool,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
-    ) -> "_IrrepToMatrix":
+    ) -> Tuple["_IrrepToMatrix", torch.Tensor]:
         assert diagonal is False, "diagonal=True not supported"
         formula = "ij=ji" if diagonal else "ij"
         rtp = ReducedTensorProducts(formula, i=irreps_i, j=irreps_j)
-        q = rtp.change_of_basis.flatten(-2).to(device).to(dtype)
+        q = rtp.change_of_basis.flatten(-2)
 
-        return cls(
+        itm = cls(
             rtp=rtp,
-            q=q,
             dim_i=irreps_i.dim,
             dim_j=irreps_j.dim,
             n_vec=q.shape[0],
         )
+        return itm, q
 
     # ------------------------- mapping helpers ------------------------------ #
-    def blocks_to_vectors(self, blocks: torch.Tensor) -> torch.Tensor:
+    def blocks_to_vectors(self, blocks: torch.Tensor, q: torch.Tensor) -> torch.Tensor:
         """
         Map ``(..., d_i, d_j)`` blocks → ``(..., n_vec)`` irrep vectors.
         """
         flat = blocks.flatten(-2)  # (..., d_i*d_j)
-        return flat @ self.q.T
+        return flat @ q.T
 
-    def vectors_to_blocks(self, vectors: torch.Tensor) -> torch.Tensor:
+    def vectors_to_blocks(self, vectors: torch.Tensor, q: torch.Tensor) -> torch.Tensor:
         """
         Inverse of :meth:`blocks_to_vectors`.
         """
-        flat = vectors @ self.q  # (..., d_i*d_j)
+        flat = vectors @ q  # (..., d_i*d_j)
         return flat.view(*vectors.shape[:-1], self.dim_i, self.dim_j)
 
 
 # --------------------------------------------------------------------------- #
-class BlockIrrepMapper:
+class BlockIrrepMapper(nn.Module):
     """
     Manages *all* per-pair `_IrrepToMatrix` instances.
 
@@ -112,6 +110,7 @@ class BlockIrrepMapper:
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
     ):
+        super().__init__()
         assert diagonal is False, "diagonal=True not supported"
 
         from core.orbital_irrep_config import (
@@ -123,8 +122,6 @@ class BlockIrrepMapper:
 
         self.orbital_cfg = orbital_cfg
         self.diagonal = diagonal
-        self.device = torch.device(device)
-        self.dtype = dtype
 
         self._maps: Dict[Tuple[str, str], _IrrepToMatrix] = {}
 
@@ -134,10 +131,18 @@ class BlockIrrepMapper:
             for el_b in els:
                 irreps_a = orbital_cfg.element_to_irreps[el_a]
                 irreps_b = orbital_cfg.element_to_irreps[el_b]
-                itm = _IrrepToMatrix.from_irreps(
-                    irreps_a, irreps_b, diagonal and el_a == el_b, device, dtype
+                itm, q = _IrrepToMatrix.from_irreps(
+                    irreps_a, irreps_b, diagonal and el_a == el_b
                 )
                 self._maps[(el_a, el_b)] = itm
+                # Sanitize key for buffer name
+                buffer_name = f"q_{el_a}_{el_b}"
+                self.register_buffer(buffer_name, q.to(device=device, dtype=dtype))
+
+    def _get_q(self, pair: Tuple[str, str]) -> torch.Tensor:
+        """Retrieve the q tensor buffer for a given pair."""
+        buffer_name = f"q_{pair[0]}_{pair[1]}"
+        return getattr(self, buffer_name)
 
     # ------------------------- public API ----------------------------------- #
     def blocks_to_vectors(
@@ -150,8 +155,10 @@ class BlockIrrepMapper:
 
         ``pair`` can be ``("Si","H")`` or `"Si-H"` (string with hyphen).
         """
-        itm = self._lookup(pair)
-        return itm.blocks_to_vectors(blocks)
+        key = self._canonical_pair(pair)
+        itm = self._maps[key]
+        q = self._get_q(key)
+        return itm.blocks_to_vectors(blocks, q)
 
     def vectors_to_blocks(
         self,
@@ -161,16 +168,10 @@ class BlockIrrepMapper:
         """
         Inverse mapping vector → block.
         """
-        itm = self._lookup(pair)
-        return itm.vectors_to_blocks(vectors)
-
-    def to(self, device: torch.device | str) -> BlockIrrepMapper:
-        """
-        Move all change-of-basis matrices to a different device.
-        """
-        for itm in self._maps.values():
-            itm.q = itm.q.to(device)
-        return self
+        key = self._canonical_pair(pair)
+        itm = self._maps[key]
+        q = self._get_q(key)
+        return itm.vectors_to_blocks(vectors, q)
 
     # ------------------------- meta-info ------------------------------------ #
     def vector_dim(self, pair: Tuple[str, str] | str) -> int:

@@ -110,7 +110,7 @@ class Config:
 
     # -------------- loss weighting --------------------------------------
     loss_coef_energy: float = 1e-5
-    loss_coef_num_electrons: float = 0.0
+    loss_coef_num_electrons: float = 1e-5
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
 
