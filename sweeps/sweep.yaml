@@ -1,0 +1,51 @@
+program: scripts/train_silicon.py
+method: bayes
+metric:
+  name: val_loss
+  goal: minimize
+
+parameters:
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-3
+  hidden_base_dim:
+    distribution: int_uniform
+    min: 32
+    max: 128
+  num_layers_gnn:
+    distribution: int_uniform
+    min: 2
+    max: 6
+  num_layers_matrix:
+    distribution: int_uniform
+    min: 1
+    max: 4
+  dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.3
+  l2_reg_coef:
+    distribution: log_uniform_values
+    min: 1.0e-8
+    max: 1.0e-5
+  head_hidden_mul:
+    distribution: uniform
+    min: 0.5
+    max: 2.0
+  nonlin_kind:
+    values: ["normact", "gate_scalars_mlp"]
+  activation_scalar:
+    values: ["silu", "relu", "leakyrelu"]
+  batch_norm:
+    values: [true, false]
+
+command:
+  - ${env}
+  - python3
+  - ${program}
+  - ${args}
+  - --gpus=0  # Specify a single GPU
+  - --num_workers=4
+  - --n_snapshots_per_temp=100 # Use a subset for faster sweeps
+  - --max_epochs=50
