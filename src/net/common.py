@@ -61,6 +61,8 @@ class Config:
     node_update: str = "tensor_product"  # "tensor_product" | "concat" | "replace"
     node_update_residual: bool = True  # use residual connections in node update
 
+    head_use_mlp_log_scale: bool = True  # whether to use MLP log scaling in the head
+
     # -------------- non-linearity & norm --------------------------------
     nonlin_kind: str = (
         "normact"  # "normact" | "s2act" | "gate_scalars_mlp" | "gate_magnitudes"
