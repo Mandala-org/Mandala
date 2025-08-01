@@ -14,7 +14,6 @@ Supported kinds
 
 The choice is controlled by ``cfg.nonlin_kind`` (see Config).
 Batch-Norm (equivariant) can be toggled independently through
-``cfg.batch_norm`` – if enabled we apply it **before** the non-linearity.
 
 Scalar activation names ("silu", "relu", …) are mapped to the
 corresponding `torch.nn.Module` instances via :func:`scalar_activation`.
@@ -235,7 +234,7 @@ def make_nonlinearity(
         Input/output representation (unchanged by the non-linearity).
     cfg
         Any object that exposes the attributes used below
-        (`nonlin_kind`, `activation_scalar`, `batch_norm`, `norm_kind`).
+        (`nonlin_kind`, `activation_scalar`, `norm_kind`).
 
     Returns
     -------
