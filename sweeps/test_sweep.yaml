@@ -2,7 +2,7 @@ program: scripts/train_silicon.py
 project: mandala
 method: bayes
 metric:
-  name: val_loss
+  name: val_loss_blocks
   goal: minimize
 
 parameters:

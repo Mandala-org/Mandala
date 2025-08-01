@@ -301,10 +301,22 @@ class E3GNNDataset(Dataset):
             "atoms": atoms,
         }
         with torch.no_grad():
+            if self.cfg.train_target == "matrix":
+                hamiltonian_target = snap.hamiltonian
+                overlap_target = snap.overlap
+                density_target = snap.density
+            elif self.cfg.train_target == "irreps":
+                hamiltonian_target = snap.hamiltonian.to_vectors(self.mapper)
+                overlap_target = snap.overlap.to_vectors(self.mapper)
+                density_target = snap.density.to_vectors(self.mapper)
+            else:
+                raise ValueError(
+                    f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
+                )
             y = {
-                "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
-                "overlap": snap.overlap.to_vectors(self.mapper).to(self.device),
-                "density": snap.density.to_vectors(self.mapper).to(self.device),
+                "hamiltonian": hamiltonian_target.to(self.device),
+                "overlap": overlap_target.to(self.device),
+                "density": density_target.to(self.device),
                 "energy": snap.get_energy().to(self.device),
                 "num_electrons": snap.get_number_of_electrons().to(self.device),
                 "forces": snap.forces.to(self.device),
