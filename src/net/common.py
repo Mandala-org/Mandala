@@ -121,6 +121,8 @@ class Config:
     log_activation_mag: bool = False
     wandb_project: str | None = None
     log_every_n_steps: int = 1
+    log_on_step: bool = False  # log metrics on step, not just epoch
+    log_on_epoch: bool = True  # log metrics on epoch
 
     # -------------- misc ------------------------------------------------
     pedantic: bool = False  # enable strict checks on input data
