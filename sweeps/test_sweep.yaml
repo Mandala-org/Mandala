@@ -39,7 +39,7 @@ command:
   - -u # Unbuffered output for real-time logging
   - ${program}
   - ${args}
-  - --gpus=0  # Specify a single GPU
+  - --gpus=1  # Specify a single GPU
   - --num_workers=0
   - --n_snapshots_per_temp=2 # Use a subset for faster sweeps
   - --max_epochs=10
