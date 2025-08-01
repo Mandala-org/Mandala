@@ -30,9 +30,9 @@ parameters:
     values: ["pre", "post"]
   edge_update:
     values: ["tensor_product", "concat", "replace"]
-  edge_update_resiudal:
+  edge_update_residual:
     values: [True, False]
-  head_use_mlp_slog_scale:
+  head_use_mlp_log_scale:
     values: [True, False]
   nonlin_kind:
     values: ["normact", "gate_scalars_mlp", "gate_magnitudes"]
