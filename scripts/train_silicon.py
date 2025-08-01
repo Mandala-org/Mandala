@@ -47,8 +47,9 @@ def setup_argparse():
     )
 
     # --- W&B Arguments ---
-    parser.add_argument("--wandb_project", type=str, default="mandala-silicon-sweep")
-    parser.add_argument("--run_name", type=str, default=None)
+    # These are now handled by the dynamic loop below as they are in the Config dataclass
+    # parser.add_argument("--wandb_project", type=str, default="mandala-silicon-sweep")
+    # parser.add_argument("--run_name", type=str, default=None)
 
     # --- Dynamically add Config fields as arguments ---
     config_fields = get_type_hints(Config)
