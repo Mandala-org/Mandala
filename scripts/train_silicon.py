@@ -23,6 +23,18 @@ from net.e3gnn import E3GNN  # noqa: E402
 from net.benchmark import BenchmarkCallback  # noqa: E402
 
 
+def str_to_bool(value):
+    """Helper function to handle boolean command-line arguments."""
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif value.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
 def setup_argparse():
     """Set up and parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Train E3GNN for Silicon.")
@@ -52,53 +64,33 @@ def setup_argparse():
     # --- Dynamically add Config fields as arguments ---
     config_fields = get_type_hints(Config)
     for name, field_type in config_fields.items():
-        print(f"\n--- Processing argument: {name} ---")
-        print(f"  Raw field_type: {field_type}")
-
         default_value = getattr(Config, name, dataclasses.MISSING)
         if isinstance(default_value, dataclasses.Field):
             default_value = default_value.default
-        print(f"  Default value: {default_value}")
+
+        # Use the new boolean handling for bool types
+        if field_type is bool:
+            parser.add_argument(f"--{name}", type=str_to_bool, default=default_value)
+            continue
 
         arg_type_callable = None
         origin = typing.get_origin(field_type)
-        print(f"  Type origin: {origin}")
 
-        # Case 1: Boolean flags
-        if field_type is bool:
-            print("  Type detected: bool")
-            parser.add_argument(f"--{name}", action="store_true", default=default_value)
-            print("  Added as boolean flag.")
-            continue
-
-        # Case 2: Union types (e.g., str | None)
         if origin is Union or origin is typing.Union:
-            print("  Type detected: Union")
             union_args = typing.get_args(field_type)
-            print(f"  Union args: {union_args}")
-            # Find the first non-None type in the Union
-            for arg in union_args:
-                if arg is not type(None) and arg is not NoneType:
-                    arg_type_callable = arg
-                    break
-            if arg_type_callable is None:
-                # This case (e.g., type is None | NoneType) is unlikely but we'll handle it
-                print("  Warning: Union contains only None types. Skipping.")
-                continue
-            print(f"  Extracted callable type from Union: {arg_type_callable}")
+            non_none_args = [
+                t for t in union_args if t is not type(None) and t is not NoneType
+            ]
+            if len(non_none_args) == 1:
+                arg_type_callable = non_none_args[0]
+            else:
+                arg_type_callable = str
         else:
-            # Case 3: Simple, non-Union types
             arg_type_callable = field_type
-            print(f"  Type detected: Simple type -> {arg_type_callable}")
 
-        # Handle special, non-callable types that need to be strings for argparse
         if arg_type_callable is torch.device or arg_type_callable is torch.dtype:
-            print(
-                f"  Special type detected ({arg_type_callable}), converting to str for argparse."
-            )
             arg_type_callable = str
 
-        # Handle Sequence/list types for nargs
         is_sequence = False
         try:
             if (
@@ -107,33 +99,24 @@ def setup_argparse():
                 or (origin and issubclass(origin, typing.Sequence))
             ):
                 is_sequence = True
-        except TypeError:  # issubclass can fail on some types
+        except TypeError:
             pass
 
         if is_sequence:
-            print("  Argument is a sequence.")
-            # For sequences like Sequence[int], the inner type is what we need
             inner_type = str
             try:
                 inner_type = typing.get_args(field_type)[0]
             except (IndexError, TypeError):
-                pass  # Keep str as default if inner type can't be determined
-            print(f"  Sequence inner type: {inner_type}")
+                pass
             parser.add_argument(
                 f"--{name}", type=inner_type, nargs="+", default=default_value
             )
         else:
-            print("  Argument is a single value.")
             if not callable(arg_type_callable):
-                print(
-                    f"  ERROR: Final type '{arg_type_callable}' is not callable! Defaulting to str."
-                )
                 arg_type_callable = str
             parser.add_argument(
                 f"--{name}", type=arg_type_callable, default=default_value
             )
-
-        print(f"  Successfully added argument --{name} with type {arg_type_callable}")
 
     return parser.parse_args()
 
