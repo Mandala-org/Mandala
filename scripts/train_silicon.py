@@ -57,7 +57,7 @@ def setup_argparse():
         if isinstance(default_value, dataclasses.Field):
             default_value = default_value.default
 
-        if field_type == bool:
+        if field_type is bool:
             parser.add_argument(f"--{name}", action="store_true", default=default_value)
         else:
             # Handle Sequence types
