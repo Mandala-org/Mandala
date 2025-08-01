@@ -126,6 +126,8 @@ class Config:
     device: torch.device = torch.device("cpu")  # default device
     gpus: int = 0  # number of GPUs
     num_workers: int = 0  # DataLoader workers, 0 for no parallelism
+    save_dir: str = "checkpoints"  # directory to save model checkpoints
+    log_model: bool = True  # whether to log the model to WandB
 
     # ----------------- caching ------------------------------------------
     cache_root: str | None = None  # path to cache directory, if any
