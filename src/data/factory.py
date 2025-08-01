@@ -104,7 +104,7 @@ class DatasetFactory:
         mapper = BlockIrrepMapper(
             orb_cfg,
             diagonal=False,
-            device=self.cfg.device,
+            device="cpu",
             dtype=self.cfg.dtype,
         )
 

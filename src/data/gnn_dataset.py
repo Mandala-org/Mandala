@@ -55,7 +55,6 @@ class E3GNNDataset(Dataset):
         if not snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
 
-        self.device = torch.device(self.cfg.device)
         self.dtype = self.cfg.dtype
 
         if cfg.train_on_forces and not self.cfg.enable_forces:
@@ -190,7 +189,6 @@ class E3GNNDataset(Dataset):
         offdiag_edge_index = torch.tensor(
             [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
             dtype=torch.long,
-            device=self.device,
         )
         disp = self._minimal_disp(
             snap.positions,
@@ -206,12 +204,10 @@ class E3GNNDataset(Dataset):
         edge_index = torch.tensor(
             [[e["src"] for e in all_edges], [e["dst"] for e in all_edges]],
             dtype=torch.long,
-            device=self.device,
         )
         edge_type_idx = torch.tensor(
             [self.edge_type2idx[e["key"]] for e in all_edges],
             dtype=torch.long,
-            device=self.device,
         )
 
         # 5. Calculate geometric features for the final edge order
@@ -262,12 +258,6 @@ class E3GNNDataset(Dataset):
         if self.cfg.train_on_stress:
             snap.stress.requires_grad_()
 
-        snap.positions = snap.positions.to(self.device)
-        snap.box = snap.box.to(self.device)
-        snap.hamiltonian = snap.hamiltonian.to(self.device)
-        snap.overlap = snap.overlap.to(self.device)
-        snap.density = snap.density.to(self.device)
-
         (
             edge_index,
             edge_type_idx,
@@ -277,16 +267,9 @@ class E3GNNDataset(Dataset):
             num_self_edges,
         ) = self._edge_tensors(snap)
 
-        edge_index = edge_index.to(self.device)
-        edge_type_idx = edge_type_idx.to(self.device)
-        edge_length_emb = edge_length_emb.to(self.device)
-        edge_sh = edge_sh.to(self.device)
-
         atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
-        node_type_idx = torch.tensor(
-            [elem2idx[el] for el in atoms], dtype=torch.long, device=self.device
-        )
+        node_type_idx = torch.tensor([elem2idx[el] for el in atoms], dtype=torch.long)
 
         x = {
             "node_type_idx": node_type_idx,
@@ -314,13 +297,13 @@ class E3GNNDataset(Dataset):
                     f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
                 )
             y = {
-                "hamiltonian": hamiltonian_target.to(self.device),
-                "overlap": overlap_target.to(self.device),
-                "density": density_target.to(self.device),
-                "energy": snap.get_energy().to(self.device),
-                "num_electrons": snap.get_number_of_electrons().to(self.device),
-                "forces": snap.forces.to(self.device),
-                "stress": snap.stress.to(self.device),
+                "hamiltonian": hamiltonian_target,
+                "overlap": overlap_target,
+                "density": density_target,
+                "energy": snap.get_energy(),
+                "num_electrons": snap.get_number_of_electrons(),
+                "forces": snap.forces,
+                "stress": snap.stress,
             }
 
         return x, y
