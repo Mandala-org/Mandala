@@ -1,10 +1,13 @@
 import argparse
 import dataclasses
 import glob
+import os
 import random
 import sys
 from pathlib import Path
-from typing import get_type_hints
+from typing import get_type_hints, Union
+from types import NoneType
+import typing
 
 import torch
 import pytorch_lightning as pl
@@ -46,11 +49,6 @@ def setup_argparse():
         help="Temperature to use for the validation set.",
     )
 
-    # --- W&B Arguments ---
-    # These are now handled by the dynamic loop below as they are in the Config dataclass
-    # parser.add_argument("--wandb_project", type=str, default="mandala-silicon-sweep")
-    # parser.add_argument("--run_name", type=str, default=None)
-
     # --- Dynamically add Config fields as arguments ---
     config_fields = get_type_hints(Config)
     for name, field_type in config_fields.items():
@@ -58,16 +56,34 @@ def setup_argparse():
         if isinstance(default_value, dataclasses.Field):
             default_value = default_value.default
 
+        arg_type = field_type
+        origin = typing.get_origin(field_type)
+
+        # Handle Union types like str | None, which are not callable
+        if origin is Union or origin is typing.Union:
+            union_args = typing.get_args(field_type)
+            non_none_args = [
+                t for t in union_args if t is not type(None) and t is not NoneType
+            ]
+            if len(non_none_args) == 1:
+                arg_type = non_none_args[0]
+            else:  # Fallback for more complex unions
+                arg_type = str
+
+        # Handle other special types that argparse can't call directly
+        if arg_type is torch.dtype:
+            arg_type = str  # Accept a string, convert to torch.dtype later
+
         if field_type is bool:
             parser.add_argument(f"--{name}", action="store_true", default=default_value)
         else:
             # Handle Sequence types
-            if "Sequence" in str(field_type):
+            if "Sequence" in str(field_type) or "list" in str(field_type):
                 parser.add_argument(
                     f"--{name}", type=int, nargs="+", default=default_value
                 )
             else:
-                parser.add_argument(f"--{name}", type=field_type, default=default_value)
+                parser.add_argument(f"--{name}", type=arg_type, default=default_value)
 
     return parser.parse_args()
 
@@ -77,9 +93,9 @@ def main():
     args = setup_argparse()
 
     # --- Initialize W&B ---
-    wandb_logger = WandbLogger(
-        project=args.wandb_project, name=args.run_name, config=vars(args)
-    )
+    # Use environment variables for W&B project if available, otherwise use default
+    wandb_project = os.getenv("WANDB_PROJECT", "mandala-silicon-sweep")
+    wandb_logger = WandbLogger(project=wandb_project, config=vars(args))
 
     # Create Config object and update it from wandb
     cfg = Config()
@@ -87,11 +103,14 @@ def main():
         if hasattr(cfg, key):
             setattr(cfg, key, value)
 
-    # Set device and dtype
+    # Post-process special types from argparse/wandb
+    if isinstance(cfg.dtype, str):
+        cfg.dtype = getattr(torch, cfg.dtype)
+
+    # Set device
     cfg.device = torch.device(
-        f"cuda:{args.gpus[0]}" if torch.cuda.is_available() and args.gpus else "cpu"
+        "cuda:0" if torch.cuda.is_available() and cfg.gpus else "cpu"
     )
-    cfg.dtype = torch.float32
 
     # --- Data Loading ---
     print("--- Setting up datasets ---")
@@ -102,9 +121,9 @@ def main():
     for temp in train_temps:
         temp_path = Path(args.data_path) / f"{temp}K"
         snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
-        selected_paths = random.sample(
-            snapshot_paths, min(len(snapshot_paths), args.n_snapshots_per_temp)
-        )
+        # Ensure we don't request more samples than available
+        num_to_sample = min(len(snapshot_paths), args.n_snapshots_per_temp)
+        selected_paths = random.sample(snapshot_paths, num_to_sample)
         for matrix_path in selected_paths:
             info_path = Path(matrix_path).parent / "info.dat"
             if info_path.exists():
@@ -152,8 +171,8 @@ def main():
         max_epochs=cfg.max_epochs,
         logger=wandb_logger,
         callbacks=callbacks,
-        devices=cfg.gpus,
-        accelerator="gpu" if cfg.gpus else "cpu",
+        devices=[cfg.device.index] if cfg.device.type == "cuda" else "auto",
+        accelerator="gpu" if cfg.device.type == "cuda" else "cpu",
         log_every_n_steps=cfg.log_every_n_steps,
         gradient_clip_val=cfg.grad_clip_val,
     )
