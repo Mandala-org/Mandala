@@ -17,11 +17,11 @@ parameters:
   num_layers_gnn:
     distribution: int_uniform
     min: 2
-    max: 6
+    max: 4
   num_layers_matrix:
     distribution: int_uniform
     min: 1
-    max: 4
+    max: 3
   dropout:
     distribution: uniform
     min: 0.0
@@ -45,3 +45,5 @@ command:
   - --num_workers=0
   - --n_snapshots_per_temp=2 # Use a subset for faster sweeps
   - --max_epochs=10
+  - --min_temp=2700
+  - --max_temp=2700
