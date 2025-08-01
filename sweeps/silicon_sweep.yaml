@@ -1,9 +1,10 @@
 program: scripts/train_silicon.py
 project: mandala
+name: silicon_sweep
 method: bayes
 early_terminate:
   type: hyperband
-  min_iter: 100  # Stop runs that are performing poorly after 10 epochs
+  min_iter: 100  # Stop runs that are performing poorly after 100 epochs
 metric:
   name: val_loss_matrix
   goal: minimize
@@ -62,12 +63,12 @@ parameters:
     max: 0.3
   l1_reg_coef:
     distribution: log_uniform_values
-    min: 1.0e-8
-    max: 1.0e-4
+    min: 1.0e-9
+    max: 1.0e-5
   l2_reg_coef:
     distribution: log_uniform_values
-    min: 1.0e-8
-    max: 1.0e-4
+    min: 1.0e-9
+    max: 1.0e-5
   n_radial:
     values: [32, 64]
   neck_depth:
@@ -98,7 +99,7 @@ command:
   - ${args}
   - --gpus=1  # Specify a single GPU
   - --num_workers=0
-  - --n_snapshots_per_temp=2 # Use a subset for faster sweeps
+  - --n_snapshots_per_temp=200 # Use a subset for faster sweeps
   - --max_epochs=1000
   - --min_temp=300
   - --max_temp=3000
