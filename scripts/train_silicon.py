@@ -10,6 +10,7 @@ from types import NoneType
 import typing
 
 import torch
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 
@@ -195,11 +196,20 @@ def main():
 
     train_ds, val_ds, mapper = fac.create()
 
-    train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
-    )
-    val_loader = torch.utils.data.DataLoader(
-        val_ds, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers
+    def _dl(ds, shuffle=False):
+        return DataLoader(
+            ds or [],
+            batch_size=1,
+            shuffle=shuffle,
+            num_workers=cfg.num_workers,
+            pin_memory=True,
+            collate_fn=lambda b: b[0],
+        )
+
+    train_loader = _dl(train_ds, shuffle=True)
+    val_loader = _dl(val_ds, shuffle=False)
+    print(
+        f"Created dataloaders: train batches={len(train_loader)}, val batches={len(val_loader)}"
     )
 
     # --- Model and Trainer Setup ---
