@@ -1,4 +1,5 @@
 program: scripts/train_silicon.py
+project: mandala
 method: bayes
 metric:
   name: val_loss
