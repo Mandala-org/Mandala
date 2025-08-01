@@ -1,0 +1,98 @@
+program: scripts/train_silicon.py
+project: mandala
+method: bayes
+metric:
+  name: val_loss_matrix
+  goal: minimize
+
+parameters:
+  cutoff_gnn:
+    distribution: uniform
+    min: 4.0
+    max: 6.0
+  cutoff_matrix:
+    distribution: uniform
+    min: 6.0
+    max: 8.0
+  l_max_gnn:
+    distribution: int_uniform
+    min: 2
+    max: 4
+  num_layers_gnn:
+    distribution: int_uniform
+    min: 2
+    max: 4
+  num_layers_matrix:
+    distribution: int_uniform
+    min: 1
+    max: 3
+  edge_update_linear:
+    values: ["pre", "post"]
+  edge_update:
+    values: ["tensor_product", "concat", "replace"]
+  edge_update_resiudal:
+    values: [True, False]
+  head_use_mlp_slog_scale:
+    values: [True, False]
+  nonlin_kind:
+    values: ["normact", "gate_scalars_mlp", "gate_magnitudes"]
+  activation_scalar:
+    values: ["silu", "leakyrelu", "tanh"]
+  activation_gate:
+    values: ["sigmoid", "leakyrelu", "tanh"]
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-3
+  hidden_base_dim:
+    values: [32, 64]
+  num_layers_gnn:
+    distribution: int_uniform
+    min: 2
+    max: 4
+  num_layers_matrix:
+    distribution: int_uniform
+    min: 1
+    max: 3
+  dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.3
+  l1_reg_coef:
+    distribution: log_uniform_values
+    min: 1.0e-8
+    max: 1.0e-4
+  l2_reg_coef:
+    distribution: log_uniform_values
+    min: 1.0e-8
+    max: 1.0e-4
+  n_radial:
+    values: [32, 64, 128]
+  neck_depth:
+    values: [2, 3, 4, 5]
+  head_depth:
+    values: [2, 3, 4]
+  train_target:
+    values: ["irreps", "matrix"]
+  loss_coef_energy:
+    distribution: log_uniform_values
+    min: 1.0e-8
+    max: 1.0e-3
+  loss_coef_num_electrons:
+    distribution: log_uniform_values
+    min: 1.0e-8
+    max: 1.0e-3
+
+
+command:
+  - ${env}
+  - python3
+  - -u # Unbuffered output for real-time logging
+  - ${program}
+  - ${args}
+  - --gpus=1  # Specify a single GPU
+  - --num_workers=0
+  - --n_snapshots_per_temp=10 # Use a subset for faster sweeps
+  - --max_epochs=1000
+  - --min_temp=2700
+  - --max_temp=2700
