@@ -129,7 +129,7 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------ util helpers -----------------------------
     @staticmethod
-    def _vectors_mse(pred, target):
+    def _mse(pred, target):
         if pred.shape != target.shape:
             raise ValueError("Shape mismatch in block loss")
         return torch.mean((pred - target) ** 2)
@@ -225,7 +225,7 @@ class E3GNN(pl.LightningModule):
         preds = self(x)
         t_fwd_end = time.perf_counter()
         # block losses
-        loss_blocks = 0.0
+        loss_vectors = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
         if self.cfg.pedantic:
             for name in ("hamiltonian", "overlap", "density"):
                 pred_edges = preds[name].pair_edges
@@ -239,31 +239,50 @@ class E3GNN(pl.LightningModule):
             p_vecs = preds[name].pair_vectors
             t_vecs = y[name].pair_vectors
             for key in p_vecs:
-                loss_blocks = loss_blocks + self._vectors_mse(p_vecs[key], t_vecs[key])
+                loss_vectors = loss_vectors + self._mse(p_vecs[key], t_vecs[key])
+
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
-        blk_ham = preds["hamiltonian"].to_blocks(self.mapper)
-        blk_den = preds["density"].to_blocks(self.mapper)
-        blk_ovr = preds["overlap"].to_blocks(self.mapper)
+        blk = {}
+        blk["hamiltonian"] = preds["hamiltonian"].to_blocks(self.mapper)
+        blk["density"] = preds["density"].to_blocks(self.mapper)
+        blk["overlap"] = preds["overlap"].to_blocks(self.mapper)
         t_map_end = time.perf_counter()
+
+        loss_blocks = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
+        for name in ("hamiltonian", "overlap", "density"):
+            p_blocks = preds[name].pair_blocks
+            t_blocks = y[name].pair_blocks
+            for key in p_blocks:
+                loss_blocks = loss_blocks + self._mse(p_blocks[key], t_blocks[key])
+
         # --- observable evaluation timing --------------------------------
         t_obs_start = time.perf_counter()
-        E_pred = trace_matmul_sparse_snap_vectorized(blk_ham, blk_den)
-        N_pred = trace_matmul_sparse_snap_vectorized(blk_ovr, blk_den)
+        E_pred = trace_matmul_sparse_snap_vectorized(blk["hamiltonian"], blk["density"])
+        N_pred = trace_matmul_sparse_snap_vectorized(blk["overlap"], blk["density"])
         t_obs_end = time.perf_counter()
         E_true = y["energy"]
         loss_E = torch.mean((E_pred - E_true) ** 2)
         abs_err_E = torch.mean(torch.abs(E_pred - E_true))
+
         # electron count loss and absolute error
         N_true = y["num_electrons"]
         loss_N = torch.mean((N_pred - N_true) ** 2)
         abs_err_N = torch.mean(torch.abs(N_pred - N_true))
+
         # total loss
+        if self.cfg.train_target == "matrix":
+            loss_matrix = loss_blocks
+        elif self.cfg.train_target == "irreps":
+            loss_matrix = loss_vectors
+        else:
+            raise ValueError(f"Unknown target type: {self.cfg.train_target}")
         loss = (
-            loss_blocks
+            loss_matrix
             + self.cfg.loss_coef_energy * loss_E
             + self.cfg.loss_coef_num_electrons * loss_N
         )
+
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
             l1_reg = sum(p.abs().sum() for p in self.parameters())
@@ -275,6 +294,7 @@ class E3GNN(pl.LightningModule):
         # log all metrics
         metrics = {
             f"{stage}_loss": loss,
+            f"{stage}_loss_vectors": loss_vectors,
             f"{stage}_loss_blocks": loss_blocks,
             f"{stage}_loss_E": loss_E,
             f"{stage}_loss_N": loss_N,
@@ -292,7 +312,7 @@ class E3GNN(pl.LightningModule):
             "map": t_map_end - t_map_start,
             "obs": t_obs_end - t_obs_start,
         }
-        return
+        return loss
 
     def training_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, stage="train")
