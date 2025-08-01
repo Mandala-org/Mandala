@@ -47,8 +47,9 @@ class E3GNN(pl.LightningModule):
     ):
         super().__init__()
         self.cfg = cfg
-        # shared mapper - move to device specified in config, as it's not an nn.Module
-        self.mapper: BlockIrrepMapper = mapper.to(cfg.device)
+        # The mapper is now an nn.Module and will be moved to the correct device
+        # automatically by PyTorch Lightning.
+        self.mapper: BlockIrrepMapper = mapper
 
         if cfg.train_on_energy and cfg.loss_coef_energy == 0.0:
             raise ValueError("If training on energy, loss_coef_energy must be nonzero.")
