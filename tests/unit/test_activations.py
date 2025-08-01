@@ -12,7 +12,6 @@ class DummyCFG:
         # defaults
         self.nonlin_kind = "gate"
         self.activation_scalar = "silu"
-        self.batch_norm = False
         self.norm_kind = "component"
         # overrides
         for k, v in kw.items():

@@ -33,8 +33,6 @@ parameters:
     values: ["normact", "gate_scalars_mlp"]
   activation_scalar:
     values: ["silu", "relu", "leakyrelu"]
-  batch_norm:
-    values: [true, false]
 
 command:
   - ${env}
