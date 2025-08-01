@@ -38,6 +38,7 @@ def str_to_bool(value):
 def setup_argparse():
     """Set up and parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Train E3GNN for Silicon.")
+    default_config = Config()  # Create an instance to get actual default values
 
     # --- Dataset Arguments ---
     parser.add_argument(
@@ -64,9 +65,8 @@ def setup_argparse():
     # --- Dynamically add Config fields as arguments ---
     config_fields = get_type_hints(Config)
     for name, field_type in config_fields.items():
-        default_value = getattr(Config, name, dataclasses.MISSING)
-        if isinstance(default_value, dataclasses.Field):
-            default_value = default_value.default
+        # Get default value from the instance, not the class
+        default_value = getattr(default_config, name)
 
         # Use the new boolean handling for bool types
         if field_type is bool:
