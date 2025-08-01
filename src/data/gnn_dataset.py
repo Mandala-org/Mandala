@@ -189,7 +189,7 @@ class E3GNNDataset(Dataset):
         # 3. Calculate lengths for off-diagonal edges and sort them
         offdiag_edge_index = torch.tensor(
             [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
-            dtype=torch.int,
+            dtype=torch.long,
             device=self.device,
         )
         disp = self._minimal_disp(
@@ -205,12 +205,12 @@ class E3GNNDataset(Dataset):
         all_edges = self_edges + offdiag_edges
         edge_index = torch.tensor(
             [[e["src"] for e in all_edges], [e["dst"] for e in all_edges]],
-            dtype=torch.int,
+            dtype=torch.long,
             device=self.device,
         )
         edge_type_idx = torch.tensor(
             [self.edge_type2idx[e["key"]] for e in all_edges],
-            dtype=torch.int,
+            dtype=torch.long,
             device=self.device,
         )
 
@@ -285,7 +285,7 @@ class E3GNNDataset(Dataset):
         atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
         node_type_idx = torch.tensor(
-            [elem2idx[el] for el in atoms], dtype=torch.int, device=self.device
+            [elem2idx[el] for el in atoms], dtype=torch.long, device=self.device
         )
 
         x = {
