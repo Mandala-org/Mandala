@@ -208,7 +208,7 @@ def main():
             batch_size=1,
             shuffle=shuffle,
             num_workers=cfg.num_workers,
-            pin_memory=True,
+            pin_memory=cfg.gpus == 0,  # Pin memory only if not using GPU
             collate_fn=lambda b: b[0],
         )
 
