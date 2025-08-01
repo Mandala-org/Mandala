@@ -7,7 +7,6 @@ E(3)-equivariant message-passing blocks:
 *   uses `torch_scatter.scatter` for edge→node aggregation
 *   dropout is `e3nn.nn.Dropout` (acts on *all* irrep coeffs)
 *   normalisation + activation selected via `make_nonlinearity`
-*   optional equivariant `BatchNorm` (`cfg.batch_norm`)
 """
 
 from __future__ import annotations

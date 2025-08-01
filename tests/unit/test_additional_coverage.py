@@ -53,10 +53,9 @@ def test_edge_update_block_shape(residual):
     assert out.shape == (E, hid_ir.dim)
 
 
-@pytest.mark.parametrize("batch_norm", [True, False])
 @pytest.mark.unit
-def test_node_update_block_shape(batch_norm):
-    cfg = Config(batch_norm=batch_norm)
+def test_node_update_block_shape():
+    cfg = Config()
     hid_ir = Irreps("2x0e")
     blk = NodeUpdateBlock(hid_ir, cfg)
     N, E = 4, 2
