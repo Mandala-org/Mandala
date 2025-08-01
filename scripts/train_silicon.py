@@ -144,16 +144,20 @@ def main():
     if isinstance(cfg.dtype, str):
         cfg.dtype = getattr(torch, cfg.dtype)
 
-    # Set device
-    cfg.device = torch.device(
-        "cuda:0" if torch.cuda.is_available() and cfg.gpus else "cpu"
-    )
-
-    print("\n--- Final Config Values ---")
-    print(f"  cfg.cache_root: {cfg.cache_root} (type: {type(cfg.cache_root)})")
-    print(f"  cfg.lr: {cfg.lr}")
-    print(f"  cfg.device: {cfg.device}")
-    print("---------------------------\n")
+    # --- Determine accelerator and devices ---
+    if cfg.gpus > 0 and torch.cuda.is_available():
+        accelerator = "gpu"
+        devices = cfg.gpus
+        print(f"--- Using {devices} GPU(s) ---")
+    else:
+        accelerator = "cpu"
+        devices = "auto"
+        if cfg.gpus > 0:
+            print(
+                "--- Warning: --gpus was > 0 but CUDA is not available. Using CPU. ---"
+            )
+        else:
+            print("--- Using CPU ---")
 
     # --- Data Loading ---
     print("--- Setting up datasets ---")
@@ -226,8 +230,8 @@ def main():
         max_epochs=cfg.max_epochs,
         logger=wandb_logger,
         callbacks=callbacks,
-        devices=[cfg.device.index] if cfg.device.type == "cuda" else "auto",
-        accelerator="gpu" if cfg.device.type == "cuda" else "cpu",
+        devices=devices,
+        accelerator=accelerator,
         log_every_n_steps=cfg.log_every_n_steps,
         gradient_clip_val=cfg.grad_clip_val,
     )
