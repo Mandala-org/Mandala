@@ -300,7 +300,13 @@ class E3GNN(pl.LightningModule):
             metrics[f"{stage}_l1_reg"] = l1_reg
         if self.cfg.l2_reg_coef > 0:
             metrics[f"{stage}_l2_reg"] = l2_reg
-        self.log_dict(metrics, prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
+        self.log_dict(
+            metrics,
+            prog_bar=True,
+            on_step=self.cfg.log_on_step,
+            on_epoch=self.cfg.log_on_epoch,
+            batch_size=1,
+        )
         # record per-batch timings for callback
         self._last_batch_times = {
             "forward": t_fwd_end - t_fwd_start,
