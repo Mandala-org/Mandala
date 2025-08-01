@@ -41,7 +41,7 @@ def make_mock_matrix():
     # stack per key
     pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
     pair_edges = {
-        k: torch.tensor(v, dtype=torch.int).t() for k, v in pair_edges.items()
+        k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
     }
 
     return (

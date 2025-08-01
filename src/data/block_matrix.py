@@ -314,7 +314,7 @@ class BlockMatrix:
         """Return 1-D tensor of start indices per atom and total dimension."""
         dims = torch.tensor(
             [self.orbital_cfg.block_dims(f"{el}-{el}")[0] for el in self.atoms],
-            dtype=torch.int,
+            dtype=torch.long,
         )
         offsets = torch.cumsum(
             torch.cat([torch.tensor([0]), dims[:-1]]), dim=0
@@ -534,7 +534,7 @@ class BlockMatrix:
         for el in atoms[:-1]:
             d = orbital_cfg.block_dims(f"{el}-{el}")[0]
             offsets.append(offsets[-1] + d)
-        offsets_t = torch.tensor(offsets, dtype=torch.int, device=matrix.device)
+        offsets_t = torch.tensor(offsets, dtype=torch.long, device=matrix.device)
 
         pair_blocks, pair_edges, lookup = {}, {}, {}
         for i, el_i in enumerate(atoms):
@@ -554,7 +554,7 @@ class BlockMatrix:
         # stack
         pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
         pair_edges = {
-            k: torch.tensor(v, dtype=torch.int).t() for k, v in pair_edges.items()
+            k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
         }
 
         snapshot = cls(
