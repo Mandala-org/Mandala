@@ -16,7 +16,7 @@ from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigErro
 def test_node_encoder_shape_and_dtype():
     cfg = Config()
     enc = NodeEncoder(node_one_hot_dim=3, cfg=cfg)
-    x = torch.tensor([0, 1], dtype=torch.int)
+    x = torch.tensor([0, 1], dtype=torch.long)
     h = enc(x)
     assert h.shape == (2, enc.irreps_out.dim)
     assert h.dtype == torch.float32
@@ -31,7 +31,7 @@ def test_edge_encoder_forward():
 
     enc = EdgeEncoder(n_types, out_ir, cfg)
     E = 4
-    edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.int)
+    edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.long)
     length_emb = torch.rand(E, cfg.n_radial)
     sh = torch.rand(E, sh_ir.dim)
     h = enc(edge_type_idx, length_emb, sh)
