@@ -24,15 +24,15 @@ from net.e3gnn import E3GNN
 # ──────────────────────────────────────────────────────────────────────
 def make_dummy_graph(cfg):
     N, E = 4, 7
-    node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
-    edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
+    node_type_idx = torch.zeros(N, dtype=torch.int)  # all H
+    edge_type_idx = torch.zeros(E, dtype=torch.int)  # H-H
 
     edge_len = torch.randn(E, cfg.n_radial)
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max_gnn)
     edge_sh = torch.randn(E, sh_irreps.dim)
 
     edge_index = torch.tensor(
-        [[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]], dtype=torch.long
+        [[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]], dtype=torch.int
     )
 
     x = {

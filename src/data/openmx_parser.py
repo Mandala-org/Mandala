@@ -157,7 +157,7 @@ def parse_openmx_scfout(
 
         pair_blocks_t = {k: torch.stack(v) for k, v in pair_blocks.items()}
         pair_edges_t = {
-            k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()
+            k: torch.tensor(v, dtype=torch.int).t() for k, v in pair_edges.items()
         }
 
         # Sanity checks to make sure edges make sense

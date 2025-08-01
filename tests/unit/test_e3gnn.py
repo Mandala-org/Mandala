@@ -19,8 +19,8 @@ def test_forward_smoke():
 
     # ------- fake batch ----------------------------
     N, E = 4, 7
-    node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
-    edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
+    node_type_idx = torch.zeros(N, dtype=torch.int)  # all H
+    edge_type_idx = torch.zeros(E, dtype=torch.int)  # H-H
     edge_len = torch.randn(E, cfg.n_radial)
     sh = Irreps.spherical_harmonics(cfg.l_max_gnn)
     edge_sh = torch.randn(E, sh.dim)  # random SH features
