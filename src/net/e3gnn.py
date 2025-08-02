@@ -273,11 +273,9 @@ class E3GNN(pl.LightningModule):
         abs_err_N = torch.mean(torch.abs(N_pred - N_true))
 
         # total loss
-        loss = (
-            loss_matrix
-            + self.cfg.loss_coef_energy * loss_E
-            + self.cfg.loss_coef_num_electrons * loss_N
-        )
+        loss_E_weighted = self.cfg.loss_coef_energy * loss_E
+        loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
+        loss = loss_matrix + loss_E_weighted + loss_N_weighted
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
@@ -296,6 +294,12 @@ class E3GNN(pl.LightningModule):
             f"{stage}_abs_error_E": abs_err_E,
             f"{stage}_abs_error_N": abs_err_N,
         }
+        # Log percentage contributions if total loss is not zero
+        if loss > 1e-8:
+            metrics[f"{stage}_percent_matrix"] = (loss_matrix / loss) * 100
+            metrics[f"{stage}_percent_E"] = (loss_E_weighted / loss) * 100
+            metrics[f"{stage}_percent_N"] = (loss_N_weighted / loss) * 100
+
         if self.cfg.l1_reg_coef > 0:
             metrics[f"{stage}_l1_reg"] = l1_reg
         if self.cfg.l2_reg_coef > 0:
