@@ -73,7 +73,9 @@ def main():
     print("Loading silicon snapshot data...")
     data_cfg = Config(cutoff_gnn=5.0, cutoff_matrix=8.0)
     fac = DatasetFactory(data_cfg)
-    fac.add_snapshot("data/big/silicon/900K/Si_DM", "data/big/silicon/900K/info.txt")
+    fac.add_snapshot(
+        "../../data/big/silicon/900K/Si_DM", "../../data/big/silicon/900K/info.txt"
+    )
     train_ds, _, mapper = fac.create()
 
     train_loader = DataLoader(train_ds, batch_size=1, collate_fn=lambda b: b[0])
@@ -114,7 +116,8 @@ def main():
             enable_checkpointing=False,
             enable_progress_bar=False,
             enable_model_summary=False,
-            accelerator="cpu",
+            accelerator="cuda",
+            log_every_n_steps=1,
         )
         log_memory(f"After Trainer Init (Run {i+1})")
 
