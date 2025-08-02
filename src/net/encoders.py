@@ -150,6 +150,10 @@ class EdgeEncoder(nn.Module):
         # Concatenate edge type embedding, radial MLP output, and SH projection
         type_emb = self.edge_emb(edge_type_idx)
         disp_emb = torch.cat([length_emb, sh], dim=-1)
+        print(f"type_emb shape: {type_emb.shape}, disp_emb shape: {disp_emb.shape}")
+        print(
+            f"TP in1 irreps: {self.tp.irreps_in1}, TP in2 irreps: {self.tp.irreps_in2}"
+        )
         emb = self.tp(type_emb, disp_emb)
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
