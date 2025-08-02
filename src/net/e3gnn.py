@@ -323,7 +323,22 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.cfg.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.cfg.lr)
+        if not self.cfg.use_lr_scheduler:
+            return optimizer
+
+        scheduler = {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                factor=self.cfg.lr_scheduler_factor,
+                patience=self.cfg.lr_scheduler_patience,
+                min_lr=self.cfg.lr_scheduler_min_lr,
+            ),
+            "monitor": "val_loss",
+            "interval": "epoch",
+            "frequency": 1,
+        }
+        return [optimizer], [scheduler]
 
     # ------------------------------------------------------------------ force prediction
     def predictions_to_snapshot(
