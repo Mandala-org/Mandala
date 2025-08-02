@@ -4,8 +4,8 @@
 # You can edit the parameters below.
 
 # --- Parameters ---
-NUM_EPOCHS=1000
-NUM_SAMPLES=100
+NUM_EPOCHS=100
+NUM_SAMPLES=10
 TRAIN_TARGET="irreps"
 LOSS_COEF=0.001
 LEARNING_RATE=0.0003
@@ -16,7 +16,7 @@ source ../../mandala-venv/bin/activate
 
 # Run the study
 echo "Starting study with ${NUM_SAMPLES} replications for ${NUM_EPOCHS} epochs each..."
-python3 run_study.py \
+python3 -u run_study.py \
     --num_epochs ${NUM_EPOCHS} \
     --num_samples ${NUM_SAMPLES} \
     --train_target ${TRAIN_TARGET} \
