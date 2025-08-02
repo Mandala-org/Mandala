@@ -18,6 +18,9 @@ dependencies = [
     "wandb>=0.16",
     "tqdm>=4.66",
     "numpy>=1.26",
+    "pandas",
+    "seaborn",
+    "psutil",
 ]
 requires-python = ">=3.10"
 
