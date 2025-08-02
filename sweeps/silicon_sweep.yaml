@@ -1,6 +1,6 @@
 program: scripts/train_silicon.py
 project: mandala
-name: silicon_sweep
+name: silicon_sweep_no_reg
 method: bayes
 early_terminate:
   type: hyperband
@@ -61,14 +61,14 @@ parameters:
     distribution: uniform
     min: 0.0
     max: 0.3
-  l1_reg_coef:
-    distribution: log_uniform_values
-    min: 1.0e-9
-    max: 1.0e-5
-  l2_reg_coef:
-    distribution: log_uniform_values
-    min: 1.0e-9
-    max: 1.0e-5
+  # l1_reg_coef:
+  #   distribution: log_uniform_values
+  #   min: 1.0e-9
+  #   max: 1.0e-5
+  # l2_reg_coef:
+  #   distribution: log_uniform_values
+  #   min: 1.0e-9
+  #   max: 1.0e-5
   n_radial:
     values: [32, 64]
   neck_depth:
@@ -85,10 +85,10 @@ parameters:
     distribution: log_uniform_values
     min: 1.0e-5
     max: 1.0e-1
-  grad_clip_val:
-    distribution: uniform
-    min: 0.5
-    max: 5.0
+  # grad_clip_val:
+  #   distribution: uniform
+  #   min: 0.5
+  #   max: 5.0
 
 
 command:
