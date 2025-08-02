@@ -79,12 +79,12 @@ parameters:
     values: ["irreps", "matrix"]
   loss_coef_energy:
     distribution: log_uniform_values
-    min: 1.0e-5
-    max: 1.0e-2
+    min: 1.0e-6
+    max: 1.0e-3
   loss_coef_num_electrons:
     distribution: log_uniform_values
-    min: 1.0e-5
-    max: 1.0e-2
+    min: 1.0e-6
+    max: 1.0e-3
   # grad_clip_val:
   #   distribution: uniform
   #   min: 0.5
