@@ -285,6 +285,25 @@ class E3GNN(pl.LightningModule):
             l2_reg = sum(p.pow(2).sum() for p in self.parameters())
             loss += self.cfg.l2_reg_coef * l2_reg
 
+        # Graceful handling of NaN/inf loss
+        if not torch.isfinite(loss):
+            max_val = torch.finfo(loss.dtype).max
+            # Log worst-case values for hyperparameter optimizer
+            metrics = {
+                f"{stage}_loss": torch.tensor(max_val, device=self.device),
+                f"{stage}_loss_matrix": torch.tensor(max_val, device=self.device),
+                f"{stage}_loss_E": torch.tensor(max_val, device=self.device),
+                f"{stage}_loss_N": torch.tensor(max_val, device=self.device),
+            }
+            self.log_dict(
+                metrics,
+                prog_bar=True,
+                on_step=self.cfg.log_on_step,
+                on_epoch=self.cfg.log_on_epoch,
+            )
+            # Return the original non-finite loss to trigger TerminateOnNaN
+            return loss
+
         # log all metrics
         metrics = {
             f"{stage}_loss": loss,
