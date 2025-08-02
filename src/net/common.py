@@ -77,6 +77,10 @@ class Config:
     max_epochs: int = 100
     batch_size: int = 1
     smoke_test: bool = False
+    use_lr_scheduler: bool = True
+    lr_scheduler_factor: float = 0.25
+    lr_scheduler_patience: int = 10
+    lr_scheduler_min_lr: float = 1e-7
 
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
