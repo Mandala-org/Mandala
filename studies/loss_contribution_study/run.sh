@@ -16,7 +16,7 @@ source ../../mandala-venv/bin/activate
 
 # Run the study
 echo "Starting study with ${NUM_SAMPLES} replications for ${NUM_EPOCHS} epochs each..."
-python3 run_study.py \
+python3 -u run_study.py \
     --num_epochs ${NUM_EPOCHS} \
     --num_samples ${NUM_SAMPLES} \
     --train_target ${TRAIN_TARGET} \
