@@ -243,18 +243,25 @@ class E3GNN(pl.LightningModule):
         t_map_end = time.perf_counter()
 
         loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
+        mae_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
         if self.cfg.train_target == "matrix":
             for name in ("hamiltonian", "overlap", "density"):
                 p_blocks = blk[name].pair_blocks
                 t_blocks = y[name].pair_blocks
                 for key in p_blocks:
                     loss_matrix = loss_matrix + self._mse(p_blocks[key], t_blocks[key])
+                    mae_matrix = mae_matrix + torch.mean(
+                        torch.abs(p_blocks[key] - t_blocks[key])
+                    )
         elif self.cfg.train_target == "irreps":
-            for name in ("hamiltonian", "overlap", "density"):
+            for name in ("hamiltontonian", "overlap", "density"):
                 p_vecs = preds[name].pair_vectors
                 t_vecs = y[name].pair_vectors
                 for key in p_vecs:
                     loss_matrix = loss_matrix + self._mse(p_vecs[key], t_vecs[key])
+                    mae_matrix = mae_matrix + torch.mean(
+                        torch.abs(p_vecs[key] - t_vecs[key])
+                    )
         else:
             raise ValueError(f"Unknown target type: {self.cfg.train_target}")
 
@@ -308,6 +315,7 @@ class E3GNN(pl.LightningModule):
         metrics = {
             f"{stage}_loss": loss,
             f"{stage}_loss_matrix": loss_matrix,
+            f"{stage}_mae_matrix": mae_matrix,
             f"{stage}_loss_E": loss_E,
             f"{stage}_loss_N": loss_N,
             f"{stage}_abs_error_E": abs_err_E,
