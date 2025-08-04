@@ -254,7 +254,7 @@ class E3GNN(pl.LightningModule):
                         torch.abs(p_blocks[key] - t_blocks[key])
                     )
         elif self.cfg.train_target == "irreps":
-            for name in ("hamiltontonian", "overlap", "density"):
+            for name in ("hamiltonian", "overlap", "density"):
                 p_vecs = preds[name].pair_vectors
                 t_vecs = y[name].pair_vectors
                 for key in p_vecs:
