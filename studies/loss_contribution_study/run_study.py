@@ -152,38 +152,69 @@ def main():
     full_df.to_csv(output_dir / "all_runs_metrics.csv", index=False)
     print(f"\nSaved combined metrics to {output_dir / 'all_runs_metrics.csv'}")
 
-    percent_cols = ["train_percent_matrix", "train_percent_E", "train_percent_N"]
-    full_df = full_df.dropna(subset=["epoch"])
-    full_df[percent_cols] = full_df[percent_cols].ffill()
+    # --- Figure and Subplots ---
+    fig, axes = plt.subplots(2, 1, figsize=(12, 16), sharex=True)
+    fig.suptitle(
+        f"Loss Analysis (target={args.train_target}, lr={args.lr}, coef={args.loss_coef_observable})",
+        fontsize=16,
+    )
 
-    df_melted = full_df.melt(
+    # --- Plot 1: Loss Contribution Percentage ---
+    percent_cols = ["train_percent_matrix", "train_percent_E", "train_percent_N"]
+    df_cleaned = full_df.dropna(subset=["epoch"])
+    df_cleaned[percent_cols] = df_cleaned[percent_cols].ffill()
+
+    df_melted_percent = df_cleaned.melt(
         id_vars=["epoch"],
         value_vars=percent_cols,
         var_name="loss_component",
         value_name="percentage",
     )
 
-    print("Generating plot...")
-    plt.figure(figsize=(12, 8))
     sns.lineplot(
-        data=df_melted,
+        data=df_melted_percent,
         x="epoch",
         y="percentage",
         hue="loss_component",
         errorbar=("pi", 50),
+        ax=axes[0],
     )
-    plt.title(
-        f"Loss Contribution Analysis\n(target={args.train_target}, lr={args.lr}, coef={args.loss_coef_observable})"
-    )
-    plt.ylabel("Percentage of Total Loss")
-    plt.xlabel("Epoch")
-    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
-    plt.ylim(0, 100)
+    axes[0].set_title("Loss Contribution Analysis")
+    axes[0].set_ylabel("Percentage of Total Loss")
+    axes[0].grid(True, which="both", linestyle="--", linewidth=0.5)
+    axes[0].set_ylim(0, 100)
 
-    plot_path = output_dir / "loss_contribution_plot.png"
+    # --- Plot 2: Mean Absolute Errors (Log Scale) ---
+    mae_cols = ["train_mae_matrix", "train_abs_error_E", "train_abs_error_N"]
+    df_cleaned[mae_cols] = df_cleaned[mae_cols].ffill()
+
+    df_melted_mae = df_cleaned.melt(
+        id_vars=["epoch"],
+        value_vars=mae_cols,
+        var_name="error_component",
+        value_name="mae",
+    )
+
+    sns.lineplot(
+        data=df_melted_mae,
+        x="epoch",
+        y="mae",
+        hue="error_component",
+        errorbar=("pi", 50),
+        ax=axes[1],
+    )
+    axes[1].set_title("Mean Absolute Error (MAE) Analysis")
+    axes[1].set_ylabel("Mean Absolute Error (Log Scale)")
+    axes[1].set_xlabel("Epoch")
+    axes[1].set_yscale("log")
+    axes[1].grid(True, which="both", linestyle="--", linewidth=0.5)
+
+    # --- Save Figure ---
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plot_path = output_dir / "loss_analysis_plot.png"
     plt.savefig(plot_path)
     plt.close()
-    print(f"Saved plot to {plot_path}")
+    print(f"Saved combined plot to {plot_path}")
     log_memory("Study End")
 
 
