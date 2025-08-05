@@ -4,10 +4,10 @@
 # You can edit the parameters below.
 
 # --- Parameters ---
-NUM_EPOCHS=100
+NUM_EPOCHS=500
 NUM_SAMPLES=10
 TRAIN_TARGET="irreps"
-LOSS_COEF=0.001
+LOSS_COEF=0.0001
 LEARNING_RATE=0.0003
 
 # Activate the virtual environment
