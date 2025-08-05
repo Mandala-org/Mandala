@@ -76,8 +76,8 @@ def main():
     fac = DatasetFactory(cfg)
     # Using a small water snapshot for faster testing, but can be changed
     fac.add_snapshot(
-        "data/big/silicon/900K/Si_DM",
-        "data/big/silicon/900K/info.txt",
+        "../../data/big/silicon/900K/Si_DM",
+        "../../data/big/silicon/900K/info.txt",
     )
     train_ds, _, mapper = fac.create()
     train_loader = DataLoader(train_ds, batch_size=1, collate_fn=lambda b: b[0])
