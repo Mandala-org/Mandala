@@ -73,8 +73,8 @@ def main():
         data_cfg = Config(cutoff_gnn=5.0, cutoff_matrix=8.0, l_max_gnn=l_max)
         fac = DatasetFactory(data_cfg)
         fac.add_snapshot(
-            "data/big/silicon/900K/Si_DM",
-            "data/big/silicon/900K/info.txt",
+            "../../data/big/silicon/900K/Si_DM",
+            "../../data/big/silicon/900K/info.txt",
         )
         train_ds, _, mapper = fac.create()
         data_samples[l_max] = (train_ds[0], mapper)
