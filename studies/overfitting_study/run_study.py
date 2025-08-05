@@ -55,8 +55,25 @@ def main():
 
     # --- Data Loading ---
     print("Loading single silicon snapshot...")
-    data_cfg = Config(cutoff_gnn=5.0, cutoff_matrix=8.0)
-    fac = DatasetFactory(data_cfg)
+    cfg = Config()
+    cfg = Config(
+        cutoff_gnn=5.0,
+        cutoff_matrix=8.0,
+        lr=args.lr,
+        train_target=args.train_target,
+        loss_coef_energy=0.0,  # Disable energy loss
+        loss_coef_num_electrons=0.0,  # Disable electron loss
+        train_on_energy=False,
+        train_on_num_electrons=False,
+        max_epochs=args.num_epochs,
+        use_lr_scheduler=False,
+        hidden_base_dim=32,  # Smaller network
+        num_layers_gnn=2,
+        num_layers_matrix=1,
+        neck_depth=2,
+        head_depth=1,
+    )
+    fac = DatasetFactory(cfg)
     # Using a small water snapshot for faster testing, but can be changed
     fac.add_snapshot(
         "data/big/silicon/900K/Si_DM",
@@ -72,21 +89,6 @@ def main():
         run_log_dir = output_dir / f"temp_run_{i}"
 
         # 1. Configure and Train
-        cfg = Config(
-            lr=args.lr,
-            train_target=args.train_target,
-            loss_coef_energy=0.0,  # Disable energy loss
-            loss_coef_num_electrons=0.0,  # Disable electron loss
-            train_on_energy=False,
-            train_on_num_electrons=False,
-            max_epochs=args.num_epochs,
-            use_lr_scheduler=False,
-            hidden_base_dim=32,  # Smaller network
-            num_layers_gnn=2,
-            num_layers_matrix=1,
-            neck_depth=2,
-            head_depth=1,
-        )
 
         model = E3GNN(mapper, cfg)
         logger = CSVLogger(save_dir=str(run_log_dir))
