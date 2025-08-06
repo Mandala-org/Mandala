@@ -55,7 +55,6 @@ def main():
 
     # --- Data Loading ---
     print("Loading single silicon snapshot...")
-    cfg = Config()
     cfg = Config(
         cutoff_gnn=5.0,
         cutoff_matrix=8.0,
@@ -96,8 +95,8 @@ def main():
             max_epochs=cfg.max_epochs,
             logger=logger,
             enable_checkpointing=False,
-            enable_progress_bar=False,
-            enable_model_summary=False,
+            enable_progress_bar=True,
+            enable_model_summary=True,
             accelerator="cuda" if "CUDA_VISIBLE_DEVICES" in os.environ else "cpu",
             log_every_n_steps=1,
         )
