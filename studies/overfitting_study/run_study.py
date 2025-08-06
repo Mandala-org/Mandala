@@ -17,6 +17,7 @@ from pytorch_lightning.loggers import CSVLogger
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
+from net.benchmark import BenchmarkCallback  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
 from data.factory import DatasetFactory  # noqa: E402
@@ -97,6 +98,8 @@ def main():
         num_layers_matrix=2,
         neck_depth=3,
         head_depth=2,
+        bench_verbosity=2,
+        log_activation_mag=True,
     )
     fac = DatasetFactory(cfg)
     # Using a small water snapshot for faster testing, but can be changed
@@ -115,14 +118,21 @@ def main():
 
         # 1. Configure and Train
 
+        callbacks = [
+            BenchmarkCallback(
+                verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
+            ),
+        ]
+
         model = E3GNN(mapper, cfg)
         logger = CSVLogger(save_dir=str(run_log_dir))
         trainer = pl.Trainer(
             max_epochs=cfg.max_epochs,
             logger=logger,
+            callbacks=callbacks,
             enable_checkpointing=False,
-            enable_progress_bar=False,
-            enable_model_summary=False,
+            enable_progress_bar=True,
+            enable_model_summary=True,
             accelerator="cuda" if "CUDA_VISIBLE_DEVICES" in os.environ else "cpu",
             log_every_n_steps=1,
         )
