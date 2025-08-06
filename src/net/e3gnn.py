@@ -286,10 +286,14 @@ class E3GNN(pl.LightningModule):
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
-            l1_reg = sum(p.abs().sum() for p in self.parameters())
+            l1_reg = sum(
+                p.abs().sum() for p in self.parameters()
+            )  #! CHECK WHETHER THIS APPLIES TO IRREPSBLOCKMAPPER'S Q MATRIX
             loss += self.cfg.l1_reg_coef * l1_reg
         if self.cfg.l2_reg_coef > 0:
-            l2_reg = sum(p.pow(2).sum() for p in self.parameters())
+            l2_reg = sum(
+                p.pow(2).sum() for p in self.parameters()
+            )  #! CHECK WHETHER THIS APPLIES TO IRREPSBLOCKMAPPER'S Q MATRIX
             loss += self.cfg.l2_reg_coef * l2_reg
 
         # Graceful handling of NaN/inf loss
