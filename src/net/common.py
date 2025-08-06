@@ -107,6 +107,7 @@ class Config:
 
     # -------------- training targets -----------------------------------
     train_target: str = "irreps"  # "irreps" | "matrix"
+    scheduler_target: str = "val_loss_matrix"
     train_on_forces: bool = False
     train_on_stress: bool = False
     train_on_energy: bool = True

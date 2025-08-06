@@ -87,6 +87,7 @@ def main():
         loss_coef_num_electrons=0.0,  # Disable electron loss
         train_on_energy=False,
         train_on_num_electrons=False,
+        scheduler_target="train_loss_matrix",
         max_epochs=args.num_epochs,
         use_lr_scheduler=args.use_lr_scheduler,
         lr_scheduler_patience=args.lr_scheduler_patience,
