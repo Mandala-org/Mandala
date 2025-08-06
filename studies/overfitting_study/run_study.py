@@ -46,16 +46,38 @@ def main():
         default="irreps",
         help="Target for the main matrix loss.",
     )
+    parser.add_argument(
+        "--output_folder",
+        type=str,
+        default="overfitting_results",
+        help="Folder to save the results.",
+    )
+    parser.add_argument(
+        "--use_lr_scheduler",
+        action="store_true",
+        help="Enable ReduceLROnPlateau learning rate scheduler.",
+    )
+    parser.add_argument(
+        "--lr_scheduler_patience",
+        type=int,
+        default=10,
+        help="Patience for ReduceLROnPlateau scheduler.",
+    )
+    parser.add_argument(
+        "--lr_scheduler_factor",
+        type=float,
+        default=0.5,
+        help="Factor for ReduceLROnPlateau scheduler.",
+    )
     args = parser.parse_args()
 
     # --- Output Directory Setup ---
-    output_dir = Path(__file__).parent
+    output_dir = Path(__file__).parent / args.output_folder
     output_dir.mkdir(exist_ok=True)
     print(f"Saving results to: {output_dir}")
 
     # --- Data Loading ---
     print("Loading single silicon snapshot...")
-    cfg = Config()
     cfg = Config(
         cutoff_gnn=5.0,
         cutoff_matrix=8.0,
@@ -66,12 +88,14 @@ def main():
         train_on_energy=False,
         train_on_num_electrons=False,
         max_epochs=args.num_epochs,
-        use_lr_scheduler=False,
-        hidden_base_dim=32,  # Smaller network
-        num_layers_gnn=2,
-        num_layers_matrix=1,
-        neck_depth=2,
-        head_depth=1,
+        use_lr_scheduler=args.use_lr_scheduler,
+        lr_scheduler_patience=args.lr_scheduler_patience,
+        lr_scheduler_factor=args.lr_scheduler_factor,
+        hidden_base_dim=64,
+        num_layers_gnn=4,
+        num_layers_matrix=2,
+        neck_depth=3,
+        head_depth=2,
     )
     fac = DatasetFactory(cfg)
     # Using a small water snapshot for faster testing, but can be changed
