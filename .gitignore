@@ -27,7 +27,7 @@ docs/_build/
 ray_results/
 
 # Notes
-notes/
+# notes/
 
 # egg-info
 *.egg-info/
