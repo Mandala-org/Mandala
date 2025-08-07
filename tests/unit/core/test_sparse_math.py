@@ -87,11 +87,8 @@ def test_trace_sparse_vs_dense():
 def test_trace_matches_dense():
     n_atoms, d = 3, 2
     edge_index, A, B = make_toy_sparse(n_atoms, d)
-
     sparse_tr = trace_matmul_sparse(A, B, edge_index)
-
     dense_A = dense_from_blocks(A, edge_index, d, n_atoms)
     dense_B = dense_from_blocks(B, edge_index, d, n_atoms)
     dense_tr = np.trace(dense_A @ dense_B)
-
     assert np.isclose(sparse_tr.cpu().item(), dense_tr, atol=1e-6)

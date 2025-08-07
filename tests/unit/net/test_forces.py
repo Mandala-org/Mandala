@@ -1,28 +1,29 @@
+import pytest
 import torch
 
 from net.common import Config
 from net.e3gnn import E3GNN
 from data.factory import DatasetFactory
 
-
-def test_stress_with_real_data():
+@pytest.mark.unit
+def test_non_zero_forces_with_real_data():
     """
     Tests that a randomly initialized network produces non-zero forces
     using a real data sample from the E3GNNDataset. This ensures that
-    the stress computation is functioning correctly.
+    the entire data processing pipeline correctly propagates gradients.
     """
 
-    # 2. Set up config
+    # Set up config
     cfg = Config(
         cutoff_gnn=3.0,
         cutoff_matrix=4.0,
         l_max_gnn=2,
         n_radial=64,
         num_layers_gnn=3,
-        hidden_base_dim=16,
         num_layers_matrix=2,
+        hidden_base_dim=16,
         lr=1e-3,
-        enable_stress=True,
+        enable_forces=True,
         pedantic=True,
     )
 
@@ -43,13 +44,14 @@ def test_stress_with_real_data():
     # Get a sample. The dataset should have set requires_grad on positions.
     x, _ = train_ds[0]
 
+    # 2. Set up the model
     model = E3GNN(mapper, cfg)
 
-    # 3. Predict stress and check that it's not all zeros
-    stress = model.predict_stress(x)
+    # 3. Predict forces and check that they are not all zero
+    forces = model.predict_forces(x)
 
-    assert stress.shape == (3, 3)
-    assert not torch.isnan(stress).any(), "Stress contains NaN values."
+    assert forces.shape == x["positions"].shape
+    assert not torch.isnan(forces).any(), "Forces contain NaN values."
     assert not torch.allclose(
-        stress, torch.zeros_like(stress)
-    ), "Stress is all zero, gradients are likely detached."
+        forces, torch.zeros_like(forces)
+    ), "Forces are all zero, gradients are likely detached."

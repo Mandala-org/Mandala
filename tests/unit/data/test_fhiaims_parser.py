@@ -2,12 +2,13 @@
 Tests for FHI-AIMS parser and basis conversion.
 """
 
+import pytest
 import torch
 import numpy as np
 
 from data.snapshot import Snapshot
 
-
+@pytest.mark.unit
 def test_fhiaims_parsing():
     """Test that FHI-AIMS files are parsed correctly."""
     geometry_path = "data/fhi-aims/original/basis_small/geometry.in"
@@ -30,7 +31,7 @@ def test_fhiaims_parsing():
     assert snap.box is not None
     assert len(snap.hamiltonian.atoms) == 6
 
-
+@pytest.mark.unit
 def test_fhiaims_basis_conversion():
     """Test the FHI-AIMS to e3nn basis conversion."""
     # Load original and rotated snapshots
