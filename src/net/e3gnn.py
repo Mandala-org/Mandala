@@ -47,8 +47,9 @@ class E3GNN(pl.LightningModule):
     ):
         super().__init__()
         self.cfg = cfg
-        # shared mapper - move to device specified in config, as it's not an nn.Module
-        self.mapper: BlockIrrepMapper = mapper.to(cfg.device)
+        # The mapper is now an nn.Module and will be moved to the correct device
+        # automatically by PyTorch Lightning.
+        self.mapper: BlockIrrepMapper = mapper
 
         if cfg.train_on_energy and cfg.loss_coef_energy == 0.0:
             raise ValueError("If training on energy, loss_coef_energy must be nonzero.")
@@ -129,7 +130,7 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------ util helpers -----------------------------
     @staticmethod
-    def _vectors_mse(pred, target):
+    def _mse(pred, target):
         if pred.shape != target.shape:
             raise ValueError("Shape mismatch in block loss")
         return torch.mean((pred - target) ** 2)
@@ -224,8 +225,6 @@ class E3GNN(pl.LightningModule):
         t_fwd_start = time.perf_counter()
         preds = self(x)
         t_fwd_end = time.perf_counter()
-        # block losses
-        loss_blocks = 0.0
         if self.cfg.pedantic:
             for name in ("hamiltonian", "overlap", "density"):
                 pred_edges = preds[name].pair_edges
@@ -235,64 +234,121 @@ class E3GNN(pl.LightningModule):
                         pred_edges[key], target_edges[key]
                     ), f"Pedantic check failed: Edge order mismatch in '{name}' matrix for key '{key}'"
 
-        for name in ("hamiltonian", "overlap", "density"):
-            p_vecs = preds[name].pair_vectors
-            t_vecs = y[name].pair_vectors
-            for key in p_vecs:
-                loss_blocks = loss_blocks + self._vectors_mse(p_vecs[key], t_vecs[key])
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
-        blk_ham = preds["hamiltonian"].to_blocks(self.mapper)
-        blk_den = preds["density"].to_blocks(self.mapper)
-        blk_ovr = preds["overlap"].to_blocks(self.mapper)
+        blk = {}
+        blk["hamiltonian"] = preds["hamiltonian"].to_blocks(self.mapper)
+        blk["density"] = preds["density"].to_blocks(self.mapper)
+        blk["overlap"] = preds["overlap"].to_blocks(self.mapper)
         t_map_end = time.perf_counter()
+
+        loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
+        mae_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
+        if self.cfg.train_target == "matrix":
+            for name in ("hamiltonian", "overlap", "density"):
+                p_blocks = blk[name].pair_blocks
+                t_blocks = y[name].pair_blocks
+                for key in p_blocks:
+                    loss_matrix = loss_matrix + self._mse(p_blocks[key], t_blocks[key])
+                    mae_matrix = mae_matrix + torch.mean(
+                        torch.abs(p_blocks[key] - t_blocks[key])
+                    )
+        elif self.cfg.train_target == "irreps":
+            for name in ("hamiltonian", "overlap", "density"):
+                p_vecs = preds[name].pair_vectors
+                t_vecs = y[name].pair_vectors
+                for key in p_vecs:
+                    loss_matrix = loss_matrix + self._mse(p_vecs[key], t_vecs[key])
+                    mae_matrix = mae_matrix + torch.mean(
+                        torch.abs(p_vecs[key] - t_vecs[key])
+                    )
+        else:
+            raise ValueError(f"Unknown target type: {self.cfg.train_target}")
+
         # --- observable evaluation timing --------------------------------
         t_obs_start = time.perf_counter()
-        E_pred = trace_matmul_sparse_snap_vectorized(blk_ham, blk_den)
-        N_pred = trace_matmul_sparse_snap_vectorized(blk_ovr, blk_den)
+        E_pred = trace_matmul_sparse_snap_vectorized(blk["hamiltonian"], blk["density"])
+        N_pred = trace_matmul_sparse_snap_vectorized(blk["overlap"], blk["density"])
         t_obs_end = time.perf_counter()
         E_true = y["energy"]
         loss_E = torch.mean((E_pred - E_true) ** 2)
         abs_err_E = torch.mean(torch.abs(E_pred - E_true))
+
         # electron count loss and absolute error
         N_true = y["num_electrons"]
         loss_N = torch.mean((N_pred - N_true) ** 2)
         abs_err_N = torch.mean(torch.abs(N_pred - N_true))
+
         # total loss
-        loss = (
-            loss_blocks
-            + self.cfg.loss_coef_energy * loss_E
-            + self.cfg.loss_coef_num_electrons * loss_N
-        )
+        loss_E_weighted = self.cfg.loss_coef_energy * loss_E
+        loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
+        loss = loss_matrix + loss_E_weighted + loss_N_weighted
+
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
-            l1_reg = sum(p.abs().sum() for p in self.parameters())
+            l1_reg = sum(
+                p.abs().sum() for p in self.parameters()
+            )  #! CHECK WHETHER THIS APPLIES TO IRREPSBLOCKMAPPER'S Q MATRIX
             loss += self.cfg.l1_reg_coef * l1_reg
         if self.cfg.l2_reg_coef > 0:
-            l2_reg = sum(p.pow(2).sum() for p in self.parameters())
+            l2_reg = sum(
+                p.pow(2).sum() for p in self.parameters()
+            )  #! CHECK WHETHER THIS APPLIES TO IRREPSBLOCKMAPPER'S Q MATRIX
             loss += self.cfg.l2_reg_coef * l2_reg
+
+        # Graceful handling of NaN/inf loss
+        if not torch.isfinite(loss):
+            max_val = torch.finfo(loss.dtype).max
+            # Log worst-case values for hyperparameter optimizer
+            metrics = {
+                f"{stage}_loss": torch.tensor(max_val, device=self.device),
+                f"{stage}_loss_matrix": torch.tensor(max_val, device=self.device),
+                f"{stage}_loss_E": torch.tensor(max_val, device=self.device),
+                f"{stage}_loss_N": torch.tensor(max_val, device=self.device),
+            }
+            self.log_dict(
+                metrics,
+                prog_bar=True,
+                on_step=self.cfg.log_on_step,
+                on_epoch=self.cfg.log_on_epoch,
+            )
+            # Return the original non-finite loss to trigger TerminateOnNaN
+            return loss
 
         # log all metrics
         metrics = {
             f"{stage}_loss": loss,
-            f"{stage}_loss_blocks": loss_blocks,
+            f"{stage}_loss_matrix": loss_matrix,
+            f"{stage}_mae_matrix": mae_matrix,
             f"{stage}_loss_E": loss_E,
             f"{stage}_loss_N": loss_N,
             f"{stage}_abs_error_E": abs_err_E,
             f"{stage}_abs_error_N": abs_err_N,
         }
+        # Log percentage contributions if total loss is not zero
+        if loss > 1e-8:
+            metrics[f"{stage}_percent_matrix"] = (loss_matrix / loss) * 100
+            metrics[f"{stage}_percent_E"] = (loss_E_weighted / loss) * 100
+            metrics[f"{stage}_percent_N"] = (loss_N_weighted / loss) * 100
+
         if self.cfg.l1_reg_coef > 0:
             metrics[f"{stage}_l1_reg"] = l1_reg
         if self.cfg.l2_reg_coef > 0:
             metrics[f"{stage}_l2_reg"] = l2_reg
-        self.log_dict(metrics, prog_bar=True, on_step=True, on_epoch=True)
+        self.log_dict(
+            metrics,
+            prog_bar=True,
+            on_step=self.cfg.log_on_step,
+            on_epoch=self.cfg.log_on_epoch,
+            batch_size=1,
+        )
         # record per-batch timings for callback
         self._last_batch_times = {
             "forward": t_fwd_end - t_fwd_start,
             "map": t_map_end - t_map_start,
             "obs": t_obs_end - t_obs_start,
         }
-        return
+        return loss
 
     def training_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, stage="train")
@@ -302,7 +358,22 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.cfg.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.cfg.lr)
+        if not self.cfg.use_lr_scheduler:
+            return optimizer
+
+        scheduler = {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                factor=self.cfg.lr_scheduler_factor,
+                patience=self.cfg.lr_scheduler_patience,
+                min_lr=self.cfg.lr_scheduler_min_lr,
+            ),
+            "monitor": "val_loss",
+            "interval": "epoch",
+            "frequency": 1,
+        }
+        return [optimizer], [scheduler]
 
     # ------------------------------------------------------------------ force prediction
     def predictions_to_snapshot(

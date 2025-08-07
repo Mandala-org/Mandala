@@ -61,6 +61,8 @@ class Config:
     node_update: str = "tensor_product"  # "tensor_product" | "concat" | "replace"
     node_update_residual: bool = True  # use residual connections in node update
 
+    head_use_mlp_log_scale: bool = True  # whether to use MLP log scaling in the head
+
     # -------------- non-linearity & norm --------------------------------
     nonlin_kind: str = (
         "normact"  # "normact" | "s2act" | "gate_scalars_mlp" | "gate_magnitudes"
@@ -75,12 +77,16 @@ class Config:
     max_epochs: int = 100
     batch_size: int = 1
     smoke_test: bool = False
+    use_lr_scheduler: bool = True
+    lr_scheduler_factor: float = 0.25
+    lr_scheduler_patience: int = 10
+    lr_scheduler_min_lr: float = 1e-7
 
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0
     l2_reg_coef: float = 0.0
-    grad_clip_val: float = 0.0
+    grad_clip_val: float | None = None
 
     # -------------- radial basis ----------------------------------------
     n_radial: int = 64
@@ -100,14 +106,15 @@ class Config:
     enable_num_electrons: bool = True
 
     # -------------- training targets -----------------------------------
+    train_target: str = "irreps"  # "irreps" | "matrix"
     train_on_forces: bool = False
     train_on_stress: bool = False
     train_on_energy: bool = True
-    train_on_num_electrons: bool = False
+    train_on_num_electrons: bool = True
 
     # -------------- loss weighting --------------------------------------
-    loss_coef_energy: float = 0.00001
-    loss_coef_num_electrons: float = 0.0
+    loss_coef_energy: float = 1e-5
+    loss_coef_num_electrons: float = 1e-5
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
 
@@ -118,15 +125,17 @@ class Config:
     log_activation_mag: bool = False
     wandb_project: str | None = None
     log_every_n_steps: int = 1
+    log_on_step: bool = False  # log metrics on step, not just epoch
+    log_on_epoch: bool = True  # log metrics on epoch
 
     # -------------- misc ------------------------------------------------
     pedantic: bool = False  # enable strict checks on input data
     dtype: torch.dtype = torch.float32  # default data type for all layers
-    device: torch.device = torch.device("cpu")  # default device
+    device: str = "cpu"  # default device for all layers
     gpus: int = 0  # number of GPUs
     num_workers: int = 0  # DataLoader workers, 0 for no parallelism
     save_dir: str = "checkpoints"  # directory to save model checkpoints
-    log_model: bool = True  # whether to log the model to WandB
+    log_model: bool = False  # whether to log the model to WandB
 
     # ----------------- caching ------------------------------------------
     cache_root: str | None = None  # path to cache directory, if any

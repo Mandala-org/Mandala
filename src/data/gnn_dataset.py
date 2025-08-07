@@ -55,7 +55,6 @@ class E3GNNDataset(Dataset):
         if not snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
 
-        self.device = torch.device(self.cfg.device)
         self.dtype = self.cfg.dtype
 
         if cfg.train_on_forces and not self.cfg.enable_forces:
@@ -180,7 +179,7 @@ class E3GNNDataset(Dataset):
                     }
                 )
 
-        # # 2. Separate self-edges and off-diagonal edges
+        # 2. Separate self-edges and off-diagonal edges
         self_edges = sorted(
             [e for e in edges if e["src"] == e["dst"]], key=lambda e: e["src"]
         )
@@ -190,7 +189,6 @@ class E3GNNDataset(Dataset):
         offdiag_edge_index = torch.tensor(
             [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
             dtype=torch.long,
-            device=self.device,
         )
         disp = self._minimal_disp(
             snap.positions,
@@ -206,12 +204,10 @@ class E3GNNDataset(Dataset):
         edge_index = torch.tensor(
             [[e["src"] for e in all_edges], [e["dst"] for e in all_edges]],
             dtype=torch.long,
-            device=self.device,
         )
         edge_type_idx = torch.tensor(
             [self.edge_type2idx[e["key"]] for e in all_edges],
             dtype=torch.long,
-            device=self.device,
         )
 
         # 5. Calculate geometric features for the final edge order
@@ -273,31 +269,41 @@ class E3GNNDataset(Dataset):
 
         atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
-        node_type_idx = torch.tensor(
-            [elem2idx[el] for el in atoms], dtype=torch.long, device=self.device
-        )
+        node_type_idx = torch.tensor([elem2idx[el] for el in atoms], dtype=torch.long)
 
         x = {
-            "node_type_idx": node_type_idx.to(self.device),
-            "edge_index": edge_index.to(self.device),
-            "edge_type_idx": edge_type_idx.to(self.device),
+            "node_type_idx": node_type_idx,
+            "edge_index": edge_index,
+            "edge_type_idx": edge_type_idx,
             "index_gnn_cutoff": index_gnn_cutoff,
             "num_self_edges": num_self_edges,
-            "edge_length_emb": edge_length_emb.to(self.device),
-            "edge_sh": edge_sh.to(self.device),
-            "positions": snap.positions.to(self.device),
-            "box": snap.box.to(self.device),
+            "edge_length_emb": edge_length_emb,
+            "edge_sh": edge_sh,
+            "positions": snap.positions,
+            "box": snap.box,
             "atoms": atoms,
         }
         with torch.no_grad():
+            if self.cfg.train_target == "matrix":
+                hamiltonian_target = snap.hamiltonian
+                overlap_target = snap.overlap
+                density_target = snap.density
+            elif self.cfg.train_target == "irreps":
+                hamiltonian_target = snap.hamiltonian.to_vectors(self.mapper)
+                overlap_target = snap.overlap.to_vectors(self.mapper)
+                density_target = snap.density.to_vectors(self.mapper)
+            else:
+                raise ValueError(
+                    f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
+                )
             y = {
-                "hamiltonian": snap.hamiltonian.to_vectors(self.mapper).to(self.device),
-                "overlap": snap.overlap.to_vectors(self.mapper).to(self.device),
-                "density": snap.density.to_vectors(self.mapper).to(self.device),
-                "energy": snap.get_energy().to(self.device),
-                "num_electrons": snap.get_number_of_electrons().to(self.device),
-                "forces": snap.forces.to(self.device),
-                "stress": snap.stress.to(self.device),
+                "hamiltonian": hamiltonian_target,
+                "overlap": overlap_target,
+                "density": density_target,
+                "energy": snap.get_energy(),
+                "num_electrons": snap.get_number_of_electrons(),
+                "forces": snap.forces,
+                "stress": snap.stress,
             }
 
         return x, y
