@@ -54,7 +54,6 @@ def _rot_y(theta):
 
 
 @pytest.mark.physics
-@pytest.mark.physics
 def test_blockmatrix_rotation_invariance():
     mat = _make_small_matrix()
     R = _rot_y(math.pi / 3.0)
