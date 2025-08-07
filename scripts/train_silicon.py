@@ -10,8 +10,10 @@ from types import NoneType
 import typing
 
 import torch
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import TerminateOnNaN
 
 # Add project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
@@ -38,6 +40,7 @@ def str_to_bool(value):
 def setup_argparse():
     """Set up and parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Train E3GNN for Silicon.")
+    default_config = Config()  # Create an instance to get actual default values
 
     # --- Dataset Arguments ---
     parser.add_argument(
@@ -60,13 +63,18 @@ def setup_argparse():
         default=1500,
         help="Temperature to use for the validation set.",
     )
+    parser.add_argument(
+        "--precision",
+        type=str,
+        default="32-true",
+        help="PyTorch Lightning precision setting (e.g., '32-true', '16-mixed').",
+    )
 
     # --- Dynamically add Config fields as arguments ---
     config_fields = get_type_hints(Config)
     for name, field_type in config_fields.items():
-        default_value = getattr(Config, name, dataclasses.MISSING)
-        if isinstance(default_value, dataclasses.Field):
-            default_value = default_value.default
+        # Get default value from the instance, not the class
+        default_value = getattr(default_config, name)
 
         # Use the new boolean handling for bool types
         if field_type is bool:
@@ -127,24 +135,38 @@ def main():
 
     # Create Config object and update it from the parsed arguments
     cfg = Config()
+    print("--- Populating Config from args ---")
     for key, value in vars(args).items():
         if hasattr(cfg, key):
+            print(f"  Setting cfg.{key} = {value} (type: {type(value)})")
             setattr(cfg, key, value)
 
     # --- Initialize W&B ---
     # Use environment variables for W&B project if available, otherwise use default
     wandb_project = os.getenv("WANDB_PROJECT", "mandala-silicon-sweep")
-    # Pass the final, correct config to W&B
+    # Pass the final, correct config to W&B for logging
     wandb_logger = WandbLogger(project=wandb_project, config=dataclasses.asdict(cfg))
 
     # Post-process special types from argparse/wandb
     if isinstance(cfg.dtype, str):
         cfg.dtype = getattr(torch, cfg.dtype)
 
-    # Set device
-    cfg.device = torch.device(
-        "cuda:0" if torch.cuda.is_available() and cfg.gpus else "cpu"
-    )
+    # --- Determine accelerator and devices ---
+    if cfg.gpus > 0 and torch.cuda.is_available():
+        accelerator = "gpu"
+        devices = cfg.gpus
+        cfg.device = torch.device("cuda:0")
+        print(f"--- Using {devices} GPU(s) ---")
+    else:
+        accelerator = "cpu"
+        devices = "auto"
+        cfg.device = torch.device("cpu")
+        if cfg.gpus > 0:
+            print(
+                "--- Warning: --gpus was > 0 but CUDA is not available. Using CPU. ---"
+            )
+        else:
+            print("--- Using CPU ---")
 
     # --- Data Loading ---
     print("--- Setting up datasets ---")
@@ -166,8 +188,10 @@ def main():
     val_pairs = []
     val_path = Path(args.data_path) / f"{args.val_temp}K"
     val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
-    # Use all available snapshots for validation
-    for matrix_path in val_snapshot_paths:
+    # Limit validation snapshots as well
+    num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
+    selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
+    for matrix_path in selected_val_paths:
         info_path = Path(matrix_path).parent / "info.dat"
         if info_path.exists():
             val_pairs.append((matrix_path, info_path))
@@ -177,6 +201,7 @@ def main():
     )
 
     fac = DatasetFactory(cfg)
+
     for m, i in train_pairs:
         fac.add_snapshot(m, i, purpose="train")
     for m, i in val_pairs:
@@ -184,11 +209,20 @@ def main():
 
     train_ds, val_ds, mapper = fac.create()
 
-    train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
-    )
-    val_loader = torch.utils.data.DataLoader(
-        val_ds, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers
+    def _dl(ds, shuffle=False):
+        return DataLoader(
+            ds or [],
+            batch_size=1,
+            shuffle=shuffle,
+            num_workers=cfg.num_workers,
+            pin_memory=cfg.gpus == 0,  # Pin memory only if not using GPU
+            collate_fn=lambda b: b[0],
+        )
+
+    train_loader = _dl(train_ds, shuffle=True)
+    val_loader = _dl(val_ds, shuffle=False)
+    print(
+        f"Created dataloaders: train batches={len(train_loader)}, val batches={len(val_loader)}"
     )
 
     # --- Model and Trainer Setup ---
@@ -198,17 +232,19 @@ def main():
     callbacks = [
         BenchmarkCallback(
             verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
-        )
+        ),
+        TerminateOnNaN(),
     ]
 
     trainer = pl.Trainer(
         max_epochs=cfg.max_epochs,
         logger=wandb_logger,
         callbacks=callbacks,
-        devices=[cfg.device.index] if cfg.device.type == "cuda" else "auto",
-        accelerator="gpu" if cfg.device.type == "cuda" else "cpu",
+        devices=devices,
+        accelerator=accelerator,
         log_every_n_steps=cfg.log_every_n_steps,
         gradient_clip_val=cfg.grad_clip_val,
+        precision=args.precision,
     )
 
     # --- Start Training ---

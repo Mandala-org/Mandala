@@ -66,10 +66,28 @@ class DeepHead(nn.Module):
                 layers.append(make_nonlinearity(irreps_neck, self.cfg))
                 if self.cfg.dropout > 0.0:
                     layers.append(Dropout(irreps_neck, p=self.cfg.dropout))
-            # final layer is linear, no nonlinearity
-            layers.append(Linear(irreps_neck, mapper.get_pair_irreps(key)))
             last[key] = nn.Sequential(*layers)
         self.last_mlps = nn.ModuleDict(last)
+
+        # 3) final projection
+        final_proj = {}
+        for key in pair_keys:
+            final_proj[key] = Linear(irreps_neck, mapper.get_pair_irreps(key))
+        self.final_projs = nn.ModuleDict(final_proj)
+
+        # 4) log scale for each pair -----------------------------------
+        if self.cfg.head_use_mlp_log_scale:
+            self.log_scales = {}
+            for key in pair_keys:
+                log_scale = nn.Sequential(
+                    Linear(irreps_neck, Irreps("64x0e")),
+                    nn.LeakyReLU(),
+                    nn.Linear(64, 1),
+                )
+                self.log_scales[key] = log_scale
+            self.log_scales = nn.ModuleDict(self.log_scales)
+        else:
+            self.log_scales = None
 
     # ------------------------------------------------------------------
     def forward(
@@ -87,7 +105,11 @@ class DeepHead(nn.Module):
             mask = edge_type_idx == idx
             if torch.any(mask):
                 vecs = self.last_mlps[key](h[mask])
-                out_vec[key].append(vecs)
+                projected_vecs = self.final_projs[key](vecs)
+                if self.log_scales is not None:
+                    log_scale = self.log_scales[key](h[mask])
+                    projected_vecs = torch.exp(log_scale) * projected_vecs
+                out_vec[key].append(projected_vecs)
                 out_edges[key].append(edge_index[:, mask])
 
         result = {}
