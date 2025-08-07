@@ -170,8 +170,8 @@ class NodeUpdateBlock(nn.Module):
 
         if self.cfg.node_update_message_agg == "attention":
             self.attn = Linear(
-                hidden_irreps, (hidden_irreps + hidden_irreps).simplify()
-            )
+                hidden_irreps, (hidden_irreps + hidden_irreps).sort().irreps
+            )  # ! Add E3MLP
         elif self.cfg.node_update_message_agg == "sum":
             pass
         else:
