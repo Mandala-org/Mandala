@@ -31,6 +31,7 @@ import os
 from typing import Dict, Any
 import numpy as np
 import torch
+from scipy.linalg import eigh
 
 from core.sparse_math import (
     trace_matmul_sparse_snap,
@@ -525,20 +526,16 @@ class Snapshot:
         """
 
         ### getting the change of basis matrix
-        S = self.overlap
-        S = S.to_dense()
-        S = S.detach().numpy()
+        S = self.overlap.to_dense().detach().numpy()
         S_eigenvalues, basis_change = np.linalg.eigh(S)
         
         ### getting the Hamiltonian in the new basis
-        H = self.hamiltonian
-        H = H.to_dense()
-        H = H.detach().numpy()
+        H = self.hamiltonian.to_dense().detach().numpy()
         H_prime = basis_change.T @ H @ basis_change
 
         eigenvalues, eigenvectors = np.linalg.eigh(H_prime)
-        diagonal_H_prime = np.diag(eigenvalues)
-        diagonized_H_prime = np.linalg.inv(eigenvectors) @ H_prime @ eigenvectors
+        #diagonal_H_prime = np.diag(eigenvalues)
+        #diagonized_H_prime = np.linalg.inv(eigenvectors) @ H_prime @ eigenvectors
 
         ### setting up the energy bins
         E_grid = np.arange(E_min, E_max + bin_width, bin_width)
