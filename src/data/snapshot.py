@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import os
 from typing import Dict, Any
-
+import numpy as np
 import torch
 
 from core.sparse_math import (
@@ -501,3 +501,55 @@ class Snapshot:
             snap = snap.filter_by_distance(cutoff_radius)
 
         return snap.canonicalize_edges()
+
+    def dos(self, sigma=0.005, bin_width=0.001, E_min=-1.0, E_max=1.0):
+        """
+        Compute the density of states (DOS) for this snapshot.
+
+        Parameters
+        ----------
+        sigma : float
+            The broadening parameter for the DOS.
+        bin_width : float
+            The width of each energy bin.
+        E_min : float
+            The minimum energy to consider.
+        E_max : float
+            The maximum energy to consider.
+
+        Returns a dict with keys:
+        "energies" : np.ndarray
+            The energy bins.
+        "dos" : np.ndarray
+            The computed density of states for each energy bin.
+        """
+
+        ### getting the change of basis matrix
+        S = self.overlap
+        S = S.to_dense()
+        S = S.detach().numpy()
+        S_eigenvalues, basis_change = np.linalg.eigh(S)
+        
+        ### getting the Hamiltonian in the new basis
+        H = self.hamiltonian
+        H = H.to_dense()
+        H = H.detach().numpy()
+        H_prime = basis_change.T @ H @ basis_change
+
+        eigenvalues, eigenvectors = np.linalg.eigh(H_prime)
+        diagonal_H_prime = np.diag(eigenvalues)
+        diagonized_H_prime = np.linalg.inv(eigenvectors) @ H_prime @ eigenvectors
+
+        ### setting up the energy bins
+        E_grid = np.arange(E_min, E_max + bin_width, bin_width)
+        dos = np.sum(
+            np.exp(-((E_grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma ** 2)),
+            axis=1
+        ) / (np.sqrt(2 * np.pi) * sigma)
+
+        dos_dict = {
+            "energies": E_grid,
+            "dos": dos
+        }
+
+        return dos_dict
