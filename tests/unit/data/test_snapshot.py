@@ -16,7 +16,7 @@ def _load_snapshot():
     return snap.canonicalize_edges()
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_energy_and_electron_count():
     snap = _load_snapshot()
     E = snap.get_energy()
@@ -30,7 +30,7 @@ def test_energy_and_electron_count():
     assert torch.allclose(Ne, Ne_ref, atol=1e-6)
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_canonical_edge_ordering():
     snap = _load_snapshot()
     D = snap.density
@@ -49,7 +49,7 @@ def test_canonical_edge_ordering():
             assert torch.all(is_diag[first_diag_idx:])
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_save_load_roundtrip(tmp_path):
     snap = _load_snapshot()
     file = tmp_path / "snapshot.pt"
@@ -65,7 +65,7 @@ def test_save_load_roundtrip(tmp_path):
 # ---------------------------------------------------------------- basis conversion
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_basis_conversion_roundtrip():
     snap_open = _load_snapshot()  # native OpenMX basis
     snap_e3 = snap_open.to_e3nn()
