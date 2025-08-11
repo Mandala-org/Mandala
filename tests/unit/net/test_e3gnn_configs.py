@@ -71,7 +71,7 @@ mapper = BlockIrrepMapper(orb_cfg)
 
 
 @pytest.mark.parametrize("hp_kwargs", HP_VARIANTS)
-@pytest.mark.integration
+@pytest.mark.unit
 def test_e3gnn_forward_variants(hp_kwargs):
 
     cfg = Config(**hp_kwargs)

@@ -8,7 +8,7 @@ from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_parse_returns_snapshot(h2o_orbital_cfg):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
@@ -27,7 +27,7 @@ def test_parse_returns_snapshot(h2o_orbital_cfg):
     ), "D[O-H] should be the same as D[H-O].T"
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_parse(h2o_orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")  # global order
@@ -70,7 +70,7 @@ def test_parse(h2o_orbital_cfg: OrbitalIrrepConfig):
     assert density[5, 5].shape == (22, 22)
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
