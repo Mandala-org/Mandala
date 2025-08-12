@@ -30,11 +30,13 @@ def test_dos_return_shape():
     assert np.shape(dos["dos"]) == (expected_length,)
 
 
+@pytest.mark.unit
 def test_number_states():
     snap = _load_snapshot()
 
     sigma = 0.005
     bin_width = 0.001
+    # wide energy range to include all states, for the integration to be accurate
     E_min = -100
     E_max = 100
 
@@ -42,10 +44,8 @@ def test_number_states():
     E_grid = dos["energies"]
     dos = dos["dos"]
     H = snap.hamiltonian.to_dense().detach().numpy()
-    
-    expected_n_states = np.shape(H)[0]
-    dos_n_states = int(np.trapezoid(dos, E_grid))
-    assert 1 - dos_n_states/ expected_n_states < 0.01
-    print('es')
 
-test_number_states()
+    # integral over the DOS should be equal to number of states (number of eigenvalues => size of Hamiltonian)
+    expected_n_states = np.shape(H)[0]
+    dos_n_states = int(np.trapezoid(dos, E_grid)) 
+    assert 1 - dos_n_states / expected_n_states < 0.01 #! error due to Gaussian broadening, tolerance of 1%
