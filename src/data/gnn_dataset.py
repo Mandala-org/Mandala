@@ -22,13 +22,13 @@ from typing import Dict, List, Sequence, Tuple
 import torch
 import time  # needed for __getitem__ timing
 from torch.utils.data import Dataset
-from e3nn.o3 import Irreps, spherical_harmonics
-from e3nn.math import soft_one_hot_linspace
+from e3nn.o3 import Irreps
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from net.common import Config
 
 from data.snapshot import Snapshot
+from data.graph_features import compute_graph_features
 from tqdm.auto import tqdm
 
 
@@ -106,6 +106,7 @@ class E3GNNDataset(Dataset):
                 self.cfg.cutoff_gnn,
                 self.cfg.cutoff_matrix,
                 self.cfg.l_max_gnn,
+                self.cfg.precompute_edge_features,
             )
             key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
             cache_file = self.cfg.cache_root / f"{key_hash}.pt"
@@ -134,109 +135,6 @@ class E3GNNDataset(Dataset):
                 pass
         return sample
 
-    # ---------------------------------------------------------------- helpers
-    # ---------- minimal-image displacements ----------------------------------
-    @staticmethod
-    def _minimal_disp(
-        pos: torch.Tensor,
-        edges: torch.Tensor,
-        box: torch.Tensor | None,
-        inv_box: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        if box is None:
-            return pos[edges[1]] - pos[edges[0]]
-        if inv_box is None:
-            inv_box = torch.inverse(box)
-        delta = pos[edges[1]] - pos[edges[0]]  # cart
-        frac = delta @ inv_box
-        frac = frac - torch.round(frac)
-        return frac @ box
-
-    # ---------- build edge tensors for a given cfg.cutoff_gnn ------------------------
-    def _edge_tensors(
-        self,
-        snap: Snapshot,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int]:
-        """
-        Returns
-        -------
-        edge_index : (2, E_total) long
-        edge_type_idx : (E_total,) long
-        edge_length_emb : (E_total, cfg.n_radial) float
-        edge_sh : (E_total, sh_dim) float
-        index_gnn_cutoff : int
-        """
-        # 1. Collect all edges and their properties
-        edges = []
-        for key, pair_edges in snap.density.pair_edges.items():
-            for i in range(pair_edges.shape[1]):
-                src, dst = pair_edges[:, i]
-                edges.append(
-                    {
-                        "src": src.item(),
-                        "dst": dst.item(),
-                        "key": key,
-                    }
-                )
-
-        # 2. Separate self-edges and off-diagonal edges
-        self_edges = sorted(
-            [e for e in edges if e["src"] == e["dst"]], key=lambda e: e["src"]
-        )
-        offdiag_edges = [e for e in edges if e["src"] != e["dst"]]
-
-        # 3. Calculate lengths for off-diagonal edges and sort them
-        offdiag_edge_index = torch.tensor(
-            [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
-            dtype=torch.long,
-        )
-        disp = self._minimal_disp(
-            snap.positions,
-            offdiag_edge_index,
-            snap.box,
-        )
-        lengths = torch.linalg.norm(disp, dim=-1)
-        sorted_indices = torch.argsort(lengths)
-        offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
-
-        # 4. Combine edges in the specified order
-        all_edges = self_edges + offdiag_edges
-        edge_index = torch.tensor(
-            [[e["src"] for e in all_edges], [e["dst"] for e in all_edges]],
-            dtype=torch.long,
-        )
-        edge_type_idx = torch.tensor(
-            [self.edge_type2idx[e["key"]] for e in all_edges],
-            dtype=torch.long,
-        )
-
-        # 5. Calculate geometric features for the final edge order
-        disp = self._minimal_disp(snap.positions, edge_index, snap.box)
-        lengths = torch.linalg.norm(disp, dim=-1)
-        edge_sh = spherical_harmonics(
-            self.sh_irreps, disp, normalize=True, normalization="component"
-        )
-        edge_length_emb = soft_one_hot_linspace(
-            lengths,
-            start=0.0,
-            end=self.cfg.cutoff_matrix,
-            number=self.cfg.n_radial,
-            basis="gaussian",
-            cutoff=False,
-        )
-
-        # 6. Determine the GNN cfg.cutoff_gnn index
-        index_gnn_cutoff = torch.sum(lengths <= self.cfg.cutoff_gnn).item()
-
-        return (
-            edge_index,
-            edge_type_idx,
-            edge_length_emb,
-            edge_sh,
-            index_gnn_cutoff,
-            len(self_edges),
-        )
-
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot(
         self, snap: Snapshot
@@ -258,31 +156,41 @@ class E3GNNDataset(Dataset):
         if self.cfg.train_on_stress:
             snap.stress.requires_grad_()
 
-        (
-            edge_index,
-            edge_type_idx,
-            edge_length_emb,
-            edge_sh,
-            index_gnn_cutoff,
-            num_self_edges,
-        ) = self._edge_tensors(snap)
-
         atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
         node_type_idx = torch.tensor([elem2idx[el] for el in atoms], dtype=torch.long)
 
         x = {
             "node_type_idx": node_type_idx,
-            "edge_index": edge_index,
-            "edge_type_idx": edge_type_idx,
-            "index_gnn_cutoff": index_gnn_cutoff,
-            "num_self_edges": num_self_edges,
-            "edge_length_emb": edge_length_emb,
-            "edge_sh": edge_sh,
             "positions": snap.positions,
             "box": snap.box,
             "atoms": atoms,
         }
+
+        if self.cfg.precompute_edge_features:
+            (
+                edge_index,
+                edge_type_idx,
+                edge_length_emb,
+                edge_sh,
+                index_gnn_cutoff,
+                num_self_edges,
+            ) = compute_graph_features(
+                positions=snap.positions,
+                box=snap.box,
+                atoms=snap.density.atoms,
+                orbital_cfg=self.orbital_cfg,
+                cfg=self.cfg,
+                sh_irreps=self.sh_irreps,
+                edge_type2idx=self.edge_type2idx,
+            )
+            x["edge_index"] = edge_index
+            x["edge_type_idx"] = edge_type_idx
+            x["edge_length_emb"] = edge_length_emb
+            x["edge_sh"] = edge_sh
+            x["index_gnn_cutoff"] = index_gnn_cutoff
+            x["num_self_edges"] = num_self_edges
+
         with torch.no_grad():
             if self.cfg.train_target == "matrix":
                 hamiltonian_target = snap.hamiltonian
@@ -337,12 +245,18 @@ class E3GNNDataset(Dataset):
         # Explicitly move known fields
         for idx, (x, y) in enumerate(self.samples):
             # x
-            x["node_type_idx"] = x["node_type_idx"].to(device)
-            x["edge_index"] = x["edge_index"].to(device)
-            x["edge_type_idx"] = x["edge_type_idx"].to(device)
-            x["edge_length_emb"] = x["edge_length_emb"].to(device)
-            x["edge_sh"] = x["edge_sh"].to(device)
-            x["index_gnn_cutoff"] = x["index_gnn_cutoff"].to(device)
+            if "node_type_idx" in x:
+                x["node_type_idx"] = x["node_type_idx"].to(device)
+            if "edge_index" in x:
+                x["edge_index"] = x["edge_index"].to(device)
+            if "edge_type_idx" in x:
+                x["edge_type_idx"] = x["edge_type_idx"].to(device)
+            if "edge_length_emb" in x:
+                x["edge_length_emb"] = x["edge_length_emb"].to(device)
+            if "edge_sh" in x:
+                x["edge_sh"] = x["edge_sh"].to(device)
+            if "index_gnn_cutoff" in x:
+                x["index_gnn_cutoff"] = x["index_gnn_cutoff"].to(device)
 
             # y targets
             y["hamiltonian"] = y["hamiltonian"].to(device)

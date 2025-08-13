@@ -24,6 +24,7 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
+from data.graph_features import compute_graph_features
 
 from net.common import Config, build_hidden_irreps
 from net.encoders import NodeEncoder, EdgeEncoder
@@ -167,6 +168,35 @@ class E3GNN(pl.LightningModule):
     def forward(self, x: Dict[str, Any]):
         # initialize activation magnitudes storage
         self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
+
+        # If edge features are not precomputed, compute them on the fly
+        if not self.cfg.precompute_edge_features:
+            (
+                edge_index,
+                edge_type_idx,
+                edge_length_emb,
+                edge_sh,
+                index_gnn_cutoff,
+                num_self_edges,
+            ) = compute_graph_features(
+                positions=x["positions"],
+                box=x["box"],
+                atoms=x["atoms"],
+                orbital_cfg=self.mapper.orbital_cfg,  # Access orbital_cfg from the mapper
+                cfg=self.cfg,
+                sh_irreps=self.sh_irreps,
+                edge_type2idx=self.mapper.edge_type2idx,  # Access edge_type2idx from the mapper
+            )
+
+            # Update x with the newly computed features
+            x["edge_index"] = edge_index
+            x["edge_type_idx"] = edge_type_idx
+            x["edge_length_emb"] = edge_length_emb
+            x["edge_sh"] = edge_sh
+            x["index_gnn_cutoff"] = index_gnn_cutoff
+            x["num_self_edges"] = num_self_edges
+
+
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x["node_type_idx"], activation_mags=self._activation_mags)
         edge = self.edge_enc(
