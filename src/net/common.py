@@ -140,6 +140,7 @@ class Config:
     # ----------------- caching ------------------------------------------
     cache_root: str | None = None  # path to cache directory, if any
     seed: int = 42  # random seed for reproducibility
+    precompute_edge_features: bool = True # precompute edge features
 
     # -------------------- hyperopt --------------------------------------
     tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
