@@ -8,7 +8,7 @@ from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.snapshot import Snapshot
 from data.graph_features import compute_graph_features
 from net.common import Config
-
+from net.e3gnn import E3GNN
 
 @pytest.fixture(scope="module")
 def dummy_h2o_integration_data():
@@ -77,6 +77,8 @@ def dummy_h2o_integration_data():
 
     return dummy_snap, mapper
 
+
+
 @pytest.mark.integration
 def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
     """
@@ -143,3 +145,69 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
     # For scalar integers, use direct comparison.
     assert x_precompute["index_gnn_cutoff"] == index_gnn_cutoff_direct, "index_gnn_cutoff mismatch"
     assert x_precompute["num_self_edges"] == num_self_edges_direct, "num_self_edges mismatch"
+
+
+@pytest.mark.integration
+def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
+    """
+    Tests that the full E3GNN model produces identical final outputs
+    whether features are precomputed or computed on-the-fly.
+    """
+    dummy_snap, mapper = dummy_h2o_integration_data
+
+    # Define the Mock Dataset class inside the test function
+    # so it can access the 'dummy_snap' variable from the fixture.
+    class MockE3GNNDataset(E3GNNDataset):
+        def _load_or_process_snapshot(self, matrix_path, info_path):
+            return self._process_snapshot(dummy_snap)
+
+    # --- 1. Setup and run for PRECOMPUTED features ---
+    cfg_precompute = Config(
+        l_max_gnn=1,
+        n_radial=16,
+        precompute_edge_features=True, # Precompute mode
+    )
+    dataset_precompute = MockE3GNNDataset(
+        snapshot_paths=[(Path("dummy.matrix"), Path("dummy.info"))],
+        mapper=mapper,
+        cfg=cfg_precompute,
+    )
+    x_precompute, _ = dataset_precompute[0]
+
+    torch.manual_seed(42) # Reset seed right before creating the first model
+    model_precompute = E3GNN(mapper, cfg_precompute, edge_type2idx=dataset_precompute.edge_type2idx)
+    preds_precompute = model_precompute(x_precompute)
+
+    # --- 2. Setup and run for ON-THE-FLY features ---
+    cfg_onthefly = Config(
+        l_max_gnn=1,
+        n_radial=16,
+        precompute_edge_features=False, # On-the-fly mode
+    )
+    dataset_onthefly = MockE3GNNDataset(
+        snapshot_paths=[(Path("dummy.matrix"), Path("dummy.info"))],
+        mapper=mapper,
+        cfg=cfg_onthefly,
+    )
+    x_onthefly, _ = dataset_onthefly[0]
+
+    torch.manual_seed(42) # Reset seed AGAIN to the same state
+    model_onthefly = E3GNN(mapper, cfg_onthefly, edge_type2idx=dataset_onthefly.edge_type2idx)
+    preds_onthefly = model_onthefly(x_onthefly)
+
+    # --- 3. Assert that the final predictions are identical ---
+    # Compare predictions for Hamiltonian, Overlap, and Density
+    for matrix_name in ["hamiltonian", "overlap", "density"]:
+        pred_precompute_vectors = preds_precompute[matrix_name].pair_vectors
+        pred_onthefly_vectors = preds_onthefly[matrix_name].pair_vectors
+
+        # Check that the same element-pair keys were predicted
+        assert set(pred_precompute_vectors.keys()) == set(pred_onthefly_vectors.keys())
+
+        # Check that the irrep vectors for each key are numerically close
+        for key in pred_precompute_vectors.keys():
+            assert torch.allclose(
+                pred_precompute_vectors[key],
+                pred_onthefly_vectors[key],
+                atol=1e-6, # Use a small tolerance for floating point comparisons
+            ), f"Mismatch in final prediction for {matrix_name} matrix, key {key}"
