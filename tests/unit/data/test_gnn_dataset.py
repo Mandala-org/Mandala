@@ -74,6 +74,9 @@ def test_edge_sets(dataset):
     assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim
     assert x["edge_length_emb"].shape[1] == dataset.cfg.n_radial
 
+
+
+
 #@pytest.fixture(scope="module")
 def dummy_h2o_snapshot_and_config():
     """Provides a dummy H2O snapshot and a config for testing."""
@@ -213,6 +216,5 @@ def test_compute_graph_features_matches_dataset_output():
     assert torch.allclose(x_from_dataset["edge_sh"], edge_sh_direct)
     assert x_from_dataset["index_gnn_cutoff"] == index_gnn_cutoff_direct
     assert x_from_dataset["num_self_edges"] == num_self_edges_direct
-    print("es")
 
 test_compute_graph_features_matches_dataset_output()
