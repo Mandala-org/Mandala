@@ -5,6 +5,7 @@ from net.common import Config
 from net.e3gnn import E3GNN
 from data.factory import DatasetFactory
 
+
 @pytest.mark.unit
 def test_stress_with_real_data():
     """

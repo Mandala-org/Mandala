@@ -16,11 +16,11 @@ from torch import nn
 from torch_scatter import scatter, scatter_softmax
 from collections import OrderedDict
 
-from e3nn.o3 import Irreps, Linear
+from e3nn.o3 import Irreps
 from e3nn.o3 import FullyConnectedTensorProduct
 from e3nn.nn import Dropout
 
-from net.common import Config, split_into_three
+from net.common import Config, split_into_three, E3MLP
 from net.activations import make_nonlinearity
 
 
@@ -80,19 +80,33 @@ class EdgeUpdateBlock(nn.Module):
             node_irreps = hidden_irreps
 
         if self.cfg.edge_update_node_combine == "concat":
-            self.pre_lin = Linear(node_irreps + node_irreps, node_irreps)
+            pre_lin_input_irreps = node_irreps + node_irreps
         else:
-            self.pre_lin = Linear(node_irreps, node_irreps)
+            pre_lin_input_irreps = node_irreps
+        self.pre_lin = E3MLP(
+            pre_lin_input_irreps,
+            node_irreps,
+            node_irreps,
+            self.cfg.edge_update_pre_lin_mlp_n_layers,
+            self.cfg,
+        )
 
         self.tp = FullyConnectedTensorProduct(
             node_irreps, hidden_irreps, hidden_irreps, internal_weights=True
         )
         if self.cfg.edge_update == "concat":
-            self.post_lin = Linear(node_irreps + hidden_irreps, hidden_irreps)
+            post_lin_input_irreps = node_irreps + hidden_irreps
         elif self.cfg.edge_update == "replace":
-            self.post_lin = Linear(node_irreps, hidden_irreps)
+            post_lin_input_irreps = node_irreps
         else:
-            self.post_lin = Linear(hidden_irreps, hidden_irreps)
+            post_lin_input_irreps = hidden_irreps
+        self.post_lin = E3MLP(
+            post_lin_input_irreps,
+            hidden_irreps,
+            hidden_irreps,
+            self.cfg.edge_update_post_lin_mlp_n_layers,
+            self.cfg,
+        )
 
         self.norm_act = make_nonlinearity(hidden_irreps, cfg)
 
@@ -166,12 +180,25 @@ class NodeUpdateBlock(nn.Module):
         else:
             node_irreps = hidden_irreps
 
-        self.pre_lin = Linear(hidden_irreps, hidden_irreps)
+        self.pre_lin = E3MLP(
+            hidden_irreps,
+            hidden_irreps,
+            hidden_irreps,
+            self.cfg.node_update_pre_lin_mlp_n_layers,
+            self.cfg,
+        )
 
         if self.cfg.node_update_message_agg == "attention":
-            self.attn = Linear(
-                hidden_irreps, (hidden_irreps + hidden_irreps).sort().irreps
-            )  # ! Add E3MLP
+            attn_output_irreps = (
+                hidden_irreps + hidden_irreps + hidden_irreps
+            ).simplify()
+            self.attn = E3MLP(
+                hidden_irreps,
+                hidden_irreps,
+                attn_output_irreps,
+                self.cfg.node_update_attention_mlp_n_layers,
+                self.cfg,
+            )
         elif self.cfg.node_update_message_agg == "sum":
             pass
         else:
@@ -184,9 +211,16 @@ class NodeUpdateBlock(nn.Module):
         )
 
         if cfg.node_update == "concat":
-            self.post_lin = Linear(node_irreps + hidden_irreps, hidden_irreps)
+            post_lin_input_irreps = node_irreps + hidden_irreps
         else:
-            self.post_lin = Linear(hidden_irreps, hidden_irreps)
+            post_lin_input_irreps = hidden_irreps
+        self.post_lin = E3MLP(
+            post_lin_input_irreps,
+            hidden_irreps,
+            hidden_irreps,
+            self.cfg.node_update_post_lin_mlp_n_layers,
+            self.cfg,
+        )
 
         self.norm_act = make_nonlinearity(hidden_irreps, self.cfg)
 
