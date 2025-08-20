@@ -55,6 +55,7 @@ def test_orbital_irrep_config_union(factory_results):
 # 4.  Mapper instance must be **shared** by all datasets
 # ════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.unit
 def test_shared_mapper_identity(factory_results):
     train_ds, val_ds, mapper = factory_results

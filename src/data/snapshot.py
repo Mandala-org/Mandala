@@ -29,9 +29,7 @@ from __future__ import annotations
 
 import os
 from typing import Dict, Any
-import numpy as np
 import torch
-from scipy.linalg import eigh
 
 from core.sparse_math import (
     trace_matmul_sparse_snap,
@@ -519,34 +517,19 @@ class Snapshot:
             The maximum energy to consider.
 
         Returns a dict with keys:
-        "energies" : np.ndarray
+        "energies" : torch.Tensor
             The energy bins.
-        "dos" : np.ndarray
+        "dos" : torch.Tensor
             The computed density of states for each energy bin.
         """
+        H = self.hamiltonian.to_dense().detach()
 
-        ### getting the change of basis matrix
-        S = self.overlap.to_dense().detach().numpy()
-        S_eigenvalues, basis_change = np.linalg.eigh(S)
-        
-        ### getting the Hamiltonian in the new basis
-        H = self.hamiltonian.to_dense().detach().numpy()
-        H_prime = basis_change.T @ H @ basis_change
-
-        eigenvalues, eigenvectors = np.linalg.eigh(H_prime)
-        #diagonal_H_prime = np.diag(eigenvalues)
-        #diagonized_H_prime = np.linalg.inv(eigenvectors) @ H_prime @ eigenvectors
-
+        eigenvalues, eigenvectors = torch.linalg.eigh(H)
         ### setting up the energy bins
-        E_grid = np.arange(E_min, E_max + bin_width, bin_width)
-        dos = np.sum(
-            np.exp(-((E_grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma ** 2)),
-            axis=1
-        ) / (np.sqrt(2 * np.pi) * sigma)
+        grid = torch.arange(E_min, E_max + bin_width, bin_width)
+        dos = torch.sum(
+            torch.exp(-((grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma**2)),
+            axis=1,
+        ) / (torch.sqrt(torch.tensor(2 * torch.pi)) * sigma)
 
-        dos_dict = {
-            "energies": E_grid,
-            "dos": dos
-        }
-
-        return dos_dict
+        return grid, dos

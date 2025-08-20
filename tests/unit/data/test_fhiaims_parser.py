@@ -8,6 +8,7 @@ import numpy as np
 
 from data.snapshot import Snapshot
 
+
 @pytest.mark.unit
 def test_fhiaims_parsing():
     """Test that FHI-AIMS files are parsed correctly."""
@@ -30,6 +31,7 @@ def test_fhiaims_parsing():
     assert snap.positions is not None
     assert snap.box is not None
     assert len(snap.hamiltonian.atoms) == 6
+
 
 @pytest.mark.unit
 def test_fhiaims_basis_conversion():

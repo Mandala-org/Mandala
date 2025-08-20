@@ -70,14 +70,6 @@ class E3GNNDataset(Dataset):
         self.orbital_cfg = mapper.orbital_cfg
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
 
-        # edge-type encoding (ordered pairs)
-        elems = self.orbital_cfg.elements()
-        self.edge_types: List[str] = [f"{a}-{b}" for a in elems for b in elems]
-        self.edge_type2idx: Dict[str, int] = {
-            k: i for i, k in enumerate(self.edge_types)
-        }
-        self.n_edge_types = len(self.edge_types)
-
         # configure cache root (if None, caching is disabled)
         if cfg.cache_root is not None:
             self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
@@ -179,10 +171,9 @@ class E3GNNDataset(Dataset):
                 positions=snap.positions,
                 box=snap.box,
                 atoms=snap.density.atoms,
-                orbital_cfg=self.orbital_cfg,
                 cfg=self.cfg,
                 sh_irreps=self.sh_irreps,
-                edge_type2idx=self.edge_type2idx,
+                edge_type2idx=self.mapper.edge_type2idx,
             )
             x["edge_index"] = edge_index
             x["edge_type_idx"] = edge_type_idx
@@ -255,8 +246,6 @@ class E3GNNDataset(Dataset):
                 x["edge_length_emb"] = x["edge_length_emb"].to(device)
             if "edge_sh" in x:
                 x["edge_sh"] = x["edge_sh"].to(device)
-            if "index_gnn_cutoff" in x:
-                x["index_gnn_cutoff"] = x["index_gnn_cutoff"].to(device)
 
             # y targets
             y["hamiltonian"] = y["hamiltonian"].to(device)
