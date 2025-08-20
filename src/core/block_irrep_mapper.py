@@ -21,7 +21,7 @@ Example
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     # This import is only for mypy/flake8/etc., not at runtime
@@ -138,6 +138,13 @@ class BlockIrrepMapper(nn.Module):
                 # Sanitize key for buffer name
                 buffer_name = f"q_{el_a}_{el_b}"
                 self.register_buffer(buffer_name, q.to(device=device, dtype=dtype))
+
+        # edge-type encoding (ordered pairs)
+        elems = self.orbital_cfg.elements()
+        self.edge_types: List[str] = [f"{a}-{b}" for a in elems for b in elems]
+        self.edge_type2idx: Dict[str, int] = {
+            k: i for i, k in enumerate(self.edge_types)
+        }
 
     def _get_q(self, pair: Tuple[str, str]) -> torch.Tensor:
         """Retrieve the q tensor buffer for a given pair."""

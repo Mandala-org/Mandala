@@ -5,20 +5,23 @@ from pathlib import Path
 from data.gnn_dataset import E3GNNDataset
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig
-from data.snapshot import Snapshot
 from data.graph_features import compute_graph_features
 from net.common import Config
 from net.e3gnn import E3GNN
+
 
 @pytest.fixture(scope="module")
 def dummy_h2o_integration_data():
     """Provides a dummy H2O snapshot and mapper for integration testing."""
     atoms = ("H", "O", "H")
-    positions = torch.tensor([
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 1.0, 0.0],
-    ], dtype=torch.float32)
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=torch.float32,
+    )
     box = torch.eye(3) * 10.0
 
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e", "O": "1x0e"})
@@ -30,20 +33,26 @@ def dummy_h2o_integration_data():
             self.atoms = atoms
             self.orbital_cfg = orbital_cfg
             # Dummy pair_vectors for to_vectors mock
-            self.pair_vectors = {k: torch.randn(v.shape[1], 1) for k, v in pair_edges.items()}
+            self.pair_vectors = {
+                k: torch.randn(v.shape[1], 1) for k, v in pair_edges.items()
+            }
 
         def to_vectors(self, mapper):
             # This mock returns a simplified object that behaves like IrrepsBlockData
-            return type('IrrepsBlockDataMock', (object,), {
-                'pair_vectors': self.pair_vectors,
-                'pair_edges': self.pair_edges,
-                'lookup': {},
-                'orbital_cfg': self.orbital_cfg,
-                'atoms': self.atoms,
-                'atom_counts': {},
-                'basis': 'e3nn',
-                'to': lambda device: self
-            })()
+            return type(
+                "IrrepsBlockDataMock",
+                (object,),
+                {
+                    "pair_vectors": self.pair_vectors,
+                    "pair_edges": self.pair_edges,
+                    "lookup": {},
+                    "orbital_cfg": self.orbital_cfg,
+                    "atoms": self.atoms,
+                    "atom_counts": {},
+                    "basis": "e3nn",
+                    "to": lambda device: self,
+                },
+            )()
 
     pair_edges = {
         "H-H": torch.tensor([[0, 0, 2, 2], [0, 2, 0, 2]], dtype=torch.long),
@@ -66,17 +75,18 @@ def dummy_h2o_integration_data():
             self.overlap = overlap
             # Add dummy forces, stress, energy, num_electrons for _process_snapshot
             self.forces = torch.zeros_like(positions)
-            self.stress = torch.zeros((3,3), dtype=torch.float32)
+            self.stress = torch.zeros((3, 3), dtype=torch.float32)
             self.energy = torch.tensor(0.0, dtype=torch.float32)
             self.num_electrons = torch.tensor(0.0, dtype=torch.float32)
             self.get_energy = lambda: self.energy
             self.get_number_of_electrons = lambda: self.num_electrons
 
-    dummy_snap = DummySnapshot(positions, box, dummy_density, dummy_hamiltonian, dummy_overlap)
+    dummy_snap = DummySnapshot(
+        positions, box, dummy_density, dummy_hamiltonian, dummy_overlap
+    )
     mapper = BlockIrrepMapper(orb_cfg)
 
     return dummy_snap, mapper
-
 
 
 @pytest.mark.integration
@@ -93,7 +103,7 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
         cutoff_matrix=7.5,
         l_max_gnn=1,
         n_radial=16,
-        precompute_edge_features=True, # Explicitly set to True
+        precompute_edge_features=True,  # Explicitly set to True
     )
 
     # Mock the dataset to use our dummy snapshot, bypassing file loading
@@ -112,7 +122,6 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
     # Get the processed sample. x_precompute contains the features we want to verify.
     x_precompute, _ = dataset_precompute[0]
 
-
     # --- 2. Generate features directly using the on-the-fly path ---
     # This simulates what E3GNN.forward would do if precomputation was False.
     (
@@ -126,25 +135,33 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
         positions=dummy_snap.positions,
         box=dummy_snap.box,
         atoms=dummy_snap.density.atoms,
-        orbital_cfg=mapper.orbital_cfg,
-        cfg=cfg_precompute, # Use the same config for a fair comparison
+        cfg=cfg_precompute,  # Use the same config for a fair comparison
         sh_irreps=dataset_precompute.sh_irreps,
         edge_type2idx=dataset_precompute.edge_type2idx,
     )
 
-
     # --- 3. Assert that the outputs are identical ---
     # For integer tensors, we can check for exact equality.
-    assert torch.equal(x_precompute["edge_index"], edge_index_direct), "edge_index mismatch"
-    assert torch.equal(x_precompute["edge_type_idx"], edge_type_idx_direct), "edge_type_idx mismatch"
+    assert torch.equal(
+        x_precompute["edge_index"], edge_index_direct
+    ), "edge_index mismatch"
+    assert torch.equal(
+        x_precompute["edge_type_idx"], edge_type_idx_direct
+    ), "edge_type_idx mismatch"
 
     # For floating-point tensors, use allclose to account for minor precision differences.
-    assert torch.allclose(x_precompute["edge_length_emb"], edge_length_emb_direct), "edge_length_emb mismatch"
+    assert torch.allclose(
+        x_precompute["edge_length_emb"], edge_length_emb_direct
+    ), "edge_length_emb mismatch"
     assert torch.allclose(x_precompute["edge_sh"], edge_sh_direct), "edge_sh mismatch"
 
     # For scalar integers, use direct comparison.
-    assert x_precompute["index_gnn_cutoff"] == index_gnn_cutoff_direct, "index_gnn_cutoff mismatch"
-    assert x_precompute["num_self_edges"] == num_self_edges_direct, "num_self_edges mismatch"
+    assert (
+        x_precompute["index_gnn_cutoff"] == index_gnn_cutoff_direct
+    ), "index_gnn_cutoff mismatch"
+    assert (
+        x_precompute["num_self_edges"] == num_self_edges_direct
+    ), "num_self_edges mismatch"
 
 
 @pytest.mark.integration
@@ -165,7 +182,7 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
     cfg_precompute = Config(
         l_max_gnn=1,
         n_radial=16,
-        precompute_edge_features=True, # Precompute mode
+        precompute_edge_features=True,  # Precompute mode
     )
     dataset_precompute = MockE3GNNDataset(
         snapshot_paths=[(Path("dummy.matrix"), Path("dummy.info"))],
@@ -174,15 +191,17 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
     )
     x_precompute, _ = dataset_precompute[0]
 
-    torch.manual_seed(42) # Reset seed right before creating the first model
-    model_precompute = E3GNN(mapper, cfg_precompute, edge_type2idx=dataset_precompute.edge_type2idx)
+    torch.manual_seed(42)  # Reset seed right before creating the first model
+    model_precompute = E3GNN(
+        mapper, cfg_precompute, edge_type2idx=dataset_precompute.edge_type2idx
+    )
     preds_precompute = model_precompute(x_precompute)
 
     # --- 2. Setup and run for ON-THE-FLY features ---
     cfg_onthefly = Config(
         l_max_gnn=1,
         n_radial=16,
-        precompute_edge_features=False, # On-the-fly mode
+        precompute_edge_features=False,  # On-the-fly mode
     )
     dataset_onthefly = MockE3GNNDataset(
         snapshot_paths=[(Path("dummy.matrix"), Path("dummy.info"))],
@@ -191,8 +210,10 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
     )
     x_onthefly, _ = dataset_onthefly[0]
 
-    torch.manual_seed(42) # Reset seed AGAIN to the same state
-    model_onthefly = E3GNN(mapper, cfg_onthefly, edge_type2idx=dataset_onthefly.edge_type2idx)
+    torch.manual_seed(42)  # Reset seed AGAIN to the same state
+    model_onthefly = E3GNN(
+        mapper, cfg_onthefly, edge_type2idx=dataset_onthefly.edge_type2idx
+    )
     preds_onthefly = model_onthefly(x_onthefly)
 
     # --- 3. Assert that the final predictions are identical ---
@@ -209,5 +230,5 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
             assert torch.allclose(
                 pred_precompute_vectors[key],
                 pred_onthefly_vectors[key],
-                atol=1e-6, # Use a small tolerance for floating point comparisons
+                atol=1e-6,  # Use a small tolerance for floating point comparisons
             ), f"Mismatch in final prediction for {matrix_name} matrix, key {key}"
