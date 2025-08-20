@@ -45,10 +45,8 @@ class E3GNN(pl.LightningModule):
         self,
         mapper: BlockIrrepMapper,
         cfg: Config,
-        edge_type2idx: Dict[str, int],
     ):
         super().__init__()
-        self.edge_type2idx = edge_type2idx
         self.cfg = cfg
         # The mapper is now an nn.Module and will be moved to the correct device
         # automatically by PyTorch Lightning.
@@ -184,10 +182,9 @@ class E3GNN(pl.LightningModule):
                 positions=x["positions"],
                 box=x["box"],
                 atoms=x["atoms"],
-                orbital_cfg=self.mapper.orbital_cfg,  # Access orbital_cfg from the mapper
                 cfg=self.cfg,
                 sh_irreps=self.sh_irreps,
-                edge_type2idx=self.edge_type2idx,  # Access edge_type2idx from the mapper
+                edge_type2idx=self.mapper.edge_type2idx,
             )
 
             # Update x with the newly computed features
@@ -197,7 +194,6 @@ class E3GNN(pl.LightningModule):
             x["edge_sh"] = edge_sh
             x["index_gnn_cutoff"] = index_gnn_cutoff
             x["num_self_edges"] = num_self_edges
-
 
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x["node_type_idx"], activation_mags=self._activation_mags)
