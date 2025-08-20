@@ -43,8 +43,6 @@ class MappingKeyError(KeyError):
 
 @dataclass(slots=True)
 class _IrrepToMatrix:
-    """Lightweight wrapper identical in spirit to mappings.IrrepToMatrix."""
-
     rtp: ReducedTensorProducts
     dim_i: int
     dim_j: int
