@@ -6,6 +6,7 @@ from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.openmx_parser import parse_openmx_scfout
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
+from data.block_matrix import BlockMatrix
 
 
 def _load_snapshot():
@@ -98,3 +99,55 @@ def test_basis_conversion_roundtrip():
         snap_open.get_number_of_electrons(),
         atol=1e-6,
     )
+
+# tests for selecting snapshot targets
+def _create_dummy_block_matrix():
+    """Helper to create a minimal BlockMatrix for testing."""
+    # The contents don't matter, only that it's a BlockMatrix instance
+    return BlockMatrix(
+        atoms=("H",),
+        atom_counts={"H": 1},
+        pair_blocks={"H-H": torch.randn(1, 1, 1)},
+        pair_edges={"H-H": torch.tensor([[0], [0]])},
+        lookup={(0, 0): ("H-H", 0)},
+        orbital_cfg=OrbitalIrrepConfig.from_dict({"H": "1x0e"}),
+        basis="e3nn",
+    )
+
+
+@pytest.mark.unit
+def test_partial_snapshot_creation():
+    """Tests that a Snapshot can be created with only a Hamiltonian."""
+    dummy_hamiltonian = _create_dummy_block_matrix()
+
+    # Create a snapshot with only the hamiltonian
+    snap = Snapshot(hamiltonian=dummy_hamiltonian)
+
+    assert snap.hamiltonian is not None
+    assert snap.overlap is None
+    assert snap.density is None
+
+
+@pytest.mark.unit
+def test_get_energy_raises_error_on_partial_snapshot():
+    """
+    Tests that get_energy() raises a RuntimeError if density is missing.
+    """
+    dummy_hamiltonian = _create_dummy_block_matrix()
+    snap = Snapshot(hamiltonian=dummy_hamiltonian) # Missing density matrix
+
+    with pytest.raises(RuntimeError, match="Cannot compute energy"):
+        snap.get_energy()
+
+@pytest.mark.unit
+def test_get_electrons_raises_error_on_partial_snapshot():
+    """
+    Tests that get_number_of_electrons() raises a RuntimeError if overlap is missing.
+    """
+    dummy_density = _create_dummy_block_matrix()
+    snap = Snapshot(density=dummy_density) # Missing overlap matrix
+
+    with pytest.raises(RuntimeError, match="Cannot compute number of electrons"):
+        snap.get_number_of_electrons()
+
+

@@ -283,28 +283,46 @@ class E3GNNDataset(Dataset):
             "box": snap.box,
             "atoms": atoms,
         }
+        
         with torch.no_grad():
-            if self.cfg.train_target == "matrix":
-                hamiltonian_target = snap.hamiltonian
-                overlap_target = snap.overlap
-                density_target = snap.density
-            elif self.cfg.train_target == "irreps":
-                hamiltonian_target = snap.hamiltonian.to_vectors(self.mapper)
-                overlap_target = snap.overlap.to_vectors(self.mapper)
-                density_target = snap.density.to_vectors(self.mapper)
-            else:
-                raise ValueError(
-                    f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
-                )
-            y = {
-                "hamiltonian": hamiltonian_target,
-                "overlap": overlap_target,
-                "density": density_target,
-                "energy": snap.get_energy(),
-                "num_electrons": snap.get_number_of_electrons(),
-                "forces": snap.forces,
-                "stress": snap.stress,
-            }
+            y = {} # Start with an empty dictionary
+
+            # Conditionally add matrix targets
+            if snap.hamiltonian is not None:
+                if self.cfg.train_target == "matrix":
+                    y["hamiltonian"] = snap.hamiltonian
+                else: # "irreps"
+                    y["hamiltonian"] = snap.hamiltonian.to_vectors(self.mapper)
+
+            if snap.overlap is not None:
+                if self.cfg.train_target == "matrix":
+                    y["overlap"] = snap.overlap
+                else: # "irreps"
+                    y["overlap"] = snap.overlap.to_vectors(self.mapper)
+
+            if snap.density is not None:
+                if self.cfg.train_target == "matrix":
+                    y["density"] = snap.density
+                else: # "irreps"
+                    y["density"] = snap.density.to_vectors(self.mapper)
+
+            # Conditionally add physics targets
+            try:
+                y["energy"] = snap.get_energy()
+            except RuntimeError:
+                pass # Ignore if matrices for energy are not available
+
+            try:
+                y["num_electrons"] = snap.get_number_of_electrons()
+            except RuntimeError:
+                pass # Ignore if matrices for num_electrons are not available
+
+            # Always add forces and stress if they exist
+            if snap.forces is not None:
+                y["forces"] = snap.forces
+            if snap.stress is not None:
+                y["stress"] = snap.stress
+
 
         return x, y
 

@@ -124,7 +124,7 @@ class E3GNN(pl.LightningModule):
                     cfg=self.cfg,
                     info={"matrix": name},
                 )
-                for name in ("hamiltonian", "overlap", "density")
+                for name in self.self.cfg.available_targets
             }
         )
 
@@ -244,8 +244,9 @@ class E3GNN(pl.LightningModule):
 
         loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
         mae_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
-        if self.cfg.train_target == "matrix":
-            for name in ("hamiltonian", "overlap", "density"):
+
+        for name in self.heads.keys():
+            if self.cfg.train_target == "matrix":
                 p_blocks = blk[name].pair_blocks
                 t_blocks = y[name].pair_blocks
                 for key in p_blocks:
@@ -253,8 +254,7 @@ class E3GNN(pl.LightningModule):
                     mae_matrix = mae_matrix + torch.mean(
                         torch.abs(p_blocks[key] - t_blocks[key])
                     )
-        elif self.cfg.train_target == "irreps":
-            for name in ("hamiltonian", "overlap", "density"):
+            elif self.cfg.train_target == "irreps":
                 p_vecs = preds[name].pair_vectors
                 t_vecs = y[name].pair_vectors
                 for key in p_vecs:
@@ -262,22 +262,30 @@ class E3GNN(pl.LightningModule):
                     mae_matrix = mae_matrix + torch.mean(
                         torch.abs(p_vecs[key] - t_vecs[key])
                     )
-        else:
-            raise ValueError(f"Unknown target type: {self.cfg.train_target}")
+            else:
+                raise ValueError(f"Unknown target type: {self.cfg.train_target}")
 
         # --- observable evaluation timing --------------------------------
-        t_obs_start = time.perf_counter()
-        E_pred = trace_matmul_sparse_snap_vectorized(blk["hamiltonian"], blk["density"])
-        N_pred = trace_matmul_sparse_snap_vectorized(blk["overlap"], blk["density"])
-        t_obs_end = time.perf_counter()
-        E_true = y["energy"]
-        loss_E = torch.mean((E_pred - E_true) ** 2)
-        abs_err_E = torch.mean(torch.abs(E_pred - E_true))
 
-        # electron count loss and absolute error
-        N_true = y["num_electrons"]
-        loss_N = torch.mean((N_pred - N_true) ** 2)
-        abs_err_N = torch.mean(torch.abs(N_pred - N_true))
+        # Conditionally compute energy loss
+        loss_E = torch.tensor(0.0, device=self.cfg.device)
+        abs_err_E = torch.tensor(0.0, device=self.cfg.device)
+        if "hamiltonian" in blk and "density" in blk:
+            E_pred = trace_matmul_sparse_snap_vectorized(blk["hamiltonian"], blk["density"])
+            E_true = y["energy"]
+            loss_E = torch.mean((E_pred - E_true) ** 2)
+            abs_err_E = torch.mean(torch.abs(E_pred - E_true))
+
+        # Conditionally compute electron count loss
+        loss_N = torch.tensor(0.0, device=self.cfg.device)
+        abs_err_N = torch.tensor(0.0, device=self.cfg.device)
+        if "overlap" in blk and "density" in blk:
+            N_pred = trace_matmul_sparse_snap_vectorized(blk["overlap"], blk["density"])
+            N_true = y["num_electrons"]
+            loss_N = torch.mean((N_pred - N_true) ** 2)
+            abs_err_N = torch.mean(torch.abs(N_pred - N_true))
+
+        t_obs_end = time.perf_counter()
 
         # total loss
         loss_E_weighted = self.cfg.loss_coef_energy * loss_E

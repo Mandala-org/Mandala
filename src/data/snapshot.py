@@ -89,11 +89,12 @@ class Snapshot:
     # ---------------------------------------------------------------- compatibility
     @staticmethod
     def _check_compatibility(*mats: BlockMatrix) -> None:
-        if not mats:
+        provided_mats = [m for m in mats if m is not None]
+        if not provided_mats:
             return
 
-        first = mats[0]
-        for i, m in enumerate(mats[1:]):
+        first = provided_mats[0]
+        for i, m in enumerate(provided_mats[1:]):
             if m.atoms != first.atoms:
                 raise ValueError(f"Matrices 0 and {i+1} must share the same atom list")
 
@@ -153,9 +154,9 @@ class Snapshot:
         }
 
         return Snapshot(
-            new_mats["hamiltonian"],
-            new_mats["overlap"],
-            new_mats["density"],
+            hamiltonian=new_mats.get("hamiltonian"),
+            overlap=new_mats.get("overlap"),
+            density=new_mats.get("density"),
             positions=self.positions,
             forces=self.forces,
             box=self.box,
@@ -247,9 +248,9 @@ class Snapshot:
         if stress is not None:
             stress = stress.to(device)
         return cls(
-            mats["hamiltonian"],
-            mats["overlap"],
-            mats["density"],
+            hamiltonian = mats.get("hamiltonian"),
+            overlap = mats.get("overlap"),
+            density = mats.get("density"),
             positions=pos,
             forces=forces,
             box=box,
@@ -317,9 +318,9 @@ class Snapshot:
             raise RuntimeError("Should not be reachable")
 
         return Snapshot(
-            ham,
-            ovl,
-            den,
+            hamiltonian=ham,
+            overlap=ovl,
+            density=den,
             positions=self.positions,
             forces=self.forces,
             box=self.box,
@@ -352,9 +353,9 @@ class Snapshot:
         ovl = self.overlap.rotate(R)
         den = self.density.rotate(R)
         return Snapshot(
-            ham,
-            ovl,
-            den,
+            hamiltonian=ham,
+            overlap=ovl,
+            density=den,
             positions=self.positions @ R.T if self.positions is not None else None,
             forces=self.forces @ R.T if self.forces is not None else None,
             box=self.box @ R.T if self.box is not None else None,
