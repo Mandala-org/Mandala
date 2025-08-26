@@ -95,6 +95,9 @@ class Config:
     )  # e.g. (128,) → 2-layer MLP
     share_radial: bool = True
 
+    # -------------- available targets ----------------------------------
+    available_targets: List[str] = field(default_factory=lambda: ["hamiltonian", "overlap", "density"])
+    
     # -------------- output head ----------------------------------------
     neck_depth: int = 3
     head_depth: int = 2

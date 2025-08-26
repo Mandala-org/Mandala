@@ -49,10 +49,10 @@ class Snapshot:
     # --------------------------------------------------------------------- init
     def __init__(
         self,
-        hamiltonian: BlockMatrix,
-        overlap: BlockMatrix,
-        density: BlockMatrix,
         *,
+        hamiltonian: BlockMatrix | None = None,
+        overlap: BlockMatrix | None = None,
+        density: BlockMatrix | None = None,
         positions: torch.Tensor | None = None,  # (N,3)
         forces: torch.Tensor | None = None,  # (N,3)
         box: torch.Tensor | None = None,  # (3,3)
@@ -62,6 +62,9 @@ class Snapshot:
         cutoff_radius: float | None = None,  # optional cutoff radius for filtering
     ) -> None:
         # quick consistency sanity checks
+        if hamiltonian is None and overlap is None and density is None:
+            raise ValueError("At least one matrix (hamiltonian, overlap, or density) must be provided to create a Snapshot.")
+
         self._check_compatibility(hamiltonian, overlap, density)
 
         self._mats: Dict[str, BlockMatrix] = {
@@ -165,10 +168,18 @@ class Snapshot:
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:
         """Return *scalar* Tr(D·S)."""
+
+        if self.overlap is None or self.density is None:
+            raise RuntimeError("Cannot compute number of electrons without both Overlap and Density matrices.")
+
         return trace_matmul_sparse_snap_vectorized(self.density, self.overlap)
 
     def get_energy(self) -> torch.Tensor:
         """Return *scalar* Tr(D·H)."""
+
+        if self.hamiltonian is None or self.density is None:
+            raise RuntimeError("Cannot compute energy without both Hamiltonian and Density matrices.")
+
         # return trace_matmul_sparse_snap_vectorized(self.hamiltonian, self.density)
         return trace_matmul_sparse_snap(self.hamiltonian, self.density)
 
@@ -433,10 +444,12 @@ class Snapshot:
         raise AttributeError(name)
 
     # -------------------------------------------------------------------- constructors
+    from net.common import Config
     @staticmethod
     def from_openmx(
         matrix_path: str | os.PathLike,
         info_path: str | os.PathLike,
+        cfg: Config,
         *,
         convention: str = "e3nn",
         symmetrize_density: bool = True,
@@ -453,12 +466,27 @@ class Snapshot:
 
         orb_cfg = OrbitalIrrepConfig.from_dict(info.orbital_set)
 
-        snap = parse_openmx_scfout(
+        snap_raw = parse_openmx_scfout(
             matrix_path,
             atoms,
             orb_cfg,
             convention=convention,
             symmetrize_density=symmetrize_density,
+        )
+
+        # Keep matrices based on config
+        ham = snap_raw.hamiltonian if "hamiltonian" in cfg.available_targets else None
+        ovl = snap_raw.overlap if "overlap" in cfg.available_targets else None
+        den = snap_raw.density if "density" in cfg.available_targets else None
+
+        snap = Snapshot(
+            hamiltonian=ham,
+            overlap=ovl,
+            density=den,
+            positions=info.positions if info.positions.numel() else None,
+            forces=info.forces if info.forces.numel() else None,
+            box=info.box if info.box.numel() else None,
+            stress=info.stress if info.box.numel() else None,
         )
 
         snap.matrix_path = matrix_path
