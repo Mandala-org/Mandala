@@ -23,7 +23,7 @@ import time
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
-from data.block_matrix import IrrepsBlockData
+from data.block_matrix import BlockMatrix, IrrepsBlockData
 
 from net.common import Config, build_hidden_irreps
 from net.encoders import NodeEncoder, EdgeEncoder
@@ -226,20 +226,20 @@ class E3GNN(pl.LightningModule):
         preds = self(x)
         t_fwd_end = time.perf_counter()
         if self.cfg.pedantic:
-            for name in ("hamiltonian", "overlap", "density"):
-                pred_edges = preds[name].pair_edges
-                target_edges = y[name].pair_edges
-                for key in target_edges.keys():
-                    assert torch.equal(
-                        pred_edges[key], target_edges[key]
-                    ), f"Pedantic check failed: Edge order mismatch in '{name}' matrix for key '{key}'"
+            for name in preds.keys() & y.keys():
+                if isinstance(y[name], BlockMatrix):
+                    pred_edges = preds[name].to_blocks(self.mapper).pair_edges
+                    target_edges = y[name].pair_edges
+                    for key in target_edges.keys():
+                        assert torch.equal(
+                            pred_edges[key], target_edges[key]
+                        ), f"Pedantic check failed: Edge order mismatch in '{name}' matrix for key '{key}'"
 
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
-        blk = {}
-        blk["hamiltonian"] = preds["hamiltonian"].to_blocks(self.mapper)
-        blk["density"] = preds["density"].to_blocks(self.mapper)
-        blk["overlap"] = preds["overlap"].to_blocks(self.mapper)
+        blk = {
+            name: p.to_blocks(self.mapper) for name, p in preds.items()
+        }
         t_map_end = time.perf_counter()
 
         loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
@@ -391,10 +391,14 @@ class E3GNN(pl.LightningModule):
         positions: torch.Tensor,
         box: torch.Tensor,
     ) -> "Snapshot":
+        ham = predictions.get("hamiltonian")
+        ovl = predictions.get("overlap")
+        den = predictions.get("density")
+
         return Snapshot(
-            hamiltonian=predictions["hamiltonian"].to_blocks(self.mapper),
-            overlap=predictions["overlap"].to_blocks(self.mapper),
-            density=predictions["density"].to_blocks(self.mapper),
+            hamiltonian=ham.to_blocks(self.mapper) if ham is not None else None,
+            overlap=ovl.to_blocks(self.mapper) if ovl is not None else None,
+            density=den.to_blocks(self.mapper) if den is not None else None,
             positions=positions,
             box=box,
         )

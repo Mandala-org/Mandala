@@ -125,13 +125,24 @@ class Snapshot:
         Return a new Snapshot with a canonical edge ordering for each key.
         The canonical order for each key is:
         1. Off-diagonal edges, sorted by the L2 norm of their corresponding
-           density matrix block in ascending order.
+        matrix block in ascending order.
         2. Diagonal edges, sorted by their node index.
         """
-        density = self._mats["density"]
-        order_dict = {}
+        # Find the first available matrix to use as a reference for edge structure
+        reference_matrix = None
+        if self.density is not None:
+            reference_matrix = self.density
+        elif self.hamiltonian is not None:
+            reference_matrix = self.hamiltonian
+        elif self.overlap is not None:
+            reference_matrix = self.overlap
 
-        for key, edges in density.pair_edges.items():
+        # If no matrices are present at all, there's nothing to reorder.
+        if reference_matrix is None:
+            return self
+
+        order_dict = {}
+        for key, edges in reference_matrix.pair_edges.items():
             is_diag_mask = edges[0] == edges[1]
 
             # Get the sorting permutation for the diagonal edges
@@ -139,8 +150,8 @@ class Snapshot:
             diag_mask = is_diag_mask[perm_diag]
             perm_diag = perm_diag[diag_mask]
 
-            # Sort off-diagonal edges by density norm
-            norms = density.pair_blocks[key].pow(2).sum(dim=(-2, -1)).sqrt()
+            # Sort off-diagonal edges by the reference matrix norm
+            norms = reference_matrix.pair_blocks[key].pow(2).sum(dim=(-2, -1)).sqrt()
             # Get the sorting permutation for the off-diagonal edges
             perm_offdiag = torch.argsort(norms)
             offdiag_mask = ~is_diag_mask[perm_offdiag]
@@ -148,9 +159,11 @@ class Snapshot:
 
             order_dict[key] = torch.cat([perm_offdiag, perm_diag])
 
-        # Apply the SAME permutation to every matrix
+        # Apply the SAME permutation to every matrix that exists
         new_mats = {
-            name: mat.reorder_edges(order_dict) for name, mat in self._mats.items()
+            name: mat.reorder_edges(order_dict)
+            for name, mat in self._mats.items()
+            if mat is not None  # Only process matrices that are not None
         }
 
         return Snapshot(
@@ -165,6 +178,7 @@ class Snapshot:
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
         )
+
 
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:
@@ -378,7 +392,7 @@ class Snapshot:
             raise RuntimeError("Snapshot has no position/box information")
 
         if mat is None:
-            mat = self.density
+            mat = self.density or self.hamiltonian or self.overlap
 
         inv_box = torch.inverse(self.box)
         vecs: Dict[str, torch.Tensor] = {}
@@ -418,9 +432,9 @@ class Snapshot:
         dist = self._edge_distances(self._mats[which])
         mask_dict = {k: (v <= cutoff) for k, v in dist.items()}
 
-        ham = self.hamiltonian._apply_edge_mask(mask_dict)
-        ovl = self.overlap._apply_edge_mask(mask_dict)
-        den = self.density._apply_edge_mask(mask_dict)
+        ham = self.hamiltonian._apply_edge_mask(mask_dict) if self.hamiltonian is not None else None
+        ovl = self.overlap._apply_edge_mask(mask_dict) if self.overlap is not None else None
+        den = self.density._apply_edge_mask(mask_dict) if self.density is not None else None
 
         return Snapshot(
             hamiltonian=ham,
@@ -467,6 +481,7 @@ class Snapshot:
 
         orb_cfg = OrbitalIrrepConfig.from_dict(info.orbital_set)
 
+        # 1. Parse all raw data first
         snap_raw = parse_openmx_scfout(
             matrix_path,
             atoms,
@@ -475,11 +490,12 @@ class Snapshot:
             symmetrize_density=symmetrize_density,
         )
 
-        # Keep matrices based on config
+        # 2. Conditionally select which matrices to use
         ham = snap_raw.hamiltonian if "hamiltonian" in cfg.available_targets else None
         ovl = snap_raw.overlap if "overlap" in cfg.available_targets else None
         den = snap_raw.density if "density" in cfg.available_targets else None
 
+        # 3. Create the initial snapshot object with the selected matrices
         snap = Snapshot(
             hamiltonian=ham,
             overlap=ovl,
@@ -488,19 +504,17 @@ class Snapshot:
             forces=info.forces if info.forces.numel() else None,
             box=info.box if info.box.numel() else None,
             stress=info.stress if info.box.numel() else None,
+            matrix_path=matrix_path,
+            info_path=info_path,
+            cutoff_radius=cutoff_radius,
         )
 
-        snap.matrix_path = matrix_path
-        snap.info_path = info_path
-        snap.positions = info.positions if info.positions.numel() else None
-        snap.forces = info.forces if info.forces.numel() else None
-        snap.box = info.box if info.box.numel() else None
-        snap.stress = info.stress if info.box.numel() else None
-
+        # 4. Now, filter and canonicalize the created snapshot
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
 
         return snap.canonicalize_edges()
+
 
     @staticmethod
     def from_fhiaims(

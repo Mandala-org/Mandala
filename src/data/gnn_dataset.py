@@ -167,9 +167,14 @@ class E3GNNDataset(Dataset):
         edge_sh : (E_total, sh_dim) float
         index_gnn_cutoff : int
         """
+        # Find the first available matrix to use as a reference for edge structure
+        reference_matrix = snap.density or snap.hamiltonian or snap.overlap
+        if reference_matrix is None:
+            raise ValueError("Snapshot in dataset has no matrices.")
+
         # 1. Collect all edges and their properties
         edges = []
-        for key, pair_edges in snap.density.pair_edges.items():
+        for key, pair_edges in reference_matrix.pair_edges.items():
             for i in range(pair_edges.shape[1]):
                 src, dst = pair_edges[:, i]
                 edges.append(
@@ -226,7 +231,7 @@ class E3GNNDataset(Dataset):
             cutoff=False,
         )
 
-        # 6. Determine the GNN cfg.cutoff_gnn index
+        # 6. Determine the GNN cutoff index
         index_gnn_cutoff = torch.sum(lengths <= self.cfg.cutoff_gnn).item()
 
         return (
@@ -245,11 +250,6 @@ class E3GNNDataset(Dataset):
         """
         Build graph inputs and targets from one Snapshot.
         """
-        # snap.positions = snap.positions.to(self.dtype)
-        # snap.box = snap.box.to(self.dtype)
-        # snap.forces = snap.forces.to(self.dtype)
-        # snap.stress = snap.stress.to(self.dtype)
-
         if self.cfg.enable_forces:
             snap.positions.requires_grad_()
         if self.cfg.enable_stress:
@@ -258,6 +258,12 @@ class E3GNNDataset(Dataset):
             snap.forces.requires_grad_()
         if self.cfg.train_on_stress:
             snap.stress.requires_grad_()
+
+        # Find the first available matrix to get the atom list from
+        reference_matrix = snap.density or snap.hamiltonian or snap.overlap
+        if reference_matrix is None:
+            raise ValueError("Snapshot in dataset has no matrices.")
+        atoms = reference_matrix.atoms
 
         (
             edge_index,
@@ -268,7 +274,6 @@ class E3GNNDataset(Dataset):
             num_self_edges,
         ) = self._edge_tensors(snap)
 
-        atoms = snap.density.atoms
         elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
         node_type_idx = torch.tensor([elem2idx[el] for el in atoms], dtype=torch.long)
 
@@ -286,37 +291,37 @@ class E3GNNDataset(Dataset):
         }
 
         with torch.no_grad():
-            y = {} # Start with an empty dictionary
+            y = {}  # Start with an empty dictionary
 
             # Conditionally add matrix targets
             if snap.hamiltonian is not None:
                 if self.cfg.train_target == "matrix":
                     y["hamiltonian"] = snap.hamiltonian
-                else: # "irreps"
+                else:  # "irreps"
                     y["hamiltonian"] = snap.hamiltonian.to_vectors(self.mapper)
 
             if snap.overlap is not None:
                 if self.cfg.train_target == "matrix":
                     y["overlap"] = snap.overlap
-                else: # "irreps"
+                else:  # "irreps"
                     y["overlap"] = snap.overlap.to_vectors(self.mapper)
 
             if snap.density is not None:
                 if self.cfg.train_target == "matrix":
                     y["density"] = snap.density
-                else: # "irreps"
+                else:  # "irreps"
                     y["density"] = snap.density.to_vectors(self.mapper)
 
             # Conditionally add physics targets
             try:
                 y["energy"] = snap.get_energy()
             except RuntimeError:
-                pass # Ignore if matrices for energy are not available
+                pass  # Ignore if matrices for energy are not available
 
             try:
                 y["num_electrons"] = snap.get_number_of_electrons()
             except RuntimeError:
-                pass # Ignore if matrices for num_electrons are not available
+                pass  # Ignore if matrices for num_electrons are not available
 
             # Always add forces and stress if they exist
             if snap.forces is not None:
@@ -324,8 +329,8 @@ class E3GNNDataset(Dataset):
             if snap.stress is not None:
                 y["stress"] = snap.stress
 
-
         return x, y
+
 
     # ------------------- torch Dataset interface ---------------------------
     def __len__(self) -> int:
