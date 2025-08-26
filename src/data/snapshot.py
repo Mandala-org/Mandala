@@ -423,9 +423,9 @@ class Snapshot:
         den = self.density._apply_edge_mask(mask_dict)
 
         return Snapshot(
-            ham,
-            ovl,
-            den,
+            hamiltonian=ham,
+            overlap=ovl,
+            density=den,
             positions=self.positions,
             forces=self.forces,
             box=self.box,

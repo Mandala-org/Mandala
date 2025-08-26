@@ -149,5 +149,3 @@ def test_get_electrons_raises_error_on_partial_snapshot():
 
     with pytest.raises(RuntimeError, match="Cannot compute number of electrons"):
         snap.get_number_of_electrons()
-
-

@@ -124,7 +124,7 @@ class E3GNN(pl.LightningModule):
                     cfg=self.cfg,
                     info={"matrix": name},
                 )
-                for name in self.self.cfg.available_targets
+                for name in self.cfg.available_targets
             }
         )
 
@@ -266,6 +266,7 @@ class E3GNN(pl.LightningModule):
                 raise ValueError(f"Unknown target type: {self.cfg.train_target}")
 
         # --- observable evaluation timing --------------------------------
+        t_obs_start = time.perf_counter()
 
         # Conditionally compute energy loss
         loss_E = torch.tensor(0.0, device=self.cfg.device)

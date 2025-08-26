@@ -9,13 +9,14 @@ import torch
 
 from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
-
+from net.common import Config
 
 @pytest.fixture(scope="module")
 def data():
     return Snapshot.from_openmx(
         Path("./data/small/H2O/original/H2O.matrix"),
         Path("./data/small/H2O/original/H2O.info.out"),
+        cfg=Config(),
     )
 
 

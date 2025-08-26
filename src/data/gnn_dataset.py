@@ -120,6 +120,7 @@ class E3GNNDataset(Dataset):
         snapshot = Snapshot.from_openmx(
             matrix_path=matrix_path,
             info_path=info_path,
+            cfg=self.cfg,
             convention="e3nn",
             symmetrize_density=True,
             cutoff_radius=self.cfg.cutoff_matrix,
@@ -283,7 +284,7 @@ class E3GNNDataset(Dataset):
             "box": snap.box,
             "atoms": atoms,
         }
-        
+
         with torch.no_grad():
             y = {} # Start with an empty dictionary
 

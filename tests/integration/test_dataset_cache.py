@@ -26,7 +26,7 @@ def load_dataset(pair, cache_dir, cutoff_gnn):
         cache_root=str(cache_dir),
     )
     fac = DatasetFactory(cfg)
-    fac.add_snapshot(mat, info)
+    fac.add_snapshot(mat, info, cfg=cfg)
     train_ds, _, _ = fac.create()
     return train_ds
 

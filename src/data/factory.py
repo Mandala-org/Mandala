@@ -54,6 +54,7 @@ class DatasetFactory:
         matrix_path: str | os.PathLike,
         info_path: str | os.PathLike,
         purpose: Purpose = "train",
+        cfg: Config = None,
     ) -> None:
         """
         Register one **(matrix, info)** file pair.

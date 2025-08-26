@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 from data.snapshot import Snapshot
+from net.common import Config
 
 
 # ---------------------------------------------------------------------------
@@ -26,6 +27,7 @@ def si_snapshot():
     return Snapshot.from_openmx(
         str(matrix_path),
         str(info_path),
+        cfg=Config(),
         convention="openmx",
     )
 

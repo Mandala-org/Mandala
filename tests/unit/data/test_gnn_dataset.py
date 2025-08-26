@@ -23,6 +23,7 @@ def dataset():
     snap_H20 = Snapshot.from_openmx(
         matrix_path=Path("data/small/H2O/original/H2O.matrix"),
         info_path=Path("data/small/H2O/original/H2O.info.out"),
+        cfg=Config()
     )
 
     mapper = BlockIrrepMapper(snap_H20.hamiltonian.orbital_cfg)
