@@ -190,8 +190,8 @@ class NodeUpdateBlock(nn.Module):
 
         if self.cfg.node_update_message_agg == "attention":
             attn_output_irreps = (
-                hidden_irreps + hidden_irreps + hidden_irreps
-            ).simplify()
+                (hidden_irreps + hidden_irreps).sort().irreps.simplify()
+            )
             self.attn = E3MLP(
                 hidden_irreps,
                 hidden_irreps,

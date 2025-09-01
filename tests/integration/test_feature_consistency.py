@@ -137,7 +137,7 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
         atoms=dummy_snap.density.atoms,
         cfg=cfg_precompute,  # Use the same config for a fair comparison
         sh_irreps=dataset_precompute.sh_irreps,
-        edge_type2idx=dataset_precompute.edge_type2idx,
+        edge_type2idx=mapper.edge_type2idx,
     )
 
     # --- 3. Assert that the outputs are identical ---
@@ -192,9 +192,7 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
     x_precompute, _ = dataset_precompute[0]
 
     torch.manual_seed(42)  # Reset seed right before creating the first model
-    model_precompute = E3GNN(
-        mapper, cfg_precompute, edge_type2idx=dataset_precompute.edge_type2idx
-    )
+    model_precompute = E3GNN(mapper, cfg_precompute)
     preds_precompute = model_precompute(x_precompute)
 
     # --- 2. Setup and run for ON-THE-FLY features ---
@@ -211,9 +209,7 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
     x_onthefly, _ = dataset_onthefly[0]
 
     torch.manual_seed(42)  # Reset seed AGAIN to the same state
-    model_onthefly = E3GNN(
-        mapper, cfg_onthefly, edge_type2idx=dataset_onthefly.edge_type2idx
-    )
+    model_onthefly = E3GNN(mapper, cfg_onthefly)
     preds_onthefly = model_onthefly(x_onthefly)
 
     # --- 3. Assert that the final predictions are identical ---

@@ -98,7 +98,7 @@ def test_sample_coherence(factory_results):
             assert elem_list[idx] in known
 
         # edge_type_idx sanity: indices must be within range
-        assert torch.all(x["edge_type_idx"] < len(train_ds.edge_types))
+        assert torch.all(x["edge_type_idx"] < len(mapper.edge_types))
 
         # target vector shapes agree with mapper dims
         for key, vec in y["hamiltonian"].pair_vectors.items():
