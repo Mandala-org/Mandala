@@ -17,6 +17,7 @@ from pytorch_lightning.loggers import CSVLogger
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
+from net.benchmark import BenchmarkCallback  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
 from data.factory import DatasetFactory  # noqa: E402
@@ -46,10 +47,33 @@ def main():
         default="irreps",
         help="Target for the main matrix loss.",
     )
+    parser.add_argument(
+        "--output_folder",
+        type=str,
+        default="overfitting_results",
+        help="Folder to save the results.",
+    )
+    parser.add_argument(
+        "--use_lr_scheduler",
+        action="store_true",
+        help="Enable ReduceLROnPlateau learning rate scheduler.",
+    )
+    parser.add_argument(
+        "--lr_scheduler_patience",
+        type=int,
+        default=10,
+        help="Patience for ReduceLROnPlateau scheduler.",
+    )
+    parser.add_argument(
+        "--lr_scheduler_factor",
+        type=float,
+        default=0.5,
+        help="Factor for ReduceLROnPlateau scheduler.",
+    )
     args = parser.parse_args()
 
     # --- Output Directory Setup ---
-    output_dir = Path(__file__).parent
+    output_dir = Path(__file__).parent / args.output_folder
     output_dir.mkdir(exist_ok=True)
     print(f"Saving results to: {output_dir}")
 
@@ -64,13 +88,18 @@ def main():
         loss_coef_num_electrons=0.0,  # Disable electron loss
         train_on_energy=False,
         train_on_num_electrons=False,
+        scheduler_target="train_loss_matrix",
         max_epochs=args.num_epochs,
-        use_lr_scheduler=False,
-        hidden_base_dim=32,  # Smaller network
-        num_layers_gnn=2,
-        num_layers_matrix=1,
-        neck_depth=2,
-        head_depth=1,
+        use_lr_scheduler=args.use_lr_scheduler,
+        lr_scheduler_patience=args.lr_scheduler_patience,
+        lr_scheduler_factor=args.lr_scheduler_factor,
+        hidden_base_dim=64,
+        num_layers_gnn=4,
+        num_layers_matrix=2,
+        neck_depth=3,
+        head_depth=2,
+        bench_verbosity=2,
+        log_activation_mag=True,
     )
     fac = DatasetFactory(cfg)
     # Using a small water snapshot for faster testing, but can be changed
@@ -89,11 +118,18 @@ def main():
 
         # 1. Configure and Train
 
+        callbacks = [
+            BenchmarkCallback(
+                verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
+            ),
+        ]
+
         model = E3GNN(mapper, cfg)
         logger = CSVLogger(save_dir=str(run_log_dir))
         trainer = pl.Trainer(
             max_epochs=cfg.max_epochs,
             logger=logger,
+            callbacks=callbacks,
             enable_checkpointing=False,
             enable_progress_bar=True,
             enable_model_summary=True,
