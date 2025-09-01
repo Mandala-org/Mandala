@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import os
 from typing import Dict, Any
-
 import torch
 
 from core.sparse_math import (
@@ -501,3 +500,36 @@ class Snapshot:
             snap = snap.filter_by_distance(cutoff_radius)
 
         return snap.canonicalize_edges()
+
+    def dos(self, sigma=0.005, bin_width=0.001, E_min=-1.0, E_max=1.0):
+        """
+        Compute the density of states (DOS) for this snapshot.
+
+        Parameters
+        ----------
+        sigma : float
+            The broadening parameter for the DOS.
+        bin_width : float
+            The width of each energy bin.
+        E_min : float
+            The minimum energy to consider.
+        E_max : float
+            The maximum energy to consider.
+
+        Returns a dict with keys:
+        "energies" : torch.Tensor
+            The energy bins.
+        "dos" : torch.Tensor
+            The computed density of states for each energy bin.
+        """
+        H = self.hamiltonian.to_dense().detach()
+
+        eigenvalues, eigenvectors = torch.linalg.eigh(H)
+        ### setting up the energy bins
+        grid = torch.arange(E_min, E_max + bin_width, bin_width)
+        dos = torch.sum(
+            torch.exp(-((grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma**2)),
+            axis=1,
+        ) / (torch.sqrt(torch.tensor(2 * torch.pi)) * sigma)
+
+        return grid, dos

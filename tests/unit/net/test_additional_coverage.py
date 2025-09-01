@@ -56,7 +56,7 @@ def test_edge_update_block_shape(residual):
 @pytest.mark.unit
 def test_node_update_block_shape():
     cfg = Config()
-    hid_ir = Irreps("2x0e")
+    hid_ir = Irreps("4x0e")
     blk = NodeUpdateBlock(hid_ir, cfg)
     N, E = 4, 2
     node = torch.randn(N, hid_ir.dim)
