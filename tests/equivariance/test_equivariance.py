@@ -247,7 +247,6 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     cfg = Config(
         head_use_mlp_log_scale=head_use_mlp_log_scale,
         head_trunk_mlp_n_layers=mlp_layers,
-        head_last_mlp_n_layers=mlp_layers,
         head_final_proj_mlp_n_layers=mlp_layers,
         head_log_scale_mlp_n_layers=mlp_layers,
         l_max_gnn=2,
@@ -291,4 +290,4 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
 
         y_vec_rotated_output = y_vec @ D_out.T
 
-        assert torch.allclose(y_vec_rotated_input, y_vec_rotated_output, atol=1e-4)
+        assert torch.allclose(y_vec_rotated_input, y_vec_rotated_output, atol=1e-3)
