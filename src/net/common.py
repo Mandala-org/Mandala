@@ -70,7 +70,6 @@ class Config:
     node_update_attention_mlp_n_layers: int = 1
     node_update_post_lin_mlp_n_layers: int = 1
     head_trunk_mlp_n_layers: int = 3
-    head_last_mlp_n_layers: int = 2
     head_final_proj_mlp_n_layers: int = 1
     head_log_scale_mlp_n_layers: int = 1
 

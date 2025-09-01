@@ -53,20 +53,7 @@ class DeepHead(nn.Module):
         )
         self.tensor_square = TensorSquare(irreps_hidden, irreps_neck)
 
-        # 2) last-mile MLP per pair -----------------------------------
-        last = {}
-        for key in pair_keys:
-            last[key] = E3MLP(
-                irreps_neck,
-                irreps_neck,
-                irreps_neck,
-                self.cfg.head_last_mlp_n_layers,
-                self.cfg,
-                activate_last=True,
-            )
-        self.last_mlps = nn.ModuleDict(last)
-
-        # 3) final projection
+        # 2) final projection
         final_proj = {}
         for key in pair_keys:
             final_proj[key] = E3MLP(
@@ -75,10 +62,11 @@ class DeepHead(nn.Module):
                 mapper.get_pair_irreps(key),
                 self.cfg.head_final_proj_mlp_n_layers,
                 self.cfg,
+                activate_last=False,
             )
         self.final_projs = nn.ModuleDict(final_proj)
 
-        # 4) log scale for each pair -----------------------------------
+        # 3) log scale for each pair -----------------------------------
         if self.cfg.head_use_mlp_log_scale:
             self.log_scales = {}
             for key in pair_keys:
@@ -109,8 +97,7 @@ class DeepHead(nn.Module):
         for idx, key in enumerate(self.pair_keys):
             mask = edge_type_idx == idx
             if torch.any(mask):
-                vecs = self.last_mlps[key](h[mask])
-                projected_vecs = self.final_projs[key](vecs)
+                projected_vecs = self.final_projs[key](h[mask])
                 if self.log_scales is not None:
                     log_scale = self.log_scales[key](h[mask])
                     projected_vecs = torch.exp(log_scale) * projected_vecs
