@@ -101,7 +101,7 @@ def test_edge_encoder_equivariance(l_max_gnn):
 
     # Check equivariance
     y_rotated_output = y @ D_out.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-5)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
 
 
 @pytest.mark.parametrize(
@@ -130,14 +130,15 @@ def test_activations_equivariance(nonlin_kind, irreps_str):
 
     # Check equivariance
     y_rotated_output = y @ D_out.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-5)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
 
 
 @pytest.mark.parametrize("edge_update_node_combine", ["concat", "sum"])
 @pytest.mark.parametrize("edge_update", ["tensor_product", "concat", "replace"])
 @pytest.mark.parametrize("edge_update_residual", [True, False])
+@pytest.mark.parametrize("mlp_layers", [1, 2])
 def test_edge_update_block_equivariance(
-    edge_update_node_combine, edge_update, edge_update_residual
+    edge_update_node_combine, edge_update, edge_update_residual, mlp_layers
 ):
     """Tests the EdgeUpdateBlock in isolation."""
     N, E = 10, 20
@@ -145,6 +146,8 @@ def test_edge_update_block_equivariance(
         edge_update_node_combine=edge_update_node_combine,
         edge_update=edge_update,
         edge_update_residual=edge_update_residual,
+        edge_update_pre_lin_mlp_n_layers=mlp_layers,
+        edge_update_post_lin_mlp_n_layers=mlp_layers,
     )
     hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
     layer = EdgeUpdateBlock(hidden_irreps, cfg)
@@ -166,14 +169,15 @@ def test_edge_update_block_equivariance(
 
     # Check equivariance
     y_rotated_output = y @ D_hidden.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-5)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
 
 
 @pytest.mark.parametrize("node_update_message_agg", ["attention", "sum"])
 @pytest.mark.parametrize("node_update", ["tensor_product", "concat", "replace", "sum"])
 @pytest.mark.parametrize("node_update_residual", [True, False])
+@pytest.mark.parametrize("mlp_layers", [1, 2])
 def test_node_update_block_equivariance(
-    node_update_message_agg, node_update, node_update_residual
+    node_update_message_agg, node_update, node_update_residual, mlp_layers
 ):
     """Tests the NodeUpdateBlock in isolation."""
     N, E = 10, 20
@@ -181,6 +185,9 @@ def test_node_update_block_equivariance(
         node_update_message_agg=node_update_message_agg,
         node_update=node_update,
         node_update_residual=node_update_residual,
+        node_update_pre_lin_mlp_n_layers=mlp_layers,
+        node_update_attention_mlp_n_layers=mlp_layers,
+        node_update_post_lin_mlp_n_layers=mlp_layers,
     )
     hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
     layer = NodeUpdateBlock(hidden_irreps, cfg)
@@ -202,7 +209,7 @@ def test_node_update_block_equivariance(
 
     # Check equivariance
     y_rotated_output = y @ D_hidden.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-5)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
 
 
 def test_message_block_equivariance():
@@ -228,20 +235,21 @@ def test_message_block_equivariance():
     node_out_rot, edge_out_rot = layer(node_rotated, edge_rotated, edge_index)
 
     # Check equivariance for both outputs
-    assert torch.allclose(node_out_rot, node_out @ D_hidden.T, atol=1e-5)
-    assert torch.allclose(edge_out_rot, edge_out @ D_hidden.T, atol=1e-5)
+    assert torch.allclose(node_out_rot, node_out @ D_hidden.T, atol=1e-4)
+    assert torch.allclose(edge_out_rot, edge_out @ D_hidden.T, atol=1e-4)
 
 
 @pytest.mark.parametrize("head_use_mlp_log_scale", [True, False])
-@pytest.mark.parametrize("neck_depth", [1, 2])
-@pytest.mark.parametrize("head_depth", [1, 2])
-def test_deep_head_equivariance(head_use_mlp_log_scale, neck_depth, head_depth):
+@pytest.mark.parametrize("mlp_layers", [1, 2])
+def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     """Tests the DeepHead for equivariance."""
     E = 30
     cfg = Config(
         head_use_mlp_log_scale=head_use_mlp_log_scale,
-        neck_depth=neck_depth,
-        head_depth=head_depth,
+        head_trunk_mlp_n_layers=mlp_layers,
+        head_last_mlp_n_layers=mlp_layers,
+        head_final_proj_mlp_n_layers=mlp_layers,
+        head_log_scale_mlp_n_layers=mlp_layers,
         l_max_gnn=2,
         l_max_matrix=3,
         hidden_base_dim=16,

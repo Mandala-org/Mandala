@@ -19,7 +19,7 @@ from typing import List, Sequence, Tuple
 
 import torch
 from torch import nn
-from e3nn.o3 import Irreps
+from e3nn.o3 import Irreps, Linear
 from omegaconf import OmegaConf
 
 # ════════════════════════════════════════════════════════════════════════
@@ -63,6 +63,17 @@ class Config:
 
     head_use_mlp_log_scale: bool = True  # whether to use MLP log scaling in the head
 
+    # -------------- MLP Layers Configuration -----------------------------
+    edge_update_pre_lin_mlp_n_layers: int = 1
+    edge_update_post_lin_mlp_n_layers: int = 1
+    node_update_pre_lin_mlp_n_layers: int = 1
+    node_update_attention_mlp_n_layers: int = 1
+    node_update_post_lin_mlp_n_layers: int = 1
+    head_trunk_mlp_n_layers: int = 3
+    head_last_mlp_n_layers: int = 2
+    head_final_proj_mlp_n_layers: int = 1
+    head_log_scale_mlp_n_layers: int = 1
+
     # -------------- non-linearity & norm --------------------------------
     nonlin_kind: str = (
         "normact"  # "normact" | "s2act" | "gate_scalars_mlp" | "gate_magnitudes"
@@ -96,9 +107,6 @@ class Config:
     share_radial: bool = True
 
     # -------------- output head ----------------------------------------
-    neck_depth: int = 3
-    head_depth: int = 2
-
     # --------- additional outputs --------------------------------------
     enable_forces: bool = False
     enable_stress: bool = False
@@ -323,3 +331,71 @@ def split_into_three(
         torch.cat(split2_list, dim=1),
         torch.cat(split3_list, dim=1),
     )
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 4.  E(3) Equivariant MLP
+# ════════════════════════════════════════════════════════════════════════
+class E3MLP(nn.Module):
+    """
+    A generic N-layer E(3)-equivariant feed-forward network.
+
+    This module is a sequence of e3nn.o3.Linear layers alternating with
+    equivariant non-linearities.
+
+    Parameters
+    ----------
+    input_irreps : e3nn.o3.Irreps
+        Input irreducible representations.
+    hidden_irreps : e3nn.o3.Irreps
+        Irreducible representations for the hidden layers. This is ignored
+        if num_layers is 1.
+    output_irreps : e3nn.o3.Irreps
+        Output irreducible representations.
+    num_layers : int
+        Total number of linear layers in the MLP. Must be >= 1.
+    cfg : Config
+        Configuration object for activation functions.
+    activate_last : bool, optional
+        Whether to apply a non-linearity after the final layer.
+        Defaults to False.
+    """
+
+    def __init__(
+        self,
+        input_irreps: Irreps,
+        hidden_irreps: Irreps,
+        output_irreps: Irreps,
+        num_layers: int,
+        cfg: Config,
+        activate_last: bool = False,
+    ):
+        super().__init__()
+        if num_layers < 1:
+            raise ValueError("E3MLP must have at least 1 layer.")
+
+        from net.activations import make_nonlinearity  # Local import
+
+        self.irreps_in = input_irreps
+        self.irreps_hidden = hidden_irreps
+        self.irreps_out = output_irreps
+
+        layers = []
+        current_irreps = input_irreps
+
+        # All layers except the last one map to hidden_irreps
+        for _ in range(num_layers - 1):
+            layers.append(Linear(current_irreps, hidden_irreps))
+            layers.append(make_nonlinearity(hidden_irreps, cfg))
+            current_irreps = hidden_irreps
+
+        # The final layer maps to the output_irreps
+        layers.append(Linear(current_irreps, output_irreps))
+
+        if activate_last:
+            layers.append(make_nonlinearity(output_irreps, cfg))
+
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
