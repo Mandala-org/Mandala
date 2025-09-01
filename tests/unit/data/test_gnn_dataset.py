@@ -39,10 +39,7 @@ def dataset():
     )
 
 
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.integration
+@pytest.mark.unit
 def test_edge_sets(dataset):
     x, y = dataset[0]
 
