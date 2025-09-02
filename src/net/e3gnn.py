@@ -125,7 +125,7 @@ class E3GNN(pl.LightningModule):
                     cfg=self.cfg,
                     info={"matrix": name},
                 )
-                for name in ("hamiltonian", "overlap", "density")
+                for name in self.cfg.matrix_targets
             }
         )
 
@@ -254,7 +254,7 @@ class E3GNN(pl.LightningModule):
         preds = self(x)
         t_fwd_end = time.perf_counter()
         if self.cfg.pedantic:
-            for name in ("hamiltonian", "overlap", "density"):
+            for name in self.cfg.matrix_targets:
                 pred_edges = preds[name].pair_edges
                 target_edges = y[name].pair_edges
                 for key in target_edges.keys():
@@ -265,15 +265,15 @@ class E3GNN(pl.LightningModule):
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
         blk = {}
-        blk["hamiltonian"] = preds["hamiltonian"].to_blocks(self.mapper)
-        blk["density"] = preds["density"].to_blocks(self.mapper)
-        blk["overlap"] = preds["overlap"].to_blocks(self.mapper)
+        for target in self.cfg.matrix_targets:
+            blk[target] = preds[target].to_blocks(self.mapper)
+
         t_map_end = time.perf_counter()
 
         loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
         mae_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
         if self.cfg.train_target == "matrix":
-            for name in ("hamiltonian", "overlap", "density"):
+            for name in self.cfg.matrix_targets:
                 p_blocks = blk[name].pair_blocks
                 t_blocks = y[name].pair_blocks
                 for key in p_blocks:
@@ -282,7 +282,7 @@ class E3GNN(pl.LightningModule):
                         torch.abs(p_blocks[key] - t_blocks[key])
                     )
         elif self.cfg.train_target == "irreps":
-            for name in ("hamiltonian", "overlap", "density"):
+            for name in self.cfg.matrix_targets:
                 p_vecs = preds[name].pair_vectors
                 t_vecs = y[name].pair_vectors
                 for key in p_vecs:
@@ -294,22 +294,26 @@ class E3GNN(pl.LightningModule):
             raise ValueError(f"Unknown target type: {self.cfg.train_target}")
 
         # --- observable evaluation timing --------------------------------
+        loss_E, loss_N, abs_err_E, abs_err_N = None, None, None, None
         t_obs_start = time.perf_counter()
-        E_pred = trace_matmul_sparse_snap_vectorized(blk["hamiltonian"], blk["density"])
-        N_pred = trace_matmul_sparse_snap_vectorized(blk["overlap"], blk["density"])
+        if "hamiltonian" in blk and "overlap" in blk and "density" in blk:
+            E_pred = trace_matmul_sparse_snap_vectorized(
+                blk["hamiltonian"], blk["density"]
+            )
+            E_true = y["energy"]
+            loss_E = torch.mean((E_pred - E_true) ** 2)
+            abs_err_E = torch.mean(torch.abs(E_pred - E_true))
+            loss_E_weighted = self.cfg.loss_coef_energy * loss_E
+        if "overlap" in blk and "density" in blk:
+            N_pred = trace_matmul_sparse_snap_vectorized(blk["overlap"], blk["density"])
+            # electron count loss and absolute error
+            N_true = y["num_electrons"]
+            loss_N = torch.mean((N_pred - N_true) ** 2)
+            abs_err_N = torch.mean(torch.abs(N_pred - N_true))
+            loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
         t_obs_end = time.perf_counter()
-        E_true = y["energy"]
-        loss_E = torch.mean((E_pred - E_true) ** 2)
-        abs_err_E = torch.mean(torch.abs(E_pred - E_true))
-
-        # electron count loss and absolute error
-        N_true = y["num_electrons"]
-        loss_N = torch.mean((N_pred - N_true) ** 2)
-        abs_err_N = torch.mean(torch.abs(N_pred - N_true))
 
         # total loss
-        loss_E_weighted = self.cfg.loss_coef_energy * loss_E
-        loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
         loss = loss_matrix + loss_E_weighted + loss_N_weighted
 
         # L1 and L2 regularization
@@ -331,9 +335,14 @@ class E3GNN(pl.LightningModule):
             metrics = {
                 f"{stage}_loss": torch.tensor(max_val, device=self.device),
                 f"{stage}_loss_matrix": torch.tensor(max_val, device=self.device),
-                f"{stage}_loss_E": torch.tensor(max_val, device=self.device),
-                f"{stage}_loss_N": torch.tensor(max_val, device=self.device),
+                # f"{stage}_loss_E": torch.tensor(max_val, device=self.device),
+                # f"{stage}_loss_N": torch.tensor(max_val, device=self.device),
             }
+            if loss_E is not None:
+                metrics[f"{stage}_loss_E"] = torch.tensor(max_val, device=self.device)
+            if loss_N is not None:
+                metrics[f"{stage}_loss_N"] = torch.tensor(max_val, device=self.device)
+
             self.log_dict(
                 metrics,
                 prog_bar=True,
@@ -348,16 +357,24 @@ class E3GNN(pl.LightningModule):
             f"{stage}_loss": loss,
             f"{stage}_loss_matrix": loss_matrix,
             f"{stage}_mae_matrix": mae_matrix,
-            f"{stage}_loss_E": loss_E,
-            f"{stage}_loss_N": loss_N,
-            f"{stage}_abs_error_E": abs_err_E,
-            f"{stage}_abs_error_N": abs_err_N,
+            # f"{stage}_loss_E": loss_E,
+            # f"{stage}_loss_N": loss_N,
+            # f"{stage}_abs_error_E": abs_err_E,
+            # f"{stage}_abs_error_N": abs_err_N,
         }
+        if loss_E is not None:
+            metrics[f"{stage}_loss_E"] = loss_E
+            metrics[f"{stage}_abs_error_E"] = abs_err_E
+        if loss_N is not None:
+            metrics[f"{stage}_loss_N"] = loss_N
+            metrics[f"{stage}_abs_error_N"] = abs_err_N
         # Log percentage contributions if total loss is not zero
         if loss > 1e-8:
             metrics[f"{stage}_percent_matrix"] = (loss_matrix / loss) * 100
-            metrics[f"{stage}_percent_E"] = (loss_E_weighted / loss) * 100
-            metrics[f"{stage}_percent_N"] = (loss_N_weighted / loss) * 100
+            if loss_E is not None:
+                metrics[f"{stage}_percent_E"] = (loss_E_weighted / loss) * 100
+            if loss_N is not None:
+                metrics[f"{stage}_percent_N"] = (loss_N_weighted / loss) * 100
 
         if self.cfg.l1_reg_coef > 0:
             metrics[f"{stage}_l1_reg"] = l1_reg
@@ -411,9 +428,21 @@ class E3GNN(pl.LightningModule):
         box: torch.Tensor,
     ) -> "Snapshot":
         return Snapshot(
-            hamiltonian=predictions["hamiltonian"].to_blocks(self.mapper),
-            overlap=predictions["overlap"].to_blocks(self.mapper),
-            density=predictions["density"].to_blocks(self.mapper),
+            hamiltonian=(
+                predictions["hamiltonian"].to_blocks(self.mapper)
+                if "hamiltonian" in predictions
+                else None
+            ),
+            overlap=(
+                predictions["overlap"].to_blocks(self.mapper)
+                if "overlap" in predictions
+                else None
+            ),
+            density=(
+                predictions["density"].to_blocks(self.mapper)
+                if "density" in predictions
+                else None
+            ),
             positions=positions,
             box=box,
         )
