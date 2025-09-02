@@ -13,7 +13,6 @@ import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import TerminateOnNaN
 
 # Add project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
@@ -232,8 +231,7 @@ def main():
     callbacks = [
         BenchmarkCallback(
             verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
-        ),
-        TerminateOnNaN(),
+        )
     ]
 
     trainer = pl.Trainer(
