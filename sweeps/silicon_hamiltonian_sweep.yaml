@@ -1,5 +1,5 @@
 program: scripts/train_silicon.py
-project: mandala
+project: mandala_small_steps
 name: silicon_hamiltonian_only_sweep
 method: bayes
 early_terminate:
