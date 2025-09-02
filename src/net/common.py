@@ -69,8 +69,9 @@ class Config:
     node_update_pre_lin_mlp_n_layers: int = 1
     node_update_attention_mlp_n_layers: int = 1
     node_update_post_lin_mlp_n_layers: int = 1
-    head_trunk_mlp_n_layers: int = 3
-    head_final_proj_mlp_n_layers: int = 1
+
+    neck_depth: int = 3
+    head_depth: int = 1
     head_log_scale_mlp_n_layers: int = 1
 
     # -------------- non-linearity & norm --------------------------------
@@ -119,6 +120,9 @@ class Config:
     train_on_stress: bool = False
     train_on_energy: bool = True
     train_on_num_electrons: bool = True
+    matrix_targets: list = field(
+        default_factory=lambda: ["hamiltonian", "overlap", "density"]
+    )
 
     # -------------- loss weighting --------------------------------------
     loss_coef_energy: float = 1e-5

@@ -47,7 +47,7 @@ class DeepHead(nn.Module):
             irreps_hidden,
             irreps_hidden,
             irreps_hidden,
-            self.cfg.head_trunk_mlp_n_layers,
+            self.cfg.neck_depth,
             self.cfg,
             activate_last=True,
         )
@@ -60,7 +60,7 @@ class DeepHead(nn.Module):
                 irreps_neck,
                 irreps_neck,
                 mapper.get_pair_irreps(key),
-                self.cfg.head_final_proj_mlp_n_layers,
+                self.cfg.head_depth,
                 self.cfg,
                 activate_last=False,
             )
