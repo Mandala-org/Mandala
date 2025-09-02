@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import get_type_hints, Union
 from types import NoneType
 import typing
+import ast
 
 import torch
 from torch.utils.data import DataLoader
@@ -34,6 +35,16 @@ def str_to_bool(value):
         return False
     else:
         raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
+def str_to_list(value):
+    """Helper function to parse string representation of a list."""
+    if isinstance(value, list):
+        return value
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        raise argparse.ArgumentTypeError(f"Failed to parse '{value}' as a list.")
 
 
 def setup_argparse():
@@ -110,14 +121,7 @@ def setup_argparse():
             pass
 
         if is_sequence:
-            inner_type = str
-            try:
-                inner_type = typing.get_args(field_type)[0]
-            except (IndexError, TypeError):
-                pass
-            parser.add_argument(
-                f"--{name}", type=inner_type, nargs="+", default=default_value
-            )
+            parser.add_argument(f"--{name}", type=str_to_list, default=default_value)
         else:
             if not callable(arg_type_callable):
                 arg_type_callable = str
