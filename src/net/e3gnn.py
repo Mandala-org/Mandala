@@ -251,11 +251,11 @@ class E3GNN(pl.LightningModule):
         x, y = batch
         # --- forward timing (message-passing + heads) -------------------
         t_fwd_start = time.perf_counter()
-        preds = self(x)
+        preds_irreps = self(x)
         t_fwd_end = time.perf_counter()
         if self.cfg.pedantic:
             for name in self.cfg.matrix_targets:
-                pred_edges = preds[name].pair_edges
+                pred_edges = preds_irreps[name].pair_edges
                 target_edges = y[name].pair_edges
                 for key in target_edges.keys():
                     assert torch.equal(
@@ -264,53 +264,65 @@ class E3GNN(pl.LightningModule):
 
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
-        blk = {}
-        for target in self.cfg.matrix_targets:
-            blk[target] = preds[target].to_blocks(self.mapper)
-
+        preds_matrix = {}
+        if (
+            self.cfg.train_target == "matrix"
+            or self.cfg.train_on_energy
+            or self.cfg.train_on_num_electrons
+        ):
+            for target in self.cfg.matrix_targets:
+                preds_matrix[target] = preds_irreps[target].to_blocks(self.mapper)
         t_map_end = time.perf_counter()
 
         loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
         mae_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
+
+        # Select appropriate prediction and target formats for loss calculation
         if self.cfg.train_target == "matrix":
-            for name in self.cfg.matrix_targets:
-                p_blocks = blk[name].pair_blocks
-                t_blocks = y[name].pair_blocks
-                for key in p_blocks:
-                    loss_matrix = loss_matrix + self._mse(p_blocks[key], t_blocks[key])
-                    mae_matrix = mae_matrix + torch.mean(
-                        torch.abs(p_blocks[key] - t_blocks[key])
-                    )
+            preds_for_loss = preds_matrix
+            targets_for_loss = y
         elif self.cfg.train_target == "irreps":
-            for name in self.cfg.matrix_targets:
-                p_vecs = preds[name].pair_vectors
-                t_vecs = y[name].pair_vectors
-                for key in p_vecs:
-                    loss_matrix = loss_matrix + self._mse(p_vecs[key], t_vecs[key])
-                    mae_matrix = mae_matrix + torch.mean(
-                        torch.abs(p_vecs[key] - t_vecs[key])
-                    )
+            preds_for_loss = preds_irreps
+            targets_for_loss = y
         else:
-            raise ValueError(f"Unknown target type: {self.cfg.train_target}")
+            raise ValueError(f"Unknown train_target: {self.cfg.train_target}")
+
+        # Calculate matrix loss
+        for name in self.cfg.matrix_targets:
+            p = preds_for_loss[name]
+            t = targets_for_loss[name]
+            if self.cfg.train_target == "matrix":
+                p_items, t_items = p.pair_blocks, t.pair_blocks
+            else:  # irreps
+                p_items, t_items = p.pair_vectors, t.pair_vectors
+
+            for key in p_items:
+                loss_matrix += self._mse(p_items[key], t_items[key])
+                mae_matrix += torch.mean(torch.abs(p_items[key] - t_items[key]))
 
         # --- observable evaluation timing --------------------------------
         loss_E, loss_N, abs_err_E, abs_err_N = None, None, None, None
+        loss_E_weighted, loss_N_weighted = torch.tensor(0.0), torch.tensor(0.0)
         t_obs_start = time.perf_counter()
-        if "hamiltonian" in blk and "overlap" in blk and "density" in blk:
-            E_pred = trace_matmul_sparse_snap_vectorized(
-                blk["hamiltonian"], blk["density"]
-            )
-            E_true = y["energy"]
-            loss_E = torch.mean((E_pred - E_true) ** 2)
-            abs_err_E = torch.mean(torch.abs(E_pred - E_true))
-            loss_E_weighted = self.cfg.loss_coef_energy * loss_E
-        if "overlap" in blk and "density" in blk:
-            N_pred = trace_matmul_sparse_snap_vectorized(blk["overlap"], blk["density"])
-            # electron count loss and absolute error
-            N_true = y["num_electrons"]
-            loss_N = torch.mean((N_pred - N_true) ** 2)
-            abs_err_N = torch.mean(torch.abs(N_pred - N_true))
-            loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
+        if self.cfg.train_on_energy:
+            if "hamiltonian" in preds_matrix and "density" in preds_matrix:
+                E_pred = trace_matmul_sparse_snap_vectorized(
+                    preds_matrix["hamiltonian"], preds_matrix["density"]
+                )
+                E_true = y["energy"]
+                loss_E = torch.mean((E_pred - E_true) ** 2)
+                abs_err_E = torch.mean(torch.abs(E_pred - E_true))
+                loss_E_weighted = self.cfg.loss_coef_energy * loss_E
+        if self.cfg.train_on_num_electrons:
+            if "overlap" in preds_matrix and "density" in preds_matrix:
+                N_pred = trace_matmul_sparse_snap_vectorized(
+                    preds_matrix["overlap"], preds_matrix["density"]
+                )
+                # electron count loss and absolute error
+                N_true = y["num_electrons"]
+                loss_N = torch.mean((N_pred - N_true) ** 2)
+                abs_err_N = torch.mean(torch.abs(N_pred - N_true))
+                loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
         t_obs_end = time.perf_counter()
 
         # total loss
@@ -318,14 +330,10 @@ class E3GNN(pl.LightningModule):
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
-            l1_reg = sum(
-                p.abs().sum() for p in self.parameters()
-            )  #! CHECK WHETHER THIS APPLIES TO IRREPSBLOCKMAPPER'S Q MATRIX
+            l1_reg = sum(p.abs().sum() for p in self.parameters())
             loss += self.cfg.l1_reg_coef * l1_reg
         if self.cfg.l2_reg_coef > 0:
-            l2_reg = sum(
-                p.pow(2).sum() for p in self.parameters()
-            )  #! CHECK WHETHER THIS APPLIES TO IRREPSBLOCKMAPPER'S Q MATRIX
+            l2_reg = sum(p.pow(2).sum() for p in self.parameters())
             loss += self.cfg.l2_reg_coef * l2_reg
 
         # Graceful handling of NaN/inf loss
