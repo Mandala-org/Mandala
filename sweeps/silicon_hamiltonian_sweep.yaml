@@ -20,7 +20,6 @@ parameters:
     min: 3
     max: 4
   num_layers_gnn:
-    distribution: int_uniform
     value: 1
   num_layers_matrix:
     value: 1
