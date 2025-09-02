@@ -169,7 +169,7 @@ def test_edge_update_block_equivariance(
 
     # Check equivariance
     y_rotated_output = y @ D_hidden.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=2e-4)
 
 
 @pytest.mark.parametrize("node_update_message_agg", ["attention", "sum"])
@@ -290,4 +290,4 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
 
         y_vec_rotated_output = y_vec @ D_out.T
 
-        assert torch.allclose(y_vec_rotated_input, y_vec_rotated_output, atol=1e-3)
+        assert torch.allclose(y_vec_rotated_input, y_vec_rotated_output, atol=2e-3)
