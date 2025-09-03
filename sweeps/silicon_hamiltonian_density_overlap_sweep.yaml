@@ -1,6 +1,6 @@
 program: scripts/train_silicon.py
 project: mandala_small_steps
-name: silicon_hamiltonian_density_sweep
+name: silicon_hamiltonian_density_overlap_sweep
 method: bayes
 early_terminate:
   type: hyperband
