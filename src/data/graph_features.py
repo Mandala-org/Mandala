@@ -59,27 +59,26 @@ def compute_graph_features(
     )
     offdiag_edges = [e for e in edges if e["src"] != e["dst"]]
 
-    # 3. Calculate lengths for off-diagonal edges and sort them`
+    # 3. Calculate lengths for off-diagonal edges and sort them
 
-    if offdiag_edges:
-        offdiag_edge_index = torch.tensor(
-            [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
-            dtype=torch.long,
-            device=positions.device,  # Use positions device
-        )
-        disp = _minimal_disp(
-            positions,
-            offdiag_edge_index,
-            box,
-        )
-        lengths = torch.linalg.norm(disp, dim=-1)
-        sorted_indices = torch.argsort(lengths)
-        offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
-    else:
-        offdiag_edge_index = torch.empty(
-            (2, 0), dtype=torch.long, device=positions.device
-        )
-        lengths = torch.empty((0,), dtype=positions.dtype, device=positions.device)
+    offdiag_edge_index = torch.tensor(
+        [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
+        dtype=torch.long,
+        device=positions.device,  # Use positions device
+    )
+    disp = _minimal_disp(
+        positions,
+        offdiag_edge_index,
+        box,
+    )
+    lengths = torch.linalg.norm(disp, dim=-1)
+    sorted_indices = torch.argsort(lengths)
+    offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
+    lengths = lengths[sorted_indices]
+    offdiag_edges = [
+        e for i, e in enumerate(offdiag_edges) if lengths[i] <= cfg.cutoff_matrix
+    ]
+    lengths = lengths[lengths <= cfg.cutoff_matrix]
 
     # 4. Combine edges in the specified order
     all_edges = self_edges + offdiag_edges
