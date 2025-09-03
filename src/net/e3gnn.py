@@ -303,25 +303,27 @@ class E3GNN(pl.LightningModule):
         loss_E, loss_N, abs_err_E, abs_err_N = None, None, None, None
         loss_E_weighted, loss_N_weighted = torch.tensor(0.0), torch.tensor(0.0)
         t_obs_start = time.perf_counter()
-        if self.cfg.train_on_energy:
+        if self.cfg.enable_energy:
             if "hamiltonian" in preds_matrix and "density" in preds_matrix:
                 E_pred = trace_matmul_sparse_snap_vectorized(
                     preds_matrix["hamiltonian"], preds_matrix["density"]
                 )
                 E_true = y["energy"]
-                loss_E = torch.mean((E_pred - E_true) ** 2)
                 abs_err_E = torch.mean(torch.abs(E_pred - E_true))
-                loss_E_weighted = self.cfg.loss_coef_energy * loss_E
-        if self.cfg.train_on_num_electrons:
+                if self.cfg.train_on_energy:
+                    loss_E = torch.mean((E_pred - E_true) ** 2)
+                    loss_E_weighted = self.cfg.loss_coef_energy * loss_E
+        if self.cfg.enable_num_electrons:
             if "overlap" in preds_matrix and "density" in preds_matrix:
                 N_pred = trace_matmul_sparse_snap_vectorized(
                     preds_matrix["overlap"], preds_matrix["density"]
                 )
                 # electron count loss and absolute error
                 N_true = y["num_electrons"]
-                loss_N = torch.mean((N_pred - N_true) ** 2)
                 abs_err_N = torch.mean(torch.abs(N_pred - N_true))
-                loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
+                if self.cfg.train_on_num_electrons:
+                    loss_N = torch.mean((N_pred - N_true) ** 2)
+                    loss_N_weighted = self.cfg.loss_coef_num_electrons * loss_N
         t_obs_end = time.perf_counter()
 
         # total loss
@@ -371,9 +373,11 @@ class E3GNN(pl.LightningModule):
         }
         if loss_E is not None:
             metrics[f"{stage}_loss_E"] = loss_E
+        if abs_err_E is not None:
             metrics[f"{stage}_abs_error_E"] = abs_err_E
         if loss_N is not None:
             metrics[f"{stage}_loss_N"] = loss_N
+        if abs_err_N is not None:
             metrics[f"{stage}_abs_error_N"] = abs_err_N
         # Log percentage contributions if total loss is not zero
         if loss > 1e-8:
