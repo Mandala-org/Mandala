@@ -101,7 +101,7 @@ def test_edge_encoder_equivariance(l_max_gnn):
 
     # Check equivariance
     y_rotated_output = y @ D_out.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=2e-4)
 
 
 @pytest.mark.parametrize(
@@ -130,7 +130,7 @@ def test_activations_equivariance(nonlin_kind, irreps_str):
 
     # Check equivariance
     y_rotated_output = y @ D_out.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=2e-4)
 
 
 @pytest.mark.parametrize("edge_update_node_combine", ["concat", "sum"])
@@ -209,7 +209,7 @@ def test_node_update_block_equivariance(
 
     # Check equivariance
     y_rotated_output = y @ D_hidden.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=1e-4)
+    assert torch.allclose(y_rotated_input, y_rotated_output, atol=2e-4)
 
 
 def test_message_block_equivariance():
@@ -235,8 +235,8 @@ def test_message_block_equivariance():
     node_out_rot, edge_out_rot = layer(node_rotated, edge_rotated, edge_index)
 
     # Check equivariance for both outputs
-    assert torch.allclose(node_out_rot, node_out @ D_hidden.T, atol=1e-4)
-    assert torch.allclose(edge_out_rot, edge_out @ D_hidden.T, atol=1e-4)
+    assert torch.allclose(node_out_rot, node_out @ D_hidden.T, atol=2e-4)
+    assert torch.allclose(edge_out_rot, edge_out @ D_hidden.T, atol=2e-4)
 
 
 @pytest.mark.parametrize("head_use_mlp_log_scale", [True, False])

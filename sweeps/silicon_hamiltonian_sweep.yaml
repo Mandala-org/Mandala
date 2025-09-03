@@ -12,9 +12,9 @@ metric:
 
 parameters:
   cutoff_gnn:
-    value: 6.0
+    value: 5.0
   cutoff_matrix:
-    value: 8.0
+    value: 7.0
   l_max_gnn:
     distribution: int_uniform
     min: 3

@@ -280,12 +280,11 @@ class E3GNN(pl.LightningModule):
         # Select appropriate prediction and target formats for loss calculation
         if self.cfg.train_target == "matrix":
             preds_for_loss = preds_matrix
-            targets_for_loss = y
         elif self.cfg.train_target == "irreps":
             preds_for_loss = preds_irreps
-            targets_for_loss = y
         else:
             raise ValueError(f"Unknown train_target: {self.cfg.train_target}")
+        targets_for_loss = y
 
         # Calculate matrix loss
         for name in self.cfg.matrix_targets:
