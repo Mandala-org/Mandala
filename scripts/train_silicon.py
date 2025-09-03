@@ -141,7 +141,6 @@ def main():
     print("--- Populating Config from args ---")
     for key, value in vars(args).items():
         if hasattr(cfg, key):
-            print(f"  Setting cfg.{key} = {value} (type: {type(value)})")
             setattr(cfg, key, value)
 
     # --- Initialize W&B ---
