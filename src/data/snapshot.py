@@ -470,7 +470,8 @@ class Snapshot:
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
 
-        return snap.canonicalize_edges()
+        snap = snap.canonicalize_edges()
+        return snap
 
     @staticmethod
     def from_fhiaims(
