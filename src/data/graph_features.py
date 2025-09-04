@@ -4,6 +4,9 @@ from e3nn.math import soft_one_hot_linspace
 from net.common import Config
 from typing import Tuple, Dict
 
+from ase import Atoms
+from ase.neighborlist import neighbor_list
+
 
 def _minimal_disp(
     pos: torch.Tensor,
@@ -39,63 +42,72 @@ def compute_graph_features(
     index_gnn_cutoff : int
     """
 
-    # 1. Collect all edges and their properties
-    edges = []
-    for i, el_i in enumerate(atoms):
-        for j, el_j in enumerate(atoms):
-
-            key = f"{el_i}-{el_j}"
-            edges.append(
-                {
-                    "src": i,
-                    "dst": j,
-                    "key": key,
-                }
-            )
-
-    # 2. Separate self-edges and off-diagonal edges
-    self_edges = sorted(
-        [e for e in edges if e["src"] == e["dst"]], key=lambda e: e["src"]
+    # 1. Create ase.Atoms object
+    ase_atoms = Atoms(
+        symbols=atoms,
+        positions=positions.detach().cpu().numpy(),
+        cell=box.detach().cpu().numpy() if box is not None else None,
+        pbc=box is not None,
     )
-    offdiag_edges = [e for e in edges if e["src"] != e["dst"]]
 
-    # 3. Calculate lengths for off-diagonal edges and sort them
+    # 2. Use ase.neighborlist to get edges and offsets
+    # 'i' is the source atom index, 'j' is the destination atom index,
+    # 'S' is the offset vector in lattice coordinates.
+    src, dst, offsets = neighbor_list(
+        "ijS", ase_atoms, cfg.cutoff_matrix, self_interaction=False
+    )
 
-    offdiag_edge_index = torch.tensor(
-        [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
-        dtype=torch.long,
-        device=positions.device,  # Use positions device
+    # 3. Handle self-edges explicitly
+    num_atoms = len(atoms)
+    self_edge_src = torch.arange(num_atoms, dtype=torch.long)
+    self_edge_dst = torch.arange(num_atoms, dtype=torch.long)
+
+    # 4. Combine self-edges and off-diagonal edges
+    offdiag_edge_src = torch.from_numpy(src)
+    offdiag_edge_dst = torch.from_numpy(dst)
+    offdiag_edge_offsets = torch.from_numpy(offsets).to(torch.float32)
+
+    # 5. Calculate displacement vectors using the offsets
+    # disp = pos[j] + S @ box - pos[i]
+    offdiag_disp = (
+        positions[offdiag_edge_dst]
+        + torch.matmul(
+            offdiag_edge_offsets.to(positions.device), box.to(positions.device)
+        )
+        - positions[offdiag_edge_src]
     )
-    disp = _minimal_disp(
-        positions,
-        offdiag_edge_index,
-        box,
-    )
+    self_disp = torch.zeros((num_atoms, 3), device=positions.device)
+
+    # 6. Calculate lengths and sort off-diagonal edges
+    offdiag_lengths = torch.linalg.norm(offdiag_disp, dim=-1)
+    sorted_indices = torch.argsort(offdiag_lengths)
+
+    offdiag_edge_src = offdiag_edge_src[sorted_indices]
+    offdiag_edge_dst = offdiag_edge_dst[sorted_indices]
+    offdiag_disp = offdiag_disp[sorted_indices]
+    offdiag_lengths = offdiag_lengths[sorted_indices]
+
+    # 7. Combine all edges and features
+    edge_src = torch.cat([self_edge_src, offdiag_edge_src])
+    edge_dst = torch.cat([self_edge_dst, offdiag_edge_dst])
+    edge_index = torch.stack([edge_src, edge_dst]).to(positions.device)
+
+    disp = torch.cat([self_disp, offdiag_disp])
     lengths = torch.linalg.norm(disp, dim=-1)
-    sorted_indices = torch.argsort(lengths)
-    offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
-    lengths = lengths[sorted_indices]
-    offdiag_edges = [
-        e for i, e in enumerate(offdiag_edges) if lengths[i] <= cfg.cutoff_matrix
+
+    # 8. Create edge_type_idx
+    self_edge_keys = [f"{atoms[i]}-{atoms[i]}" for i in range(num_atoms)]
+    offdiag_edge_keys = [
+        f"{atoms[i]}-{atoms[j]}" for i, j in zip(offdiag_edge_src, offdiag_edge_dst)
     ]
-    lengths = lengths[lengths <= cfg.cutoff_matrix]
-
-    # 4. Combine edges in the specified order
-    all_edges = self_edges + offdiag_edges
-    edge_index = torch.tensor(
-        [[e["src"] for e in all_edges], [e["dst"] for e in all_edges]],
-        dtype=torch.long,
-        device=positions.device,
-    )
+    all_edge_keys = self_edge_keys + offdiag_edge_keys
     edge_type_idx = torch.tensor(
-        [edge_type2idx[e["key"]] for e in all_edges],
+        [edge_type2idx[key] for key in all_edge_keys],
         dtype=torch.long,
         device=positions.device,
     )
 
-    # 5. Calculate geometric features for the final edge order
-    disp = _minimal_disp(positions, edge_index, box)
-    lengths = torch.linalg.norm(disp, dim=-1)
+    # 9. Calculate geometric features for the final edge order
     edge_sh = spherical_harmonics(
         sh_irreps, disp, normalize=True, normalization="component"
     )
@@ -108,7 +120,7 @@ def compute_graph_features(
         cutoff=False,
     )
 
-    # 6. Determine the GNN cfg.cutoff_gnn index
+    # 10. Determine the GNN cfg.cutoff_gnn index
     index_gnn_cutoff = torch.sum(lengths <= cfg.cutoff_gnn).item()
 
     return (
@@ -117,5 +129,5 @@ def compute_graph_features(
         edge_length_emb,
         edge_sh,
         index_gnn_cutoff,
-        len(self_edges),
+        len(self_edge_src),
     )
