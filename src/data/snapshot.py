@@ -30,6 +30,7 @@ from __future__ import annotations
 import os
 from typing import Dict, Any
 import torch
+from scipy.linalg import eigvalsh
 
 from core.sparse_math import (
     trace_matmul_sparse_snap,
@@ -523,8 +524,10 @@ class Snapshot:
             The computed density of states for each energy bin.
         """
         H = self.hamiltonian.to_dense().detach()
+        S = self.overlap.to_dense().detach()
 
-        eigenvalues, eigenvectors = torch.linalg.eigh(H)
+        eigenvalues = eigvalsh(H, S)
+
         ### setting up the energy bins
         grid = torch.arange(E_min, E_max + bin_width, bin_width)
         dos = torch.sum(
