@@ -14,6 +14,7 @@ from typing import Dict, Tuple, Any
 import torch
 import pytorch_lightning as pl
 from torch import nn
+from torch_scatter import scatter_add
 
 from collections import OrderedDict
 
@@ -140,11 +141,37 @@ class E3GNN(pl.LightningModule):
         self,
         raw: Dict[str, Dict[str, torch.Tensor]],
         atoms: Tuple[str, ...],
-    ):
+    ) -> IrrepsBlockData:
         """
         Convert DeepHead raw dict → IrrepsBlockData with mapper.
         """
         from collections import Counter
+
+        if self.cfg.pbc_aggregation == "sum":
+            aggregated_raw = {}
+            num_atoms = len(atoms)
+            for key, payload in raw.items():
+                vectors = payload["vectors"]
+                edges = payload["edges"]
+
+                # Create a unique ID for each (i, j) pair
+                pair_ids = edges[0] * num_atoms + edges[1]
+
+                # Find unique pairs and their inverse mapping
+                unique_pair_ids, inverse_map = torch.unique(
+                    pair_ids, return_inverse=True
+                )
+
+                # Sum vectors for the same pair
+                summed_vectors = scatter_add(vectors, inverse_map, dim=0)
+
+                # Get the edges for the summed vectors
+                new_edges_i = unique_pair_ids // num_atoms
+                new_edges_j = unique_pair_ids % num_atoms
+                new_edges = torch.stack([new_edges_i, new_edges_j])
+
+                aggregated_raw[key] = {"vectors": summed_vectors, "edges": new_edges}
+            raw = aggregated_raw
 
         pair_vec, pair_edges, lookup = {}, {}, {}
         for key, payload in raw.items():
@@ -178,6 +205,7 @@ class E3GNN(pl.LightningModule):
                 edge_sh,
                 index_gnn_cutoff,
                 num_self_edges,
+                is_closest_edge,
             ) = compute_graph_features(
                 positions=x["positions"],
                 box=x["box"],
@@ -194,6 +222,7 @@ class E3GNN(pl.LightningModule):
             x["edge_sh"] = edge_sh
             x["index_gnn_cutoff"] = index_gnn_cutoff
             x["num_self_edges"] = num_self_edges
+            x["is_closest_edge"] = is_closest_edge
 
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x["node_type_idx"], activation_mags=self._activation_mags)
@@ -227,17 +256,34 @@ class E3GNN(pl.LightningModule):
                 node, edge_large, ei_large, activation_mags=self._activation_mags
             )
 
-        embeddings = torch.cat([node, edge_large], dim=0)
-
         # ---- heads -----------------------------------------------------
+        # The head operates on a concatenation of node features (for self-edges)
+        # and edge features (for off-diagonal edges).
+
+        head_edge_index = x["edge_index"]
+        head_edge_type_idx = x["edge_type_idx"]
+
+        if self.cfg.pbc_aggregation == "closest":
+            closest_mask = x["is_closest_edge"]
+            is_closest_offdiag_mask = closest_mask[num_self_edges:]
+            closest_edge_large = edge_large[is_closest_offdiag_mask]
+            head_embeddings = torch.cat([node, closest_edge_large], dim=0)
+
+            head_edge_index = x["edge_index"][:, closest_mask]
+            head_edge_type_idx = x["edge_type_idx"][closest_mask]
+        else:  # sum
+            head_embeddings = torch.cat([node, edge_large], dim=0)
+
         preds_raw = {
-            name: head(embeddings, x["edge_type_idx"], x["edge_index"])
+            name: head(head_embeddings, head_edge_type_idx, head_edge_index)
             for name, head in self.heads.items()
         }
+
         preds_wrapped = {
             name: self._wrap_head_output(raw, tuple(x["atoms"]))
             for name, raw in preds_raw.items()
         }
+
         # expose activation magnitudes for callbacks
         self._last_activation_mags = self._activation_mags
         return preds_wrapped

@@ -36,6 +36,9 @@ class Config:
     nonlinearity, regularization, radial basis, output heads, and loss weighting.
     """
 
+    # -------------- PBC handling ----------------------------------------
+    pbc_aggregation: str = "sum"  # "sum" | "closest"
+
     # radii
     cutoff_gnn: float = 5.0
     cutoff_matrix: float = 8.0
