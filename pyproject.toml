@@ -44,7 +44,7 @@ dev = [
 
 [tool.ruff.lint]
 # ignore E741 Ambiguous variable name
-ignore = ["E741"]
+ignore = ["E741", "E402"]
 
 [tool.pytest.ini_options]
 addopts = ['-n', 'auto']

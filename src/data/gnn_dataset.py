@@ -167,6 +167,7 @@ class E3GNNDataset(Dataset):
                 edge_sh,
                 index_gnn_cutoff,
                 num_self_edges,
+                is_closest_edge,
             ) = compute_graph_features(
                 positions=snap.positions,
                 box=snap.box,
@@ -181,6 +182,7 @@ class E3GNNDataset(Dataset):
             x["edge_sh"] = edge_sh
             x["index_gnn_cutoff"] = index_gnn_cutoff
             x["num_self_edges"] = num_self_edges
+            x["is_closest_edge"] = is_closest_edge
 
         with torch.no_grad():
             if self.cfg.train_target == "matrix":
