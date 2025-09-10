@@ -3,6 +3,7 @@ from e3nn.o3 import Irreps, spherical_harmonics
 from e3nn.math import soft_one_hot_linspace
 from net.common import Config
 from typing import Tuple, Dict
+from torch_scatter import scatter_min
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
@@ -31,7 +32,9 @@ def compute_graph_features(
     cfg: Config,
     sh_irreps: Irreps,
     edge_type2idx: Dict[str, int],
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int, int]:
+) -> Tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int, int, torch.Tensor
+]:
     """
     Returns
     -------
@@ -40,6 +43,7 @@ def compute_graph_features(
     edge_length_emb : (E_total, cfg.n_radial) float
     edge_sh : (E_total, sh_dim) float
     index_gnn_cutoff : int
+    is_closest_edge: (E_total,) bool
     """
 
     # 1. Create ase.Atoms object
@@ -63,29 +67,46 @@ def compute_graph_features(
     self_edge_dst = torch.arange(num_atoms, dtype=torch.long)
 
     # 4. Combine self-edges and off-diagonal edges
-    offdiag_edge_src = torch.from_numpy(src)
-    offdiag_edge_dst = torch.from_numpy(dst)
+    offdiag_edge_src_unsorted = torch.from_numpy(src)
+    offdiag_edge_dst_unsorted = torch.from_numpy(dst)
     offdiag_edge_offsets = torch.from_numpy(offsets).to(torch.float32)
 
     # 5. Calculate displacement vectors using the offsets
     # disp = pos[j] + S @ box - pos[i]
-    offdiag_disp = (
-        positions[offdiag_edge_dst]
+    offdiag_disp_unsorted = (
+        positions[offdiag_edge_dst_unsorted]
         + torch.matmul(
             offdiag_edge_offsets.to(positions.device), box.to(positions.device)
         )
-        - positions[offdiag_edge_src]
+        - positions[offdiag_edge_src_unsorted]
     )
     self_disp = torch.zeros((num_atoms, 3), device=positions.device)
 
     # 6. Calculate lengths and sort off-diagonal edges
-    offdiag_lengths = torch.linalg.norm(offdiag_disp, dim=-1)
-    sorted_indices = torch.argsort(offdiag_lengths)
+    offdiag_lengths_unsorted = torch.linalg.norm(offdiag_disp_unsorted, dim=-1)
 
-    offdiag_edge_src = offdiag_edge_src[sorted_indices]
-    offdiag_edge_dst = offdiag_edge_dst[sorted_indices]
-    offdiag_disp = offdiag_disp[sorted_indices]
-    offdiag_lengths = offdiag_lengths[sorted_indices]
+    # Create canonical pair IDs for off-diagonal edges
+    pair_ids = torch.minimum(
+        offdiag_edge_src_unsorted, offdiag_edge_dst_unsorted
+    ) * num_atoms + torch.maximum(offdiag_edge_src_unsorted, offdiag_edge_dst_unsorted)
+
+    # Find the minimum length for each pair
+    _, argmin = scatter_min(offdiag_lengths_unsorted, pair_ids, dim=0)
+
+    # Create a boolean mask for the closest off-diagonal edges
+    is_closest_offdiag_edge_unsorted = torch.zeros_like(
+        offdiag_lengths_unsorted, dtype=torch.bool
+    )
+    unique_pair_ids = torch.unique(pair_ids)
+    valid_argmin = argmin[unique_pair_ids]
+    is_closest_offdiag_edge_unsorted[valid_argmin] = True
+
+    sorted_indices = torch.argsort(offdiag_lengths_unsorted)
+
+    offdiag_edge_src = offdiag_edge_src_unsorted[sorted_indices]
+    offdiag_edge_dst = offdiag_edge_dst_unsorted[sorted_indices]
+    offdiag_disp = offdiag_disp_unsorted[sorted_indices]
+    is_closest_offdiag_edge = is_closest_offdiag_edge_unsorted[sorted_indices]
 
     # 7. Combine all edges and features
     edge_src = torch.cat([self_edge_src, offdiag_edge_src])
@@ -94,6 +115,11 @@ def compute_graph_features(
 
     disp = torch.cat([self_disp, offdiag_disp])
     lengths = torch.linalg.norm(disp, dim=-1)
+
+    is_closest_self_edge = torch.ones_like(self_edge_src, dtype=torch.bool)
+    is_closest_edge = torch.cat([is_closest_self_edge, is_closest_offdiag_edge]).to(
+        positions.device
+    )
 
     # 8. Create edge_type_idx
     self_edge_keys = [f"{atoms[i]}-{atoms[i]}" for i in range(num_atoms)]
@@ -130,4 +156,5 @@ def compute_graph_features(
         edge_sh,
         index_gnn_cutoff,
         len(self_edge_src),
+        is_closest_edge,
     )
