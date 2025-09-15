@@ -25,8 +25,10 @@ from omegaconf import OmegaConf
 # ════════════════════════════════════════════════════════════════════════
 # 1.  Hyper-parameters
 # ════════════════════════════════════════════════════════════════════════
-OmegaConf.register_new_resolver("torch_dtype", lambda x: str(x).split(".")[-1])
-OmegaConf.register_new_resolver("torch_device", lambda x: str(x))
+if not OmegaConf.has_resolver("torch_dtype"):
+    OmegaConf.register_new_resolver("torch_dtype", lambda x: str(x).split(".")[-1])
+if not OmegaConf.has_resolver("torch_device"):
+    OmegaConf.register_new_resolver("torch_device", lambda x: str(x))
 
 
 @dataclass(slots=True)
