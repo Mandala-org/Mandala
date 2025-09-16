@@ -1,6 +1,6 @@
 program: scripts/train_silicon.py
 project: mandala_small_steps
-name: silicon_hamiltonian_density_sweep
+name: silicon_hamiltonian_density_overlap_sweep
 method: bayes
 early_terminate:
   type: hyperband
@@ -56,7 +56,7 @@ parameters:
 
   # --- Fixed parameters for Hamiltonian-only training ---
   matrix_targets:
-    value: ["hamiltonian", "density"]
+    value: ["hamiltonian", "density", "overlap"]
   train_on_energy:
     value: False
   train_on_num_electrons:
@@ -75,7 +75,7 @@ command:
   - ${args}
   - --gpus=1  # Specify a single GPU
   - --num_workers=0
-  - --n_snapshots_per_temp=10 # Use a subset for faster sweeps
-  - --max_epochs=400
+  - --n_snapshots_per_temp=1 # Use a subset for faster sweeps
+  - --max_epochs=1000
   - --min_temp=3000
   - --max_temp=3000
