@@ -213,6 +213,9 @@ def parse_openmx_scfout(
         ham = conv.matrix_to_e3nn(ham)
         ovl = conv.matrix_to_e3nn(ovl)
         den = conv.matrix_to_e3nn(den)
+        print(
+            "Warning: Parsed matrices converted to e3nn convention, positions may need adjustment."
+        )
     elif convention != "openmx":
         raise ValueError(f"convention must be 'openmx' or 'e3nn', not '{convention}'")
 
