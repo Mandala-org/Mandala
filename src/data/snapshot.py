@@ -280,35 +280,63 @@ class Snapshot:
         cfg = self.density.orbital_cfg
         any_block = next(iter(self.density.pair_blocks.values()))
         device = any_block.device
+        pos = self.positions
+        forces = self.forces
+        box = self.box
 
-        if self.density.basis == "openmx":
+        if self.density.basis == "openmx" and target == "e3nn":
             conv = OpenMXE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-        elif self.density.basis == "fhi-aims":
+            pos = pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            forces = (
+                forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+                if forces is not None
+                else None
+            )
+            box = (
+                box @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+                if box is not None
+                else None
+            )
+        elif self.density.basis == "fhi-aims" and target == "e3nn":
             conv = FHIaimsE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-        elif target == "openmx":
+        elif self.density.basis == "e3nn" and target == "openmx":
             conv = OpenMXE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_openmx(self.hamiltonian)
             ovl = conv.matrix_to_openmx(self.overlap)
             den = conv.matrix_to_openmx(self.density)
-        elif target == "fhi-aims":
+            print(
+                "Warning: Position/force/box conversion from e3nn to openmx to be checked!"
+            )
+            pos = pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+            forces = (
+                forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                if forces is not None
+                else None
+            )
+            box = (
+                box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                if box is not None
+                else None
+            )
+        elif self.density.basis == "e3nn" and target == "fhi-aims":
             conv = FHIaimsE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_fhiaims(self.hamiltonian)
             ovl = conv.matrix_to_fhiaims(self.overlap)
             den = conv.matrix_to_fhiaims(self.density)
         else:
-            raise RuntimeError("Should not be reachable")
+            raise RuntimeError("Unsupported basis conversion")
 
         return Snapshot(
             ham,
             ovl,
             den,
-            positions=self.positions,
+            positions=pos,
             forces=self.forces,
             box=self.box,
             stress=self.stress,
@@ -339,15 +367,20 @@ class Snapshot:
         ham = self.hamiltonian.rotate(R)
         ovl = self.overlap.rotate(R)
         den = self.density.rotate(R)
+        if self.stress is not None:
+            print("Warning: stress rotation to be checked!")
         return Snapshot(
             ham,
             ovl,
             den,
             positions=self.positions @ R.T if self.positions is not None else None,
+            # positions=self.positions @ R if self.positions is not None else None,
             forces=self.forces @ R.T if self.forces is not None else None,
             box=self.box @ R.T if self.box is not None else None,
             stress=(
-                self.stress @ R.T if self.stress is not None else None
+                self.stress @ R.T
+                if self.stress is not None and self.stress.shape != torch.Size([0])
+                else None
             ),  # ! Check that it's correct
             matrix_path=None,
             info_path=None,
@@ -456,7 +489,7 @@ class Snapshot:
             matrix_path,
             atoms,
             orb_cfg,
-            convention=convention,
+            convention="openmx",
             symmetrize_density=symmetrize_density,
         )
 
@@ -469,6 +502,8 @@ class Snapshot:
 
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
+
+        snap = snap._change_basis(convention)
 
         snap = snap.canonicalize_edges()
         return snap
