@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
-import torch  # real PyTorch – no stub
+import torch
 
 # ---------------------------------------------------------------------------
 # helper: recover lattice given frac + cartesian
