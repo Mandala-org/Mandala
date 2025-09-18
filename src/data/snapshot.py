@@ -289,14 +289,26 @@ class Snapshot:
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-            pos = pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            # pos = pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            # forces = (
+            #     forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            #     if forces is not None
+            #     else None
+            # )
+            # box = (
+            #     box @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            #     if box is not None
+            #     else None
+            # )
+            print("Changing convention with [1, 2, 0]")
+            pos = pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
             forces = (
-                forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+                forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if forces is not None
                 else None
             )
             box = (
-                box @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+                box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if box is not None
                 else None
             )
