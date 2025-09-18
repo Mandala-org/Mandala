@@ -39,8 +39,8 @@ parameters:
     values: ["sigmoid", "leakyrelu", "tanh"]
   lr:
     distribution: log_uniform_values
-    min: 1.0e-4
-    max: 1.0e-2
+    min: 1.0e-5
+    max: 1.0e-3
   hidden_base_dim:
     value: 64
   dropout:
