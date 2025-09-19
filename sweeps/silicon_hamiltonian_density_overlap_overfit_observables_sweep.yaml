@@ -62,18 +62,8 @@ parameters:
     value: 1
   train_target:
     value: "matrix"
-
-  # --- Fixed parameters for Hamiltonian-only training ---
   matrix_targets:
     value: ["hamiltonian", "density", "overlap"]
-  train_on_energy:
-    value: False
-  train_on_num_electrons:
-    value: False
-  loss_coef_energy:
-    value: 0.0
-  loss_coef_num_electrons:
-    value: 0.0
 
 
 command:
