@@ -485,20 +485,20 @@ class E3GNN(pl.LightningModule):
             # f"{stage}_abs_error_E": abs_err_E,
             # f"{stage}_abs_error_N": abs_err_N,
         }
-        if loss_E is not None:
-            metrics[f"{stage}_loss_E"] = loss_E
+        if loss_E_weighted is not None:
+            metrics[f"{stage}_loss_E"] = loss_E_weighted
         if abs_err_E is not None:
             metrics[f"{stage}_abs_error_E"] = abs_err_E
-        if loss_N is not None:
-            metrics[f"{stage}_loss_N"] = loss_N
+        if loss_N_weighted is not None:
+            metrics[f"{stage}_loss_N"] = loss_N_weighted
         if abs_err_N is not None:
             metrics[f"{stage}_abs_error_N"] = abs_err_N
         # Log percentage contributions if total loss is not zero
         if loss > 1e-8:
             metrics[f"{stage}_percent_matrix"] = (loss_matrix / loss) * 100
-            if loss_E is not None:
+            if loss_E_weighted is not None:
                 metrics[f"{stage}_percent_E"] = (loss_E_weighted / loss) * 100
-            if loss_N is not None:
+            if loss_N_weighted is not None:
                 metrics[f"{stage}_percent_N"] = (loss_N_weighted / loss) * 100
 
         if self.cfg.l1_reg_coef > 0:
