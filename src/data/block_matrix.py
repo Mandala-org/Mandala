@@ -206,6 +206,15 @@ class BlockMatrix:
             basis=self.basis,
         )
 
+    def __mul__(self, scalar: float) -> "BlockMatrix":
+        """
+        Scalar multiplication of all blocks by a float or int.
+        """
+        if not isinstance(scalar, (float, int)):
+            return NotImplemented
+        new_blocks = {k: v * scalar for k, v in self.pair_blocks.items()}
+        return self._replace_pair_blocks(new_blocks, basis=self.basis)
+
     # ------------------------------------------------------------------ edge reordering
     def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
         """

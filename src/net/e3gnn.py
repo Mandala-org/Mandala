@@ -321,7 +321,7 @@ class E3GNN(pl.LightningModule):
                 # symmetrize
                 preds_matrix[target] = (
                     preds_matrix[target] + preds_matrix[target].transpose()
-                ) / 2
+                ) * 0.5
         t_map_end = time.perf_counter()
 
         loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
