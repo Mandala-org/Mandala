@@ -14,7 +14,7 @@ parameters:
   cutoff_gnn:
     value: 7.0
   cutoff_matrix:
-    value: 10.0
+    value: 7.0
   l_max_gnn:
     distribution: int_uniform
     min: 3
