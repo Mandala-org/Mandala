@@ -1,6 +1,6 @@
 program: scripts/train_silicon.py
 project: mandala_small_steps
-name: silicon_hamiltonian_density_overlap_overfit_sweep
+name: silicon_hamiltonian_density_overlap_overfit_observables_low_sweep
 method: bayes
 early_terminate:
   type: hyperband
@@ -42,12 +42,12 @@ parameters:
     max: 1.0e-2
   loss_coef_energy:
     distribution: log_uniform_values
-    min: 1.0e-6
-    max: 1.0e-3
+    min: 1.0e-9
+    max: 1.0e-6
   loss_coef_num_electrons:
     distribution: log_uniform_values
-    min: 1.0e-6
-    max: 1.0e-3
+    min: 1.0e-9
+    max: 1.0e-6
 
   hidden_base_dim:
     value: 32
