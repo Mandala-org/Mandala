@@ -49,8 +49,8 @@ class E3GNNDataset(Dataset):
         cfg: Config,
     ):
         self.cfg = cfg
-        if cfg.cutoff_gnn >= cfg.cutoff_matrix:
-            raise ValueError("cutoff_gnn must be < cutoff_matrix")
+        if cfg.cutoff_gnn > cfg.cutoff_matrix:
+            raise ValueError("cutoff_gnn must be <= cutoff_matrix")
 
         if not snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
