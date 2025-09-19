@@ -12,7 +12,6 @@ from typing import Dict, List
 import torch
 from torch import nn
 from e3nn.o3 import Irreps
-from e3nn.o3 import TensorSquare
 
 from core.block_irrep_mapper import BlockIrrepMapper
 
@@ -46,12 +45,12 @@ class DeepHead(nn.Module):
         self.trunk = E3MLP(
             irreps_hidden,
             irreps_hidden,
-            irreps_hidden,
+            irreps_neck,
             self.cfg.neck_depth,
             self.cfg,
             activate_last=True,
         )
-        self.tensor_square = TensorSquare(irreps_hidden, irreps_neck)
+        # self.tensor_square = TensorSquare(irreps_hidden, irreps_neck)
 
         # 2) final projection
         final_proj = {}
@@ -90,7 +89,7 @@ class DeepHead(nn.Module):
         edge_index: torch.Tensor,  # (2, E)
     ) -> Dict[str, Dict[str, torch.Tensor]]:
         h = self.trunk(edge_feat)
-        h = self.tensor_square(h)
+        # h = self.tensor_square(h)
 
         out_vec = defaultdict(list)
         out_edges = defaultdict(list)
