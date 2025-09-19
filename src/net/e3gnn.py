@@ -346,8 +346,13 @@ class E3GNN(pl.LightningModule):
                 p_items, t_items = p.pair_vectors, t.pair_vectors
 
             for key in p_items:
-                loss_matrix += self._mse(p_items[key], t_items[key])
-                mae_matrix += torch.mean(torch.abs(p_items[key] - t_items[key]))
+                try:
+                    loss_matrix += self._mse(p_items[key], t_items[key])
+                    mae_matrix += torch.mean(torch.abs(p_items[key] - t_items[key]))
+                except ValueError as e:
+                    raise ValueError(
+                        f"Error computing loss for matrix '{name}', block '{key}' with shapes: {p_items[key].shape=}, {t_items[key].shape}: {e}"
+                    ) from e
 
         # --- observable evaluation timing --------------------------------
         loss_E, loss_N, abs_err_E, abs_err_N = None, None, None, None
