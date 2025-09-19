@@ -345,14 +345,68 @@ class E3GNN(pl.LightningModule):
             else:  # irreps
                 p_items, t_items = p.pair_vectors, t.pair_vectors
 
-            for key in p_items:
-                try:
-                    loss_matrix += self._mse(p_items[key], t_items[key])
-                    mae_matrix += torch.mean(torch.abs(p_items[key] - t_items[key]))
-                except ValueError as e:
-                    raise ValueError(
-                        f"Error computing loss for matrix '{name}', block '{key}' with shapes: {p_items[key].shape=}, {t_items[key].shape}: {e}"
-                    ) from e
+            # Vectorized loss calculation
+            for key in t.keys():
+                if key not in p.keys():
+                    continue
+
+                t_items_key = t_items[key]
+                p_items_key = p_items[key]
+                t_edges = t.pair_edges[key].t().tolist()
+                p_edges = p.pair_edges[key].t().tolist()
+
+                print(f"\nMatrix '{name}', Key '{key}':")
+                print(f"  Target blocks shape: {t_items_key.shape}")
+                print(f"  Predicted blocks shape: {p_items_key.shape}")
+
+                num_target_edges = len(t_edges)
+                num_pred_edges = len(p_edges)
+
+                pred_edge_to_idx = {tuple(edge): i for i, edge in enumerate(p_edges)}
+
+                target_indices = []
+                pred_indices = []
+                for i, edge in enumerate(t_edges):
+                    if tuple(edge) in pred_edge_to_idx:
+                        target_indices.append(i)
+                        pred_indices.append(pred_edge_to_idx[tuple(edge)])
+
+                target_indices = torch.tensor(
+                    target_indices, dtype=torch.long, device=self.device
+                )
+                pred_indices = torch.tensor(
+                    pred_indices, dtype=torch.long, device=self.device
+                )
+
+                target_blocks_to_compare = t_items_key[target_indices]
+                pred_blocks_to_compare = p_items_key[pred_indices]
+
+                num_common_edges = len(target_indices)
+                print(f"  Shape for loss calculation: {target_blocks_to_compare.shape}")
+                perc_target_used = (
+                    (num_common_edges / num_target_edges) * 100
+                    if num_target_edges > 0
+                    else 0
+                )
+                perc_pred_used = (
+                    (num_common_edges / num_pred_edges) * 100
+                    if num_pred_edges > 0
+                    else 0
+                )
+                print(
+                    f"  Edges used: {num_common_edges}/{num_target_edges} ({perc_target_used:.2f}%) of target edges."
+                )
+                print(
+                    f"  Edges used: {num_common_edges}/{num_pred_edges} ({perc_pred_used:.2f}%) of predicted edges."
+                )
+
+                if num_common_edges > 0:
+                    loss_matrix += self._mse(
+                        pred_blocks_to_compare, target_blocks_to_compare
+                    )
+                    mae_matrix += torch.mean(
+                        torch.abs(pred_blocks_to_compare - target_blocks_to_compare)
+                    )
 
         # --- observable evaluation timing --------------------------------
         loss_E, loss_N, abs_err_E, abs_err_N = None, None, None, None
