@@ -355,9 +355,10 @@ class E3GNN(pl.LightningModule):
                 t_edges = t.pair_edges[key].t().tolist()
                 p_edges = p.pair_edges[key].t().tolist()
 
-                print(f"\nMatrix '{name}', Key '{key}':")
-                print(f"  Target blocks shape: {t_items_key.shape}")
-                print(f"  Predicted blocks shape: {p_items_key.shape}")
+                if self.cfg.verbosity >= 2:
+                    print(f"\nMatrix '{name}', Key '{key}':")
+                    print(f"  Target blocks shape: {t_items_key.shape}")
+                    print(f"  Predicted blocks shape: {p_items_key.shape}")
 
                 num_target_edges = len(t_edges)
                 num_pred_edges = len(p_edges)
@@ -382,7 +383,10 @@ class E3GNN(pl.LightningModule):
                 pred_blocks_to_compare = p_items_key[pred_indices]
 
                 num_common_edges = len(target_indices)
-                print(f"  Shape for loss calculation: {target_blocks_to_compare.shape}")
+                if self.cfg.verbosity >= 2:
+                    print(
+                        f"  Shape for loss calculation: {target_blocks_to_compare.shape}"
+                    )
                 perc_target_used = (
                     (num_common_edges / num_target_edges) * 100
                     if num_target_edges > 0
@@ -393,12 +397,13 @@ class E3GNN(pl.LightningModule):
                     if num_pred_edges > 0
                     else 0
                 )
-                print(
-                    f"  Edges used: {num_common_edges}/{num_target_edges} ({perc_target_used:.2f}%) of target edges."
-                )
-                print(
-                    f"  Edges used: {num_common_edges}/{num_pred_edges} ({perc_pred_used:.2f}%) of predicted edges."
-                )
+                if self.verbosity >= 2:
+                    print(
+                        f"  Edges used: {num_common_edges}/{num_target_edges} ({perc_target_used:.2f}%) of target edges."
+                    )
+                    print(
+                        f"  Edges used: {num_common_edges}/{num_pred_edges} ({perc_pred_used:.2f}%) of predicted edges."
+                    )
 
                 if num_common_edges > 0:
                     loss_matrix += self._mse(
