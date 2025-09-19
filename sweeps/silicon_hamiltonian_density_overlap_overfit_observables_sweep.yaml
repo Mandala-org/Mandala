@@ -4,7 +4,7 @@ name: silicon_hamiltonian_density_overlap_overfit_observables_low_longer_sweep
 method: bayes
 early_terminate:
   type: hyperband
-  min_iter: 100  # Stop runs that are performing poorly after 100 epochs
+  min_iter: 200  # Stop runs that are performing poorly after 100 epochs
 metric:
   name: val_loss_matrix
   goal: minimize
