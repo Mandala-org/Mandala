@@ -137,7 +137,7 @@ class Config:
 
     # -------------- logging ---------------------------------------------
     run_name: str = "mandala-run"
-    verbosity: int = 2
+    verbosity: int = 1
     bench_verbosity: int = 1
     log_activation_mag: bool = False
     wandb_project: str | None = None
