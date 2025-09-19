@@ -397,7 +397,7 @@ class E3GNN(pl.LightningModule):
                     if num_pred_edges > 0
                     else 0
                 )
-                if self.verbosity >= 2:
+                if self.cfg.verbosity >= 2:
                     print(
                         f"  Edges used: {num_common_edges}/{num_target_edges} ({perc_target_used:.2f}%) of target edges."
                     )
