@@ -182,7 +182,7 @@ class E3GNN(pl.LightningModule):
             for idx, (i, j) in enumerate(edges.t().tolist()):
                 lookup[(i, j)] = (key, idx)
 
-        return IrrepsBlockData(
+        irreps_blocks = IrrepsBlockData(
             atoms=atoms,
             atom_counts=Counter(atoms),
             pair_vectors=pair_vec,
@@ -190,6 +190,9 @@ class E3GNN(pl.LightningModule):
             lookup=lookup,
             orbital_cfg=self.mapper.orbital_cfg,
         )
+        if self.cfg.symmetrize_output:
+            irreps_blocks = (irreps_blocks + irreps_blocks.transpose()) * 0.5
+        return irreps_blocks
 
     # ------------------------------------------------------------------ forward
     def forward(self, x: Dict[str, Any]):
@@ -319,9 +322,9 @@ class E3GNN(pl.LightningModule):
             for target in self.cfg.matrix_targets:
                 preds_matrix[target] = preds_irreps[target].to_blocks(self.mapper)
                 # symmetrize
-                preds_matrix[target] = (
-                    preds_matrix[target] + preds_matrix[target].transpose()
-                ) * 0.5
+                # preds_matrix[target] = (
+                #     preds_matrix[target] + preds_matrix[target].transpose()
+                # ) * 0.5
         t_map_end = time.perf_counter()
 
         loss_matrix = torch.tensor(0.0, device=self.cfg.device, dtype=torch.float32)
