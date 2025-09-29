@@ -1,10 +1,10 @@
 program: scripts/train_silicon.py
 project: mandala_small_steps
-name: silicon_hamiltonian_density_overlap_overfit_observables_low_longer_sweep
+name: silicon_hamiltonian_density_overlap_overfit_observables_sweep
 method: bayes
 early_terminate:
   type: hyperband
-  min_iter: 200  # Stop runs that are performing poorly after 100 epochs
+  min_iter: 200  # Stop runs that are performing poorly after 200 epochs
 metric:
   name: val_loss_matrix
   goal: minimize
@@ -16,9 +16,9 @@ parameters:
   cutoff_matrix:
     value: 7.0
   l_max_gnn:
-    value: 4
+    value: 5
   num_layers_gnn:
-    value: 1
+    value: 2
   num_layers_matrix:
     value: 1
   edge_update_linear:
@@ -49,11 +49,11 @@ parameters:
     max: 1.0e-6
 
   hidden_base_dim:
-    value: 32
+    value: 64
   dropout:
     value: 0.0
   n_radial:
-    value: 64
+    value: 128
   neck_depth:
     value: 1
   head_depth:
@@ -71,8 +71,8 @@ command:
   - ${program}
   - ${args}
   - --gpus=1  # Specify a single GPU
-  - --num_workers=0
-  - --n_snapshots_per_temp=1 # Use a subset for faster sweeps
+  - --num_workers=8
+  - --n_snapshots_per_temp=10 # Use a subset for faster sweeps
   - --max_epochs=1000
   - --min_temp=3000
   - --max_temp=3000
