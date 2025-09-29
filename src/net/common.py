@@ -119,7 +119,7 @@ class Config:
     enable_num_electrons: bool = True
 
     # -------------- training targets -----------------------------------
-    train_target: str = "irreps"  # "irreps" | "matrix"
+    train_target: str = "matrix"  # "irreps" | "matrix"
     scheduler_target: str = "val_loss_matrix"
     train_on_forces: bool = False
     train_on_stress: bool = False
@@ -128,6 +128,7 @@ class Config:
     matrix_targets: list = field(
         default_factory=lambda: ["hamiltonian", "overlap", "density"]
     )
+    train_observables_using_gt: bool = True
     symmetrize_output: bool = True  # symmetrize matrix outputs
 
     # -------------- loss weighting --------------------------------------
@@ -140,6 +141,7 @@ class Config:
     run_name: str = "mandala-run"
     verbosity: int = 1
     bench_verbosity: int = 1
+    log_partial_gt_observables: bool = True
     log_activation_mag: bool = False
     wandb_project: str | None = None
     log_every_n_steps: int = 1
