@@ -74,6 +74,12 @@ def setup_argparse():
         help="Temperature to use for the validation set.",
     )
     parser.add_argument(
+        "--val_n_snapshots",
+        type=int,
+        default=None,
+        help="Number of snapshots to use for validation. If None, uses the same as training.",
+    )
+    parser.add_argument(
         "--precision",
         type=str,
         default="32-true",
@@ -192,6 +198,8 @@ def main():
     val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
     # Limit validation snapshots as well
     num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
+    if args.val_n_snapshots is not None:
+        num_val_to_sample = min(num_val_to_sample, args.val_n_snapshots)
     selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
     for matrix_path in selected_val_paths:
         info_path = Path(matrix_path).parent / "info.dat"
