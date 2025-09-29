@@ -405,9 +405,14 @@ class E3GNN(pl.LightningModule):
 
         # Partial Ground Truth Observables
         if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
-            H_true = y["hamiltonian"].to_blocks(self.mapper)
-            D_true = y["density"].to_blocks(self.mapper)
-            S_true = y["overlap"].to_blocks(self.mapper)
+            if self.cfg.train_target == "irreps":
+                H_true = y["hamiltonian"].to_blocks(self.mapper)
+                D_true = y["density"].to_blocks(self.mapper)
+                S_true = y["overlap"].to_blocks(self.mapper)
+            else:
+                H_true = y["hamiltonian"]
+                D_true = y["density"]
+                S_true = y["overlap"]
 
             E_gt_D = trace_matmul_sparse_snap_vectorized(
                 preds_matrix["hamiltonian"], D_true
