@@ -128,7 +128,7 @@ class Config:
     matrix_targets: list = field(
         default_factory=lambda: ["hamiltonian", "overlap", "density"]
     )
-    train_observables_using_gt: bool = True
+    train_observables_on_gt: bool = True
     symmetrize_output: bool = True  # symmetrize matrix outputs
 
     # -------------- loss weighting --------------------------------------
