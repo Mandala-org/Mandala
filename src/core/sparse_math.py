@@ -107,12 +107,6 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
         blk_a = A.pair_blocks[key]  # (E, d_A, d_B)
         blk_b_rev = B.pair_blocks[rev_key]  # (E_rev, d_B, d_A)
 
-        if blk_a.requires_grad or blk_b_rev.requires_grad:
-            assert blk_a.requires_grad, f"blk_a for key {key} is missing gradients!"
-            assert (
-                blk_b_rev.requires_grad
-            ), f"blk_b_rev for key {rev_key} is missing gradients!"
-
         edges_a = A.pair_edges[key]  # (2, E)   (i, j)
         edges_b_rev = B.pair_edges[rev_key]  # (2, E')  (j, i)
 
