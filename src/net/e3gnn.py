@@ -510,7 +510,7 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.cfg.lr)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.cfg.lr)
         if not self.cfg.use_lr_scheduler:
             return optimizer
 
