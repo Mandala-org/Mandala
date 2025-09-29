@@ -20,7 +20,9 @@ parameters:
     min: 3
     max: 4
   num_layers_gnn:
-    value: 1
+    values:
+    - 1
+    - 2
   num_layers_matrix:
     value: 1
   edge_update_linear:
@@ -48,9 +50,13 @@ parameters:
   n_radial:
     value: 64
   neck_depth:
-    value: 2
+    values:
+    - 1
+    - 2
   head_depth:
-    value: 2
+    values:
+    - 1
+    - 2
   train_target:
     value: "matrix"
 
