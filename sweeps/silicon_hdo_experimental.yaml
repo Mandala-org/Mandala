@@ -72,8 +72,8 @@ command:
   - ${args}
   - --gpus=1  # Specify a single GPU
   - --num_workers=8
-  - --n_snapshots_per_temp=10 # Use a subset for faster sweeps
-  - --val_n_snapshots=1
+  - --n_snapshots_per_temp=20 # Use a subset for faster sweeps
+  - --val_n_snapshots=5
   - --max_epochs=1000
-  - --min_temp=3000
-  - --max_temp=3000
+  - --min_temp=2700
+  - --max_temp=2700
