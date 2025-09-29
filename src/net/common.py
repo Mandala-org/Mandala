@@ -42,8 +42,8 @@ class Config:
     pbc_aggregation: str = "sum"  # "sum" | "closest"
 
     # radii
-    cutoff_gnn: float = 5.0
-    cutoff_matrix: float = 8.0
+    cutoff_gnn: float = 7.0
+    cutoff_matrix: float = 7.0
 
     # -------------- representation shape --------------------------------
     l_max_gnn: int = 2
@@ -128,6 +128,7 @@ class Config:
     matrix_targets: list = field(
         default_factory=lambda: ["hamiltonian", "overlap", "density"]
     )
+    symmetrize_output: bool = True  # symmetrize matrix outputs
 
     # -------------- loss weighting --------------------------------------
     loss_coef_energy: float = 1e-5
