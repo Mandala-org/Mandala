@@ -12,7 +12,7 @@ metric:
 
 parameters:
   cutoff_gnn:
-    value: 5.0
+    value: 7.0
   cutoff_matrix:
     value: 7.0
   l_max_gnn:
@@ -54,9 +54,13 @@ parameters:
   train_target:
     value: "matrix"
 
-  # --- Fixed parameters for Hamiltonian-only training ---
+  # --- Fixed parameters for Hamiltonian + Density + Overlap training ---
   matrix_targets:
-    value: ["hamiltonian"]
+    value: ["hamiltonian", "density", "overlap"]
+  enable_energy:
+    value: True
+  enable_num_electrons:
+    value: True
   train_on_energy:
     value: False
   train_on_num_electrons:
