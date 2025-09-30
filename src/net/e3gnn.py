@@ -320,6 +320,10 @@ class E3GNN(pl.LightningModule):
         for name in self.cfg.matrix_targets:
             p = preds_for_loss[name]
             t = y[name]
+
+            if self.cfg.train_target == "matrix":
+                p = (p + p.transpose()) * 0.5
+
             p_items, t_items = (
                 (p.pair_vectors, t.pair_vectors)
                 if self.cfg.train_target == "irreps"
