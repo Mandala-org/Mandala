@@ -310,8 +310,9 @@ class E3GNN(pl.LightningModule):
         t_map_end = time.perf_counter()
 
         # --- Matrix Loss Calculation ------------------------------------
-        matrix_losses = {}
+        matrix_mses = {}
         matrix_maes = {}
+        combined_matrix_losses = {}
         preds_for_loss = (
             preds_irreps if self.cfg.train_target == "irreps" else preds_matrix
         )
@@ -325,7 +326,7 @@ class E3GNN(pl.LightningModule):
                 else (p.pair_blocks, t.pair_blocks)
             )
 
-            loss_val = torch.tensor(0.0, device=self.device)
+            mse_val = torch.tensor(0.0, device=self.device)
             mae_val = torch.tensor(0.0, device=self.device)
 
             # Vectorized loss calculation
@@ -358,15 +359,18 @@ class E3GNN(pl.LightningModule):
                     torch.tensor(pred_indices, device=self.device)
                 ]
 
-                loss_val += self._mse(pred_blocks_to_compare, target_blocks_to_compare)
+                mse_val += self._mse(pred_blocks_to_compare, target_blocks_to_compare)
                 mae_val += torch.mean(
                     torch.abs(pred_blocks_to_compare - target_blocks_to_compare)
                 )
 
-            matrix_losses[name] = loss_val
+            matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
+            combined_matrix_losses[name] = (
+                1 - self.cfg.loss_l1_fraction
+            ) * mse_val + self.cfg.loss_l1_fraction * mae_val
 
-        loss_matrix = sum(matrix_losses.values())
+        loss_matrix = sum(combined_matrix_losses.values())
 
         # --- Observable Evaluation --------------------------------------
         t_obs_start = time.perf_counter()
@@ -450,7 +454,17 @@ class E3GNN(pl.LightningModule):
         t_obs_end = time.perf_counter()
 
         # --- Total Loss Aggregation ---
-        loss = loss_matrix + loss_E_weighted + loss_N_weighted
+        total_matrix_l1_component = self.cfg.loss_l1_fraction * sum(
+            matrix_maes.values()
+        )
+        total_matrix_l2_component = (1 - self.cfg.loss_l1_fraction) * sum(
+            matrix_mses.values()
+        )
+
+        total_l1_loss = total_matrix_l1_component
+        total_l2_loss = total_matrix_l2_component + loss_E_weighted + loss_N_weighted
+
+        loss = total_l1_loss + total_l2_loss
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
@@ -466,10 +480,12 @@ class E3GNN(pl.LightningModule):
         metrics[f"{stage}_loss"] = loss
         metrics[f"{stage}_loss_matrix"] = loss_matrix
 
-        for name, val in matrix_losses.items():
+        for name, val in combined_matrix_losses.items():
             metrics[f"{stage}_{name}_loss"] = val
         for name, val in matrix_maes.items():
             metrics[f"{stage}_{name}_mae"] = val
+        for name, val in matrix_mses.items():
+            metrics[f"{stage}_{name}_mse"] = val
 
         if loss_E_weighted > 0:
             metrics[f"{stage}_loss_E"] = loss_E_weighted
@@ -482,6 +498,8 @@ class E3GNN(pl.LightningModule):
                 metrics[f"{stage}_percent_E"] = (loss_E_weighted / loss) * 100
             if loss_N_weighted > 0:
                 metrics[f"{stage}_percent_N"] = (loss_N_weighted / loss) * 100
+            metrics[f"{stage}_l1_fraction_of_total"] = (total_l1_loss / loss) * 100
+            metrics[f"{stage}_l2_fraction_of_total"] = (total_l2_loss / loss) * 100
 
         self.log_dict(
             metrics,
