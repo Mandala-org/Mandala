@@ -32,7 +32,7 @@ from typing import Dict, Any
 import torch
 
 from core.sparse_math import (
-    trace_matmul_sparse_snap_vectorized,
+    trace_matmul_sparse_snap,
 )
 from data.block_matrix import BlockMatrix
 from core.basis_converter import OpenMXE3NNConverter, FHIaimsE3NNConverter
@@ -163,12 +163,11 @@ class Snapshot:
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:
         """Return *scalar* Tr(D·S)."""
-        return trace_matmul_sparse_snap_vectorized(self.density, self.overlap)
+        return trace_matmul_sparse_snap(self.density, self.overlap)
 
     def get_energy(self) -> torch.Tensor:
         """Return *scalar* Tr(D·H)."""
-        # return trace_matmul_sparse_snap_vectorized(self.hamiltonian, self.density)
-        return trace_matmul_sparse_snap_vectorized(self.hamiltonian, self.density)
+        return trace_matmul_sparse_snap(self.hamiltonian, self.density)
 
     # ---------------------------------------------------------------- serialisation
     def _payload(self):
