@@ -132,6 +132,7 @@ class Config:
     symmetrize_output: bool = True  # symmetrize matrix outputs
 
     # -------------- loss weighting --------------------------------------
+    loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1
     loss_coef_energy: float = 1e-5
     loss_coef_num_electrons: float = 1e-5
     loss_coef_forces: float = 0.0
