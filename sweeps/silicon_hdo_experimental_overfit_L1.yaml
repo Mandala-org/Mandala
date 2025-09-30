@@ -1,6 +1,6 @@
 program: scripts/train_silicon.py
 project: mandala_small_steps
-name: silicon_hdo_l1
+name: silicon_hdo_overfit_l1
 method: bayes
 early_terminate:
   type: hyperband
