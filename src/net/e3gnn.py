@@ -527,6 +527,18 @@ class E3GNN(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, stage="val")
 
+    def on_train_epoch_start(self):
+        """Log learning rate at the beginning of each training epoch."""
+        if self.trainer.sanity_checking:
+            return
+        # Get the first optimizer
+        optimizer = self.optimizers()
+        if not isinstance(optimizer, list):
+            optimizer = [optimizer]
+
+        lr = optimizer[0].param_groups[0]["lr"]
+        self.log("lr", lr, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.cfg.lr)
