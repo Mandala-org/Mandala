@@ -260,7 +260,6 @@ def main():
         gradient_clip_algorithm="value",
         accumulate_grad_batches=cfg.accumulate_grad_batches,
         precision=args.precision,
-        terminate_on_nan=True,
     )
 
     # --- Start Training ---
