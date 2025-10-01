@@ -38,8 +38,8 @@ config:
   l1_reg_coef: 0.0
   l2_reg_coef: 0.0
   grad_clip_val: 0.0
-  loss_coef_energy: 0.0001
-  loss_coef_num_electrons: 0.0001
+  loss_coef_observables: 0.0001
+  loss_coef_observables: 0.0001
   loss_coef_forces: 0.0
   loss_coef_stress: 0.0
   train_on_forces: false

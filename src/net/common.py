@@ -103,6 +103,7 @@ class Config:
     l1_reg_coef: float = 0.0
     l2_reg_coef: float = 0.0
     grad_clip_val: float | None = 0.5
+    accumulate_grad_batches: int = 1  # gradient accumulation steps
 
     # -------------- radial basis ----------------------------------------
     n_radial: int = 64
@@ -133,8 +134,7 @@ class Config:
 
     # -------------- loss weighting --------------------------------------
     loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1
-    loss_coef_energy: float = 1e-5
-    loss_coef_num_electrons: float = 1e-5
+    loss_coef_observables: float = 1e-5
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
 

@@ -61,9 +61,9 @@ parameters:
     value: False
   train_on_num_electrons:
     value: False
-  loss_coef_energy:
+  loss_coef_observables:
     value: 0.0
-  loss_coef_num_electrons:
+  loss_coef_observables:
     value: 0.0
 
 

@@ -94,13 +94,12 @@ def main():
         cfg = Config(
             lr=args.lr,
             train_target=args.train_target,
-            loss_coef_energy=args.loss_coef_observable,
-            loss_coef_num_electrons=args.loss_coef_observable,
+            loss_coef_observables=args.loss_coef_observable,
             max_epochs=args.num_epochs,
             use_lr_scheduler=False,
         )
         print(
-            f"Config for Run {i+1}: lr={cfg.lr}, target={cfg.train_target}, coef={cfg.loss_coef_energy}"
+            f"Config for Run {i+1}: lr={cfg.lr}, target={cfg.train_target}, coef={cfg.loss_coef_observables}"
         )
         log_memory(f"After Config (Run {i+1})")
 

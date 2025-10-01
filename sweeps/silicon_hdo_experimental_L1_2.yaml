@@ -50,11 +50,11 @@ parameters:
     distribution: log_uniform_values
     min: 1.0e-3
     max: 1.0e-1
-  loss_coef_energy:
+  loss_coef_observables:
     distribution: log_uniform_values
     min: 1.0e-8
     max: 1.0e-5
-  loss_coef_num_electrons:
+  loss_coef_observables:
     distribution: log_uniform_values
     min: 1.0e-8
     max: 1.0e-5
