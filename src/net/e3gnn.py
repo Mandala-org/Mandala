@@ -554,7 +554,7 @@ class E3GNN(pl.LightningModule):
                 patience=self.cfg.lr_scheduler_patience,
                 min_lr=self.cfg.lr_scheduler_min_lr,
             ),
-            "monitor": self.cfg.scheduler_target,  # Monitor the matrix loss
+            "monitor": self.cfg.lr_scheduler_target,  # Monitor the matrix loss
             "interval": "epoch",
             "frequency": 1,
         }
