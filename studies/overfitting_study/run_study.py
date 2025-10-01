@@ -87,7 +87,7 @@ def main():
         loss_coef_observables=0.0,  # Disable observable losses
         train_on_energy=False,
         train_on_num_electrons=False,
-        scheduler_target="train_loss_matrix",
+        lr_scheduler_target="train_loss_matrix",
         max_epochs=args.num_epochs,
         use_lr_scheduler=args.use_lr_scheduler,
         lr_scheduler_patience=args.lr_scheduler_patience,
