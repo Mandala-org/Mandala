@@ -97,6 +97,7 @@ class Config:
     lr_scheduler_factor: float = 0.25
     lr_scheduler_patience: int = 10
     lr_scheduler_min_lr: float = 1e-8
+    lr_scheduler_target: str = "val/loss_total"
 
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
@@ -121,7 +122,6 @@ class Config:
 
     # -------------- training targets -----------------------------------
     train_target: str = "matrix"  # "irreps" | "matrix"
-    scheduler_target: str = "val_loss_matrix"
     train_on_forces: bool = False
     train_on_stress: bool = False
     train_on_energy: bool = True
