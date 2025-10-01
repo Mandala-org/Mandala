@@ -496,7 +496,7 @@ class E3GNN(pl.LightningModule):
         if loss_N_weighted > 0:
             metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted
 
-        if stage == "train" and loss > 1e-8:
+        if stage == "train" and loss > 1e-12:
             for name, val in combined_matrix_losses.items():
                 metrics[f"frac/loss_{name}"] = val / loss
             if loss_E_weighted > 0:
