@@ -179,7 +179,11 @@ def main():
     # --- Data Loading ---
     print("--- Setting up datasets ---")
     all_temps = range(args.min_temp, args.max_temp + 1, args.temp_step)
-    train_temps = [t for t in all_temps if t != args.val_temp]
+    train_temps = [
+        t
+        for t in all_temps
+        if t != args.val_temp or args.min_temp == args.max_temp == args.val_temp
+    ]
 
     train_pairs = []
     for temp in train_temps:
