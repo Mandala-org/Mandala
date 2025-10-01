@@ -428,11 +428,10 @@ class E3GNN(pl.LightningModule):
                 D_true = y["density"]
                 S_true = y["overlap"]
 
-            if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
-                E_gt_D = trace_matmul_sparse_snap(preds_matrix["hamiltonian"], D_true)
-                E_gt_H = trace_matmul_sparse_snap(H_true, preds_matrix["density"])
-                N_gt_S = trace_matmul_sparse_snap(preds_matrix["density"], S_true)
-                N_gt_D = trace_matmul_sparse_snap(S_true, preds_matrix["density"])
+            E_gt_D = trace_matmul_sparse_snap(preds_matrix["hamiltonian"], D_true)
+            E_gt_H = trace_matmul_sparse_snap(H_true, preds_matrix["density"])
+            N_gt_S = trace_matmul_sparse_snap(preds_matrix["density"], S_true)
+            N_gt_D = trace_matmul_sparse_snap(S_true, preds_matrix["density"])
 
             if self.cfg.log_partial_gt_observables:
                 metrics[f"{stage}/energy_mae_gt_density"] = torch.mean(
@@ -451,15 +450,15 @@ class E3GNN(pl.LightningModule):
             if self.cfg.train_on_energy and self.cfg.train_observables_on_gt:
                 loss_E_gt_D = self._mse(E_gt_D, E_true)
                 loss_E_gt_H = self._mse(E_gt_H, E_true)
-                loss_E_weighted = self.cfg.loss_coef_energy * (
-                    loss_E_gt_D + loss_E_gt_H
+                loss_E_weighted = (
+                    self.cfg.loss_coef_energy * (loss_E_gt_D + loss_E_gt_H) * 0.5
                 )
 
             if self.cfg.train_on_num_electrons and self.cfg.train_observables_on_gt:
                 loss_N_gt_S = self._mse(N_gt_S, N_true)
                 loss_N_gt_D = self._mse(N_gt_D, N_true)
-                loss_N_weighted = self.cfg.loss_coef_num_electrons * (
-                    loss_N_gt_S + loss_N_gt_D
+                loss_N_weighted = (
+                    self.cfg.loss_coef_num_electrons * (loss_N_gt_S + loss_N_gt_D) * 0.5
                 )
 
         t_obs_end = time.perf_counter()

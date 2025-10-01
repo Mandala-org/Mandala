@@ -257,7 +257,9 @@ def main():
         accelerator=accelerator,
         log_every_n_steps=cfg.log_every_n_steps,
         gradient_clip_val=cfg.grad_clip_val,
+        gradient_clip_algorithm="value",
         precision=args.precision,
+        terminate_on_nan=True,
     )
 
     # --- Start Training ---

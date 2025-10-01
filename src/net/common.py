@@ -102,7 +102,7 @@ class Config:
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0
     l2_reg_coef: float = 0.0
-    grad_clip_val: float | None = None
+    grad_clip_val: float | None = 0.5
 
     # -------------- radial basis ----------------------------------------
     n_radial: int = 64
@@ -128,7 +128,7 @@ class Config:
     matrix_targets: list = field(
         default_factory=lambda: ["hamiltonian", "overlap", "density"]
     )
-    train_observables_on_gt: bool = True
+    train_observables_on_gt: bool = False
     symmetrize_output: bool = True  # symmetrize matrix outputs
 
     # -------------- loss weighting --------------------------------------
