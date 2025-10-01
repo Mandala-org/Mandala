@@ -6,7 +6,7 @@ early_terminate:
   type: hyperband
   min_iter: 200  # Stop runs that are performing poorly after 200 epochs
 metric:
-  name: val_abs_error_E
+  name: val/hamiltonian_mae
   goal: minimize
 
 
