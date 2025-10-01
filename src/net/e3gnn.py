@@ -325,7 +325,7 @@ class E3GNN(pl.LightningModule):
             p = preds_for_loss[name]
             t = y[name]
 
-            if self.cfg.train_target == "matrix":
+            if self.cfg.train_target == "matrix" and self.cfg.symmetrize_output:
                 p = (p + p.transpose()) * 0.5
 
             p_items, t_items = (
