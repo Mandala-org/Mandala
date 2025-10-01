@@ -43,4 +43,4 @@ ray_results/
 notebooks/scratchpads
 
 # external
-external/
+external/**/*
