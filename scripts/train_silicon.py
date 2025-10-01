@@ -262,6 +262,7 @@ def main():
 
     # --- Start Training ---
     print("--- Starting training ---")
+    torch.set_float32_matmul_precision("high")
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
 
