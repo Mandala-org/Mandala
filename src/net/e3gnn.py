@@ -296,6 +296,8 @@ class E3GNN(pl.LightningModule):
         Logs metrics prefixed with stage ('train' or 'val').
         """
         x, y = batch
+        metrics = {}
+
         # --- forward timing (message-passing + heads) -------------------
         t_fwd_start = time.perf_counter()
         preds_irreps = self(x)
@@ -370,6 +372,9 @@ class E3GNN(pl.LightningModule):
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
+            metrics[f"{stage}/{name}_mae"] = mae_val
+            metrics[f"{stage}/{name}_mse"] = mse_val
+
             combined_matrix_losses[name] = (
                 1 - self.cfg.loss_l1_fraction
             ) * mse_val + self.cfg.loss_l1_fraction * mae_val
@@ -380,7 +385,6 @@ class E3GNN(pl.LightningModule):
         t_obs_start = time.perf_counter()
         loss_E_weighted = torch.tensor(0.0, device=self.device)
         loss_N_weighted = torch.tensor(0.0, device=self.device)
-        metrics = {}
 
         # Standard observables
         if (
@@ -392,7 +396,7 @@ class E3GNN(pl.LightningModule):
                 preds_matrix["hamiltonian"], preds_matrix["density"]
             )
             E_true = y["energy"]
-            metrics[f"{stage}_abs_error_E"] = torch.mean(torch.abs(E_pred - E_true))
+            metrics[f"{stage}/energy_mae"] = torch.mean(torch.abs(E_pred - E_true))
             if self.cfg.train_on_energy and not self.cfg.train_observables_on_gt:
                 loss_E_weighted = self.cfg.loss_coef_energy * self._mse(E_pred, E_true)
 
@@ -405,7 +409,9 @@ class E3GNN(pl.LightningModule):
                 preds_matrix["overlap"], preds_matrix["density"]
             )
             N_true = y["num_electrons"]
-            metrics[f"{stage}_abs_error_N"] = torch.mean(torch.abs(N_pred - N_true))
+            metrics[f"{stage}/num_electrons_mae"] = torch.mean(
+                torch.abs(N_pred - N_true)
+            )
             if self.cfg.train_on_num_electrons and not self.cfg.train_observables_on_gt:
                 loss_N_weighted = self.cfg.loss_coef_num_electrons * self._mse(
                     N_pred, N_true
@@ -422,22 +428,23 @@ class E3GNN(pl.LightningModule):
                 D_true = y["density"]
                 S_true = y["overlap"]
 
-            E_gt_D = trace_matmul_sparse_snap(preds_matrix["hamiltonian"], D_true)
-            E_gt_H = trace_matmul_sparse_snap(H_true, preds_matrix["density"])
-            N_gt_S = trace_matmul_sparse_snap(preds_matrix["density"], S_true)
-            N_gt_D = trace_matmul_sparse_snap(S_true, preds_matrix["density"])
+            if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
+                E_gt_D = trace_matmul_sparse_snap(preds_matrix["hamiltonian"], D_true)
+                E_gt_H = trace_matmul_sparse_snap(H_true, preds_matrix["density"])
+                N_gt_S = trace_matmul_sparse_snap(preds_matrix["density"], S_true)
+                N_gt_D = trace_matmul_sparse_snap(S_true, preds_matrix["density"])
 
             if self.cfg.log_partial_gt_observables:
-                metrics[f"{stage}_mae_energy_gt_density"] = torch.mean(
+                metrics[f"{stage}/energy_mae_gt_density"] = torch.mean(
                     torch.abs(E_gt_D - E_true)
                 )
-                metrics[f"{stage}_mae_energy_gt_hamiltonian"] = torch.mean(
+                metrics[f"{stage}/energy_mae_gt_hamiltonian"] = torch.mean(
                     torch.abs(E_gt_H - E_true)
                 )
-                metrics[f"{stage}_mae_num_electrons_gt_overlap"] = torch.mean(
+                metrics[f"{stage}/num_electrons_mae_gt_overlap"] = torch.mean(
                     torch.abs(N_gt_S - N_true)
                 )
-                metrics[f"{stage}_mae_num_electrons_gt_density"] = torch.mean(
+                metrics[f"{stage}/num_electrons_mae_gt_density"] = torch.mean(
                     torch.abs(N_gt_D - N_true)
                 )
 
@@ -474,36 +481,28 @@ class E3GNN(pl.LightningModule):
         if self.cfg.l1_reg_coef > 0:
             l1_reg = sum(p.abs().sum() for p in self.parameters())
             loss += self.cfg.l1_reg_coef * l1_reg
-            metrics[f"{stage}_l1_reg"] = l1_reg
+            metrics[f"{stage}/loss_l1_reg"] = l1_reg
         if self.cfg.l2_reg_coef > 0:
             l2_reg = sum(p.pow(2).sum() for p in self.parameters())
             loss += self.cfg.l2_reg_coef * l2_reg
-            metrics[f"{stage}_l2_reg"] = l2_reg
+            metrics[f"{stage}/loss_l2_reg"] = l2_reg
 
         # --- Logging ------------------------------------------------------
-        metrics[f"{stage}_loss"] = loss
-        metrics[f"{stage}_loss_matrix"] = loss_matrix
-
-        for name, val in combined_matrix_losses.items():
-            metrics[f"{stage}_{name}_loss"] = val
-        for name, val in matrix_maes.items():
-            metrics[f"{stage}_{name}_mae"] = val
-        for name, val in matrix_mses.items():
-            metrics[f"{stage}_{name}_mse"] = val
+        metrics[f"{stage}/loss_total"] = loss
+        metrics[f"{stage}/loss_matrix_total"] = loss_matrix
 
         if loss_E_weighted > 0:
-            metrics[f"{stage}_loss_E"] = loss_E_weighted
+            metrics[f"{stage}/loss_energy"] = loss_E_weighted
         if loss_N_weighted > 0:
-            metrics[f"{stage}_loss_N"] = loss_N_weighted
+            metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted
 
-        if loss > 1e-8:
-            metrics[f"{stage}_percent_matrix"] = (loss_matrix / loss) * 100
+        if stage == "train" and loss > 1e-8:
+            for name, val in combined_matrix_losses.items():
+                metrics[f"frac/loss_{name}"] = val / loss
             if loss_E_weighted > 0:
-                metrics[f"{stage}_percent_E"] = (loss_E_weighted / loss) * 100
+                metrics["frac/loss_energy"] = loss_E_weighted / loss
             if loss_N_weighted > 0:
-                metrics[f"{stage}_percent_N"] = (loss_N_weighted / loss) * 100
-            metrics[f"{stage}_l1_fraction_of_total"] = (total_l1_loss / loss) * 100
-            metrics[f"{stage}_l2_fraction_of_total"] = (total_l2_loss / loss) * 100
+                metrics["frac/loss_num_electrons"] = loss_N_weighted / loss
 
         self.log_dict(
             metrics,
