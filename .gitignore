@@ -41,3 +41,6 @@ ray_results/
 
 # throwaway notebooks
 notebooks/scratchpads
+
+# external
+external/
