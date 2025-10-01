@@ -53,11 +53,13 @@ class E3GNN(pl.LightningModule):
         # automatically by PyTorch Lightning.
         self.mapper: BlockIrrepMapper = mapper
 
-        if cfg.train_on_energy and cfg.loss_coef_energy == 0.0:
-            raise ValueError("If training on energy, loss_coef_energy must be nonzero.")
-        if cfg.train_on_num_electrons and cfg.loss_coef_num_electrons == 0.0:
+        if cfg.train_on_energy and cfg.loss_coef_observables == 0.0:
             raise ValueError(
-                "If training on number of electrons, loss_coef_num_electrons must be nonzero."
+                "If training on energy, loss_coef_observables must be nonzero."
+            )
+        if cfg.train_on_num_electrons and cfg.loss_coef_observables == 0.0:
+            raise ValueError(
+                "If training on number of electrons, loss_coef_observables must be nonzero."
             )
         if cfg.train_on_forces and cfg.loss_coef_forces == 0.0:
             raise ValueError("If training on forces, loss_coef_forces must be nonzero.")
@@ -398,7 +400,9 @@ class E3GNN(pl.LightningModule):
             E_true = y["energy"]
             metrics[f"{stage}/energy_mae"] = torch.mean(torch.abs(E_pred - E_true))
             if self.cfg.train_on_energy and not self.cfg.train_observables_on_gt:
-                loss_E_weighted = self.cfg.loss_coef_energy * self._mse(E_pred, E_true)
+                loss_E_weighted = self.cfg.loss_coef_observables * self._mse(
+                    E_pred, E_true
+                )
 
         if (
             self.cfg.enable_num_electrons
@@ -413,7 +417,7 @@ class E3GNN(pl.LightningModule):
                 torch.abs(N_pred - N_true)
             )
             if self.cfg.train_on_num_electrons and not self.cfg.train_observables_on_gt:
-                loss_N_weighted = self.cfg.loss_coef_num_electrons * self._mse(
+                loss_N_weighted = self.cfg.loss_coef_observables * self._mse(
                     N_pred, N_true
                 )
 
@@ -451,14 +455,14 @@ class E3GNN(pl.LightningModule):
                 loss_E_gt_D = self._mse(E_gt_D, E_true)
                 loss_E_gt_H = self._mse(E_gt_H, E_true)
                 loss_E_weighted = (
-                    self.cfg.loss_coef_energy * (loss_E_gt_D + loss_E_gt_H) * 0.5
+                    self.cfg.loss_coef_observables * (loss_E_gt_D + loss_E_gt_H) * 0.5
                 )
 
             if self.cfg.train_on_num_electrons and self.cfg.train_observables_on_gt:
                 loss_N_gt_S = self._mse(N_gt_S, N_true)
                 loss_N_gt_D = self._mse(N_gt_D, N_true)
                 loss_N_weighted = (
-                    self.cfg.loss_coef_num_electrons * (loss_N_gt_S + loss_N_gt_D) * 0.5
+                    self.cfg.loss_coef_observables * (loss_N_gt_S + loss_N_gt_D) * 0.5
                 )
 
         t_obs_end = time.perf_counter()

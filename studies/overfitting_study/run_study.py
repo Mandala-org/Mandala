@@ -84,8 +84,7 @@ def main():
         cutoff_matrix=8.0,
         lr=args.lr,
         train_target=args.train_target,
-        loss_coef_energy=0.0,  # Disable energy loss
-        loss_coef_num_electrons=0.0,  # Disable electron loss
+        loss_coef_observables=0.0,  # Disable observable losses
         train_on_energy=False,
         train_on_num_electrons=False,
         scheduler_target="train_loss_matrix",

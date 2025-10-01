@@ -258,6 +258,7 @@ def main():
         log_every_n_steps=cfg.log_every_n_steps,
         gradient_clip_val=cfg.grad_clip_val,
         gradient_clip_algorithm="value",
+        accumulate_grad_batches=cfg.accumulate_grad_batches,
         precision=args.precision,
         terminate_on_nan=True,
     )
