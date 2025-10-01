@@ -23,4 +23,4 @@ def test_radial_mlp_arbitrary_layers():
 def test_hyperparams_defaults():
     cfg = Config()
     assert cfg.nonlin_kind in {"gate", "normact", "s2act", "id"}
-    assert cfg.loss_coef_energy > 0
+    assert cfg.loss_coef_observables > 0

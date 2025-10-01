@@ -1,6 +1,6 @@
 program: scripts/train_silicon.py
 project: mandala_small_steps
-name: silicon_hdo_overfit
+name: silicon_hdo_overfit_new
 method: bayes
 early_terminate:
   type: hyperband
@@ -50,11 +50,9 @@ parameters:
     distribution: log_uniform_values
     min: 1.0e-4
     max: 1.0e-2
-  loss_coef_energy:
-    distribution: log_uniform_values
-    min: 1.0e-8
-    max: 1.0e-5
-  loss_coef_num_electrons:
+  accumulate_grad_batches:
+    value: 1
+  loss_coef_observables:
     distribution: log_uniform_values
     min: 1.0e-8
     max: 1.0e-5
