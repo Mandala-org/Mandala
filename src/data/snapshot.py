@@ -298,7 +298,7 @@ class Snapshot:
             #     if box is not None
             #     else None
             # )
-            print("Changing convention with [1, 2, 0]")
+            # print("Changing convention with [1, 2, 0]")
             pos = pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
             forces = (
                 forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
