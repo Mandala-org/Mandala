@@ -69,6 +69,7 @@ def factory_results():
         cutoff_gnn=4.5,
         cutoff_matrix=7.5,
         device="cpu",
+        train_target="matrix",
         dtype=torch.float32,
     )
     fac = DatasetFactory(cfg)

@@ -100,11 +100,11 @@ def test_sample_coherence(factory_results):
         # edge_type_idx sanity: indices must be within range
         assert torch.all(x["edge_type_idx"] < len(mapper.edge_types))
 
-        # target vector shapes agree with mapper dims
-        for key, vec in y["hamiltonian"].pair_vectors.items():
-            assert vec.shape[-1] == mapper.vector_dim(
+        # target block shapes agree with mapper dims
+        for key, block in y["hamiltonian"].pair_blocks.items():
+            assert block.shape[1:] == mapper.block_dims(
                 key
-            ), f"Vec dim mismatch for {key}"
+            ), f"Block dim mismatch for {key}"
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -130,4 +130,4 @@ def test_model_forward_cpu(factory_results):
     # we expect all three predicted IrrepsBlockData objects
     for key in ("hamiltonian", "overlap", "density"):
         assert key in out
-        assert out[key].pair_vectors, f"{key} vectors should not be empty"
+        assert out[key].pair_blocks, f"{key} vectors should not be empty"

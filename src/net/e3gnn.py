@@ -338,6 +338,7 @@ class E3GNN(pl.LightningModule):
             mae_val = torch.tensor(0.0, device=self.device)
 
             # Vectorized loss calculation
+            # ! Improve this
             for key in t.keys():
                 if key not in p.keys():
                     continue

@@ -131,6 +131,7 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
         edge_sh_direct,
         index_gnn_cutoff_direct,
         num_self_edges_direct,
+        is_closest_edge_direct,
     ) = compute_graph_features(
         positions=dummy_snap.positions,
         box=dummy_snap.box,
@@ -148,6 +149,9 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
     assert torch.equal(
         x_precompute["edge_type_idx"], edge_type_idx_direct
     ), "edge_type_idx mismatch"
+    assert torch.equal(
+        x_precompute["is_closest_edge"], is_closest_edge_direct
+    ), "is_closest_edge mismatch"
 
     # For floating-point tensors, use allclose to account for minor precision differences.
     assert torch.allclose(
