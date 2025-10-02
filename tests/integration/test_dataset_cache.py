@@ -53,7 +53,7 @@ def test_dataset_cache_with_silicon_data(tmp_path, silicon_pair):
     hamiltonian3 = y3["hamiltonian"]
 
     # 5. Check that some random matrix block is the same as in the first dataset
-    block_key = list(hamiltonian1.pair_vectors.keys())[0]
+    block_key = list(hamiltonian1.pair_blocks.keys())[0]
     assert torch.equal(
-        hamiltonian1.pair_vectors[block_key], hamiltonian3.pair_vectors[block_key]
+        hamiltonian1.pair_blocks[block_key], hamiltonian3.pair_blocks[block_key]
     )

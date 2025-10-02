@@ -299,7 +299,11 @@ class Snapshot:
             #     else None
             # )
             # print("Changing convention with [1, 2, 0]")
-            pos = pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+            pos = (
+                pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                if pos is not None
+                else None
+            )
             forces = (
                 forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if forces is not None
@@ -323,7 +327,11 @@ class Snapshot:
             print(
                 "Warning: Position/force/box conversion from e3nn to openmx to be checked!"
             )
-            pos = pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+            pos = (
+                pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                if pos is not None
+                else None
+            )
             forces = (
                 forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if forces is not None
@@ -334,6 +342,7 @@ class Snapshot:
                 if box is not None
                 else None
             )
+            print("Warning!: wrong formula")
         elif self.density.basis == "e3nn" and target == "fhi-aims":
             conv = FHIaimsE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_fhiaims(self.hamiltonian)
