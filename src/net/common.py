@@ -142,7 +142,7 @@ class Config:
     run_name: str = "mandala-run"
     verbosity: int = 1
     bench_verbosity: int = 1
-    log_partial_gt_observables: bool = True
+    log_partial_gt_observables: bool = False
     log_activation_mag: bool = False
     wandb_project: str | None = None
     log_every_n_steps: int = 1

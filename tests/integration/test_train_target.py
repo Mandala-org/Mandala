@@ -25,17 +25,17 @@ def prepared_data():
     for m, i in paths:
         fac.add_snapshot(m, i)
     train_ds, _, mapper = fac.create()
-    x, y_irreps = train_ds[0]
+    x, y_matrix = train_ds[0]
 
-    # Also create a matrix version of y for convenience in tests
-    y_matrix = {
-        "hamiltonian": y_irreps["hamiltonian"].to_blocks(mapper),
-        "overlap": y_irreps["overlap"].to_blocks(mapper),
-        "density": y_irreps["density"].to_blocks(mapper),
-        "energy": y_irreps["energy"],
-        "num_electrons": y_irreps["num_electrons"],
-        "forces": y_irreps["forces"],
-        "stress": y_irreps["stress"],
+    # Also create an irreps version of y for convenience in tests
+    y_irreps = {
+        "hamiltonian": y_matrix["hamiltonian"].to_vectors(mapper),
+        "overlap": y_matrix["overlap"].to_vectors(mapper),
+        "density": y_matrix["density"].to_vectors(mapper),
+        "energy": y_matrix["energy"],
+        "num_electrons": y_matrix["num_electrons"],
+        "forces": y_matrix["forces"],
+        "stress": y_matrix["stress"],
     }
     return x, y_irreps, y_matrix, mapper
 
@@ -97,6 +97,9 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
             preds_matrix = {
                 name: preds_irreps[name].to_blocks(mapper) for name in matrix_targets
             }
+            if cfg.symmetrize_output:
+                for name, matrix in preds_matrix.items():
+                    preds_matrix[name] = (matrix + matrix.transpose()) * 0.5
             for name in matrix_targets:
                 p_blocks = preds_matrix[name].pair_blocks
                 t_blocks = y[name].pair_blocks
@@ -113,13 +116,13 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
                     expected_loss_matrix += torch.mean((p_vecs[key] - t_vecs[key]) ** 2)
 
     # 4. Assert that the logged matrix loss is close to the manually calculated one
-    assert "train_loss_matrix" in logged_metrics
+    assert "train/loss_matrix_total" in logged_metrics
     assert torch.allclose(
-        logged_metrics["train_loss_matrix"],
+        logged_metrics["train/loss_matrix_total"],
         expected_loss_matrix,
         atol=1e-6,
     )
     print(
         f"Success: train_target='{train_target}', matrix_targets={matrix_targets}. "
-        f"Manual Loss: {expected_loss_matrix:.6f}, Model Loss: {logged_metrics['train_loss_matrix']:.6f}"
+        f"Manual Loss: {expected_loss_matrix:.6f}, Model Loss: {logged_metrics['train/loss_matrix_total']:.6f}"
     )
