@@ -1,6 +1,8 @@
 import argparse
 import dataclasses
+import glob
 import os
+import random
 import sys
 from pathlib import Path
 from typing import get_type_hints, Union
@@ -186,18 +188,27 @@ def main():
     train_pairs = []
     for temp in train_temps:
         temp_path = Path(args.data_path) / f"{temp}K"
-        matrix_path = temp_path / "Si_DM"
-        info_path = temp_path / "info.txt"
-        print(f"Looking for training data in {temp_path}")
-        if matrix_path.exists() and info_path.exists():
-            train_pairs.append((matrix_path, info_path))
+        snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
+        # Ensure we don't request more samples than available
+        num_to_sample = min(len(snapshot_paths), args.n_snapshots_per_temp)
+        selected_paths = random.sample(snapshot_paths, num_to_sample)
+        for matrix_path in selected_paths:
+            info_path = Path(matrix_path).parent / "info.dat"
+            if info_path.exists():
+                train_pairs.append((matrix_path, info_path))
 
     val_pairs = []
     val_path = Path(args.data_path) / f"{args.val_temp}K"
-    matrix_path = val_path / "Si_DM"
-    info_path = val_path / "info.txt"
-    if matrix_path.exists() and info_path.exists():
-        val_pairs.append((matrix_path, info_path))
+    val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
+    # Limit validation snapshots as well
+    num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
+    if args.val_n_snapshots is not None:
+        num_val_to_sample = min(num_val_to_sample, args.val_n_snapshots)
+    selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
+    for matrix_path in selected_val_paths:
+        info_path = Path(matrix_path).parent / "info.dat"
+        if info_path.exists():
+            val_pairs.append((matrix_path, info_path))
 
     print(
         f"Found {len(train_pairs)} training snapshots and {len(val_pairs)} validation snapshots."
