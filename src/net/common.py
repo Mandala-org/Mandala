@@ -166,6 +166,13 @@ class Config:
     # -------------------- hyperopt --------------------------------------
     tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
 
+    # --- DeepH-E3 Specific Config ---
+    num_block: int = 3
+    r_max: float = 8.0
+    num_basis: int = 128
+    use_sc: bool = True
+    use_sbf: bool = False
+
 
 def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
     if not isinstance(dtype, torch.dtype):

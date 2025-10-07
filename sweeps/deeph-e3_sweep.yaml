@@ -1,0 +1,24 @@
+program: scripts/train_silicon_deephe3.py
+method: bayes
+metric:
+  name: val/loss
+  goal: minimize
+parameters:
+  num_block:
+    distribution: int_uniform
+    min: 2
+    max: 4
+  r_max:
+    distribution: uniform
+    min: 6.0
+    max: 8.0
+  num_basis:
+    values: [64, 128]
+  use_sc:
+    values: [true, false]
+  use_sbf:
+    values: [true, false]
+  lr:
+    distribution: log_uniform_values
+    min: 1e-6
+    max: 1e-3
