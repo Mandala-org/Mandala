@@ -63,13 +63,15 @@ def compute_graph_features(
 
     # 3. Handle self-edges explicitly
     num_atoms = len(atoms)
-    self_edge_src = torch.arange(num_atoms, dtype=torch.long)
-    self_edge_dst = torch.arange(num_atoms, dtype=torch.long)
+    self_edge_src = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
+    self_edge_dst = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
 
     # 4. Combine self-edges and off-diagonal edges
-    offdiag_edge_src_unsorted = torch.from_numpy(src)
-    offdiag_edge_dst_unsorted = torch.from_numpy(dst)
-    offdiag_edge_offsets = torch.from_numpy(offsets).to(torch.float32)
+    offdiag_edge_src_unsorted = torch.from_numpy(src).to(positions.device)
+    offdiag_edge_dst_unsorted = torch.from_numpy(dst).to(positions.device)
+    offdiag_edge_offsets = (
+        torch.from_numpy(offsets).to(positions.device).to(torch.float32)
+    )
 
     # 5. Calculate displacement vectors using the offsets
     # disp = pos[j] + S @ box - pos[i]
