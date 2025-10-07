@@ -56,9 +56,9 @@ def setup_argparse():
         type=str,
         default="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A",
     )
-    parser.add_argument("--min_temp", type=int, default=900)
-    parser.add_argument("--max_temp", type=int, default=900)
-    parser.add_argument("--temp_step", type=int, default=900)
+    parser.add_argument("--min_temp", type=int, default=300)
+    parser.add_argument("--max_temp", type=int, default=300)
+    parser.add_argument("--temp_step", type=int, default=300)
     parser.add_argument(
         "--n_snapshots_per_temp",
         type=int,
@@ -188,6 +188,7 @@ def main():
         temp_path = Path(args.data_path) / f"{temp}K"
         matrix_path = temp_path / "Si_DM"
         info_path = temp_path / "info.txt"
+        print(f"Looking for training data in {temp_path}")
         if matrix_path.exists() and info_path.exists():
             train_pairs.append((matrix_path, info_path))
 
