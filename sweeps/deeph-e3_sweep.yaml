@@ -22,3 +22,16 @@ parameters:
     distribution: log_uniform_values
     min: 1e-6
     max: 1e-3
+
+command:
+  - ${env}
+  - python3
+  - -u # Unbuffered output for real-time logging
+  - ${program}
+  - ${args}
+  - --gpus=1  # Specify a single GPU
+  - --num_workers=0
+  - --n_snapshots_per_temp=100 # Use a subset for faster sweeps
+  - --max_epochs=1000
+  - --min_temp=3000
+  - --max_temp=3000
