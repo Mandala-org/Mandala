@@ -737,6 +737,7 @@ class DeepHE3(pl.LightningModule):
             out_js_list=out_js_list,
             default_dtype_torch=torch.float32,
             spinful=False,
+            device_torch=self.device,
         )
         self.criterion = MaskMSELoss()
 
