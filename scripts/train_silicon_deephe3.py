@@ -176,7 +176,6 @@ def main():
 
     # --- Data Loading ---
     print("--- Setting up datasets ---")
-    args.data_path = "data/big/silicon"
     all_temps = range(args.min_temp, args.max_temp + 1, args.temp_step)
     train_temps = [
         t
