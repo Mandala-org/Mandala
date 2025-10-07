@@ -47,8 +47,10 @@ class E3GNNDataset(Dataset):
         snapshot_paths: Sequence[Tuple[Path, Path]],
         mapper: BlockIrrepMapper,
         cfg: Config,
+        convention: str = "e3nn",
     ):
         self.cfg = cfg
+        self.convention = convention
         if cfg.cutoff_gnn > cfg.cutoff_matrix:
             raise ValueError("cutoff_gnn must be <= cutoff_matrix")
 
@@ -113,7 +115,7 @@ class E3GNNDataset(Dataset):
         snapshot = Snapshot.from_openmx(
             matrix_path=matrix_path,
             info_path=info_path,
-            convention="e3nn",
+            convention=self.convention,
             symmetrize_density=True,
             cutoff_radius=self.cfg.cutoff_matrix,
         )

@@ -39,8 +39,10 @@ class DatasetFactory:
     def __init__(
         self,
         cfg: Config,
+        convention: str = "e3nn",
     ):
         self.cfg = cfg
+        self.convention = convention
         # cache root for processed snapshots; if None, caching is disabled
         if self.cfg.cache_root is not None:
             self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
@@ -109,9 +111,9 @@ class DatasetFactory:
         )
 
         # ④  Build datasets --------------------------------------------
-        train_ds = E3GNNDataset(self._pairs["train"], mapper, self.cfg)
+        train_ds = E3GNNDataset(self._pairs["train"], mapper, self.cfg, self.convention)
         val_ds = (
-            E3GNNDataset(self._pairs["val"], mapper, self.cfg)
+            E3GNNDataset(self._pairs["val"], mapper, self.cfg, self.convention)
             if self._pairs["val"]
             else None
         )
@@ -126,6 +128,7 @@ def build_datasets(
     train_pairs: Sequence[Tuple[str | os.PathLike, str | os.PathLike]],
     val_pairs: Sequence[Tuple[str | os.PathLike, str | os.PathLike]] | None = None,
     cfg: Config = None,
+    convention: str = "e3nn",
 ) -> Tuple[E3GNNDataset, Optional[E3GNNDataset], BlockIrrepMapper]:
     """Build datasets from snapshot pairs.
     Example
@@ -135,7 +138,7 @@ def build_datasets(
     ...     cfg=Config(cutoff_gnn=4.5),
     ... )
     """
-    fac = DatasetFactory(cfg)
+    fac = DatasetFactory(cfg, convention)
     for m, i in train_pairs:
         fac.add_snapshot(m, i, purpose="train")
     if val_pairs:
