@@ -731,14 +731,14 @@ class DeepHE3(pl.LightningModule):
         # Correctly derive out_js_list for Si orbitals (2s2p1d -> l=[0,0,1,1,2])
         si_orbitals_l = [0, 0, 1, 1, 2]
         out_js_list = list(product(si_orbitals_l, si_orbitals_l))
-
         self.construct_kernel = e3TensorDecomp(
             net_irreps_out=None,
             out_js_list=out_js_list,
             default_dtype_torch=torch.float32,
             spinful=False,
-            device_torch=self.device,
+            device_torch=self.cfg.device,
         )
+        print(f"e3TensorDecomp is on device: {self.construct_kernel.device}")
         self.criterion = MaskMSELoss()
 
     def _prepare_deeph_input(self, x: Dict[str, Any]) -> Batch:
