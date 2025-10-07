@@ -12,9 +12,9 @@ metric:
 
 parameters:
   cutoff_gnn:
-    value: 7.0
+    value: 4.0
   cutoff_matrix:
-    value: 7.0
+    value: 4.0
   l_max_gnn:
     distribution: int_uniform
     min: 3
@@ -74,6 +74,8 @@ parameters:
     values:
       - 0.0
       - 0.5
+      - 0.9
+      - 0.98
       - 1.0
   lr_scheduler_target:
     value: "train/loss_total"
