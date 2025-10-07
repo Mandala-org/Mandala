@@ -20,8 +20,8 @@ parameters:
     values: [true, false]
   lr:
     distribution: log_uniform_values
-    min: 1e-6
-    max: 1e-3
+    min: 1.0e-5
+    max: 1.0e-3
 
 command:
   - ${env}
