@@ -89,6 +89,7 @@ def compute_graph_features(
     pair_ids = torch.minimum(
         offdiag_edge_src_unsorted, offdiag_edge_dst_unsorted
     ) * num_atoms + torch.maximum(offdiag_edge_src_unsorted, offdiag_edge_dst_unsorted)
+    pair_ids = pair_ids.to(positions.device)
 
     # Find the minimum length for each pair
     _, argmin = scatter_min(offdiag_lengths_unsorted, pair_ids, dim=0)
