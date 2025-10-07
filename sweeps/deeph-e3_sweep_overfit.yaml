@@ -36,6 +36,6 @@ command:
   - --num_workers=0
   - --n_snapshots_per_temp=1 # Use a subset for faster sweeps
   - --val_n_snapshots=0
-  - --max_epochs=1000
+  - --max_epochs=4000
   - --min_temp=300
   - --max_temp=300
