@@ -9,7 +9,6 @@ E3GNN – PyTorch-Lightning implementation
 """
 
 from __future__ import annotations
-from itertools import product
 from typing import Dict, Tuple, Any
 
 import torch
@@ -25,8 +24,8 @@ import time
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_snap
 from data.snapshot import Snapshot
-from data.block_matrix import BlockMatrix, IrrepsBlockData
-from data.graph_features import compute_graph_features, _minimal_disp
+from data.block_matrix import IrrepsBlockData
+from data.graph_features import compute_graph_features
 
 from net.common import Config, build_hidden_irreps
 from net.encoders import NodeEncoder, EdgeEncoder
@@ -34,18 +33,16 @@ from net.layers import MessageBlock
 from net.heads import DeepHead
 
 # DeepH-E3
-import sys
-from pathlib import Path
 
 # Add DeepH-E3 to the Python path
-deeph_path = Path(__file__).resolve().parents[2] / "external" / "DeepH-E3"
-if str(deeph_path) not in sys.path:
-    sys.path.append(str(deeph_path))
+# deeph_path = Path(__file__).resolve().parents[2] / "external" / "DeepH-E3"
+# if str(deeph_path) not in sys.path:
+#     sys.path.append(str(deeph_path))
 
-from deephe3.model import Net as DeepHE3Net
-from deephe3.e3modules import e3TensorDecomp, Rotate
-from deephe3.utils import MaskMSELoss
-from torch_geometric.data import Data, Batch
+# from deephe3.model import Net as DeepHE3Net
+# from deephe3.e3modules import e3TensorDecomp, Rotate
+# from deephe3.utils import MaskMSELoss
+# from torch_geometric.data import Data, Batch
 
 
 class E3GNN(pl.LightningModule):
@@ -698,118 +695,118 @@ class E3GNN(pl.LightningModule):
         return self.get_stress(predictions, x["positions"], x["box"])
 
 
-class DeepHE3(pl.LightningModule):
-    def __init__(self, cfg: Config, mapper: BlockIrrepMapper):
-        super().__init__()
-        self.cfg = cfg
-        self.mapper = mapper  # Used to get orbital info
+# class DeepHE3(pl.LightningModule):
+#     def __init__(self, cfg: Config, mapper: BlockIrrepMapper):
+#         super().__init__()
+#         self.cfg = cfg
+#         self.mapper = mapper  # Used to get orbital info
 
-        # Hardcoded hyperparameters from DeepH-E3 defaults
-        self.deephe3 = DeepHE3Net(
-            num_species=len(self.mapper.orbital_cfg.elements()),
-            irreps_embed_node="16x0e",
-            irreps_edge_init="16x0e",
-            irreps_sh="1x0e+1x1o+1x2e",
-            irreps_mid_node="16x0e+16x0o+16x1e+16x1o",
-            irreps_post_node="16x0e+16x0o",
-            irreps_out_node="1x0e",
-            irreps_mid_edge="16x0e+16x0o+16x1e+16x1o",
-            irreps_post_edge="16x0e+16x0o+16x1e+16x1o+16x2e+16x2o",
-            irreps_out_edge="16x0e+16x0o+16x1e+16x1o+16x2e+16x2o",
-            num_block=self.cfg.num_block,
-            r_max=self.cfg.r_max,
-            use_sc=self.cfg.use_sc,
-            no_parity=False,
-            use_sbf=self.cfg.use_sbf,
-            only_ij=False,
-            num_basis=self.cfg.num_basis,
-        )
+#         # Hardcoded hyperparameters from DeepH-E3 defaults
+#         self.deephe3 = DeepHE3Net(
+#             num_species=len(self.mapper.orbital_cfg.elements()),
+#             irreps_embed_node="16x0e",
+#             irreps_edge_init="16x0e",
+#             irreps_sh="1x0e+1x1o+1x2e",
+#             irreps_mid_node="16x0e+16x0o+16x1e+16x1o",
+#             irreps_post_node="16x0e+16x0o",
+#             irreps_out_node="1x0e",
+#             irreps_mid_edge="16x0e+16x0o+16x1e+16x1o",
+#             irreps_post_edge="16x0e+16x0o+16x1e+16x1o+16x2e+16x2o",
+#             irreps_out_edge="16x0e+16x0o+16x1e+16x1o+16x2e+16x2o",
+#             num_block=self.cfg.num_block,
+#             r_max=self.cfg.r_max,
+#             use_sc=self.cfg.use_sc,
+#             no_parity=False,
+#             use_sbf=self.cfg.use_sbf,
+#             only_ij=False,
+#             num_basis=self.cfg.num_basis,
+#         )
 
-        # These are needed for transformations
-        self.rotate_kernel = Rotate(default_dtype_torch=torch.float32, spinful=False)
+#         # These are needed for transformations
+#         self.rotate_kernel = Rotate(default_dtype_torch=torch.float32, spinful=False)
 
-        # Correctly derive out_js_list for Si orbitals (2s2p1d -> l=[0,0,1,1,2])
-        si_orbitals_l = [0, 0, 1, 1, 2]
-        out_js_list = list(product(si_orbitals_l, si_orbitals_l))
-        self.construct_kernel = e3TensorDecomp(
-            net_irreps_out=None,
-            out_js_list=out_js_list,
-            default_dtype_torch=torch.float32,
-            spinful=False,
-            device_torch=self.cfg.device,
-        )
-        print(f"e3TensorDecomp is on device: {self.construct_kernel.device}")
-        self.criterion = MaskMSELoss()
+#         # Correctly derive out_js_list for Si orbitals (2s2p1d -> l=[0,0,1,1,2])
+#         si_orbitals_l = [0, 0, 1, 1, 2]
+#         out_js_list = list(product(si_orbitals_l, si_orbitals_l))
+#         self.construct_kernel = e3TensorDecomp(
+#             net_irreps_out=None,
+#             out_js_list=out_js_list,
+#             default_dtype_torch=torch.float32,
+#             spinful=False,
+#             device_torch=self.cfg.device,
+#         )
+#         print(f"e3TensorDecomp is on device: {self.construct_kernel.device}")
+#         self.criterion = MaskMSELoss()
 
-    def _prepare_deeph_input(self, x: Dict[str, Any]) -> Batch:
-        num_nodes = x["positions"].shape[0]
+#     def _prepare_deeph_input(self, x: Dict[str, Any]) -> Batch:
+#         num_nodes = x["positions"].shape[0]
 
-        # Calculate displacement vectors and distances
-        disp = _minimal_disp(x["positions"], x["edge_index"], x["box"])
-        lengths = torch.linalg.norm(disp, dim=-1, keepdim=True)
-        edge_attr = torch.cat([lengths, disp], dim=-1)
+#         # Calculate displacement vectors and distances
+#         disp = _minimal_disp(x["positions"], x["edge_index"], x["box"])
+#         lengths = torch.linalg.norm(disp, dim=-1, keepdim=True)
+#         edge_attr = torch.cat([lengths, disp], dim=-1)
 
-        data = Data(
-            x=x["node_type_idx"],
-            edge_index=x["edge_index"],
-            edge_attr=edge_attr,
-            pos=x["positions"],
-            lattice=x["box"].unsqueeze(0),
-            num_nodes=num_nodes,
-        )
-        return Batch.from_data_list([data])
+#         data = Data(
+#             x=x["node_type_idx"],
+#             edge_index=x["edge_index"],
+#             edge_attr=edge_attr,
+#             pos=x["positions"],
+#             lattice=x["box"].unsqueeze(0),
+#             num_nodes=num_nodes,
+#         )
+#         return Batch.from_data_list([data])
 
-    def forward(self, x: Dict[str, Any]) -> torch.Tensor:
-        batch = self._prepare_deeph_input(x)
-        _, edge_fea = self.deephe3(batch)
-        return edge_fea
+#     def forward(self, x: Dict[str, Any]) -> torch.Tensor:
+#         batch = self._prepare_deeph_input(x)
+#         _, edge_fea = self.deephe3(batch)
+#         return edge_fea
 
-    def _prepare_deeph_target(
-        self, y_matrix: BlockMatrix, x: Dict[str, Any]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Converts a Mandala BlockMatrix into the flat label and mask format for DeepH-E3."""
-        num_edges = x["edge_index"].shape[1]
-        # For Si 2s2p1d, the blocks are 13x13, so flattened size is 169
-        label = torch.zeros(num_edges, 169, device=self.device)
-        mask = torch.zeros_like(label, dtype=torch.bool)
+#     def _prepare_deeph_target(
+#         self, y_matrix: BlockMatrix, x: Dict[str, Any]
+#     ) -> Tuple[torch.Tensor, torch.Tensor]:
+#         """Converts a Mandala BlockMatrix into the flat label and mask format for DeepH-E3."""
+#         num_edges = x["edge_index"].shape[1]
+#         # For Si 2s2p1d, the blocks are 13x13, so flattened size is 169
+#         label = torch.zeros(num_edges, 169, device=self.device)
+#         mask = torch.zeros_like(label, dtype=torch.bool)
 
-        edge_to_block = {
-            tuple(edge.tolist()): block
-            for edge, block in zip(
-                y_matrix.pair_edges["Si-Si"].t(), y_matrix.pair_blocks["Si-Si"]
-            )
-        }
+#         edge_to_block = {
+#             tuple(edge.tolist()): block
+#             for edge, block in zip(
+#                 y_matrix.pair_edges["Si-Si"].t(), y_matrix.pair_blocks["Si-Si"]
+#             )
+#         }
 
-        for i, edge in enumerate(x["edge_index"].t().tolist()):
-            if tuple(edge) in edge_to_block:
-                label[i] = edge_to_block[tuple(edge)].flatten()
-                mask[i] = True
+#         for i, edge in enumerate(x["edge_index"].t().tolist()):
+#             if tuple(edge) in edge_to_block:
+#                 label[i] = edge_to_block[tuple(edge)].flatten()
+#                 mask[i] = True
 
-        return label, mask
+#         return label, mask
 
-    def _shared_step(self, batch, batch_idx, stage: str):
-        x, y = batch
-        predicted_irreps = self.forward(x)
+#     def _shared_step(self, batch, batch_idx, stage: str):
+#         x, y = batch
+#         predicted_irreps = self.forward(x)
 
-        # Reconstruct predicted matrix in OpenMX basis
-        H_pred_openmx_flat = self.construct_kernel.get_H(predicted_irreps)
+#         # Reconstruct predicted matrix in OpenMX basis
+#         H_pred_openmx_flat = self.construct_kernel.get_H(predicted_irreps)
 
-        # Prepare target matrix in the same flat, OpenMX format
-        H_true_openmx_flat, mask = self._prepare_deeph_target(y["hamiltonian"], x)
+#         # Prepare target matrix in the same flat, OpenMX format
+#         H_true_openmx_flat, mask = self._prepare_deeph_target(y["hamiltonian"], x)
 
-        loss = self.criterion(H_pred_openmx_flat, H_true_openmx_flat, mask)
-        mae = torch.mean(torch.abs(H_pred_openmx_flat[mask] - H_true_openmx_flat[mask]))
+#         loss = self.criterion(H_pred_openmx_flat, H_true_openmx_flat, mask)
+#         mae = torch.mean(torch.abs(H_pred_openmx_flat[mask] - H_true_openmx_flat[mask]))
 
-        self.log(f"{stage}/loss", loss)
-        self.log(f"{stage}/hamiltonian_mae", mae)
-        return loss
+#         self.log(f"{stage}/loss", loss)
+#         self.log(f"{stage}/hamiltonian_mae", mae)
+#         return loss
 
-    def training_step(self, batch, batch_idx):
-        return self._shared_step(batch, batch_idx, "train")
+#     def training_step(self, batch, batch_idx):
+#         return self._shared_step(batch, batch_idx, "train")
 
-    def validation_step(self, batch, batch_idx):
-        return self._shared_step(batch, batch_idx, "val")
+#     def validation_step(self, batch, batch_idx):
+#         return self._shared_step(batch, batch_idx, "val")
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.cfg.lr)
-        return optimizer
+#     def configure_optimizers(self):
+#         optimizer = torch.optim.AdamW(self.parameters(), lr=self.cfg.lr)
+#         return optimizer
