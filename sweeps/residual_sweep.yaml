@@ -1,6 +1,6 @@
-program: scripts/train_silicon.py
-project: mandala_small_steps
-name: silicon_hdo_overfit_new
+program: scripts/train_residual.py
+project: mandala_residual
+name: residual_model_1
 method: bayes
 early_terminate:
   type: hyperband
