@@ -304,38 +304,22 @@ class E3GNN(pl.LightningModule):
         return preds_wrapped
 
     # ==================== Lightning steps ====================================
-    def _shared_step(self, batch, batch_idx, stage: str):
+    def compute_loss(self, predictions, targets) -> Dict[str, torch.Tensor]:
         """
-        Shared logic for training and validation steps.
-        Logs metrics prefixed with stage ('train' or 'val').
+        Computes matrix-level losses (MSE, MAE) between predictions and targets.
         """
-        x, y = batch
-        metrics = {}
-
-        # --- forward timing (message-passing + heads) -------------------
-        t_fwd_start = time.perf_counter()
-        preds_irreps = self(x)
-        t_fwd_end = time.perf_counter()
-
-        # --- block mapping timing ---------------------------------------
-        t_map_start = time.perf_counter()
-        preds_matrix = {
-            name: preds_irreps[name].to_blocks(self.mapper)
-            for name in self.cfg.matrix_targets
-        }
-        t_map_end = time.perf_counter()
-
-        # --- Matrix Loss Calculation ------------------------------------
         matrix_mses = {}
         matrix_maes = {}
         combined_matrix_losses = {}
+        metrics = {}
+
         preds_for_loss = (
-            preds_irreps if self.cfg.train_target == "irreps" else preds_matrix
+            predictions if self.cfg.train_target == "irreps" else predictions
         )
 
         for name in self.cfg.matrix_targets:
             p = preds_for_loss[name]
-            t = y[name]
+            t = targets[name]
 
             if self.cfg.train_target == "matrix" and self.cfg.symmetrize_output:
                 p = (p + p.transpose()) * 0.5
@@ -349,8 +333,6 @@ class E3GNN(pl.LightningModule):
             mse_val = torch.tensor(0.0, device=self.device)
             mae_val = torch.tensor(0.0, device=self.device)
 
-            # Vectorized loss calculation
-            # ! Improve this
             for key in t.keys():
                 if key not in p.keys():
                     continue
@@ -358,7 +340,6 @@ class E3GNN(pl.LightningModule):
                 t_items_key = t_items[key]
                 p_items_key = p_items[key]
 
-                # Ensure edge order matches for comparison
                 t_edges = t.pair_edges[key].t().tolist()
                 p_edges = p.pair_edges[key].t().tolist()
                 pred_edge_to_idx = {tuple(edge): i for i, edge in enumerate(p_edges)}
@@ -387,31 +368,40 @@ class E3GNN(pl.LightningModule):
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
-            metrics[f"{stage}/{name}_mae"] = mae_val
-            metrics[f"{stage}/{name}_mse"] = mse_val
+            metrics[f"{name}_mae"] = mae_val
+            metrics[f"{name}_mse"] = mse_val
 
             combined_matrix_losses[name] = (
                 1 - self.cfg.loss_l1_fraction
             ) * mse_val + self.cfg.loss_l1_fraction * mae_val
 
         loss_matrix = sum(combined_matrix_losses.values())
+        metrics["loss_matrix_total"] = loss_matrix
+        metrics["loss_total"] = loss_matrix  # Initially, total loss is matrix loss
 
-        # --- Observable Evaluation --------------------------------------
-        t_obs_start = time.perf_counter()
+        return metrics
+
+    def compute_observables(
+        self, predictions_matrix, targets
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Computes observable-related losses and metrics.
+        """
+        metrics = {}
         loss_E_weighted = torch.tensor(0.0, device=self.device)
         loss_N_weighted = torch.tensor(0.0, device=self.device)
 
         # Standard observables
         if (
             self.cfg.enable_energy
-            and "hamiltonian" in preds_matrix
-            and "density" in preds_matrix
+            and "hamiltonian" in predictions_matrix
+            and "density" in predictions_matrix
         ):
             E_pred = trace_matmul_sparse_snap(
-                preds_matrix["hamiltonian"], preds_matrix["density"]
+                predictions_matrix["hamiltonian"], predictions_matrix["density"]
             )
-            E_true = y["energy"]
-            metrics[f"{stage}/energy_mae"] = torch.mean(torch.abs(E_pred - E_true))
+            E_true = targets["energy"]
+            metrics["energy_mae"] = torch.mean(torch.abs(E_pred - E_true))
             if self.cfg.train_on_energy and not self.cfg.train_observables_on_gt:
                 loss_E_weighted = self.cfg.loss_coef_observables * self._mse(
                     E_pred, E_true
@@ -419,16 +409,14 @@ class E3GNN(pl.LightningModule):
 
         if (
             self.cfg.enable_num_electrons
-            and "overlap" in preds_matrix
-            and "density" in preds_matrix
+            and "overlap" in predictions_matrix
+            and "density" in predictions_matrix
         ):
             N_pred = trace_matmul_sparse_snap(
-                preds_matrix["overlap"], preds_matrix["density"]
+                predictions_matrix["overlap"], predictions_matrix["density"]
             )
-            N_true = y["num_electrons"]
-            metrics[f"{stage}/num_electrons_mae"] = torch.mean(
-                torch.abs(N_pred - N_true)
-            )
+            N_true = targets["num_electrons"]
+            metrics["num_electrons_mae"] = torch.mean(torch.abs(N_pred - N_true))
             if self.cfg.train_on_num_electrons and not self.cfg.train_observables_on_gt:
                 loss_N_weighted = self.cfg.loss_coef_observables * self._mse(
                     N_pred, N_true
@@ -437,30 +425,30 @@ class E3GNN(pl.LightningModule):
         # Partial Ground Truth Observables
         if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
             if self.cfg.train_target == "irreps":
-                H_true = y["hamiltonian"].to_blocks(self.mapper)
-                D_true = y["density"].to_blocks(self.mapper)
-                S_true = y["overlap"].to_blocks(self.mapper)
+                H_true = targets["hamiltonian"].to_blocks(self.mapper)
+                D_true = targets["density"].to_blocks(self.mapper)
+                S_true = targets["overlap"].to_blocks(self.mapper)
             else:
-                H_true = y["hamiltonian"]
-                D_true = y["density"]
-                S_true = y["overlap"]
+                H_true = targets["hamiltonian"]
+                D_true = targets["density"]
+                S_true = targets["overlap"]
 
-            E_gt_D = trace_matmul_sparse_snap(preds_matrix["hamiltonian"], D_true)
-            E_gt_H = trace_matmul_sparse_snap(H_true, preds_matrix["density"])
-            N_gt_S = trace_matmul_sparse_snap(preds_matrix["density"], S_true)
-            N_gt_D = trace_matmul_sparse_snap(S_true, preds_matrix["density"])
+            E_gt_D = trace_matmul_sparse_snap(predictions_matrix["hamiltonian"], D_true)
+            E_gt_H = trace_matmul_sparse_snap(H_true, predictions_matrix["density"])
+            N_gt_S = trace_matmul_sparse_snap(predictions_matrix["density"], S_true)
+            N_gt_D = trace_matmul_sparse_snap(S_true, predictions_matrix["density"])
 
             if self.cfg.log_partial_gt_observables:
-                metrics[f"{stage}/energy_mae_gt_density"] = torch.mean(
+                metrics["energy_mae_gt_density"] = torch.mean(
                     torch.abs(E_gt_D - E_true)
                 )
-                metrics[f"{stage}/energy_mae_gt_hamiltonian"] = torch.mean(
+                metrics["energy_mae_gt_hamiltonian"] = torch.mean(
                     torch.abs(E_gt_H - E_true)
                 )
-                metrics[f"{stage}/num_electrons_mae_gt_overlap"] = torch.mean(
+                metrics["num_electrons_mae_gt_overlap"] = torch.mean(
                     torch.abs(N_gt_S - N_true)
                 )
-                metrics[f"{stage}/num_electrons_mae_gt_density"] = torch.mean(
+                metrics["num_electrons_mae_gt_density"] = torch.mean(
                     torch.abs(N_gt_D - N_true)
                 )
 
@@ -472,63 +460,97 @@ class E3GNN(pl.LightningModule):
                 )
 
             if self.cfg.train_on_num_electrons and self.cfg.train_observables_on_gt:
-                loss_N_gt_S = self._mse(N_gt_S, N_true)
-                loss_N_gt_D = self._mse(N_gt_D, N_true)
+                loss_N_gt_S = self._mse(N_gt_S, E_true)
+                loss_N_gt_D = self._mse(N_gt_D, E_true)
                 loss_N_weighted = (
                     self.cfg.loss_coef_observables * (loss_N_gt_S + loss_N_gt_D) * 0.5
                 )
 
+        if loss_E_weighted > 0:
+            metrics["loss_energy"] = loss_E_weighted
+        if loss_N_weighted > 0:
+            metrics["loss_num_electrons"] = loss_N_weighted
+
+        return metrics
+
+    def _shared_step(self, batch, batch_idx, stage: str):
+        """
+        Shared logic for training and validation steps.
+        Logs metrics prefixed with stage ('train' or 'val').
+        """
+        x, y = batch
+
+        t_fwd_start = time.perf_counter()
+        preds_irreps = self(x)
+        t_fwd_end = time.perf_counter()
+
+        t_map_start = time.perf_counter()
+        preds_matrix = {
+            name: preds_irreps[name].to_blocks(self.mapper)
+            for name in self.cfg.matrix_targets
+        }
+        t_map_end = time.perf_counter()
+
+        targets_for_loss = y
+        if self.cfg.train_target == "irreps":
+            targets_for_loss = {
+                name: y[name].to_vectors(self.mapper)
+                for name in self.cfg.matrix_targets
+            }
+
+        preds_for_loss = (
+            preds_irreps if self.cfg.train_target == "irreps" else preds_matrix
+        )
+
+        loss_metrics = self.compute_loss(preds_for_loss, targets_for_loss)
+
+        t_obs_start = time.perf_counter()
+        obs_metrics = self.compute_observables(preds_matrix, y)
         t_obs_end = time.perf_counter()
 
-        # --- Total Loss Aggregation ---
-        total_matrix_l1_component = self.cfg.loss_l1_fraction * sum(
-            matrix_maes.values()
+        loss = (
+            loss_metrics["loss_total"]
+            + obs_metrics.get("loss_energy", 0.0)
+            + obs_metrics.get("loss_num_electrons", 0.0)
         )
-        total_matrix_l2_component = (1 - self.cfg.loss_l1_fraction) * sum(
-            matrix_mses.values()
-        )
-
-        total_l1_loss = total_matrix_l1_component
-        total_l2_loss = total_matrix_l2_component + loss_E_weighted + loss_N_weighted
-
-        loss = total_l1_loss + total_l2_loss
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
             l1_reg = sum(p.abs().sum() for p in self.parameters())
             loss += self.cfg.l1_reg_coef * l1_reg
-            metrics[f"{stage}/loss_l1_reg"] = l1_reg
+            obs_metrics["loss_l1_reg"] = l1_reg
         if self.cfg.l2_reg_coef > 0:
             l2_reg = sum(p.pow(2).sum() for p in self.parameters())
             loss += self.cfg.l2_reg_coef * l2_reg
-            metrics[f"{stage}/loss_l2_reg"] = l2_reg
+            obs_metrics["loss_l2_reg"] = l2_reg
 
-        # --- Logging ------------------------------------------------------
-        metrics[f"{stage}/loss_total"] = loss
-        metrics[f"{stage}/loss_matrix_total"] = loss_matrix
+        loss_metrics["loss_total"] = loss
 
-        if loss_E_weighted > 0:
-            metrics[f"{stage}/loss_energy"] = loss_E_weighted
-        if loss_N_weighted > 0:
-            metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted
+        # Combine and log all metrics
+        all_metrics = {
+            f"{stage}/{k}": v for k, v in {**loss_metrics, **obs_metrics}.items()
+        }
 
         if stage == "train" and loss > 1e-12:
-            for name, val in combined_matrix_losses.items():
-                metrics[f"frac/loss_{name}"] = val / loss
-            if loss_E_weighted > 0:
-                metrics["frac/loss_energy"] = loss_E_weighted / loss
-            if loss_N_weighted > 0:
-                metrics["frac/loss_num_electrons"] = loss_N_weighted / loss
+            # Log fractional contributions to the loss
+            for name, val in loss_metrics.items():
+                if "loss" in name and name != "loss_total":
+                    all_metrics[f"frac/{name}"] = val / loss
+            if "loss_energy" in obs_metrics:
+                all_metrics["frac/loss_energy"] = obs_metrics["loss_energy"] / loss
+            if "loss_num_electrons" in obs_metrics:
+                all_metrics["frac/loss_num_electrons"] = (
+                    obs_metrics["loss_num_electrons"] / loss
+                )
 
         self.log_dict(
-            metrics,
+            all_metrics,
             prog_bar=True,
             on_step=self.cfg.log_on_step,
             on_epoch=self.cfg.log_on_epoch,
             batch_size=1,
         )
 
-        # record per-batch timings for callback
         self._last_batch_times = {
             "forward": t_fwd_end - t_fwd_start,
             "map": t_map_end - t_map_start,

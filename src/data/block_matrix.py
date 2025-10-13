@@ -755,6 +755,76 @@ class IrrepsBlockData:
             self.basis,
         )
 
+    # ------------------------------------------------------------------ arithmetic
+    def _replace_pair_vectors(
+        self, new_vectors: Dict[PairKey, torch.Tensor], *, basis: str
+    ):
+        """Return a shallow copy with *pair_vectors* replaced."""
+        return IrrepsBlockData(
+            atoms=self.atoms,
+            atom_counts=self.atom_counts,
+            pair_vectors=new_vectors,
+            pair_edges=self.pair_edges,
+            lookup=self.lookup,
+            orbital_cfg=self.orbital_cfg,
+            basis=basis,
+        )
+
+    def _align_with(
+        self, other: "IrrepsBlockData"
+    ) -> Tuple["IrrepsBlockData", "IrrepsBlockData"]:
+        """Ensure both instances have the same atoms, basis, cfg, and edge order."""
+        if not isinstance(other, IrrepsBlockData):
+            raise TypeError("Operand must be IrrepsBlockData")
+        if self.atoms != other.atoms:
+            raise ValueError("Atoms differ; cannot add/subtract snapshots")
+        if self.basis != other.basis:
+            raise ValueError("Basis differs (openmx vs e3nn)")
+        if self.orbital_cfg.to_dict() != other.orbital_cfg.to_dict():
+            raise ValueError("OrbitalIrrepConfig differs")
+        if self.keys() != other.keys():
+            raise ValueError("Snapshots contain different element-pair keys")
+
+        # This part for reordering is not implemented for IrrepsBlockData
+        # as it's assumed to be handled at the BlockMatrix level before conversion.
+        for k in self.keys():
+            if not torch.equal(self.pair_edges[k], other.pair_edges[k]):
+                raise ValueError(
+                    f"Edge order for key '{k}' differs. Alignment must be done at BlockMatrix level."
+                )
+            if self.pair_vectors[k].shape != other.pair_vectors[k].shape:
+                raise ValueError(f"Shape mismatch for key '{k}'")
+
+        return self, other
+
+    def __add__(self, other):
+        if other == 0:
+            return self
+        a, b = self._align_with(other)
+        new_vectors = {k: a.pair_vectors[k] + b.pair_vectors[k] for k in a.pair_vectors}
+        return self._replace_pair_vectors(new_vectors, basis=a.basis)
+
+    __radd__ = __add__
+
+    def __neg__(self):
+        new_vectors = {k: -v for k, v in self.pair_vectors.items()}
+        return self._replace_pair_vectors(new_vectors, basis=self.basis)
+
+    def __sub__(self, other):
+        if other == 0:
+            return self
+        a, b = self._align_with(other)
+        new_vectors = {k: a.pair_vectors[k] - b.pair_vectors[k] for k in a.pair_vectors}
+        return self._replace_pair_vectors(new_vectors, basis=a.basis)
+
+    def __rsub__(self, other):
+        if other == 0:
+            return -self
+        return NotImplemented
+
+    def keys(self):
+        return self.pair_vectors.keys()
+
     # ─────────────────────────────────────────────────────────────────────────
     #   diag / offdiag access for vector form
     # ─────────────────────────────────────────────────────────────────────────
