@@ -59,6 +59,7 @@ def setup_argparse():
         type=str,
         required=True,
         help="Path to the checkpoint of the pretrained model.",
+        default="/home/brzoza73/casus/mandala/saved_models/suxj8k89/checkpoints/epoch=333-step=6680.ckpt",
     )
 
     # --- Dataset Arguments ---
