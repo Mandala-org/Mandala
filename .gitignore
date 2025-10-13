@@ -15,6 +15,7 @@ benchmarks/
 lightning_logs/
 outputs/
 slurm-*.out
+saved_models/
 
 # PyTest + coverage
 .pytest_cache/
