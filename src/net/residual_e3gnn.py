@@ -122,7 +122,7 @@ class ResidualE3GNN(pl.LightningModule):
                 patience=self.residual_cfg.lr_scheduler_patience,
                 min_lr=self.residual_cfg.lr_scheduler_min_lr,
             ),
-            "monitor": "val/residual_loss_total",
+            "monitor": "train/residual_loss_total",
             "interval": "epoch",
             "frequency": 1,
         }

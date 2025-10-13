@@ -94,7 +94,7 @@ command:
   - --gpus=1  # Specify a single GPU
   - --num_workers=20
   - --n_snapshots_per_temp=1 # Use a subset for faster sweeps
-  - --val_n_snapshots=0
+  - --val_n_snapshots=1
   - --max_epochs=1000
   - --val_temp=300
   - --min_temp=300
