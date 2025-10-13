@@ -68,25 +68,25 @@ def setup_argparse():
         type=str,
         default="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A",
     )
-    parser.add_argument("--min_temp", type=int, default=300)
-    parser.add_argument("--max_temp", type=int, default=3000)
+    parser.add_argument("--min_temp", type=int, default=2700)
+    parser.add_argument("--max_temp", type=int, default=2700)
     parser.add_argument("--temp_step", type=int, default=300)
     parser.add_argument(
         "--n_snapshots_per_temp",
         type=int,
-        default=50,
+        default=1,
         help="Number of snapshots to use for training per temperature.",
     )
     parser.add_argument(
         "--val_temp",
         type=int,
-        default=1500,
+        default=2700,
         help="Temperature to use for the validation set.",
     )
     parser.add_argument(
         "--val_n_snapshots",
         type=int,
-        default=None,
+        default=1,
         help="Number of snapshots to use for validation. If None, uses the same as training.",
     )
     parser.add_argument(
