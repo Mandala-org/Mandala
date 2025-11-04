@@ -3,7 +3,6 @@ from e3nn.o3 import Irreps, spherical_harmonics
 from e3nn.math import soft_one_hot_linspace
 from net.common import Config
 from typing import Tuple, Dict
-from torch_scatter import scatter_min
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
@@ -54,6 +53,9 @@ def compute_graph_features(
         pbc=box is not None,
     )
 
+    if box is None:
+        print("Warning: box is None, periodic boundary conditions are disabled.")
+
     # 2. Use ase.neighborlist to get edges and offsets
     # 'i' is the source atom index, 'j' is the destination atom index,
     # 'S' is the offset vector in lattice coordinates.
@@ -65,13 +67,14 @@ def compute_graph_features(
     num_atoms = len(atoms)
     self_edge_src = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
     self_edge_dst = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
+    self_edge_offsets = torch.zeros(
+        (num_atoms, 3), dtype=torch.long, device=positions.device
+    )
 
     # 4. Combine self-edges and off-diagonal edges
     offdiag_edge_src_unsorted = torch.from_numpy(src).to(positions.device)
     offdiag_edge_dst_unsorted = torch.from_numpy(dst).to(positions.device)
-    offdiag_edge_offsets = (
-        torch.from_numpy(offsets).to(positions.device).to(torch.float32)
-    )
+    offdiag_edge_offsets = torch.from_numpy(offsets).to(positions.device).to(torch.long)
 
     # 5. Calculate displacement vectors using the offsets
     # disp = pos[j] + S @ box - pos[i]
@@ -82,46 +85,45 @@ def compute_graph_features(
         )
         - positions[offdiag_edge_src_unsorted]
     )
+
+    if cfg.pedantic:
+        # check if displacements lead to correct destinations
+        positions_dst_reconstructed = (
+            positions[offdiag_edge_src_unsorted] + offdiag_disp_unsorted
+        )
+        # Due to periodic boundaries, we need to map positions back into the unit cell
+        if box is not None:
+            inv_box = torch.inverse(box.to(positions.device))
+            frac_coords = positions_dst_reconstructed @ inv_box
+            frac_coords = frac_coords - torch.floor(frac_coords)
+            positions_dst_reconstructed = frac_coords @ box.to(positions.device)
+        diffs = positions_dst_reconstructed - positions[offdiag_edge_dst_unsorted]
+        assert torch.all(
+            torch.linalg.norm(diffs, dim=-1) < 1e-4
+        ), "Displacement vectors do not lead to correct destination positions."
+
     self_disp = torch.zeros((num_atoms, 3), device=positions.device)
 
     # 6. Calculate lengths and sort off-diagonal edges
+
     offdiag_lengths_unsorted = torch.linalg.norm(offdiag_disp_unsorted, dim=-1)
-
-    # Create canonical pair IDs for off-diagonal edges
-    pair_ids = torch.minimum(
-        offdiag_edge_src_unsorted, offdiag_edge_dst_unsorted
-    ) * num_atoms + torch.maximum(offdiag_edge_src_unsorted, offdiag_edge_dst_unsorted)
-    pair_ids = pair_ids.to(positions.device)
-
-    # Find the minimum length for each pair
-    _, argmin = scatter_min(offdiag_lengths_unsorted, pair_ids, dim=0)
-
-    # Create a boolean mask for the closest off-diagonal edges
-    is_closest_offdiag_edge_unsorted = torch.zeros_like(
-        offdiag_lengths_unsorted, dtype=torch.bool
-    )
-    unique_pair_ids = torch.unique(pair_ids)
-    valid_argmin = argmin[unique_pair_ids]
-    is_closest_offdiag_edge_unsorted[valid_argmin] = True
 
     sorted_indices = torch.argsort(offdiag_lengths_unsorted)
 
     offdiag_edge_src = offdiag_edge_src_unsorted[sorted_indices]
     offdiag_edge_dst = offdiag_edge_dst_unsorted[sorted_indices]
+    offdiag_edge_offsets = offdiag_edge_offsets[sorted_indices]
     offdiag_disp = offdiag_disp_unsorted[sorted_indices]
-    is_closest_offdiag_edge = is_closest_offdiag_edge_unsorted[sorted_indices]
+    offdiag_lengths = offdiag_lengths_unsorted[sorted_indices]
 
     # 7. Combine all edges and features
     edge_src = torch.cat([self_edge_src, offdiag_edge_src])
     edge_dst = torch.cat([self_edge_dst, offdiag_edge_dst])
-    edge_index = torch.stack([edge_src, edge_dst]).to(positions.device)
-
-    disp = torch.cat([self_disp, offdiag_disp])
-    lengths = torch.linalg.norm(disp, dim=-1)
-
-    is_closest_self_edge = torch.ones_like(self_edge_src, dtype=torch.bool)
-    is_closest_edge = torch.cat([is_closest_self_edge, is_closest_offdiag_edge]).to(
-        positions.device
+    edge_offsets = torch.cat([self_edge_offsets, offdiag_edge_offsets])
+    edge_index = torch.cat([edge_src, edge_dst]).to(positions.device)
+    edge_disp = torch.cat([self_disp, offdiag_disp], dim=0)
+    edge_lengths = torch.cat(
+        [torch.zeros(num_atoms, device=positions.device), offdiag_lengths]
     )
 
     # 8. Create edge_type_idx
@@ -130,6 +132,15 @@ def compute_graph_features(
         f"{atoms[i]}-{atoms[j]}" for i, j in zip(offdiag_edge_src, offdiag_edge_dst)
     ]
     all_edge_keys = self_edge_keys + offdiag_edge_keys
+
+    if cfg.pedantic:
+        all_edge_keys_test = [
+            f"{atoms[i]}-{atoms[j]}" for i, j in zip(edge_src, edge_dst)
+        ]
+        # compare with all_edge_keys
+        for k1, k2 in zip(all_edge_keys, all_edge_keys_test):
+            assert k1 == k2, "Edge keys do not match!"
+
     edge_type_idx = torch.tensor(
         [edge_type2idx[key] for key in all_edge_keys],
         dtype=torch.long,
@@ -138,10 +149,10 @@ def compute_graph_features(
 
     # 9. Calculate geometric features for the final edge order
     edge_sh = spherical_harmonics(
-        sh_irreps, disp, normalize=True, normalization="component"
+        sh_irreps, edge_disp, normalize=True, normalization="component"
     )
     edge_length_emb = soft_one_hot_linspace(
-        lengths,
+        edge_lengths,
         start=0.0,
         end=cfg.cutoff_matrix,
         number=cfg.n_radial,
@@ -150,14 +161,14 @@ def compute_graph_features(
     )
 
     # 10. Determine the GNN cfg.cutoff_gnn index
-    index_gnn_cutoff = torch.sum(lengths <= cfg.cutoff_gnn).item()
+    index_gnn_cutoff = torch.sum(edge_lengths <= cfg.cutoff_gnn).item()
 
     return (
         edge_index,
+        edge_offsets,
         edge_type_idx,
         edge_length_emb,
         edge_sh,
         index_gnn_cutoff,
         len(self_edge_src),
-        is_closest_edge,
     )
