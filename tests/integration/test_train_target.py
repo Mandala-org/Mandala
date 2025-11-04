@@ -75,19 +75,7 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
     # Select the correct target format based on the test parameter
     y = y_matrix if train_target == "matrix" else y_irreps
 
-    # 2. Run a training step and capture the logged metrics
-    logged_metrics = {}
-
-    def mock_log_dict(metrics, **kwargs):
-        logged_metrics.update(metrics)
-
-    model.log_dict = mock_log_dict
-    loss = model.training_step((x, y), batch_idx=0)
-
-    assert loss is not None
-    assert loss.requires_grad
-
-    # 3. Manually calculate the expected matrix loss for the subset
+    # 2. Manually calculate the expected matrix loss for the subset
     with torch.no_grad():
         preds_irreps = model(x)
         expected_loss_matrix = torch.tensor(0.0)
@@ -103,6 +91,19 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
             for name in matrix_targets:
                 p_blocks = preds_matrix[name].pair_blocks
                 t_blocks = y[name].pair_blocks
+
+                p_edges = preds_matrix[name].pair_edges
+                t_edges = y[name].pair_edges
+                for key in t_edges:
+                    if key not in p_edges:
+                        raise ValueError(
+                            f"Edge indices for predicted and target {name} matrices do not match."
+                        )
+                    if not torch.equal(p_edges[key], t_edges[key]):
+                        raise ValueError(
+                            f"Edge indices for predicted and target {name} matrices do not match."
+                        )
+
                 for key in p_blocks:
                     expected_loss_matrix += torch.mean(
                         (p_blocks[key] - t_blocks[key]) ** 2
@@ -114,6 +115,18 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
                 t_vecs = y[name].pair_vectors
                 for key in p_vecs:
                     expected_loss_matrix += torch.mean((p_vecs[key] - t_vecs[key]) ** 2)
+
+    # 3. Run a training step and capture the logged metrics
+    logged_metrics = {}
+
+    def mock_log_dict(metrics, **kwargs):
+        logged_metrics.update(metrics)
+
+    model.log_dict = mock_log_dict
+    loss = model.training_step((x, y), batch_idx=0)
+
+    assert loss is not None
+    assert loss.requires_grad
 
     # 4. Assert that the logged matrix loss is close to the manually calculated one
     assert "train/loss_matrix_total" in logged_metrics
