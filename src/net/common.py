@@ -147,7 +147,7 @@ class Config:
     log_on_epoch: bool = True  # log metrics on epoch
 
     # -------------- misc ------------------------------------------------
-    pedantic: bool = False  # enable strict checks on input data
+    safety_checks: bool = False  # enable strict checks on input data
     dtype: torch.dtype = torch.float32  # default data type for all layers
     device: str = "cpu"  # default device for all layers
     gpus: int = 0  # number of GPUs

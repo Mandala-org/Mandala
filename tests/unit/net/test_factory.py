@@ -119,7 +119,7 @@ def test_model_forward_cpu(factory_results):
     sample = train_ds[0]
     x, y = sample
 
-    cfg = Config(dropout=0.0)
+    cfg = Config(dropout=0.0, safety_checks=True)
     model = E3GNN(
         mapper=mapper,
         cfg=cfg,
@@ -130,4 +130,4 @@ def test_model_forward_cpu(factory_results):
     # we expect all three predicted IrrepsBlockData objects
     for key in ("hamiltonian", "overlap", "density"):
         assert key in out
-        assert out[key].pair_blocks, f"{key} vectors should not be empty"
+        assert out[key].pair_vectors, f"{key} vectors should not be empty"

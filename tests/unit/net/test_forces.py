@@ -25,7 +25,7 @@ def test_non_zero_forces_with_real_data():
         hidden_base_dim=16,
         lr=1e-3,
         enable_forces=True,
-        pedantic=True,
+        safety_checks=True,
     )
 
     # 1. Create a DatasetFactory with position gradients enabled

@@ -33,6 +33,7 @@ def test_edge_update_block_variants(node_combine, edge_update, residual):
         edge_update_node_combine=node_combine,
         edge_update=edge_update,
         edge_update_residual=residual,
+        safety_checks=True,
     )
     hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
     edge_blk = EdgeUpdateBlock(hid, cfg)
@@ -63,6 +64,7 @@ def test_node_update_block_variants(message_agg, node_update, residual):
         node_update_message_agg=message_agg,
         node_update=node_update,
         node_update_residual=residual,
+        safety_checks=True,
     )
     hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
     node_blk = NodeUpdateBlock(hid, cfg)
@@ -76,7 +78,7 @@ def test_node_update_block_variants(message_agg, node_update, residual):
 @pytest.mark.unit
 def test_message_block_roundtrip():
     """Tests the full MessageBlock forward pass."""
-    cfg = Config()
+    cfg = Config(safety_checks=True)
     hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
 
     blk = MessageBlock(hid, cfg)

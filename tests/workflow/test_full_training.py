@@ -40,6 +40,7 @@ def test_full_training_workflow(train_target, tmp_path):
         num_workers=0,
         log_on_step=False,
         log_on_epoch=True,
+        safety_checks=True,
     )
 
     # 2. Create datasets using the factory

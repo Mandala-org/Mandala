@@ -71,6 +71,7 @@ def factory_results():
         device="cpu",
         train_target="matrix",
         dtype=torch.float32,
+        safety_checks=True,
     )
     fac = DatasetFactory(cfg)
     fac.add_snapshot(*PAIR_TRAIN_1, purpose="train")

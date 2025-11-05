@@ -23,7 +23,7 @@ def test_force_prediction():
     train_ds, _, mapper = fac.create()
 
     # initialize model with default hyperparameters
-    cfg = Config()
+    cfg = Config(safety_checks=True)
     model = E3GNN(mapper, cfg)
     # take first sample from training dataset
     x, y = train_ds[0]

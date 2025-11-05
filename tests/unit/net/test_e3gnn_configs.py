@@ -74,7 +74,7 @@ mapper = BlockIrrepMapper(orb_cfg)
 @pytest.mark.unit
 def test_e3gnn_forward_variants(hp_kwargs):
 
-    cfg = Config(**hp_kwargs)
+    cfg = Config(**hp_kwargs, safety_checks=True)
 
     model = E3GNN(
         mapper,

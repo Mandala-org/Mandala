@@ -104,6 +104,7 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
         l_max_gnn=1,
         n_radial=16,
         precompute_edge_features=True,  # Explicitly set to True
+        safety_checks=True,
     )
 
     # Mock the dataset to use our dummy snapshot, bypassing file loading
@@ -126,12 +127,12 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
     # This simulates what E3GNN.forward would do if precomputation was False.
     (
         edge_index_direct,
+        edge_shift_direct,
         edge_type_idx_direct,
         edge_length_emb_direct,
         edge_sh_direct,
         index_gnn_cutoff_direct,
         num_self_edges_direct,
-        is_closest_edge_direct,
     ) = compute_graph_features(
         positions=dummy_snap.positions,
         box=dummy_snap.box,
@@ -147,11 +148,11 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
         x_precompute["edge_index"], edge_index_direct
     ), "edge_index mismatch"
     assert torch.equal(
+        x_precompute["edge_shift"], edge_shift_direct
+    ), "edge_shift mismatch"
+    assert torch.equal(
         x_precompute["edge_type_idx"], edge_type_idx_direct
     ), "edge_type_idx mismatch"
-    assert torch.equal(
-        x_precompute["is_closest_edge"], is_closest_edge_direct
-    ), "is_closest_edge mismatch"
 
     # For floating-point tensors, use allclose to account for minor precision differences.
     assert torch.allclose(
@@ -187,6 +188,7 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
         l_max_gnn=1,
         n_radial=16,
         precompute_edge_features=True,  # Precompute mode
+        safety_checks=True,
     )
     dataset_precompute = MockE3GNNDataset(
         snapshot_paths=[(Path("dummy.matrix"), Path("dummy.info"))],
@@ -204,6 +206,7 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
         l_max_gnn=1,
         n_radial=16,
         precompute_edge_features=False,  # On-the-fly mode
+        safety_checks=True,
     )
     dataset_onthefly = MockE3GNNDataset(
         snapshot_paths=[(Path("dummy.matrix"), Path("dummy.info"))],

@@ -70,16 +70,18 @@ def test_pre_rotated_files_match_in_code_rotation():
 
     # physics invariants (redundant but nice to have)
     assert torch.allclose(
-        snap_rot_calc.get_energy(), snap_rot_ref.get_energy(), atol=0.01
+        snap_rot_calc.get_energy(), snap_rot_ref.get_energy(), atol=0.0001
     )
     assert torch.allclose(
         snap_rot_calc.get_number_of_electrons(),
         snap_rot_ref.get_number_of_electrons(),
-        atol=0.01,
+        atol=0.0001,
     )
-    assert torch.allclose(snap_rot_calc.get_energy(), snap_orig.get_energy(), atol=0.01)
+    assert torch.allclose(
+        snap_rot_calc.get_energy(), snap_orig.get_energy(), atol=0.0001
+    )
     assert torch.allclose(
         snap_rot_calc.get_number_of_electrons(),
         snap_orig.get_number_of_electrons(),
-        atol=0.01,
+        atol=0.0001,
     )
