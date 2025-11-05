@@ -24,6 +24,7 @@ def load_dataset(pair, cache_dir, cutoff_gnn):
         n_radial=64,
         device="cpu",
         cache_root=str(cache_dir),
+        safety_checks=True,
     )
     fac = DatasetFactory(cfg)
     fac.add_snapshot(mat, info)

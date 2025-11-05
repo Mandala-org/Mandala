@@ -14,7 +14,7 @@ from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigErro
 
 @pytest.mark.unit
 def test_node_encoder_shape_and_dtype():
-    cfg = Config()
+    cfg = Config(safety_checks=True)
     enc = NodeEncoder(node_one_hot_dim=3, cfg=cfg)
     x = torch.tensor([0, 1], dtype=torch.long)
     h = enc(x)
@@ -24,7 +24,7 @@ def test_node_encoder_shape_and_dtype():
 
 @pytest.mark.unit
 def test_edge_encoder_forward():
-    cfg = Config(n_radial=16, l_max_gnn=2)
+    cfg = Config(n_radial=16, l_max_gnn=2, safety_checks=True)
     n_types = 2
     sh_ir = Irreps.spherical_harmonics(cfg.l_max_gnn)
     out_ir = Irreps("5x0e")
@@ -41,7 +41,7 @@ def test_edge_encoder_forward():
 @pytest.mark.parametrize("residual", [True, False])
 @pytest.mark.unit
 def test_edge_update_block_shape(residual):
-    cfg = Config(edge_update_residual=residual)
+    cfg = Config(edge_update_residual=residual, safety_checks=True)
     hid_ir = Irreps("3x0e")
     blk = EdgeUpdateBlock(hid_ir, cfg)
     N, E = 5, 3
@@ -55,7 +55,7 @@ def test_edge_update_block_shape(residual):
 
 @pytest.mark.unit
 def test_node_update_block_shape():
-    cfg = Config()
+    cfg = Config(safety_checks=True)
     hid_ir = Irreps("4x0e")
     blk = NodeUpdateBlock(hid_ir, cfg)
     N, E = 4, 2
@@ -68,7 +68,7 @@ def test_node_update_block_shape():
 
 @pytest.mark.unit
 def test_message_block_edge_and_node_update():
-    cfg = Config(node_update_message_agg="attention")
+    cfg = Config(node_update_message_agg="attention", safety_checks=True)
     hid_ir = Irreps("8x0e")
     blk = MessageBlock(hid_ir, cfg)
     N, E = 3, 2
@@ -91,7 +91,7 @@ def test_scalar_activation_and_invalid():
 @pytest.mark.unit
 def test_bad_nonlinearity():
     ir = Irreps("2x0e+1x1o")
-    cfg = Config(nonlin_kind="bogus")
+    cfg = Config(nonlin_kind="bogus", safety_checks=True)
     with pytest.raises(ValueError):
         make_nonlinearity(ir, cfg)
 

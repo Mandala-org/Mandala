@@ -20,7 +20,7 @@ def prepared_data():
         )
     ]
     # The default config creates targets in 'irreps' format.
-    cfg = Config(device="cpu")
+    cfg = Config(device="cpu", safety_checks=True)
     fac = DatasetFactory(cfg)
     for m, i in paths:
         fac.add_snapshot(m, i)
@@ -66,6 +66,7 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
         train_on_energy=False,
         train_on_num_electrons=False,
         device="cpu",
+        safety_checks=True,
     )
     model = E3GNN(mapper, cfg)
 

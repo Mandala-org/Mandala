@@ -43,7 +43,7 @@ def test_gate_magnitudes(sample_irreps, sample_tensor):
 @pytest.mark.unit
 def test_make_nonlinearity_factory(sample_irreps, sample_tensor, kind):
     """Tests the make_nonlinearity factory for all new kinds."""
-    cfg = Config(nonlin_kind=kind)
+    cfg = Config(nonlin_kind=kind, safety_checks=True)
     activation = make_nonlinearity(sample_irreps, cfg)
     output = activation(sample_tensor)
 
@@ -55,7 +55,7 @@ def test_make_nonlinearity_s2act():
     """Tests the S2Activation factory with valid irreps."""
     irreps = Irreps("1x0e+1x1o+1x2e")
     tensor = torch.randn(5, irreps.dim)
-    cfg = Config(nonlin_kind="s2act")
+    cfg = Config(nonlin_kind="s2act", safety_checks=True)
     activation = make_nonlinearity(irreps, cfg)
     output = activation(tensor)
     assert output.shape == tensor.shape
@@ -64,6 +64,6 @@ def test_make_nonlinearity_s2act():
 @pytest.mark.unit
 def test_make_nonlinearity_invalid_kind(sample_irreps):
     """Tests that the factory raises an error for an invalid kind."""
-    cfg = Config(nonlin_kind="invalid_kind")
+    cfg = Config(nonlin_kind="invalid_kind", safety_checks=True)
     with pytest.raises(ValueError, match="Unknown nonlin_kind"):
         make_nonlinearity(sample_irreps, cfg)

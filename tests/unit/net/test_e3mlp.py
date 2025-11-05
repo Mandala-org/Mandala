@@ -20,7 +20,7 @@ from tests.equivariance.test_equivariance import (
 @pytest.mark.parametrize("activate_last", [True, False])
 def test_e3mlp_creation_and_forward(num_layers, activate_last):
     """Tests that the E3MLP is created and runs a forward pass with correct shapes."""
-    cfg = Config()
+    cfg = Config(safety_checks=True)
     input_irreps = Irreps("3x0e + 4x1o")
     hidden_irreps = Irreps("16x0e + 8x1o + 4x2e")
     output_irreps = Irreps("5x0e + 2x1o")
@@ -59,7 +59,7 @@ def test_e3mlp_min_layers_assertion():
 @pytest.mark.parametrize("activate_last", [True, False])
 def test_e3mlp_equivariance(num_layers, activate_last):
     """Tests the E3MLP for rotational equivariance."""
-    cfg = Config()
+    cfg = Config(safety_checks=True)
     input_irreps = Irreps("5x0e + 5x1o")
     hidden_irreps = Irreps("10x0e + 10x1o + 5x2e")
     output_irreps = Irreps("3x0e + 3x1o")

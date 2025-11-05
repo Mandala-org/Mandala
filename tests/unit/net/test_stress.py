@@ -25,7 +25,7 @@ def test_stress_with_real_data():
         num_layers_matrix=2,
         lr=1e-3,
         enable_stress=True,
-        pedantic=True,
+        safety_checks=True,
     )
 
     # 1. Create a DatasetFactory with position gradients enabled

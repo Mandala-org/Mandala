@@ -57,7 +57,9 @@ def test_node_encoder_equivariance():
     Tests the NodeEncoder. Since it only produces scalars, the output
     should be invariant to rotation (a special case of equivariance).
     """
-    cfg = Config()
+    cfg = Config(
+        safety_checks=True,
+    )
     layer = NodeEncoder(node_one_hot_dim=10, cfg=cfg)
     node_type_idx = torch.randint(0, 10, (5,))
 
@@ -75,7 +77,7 @@ def test_node_encoder_equivariance():
 def test_edge_encoder_equivariance(l_max_gnn):
     """Tests the EdgeEncoder for equivariance."""
     E, N_edge_types, n_radial = 5, 7, 16
-    cfg = Config(l_max_gnn=l_max_gnn, n_radial=n_radial)
+    cfg = Config(l_max_gnn=l_max_gnn, n_radial=n_radial, safety_checks=True)
     layer = EdgeEncoder(
         n_edge_types=N_edge_types,
         irreps_out=build_hidden_irreps(l_max_gnn, 32),
@@ -111,7 +113,7 @@ def test_edge_encoder_equivariance(l_max_gnn):
 def test_activations_equivariance(nonlin_kind, irreps_str):
     """Tests all activation layers for equivariance."""
     B = 2
-    cfg = Config(nonlin_kind=nonlin_kind)
+    cfg = Config(nonlin_kind=nonlin_kind, safety_checks=True)
     irreps = Irreps(irreps_str)
     layer = make_nonlinearity(irreps, cfg)
 
@@ -148,6 +150,7 @@ def test_edge_update_block_equivariance(
         edge_update_residual=edge_update_residual,
         edge_update_pre_lin_mlp_n_layers=mlp_layers,
         edge_update_post_lin_mlp_n_layers=mlp_layers,
+        safety_checks=True,
     )
     hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
     layer = EdgeUpdateBlock(hidden_irreps, cfg)
@@ -188,6 +191,7 @@ def test_node_update_block_equivariance(
         node_update_pre_lin_mlp_n_layers=mlp_layers,
         node_update_attention_mlp_n_layers=mlp_layers,
         node_update_post_lin_mlp_n_layers=mlp_layers,
+        safety_checks=True,
     )
     hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
     layer = NodeUpdateBlock(hidden_irreps, cfg)
@@ -215,7 +219,7 @@ def test_node_update_block_equivariance(
 def test_message_block_equivariance():
     """Tests the full MessageBlock as an integration test."""
     N, E = 10, 20
-    cfg = Config()
+    cfg = Config(safety_checks=True)
     hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
     layer = MessageBlock(hidden_irreps, cfg)
 
@@ -252,6 +256,7 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
         l_max_gnn=2,
         l_max_matrix=3,
         hidden_base_dim=16,
+        safety_checks=True,
     )
 
     # Mock mapper

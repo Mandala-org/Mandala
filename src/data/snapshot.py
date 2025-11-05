@@ -118,33 +118,57 @@ class Snapshot:
         """
         Return a new Snapshot with a canonical edge ordering for each key.
         The canonical order for each key is:
-        1. Off-diagonal edges, sorted by the L2 norm of their corresponding
-           density matrix block in ascending order.
-        2. Diagonal edges, sorted by their node index.
+        1. Diagonal edges, sorted by their node index.
+        2. Off-diagonal edges, sorted by the distance (ascending).
         """
-        density = self._mats["density"]
+        from ase.neighborlist import neighbor_list
+        from ase import Atoms
+
+        mat = next(iter(self._mats.values()))
+
+        ase_atoms = Atoms(
+            symbols=mat.atoms,
+            positions=self.positions.detach().cpu().numpy(),
+            cell=self.box.detach().cpu().numpy() if self.box is not None else None,
+            pbc=self.box is not None,
+        )
+
+        src, dst, shift = neighbor_list(
+            "ijS", ase_atoms, self.cfg.cutoff_matrix, self_interaction=False
+        )
+        # disp = pos[j] + S @ box - pos[i]
+        disp = self.positions[dst] + shift @ self.box - self.positions[src]
+        distances = torch.linalg.norm(disp, dim=-1)
+        edge_to_distance = {
+            (src[i], dst[i], *shift[i]): distances[i] for i in range(len(src))
+        }
+
         order_dict = {}
+        for matrix_name in self._mats:
+            order_dict[matrix_name] = {}
+            for key, edges in self._mats[matrix_name].pair_edges.items():
+                is_diag_mask = edges[0] == edges[1]
 
-        for key, edges in density.pair_edges.items():
-            is_diag_mask = edges[0] == edges[1]
+                # Get the sorting permutation for the diagonal edges
+                perm = torch.argsort(edges[0] + edges[1] * 1e6)
+                diag_mask = is_diag_mask[perm]
+                perm_diag = perm[diag_mask]
 
-            # Get the sorting permutation for the diagonal edges
-            perm_diag = torch.argsort(edges[0] + edges[1] * 1e6)
-            diag_mask = is_diag_mask[perm_diag]
-            perm_diag = perm_diag[diag_mask]
+                # Sort off-diagonal edges distance
+                distances = torch.zeros(edges.shape[1], dtype=torch.float32)
+                for i in range(edges.shape[1]):
+                    edge = (edges[0, i].item(), edges[1, i].item())
+                    distances[i] = edge_to_distance[edge]
+                perm_dist = torch.argsort(distances)
+                offdiag_mask = (~is_diag_mask)[perm_dist]
+                perm_offdiag = perm_dist[offdiag_mask]
 
-            # Sort off-diagonal edges by density norm
-            norms = density.pair_blocks[key].pow(2).sum(dim=(-2, -1)).sqrt()
-            # Get the sorting permutation for the off-diagonal edges
-            perm_offdiag = torch.argsort(norms)
-            offdiag_mask = ~is_diag_mask[perm_offdiag]
-            perm_offdiag = perm_offdiag[offdiag_mask]
-
-            order_dict[key] = torch.cat([perm_offdiag, perm_diag])
+                order_dict[matrix_name][key] = torch.cat([perm_diag, perm_offdiag])
 
         # Apply the SAME permutation to every matrix
         new_mats = {
-            name: mat.reorder_edges(order_dict) for name, mat in self._mats.items()
+            name: mat.reorder_edges(order_dict[name])
+            for name, mat in self._mats.items()
         }
 
         return Snapshot(
@@ -554,7 +578,8 @@ class Snapshot:
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
 
-        return snap.canonicalize_edges()
+        snap = snap.canonicalize_edges()
+        return snap
 
     def dos(self, sigma=0.005, bin_width=0.001, E_min=-1.0, E_max=1.0):
         """

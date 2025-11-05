@@ -77,10 +77,10 @@ class E3GNNDataset(Dataset):
             self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
 
         # preprocess all snapshots
-        self.samples: List[Tuple[Dict, Dict, Dict]] = []
+        self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
         for matrix_path, info_path in tqdm(snapshot_paths, desc="Loading snapshots"):
-            sample = self._load_or_process_snapshot(matrix_path, info_path)
-            self.samples.append(sample)
+            processed_snapshot = self._load_or_process_snapshot(matrix_path, info_path)
+            self.snapshots.append(processed_snapshot)
 
     # ---------------------------------------------------------------- snapshot caching & helpers
     def _load_or_process_snapshot(
@@ -119,15 +119,15 @@ class E3GNNDataset(Dataset):
             symmetrize_density=True,
             cutoff_radius=self.cfg.cutoff_matrix,
         )
-        sample = self._process_snapshot(snapshot)
+        processed_snapshot = self._process_snapshot(snapshot)
         # save to cache if enabled
         if self.cfg.cache_root is not None:
             try:
                 self.cfg.cache_root.mkdir(parents=True, exist_ok=True)
-                torch.save(sample, cache_file)
+                torch.save(processed_snapshot, cache_file)
             except Exception:
                 pass
-        return sample
+        return processed_snapshot
 
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot(
@@ -164,12 +164,12 @@ class E3GNNDataset(Dataset):
         if self.cfg.precompute_edge_features:
             (
                 edge_index,
+                edge_shift,
                 edge_type_idx,
                 edge_length_emb,
                 edge_sh,
                 index_gnn_cutoff,
                 num_self_edges,
-                is_closest_edge,
             ) = compute_graph_features(
                 positions=snap.positions,
                 box=snap.box,
@@ -179,12 +179,12 @@ class E3GNNDataset(Dataset):
                 edge_type2idx=self.mapper.edge_type2idx,
             )
             x["edge_index"] = edge_index
+            x["edge_shift"] = edge_shift
             x["edge_type_idx"] = edge_type_idx
             x["edge_length_emb"] = edge_length_emb
             x["edge_sh"] = edge_sh
             x["index_gnn_cutoff"] = index_gnn_cutoff
             x["num_self_edges"] = num_self_edges
-            x["is_closest_edge"] = is_closest_edge
 
         with torch.no_grad():
             if self.cfg.train_target == "matrix":
@@ -213,7 +213,7 @@ class E3GNNDataset(Dataset):
 
     # ------------------- torch Dataset interface ---------------------------
     def __len__(self) -> int:
-        return len(self.samples)
+        return len(self.snapshots)
 
     def __getitem__(
         self, idx: int
@@ -221,13 +221,13 @@ class E3GNNDataset(Dataset):
         Dict[str, torch.Tensor], Dict[str, torch.Tensor], Dict[str, torch.Tensor]
     ]:
         t0 = time.perf_counter()
-        sample = self.samples[idx]
+        snapshot = self.snapshots[idx]
         t1 = time.perf_counter()
         try:
             self.loader_times.append(t1 - t0)
         except Exception:
             pass
-        return sample
+        return snapshot
 
     def to(self, device: torch.device | str) -> E3GNNDataset:
         """
@@ -238,12 +238,14 @@ class E3GNNDataset(Dataset):
             return self
         self.device = device
         # Explicitly move known fields
-        for idx, (x, y) in enumerate(self.samples):
+        for idx, (x, y) in enumerate(self.snapshots):
             # x
             if "node_type_idx" in x:
                 x["node_type_idx"] = x["node_type_idx"].to(device)
             if "edge_index" in x:
                 x["edge_index"] = x["edge_index"].to(device)
+            if "edge_shift" in x:
+                x["edge_shift"] = x["edge_shift"].to(device)
             if "edge_type_idx" in x:
                 x["edge_type_idx"] = x["edge_type_idx"].to(device)
             if "edge_length_emb" in x:
@@ -258,5 +260,5 @@ class E3GNNDataset(Dataset):
             y["energy"] = y["energy"].to(device)
             y["num_electrons"] = y["num_electrons"].to(device)
 
-            self.samples[idx] = (x, y)
+            self.snapshots[idx] = (x, y)
         return self

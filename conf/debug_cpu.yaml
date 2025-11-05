@@ -53,4 +53,4 @@ config:
   bench_verbosity: 1
   log_activation_mag: true
   wandb_project: null
-  pedantic: false
+  safety_checks: false

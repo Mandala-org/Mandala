@@ -14,7 +14,6 @@ from typing import Dict, Tuple, Any
 import torch
 import pytorch_lightning as pl
 from torch import nn
-from torch_scatter import scatter_add
 
 from collections import OrderedDict
 
@@ -161,32 +160,6 @@ class E3GNN(pl.LightningModule):
         """
         from collections import Counter
 
-        if self.cfg.pbc_aggregation == "sum":
-            aggregated_raw = {}
-            num_atoms = len(atoms)
-            for key, payload in raw.items():
-                vectors = payload["vectors"]
-                edges = payload["edges"]
-
-                # Create a unique ID for each (i, j) pair
-                pair_ids = edges[0] * num_atoms + edges[1]
-
-                # Find unique pairs and their inverse mapping
-                unique_pair_ids, inverse_map = torch.unique(
-                    pair_ids, return_inverse=True
-                )
-
-                # Sum vectors for the same pair
-                summed_vectors = scatter_add(vectors, inverse_map, dim=0)
-
-                # Get the edges for the summed vectors
-                new_edges_i = unique_pair_ids // num_atoms
-                new_edges_j = unique_pair_ids % num_atoms
-                new_edges = torch.stack([new_edges_i, new_edges_j])
-
-                aggregated_raw[key] = {"vectors": summed_vectors, "edges": new_edges}
-            raw = aggregated_raw
-
         pair_vec, pair_edges, lookup = {}, {}, {}
         for key, payload in raw.items():
             vec = payload["vectors"]
@@ -215,12 +188,12 @@ class E3GNN(pl.LightningModule):
         if not self.cfg.precompute_edge_features:
             (
                 edge_index,
+                edge_shift,
                 edge_type_idx,
                 edge_length_emb,
                 edge_sh,
                 index_gnn_cutoff,
                 num_self_edges,
-                is_closest_edge,
             ) = compute_graph_features(
                 positions=x["positions"],
                 box=x["box"],
@@ -232,12 +205,12 @@ class E3GNN(pl.LightningModule):
 
             # Update x with the newly computed features
             x["edge_index"] = edge_index
+            x["edge_shift"] = edge_shift
             x["edge_type_idx"] = edge_type_idx
             x["edge_length_emb"] = edge_length_emb
             x["edge_sh"] = edge_sh
             x["index_gnn_cutoff"] = index_gnn_cutoff
             x["num_self_edges"] = num_self_edges
-            x["is_closest_edge"] = is_closest_edge
 
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x["node_type_idx"], activation_mags=self._activation_mags)
@@ -247,7 +220,8 @@ class E3GNN(pl.LightningModule):
             x["edge_sh"],
             activation_mags=self._activation_mags,
         )
-        if self.cfg.pedantic:
+        if self.cfg.safety_checks and torch.is_grad_enabled():
+            assert node.requires_grad, "Gradients not flowing through node encoder!"
             assert edge.requires_grad, "Gradients not flowing through edge encoder!"
 
         # ---- message-passing -------------------------------------------
@@ -277,17 +251,7 @@ class E3GNN(pl.LightningModule):
 
         head_edge_index = x["edge_index"]
         head_edge_type_idx = x["edge_type_idx"]
-
-        if self.cfg.pbc_aggregation == "closest":
-            closest_mask = x["is_closest_edge"]
-            is_closest_offdiag_mask = closest_mask[num_self_edges:]
-            closest_edge_large = edge_large[is_closest_offdiag_mask]
-            head_embeddings = torch.cat([node, closest_edge_large], dim=0)
-
-            head_edge_index = x["edge_index"][:, closest_mask]
-            head_edge_type_idx = x["edge_type_idx"][closest_mask]
-        else:  # sum
-            head_embeddings = torch.cat([node, edge_large], dim=0)
+        head_embeddings = torch.cat([node, edge_large], dim=0)
 
         preds_raw = {
             name: head(head_embeddings, head_edge_type_idx, head_edge_index)
@@ -351,8 +315,8 @@ class E3GNN(pl.LightningModule):
 
             # Vectorized loss calculation
             # ! Improve this
-            for key in t.keys():
-                if key not in p.keys():
+            for key in t_items.keys():
+                if key not in p_items.keys():
                     continue
 
                 t_items_key = t_items[key]
