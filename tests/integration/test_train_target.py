@@ -2,6 +2,8 @@ import pytest
 from pathlib import Path
 import torch
 
+from torch_scatter import scatter_add
+
 from net.common import Config
 from net.e3gnn import E3GNN
 from data.factory import DatasetFactory
@@ -36,6 +38,7 @@ def prepared_data():
         "num_electrons": y_matrix["num_electrons"],
         "forces": y_matrix["forces"],
         "stress": y_matrix["stress"],
+        "target_index_map": y_matrix["target_index_map"],
     }
     return x, y_irreps, y_matrix, mapper
 
@@ -95,6 +98,24 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
 
                 p_edges = preds_matrix[name].pair_edges
                 t_edges = y[name].pair_edges
+
+                for key in t_edges:
+                    p_edges_key = p_edges[key]
+                    p_edges_sorted_key = torch.zeros_like(t_edges[key])
+                    target_index_map = y["target_index_map"][key]
+                    for val in torch.unique(target_index_map):
+                        src, dst = p_edges_key[:, target_index_map == val]
+                        assert (
+                            src.min() == src.max()
+                        ), "Source indices for a block are not consistent."
+                        assert (
+                            dst.min() == dst.max()
+                        ), "Destination indices for a block are not consistent."
+                        p_edges_sorted_key[0, val] = src[0]
+                        p_edges_sorted_key[1, val] = dst[0]
+                    p_edges[key] = p_edges_sorted_key
+                    p_blocks[key] = scatter_add(p_blocks[key], target_index_map, dim=0)
+
                 for key in t_edges:
                     if key not in p_edges:
                         raise ValueError(
@@ -114,6 +135,11 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
             for name in matrix_targets:
                 p_vecs = preds_irreps[name].pair_vectors
                 t_vecs = y[name].pair_vectors
+
+                target_index_map = y["target_index_map"][name]
+                for key in t_vecs:
+                    p_vecs[key] = scatter_add(p_vecs[key], target_index_map)
+
                 for key in p_vecs:
                     expected_loss_matrix += torch.mean((p_vecs[key] - t_vecs[key]) ** 2)
 

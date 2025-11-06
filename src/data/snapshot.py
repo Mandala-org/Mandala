@@ -37,6 +37,7 @@ from core.sparse_math import (
 from data.block_matrix import BlockMatrix
 from core.basis_converter import OpenMXE3NNConverter, FHIaimsE3NNConverter
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from net.common import Config
 
 __all__ = ["Snapshot"]
 
@@ -58,6 +59,7 @@ class Snapshot:
         matrix_path=None,  # optional path to the source file
         info_path=None,  # optional path to the source info file
         cutoff_radius: float | None = None,  # optional cutoff radius for filtering
+        cfg: Config = None,
     ) -> None:
         # quick consistency sanity checks
         self._check_compatibility(hamiltonian, overlap, density)
@@ -80,6 +82,8 @@ class Snapshot:
         self.hamiltonian = self._mats["hamiltonian"]
         self.overlap = self._mats["overlap"]
         self.density = self._mats["density"]
+
+        self.cfg = cfg
 
     # ---------------------------------------------------------------- compatibility
     @staticmethod
@@ -133,15 +137,17 @@ class Snapshot:
             pbc=self.box is not None,
         )
 
-        src, dst, shift = neighbor_list(
-            "ijS", ase_atoms, self.cfg.cutoff_matrix, self_interaction=False
+        src, dst, shift, distances = neighbor_list(
+            "ijSd", ase_atoms, self.cfg.cutoff_matrix, self_interaction=True
         )
-        # disp = pos[j] + S @ box - pos[i]
-        disp = self.positions[dst] + shift @ self.box - self.positions[src]
-        distances = torch.linalg.norm(disp, dim=-1)
-        edge_to_distance = {
-            (src[i], dst[i], *shift[i]): distances[i] for i in range(len(src))
-        }
+        # get rid of duplicate edges due to periodic images (only pick the shortest)
+        # (i, j) is the edge, and we want to keep the one with the smallest distance
+        edge_to_distance = {}
+        for i in range(len(src)):
+            edge = (src[i], dst[i])
+            dist = distances[i]
+            if edge not in edge_to_distance or dist < edge_to_distance[edge]:
+                edge_to_distance[edge] = dist
 
         order_dict = {}
         for matrix_name in self._mats:
@@ -182,6 +188,7 @@ class Snapshot:
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
         )
 
     # ---------------------------------------------------------------- physics helpers
@@ -386,6 +393,7 @@ class Snapshot:
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
         )
 
     # public façade --------------------------------------------------------
@@ -428,6 +436,7 @@ class Snapshot:
             matrix_path=None,
             info_path=None,
             cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
         )
 
     # -------------------------------------------------------------------- helpers
@@ -496,6 +505,7 @@ class Snapshot:
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=cutoff,
+            cfg=self.cfg,
         )
 
     # ---------------------------------------------------------------- dunder access
@@ -517,6 +527,7 @@ class Snapshot:
         symmetrize_density: bool = True,
         cutoff_radius: float | None = None,
         dtype: torch.dtype = torch.float32,
+        cfg: Config = None,
     ) -> "Snapshot":
         from data.openmx_info_parser import parse_info_out
         from data.openmx_parser import parse_openmx_scfout
@@ -542,6 +553,7 @@ class Snapshot:
         snap.forces = info.forces if info.forces.numel() else None
         snap.box = info.box if info.box.numel() else None
         snap.stress = info.stress if info.box.numel() else None
+        snap.cfg = cfg
 
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
@@ -561,6 +573,7 @@ class Snapshot:
         *,
         convention: str = "e3nn",
         cutoff_radius: float | None = None,
+        cfg: Config = None,
     ) -> "Snapshot":
         from data.fhiaims_parser import parse_fhiaims_output
 
@@ -571,6 +584,8 @@ class Snapshot:
             overlap_path,
             density_path,
         )
+
+        snap.cfg = cfg
 
         if convention == "e3nn":
             snap = snap.to_e3nn()

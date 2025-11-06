@@ -79,8 +79,8 @@ class E3GNNDataset(Dataset):
         # preprocess all snapshots
         self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
         for matrix_path, info_path in tqdm(snapshot_paths, desc="Loading snapshots"):
-            processed_snapshot = self._load_or_process_snapshot(matrix_path, info_path)
-            self.snapshots.append(processed_snapshot)
+            sample = self._load_or_process_snapshot(matrix_path, info_path)
+            self.snapshots.append(sample)
 
     # ---------------------------------------------------------------- snapshot caching & helpers
     def _load_or_process_snapshot(
@@ -118,19 +118,20 @@ class E3GNNDataset(Dataset):
             convention=self.convention,
             symmetrize_density=True,
             cutoff_radius=self.cfg.cutoff_matrix,
+            cfg=self.cfg,
         )
-        processed_snapshot = self._process_snapshot(snapshot)
+        sample = self._process_snapshot_to_sample(snapshot)
         # save to cache if enabled
         if self.cfg.cache_root is not None:
             try:
                 self.cfg.cache_root.mkdir(parents=True, exist_ok=True)
-                torch.save(processed_snapshot, cache_file)
+                torch.save(sample, cache_file)
             except Exception:
                 pass
-        return processed_snapshot
+        return sample
 
     # ---------- main per-snapshot routine -----------------------------------
-    def _process_snapshot(
+    def _process_snapshot_to_sample(
         self, snap: Snapshot
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         """
@@ -199,6 +200,7 @@ class E3GNNDataset(Dataset):
                 raise ValueError(
                     f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
                 )
+
             y = {
                 "hamiltonian": hamiltonian_target,
                 "overlap": overlap_target,
@@ -208,6 +210,25 @@ class E3GNNDataset(Dataset):
                 "forces": snap.forces,
                 "stress": snap.stress,
             }
+
+            target_index_map = {}
+            matrix_name = self.cfg.matrix_targets[0]
+            for key in y[matrix_name].keys():
+                edge_type_id = self.mapper.edge_type2idx[key]
+                edges_t = y[matrix_name].pair_edges[key]
+                edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
+                edge_t_to_id = {
+                    tuple(edge.tolist()): i for i, edge in enumerate(edges_t.T)
+                }
+                target_index_map[key] = torch.tensor(
+                    [
+                        edge_t_to_id[tuple(edge.tolist())]
+                        for edge in edges_p.T
+                        if edge in edge_t_to_id
+                    ],
+                    dtype=torch.long,
+                )
+            y["target_index_map"] = target_index_map
 
         return x, y
 

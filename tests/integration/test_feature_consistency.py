@@ -73,7 +73,7 @@ def dummy_h2o_integration_data():
             self.density = density
             self.hamiltonian = hamiltonian
             self.overlap = overlap
-            # Add dummy forces, stress, energy, num_electrons for _process_snapshot
+            # Add dummy forces, stress, energy, num_electrons for _process_snapshot_to_sample
             self.forces = torch.zeros_like(positions)
             self.stress = torch.zeros((3, 3), dtype=torch.float32)
             self.energy = torch.tensor(0.0, dtype=torch.float32)
@@ -109,10 +109,10 @@ def test_precomputed_vs_onthefly_features(dummy_h2o_integration_data):
 
     # Mock the dataset to use our dummy snapshot, bypassing file loading
     class MockE3GNNDataset(E3GNNDataset):
-        def _load_or_process_snapshot(self, matrix_path, info_path):
-            # This method now directly calls the real _process_snapshot
+        def _load_or_process_snapshot_to_sample(self, matrix_path, info_path):
+            # This method now directly calls the real _process_snapshot_to_sample
             # with our dummy_snap, which in turn calls compute_graph_features.
-            return self._process_snapshot(dummy_snap)
+            return self._process_snapshot_to_sample(dummy_snap)
 
     dataset_precompute = MockE3GNNDataset(
         snapshot_paths=[(Path("dummy.matrix"), Path("dummy.info"))],
@@ -180,8 +180,8 @@ def test_e3gnn_end_to_end_consistency(dummy_h2o_integration_data):
     # Define the Mock Dataset class inside the test function
     # so it can access the 'dummy_snap' variable from the fixture.
     class MockE3GNNDataset(E3GNNDataset):
-        def _load_or_process_snapshot(self, matrix_path, info_path):
-            return self._process_snapshot(dummy_snap)
+        def _load_or_process_snapshot_to_sample(self, matrix_path, info_path):
+            return self._process_snapshot_to_sample(dummy_snap)
 
     # --- 1. Setup and run for PRECOMPUTED features ---
     cfg_precompute = Config(
