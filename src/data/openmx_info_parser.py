@@ -36,6 +36,7 @@ class InfoOutData:
     occupancies: torch.Tensor
     record_meta: List[Tuple[int, str, str, int, int]]
     orbital_set: Dict[str, str]
+    fermi_level: torch.Tensor
 
     eigenvalues: torch.Tensor
     dipole_abs: torch.Tensor
@@ -58,7 +59,13 @@ class InfoOutData:
 # ---------------------------------------------------------------------------
 # regexps
 # ---------------------------------------------------------------------------
-_RE_ENERGY = re.compile(r"^\s*([A-Za-z0-9]+)\.\s+([-+0-9Ee\.]+)")
+_RE_ENERGY = re.compile(
+    r"^\s*([A-Za-z0-9]+)\.\s+([-+0-9Ee\.]+)"
+)  # add this with the other regexps
+_RE_CHEM_POT = re.compile(
+    r"^\s*Chemical\s+Potential\s*\(Hartree\)\s*=\s*([-+0-9Ee\.]+)", re.I
+)
+
 
 _RE_ATOM_HDR = re.compile(r"^\s*\d+\s+([A-Z][a-z]?)\s+Up spin", re.I)
 _RE_ORB_PARSE = re.compile(
@@ -105,12 +112,17 @@ def parse_info_out(
     atom_id: Dict[str, int] = {}
     cur_el: Optional[str] = None
     in_block = False
+    fermi_level = None
 
     for ln in lines:
         if h := _RE_ATOM_HDR.match(ln):
             cur_el = h.group(1)
             atom_id[cur_el] = atom_id.get(cur_el, 0)
             in_block = True
+            continue
+
+        if m := _RE_CHEM_POT.match(ln):
+            fermi_level = torch.tensor(float(m.group(1)), dtype=dtype)
             continue
 
         if not in_block:
@@ -225,6 +237,7 @@ def parse_info_out(
     # 6) pack ---------------------------------------------------------------
     return InfoOutData(
         energies=energies,
+        fermi_level=fermi_level,
         occupancies=occupancies,
         record_meta=meta,
         orbital_set=orbital_set,

@@ -60,6 +60,7 @@ class Snapshot:
         info_path=None,  # optional path to the source info file
         cutoff_radius: float | None = None,  # optional cutoff radius for filtering
         cfg: Config = None,
+        info: Any = None,
     ) -> None:
         # quick consistency sanity checks
         self._check_compatibility(hamiltonian, overlap, density)
@@ -84,6 +85,7 @@ class Snapshot:
         self.density = self._mats["density"]
 
         self.cfg = cfg
+        self.info = info
 
     # ---------------------------------------------------------------- compatibility
     @staticmethod
@@ -189,6 +191,7 @@ class Snapshot:
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
             cfg=self.cfg,
+            info=self.info,
         )
 
     # ---------------------------------------------------------------- physics helpers
@@ -394,6 +397,7 @@ class Snapshot:
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
             cfg=self.cfg,
+            info=self.info,
         )
 
     # public façade --------------------------------------------------------
@@ -437,6 +441,7 @@ class Snapshot:
             info_path=None,
             cutoff_radius=self.cutoff_radius,
             cfg=self.cfg,
+            info=self.info,
         )
 
     # -------------------------------------------------------------------- helpers
@@ -506,6 +511,7 @@ class Snapshot:
             info_path=self.info_path,
             cutoff_radius=cutoff,
             cfg=self.cfg,
+            info=self.info,
         )
 
     # ---------------------------------------------------------------- dunder access
@@ -554,6 +560,7 @@ class Snapshot:
         snap.box = info.box if info.box.numel() else None
         snap.stress = info.stress if info.box.numel() else None
         snap.cfg = cfg
+        snap.info = info
 
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
