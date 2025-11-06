@@ -31,6 +31,8 @@ from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
 from net.heads import DeepHead
 
+from torch_scatter import scatter_add
+
 # DeepH-E3
 
 # Add DeepH-E3 to the Python path
@@ -149,6 +151,12 @@ class E3GNN(pl.LightningModule):
         if pred.shape != target.shape:
             raise ValueError("Shape mismatch in block loss")
         return torch.mean((pred - target) ** 2)
+
+    @staticmethod
+    def _mae(pred, target):
+        if pred.shape != target.shape:
+            raise ValueError("Shape mismatch in block loss")
+        return torch.mean(torch.abs(pred - target))
 
     def _wrap_head_output(
         self,
@@ -297,6 +305,8 @@ class E3GNN(pl.LightningModule):
             preds_irreps if self.cfg.train_target == "irreps" else preds_matrix
         )
 
+        # num_atoms = x["positions"].shape[0]
+
         for name in self.cfg.matrix_targets:
             p = preds_for_loss[name]
             t = y[name]
@@ -317,37 +327,13 @@ class E3GNN(pl.LightningModule):
             # ! Improve this
             for key in t_items.keys():
                 if key not in p_items.keys():
-                    continue
+                    raise ValueError(f"Key {key} not found in predicted items.")
+                preds = p_items[key]
+                targets = t_items[key]
+                preds_summed = scatter_add(preds, y["target_index_map"][key], dim=0)
 
-                t_items_key = t_items[key]
-                p_items_key = p_items[key]
-
-                # Ensure edge order matches for comparison
-                t_edges = t.pair_edges[key].t().tolist()
-                p_edges = p.pair_edges[key].t().tolist()
-                pred_edge_to_idx = {tuple(edge): i for i, edge in enumerate(p_edges)}
-
-                target_indices = []
-                pred_indices = []
-                for i, edge in enumerate(t_edges):
-                    if tuple(edge) in pred_edge_to_idx:
-                        target_indices.append(i)
-                        pred_indices.append(pred_edge_to_idx[tuple(edge)])
-
-                if not target_indices:
-                    continue
-
-                target_blocks_to_compare = t_items_key[
-                    torch.tensor(target_indices, device=self.device)
-                ]
-                pred_blocks_to_compare = p_items_key[
-                    torch.tensor(pred_indices, device=self.device)
-                ]
-
-                mse_val += self._mse(pred_blocks_to_compare, target_blocks_to_compare)
-                mae_val += torch.mean(
-                    torch.abs(pred_blocks_to_compare - target_blocks_to_compare)
-                )
+                mse_val += self._mse(preds_summed, targets)
+                mae_val += self._mae(preds_summed, targets)
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
