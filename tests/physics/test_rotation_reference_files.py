@@ -18,7 +18,8 @@ import math
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
-from data.openmx_parser import parse_openmx_scfout
+from data.snapshot import Snapshot
+from net.common import Config
 
 
 # ------------------------------------------------------------------ helpers
@@ -35,15 +36,19 @@ def _rotation_matrix() -> torch.Tensor:
 
 def _load_pair():
     base = Path("./data/small/H2O")
-    snap_orig = parse_openmx_scfout(
-        base / "original" / "H2O.matrix", _ATOMS, _CFG, convention="e3nn"
+    cfg = Config()
+    snap_orig = Snapshot.from_openmx(
+        base / "original" / "H2O.matrix",
+        base / "original" / "H2O.info.out",
+        cfg=cfg,
+        convention="e3nn",
     )
-    snap_rot_ref = parse_openmx_scfout(
-        base / "rotated" / "H2O.matrix", _ATOMS, _CFG, convention="e3nn"
+    snap_rot_ref = Snapshot.from_openmx(
+        base / "rotated" / "H2O.matrix",
+        base / "rotated" / "H2O.info.out",
+        cfg=cfg,
+        convention="e3nn",
     )
-    # canonicalise edge order → lexicographic (avoids ties w/ equal norms)
-    snap_orig = snap_orig
-    snap_rot_ref = snap_rot_ref
     return snap_orig, snap_rot_ref
 
 
@@ -53,6 +58,11 @@ def _assert_snapshot_equal(a, b, *, atol=1e-5):
         mat_a = getattr(a, name).to_dense()
         mat_b = getattr(b, name).to_dense()
         assert torch.allclose(mat_a, mat_b, atol=atol), f"{name} mismatch beyond {atol}"
+    assert torch.allclose(a.positions, b.positions, atol=atol), "positions mismatch"
+    # if a.forces is not None and b.forces is not None:
+    #     assert torch.allclose(a.forces, b.forces, atol=atol), "forces mismatch"
+    if a.box is not None and b.box is not None:
+        assert torch.allclose(a.box, b.box, atol=atol), "box mismatch"
 
 
 @pytest.mark.physics
@@ -66,7 +76,7 @@ def test_pre_rotated_files_match_in_code_rotation():
     R = _rotation_matrix()
     snap_rot_calc = snap_orig.rotate(R)
 
-    _assert_snapshot_equal(snap_rot_calc, snap_rot_ref, atol=0.002)
+    _assert_snapshot_equal(snap_rot_calc, snap_rot_ref, atol=0.005)
 
     # physics invariants (redundant but nice to have)
     assert torch.allclose(

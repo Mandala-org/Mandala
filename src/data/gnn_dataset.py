@@ -213,21 +213,24 @@ class E3GNNDataset(Dataset):
 
             target_index_map = {}
             matrix_name = self.cfg.matrix_targets[0]
-            for key in y[matrix_name].keys():
+            for key in y[matrix_name].pair_edges.keys():
                 edge_type_id = self.mapper.edge_type2idx[key]
                 edges_t = y[matrix_name].pair_edges[key]
                 edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
+                edge_shift_p = x["edge_shift"][x["edge_type_idx"] == edge_type_id, :].T
+                edges_p = torch.cat([edges_p, edge_shift_p], dim=0)
                 edge_t_to_id = {
                     tuple(edge.tolist()): i for i, edge in enumerate(edges_t.T)
                 }
-                target_index_map[key] = torch.tensor(
+                tim = torch.tensor(
                     [
                         edge_t_to_id[tuple(edge.tolist())]
                         for edge in edges_p.T
-                        if edge in edge_t_to_id
+                        if tuple(edge.tolist()) in edge_t_to_id
                     ],
                     dtype=torch.long,
                 )
+                target_index_map[key] = tim
             y["target_index_map"] = target_index_map
 
         return x, y

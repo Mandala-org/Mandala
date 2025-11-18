@@ -20,9 +20,11 @@ from net.common import Config
 
 @pytest.fixture(scope="module")
 def dataset():
+    cfg = Config(cutoff_gnn=4.0, cutoff_matrix=7.5)
     snap_H20 = Snapshot.from_openmx(
         matrix_path=Path("data/small/H2O/original/H2O.matrix"),
         info_path=Path("data/small/H2O/original/H2O.info.out"),
+        cfg=cfg,
     )
 
     mapper = BlockIrrepMapper(snap_H20.hamiltonian.orbital_cfg)
@@ -35,7 +37,7 @@ def dataset():
             )
         ],
         mapper,
-        cfg=Config(cutoff_gnn=4.0, cutoff_matrix=7.5),
+        cfg=cfg,
     )
 
 

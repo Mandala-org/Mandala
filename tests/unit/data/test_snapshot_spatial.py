@@ -6,31 +6,28 @@ Uses the 216-atom diamond-Si cell included under ``data/big/silicon/300K``.
 """
 
 import pytest
-from pathlib import Path
 
 
-from data.snapshot import Snapshot
-
-
-# ---------------------------------------------------------------------------
-@pytest.fixture(scope="module")
-def si_snapshot():
-    """
-    Build a Snapshot directly from OpenMX SCF output and info files using
-    the Snapshot.from_openmx constructor.
-    """
-    base = Path("./data/big/silicon/2700K")
-    matrix_path = base / "Si_DM"
-    info_path = base / "info.txt"
-    # convention="openmx" ensures we keep native basis
-    return Snapshot.from_openmx(
-        str(matrix_path),
-        str(info_path),
-        convention="openmx",
-    )
+import torch
 
 
 # ---------------------------------------------------------------------------
+@pytest.mark.unit
+def test_canonical_edge_ordering(si_snapshot):
+    D = si_snapshot.density
+
+    for key in D.keys():
+        edges = D.pair_edges[key]
+        is_diag = edges[0] == edges[1]
+
+        # Find the first off-diagonal edge, if any
+        off_diag_indices = torch.where(~is_diag)[0]
+        if len(off_diag_indices) > 0:
+            first_off_diag_idx = off_diag_indices[0]
+            # All edges before the first off-diagonal edge must be diagonal
+            assert torch.all(is_diag[:first_off_diag_idx])
+            # All edges from the first off-diagonal edge onwards must be diagonal
+            assert torch.all(~is_diag[first_off_diag_idx:])
 
 
 @pytest.mark.unit

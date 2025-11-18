@@ -22,7 +22,13 @@ def prepared_data():
         )
     ]
     # The default config creates targets in 'irreps' format.
-    cfg = Config(device="cpu", safety_checks=True)
+    cfg = Config(
+        device="cpu",
+        train_on_energy=False,
+        train_on_num_electrons=False,
+        safety_checks=True,
+        cutoff_matrix=14.0,
+    )
     fac = DatasetFactory(cfg)
     for m, i in paths:
         fac.add_snapshot(m, i)
@@ -40,7 +46,7 @@ def prepared_data():
         "stress": y_matrix["stress"],
         "target_index_map": y_matrix["target_index_map"],
     }
-    return x, y_irreps, y_matrix, mapper
+    return x, y_irreps, y_matrix, mapper, cfg
 
 
 # Define the matrix target subsets to test
@@ -62,16 +68,11 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
     2. Runs a training step for both 'matrix' and 'irreps' train_target settings.
     3. Computes the loss correctly for the specified subset.
     """
-    x, y_irreps, y_matrix, mapper = prepared_data
-    cfg = Config(
-        matrix_targets=matrix_targets,
-        train_target=train_target,
-        train_on_energy=False,
-        train_on_num_electrons=False,
-        device="cpu",
-        safety_checks=True,
-    )
+    x, y_irreps, y_matrix, mapper, cfg = prepared_data
     model = E3GNN(mapper, cfg)
+
+    cfg.matrix_targets = (matrix_targets,)
+    cfg.train_target = (train_target,)
 
     # 1. Check that the model only has heads for the specified targets
     assert sorted(list(model.heads.keys())) == sorted(matrix_targets)
@@ -136,9 +137,9 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
                 p_vecs = preds_irreps[name].pair_vectors
                 t_vecs = y[name].pair_vectors
 
-                target_index_map = y["target_index_map"][name]
                 for key in t_vecs:
-                    p_vecs[key] = scatter_add(p_vecs[key], target_index_map)
+                    target_index_map = y["target_index_map"][key]
+                    p_vecs[key] = scatter_add(p_vecs[key], target_index_map, dim=0)
 
                 for key in p_vecs:
                     expected_loss_matrix += torch.mean((p_vecs[key] - t_vecs[key]) ** 2)

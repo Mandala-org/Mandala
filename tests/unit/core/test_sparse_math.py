@@ -16,6 +16,8 @@ from core.sparse_math import (
 def make_toy_sparse(n_atoms=3, d=2):
     pairs = list(itertools.product(range(n_atoms), repeat=2))
     edge_index = torch.tensor(pairs, dtype=torch.long).t()
+    edge_shift = torch.zeros(3, edge_index.shape[1], dtype=torch.long)
+    edge_index = torch.cat([edge_index, edge_shift], dim=0)
     E = edge_index.shape[1]
     rng = torch.Generator().manual_seed(11)
     a = torch.randn(E, d, d, generator=rng)
@@ -25,10 +27,10 @@ def make_toy_sparse(n_atoms=3, d=2):
 
 def dense_from_blocks(blocks, edge_index, d, n_atoms):
     big = np.zeros((n_atoms * d, n_atoms * d))
-    for k, (src, dst) in enumerate(edge_index.t().tolist()):
+    for k, (src, dst, _sx, _sy, _sz) in enumerate(edge_index.t().tolist()):
         r0, r1 = src * d, (src + 1) * d
         c0, c1 = dst * d, (dst + 1) * d
-        big[r0:r1, c0:c1] = blocks[k].cpu().numpy()
+        big[r0:r1, c0:c1] += blocks[k].cpu().numpy()
     return big
 
 
@@ -46,8 +48,8 @@ def make_mock_snapshot():
             d_i, d_j = mapper.block_dims(key)
             blk = torch.randn(d_i, d_j)
             pair_blocks.setdefault(key, []).append(blk)
-            pair_edges.setdefault(key, []).append([i, j])
-            lookup[(i, j)] = (key, len(pair_blocks[key]) - 1)
+            pair_edges.setdefault(key, []).append([i, j, 0, 0, 0])
+            lookup[(i, j, 0, 0, 0)] = (key, len(pair_blocks[key]) - 1)
     pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
     pair_edges = {
         k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()

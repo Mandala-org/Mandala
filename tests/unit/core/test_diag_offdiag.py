@@ -42,7 +42,7 @@ def test_blockmatrix_diag_offdiag(data):
     # per-key correctness against boolean masks
     for key, blk in D.pair_blocks.items():
         edges = D.pair_edges[key]  # (2,E_key)
-        mask_diag = edges[0] == edges[1]
+        mask_diag = (edges[0] == edges[1]) & edges[2:5].eq(0).all(dim=0)
         mask_off = ~mask_diag
 
         if torch.any(mask_diag):
@@ -68,7 +68,7 @@ def test_irrepsblockdata_diag_offdiag(data):
     # vector-level equality with masks
     for key, vec in dens_vecs.pair_vectors.items():
         edges = dens_vecs.pair_edges[key]
-        mask_diag = edges[0] == edges[1]
+        mask_diag = (edges[0] == edges[1]) & edges[2:5].eq(0).all(dim=0)
         mask_off = ~mask_diag
         if torch.any(mask_diag):
             assert torch.allclose(vec[mask_diag], diag[key], atol=1e-6)

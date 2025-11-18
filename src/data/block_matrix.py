@@ -43,7 +43,7 @@ class BlockMatrix:
     atoms: Tuple[str, ...]
     atom_counts: Dict[str, int]
     pair_blocks: Dict[PairKey, torch.Tensor]  # (E_ab, d_A, d_B)
-    pair_edges: Dict[PairKey, torch.Tensor]  # (2, E_ab)
+    pair_edges: Dict[PairKey, torch.Tensor]  # (5, E_ab)
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
     orbital_cfg: OrbitalIrrepConfig
     basis: str  # "openmx" | "e3nn"
@@ -57,14 +57,29 @@ class BlockMatrix:
 
     # --------------- dict-like access -------------------------------------- #
     def __getitem__(self, item):
-        # item = (i, j) global indices
+        # item = (i, j) global indices, sum periodic images
         if isinstance(item, tuple) and len(item) == 2:
+            print("Warning: BlockMatrix.__getitem__((i,j)) sums over periodic images.")
+            ret = None
+            for key in self.lookup:
+                if key[0] == item[0] and key[1] == item[1]:
+                    k_key, k_idx = self.lookup[key]
+                    block = self.pair_blocks[k_key][k_idx]
+                    if ret is None:
+                        ret = block.clone()
+                    else:
+                        ret += block
+            if ret is None:
+                raise KeyError(f"No blocks found for indices {item}")
+            return ret
+        # item = (i, j, sx, sy, sz) global indices
+        if isinstance(item, tuple) and len(item) == 5:
             key, k = self.lookup[item]
             return self.pair_blocks[key][k]
         # item = "A-B"
         if isinstance(item, str):
             return self.pair_blocks[item]
-        raise KeyError("use (i,j) or 'A-B'")
+        raise KeyError("use (i,j), (i,j,sx,sy,sz) or 'A-B'")
 
     def edges(self, key: PairKey) -> torch.Tensor:
         return self.pair_edges[key]
@@ -87,10 +102,8 @@ class BlockMatrix:
             el_a, el_b = key.split("-")
             if el_a != el_b:
                 continue
-
-            n_diag = self.atom_counts[el_a]
-            if blk.shape[0] >= n_diag:
-                diag_dict[key] = blk[-n_diag:]
+            n_atoms = self.atom_counts[el_a]
+            diag_dict[key] = blk[:n_atoms]
 
         return diag_dict
 
@@ -103,9 +116,8 @@ class BlockMatrix:
         for key, blk in self.pair_blocks.items():
             el_a, el_b = key.split("-")
             if el_a == el_b:
-                n_diag = self.atom_counts[el_a]
-                if blk.shape[0] > n_diag:
-                    off_dict[key] = blk[:-n_diag]
+                n_atoms = self.atom_counts[el_a]
+                off_dict[key] = blk[n_atoms:]
             else:
                 off_dict[key] = blk
         return off_dict
@@ -154,7 +166,10 @@ class BlockMatrix:
             el_a, el_b = key.split("-")
             new_key = f"{el_b}-{el_a}"
             transposed_blocks[new_key] = blk.transpose(-1, -2).clone()
-            transposed_edges[new_key] = self.pair_edges[key].flip(0).clone()
+            edges = self.pair_edges[key]
+            transposed_edges[new_key] = torch.stack(
+                [edges[1], edges[0], -edges[2], -edges[3], -edges[4]]
+            )
 
         final_blocks = {}
         final_edges = {}
@@ -193,8 +208,8 @@ class BlockMatrix:
         # Rebuild lookup
         new_lookup = {}
         for key, edges in final_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                new_lookup[(i, j)] = (key, idx)
+            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
+                new_lookup[(i, j, sx, sy, sz)] = (key, idx)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -233,8 +248,8 @@ class BlockMatrix:
                 edges = self.pair_edges[key]
             pair_blocks[key] = blk
             pair_edges[key] = edges
-            for new_k, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, new_k)
+            for new_k, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
+                lookup[(i, j, sx, sy, sz)] = (key, new_k)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -336,17 +351,18 @@ class BlockMatrix:
         """
         Assemble a full dense matrix of shape ``(Σ d_i, Σ d_i)`` where
         ``d_i`` is orbital dimension of atom *i*.
+        Summing all periodic images into the central cell.
         """
         offsets, total = self._atom_offsets()
         device = next(iter(self.pair_blocks.values())).device
         dtype = next(iter(self.pair_blocks.values())).dtype
         dense = torch.zeros(total, total, device=device, dtype=dtype)
 
-        for (i, j), (key, k) in self.lookup.items():
+        for (i, j, _sx, _sy, _sz), (key, k) in self.lookup.items():
             d_i, d_j = self.orbital_cfg.block_dims(key)
             r0 = int(offsets[i])
             c0 = int(offsets[j])
-            dense[r0 : r0 + d_i, c0 : c0 + d_j] = self.pair_blocks[key][k]
+            dense[r0 : r0 + d_i, c0 : c0 + d_j] += self.pair_blocks[key][k]
         return dense
 
     # ------------------ serialisation ------------------------------------
@@ -387,8 +403,8 @@ class BlockMatrix:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
+                lookup[(i, j, sx, sy, sz)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter
@@ -453,8 +469,8 @@ class BlockMatrix:
 
             pair_blocks[key] = blk_kept
             pair_edges[key] = edges_kept
-            for idx, (i, j) in enumerate(edges_kept.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (i, j, sx, sy, sz) in enumerate(edges_kept.t().tolist()):
+                lookup[(i, j, sx, sy, sz)] = (key, idx)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -559,7 +575,8 @@ class BlockMatrix:
                 local_idx = len(pair_blocks[key])
                 pair_blocks[key].append(blk)
                 pair_edges[key].append([i, j])
-                lookup[(i, j)] = (key, local_idx)
+                lookup[(i, j, 0, 0, 0)] = (key, local_idx)
+        print("Warning: from_dense currently assumes no periodic images!")
         # stack
         pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
         pair_edges = {
@@ -620,8 +637,8 @@ class BlockMatrix:
                 new_edges[key] = edges_kept
 
                 # rebuild lookup for the surviving edges of this key
-                for local_idx, (i, j) in enumerate(edges_kept.t().tolist()):
-                    new_lookup[(i, j)] = (key, local_idx)
+                for local_idx, (i, j, sx, sy, sz) in enumerate(edges_kept.t().tolist()):
+                    new_lookup[(i, j, sx, sy, sz)] = (key, local_idx)
 
         # assemble the sparsified snapshot
         return BlockMatrix(
@@ -653,8 +670,8 @@ class BlockMatrix:
         # rebuild lookup table
         lookup: Dict[Tuple[int, int], Tuple[str, int]] = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
+                lookup[(i, j, sx, sy, sz)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter
@@ -673,7 +690,7 @@ class BlockMatrix:
 
     # ════════════════════════════════════════════════════════════════════════════
     #                                ROTATION
-    # ═══════════════════════���════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════════
     def rotate(self, R: torch.Tensor) -> "BlockMatrix":
         """
         Return a **new** :class:`BlockMatrix` whose *orbital reference frame*
@@ -764,10 +781,8 @@ class IrrepsBlockData:
             el_a, el_b = key.split("-")
             if el_a != el_b:
                 continue
-
-            n_diag = self.atom_counts[el_a]
-            if vec.shape[0] >= n_diag:
-                diag_dict[key] = vec[-n_diag:]
+            n_atoms = self.atom_counts[el_a]
+            diag_dict[key] = vec[:n_atoms]
         return diag_dict
 
     def offdiag(self) -> Dict[PairKey, torch.Tensor]:
@@ -775,21 +790,39 @@ class IrrepsBlockData:
         for key, vec in self.pair_vectors.items():
             el_a, el_b = key.split("-")
             if el_a == el_b:
-                n_diag = self.atom_counts[el_a]
-                if vec.shape[0] > n_diag:
-                    off_dict[key] = vec[:-n_diag]
+                n_atoms = self.atom_counts[el_a]
+                off_dict[key] = vec[n_atoms:]
             else:
                 off_dict[key] = vec
         return off_dict
 
     # -------- indexing paralleling BlockMatrix -------- #
     def __getitem__(self, item):
+        # item = (i, j) global indices, sum periodic images
         if isinstance(item, tuple) and len(item) == 2:
+            print(
+                "Warning: IrrepsBlockData.__getitem__((i,j)) sums over periodic images."
+            )
+            ret = None
+            for key in self.lookup:
+                if key[0] == item[0] and key[1] == item[1]:
+                    k_key, k_idx = self.lookup[key]
+                    vec = self.pair_vectors[k_key][k_idx]
+                    if ret is None:
+                        ret = vec.clone()
+                    else:
+                        ret += vec
+            if ret is None:
+                raise KeyError(f"No vectors found for indices {item}")
+            return ret
+        # item = (i, j, sx, sy, sz) global indices
+        if isinstance(item, tuple) and len(item) == 5:
             key, k = self.lookup[item]
             return self.pair_vectors[key][k]
+        # item = "A-B"
         if isinstance(item, str):
             return self.pair_vectors[item]
-        raise KeyError
+        raise KeyError("use (i,j), (i,j,sx,sy,sz) or 'A-B'")
 
     # ------------------------------------------------------------------ serialisation
     def _to_payload(self) -> dict:
@@ -830,8 +863,8 @@ class IrrepsBlockData:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
+                lookup[(i, j, sx, sy, sz)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter

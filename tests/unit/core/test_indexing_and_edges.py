@@ -36,8 +36,8 @@ def test_blockmatrix_lookup(data):
     for _ in range(10):  # random edges
         i = rng.randrange(len(B.atoms))
         j = rng.randrange(len(B.atoms))
-        key, local = B.lookup[(i, j)]  # local index *inside* key bucket
-        blk_global = B[(i, j)]  # global accessor
+        key, local = B.lookup[(i, j, 0, 0, 0)]  # local index *inside* key bucket
+        blk_global = B[(i, j, 0, 0, 0)]  # global accessor
         blk_local = B.pair_blocks[key][local]  # local accessor
         assert torch.allclose(blk_global, blk_local, atol=1e-7)
 
@@ -52,7 +52,7 @@ def test_irrepsblockdata_lookup(data):
     for _ in range(10):
         i = rng.randrange(len(V.atoms))
         j = rng.randrange(len(V.atoms))
-        key, local = V.lookup[(i, j)]
-        vec_g = V[(i, j)]
-        vec_l = V.pair_vectors[key][local]
+        key, local = V.lookup[(i, j, 0, 0, 0)]  # local index *inside* key bucket
+        vec_g = V[(i, j, 0, 0, 0)]  # global accessor
+        vec_l = V.pair_vectors[key][local]  # local accessor
         assert torch.allclose(vec_g, vec_l, atol=1e-7)

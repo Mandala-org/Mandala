@@ -122,13 +122,19 @@ def test_radial_mlp_output_shape_and_layers():
 def test_trace_matmul_sparse_basic():
     # two blocks: identity and 2*identity
     I = torch.eye(2)
-    blocks_a = torch.stack([I, I])
-    blocks_b = torch.stack([2 * I, 3 * I])
-    idx = torch.tensor([[0, 1], [1, 0]])
-    # pairs: (0,1),(1,0) so reverse exists for both
-    # Tr(I*3I) + Tr(I*2I) = 2*3 + 2*2 = 6+4=10
-    val = trace_matmul_sparse(blocks_a, blocks_b, idx)
-    assert torch.isclose(val, torch.tensor(10.0))
+    blocks_a = torch.stack([I, I, I, I])
+    blocks_b = torch.stack([2 * I, 3 * I, 5 * I, 3 * I])
+    edge_idx = torch.tensor(
+        [
+            [0, 1, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 1],
+            [1, 0, 0, 0, -1],
+        ]
+    )
+    # Tr(I*3I) + Tr(I*2I) + Tr(I*5I) + Tr(I*3I) = 2*3 + 2*2 + 2*5 + 2*3 = 6+4+10+6=26
+    val = trace_matmul_sparse(blocks_a, blocks_b, edge_idx)
+    assert torch.isclose(val, torch.tensor(26.0))
 
 
 @pytest.mark.unit

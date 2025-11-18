@@ -2,18 +2,24 @@ import pytest
 from pathlib import Path
 import torch
 
-from core.orbital_irrep_config import OrbitalIrrepConfig
-from data.openmx_parser import parse_openmx_scfout
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
+from net.common import Config
 
 
 def _load_snapshot():
-    cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
-    sample = Path("./data/small/H2O/original/H2O.matrix")
-    atoms = list("HHHHOO")
-    snap = parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
-    return snap.canonicalize_edges()
+    # cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
+    # sample = Path("./data/small/H2O/original/H2O.matrix")
+    # atoms = list("HHHHOO")
+    # snap = parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
+    cfg = Config()
+    snap = Snapshot.from_openmx(
+        Path("./data/small/H2O/original/H2O.matrix"),
+        Path("./data/small/H2O/original/H2O.info.out"),
+        cfg=cfg,
+        convention="openmx",
+    )
+    return snap
 
 
 @pytest.mark.unit
@@ -28,25 +34,6 @@ def test_energy_and_electron_count():
 
     assert torch.allclose(E, E_ref, atol=1e-6)
     assert torch.allclose(Ne, Ne_ref, atol=1e-6)
-
-
-@pytest.mark.unit
-def test_canonical_edge_ordering():
-    snap = _load_snapshot()
-    D = snap.density
-
-    for key in D.keys():
-        edges = D.pair_edges[key]
-        is_diag = edges[0] == edges[1]
-
-        # Find the first diagonal edge, if any
-        diag_indices = torch.where(is_diag)[0]
-        if len(diag_indices) > 0:
-            first_diag_idx = diag_indices[0]
-            # All edges before the first diagonal edge must be off-diagonal
-            assert not torch.any(is_diag[:first_diag_idx])
-            # All edges from the first diagonal edge onwards must be diagonal
-            assert torch.all(is_diag[first_diag_idx:])
 
 
 @pytest.mark.unit
@@ -84,6 +71,14 @@ def test_basis_conversion_roundtrip():
     assert torch.allclose(
         snap_back.density[key][0], snap_open.density[key][0], atol=1e-6
     )
+    assert torch.allclose(
+        snap_back.hamiltonian[key][0], snap_open.hamiltonian[key][0], atol=1e-6
+    )
+    assert torch.allclose(
+        snap_back.overlap[key][0], snap_open.overlap[key][0], atol=1e-6
+    )
+    assert torch.allclose(snap_back.positions, snap_open.positions, atol=1e-6)
+    assert torch.allclose(snap_back.box, snap_open.box, atol=1e-6)
 
     # physics helpers unchanged
     assert torch.allclose(snap_back.get_energy(), snap_open.get_energy(), atol=1e-6)
