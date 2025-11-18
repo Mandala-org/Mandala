@@ -18,14 +18,20 @@ def h2o_orbital_cfg():
 def h2o_snapshot(h2o_orbital_cfg):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
-    return parse_openmx_scfout(sample, atoms, h2o_orbital_cfg, convention="openmx")
+    cfg = Config(cutoff_matrix=5.0)
+    return parse_openmx_scfout(
+        sample, atoms, h2o_orbital_cfg, convention="openmx", cfg=cfg
+    )
 
 
 @pytest.fixture(scope="session")
 def h2o_snapshot_e3nn(h2o_orbital_cfg):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
-    return parse_openmx_scfout(sample, atoms, h2o_orbital_cfg, convention="e3nn")
+    cfg = Config(cutoff_matrix=5.0)
+    return parse_openmx_scfout(
+        sample, atoms, h2o_orbital_cfg, convention="e3nn", cfg=cfg
+    )
 
 
 @pytest.fixture(scope="session")
@@ -33,10 +39,12 @@ def si_snapshot():
     base = Path("./data/big/silicon/2700K")
     matrix_path = base / "Si_DM"
     info_path = base / "info.txt"
+    cfg = Config(cutoff_matrix=7.5)
     return Snapshot.from_openmx(
         str(matrix_path),
         str(info_path),
         convention="openmx",
+        cfg=cfg,
     )
 
 

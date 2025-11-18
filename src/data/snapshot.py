@@ -149,13 +149,13 @@ class Snapshot:
             edge = (src[i], dst[i])
             dist = distances[i]
             if edge not in edge_to_distance or dist < edge_to_distance[edge]:
-                edge_to_distance[edge] = dist
+                edge_to_distance[tuple(map(int, edge))] = dist
 
         order_dict = {}
         for matrix_name in self._mats:
             order_dict[matrix_name] = {}
             for key, edges in self._mats[matrix_name].pair_edges.items():
-                is_diag_mask = edges[0] == edges[1]
+                is_diag_mask = (edges[0] == edges[1]) & edges[2:5].eq(0).all(dim=0)
 
                 # Get the sorting permutation for the diagonal edges
                 perm = torch.argsort(edges[0] + edges[1] * 1e6)
@@ -163,11 +163,17 @@ class Snapshot:
                 perm_diag = perm[diag_mask]
 
                 # Sort off-diagonal edges distance
-                distances = torch.zeros(edges.shape[1], dtype=torch.float32)
+                edge_distances = torch.zeros(edges.shape[1], dtype=torch.float32)
                 for i in range(edges.shape[1]):
-                    edge = (edges[0, i].item(), edges[1, i].item())
-                    distances[i] = edge_to_distance[edge]
-                perm_dist = torch.argsort(distances)
+                    edge = (int(edges[0, i].item()), int(edges[1, i].item()))
+                    try:
+                        edge_distances[i] = edge_to_distance[edge]
+                    except KeyError:
+                        raise Exception(
+                            f"Edge {edge} not found in neighbor list. "
+                            "Increase cutoff_matrix in config"
+                        )
+                perm_dist = torch.argsort(edge_distances)
                 offdiag_mask = (~is_diag_mask)[perm_dist]
                 perm_offdiag = perm_dist[offdiag_mask]
 
@@ -230,8 +236,8 @@ class Snapshot:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
+                lookup[(i, j, sx, sy, sz)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         atom_counts = payload.get("atom_counts", Counter(atoms))
@@ -310,7 +316,7 @@ class Snapshot:
             return self
 
         cfg = self.density.orbital_cfg
-        any_block = next(iter(self.density.pair_blocks.values()))
+        any_block = next(iter(self.hamiltonian.pair_blocks.values()))
         device = any_block.device
         pos = self.positions
         forces = self.forces
@@ -321,7 +327,11 @@ class Snapshot:
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-            # pos = pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            # pos = (
+            #     pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            #     if pos is not None
+            #     else None
+            # )
             # forces = (
             #     forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
             #     if forces is not None
@@ -334,17 +344,20 @@ class Snapshot:
             # )
             # print("Changing convention with [1, 2, 0]")
             pos = (
-                pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                # pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
                 if pos is not None
                 else None
             )
             forces = (
-                forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                # forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
                 if forces is not None
                 else None
             )
             box = (
-                box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                # box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                torch.eye(3, dtype=torch.float32)[[2, 0, 1]].T @ box
                 if box is not None
                 else None
             )
@@ -362,16 +375,19 @@ class Snapshot:
                 "Warning: Position/force/box conversion from e3nn to openmx to be checked!"
             )
             pos = (
+                # pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
                 pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if pos is not None
                 else None
             )
             forces = (
+                # forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
                 forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if forces is not None
                 else None
             )
             box = (
+                # box @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
                 box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if box is not None
                 else None
@@ -429,9 +445,8 @@ class Snapshot:
             ovl,
             den,
             positions=self.positions @ R.T if self.positions is not None else None,
-            # positions=self.positions @ R if self.positions is not None else None,
             forces=self.forces @ R.T if self.forces is not None else None,
-            box=self.box @ R.T if self.box is not None else None,
+            box=R @ self.box if self.box is not None else None,
             stress=(
                 self.stress @ R.T
                 if self.stress is not None and self.stress.shape != torch.Size([0])
@@ -457,17 +472,22 @@ class Snapshot:
         if mat is None:
             mat = self.density
 
-        inv_box = torch.inverse(self.box)
+        # inv_box = torch.inverse(self.box)
         vecs: Dict[str, torch.Tensor] = {}
 
         for key, edges in mat.pair_edges.items():
-            src, dst = edges
-            delta = self.positions[dst] - self.positions[src]
+            src, dst, sx, sy, sz = edges
+            edge_shift = (
+                torch.stack([sx, sy, sz], dim=-1)
+                .to(self.positions.device)
+                .to(self.positions.dtype)
+            )
+            delta = self.positions[dst] - self.positions[src] + edge_shift @ self.box
 
-            frac = delta @ inv_box
-            frac_wrapped = frac - torch.round(frac)
-
-            vecs[key] = frac_wrapped @ self.box
+            # frac = delta @ inv_box
+            # frac_wrapped = frac - torch.round(frac)
+            # vecs[key] = frac_wrapped @ self.box
+            vecs[key] = delta
 
         return vecs
 

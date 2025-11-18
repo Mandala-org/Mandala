@@ -17,7 +17,6 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from data.block_matrix import BlockMatrix
 
 
-# --------------------------------------------------------------------------- #
 def trace_matmul_sparse(
     blocks_a: torch.Tensor,  # (E, d, d)
     blocks_b: torch.Tensor,  # (E, d, d)
@@ -29,15 +28,15 @@ def trace_matmul_sparse(
     if blocks_a.shape != blocks_b.shape:
         raise ValueError("blocks_a and blocks_b must have same shape")
 
-    if edge_index.shape[1] != blocks_a.shape[0]:
+    if edge_index.shape[0] != blocks_a.shape[0]:
         raise ValueError("edge_index cols must match number of blocks")
 
-    pairs = edge_index.t().tolist()
+    pairs = edge_index.tolist()
     lookup = {tuple(p): k for k, p in enumerate(pairs)}
 
     out = torch.zeros((), dtype=blocks_a.dtype, device=blocks_a.device)
-    for k, (i, j) in enumerate(pairs):
-        rev = (j, i)
+    for k, (i, j, sx, sy, sz) in enumerate(pairs):
+        rev = (j, i, -sx, -sy, -sz)
         rev_k = lookup.get(rev, None)
         if rev_k is None:
             continue
@@ -78,10 +77,10 @@ def trace_matmul_sparse_snap(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
         device=list(A.pair_blocks.values())[0].device,
         requires_grad=True,
     )
-    for (i, j), (key, k) in A.lookup.items():
-        if (j, i) not in B.lookup:
+    for (i, j, sx, sy, sz), (key, k) in A.lookup.items():
+        if (j, i, -sx, -sy, -sz) not in B.lookup:
             continue
-        key_rev, k_rev = B.lookup[(j, i)]
+        key_rev, k_rev = B.lookup[(j, i, -sx, -sy, -sz)]
         out = out + torch.trace(A.pair_blocks[key][k] @ B.pair_blocks[key_rev][k_rev])
     return out
 
@@ -111,11 +110,17 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
         edges_b_rev = B.pair_edges[rev_key]  # (2, E')  (j, i)
 
         # map (j,i) tuple -> index in B
-        mapping = {(int(e[0]), int(e[1])): idx for idx, e in enumerate(edges_b_rev.t())}
+        mapping = {
+            tuple(map(int, (i, j, sx, sy, sz))): idx
+            for idx, (i, j, sx, sy, sz) in enumerate(edges_b_rev.t())
+        }
 
         # build index list such that order matches edges_a
         idx_rev = torch.tensor(
-            [mapping[(int(j), int(i))] for i, j in edges_a.t()],
+            [
+                mapping[tuple(map(int, (j, i, -sx, -sy, -sz)))]
+                for i, j, sx, sy, sz in edges_a.t()
+            ],
             device=blk_a.device,
         )
 

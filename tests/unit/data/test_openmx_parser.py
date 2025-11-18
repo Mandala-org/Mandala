@@ -77,11 +77,11 @@ def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
 
     mats = parse_openmx_scfout(sample, atoms, h2o_orbital_cfg)
     density = mats["density"]
-    # ensure that duplicate Rn blocks were summed: count of H‑H edges is 16 (fully connected dir graph)
-    assert density["H-H"].shape == (16, 9, 9)
-    assert density["O-O"].shape == (4, 22, 22)
-    assert density["H-O"].shape == (8, 9, 22)
-    assert density["O-H"].shape == (8, 22, 9)
+    # ensure that duplicate Rn blocks were not summed: count of H‑H edges is 16 (fully connected dir graph)
+    assert density["H-H"].shape == (712, 9, 9)
+    assert density["O-O"].shape == (194, 22, 22)
+    assert density["H-O"].shape == (384, 9, 22)
+    assert density["O-H"].shape == (384, 22, 9)
     # assert O-H is the same as H-O.T
     density = density
     density_T = density.transpose()
@@ -90,10 +90,10 @@ def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
     ), "D[O-H] should be the same as D[H-O].T"
 
     hamiltonian = mats["hamiltonian"]
-    assert hamiltonian["H-H"].shape == (16, 9, 9)
-    assert hamiltonian["O-O"].shape == (4, 22, 22)
-    assert hamiltonian["H-O"].shape == (8, 9, 22)
-    assert hamiltonian["O-H"].shape == (8, 22, 9)
+    assert hamiltonian["H-H"].shape == (712, 9, 9)
+    assert hamiltonian["O-O"].shape == (194, 22, 22)
+    assert hamiltonian["H-O"].shape == (384, 9, 22)
+    assert hamiltonian["O-H"].shape == (384, 22, 9)
     # assert O-H is the same as H-O.T
     hamiltonian = hamiltonian
     hamiltonian_T = hamiltonian.transpose()
@@ -102,10 +102,10 @@ def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
     ), "Ham[O-H] should be the same as Ham[H-O].T"
 
     overlap = mats["overlap"]
-    assert overlap["H-H"].shape == (16, 9, 9)
-    assert overlap["O-O"].shape == (4, 22, 22)
-    assert overlap["H-O"].shape == (8, 9, 22)
-    assert overlap["O-H"].shape == (8, 22, 9)
+    assert overlap["H-H"].shape == (712, 9, 9)
+    assert overlap["O-O"].shape == (194, 22, 22)
+    assert overlap["H-O"].shape == (384, 9, 22)
+    assert overlap["O-H"].shape == (384, 22, 9)
     # assert O-H is the same as H-O.T
     overlap = overlap
     overlap_T = overlap.transpose()

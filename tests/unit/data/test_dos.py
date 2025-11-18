@@ -1,5 +1,6 @@
 import pytest
 from data.snapshot import Snapshot
+from net.common import Config
 from pathlib import Path
 import torch
 
@@ -9,10 +10,14 @@ def snapshot():
     base = Path("data/big/silicon/2700K")
     matrix_path = base / "Si_DM"
     info_path = base / "info.txt"
+    cfg = Config(
+        cutoff_matrix=9.0,
+    )
     snap = Snapshot.from_openmx(
         str(matrix_path),
         str(info_path),
         convention="openmx",
+        cfg=cfg,
     )
     return snap
 
