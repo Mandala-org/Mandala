@@ -76,6 +76,8 @@ def test_pre_rotated_files_match_in_code_rotation():
     R = _rotation_matrix()
     snap_rot_calc = snap_orig.rotate(R)
 
+    # B' = R @ B
+    # R  = B'@B^-1
     _assert_snapshot_equal(snap_rot_calc, snap_rot_ref, atol=0.005)
 
     # physics invariants (redundant but nice to have)

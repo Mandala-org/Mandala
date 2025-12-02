@@ -108,6 +108,15 @@ def compute_graph_features(
 
     self_disp = torch.zeros((num_atoms, 3), device=positions.device)
 
+    # 6. Sort lexicographically the off-diagonal edges
+    # to have a deterministic order for testing
+    edge_val = offdiag_edge_src_unsorted * 10**6 + offdiag_edge_dst_unsorted
+    sorted_indices = torch.argsort(edge_val)
+    offdiag_edge_src_unsorted = offdiag_edge_src_unsorted[sorted_indices]
+    offdiag_edge_dst_unsorted = offdiag_edge_dst_unsorted[sorted_indices]
+    offdiag_edge_shift = offdiag_edge_shift[sorted_indices]
+    offdiag_disp_unsorted = offdiag_disp_unsorted[sorted_indices]
+
     # 6. Calculate lengths and sort off-diagonal edges
 
     offdiag_lengths_unsorted = torch.linalg.norm(offdiag_disp_unsorted, dim=-1)

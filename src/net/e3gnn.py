@@ -21,7 +21,7 @@ from e3nn.o3 import Irreps
 import time
 
 from core.block_irrep_mapper import BlockIrrepMapper
-from core.sparse_math import trace_matmul_sparse_snap
+from core.sparse_math import trace_matmul_sparse_block_matrix
 from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
 from data.graph_features import compute_graph_features
@@ -359,7 +359,7 @@ class E3GNN(pl.LightningModule):
             and "hamiltonian" in preds_matrix
             and "density" in preds_matrix
         ):
-            E_pred = trace_matmul_sparse_snap(
+            E_pred = trace_matmul_sparse_block_matrix(
                 preds_matrix["hamiltonian"], preds_matrix["density"]
             )
             E_true = y["energy"]
@@ -374,7 +374,7 @@ class E3GNN(pl.LightningModule):
             and "overlap" in preds_matrix
             and "density" in preds_matrix
         ):
-            N_pred = trace_matmul_sparse_snap(
+            N_pred = trace_matmul_sparse_block_matrix(
                 preds_matrix["overlap"], preds_matrix["density"]
             )
             N_true = y["num_electrons"]
@@ -397,10 +397,12 @@ class E3GNN(pl.LightningModule):
                 D_true = y["density"]
                 S_true = y["overlap"]
 
-            E_gt_D = trace_matmul_sparse_snap(preds_matrix["hamiltonian"], D_true)
-            E_gt_H = trace_matmul_sparse_snap(H_true, preds_matrix["density"])
-            N_gt_S = trace_matmul_sparse_snap(preds_matrix["density"], S_true)
-            N_gt_D = trace_matmul_sparse_snap(S_true, preds_matrix["density"])
+            E_gt_D = trace_matmul_sparse_block_matrix(
+                preds_matrix["hamiltonian"], D_true
+            )
+            E_gt_H = trace_matmul_sparse_block_matrix(H_true, preds_matrix["density"])
+            N_gt_S = trace_matmul_sparse_block_matrix(preds_matrix["density"], S_true)
+            N_gt_D = trace_matmul_sparse_block_matrix(S_true, preds_matrix["density"])
 
             if self.cfg.log_partial_gt_observables:
                 metrics[f"{stage}/energy_mae_gt_density"] = torch.mean(
