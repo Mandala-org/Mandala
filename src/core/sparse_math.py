@@ -66,7 +66,7 @@ def vectors_to_blocks(
 # ---------------------------------------------------------------------------
 #   BlockMatrix sparse traces
 # ---------------------------------------------------------------------------
-def trace_matmul_sparse_snap(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
+def trace_matmul_sparse_block_matrix(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
     """
     Scalar trace **via per-edge loop** using lookup table.
     Works for any BlockMatrix / IrrepsBlockData combination.
@@ -136,6 +136,6 @@ __all__: Tuple[str, ...] = (
     "trace_matmul_sparse",
     "blocks_to_vectors",
     "vectors_to_blocks",
-    "trace_matmul_sparse_snap",
+    "trace_matmul_sparse_block_matrix",
     "trace_matmul_sparse_snap_vectorized",
 )

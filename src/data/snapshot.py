@@ -32,7 +32,7 @@ from typing import Dict, Any
 import torch
 
 from core.sparse_math import (
-    trace_matmul_sparse_snap,
+    trace_matmul_sparse_block_matrix,
 )
 from data.block_matrix import BlockMatrix
 from core.basis_converter import OpenMXE3NNConverter, FHIaimsE3NNConverter
@@ -203,11 +203,11 @@ class Snapshot:
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:
         """Return *scalar* Tr(D·S)."""
-        return trace_matmul_sparse_snap(self.density, self.overlap)
+        return trace_matmul_sparse_block_matrix(self.density, self.overlap)
 
     def get_energy(self) -> torch.Tensor:
         """Return *scalar* Tr(D·H)."""
-        return trace_matmul_sparse_snap(self.hamiltonian, self.density)
+        return trace_matmul_sparse_block_matrix(self.hamiltonian, self.density)
 
     # ---------------------------------------------------------------- serialisation
     def _payload(self):
@@ -355,9 +355,10 @@ class Snapshot:
                 if forces is not None
                 else None
             )
+            change_of_basis = torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
             box = (
                 # box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-                torch.eye(3, dtype=torch.float32)[[2, 0, 1]].T @ box
+                change_of_basis.T @ box @ change_of_basis
                 if box is not None
                 else None
             )

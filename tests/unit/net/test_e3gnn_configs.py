@@ -34,6 +34,7 @@ def make_dummy_graph(cfg):
     edge_index = torch.tensor(
         [[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]], dtype=torch.long
     )
+    edge_shift = torch.zeros(E, 3, dtype=torch.long)
 
     x = {
         "node_type_idx": node_type_idx,
@@ -41,6 +42,7 @@ def make_dummy_graph(cfg):
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": edge_index,
+        "edge_shift": edge_shift,
         "atoms": ("H", "H", "H", "H"),
         "index_gnn_cutoff": E,
         "num_self_edges": N,
