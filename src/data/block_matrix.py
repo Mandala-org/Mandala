@@ -574,7 +574,7 @@ class BlockMatrix:
                     pair_blocks[key], pair_edges[key] = [], []
                 local_idx = len(pair_blocks[key])
                 pair_blocks[key].append(blk)
-                pair_edges[key].append([i, j])
+                pair_edges[key].append([i, j, 0, 0, 0])
                 lookup[(i, j, 0, 0, 0)] = (key, local_idx)
         print("Warning: from_dense currently assumes no periodic images!")
         # stack
