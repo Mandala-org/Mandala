@@ -35,8 +35,8 @@ def make_mock_matrix():
                 pair_edges[key] = []
             local_idx = len(pair_blocks[key])
             pair_blocks[key].append(blk)
-            pair_edges[key].append([i, j])
-            lookup[(i, j)] = (key, local_idx)
+            pair_edges[key].append([i, j, 0, 0, 0])
+            lookup[(i, j, 0, 0, 0)] = (key, local_idx)
 
     # stack per key
     pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
