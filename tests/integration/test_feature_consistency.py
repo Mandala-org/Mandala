@@ -12,7 +12,7 @@ from net.e3gnn import E3GNN
 
 @pytest.fixture(scope="module")
 def h2o_data():
-    cfg = Config()
+    cfg = Config(cutoff_matrix=15.0)
     snap = Snapshot.from_openmx(
         matrix_path=Path("data/small/H2O/original/H2O.matrix"),
         info_path=Path("data/small/H2O/original/H2O.info.out"),
