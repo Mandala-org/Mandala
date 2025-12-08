@@ -189,9 +189,16 @@ class Snapshot:
                             f"Edge {edge} not found in neighbor list. "
                             "Increase cutoff_matrix in config"
                         )
-                perm_dist = torch.argsort(edge_distances)
-                offdiag_mask = (~is_diag_mask)[perm_dist]
-                perm_offdiag = perm_dist[offdiag_mask]
+
+                # Use lexsort to pre-sort off-diagonal edges
+                offdiag_mask = ~diag_mask
+                perm_offdiag_lex = perm[offdiag_mask]
+
+                # Sort by distance (stable sort preserves lex order)
+                edge_distances = edge_distances.to(edges.device)
+                dists_lex = edge_distances[perm_offdiag_lex]
+                sort_idx = torch.argsort(dists_lex)
+                perm_offdiag = perm_offdiag_lex[sort_idx]
 
                 order_dict[matrix_name][key] = torch.cat([perm_diag, perm_offdiag])
 

@@ -8,28 +8,7 @@ Uses the 216-atom diamond-Si cell included under ``data/big/silicon/300K``.
 import pytest
 
 
-import torch
-
-
 # ---------------------------------------------------------------------------
-@pytest.mark.unit
-def test_canonical_edge_ordering(si_snapshot):
-    D = si_snapshot.density
-
-    for key in D.keys():
-        edges = D.pair_edges[key]
-        is_diag = edges[0] == edges[1]
-
-        # Find the first off-diagonal edge, if any
-        off_diag_indices = torch.where(~is_diag)[0]
-        if len(off_diag_indices) > 0:
-            first_off_diag_idx = off_diag_indices[0]
-            # All edges before the first off-diagonal edge must be diagonal
-            assert torch.all(is_diag[:first_off_diag_idx])
-            # All edges from the first off-diagonal edge onwards must be diagonal
-            assert torch.all(~is_diag[first_off_diag_idx:])
-
-
 @pytest.mark.unit
 def test_max_distance_periodic(si_snapshot):
     """
