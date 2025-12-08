@@ -21,6 +21,7 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from core.basis_converter import OpenMXE3NNConverter
 from data.block_matrix import BlockMatrix
 from data.snapshot import Snapshot  # <── new aggregate container
+from net.common import Config
 
 __all__ = ["OpenMXParseError", "parse_openmx_scfout"]
 
@@ -48,6 +49,7 @@ def parse_openmx_scfout(
     path: str | Path,
     atoms: List[str] | Tuple[str, ...],
     orbital_cfg: OrbitalIrrepConfig,
+    cfg: Config,
     *,
     convention: str = "e3nn",  # "openmx" | "e3nn"
     symmetrize_density: bool = True,  # D ← D + Dᵀ
@@ -255,4 +257,4 @@ def parse_openmx_scfout(
         raise ValueError(f"convention must be 'openmx' or 'e3nn', not '{convention}'")
 
     # ─────────────────────────────────────── Snapshot aggregation
-    return Snapshot(hamiltonian=ham, overlap=ovl, density=den)
+    return Snapshot(hamiltonian=ham, overlap=ovl, density=den, cfg=cfg)
