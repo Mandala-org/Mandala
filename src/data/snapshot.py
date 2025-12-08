@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 from typing import Dict, Any
+import numpy as np
 import torch
 
 from core.sparse_math import (
@@ -146,7 +147,7 @@ class Snapshot:
         # (i, j) is the edge, and we want to keep the one with the smallest distance
         edge_to_distance = {}
         for i in range(len(src)):
-            edge = (src[i], dst[i])
+            edge = (src[i], dst[i], shift[i][0], shift[i][1], shift[i][2])
             dist = distances[i]
             if edge not in edge_to_distance or dist < edge_to_distance[edge]:
                 edge_to_distance[tuple(map(int, edge))] = dist
@@ -158,14 +159,25 @@ class Snapshot:
                 is_diag_mask = (edges[0] == edges[1]) & edges[2:5].eq(0).all(dim=0)
 
                 # Get the sorting permutation for the diagonal edges
-                perm = torch.argsort(edges[0] + edges[1] * 1e6)
+                # perm = torch.argsort(edges[0] + edges[1] * 1e6)
+                perm = torch.tensor(
+                    np.lexsort(
+                        (
+                            edges[4].numpy(),
+                            edges[3].numpy(),
+                            edges[2].numpy(),
+                            edges[1].numpy(),
+                            edges[0].numpy(),
+                        )
+                    )
+                )
                 diag_mask = is_diag_mask[perm]
                 perm_diag = perm[diag_mask]
 
                 # Sort off-diagonal edges distance
                 edge_distances = torch.zeros(edges.shape[1], dtype=torch.float32)
                 for i in range(edges.shape[1]):
-                    edge = (int(edges[0, i].item()), int(edges[1, i].item()))
+                    edge = tuple(edges[:, i].tolist())
                     try:
                         edge_distances[i] = edge_to_distance[edge]
                     except KeyError:
