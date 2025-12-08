@@ -28,9 +28,13 @@ Key features
 from __future__ import annotations
 
 import os
+import json
+from pathlib import Path
 from typing import Dict, Any
 import numpy as np
 import torch
+import h5py
+from ase import Atoms
 
 from core.sparse_math import (
     trace_matmul_sparse_block_matrix,
@@ -129,7 +133,6 @@ class Snapshot:
         2. Off-diagonal edges, sorted by the distance (ascending).
         """
         from ase.neighborlist import neighbor_list
-        from ase import Atoms
 
         mat = next(iter(self._mats.values()))
 
@@ -668,3 +671,77 @@ class Snapshot:
         ) / (torch.sqrt(torch.tensor(2 * torch.pi)) * sigma)
 
         return grid, dos
+
+    def export_to_deephe3(self, path: str | os.PathLike):
+        """
+        Export the snapshot to the DeepH-E3 format.
+
+        Parameters
+        ----------
+        path : str | os.PathLike
+            The directory where the files will be saved.
+        """
+        path = Path(path)
+        os.makedirs(path, exist_ok=True)
+
+        # save_element
+        atoms = Atoms(self.hamiltonian.atoms)
+        with open(path / "element.dat", "w") as f:
+            for number in atoms.numbers:
+                f.write(f"{number}\n")
+
+        # save_info
+        with open(path / "info.json", "w") as f:
+            json.dump(
+                {"fermi_level": self.info.fermi_level.item(), "isspinful": False}, f
+            )
+
+        # save_lat
+        with open(path / "lat.dat", "w") as f:
+            for row in self.box:
+                for el in row:
+                    f.write(f"{el} ")
+                f.write("\n")
+
+        # save_rlat
+        rlat = 2 * torch.pi * torch.linalg.inv(self.box).T
+        with open(path / "rlat.dat", "w") as f:
+            for row in rlat:
+                for el in row:
+                    f.write(f"{el} ")
+                f.write("\n")
+
+        # save_site_positions
+        with open(path / "site_positions.dat", "w") as f:
+            for row in self.positions.T:
+                for el in row:
+                    f.write(f"{el}\t")
+                f.write("\n")
+
+        # save_hamiltonians
+        with h5py.File(path / "hamiltonians.h5", "w") as f:
+            for key in self.hamiltonian.keys():
+                edges = self.hamiltonian.pair_edges[key]
+                blocks = self.hamiltonian.pair_blocks[key]
+
+                # edges rows: 0:src, 1:dst, 2:sx, 3:sy, 4:sz
+                for i in range(edges.shape[1]):
+                    src = edges[0, i].item()
+                    dst = edges[1, i].item()
+                    sx = edges[2, i].item()
+                    sy = edges[3, i].item()
+                    sz = edges[4, i].item()
+
+                    # Key format: [sx, sy, sz, src, dst]
+                    name = str([sx, sy, sz, src, dst])
+                    f.create_dataset(
+                        name, data=blocks[i].to(torch.float64).cpu().numpy()
+                    )
+
+        # save_orbital_types
+        with open(path / "orbital_types.dat", "w") as f:
+            for atom in self.hamiltonian.atoms:
+                orbital_list = self.hamiltonian.orbital_cfg.element_to_irreps[atom].ls
+                for l in orbital_list:
+                    f.write(f"{l}\t")
+                f.write("\n")
