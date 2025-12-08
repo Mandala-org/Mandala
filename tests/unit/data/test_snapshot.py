@@ -1,9 +1,12 @@
 import pytest
 from pathlib import Path
 import torch
+from collections import Counter
 
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
+from data.block_matrix import BlockMatrix
+from core.orbital_irrep_config import OrbitalIrrepConfig
 from net.common import Config
 
 
@@ -93,3 +96,106 @@ def test_basis_conversion_roundtrip():
         snap_open.get_number_of_electrons(),
         atol=1e-6,
     )
+
+
+@pytest.mark.unit
+def test_canonical_edge_ordering_tiebreaker():
+    # 1. Setup Geometry
+    # Atom 0: "H" at (0, 0, 0)
+    # Atom 1: "H" at (2, 0, 0) -> dist 2
+    # Atom 2: "H" at (0, 2, 0) -> dist 2
+    # Atom 3: "H" at (1, 0, 0) -> dist 1
+
+    # Edges of interest: (0, 1) and (0, 2). Both have dist=2.
+    # Canonical order should be determined by indices: (0, 1) < (0, 2).
+
+    atoms = ("H", "H", "H", "H")
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [1.0, 0.0, 0.0],
+        ]
+    )
+    # Box is needed for neighbor_list, make it large enough to avoid PBC issues for this test
+    box = torch.eye(3) * 10.0
+
+    # 2. Create Dummy BlockMatrix
+    # We only need one key "H-H"
+    # Edges:
+    # 0: (0, 2) - dist 2
+    # 1: (0, 1) - dist 2
+    # 2: (0, 3) - dist 1
+    # 3: (0, 0) - dist 0 (diagonal)
+
+    # Expected order:
+    # 1. Diagonal: (0, 0)
+    # 2. Off-diagonal sorted by distance, then lex:
+    #    - (0, 3) [dist 1]
+    #    - (0, 1) [dist 2, dst=1]
+    #    - (0, 2) [dist 2, dst=2]
+
+    # Input edges (shuffled/reverse order to test sorting)
+    # src, dst, sx, sy, sz
+    edges_data = [
+        [0, 2, 0, 0, 0],  # dist 2
+        [0, 1, 0, 0, 0],  # dist 2
+        [0, 3, 0, 0, 0],  # dist 1
+        [0, 0, 0, 0, 0],  # dist 0
+    ]
+    edges_tensor = torch.tensor(edges_data).T  # (5, 4)
+
+    # Dummy blocks (1x1)
+    blocks_tensor = torch.randn(4, 1, 1)
+
+    pair_edges = {"H-H": edges_tensor}
+    pair_blocks = {"H-H": blocks_tensor}
+
+    # Lookup not strictly needed for canonicalize_edges but good for consistency
+    lookup = {}
+    for idx, row in enumerate(edges_data):
+        lookup[tuple(row)] = ("H-H", idx)
+
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})
+
+    bm = BlockMatrix(
+        atoms=atoms,
+        atom_counts=Counter(atoms),
+        pair_blocks=pair_blocks,
+        pair_edges=pair_edges,
+        lookup=lookup,
+        orbital_cfg=orb_cfg,
+        basis="e3nn",
+    )
+
+    # 3. Create Snapshot
+    cfg = Config()
+    cfg.cutoff_matrix = 5.0  # Large enough
+
+    snap = Snapshot(
+        hamiltonian=bm,
+        overlap=bm,
+        density=bm,
+        positions=positions,
+        box=box,
+        cfg=cfg,
+    )
+
+    # 4. Run Canonicalization
+    snap_canon = snap.canonicalize_edges()
+
+    # 5. Verify Order
+    new_edges = snap_canon.hamiltonian.pair_edges["H-H"]
+    # Expected:
+    # Index 0: (0, 0) - Diag
+    # Index 1: (0, 3) - Dist 1
+    # Index 2: (0, 1) - Dist 2, dst 1
+    # Index 3: (0, 2) - Dist 2, dst 2
+
+    # Check src/dst pairs
+    pairs = new_edges[:2, :].T.tolist()
+    assert pairs[0] == [0, 0], f"Expected [0, 0], got {pairs[0]}"
+    assert pairs[1] == [0, 3], f"Expected [0, 3], got {pairs[1]}"
+    assert pairs[2] == [0, 1], f"Expected [0, 1], got {pairs[2]}"
+    assert pairs[3] == [0, 2], f"Expected [0, 2], got {pairs[3]}"
