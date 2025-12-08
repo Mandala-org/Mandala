@@ -64,7 +64,7 @@ class Snapshot:
         matrix_path=None,  # optional path to the source file
         info_path=None,  # optional path to the source info file
         cutoff_radius: float | None = None,  # optional cutoff radius for filtering
-        cfg: Config | None,
+        cfg: Config | None = None,
         info: Any = None,
     ) -> None:
         # quick consistency sanity checks
