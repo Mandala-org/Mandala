@@ -14,7 +14,7 @@ from net.common import Config
 
 @pytest.fixture(scope="module")
 def data():
-    cfg = Config()
+    cfg = Config(cutoff_matrix=7.5)
     return Snapshot.from_openmx(
         Path("./data/small/H2O/original/H2O.matrix"),
         Path("./data/small/H2O/original/H2O.info.out"),

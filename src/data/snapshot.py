@@ -64,7 +64,7 @@ class Snapshot:
         matrix_path=None,  # optional path to the source file
         info_path=None,  # optional path to the source info file
         cutoff_radius: float | None = None,  # optional cutoff radius for filtering
-        cfg: Config = None,
+        cfg: Config,
         info: Any = None,
     ) -> None:
         # quick consistency sanity checks
@@ -152,8 +152,9 @@ class Snapshot:
         for i in range(len(src)):
             edge = (src[i], dst[i], shift[i][0], shift[i][1], shift[i][2])
             dist = distances[i]
-            if edge not in edge_to_distance or dist < edge_to_distance[edge]:
-                edge_to_distance[tuple(map(int, edge))] = dist
+            key = tuple(map(int, edge))
+            if key not in edge_to_distance or dist < edge_to_distance[key]:
+                edge_to_distance[key] = dist
 
         order_dict = {}
         for matrix_name in self._mats:
@@ -166,14 +167,14 @@ class Snapshot:
                 perm = torch.tensor(
                     np.lexsort(
                         (
-                            edges[4].numpy(),
-                            edges[3].numpy(),
-                            edges[2].numpy(),
-                            edges[1].numpy(),
-                            edges[0].numpy(),
+                            edges[4].cpu().numpy(),
+                            edges[3].cpu().numpy(),
+                            edges[2].cpu().numpy(),
+                            edges[1].cpu().numpy(),
+                            edges[0].cpu().numpy(),
                         )
                     )
-                )
+                ).to(edges.device)
                 diag_mask = is_diag_mask[perm]
                 perm_diag = perm[diag_mask]
 
