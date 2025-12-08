@@ -63,7 +63,7 @@ _RE_ENERGY = re.compile(
     r"^\s*([A-Za-z0-9]+)\.\s+([-+0-9Ee\.]+)"
 )  # add this with the other regexps
 _RE_CHEM_POT = re.compile(
-    r"^\s*Chemical\s+Potential\s*\(Hartree\)\s*=\s*([-+0-9Ee\.]+)", re.I
+    r"^\s*Chemical\s+Potential\s*\(Hartree\)\s+([-+0-9Ee\.]+)", re.I
 )
 
 
