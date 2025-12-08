@@ -43,5 +43,5 @@ ray_results/
 notebooks/scratchpads
 
 # temporary/testing files
-data/deeph_e3/7_7_reproduced
-data/deeph_e3/silicon_reproduced
+data/deeph_e3/7_7_reproduced/*
+data/deeph_e3/silicon_reproduced/*
