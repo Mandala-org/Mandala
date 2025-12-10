@@ -4,25 +4,12 @@ import torch
 # ────────────────────────────────────────────────────────────────────────────
 # tests/test_dataset_factory.py
 # ────────────────────────────────────────────────────────────────────────────
-from pathlib import Path
 from net.common import Config
 from net.e3gnn import E3GNN
 
 # ---------------------------------------------------------------------------
 # Paths to the data files
 # ---------------------------------------------------------------------------
-PAIR_TRAIN_1 = (
-    Path("data/small/H2O/original/H2O.matrix"),
-    Path("data/small/H2O/original/H2O.info.out"),
-)
-PAIR_TRAIN_2 = (
-    Path("data/big/silicon/900K/Si_DM"),
-    Path("data/big/silicon/900K/info.txt"),
-)
-PAIR_VAL_1 = (
-    Path("data/big/silicon/2700K/Si_DM"),
-    Path("data/big/silicon/2700K/info.txt"),
-)
 
 
 # ════════════════════════════════════════════════════════════════════════

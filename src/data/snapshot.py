@@ -369,16 +369,6 @@ class Snapshot:
             return self
 
         cfg = self.density.orbital_cfg
-        #! Edge manipulation
-        # <assumptions>
-        # - When changing basis (e.g. OpenMX -> E3NN), the coordinate system might also need rotation/permutation.
-        # - This section handles the geometric transformation of positions, forces, and box vectors.
-        # </assumptions>
-        # <implementation>
-        # - Retrieves a sample block to determine device.
-        # - Applies basis conversion to matrices (H, S, D).
-        # - Applies coordinate transformation to geometric tensors (pos, forces, box).
-        # </implementation>
         any_block = next(iter(self.hamiltonian.pair_blocks.values()))
         device = any_block.device
         pos = self.positions
@@ -390,24 +380,9 @@ class Snapshot:
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-            # pos = (
-            #     pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-            #     if pos is not None
-            #     else None
-            # )
-            # forces = (
-            #     forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-            #     if forces is not None
-            #     else None
-            # )
-            # box = (
-            #     box @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-            #     if box is not None
-            #     else None
-            # )
-            # print("Changing convention with [1, 2, 0]")
 
             change_of_basis = torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+
             pos = pos @ change_of_basis if pos is not None else None
             forces = forces @ change_of_basis if forces is not None else None
             box = box @ change_of_basis if box is not None else None
@@ -421,23 +396,18 @@ class Snapshot:
             ham = conv.matrix_to_openmx(self.hamiltonian)
             ovl = conv.matrix_to_openmx(self.overlap)
             den = conv.matrix_to_openmx(self.density)
-            print(
-                "Warning: Position/force/box conversion from e3nn to openmx to be checked!"
-            )
-            pos = (
-                # pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-                pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-                if pos is not None
-                else None
-            )
-            forces = (
-                # forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-                forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-                if forces is not None
-                else None
-            )
+
+            change_of_basis = torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+
+            pos = pos @ change_of_basis if pos is not None else None
+            forces = forces @ change_of_basis if forces is not None else None
+            box = box @ change_of_basis if box is not None else None
+        elif self.density.basis == "e3nn" and target == "fhi-aims":
+            conv = FHIaimsE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_fhiaims(self.hamiltonian)
+            ovl = conv.matrix_to_fhiaims(self.overlap)
+            den = conv.matrix_to_fhiaims(self.density)
             box = (
-                # box @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
                 box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
                 if box is not None
                 else None
