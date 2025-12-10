@@ -136,33 +136,110 @@ class Snapshot:
         - Enforces a deterministic edge order to ensure reproducibility and consistent batching.
         - Separates self-interactions (diagonal) from inter-atomic interactions (off-diagonal).
         - Uses Euclidean distance for sorting off-diagonal edges.
+        - "Diagonal" means src == dst AND shift == (0, 0, 0).
+        - Tie-breaking for off-diagonal edges uses the lexicographical order of (sx, sy, sz, src, dst).
         </assumptions>
         <implementation>
-        - (Not yet implemented)
-        - Would iterate over all keys.
-        - For each key, split edges into diagonal and off-diagonal sets.
-        - Sort diagonal edges by atom index `i`.
-        - Sort off-diagonal edges by computed edge length.
-        - Concatenate sorted indices and reorder blocks/edges using `reorder_edges`.
+        - Computes edge distances using `_edge_distances`.
+        - Iterates over each key in the density matrix.
+        - For each key:
+            - Identifies diagonal edges (src == dst & shift == 0).
+            - Identifies off-diagonal edges.
+            - Sorts diagonal edges by atom index.
+            - Sorts off-diagonal edges by (distance, sx, sy, sz, src, dst).
+            - Concatenates indices and stores in `order_dict`.
+        - Applies `reorder_edges` to Hamiltonian, Overlap, and Density matrices.
+        - Returns a new Snapshot with reordered matrices.
         </implementation>
         """
+        dists = self._edge_distances(self.density)
+        order_dict = {}
 
-        raise NotImplementedError("canonicalize_edges is not implemented yet.")
+        for key in self.density.pair_edges.keys():
+            edges = self.density.pair_edges[key]  # (5, E)
+            # edges rows: 0:sx, 1:sy, 2:sz, 3:src, 4:dst
 
-        # return Snapshot(
-        #     new_mats["hamiltonian"],
-        #     new_mats["overlap"],
-        #     new_mats["density"],
-        #     positions=self.positions,
-        #     forces=self.forces,
-        #     box=self.box,
-        #     stress=self.stress,
-        #     matrix_path=self.matrix_path,
-        #     info_path=self.info_path,
-        #     cutoff_radius=self.cutoff_radius,
-        #     cfg=self.cfg,
-        #     info=self.info,
-        # )
+            # Get distances for this key
+            D = dists[key]  # (E,)
+
+            num_edges = edges.shape[1]
+            indices = torch.arange(num_edges, device=edges.device)
+
+            # Identify diagonal edges: src == dst AND sx==0 AND sy==0 AND sz==0
+            sx = edges[0]
+            sy = edges[1]
+            sz = edges[2]
+            src = edges[3]
+            dst = edges[4]
+
+            is_diag = (src == dst) & (sx == 0) & (sy == 0) & (sz == 0)
+
+            diag_indices = indices[is_diag]
+            off_diag_indices = indices[~is_diag]
+
+            # Sort diagonal indices by src
+            diag_src = src[diag_indices]
+            perm_diag = torch.argsort(diag_src)
+            sorted_diag_indices = diag_indices[perm_diag]
+
+            # Sort off-diagonal indices
+            # Primary key: distance
+            # Tie-breaker: sx, sy, sz, src, dst
+            od_idx = off_diag_indices
+            od_d = D[od_idx]
+            od_edges = edges[:, od_idx]  # (5, E_od)
+
+            # Move to CPU for sorting
+            od_d_cpu = od_d.cpu().tolist()
+            od_edges_cpu = od_edges.t().cpu().tolist()  # List of [sx, sy, sz, src, dst]
+            od_idx_cpu = od_idx.cpu().tolist()
+
+            # Combine into a list of tuples
+            # (dist, sx, sy, sz, src, dst, original_idx)
+            to_sort = []
+            for i in range(len(od_idx_cpu)):
+                row = od_edges_cpu[i]  # [sx, sy, sz, src, dst]
+                to_sort.append(
+                    (
+                        od_d_cpu[i],
+                        row[0],
+                        row[1],
+                        row[2],
+                        row[3],
+                        row[4],
+                        od_idx_cpu[i],
+                    )
+                )
+
+            to_sort.sort()
+
+            sorted_off_diag_indices = torch.tensor(
+                [x[-1] for x in to_sort], device=edges.device, dtype=torch.long
+            )
+
+            # Concatenate
+            final_indices = torch.cat([sorted_diag_indices, sorted_off_diag_indices])
+            order_dict[key] = final_indices
+
+        # Apply reordering
+        new_ham = self.hamiltonian.reorder_edges(order_dict)
+        new_ovl = self.overlap.reorder_edges(order_dict)
+        new_den = self.density.reorder_edges(order_dict)
+
+        return Snapshot(
+            new_ham,
+            new_ovl,
+            new_den,
+            positions=self.positions,
+            forces=self.forces,
+            box=self.box,
+            stress=self.stress,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
+            info=self.info,
+        )
 
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:

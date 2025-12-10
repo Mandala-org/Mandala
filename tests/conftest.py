@@ -2,11 +2,11 @@ import pytest
 from pathlib import Path
 import torch
 
-from core.orbital_irrep_config import OrbitalIrrepConfig
-from data.openmx_parser import parse_openmx_scfout
-from data.snapshot import Snapshot
-from data.factory import DatasetFactory
-from net.common import Config
+from src.core.orbital_irrep_config import OrbitalIrrepConfig
+from src.data.openmx_parser import parse_openmx_scfout
+from src.data.snapshot import Snapshot
+from src.data.factory import DatasetFactory
+from src.net.common import Config
 
 
 @pytest.fixture(scope="session")
