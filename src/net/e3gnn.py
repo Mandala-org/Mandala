@@ -174,6 +174,7 @@ class E3GNN(pl.LightningModule):
             edges = payload["edges"]
             pair_vec[key] = vec
             pair_edges[key] = edges
+            #! Edge manipulation
             for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
                 lookup[(sx, sy, sz, i, j)] = (key, idx)
 
@@ -194,6 +195,7 @@ class E3GNN(pl.LightningModule):
 
         # If edge features are not precomputed, compute them on the fly
         if not self.cfg.precompute_edge_features:
+            #! Edge manipulation
             (
                 edge_index,
                 edge_shift,
@@ -212,6 +214,7 @@ class E3GNN(pl.LightningModule):
             )
 
             # Update x with the newly computed features
+            #! Edge manipulation
             x["edge_index"] = edge_index
             x["edge_shift"] = edge_shift
             x["edge_type_idx"] = edge_type_idx
@@ -237,6 +240,7 @@ class E3GNN(pl.LightningModule):
         num_self_edges = x["num_self_edges"]
 
         edge_small = edge[num_self_edges:index_gnn_cutoff]
+        #! Edge manipulation
         ei_small = x["edge_index"][:, num_self_edges:index_gnn_cutoff]
 
         for idx, blk in enumerate(self.mp_small):
@@ -246,6 +250,7 @@ class E3GNN(pl.LightningModule):
 
         edge_only_large = edge[index_gnn_cutoff:]
         edge_large = torch.cat([edge_small, edge_only_large], dim=0)
+        #! Edge manipulation
         ei_large = x["edge_index"][:, num_self_edges:]
 
         for idx, blk in enumerate(self.mp_large):
@@ -259,6 +264,7 @@ class E3GNN(pl.LightningModule):
 
         # head_edge_index = x["edge_index"]
         # concatenate edge_index with edge shift
+        #! Edge manipulation
         head_edge_index = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
         head_edge_type_idx = x["edge_type_idx"]
         head_embeddings = torch.cat([node, edge_large], dim=0)

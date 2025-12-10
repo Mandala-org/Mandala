@@ -56,6 +56,7 @@ class BlockMatrix:
         return cls(tuple(atoms), Counter(atoms), {}, {}, {}, orbital_cfg, basis)
 
     # --------------- dict-like access -------------------------------------- #
+    #! Edge manipulation
     def __getitem__(self, item):
         # item = (i, j) global indices, sum periodic images
         if isinstance(item, tuple) and len(item) == 2:
@@ -90,6 +91,7 @@ class BlockMatrix:
     # ─────────────────────────────────────────────────────────────────────────
     #   helpers to access diagonal / off-diagonal blocks
     # ─────────────────────────────────────────────────────────────────────────
+    #! Edge manipulation
     def diag(self) -> Dict[PairKey, torch.Tensor]:
         """
         Return a **dict** ``key → tensor`` that contains *only the blocks whose
@@ -107,6 +109,7 @@ class BlockMatrix:
 
         return diag_dict
 
+    #! Edge manipulation
     def offdiag(self) -> Dict[PairKey, torch.Tensor]:
         """
         Same as :meth:`diag` but returns the **off-diagonal** blocks
@@ -123,6 +126,7 @@ class BlockMatrix:
         return off_dict
 
     # --------------- device handling --------------------------------------- #
+    #! Edge manipulation
     def to(self, device):
         new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
         new_edges = {k: v.to(device) for k, v in self.pair_edges.items()}
@@ -154,6 +158,7 @@ class BlockMatrix:
 
         # ------------------------------------------------------------------ transpose
 
+    #! Edge manipulation
     def transpose(self) -> "BlockMatrix":
         """
         Return a **new** snapshot representing the transposed matrix.
@@ -179,6 +184,7 @@ class BlockMatrix:
         for key, t_edges in transposed_edges.items():
             if key in self.pair_edges:
                 # This key existed in the original matrix. We should match its edge order.
+                #! Edge manipulation
                 original_edges = self.pair_edges[key]
 
                 # Build a map from a transposed edge to its current index.
@@ -231,6 +237,7 @@ class BlockMatrix:
         return self._replace_pair_blocks(new_blocks, basis=self.basis)
 
     # ------------------------------------------------------------------ edge reordering
+    #! Edge manipulation
     def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
         """
         Re-order edge *rows* for given keys. ``order_dict`` maps
@@ -263,6 +270,7 @@ class BlockMatrix:
 
     # ------------------------------------------------------------------ arithmetic
     # private helper ------------------------------------------------------------
+    #! Edge manipulation
     def _align_with(self, other: "BlockMatrix") -> Tuple["BlockMatrix", "BlockMatrix"]:
         """Make sure the matrices have the same atoms, basis, orbital_cfg and edge order."""
         if not isinstance(other, BlockMatrix):
@@ -386,6 +394,7 @@ class BlockMatrix:
         torch.save(self._to_payload(), path)
 
     # ------------------ alternate constructors ---------------------------
+    #! Edge manipulation
     @classmethod
     def load(cls, path, device="cpu") -> "BlockMatrix":
         import torch
@@ -436,6 +445,7 @@ class BlockMatrix:
             basis=basis,
         )
 
+    #! Edge manipulation
     def _apply_edge_mask(
         self,
         mask_dict: Dict[PairKey, torch.Tensor | Sequence[bool]],
@@ -535,6 +545,7 @@ class BlockMatrix:
         )
 
     # ------------------------ alternate constructor -----------------------------
+    #! Edge manipulation
     @classmethod
     def from_dense(
         cls,
@@ -592,6 +603,7 @@ class BlockMatrix:
 
         # ---------------------------------------------------------------- sparsify
 
+    #! Edge manipulation
     def sparsify(self, threshold: float) -> "BlockMatrix":
         """
         Return a **new** snapshot in which only blocks whose root-mean-square
@@ -631,6 +643,7 @@ class BlockMatrix:
 
             if torch.any(keep):
                 blk_kept = blk[keep]
+                #! Edge manipulation
                 edges_kept = self.pair_edges[key][:, keep]
 
                 new_blocks[key] = blk_kept
@@ -652,6 +665,7 @@ class BlockMatrix:
         )
 
     # ----------------------------------------------------------------- reload from payload
+    #! Edge manipulation
     @classmethod
     def from_payload(
         cls, payload: dict, device: str | torch.device = "cpu"
@@ -775,6 +789,7 @@ class IrrepsBlockData:
     # ─────────────────────────────────────────────────────────────────────────
     #   diag / offdiag access for vector form
     # ─────────────────────────────────────────────────────────────────────────
+    #! Edge manipulation
     def diag(self) -> Dict[PairKey, torch.Tensor]:
         diag_dict: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
@@ -785,6 +800,7 @@ class IrrepsBlockData:
             diag_dict[key] = vec[:n_atoms]
         return diag_dict
 
+    #! Edge manipulation
     def offdiag(self) -> Dict[PairKey, torch.Tensor]:
         off_dict: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
@@ -797,6 +813,7 @@ class IrrepsBlockData:
         return off_dict
 
     # -------- indexing paralleling BlockMatrix -------- #
+    #! Edge manipulation
     def __getitem__(self, item):
         # item = (i, j) global indices, sum periodic images
         if isinstance(item, tuple) and len(item) == 2:
@@ -846,6 +863,7 @@ class IrrepsBlockData:
         torch.save(self._to_payload(), path)
 
     # --------------------- alternate constructor ----------------------------- #
+    #! Edge manipulation
     @classmethod
     def load(cls, path, device="cpu") -> "IrrepsBlockData":
         import torch

@@ -124,6 +124,7 @@ class Snapshot:
                 )
 
     # ---------------------------------------------------------------- edge ordering
+    #! Edge manipulation
     def canonicalize_edges(self) -> "Snapshot":
         """
         Return a new Snapshot with a canonical edge ordering for each key.
@@ -150,10 +151,12 @@ class Snapshot:
         # )
 
     # ---------------------------------------------------------------- physics helpers
+    #! Edge manipulation
     def get_number_of_electrons(self) -> torch.Tensor:
         """Return *scalar* Tr(D·S)."""
         return trace_matmul_sparse_block_matrix(self.density, self.overlap)
 
+    #! Edge manipulation
     def get_energy(self) -> torch.Tensor:
         """Return *scalar* Tr(D·H)."""
         return trace_matmul_sparse_block_matrix(self.hamiltonian, self.density)
@@ -172,6 +175,7 @@ class Snapshot:
         torch.save(self._payload(), path)
 
     # helper to reconstruct one BlockMatrix from saved payload ----------
+    #! Edge manipulation
     @staticmethod
     def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> BlockMatrix:
         from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -202,6 +206,7 @@ class Snapshot:
         )
 
     # public classmethod ----------------------------------------------------
+    #! Edge manipulation
     @classmethod
     def load(cls, path: str | os.PathLike, *, device="cpu") -> "Snapshot":
         payload_top = torch.load(path, map_location="cpu")
@@ -265,6 +270,7 @@ class Snapshot:
             return self
 
         cfg = self.density.orbital_cfg
+        #! Edge manipulation
         any_block = next(iter(self.hamiltonian.pair_blocks.values()))
         device = any_block.device
         pos = self.positions
@@ -410,6 +416,7 @@ class Snapshot:
         )
 
     # -------------------------------------------------------------------- helpers
+    #! Edge manipulation
     def _edge_displacements(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
@@ -426,7 +433,9 @@ class Snapshot:
         vecs: Dict[str, torch.Tensor] = {}
 
         for key, edges in mat.pair_edges.items():
+            #! Edge manipulation
             sx, sy, sz, src, dst = edges
+            #! Edge manipulation
             edge_shift = (
                 torch.stack([sx, sy, sz], dim=-1)
                 .to(self.positions.device)
@@ -441,6 +450,7 @@ class Snapshot:
 
         return vecs
 
+    #! Edge manipulation
     def _edge_distances(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
@@ -449,6 +459,7 @@ class Snapshot:
         return {k: torch.linalg.norm(v, dim=-1) for k, v in disp.items()}
 
     # -------------------- public API -------------------------------------------
+    #! Edge manipulation
     def max_distance(self, which: str = "density") -> torch.Tensor:
         """
         Largest minimal-image distance appearing in *which* sparse matrix.
@@ -457,6 +468,7 @@ class Snapshot:
         d = self._edge_distances(mat)
         return torch.stack([v.max() for v in d.values()]).max()
 
+    #! Edge manipulation
     def filter_by_distance(self, cutoff: float, which: str = "density") -> "Snapshot":
         """
         Return a **new** snapshot where edges whose minimal-image distance
@@ -606,6 +618,7 @@ class Snapshot:
 
         return grid, dos
 
+    #! Edge manipulation
     def export_to_deephe3(self, path: str | os.PathLike):
         """
         Export the snapshot to the DeepH-E3 format.
@@ -655,6 +668,7 @@ class Snapshot:
         # save_hamiltonians
         with h5py.File(path / "hamiltonians.h5", "w") as f:
             for key in self.hamiltonian.keys():
+                #! Edge manipulation
                 edges = self.hamiltonian.pair_edges[key]
                 blocks = self.hamiltonian.pair_blocks[key]
 

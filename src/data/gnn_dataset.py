@@ -215,6 +215,7 @@ class E3GNNDataset(Dataset):
             matrix_name = self.cfg.matrix_targets[0]
             for key in y[matrix_name].pair_edges.keys():
                 edge_type_id = self.mapper.edge_type2idx[key]
+                #! Edge manipulation
                 edges_t = y[matrix_name].pair_edges[key]
                 edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
                 edge_shift_p = x["edge_shift"][:, x["edge_type_idx"] == edge_type_id]
