@@ -335,6 +335,8 @@ class E3GNN(pl.LightningModule):
                     raise ValueError(f"Key {key} not found in predicted items.")
                 preds = p_items[key]
                 targets = t_items[key]
+                print(f"{key} {preds.shape=}, {targets.shape=}")
+                print(f"{y['target_index_map'][key].shape=}")
                 preds_summed = scatter_add(preds, y["target_index_map"][key], dim=0)
 
                 mse_val += self._mse(preds_summed, targets)

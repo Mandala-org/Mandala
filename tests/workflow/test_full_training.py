@@ -23,8 +23,8 @@ def test_full_training_workflow(train_target, tmp_path):
     # 1. Create a configuration for a quick test run
     cfg = Config(
         # Data
-        cutoff_gnn=5.0,
-        cutoff_matrix=9.0,
+        cutoff_gnn=8.0,
+        cutoff_matrix=8.0,
         # Model
         l_max_gnn=1,
         l_max_matrix=1,
