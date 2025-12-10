@@ -218,7 +218,7 @@ class E3GNNDataset(Dataset):
                 edges_t = y[matrix_name].pair_edges[key]
                 edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
                 edge_shift_p = x["edge_shift"][x["edge_type_idx"] == edge_type_id, :].T
-                edges_p = torch.cat([edges_p, edge_shift_p], dim=0)
+                edges_p = torch.cat([edge_shift_p, edges_p], dim=0)
                 edge_t_to_id = {
                     tuple(edge.tolist()): i for i, edge in enumerate(edges_t.T)
                 }

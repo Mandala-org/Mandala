@@ -181,10 +181,10 @@ def parse_openmx_scfout(
             pair_edges[key] = []
             for (i, j, rn), _ in items:
                 sx, sy, sz = rn_shift_map[rn]
-                pair_edges[key].append([i, j, sx, sy, sz])
+                pair_edges[key].append([sx, sy, sz, i, j])
             for idx, ((i, j, rn), _) in enumerate(items):
                 sx, sy, sz = rn_shift_map[rn]
-                lookup[(i, j, sx, sy, sz)] = (key, idx)
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         pair_blocks_t = {k: torch.stack(v) for k, v in pair_blocks.items()}
         pair_edges_t = {
@@ -202,10 +202,10 @@ def parse_openmx_scfout(
         # 2. Test whether lookup contains all edges
         if len(lookup) != len(all_edges):
             raise OpenMXParseError("Lookup size does not match edge count")
-        for i, j, sx, sy, sz in all_edges:
-            if (i, j, sx, sy, sz) not in lookup:
-                raise OpenMXParseError(f"Edge {(i, j, sx, sy, sz)} not found in lookup")
-            key, idx = lookup[(i, j, sx, sy, sz)]
+        for sx, sy, sz, i, j in all_edges:
+            if (sx, sy, sz, i, j) not in lookup:
+                raise OpenMXParseError(f"Edge {(sx, sy, sz, i, j)} not found in lookup")
+            key, idx = lookup[(sx, sy, sz, i, j)]
             if key not in pair_blocks_t or idx >= len(pair_blocks_t[key]):
                 raise OpenMXParseError(
                     f"Edge {(i, j, sx, sy, sz)} lookup points to invalid block"

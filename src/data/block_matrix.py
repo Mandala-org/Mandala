@@ -72,14 +72,14 @@ class BlockMatrix:
             if ret is None:
                 raise KeyError(f"No blocks found for indices {item}")
             return ret
-        # item = (i, j, sx, sy, sz) global indices
+        # item = (sx, sy, sz, i, j) global indices
         if isinstance(item, tuple) and len(item) == 5:
             key, k = self.lookup[item]
             return self.pair_blocks[key][k]
         # item = "A-B"
         if isinstance(item, str):
             return self.pair_blocks[item]
-        raise KeyError("use (i,j), (i,j,sx,sy,sz) or 'A-B'")
+        raise KeyError("use (i,j), (sx,sy,sz,i,j) or 'A-B'")
 
     def edges(self, key: PairKey) -> torch.Tensor:
         return self.pair_edges[key]
@@ -168,7 +168,7 @@ class BlockMatrix:
             transposed_blocks[new_key] = blk.transpose(-1, -2).clone()
             edges = self.pair_edges[key]
             transposed_edges[new_key] = torch.stack(
-                [edges[1], edges[0], -edges[2], -edges[3], -edges[4]]
+                [-edges[0], -edges[1], -edges[2], edges[4], edges[3]]
             )
 
         final_blocks = {}
@@ -208,8 +208,8 @@ class BlockMatrix:
         # Rebuild lookup
         new_lookup = {}
         for key, edges in final_edges.items():
-            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
-                new_lookup[(i, j, sx, sy, sz)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                new_lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -248,8 +248,8 @@ class BlockMatrix:
                 edges = self.pair_edges[key]
             pair_blocks[key] = blk
             pair_edges[key] = edges
-            for new_k, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
-                lookup[(i, j, sx, sy, sz)] = (key, new_k)
+            for new_k, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, new_k)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -358,7 +358,7 @@ class BlockMatrix:
         dtype = next(iter(self.pair_blocks.values())).dtype
         dense = torch.zeros(total, total, device=device, dtype=dtype)
 
-        for (i, j, _sx, _sy, _sz), (key, k) in self.lookup.items():
+        for (_sx, _sy, _sz, i, j), (key, k) in self.lookup.items():
             d_i, d_j = self.orbital_cfg.block_dims(key)
             r0 = int(offsets[i])
             c0 = int(offsets[j])
@@ -403,8 +403,8 @@ class BlockMatrix:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
-                lookup[(i, j, sx, sy, sz)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter
@@ -469,8 +469,8 @@ class BlockMatrix:
 
             pair_blocks[key] = blk_kept
             pair_edges[key] = edges_kept
-            for idx, (i, j, sx, sy, sz) in enumerate(edges_kept.t().tolist()):
-                lookup[(i, j, sx, sy, sz)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges_kept.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -574,8 +574,8 @@ class BlockMatrix:
                     pair_blocks[key], pair_edges[key] = [], []
                 local_idx = len(pair_blocks[key])
                 pair_blocks[key].append(blk)
-                pair_edges[key].append([i, j, 0, 0, 0])
-                lookup[(i, j, 0, 0, 0)] = (key, local_idx)
+                pair_edges[key].append([0, 0, 0, i, j])
+                lookup[(0, 0, 0, i, j)] = (key, local_idx)
         print("Warning: from_dense currently assumes no periodic images!")
         # stack
         pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
@@ -637,8 +637,8 @@ class BlockMatrix:
                 new_edges[key] = edges_kept
 
                 # rebuild lookup for the surviving edges of this key
-                for local_idx, (i, j, sx, sy, sz) in enumerate(edges_kept.t().tolist()):
-                    new_lookup[(i, j, sx, sy, sz)] = (key, local_idx)
+                for local_idx, (sx, sy, sz, i, j) in enumerate(edges_kept.t().tolist()):
+                    new_lookup[(sx, sy, sz, i, j)] = (key, local_idx)
 
         # assemble the sparsified snapshot
         return BlockMatrix(
@@ -670,8 +670,8 @@ class BlockMatrix:
         # rebuild lookup table
         lookup: Dict[Tuple[int, int], Tuple[str, int]] = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
-                lookup[(i, j, sx, sy, sz)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter
@@ -815,14 +815,14 @@ class IrrepsBlockData:
             if ret is None:
                 raise KeyError(f"No vectors found for indices {item}")
             return ret
-        # item = (i, j, sx, sy, sz) global indices
+        # item = (sx, sy, sz, i, j) global indices
         if isinstance(item, tuple) and len(item) == 5:
             key, k = self.lookup[item]
             return self.pair_vectors[key][k]
         # item = "A-B"
         if isinstance(item, str):
             return self.pair_vectors[item]
-        raise KeyError("use (i,j), (i,j,sx,sy,sz) or 'A-B'")
+        raise KeyError("use (i,j), (sx,sy,sz,i,j) or 'A-B'")
 
     # ------------------------------------------------------------------ serialisation
     def _to_payload(self) -> dict:
@@ -863,8 +863,8 @@ class IrrepsBlockData:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
-                lookup[(i, j, sx, sy, sz)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter

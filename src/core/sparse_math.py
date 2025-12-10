@@ -35,8 +35,8 @@ def trace_matmul_sparse(
     lookup = {tuple(p): k for k, p in enumerate(pairs)}
 
     out = torch.zeros((), dtype=blocks_a.dtype, device=blocks_a.device)
-    for k, (i, j, sx, sy, sz) in enumerate(pairs):
-        rev = (j, i, -sx, -sy, -sz)
+    for k, (sx, sy, sz, i, j) in enumerate(pairs):
+        rev = (-sx, -sy, -sz, j, i)
         rev_k = lookup.get(rev, None)
         if rev_k is None:
             continue
@@ -77,10 +77,10 @@ def trace_matmul_sparse_block_matrix(A: BlockMatrix, B: BlockMatrix) -> torch.Te
         device=list(A.pair_blocks.values())[0].device,
         requires_grad=True,
     )
-    for (i, j, sx, sy, sz), (key, k) in A.lookup.items():
-        if (j, i, -sx, -sy, -sz) not in B.lookup:
+    for (sx, sy, sz, i, j), (key, k) in A.lookup.items():
+        if (-sx, -sy, -sz, j, i) not in B.lookup:
             continue
-        key_rev, k_rev = B.lookup[(j, i, -sx, -sy, -sz)]
+        key_rev, k_rev = B.lookup[(-sx, -sy, -sz, j, i)]
         out = out + torch.trace(A.pair_blocks[key][k] @ B.pair_blocks[key_rev][k_rev])
     return out
 
@@ -111,15 +111,15 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
 
         # map (j,i) tuple -> index in B
         mapping = {
-            tuple(map(int, (i, j, sx, sy, sz))): idx
-            for idx, (i, j, sx, sy, sz) in enumerate(edges_b_rev.t())
+            tuple(map(int, (sx, sy, sz, i, j))): idx
+            for idx, (sx, sy, sz, i, j) in enumerate(edges_b_rev.t())
         }
 
         # build index list such that order matches edges_a
         idx_rev = torch.tensor(
             [
-                mapping[tuple(map(int, (j, i, -sx, -sy, -sz)))]
-                for i, j, sx, sy, sz in edges_a.t()
+                mapping[tuple(map(int, (-sx, -sy, -sz, j, i)))]
+                for sx, sy, sz, i, j in edges_a.t()
             ],
             device=blk_a.device,
         )

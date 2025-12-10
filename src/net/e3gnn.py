@@ -174,8 +174,8 @@ class E3GNN(pl.LightningModule):
             edges = payload["edges"]
             pair_vec[key] = vec
             pair_edges[key] = edges
-            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
-                lookup[(i, j, sx, sy, sz)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         irreps_blocks = IrrepsBlockData(
             atoms=atoms,
@@ -259,7 +259,7 @@ class E3GNN(pl.LightningModule):
 
         # head_edge_index = x["edge_index"]
         # concatenate edge_index with edge shift
-        head_edge_index = torch.cat([x["edge_index"], x["edge_shift"].T], dim=0)
+        head_edge_index = torch.cat([x["edge_shift"].T, x["edge_index"]], dim=0)
         head_edge_type_idx = x["edge_type_idx"]
         head_embeddings = torch.cat([node, edge_large], dim=0)
 

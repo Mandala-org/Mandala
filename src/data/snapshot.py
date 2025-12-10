@@ -31,7 +31,6 @@ import os
 import json
 from pathlib import Path
 from typing import Dict, Any
-import numpy as np
 import torch
 import h5py
 from ase import Atoms
@@ -132,96 +131,23 @@ class Snapshot:
         1. Diagonal edges, sorted by their node index.
         2. Off-diagonal edges, sorted by the distance (ascending).
         """
-        from ase.neighborlist import neighbor_list
 
-        mat = next(iter(self._mats.values()))
+        raise NotImplementedError("canonicalize_edges is not implemented yet.")
 
-        ase_atoms = Atoms(
-            symbols=mat.atoms,
-            positions=self.positions.detach().cpu().numpy(),
-            cell=self.box.detach().cpu().numpy() if self.box is not None else None,
-            pbc=self.box is not None,
-        )
-
-        src, dst, shift, distances = neighbor_list(
-            "ijSd", ase_atoms, self.cfg.cutoff_matrix, self_interaction=True
-        )
-        # get rid of duplicate edges due to periodic images (only pick the shortest)
-        # (i, j) is the edge, and we want to keep the one with the smallest distance
-        edge_to_distance = {}
-        for i in range(len(src)):
-            edge = (src[i], dst[i], shift[i][0], shift[i][1], shift[i][2])
-            dist = distances[i]
-            key = tuple(map(int, edge))
-            if key not in edge_to_distance or dist < edge_to_distance[key]:
-                edge_to_distance[key] = dist
-
-        order_dict = {}
-        for matrix_name in self._mats:
-            order_dict[matrix_name] = {}
-            for key, edges in self._mats[matrix_name].pair_edges.items():
-                is_diag_mask = (edges[0] == edges[1]) & edges[2:5].eq(0).all(dim=0)
-
-                # Get the sorting permutation for the diagonal edges
-                # perm = torch.argsort(edges[0] + edges[1] * 1e6)
-                perm = torch.tensor(
-                    np.lexsort(
-                        (
-                            edges[4].cpu().numpy(),
-                            edges[3].cpu().numpy(),
-                            edges[2].cpu().numpy(),
-                            edges[1].cpu().numpy(),
-                            edges[0].cpu().numpy(),
-                        )
-                    )
-                ).to(edges.device)
-                diag_mask = is_diag_mask[perm]
-                perm_diag = perm[diag_mask]
-
-                # Sort off-diagonal edges distance
-                edge_distances = torch.zeros(edges.shape[1], dtype=torch.float32)
-                for i in range(edges.shape[1]):
-                    edge = tuple(edges[:, i].tolist())
-                    try:
-                        edge_distances[i] = edge_to_distance[edge]
-                    except KeyError:
-                        raise Exception(
-                            f"Edge {edge} not found in neighbor list. "
-                            "Increase cutoff_matrix in config"
-                        )
-
-                # Use lexsort to pre-sort off-diagonal edges
-                offdiag_mask = ~diag_mask
-                perm_offdiag_lex = perm[offdiag_mask]
-
-                # Sort by distance (stable sort preserves lex order)
-                edge_distances = edge_distances.to(edges.device)
-                dists_lex = edge_distances[perm_offdiag_lex]
-                sort_idx = torch.argsort(dists_lex)
-                perm_offdiag = perm_offdiag_lex[sort_idx]
-
-                order_dict[matrix_name][key] = torch.cat([perm_diag, perm_offdiag])
-
-        # Apply the SAME permutation to every matrix
-        new_mats = {
-            name: mat.reorder_edges(order_dict[name])
-            for name, mat in self._mats.items()
-        }
-
-        return Snapshot(
-            new_mats["hamiltonian"],
-            new_mats["overlap"],
-            new_mats["density"],
-            positions=self.positions,
-            forces=self.forces,
-            box=self.box,
-            stress=self.stress,
-            matrix_path=self.matrix_path,
-            info_path=self.info_path,
-            cutoff_radius=self.cutoff_radius,
-            cfg=self.cfg,
-            info=self.info,
-        )
+        # return Snapshot(
+        #     new_mats["hamiltonian"],
+        #     new_mats["overlap"],
+        #     new_mats["density"],
+        #     positions=self.positions,
+        #     forces=self.forces,
+        #     box=self.box,
+        #     stress=self.stress,
+        #     matrix_path=self.matrix_path,
+        #     info_path=self.info_path,
+        #     cutoff_radius=self.cutoff_radius,
+        #     cfg=self.cfg,
+        #     info=self.info,
+        # )
 
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:
@@ -500,7 +426,7 @@ class Snapshot:
         vecs: Dict[str, torch.Tensor] = {}
 
         for key, edges in mat.pair_edges.items():
-            src, dst, sx, sy, sz = edges
+            sx, sy, sz, src, dst = edges
             edge_shift = (
                 torch.stack([sx, sy, sz], dim=-1)
                 .to(self.positions.device)
@@ -732,13 +658,13 @@ class Snapshot:
                 edges = self.hamiltonian.pair_edges[key]
                 blocks = self.hamiltonian.pair_blocks[key]
 
-                # edges rows: 0:src, 1:dst, 2:sx, 3:sy, 4:sz
+                # edges rows: 0:sx, 1:sy, 2:sz, 3:src, 4:dst
                 for i in range(edges.shape[1]):
-                    src = edges[0, i].item()
-                    dst = edges[1, i].item()
-                    sx = edges[2, i].item()
-                    sy = edges[3, i].item()
-                    sz = edges[4, i].item()
+                    sx = edges[0, i].item()
+                    sy = edges[1, i].item()
+                    sz = edges[2, i].item()
+                    src = edges[3, i].item()
+                    dst = edges[4, i].item()
 
                     # Key format: [sx, sy, sz, src, dst]
                     name = str([sx, sy, sz, src, dst])
