@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from e3nn.o3 import Irreps, spherical_harmonics
 from e3nn.math import soft_one_hot_linspace
@@ -132,15 +131,21 @@ def compute_graph_features(
     )
 
     # 5. Calculate displacement vectors using the offsets
-    # disp = pos[j] + S @ box - pos[i]
-    offdiag_disp_unsorted = (
-        positions[offdiag_edge_dst_unsorted]
-        + torch.matmul(
-            offdiag_edge_shift_unsorted.T.to(positions.device).to(torch.float32),
-            box.to(positions.device),
+    # disp = pos[j] - pos[i] + S @ box
+    # Match the calculation in Snapshot._edge_displacements exactly (order and dtype)
+    if box is not None:
+        shift_float = offdiag_edge_shift_unsorted.T.to(positions.device).to(
+            positions.dtype
         )
-        - positions[offdiag_edge_src_unsorted]
-    )
+        offdiag_disp_unsorted = (
+            positions[offdiag_edge_dst_unsorted]
+            - positions[offdiag_edge_src_unsorted]
+            + shift_float @ box.to(positions.device)
+        )
+    else:
+        offdiag_disp_unsorted = (
+            positions[offdiag_edge_dst_unsorted] - positions[offdiag_edge_src_unsorted]
+        )
 
     if cfg.safety_checks:
         # check if displacements lead to correct destinations
@@ -163,56 +168,44 @@ def compute_graph_features(
 
     self_disp = torch.zeros((num_atoms, 3), device=positions.device)
 
-    # 6. Sort lexicographically the off-diagonal edges
-    # to have a deterministic order for testing
-    # edges_full_unsorted = torch.cat(
-    #     offdiag_edge_src_unsorted.reshape((-1, 1)),
-    #     offdiag_edge_dst_unsorted.reshape((-1, 1)),
-    #     offdiag_edge_shift_unsorted,
-    #     dim=-1
-    # )
-    # sorted_indices = torch.argsort(edges_full_unsorted, stable=True)
-    sorted_indices = torch.tensor(
-        np.lexsort(
-            (
-                offdiag_edge_shift_unsorted[2, :].numpy(),
-                offdiag_edge_shift_unsorted[1, :].numpy(),
-                offdiag_edge_shift_unsorted[0, :].numpy(),
-                offdiag_edge_dst_unsorted.numpy(),
-                offdiag_edge_src_unsorted.numpy(),
-            )
-        )
-    )
-    #! Edge manipulation
-    # <assumptions>
-    # - Deterministic edge ordering is required for reproducibility.
-    # - Sorts by `(src, dst, sx, sy, sz)` (lexicographical).
-    # </assumptions>
-    # <implementation>
-    # - Uses `np.lexsort` (which sorts by last key first).
-    # - Reorders src, dst, and shift tensors.
-    # </implementation>
-    offdiag_edge_src_unsorted = offdiag_edge_src_unsorted[sorted_indices]
-    offdiag_edge_dst_unsorted = offdiag_edge_dst_unsorted[sorted_indices]
-    offdiag_edge_shift_unsorted = offdiag_edge_shift_unsorted[:, sorted_indices]
-    offdiag_disp_unsorted = offdiag_disp_unsorted[sorted_indices]
-
-    # 6. Calculate lengths and sort off-diagonal edges
+    # 6. Sort off-diagonal edges
+    # Match the sorting logic in Snapshot.canonicalize_edges:
+    # Primary key: distance
+    # Tie-breaker: sx, sy, sz, src, dst
 
     offdiag_lengths_unsorted = torch.linalg.norm(offdiag_disp_unsorted, dim=-1)
 
-    sorted_indices = torch.argsort(offdiag_lengths_unsorted, stable=True)
+    # Move to CPU for sorting
+    od_d_cpu = offdiag_lengths_unsorted.cpu().tolist()
+    od_src_cpu = offdiag_edge_src_unsorted.cpu().tolist()
+    od_dst_cpu = offdiag_edge_dst_unsorted.cpu().tolist()
+    od_shift_cpu = (
+        offdiag_edge_shift_unsorted.t().cpu().tolist()
+    )  # List of [sx, sy, sz]
 
-    #! Edge manipulation
-    # <assumptions>
-    # - Sorts off-diagonal edges by length (ascending).
-    # - This enables efficient cutoff for message passing (processing only short edges in early layers).
-    # </assumptions>
-    # <implementation>
-    # - Computes lengths.
-    # - Sorts indices based on length.
-    # - Reorders all edge tensors.
-    # </implementation>
+    # Combine into a list of tuples
+    # (dist, sx, sy, sz, src, dst, original_idx)
+    to_sort = []
+    for i in range(len(od_d_cpu)):
+        shift = od_shift_cpu[i]
+        to_sort.append(
+            (
+                od_d_cpu[i],
+                shift[0],
+                shift[1],
+                shift[2],
+                od_src_cpu[i],
+                od_dst_cpu[i],
+                i,
+            )
+        )
+
+    to_sort.sort()
+
+    sorted_indices = torch.tensor(
+        [x[-1] for x in to_sort], device=positions.device, dtype=torch.long
+    )
+
     offdiag_edge_src = offdiag_edge_src_unsorted[sorted_indices]
     offdiag_edge_dst = offdiag_edge_dst_unsorted[sorted_indices]
     offdiag_edge_shift = offdiag_edge_shift_unsorted[:, sorted_indices]

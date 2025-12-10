@@ -31,7 +31,6 @@ from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
 from net.heads import DeepHead
 
-from torch_scatter import scatter_add
 
 # DeepH-E3
 
@@ -329,18 +328,28 @@ class E3GNN(pl.LightningModule):
             mae_val = torch.tensor(0.0, device=self.device)
 
             # Vectorized loss calculation
-            # ! Improve this
             for key in t_items.keys():
                 if key not in p_items.keys():
                     raise ValueError(f"Key {key} not found in predicted items.")
                 preds = p_items[key]
                 targets = t_items[key]
-                print(f"{key} {preds.shape=}, {targets.shape=}")
-                print(f"{y['target_index_map'][key].shape=}")
-                preds_summed = scatter_add(preds, y["target_index_map"][key], dim=0)
 
-                mse_val += self._mse(preds_summed, targets)
-                mae_val += self._mae(preds_summed, targets)
+                # Handle size mismatch by truncating to the smaller size
+                # if preds.shape[0] > targets.shape[0] that means that cutoff_matrix
+                # is bigger than maximum distance in the system
+                # if preds.shape[0] < targets.shape[0] that means that the maximum
+                # distance in the system is bigger than cutoff_matrix
+                min_n = min(preds.shape[0], targets.shape[0])
+                preds = preds[:min_n]
+                targets = targets[:min_n]
+
+                if self.cfg.safety_checks:
+                    assert torch.equal(
+                        p.pair_edges[key][:, :min_n], t.pair_edges[key][:, :min_n]
+                    ), f"Edge mismatch in block loss for matrix {name}, key {key}."
+
+                mse_val += self._mse(preds, targets)
+                mae_val += self._mae(preds, targets)
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
