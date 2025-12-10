@@ -259,7 +259,7 @@ class E3GNN(pl.LightningModule):
 
         # head_edge_index = x["edge_index"]
         # concatenate edge_index with edge shift
-        head_edge_index = torch.cat([x["edge_shift"].T, x["edge_index"]], dim=0)
+        head_edge_index = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
         head_edge_type_idx = x["edge_type_idx"]
         head_embeddings = torch.cat([node, edge_large], dim=0)
 
