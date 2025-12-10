@@ -216,6 +216,18 @@ class E3GNNDataset(Dataset):
             for key in y[matrix_name].pair_edges.keys():
                 edge_type_id = self.mapper.edge_type2idx[key]
                 #! Edge manipulation
+                # <assumptions>
+                # - Maps edges from the GNN graph (`x`) to the target matrix (`y`).
+                # - `edges_t` (target) follows `(sx, sy, sz, src, dst)` convention.
+                # - `edges_p` (graph) is constructed by concatenating `edge_shift` and `edge_index`.
+                # </assumptions>
+                # <implementation>
+                # - Retrieves target edges.
+                # - Filters graph edges and shifts by edge type.
+                # - Concatenates shift and indices to form `(5, E)` tensor.
+                # - Builds a mapping from edge tuple to target index.
+                # - Creates `tim` tensor mapping graph edges to target indices.
+                # </implementation>
                 edges_t = y[matrix_name].pair_edges[key]
                 edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
                 edge_shift_p = x["edge_shift"][:, x["edge_type_idx"] == edge_type_id]

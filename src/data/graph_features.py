@@ -16,6 +16,18 @@ def _minimal_disp(
     box: torch.Tensor | None,
     inv_box: torch.Tensor | None = None,
 ) -> torch.Tensor:
+    """
+    <assumptions>
+    - Computes the minimal image displacement vector between atoms connected by `edges`.
+    - `edges` is assumed to be a tensor where indices 3 and 4 correspond to `src` and `dst` atom indices respectively (matching `(sx, sy, sz, src, dst)` convention).
+    - If `box` is provided, computes displacement in fractional coordinates, wraps to [-0.5, 0.5], and converts back to Cartesian.
+    </assumptions>
+    <implementation>
+    - Extracts `src` and `dst` indices from `edges`.
+    - Computes `delta = pos[dst] - pos[src]`.
+    - If `box` exists, applies minimum image convention using fractional coordinates.
+    </implementation>
+    """
     if box is None:
         return pos[edges[4]] - pos[edges[3]]
     if inv_box is None:
@@ -47,6 +59,25 @@ def compute_graph_features(
     edge_length_emb : (E_total, cfg.n_radial) float
     edge_sh : (E_total, sh_dim) float
     index_gnn_cutoff : int
+
+    <assumptions>
+    - Constructs the graph structure for the GNN.
+    - Uses `ase.neighborlist` to find all neighbors within `cfg.cutoff_matrix`.
+    - Explicitly adds self-edges for every atom.
+    - Sorts edges such that self-edges come first, followed by off-diagonal edges sorted by length.
+    - This sorting allows efficient splitting of the graph into "small" (short-range) and "large" (long-range) components for message passing.
+    </assumptions>
+    <implementation>
+    1. **Neighbor Search**: Uses ASE to find neighbors `(src, dst, offsets)`.
+    2. **Self-Edges**: Creates self-edges `(i, i)` with shift `(0, 0, 0)`.
+    3. **Displacement**: Computes displacement vectors `pos[dst] - pos[src] + shift @ box`.
+    4. **Sorting**:
+       - First, lexicographical sort of off-diagonal edges for determinism.
+       - Second, sort off-diagonal edges by length (ascending).
+    5. **Concatenation**: Combines self-edges and sorted off-diagonal edges.
+    6. **Features**: Computes spherical harmonics and radial embeddings for the final edge set.
+    7. **Cutoff Index**: Finds the index `index_gnn_cutoff` separating edges within `cfg.cutoff_gnn` from those beyond.
+    </implementation>
     """
 
     # 1. Create ase.Atoms object
@@ -70,6 +101,14 @@ def compute_graph_features(
     # 3. Handle self-edges explicitly
     num_atoms = len(atoms)
     #! Edge manipulation
+    # <assumptions>
+    # - Every atom has exactly one self-edge.
+    # - Self-edge connects atom i to itself with zero shift.
+    # </assumptions>
+    # <implementation>
+    # - Creates `src` and `dst` indices as `0..N-1`.
+    # - Creates `shift` as `(3, N)` zeros.
+    # </implementation>
     self_edge_src = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
     self_edge_dst = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
     self_edge_shift = torch.zeros(
@@ -77,6 +116,15 @@ def compute_graph_features(
     )
 
     # 4. Combine self-edges and off-diagonal edges
+    #! Edge manipulation
+    # <assumptions>
+    # - `ase.neighborlist` returns neighbors within cutoff.
+    # - `offsets` corresponds to the lattice shift vector (integers).
+    # </assumptions>
+    # <implementation>
+    # - Converts numpy arrays from ASE to torch tensors.
+    # - Transposes `offsets` to shape `(3, E)`.
+    # </implementation>
     offdiag_edge_src_unsorted = torch.from_numpy(src).to(positions.device)
     offdiag_edge_dst_unsorted = torch.from_numpy(dst).to(positions.device)
     offdiag_edge_shift_unsorted = (
@@ -135,6 +183,15 @@ def compute_graph_features(
             )
         )
     )
+    #! Edge manipulation
+    # <assumptions>
+    # - Deterministic edge ordering is required for reproducibility.
+    # - Sorts by `(src, dst, sx, sy, sz)` (lexicographical).
+    # </assumptions>
+    # <implementation>
+    # - Uses `np.lexsort` (which sorts by last key first).
+    # - Reorders src, dst, and shift tensors.
+    # </implementation>
     offdiag_edge_src_unsorted = offdiag_edge_src_unsorted[sorted_indices]
     offdiag_edge_dst_unsorted = offdiag_edge_dst_unsorted[sorted_indices]
     offdiag_edge_shift_unsorted = offdiag_edge_shift_unsorted[:, sorted_indices]
@@ -146,6 +203,16 @@ def compute_graph_features(
 
     sorted_indices = torch.argsort(offdiag_lengths_unsorted, stable=True)
 
+    #! Edge manipulation
+    # <assumptions>
+    # - Sorts off-diagonal edges by length (ascending).
+    # - This enables efficient cutoff for message passing (processing only short edges in early layers).
+    # </assumptions>
+    # <implementation>
+    # - Computes lengths.
+    # - Sorts indices based on length.
+    # - Reorders all edge tensors.
+    # </implementation>
     offdiag_edge_src = offdiag_edge_src_unsorted[sorted_indices]
     offdiag_edge_dst = offdiag_edge_dst_unsorted[sorted_indices]
     offdiag_edge_shift = offdiag_edge_shift_unsorted[:, sorted_indices]
@@ -153,6 +220,16 @@ def compute_graph_features(
     offdiag_lengths = offdiag_lengths_unsorted[sorted_indices]
 
     # 7. Combine all edges and features
+    #! Edge manipulation
+    # <assumptions>
+    # - Combines self-edges (first) and sorted off-diagonal edges (second).
+    # - `edge_index` is `(2, E)`: `[src, dst]`.
+    # - `edge_shift` is `(3, E)`: `[sx, sy, sz]`.
+    # </assumptions>
+    # <implementation>
+    # - Concatenates src, dst, shift tensors.
+    # - Stacks src and dst to form `edge_index`.
+    # </implementation>
     edge_src = torch.cat([self_edge_src, offdiag_edge_src])
     edge_dst = torch.cat([self_edge_dst, offdiag_edge_dst])
     edge_shift = torch.cat([self_edge_shift, offdiag_edge_shift], dim=1)
@@ -177,6 +254,16 @@ def compute_graph_features(
         for k1, k2 in zip(all_edge_keys, all_edge_keys_test):
             assert k1 == k2, "Edge keys do not match!"
 
+    #! Edge manipulation
+    # <assumptions>
+    # - Maps each edge to an integer type index based on the element pair "A-B".
+    # - `edge_type2idx` provides the mapping.
+    # </assumptions>
+    # <implementation>
+    # - Iterates over all edge keys.
+    # - Looks up index.
+    # - Converts to tensor.
+    # </implementation>
     edge_type_idx = torch.tensor(
         [edge_type2idx[key] for key in all_edge_keys],
         dtype=torch.long,

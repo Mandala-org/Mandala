@@ -118,6 +118,13 @@ class EdgeUpdateBlock(nn.Module):
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         #! Edge manipulation
+        # <assumptions>
+        # - `edge_index` is a (2, E) tensor where row 0 is source, row 1 is destination.
+        # - Used to gather node features for edge updates.
+        # </assumptions>
+        # <implementation>
+        # - Unpacks `edge_index` into `src` and `dst`.
+        # </implementation>
         src, dst = edge_index
         edge_old = edge
 
@@ -233,6 +240,13 @@ class NodeUpdateBlock(nn.Module):
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
         #! Edge manipulation
+        # <assumptions>
+        # - `edge_index` is a (2, E) tensor where row 0 is source, row 1 is destination.
+        # - `dst` is used as the index for aggregating messages (scatter sum/softmax).
+        # </assumptions>
+        # <implementation>
+        # - Unpacks `edge_index` into `src` and `dst`.
+        # </implementation>
         src, dst = edge_index
         node_old = node
 
