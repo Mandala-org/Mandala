@@ -15,7 +15,7 @@ def _load_snapshot():
     # sample = Path("./data/small/H2O/original/H2O.matrix")
     # atoms = list("HHHHOO")
     # snap = parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
-    cfg = Config()
+    cfg = Config(cutoff_matrix=8.0)
     snap = Snapshot.from_openmx(
         Path("./data/small/H2O/original/H2O.matrix"),
         Path("./data/small/H2O/original/H2O.info.out"),
