@@ -779,7 +779,6 @@ class BlockMatrix:
 
             if torch.any(keep):
                 blk_kept = blk[keep]
-                #! Edge manipulation
                 edges_kept = self.pair_edges[key][:, keep]
 
                 new_blocks[key] = blk_kept

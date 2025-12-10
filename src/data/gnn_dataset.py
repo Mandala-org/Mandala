@@ -229,9 +229,13 @@ class E3GNNDataset(Dataset):
                 # - Creates `tim` tensor mapping graph edges to target indices.
                 # </implementation>
                 edges_t = y[matrix_name].pair_edges[key]
+                print(f"{key} edges_t shape: {edges_t.shape}")
                 edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
+                print(f"{key} edges_p shape: {edges_p.shape}")
                 edge_shift_p = x["edge_shift"][:, x["edge_type_idx"] == edge_type_id]
+                print(f"{key} edge_shift_p shape: {edge_shift_p.shape}")
                 edges_p = torch.cat([edge_shift_p, edges_p], dim=0)
+                print(f"{key} edges_p (with shift) shape: {edges_p.shape}")
                 edge_t_to_id = {
                     tuple(edge.tolist()): i for i, edge in enumerate(edges_t.T)
                 }
@@ -244,6 +248,7 @@ class E3GNNDataset(Dataset):
                     dtype=torch.long,
                 )
                 target_index_map[key] = tim
+                print(f"{key} tim shape: {tim.shape}")
             y["target_index_map"] = target_index_map
 
         return x, y
