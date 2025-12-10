@@ -39,7 +39,7 @@ def compute_graph_features(
     Returns
     -------
     edge_index : (2, E_total) long
-    edge_shift : (E_total, 3) long
+    edge_shift : (3, E_total) long
     edge_type_idx : (E_total,) long
     edge_length_emb : (E_total, cfg.n_radial) float
     edge_sh : (E_total, sh_dim) float
@@ -69,14 +69,14 @@ def compute_graph_features(
     self_edge_src = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
     self_edge_dst = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
     self_edge_shift = torch.zeros(
-        (num_atoms, 3), dtype=torch.long, device=positions.device
+        (3, num_atoms), dtype=torch.long, device=positions.device
     )
 
     # 4. Combine self-edges and off-diagonal edges
     offdiag_edge_src_unsorted = torch.from_numpy(src).to(positions.device)
     offdiag_edge_dst_unsorted = torch.from_numpy(dst).to(positions.device)
     offdiag_edge_shift_unsorted = (
-        torch.from_numpy(offsets).to(positions.device).to(torch.long)
+        torch.from_numpy(offsets).to(positions.device).to(torch.long).T
     )
 
     # 5. Calculate displacement vectors using the offsets
@@ -84,7 +84,7 @@ def compute_graph_features(
     offdiag_disp_unsorted = (
         positions[offdiag_edge_dst_unsorted]
         + torch.matmul(
-            offdiag_edge_shift_unsorted.to(positions.device).to(torch.float32),
+            offdiag_edge_shift_unsorted.T.to(positions.device).to(torch.float32),
             box.to(positions.device),
         )
         - positions[offdiag_edge_src_unsorted]
@@ -123,9 +123,9 @@ def compute_graph_features(
     sorted_indices = torch.tensor(
         np.lexsort(
             (
-                offdiag_edge_shift_unsorted[:, 2].numpy(),
-                offdiag_edge_shift_unsorted[:, 1].numpy(),
-                offdiag_edge_shift_unsorted[:, 0].numpy(),
+                offdiag_edge_shift_unsorted[2, :].numpy(),
+                offdiag_edge_shift_unsorted[1, :].numpy(),
+                offdiag_edge_shift_unsorted[0, :].numpy(),
                 offdiag_edge_dst_unsorted.numpy(),
                 offdiag_edge_src_unsorted.numpy(),
             )
@@ -133,7 +133,7 @@ def compute_graph_features(
     )
     offdiag_edge_src_unsorted = offdiag_edge_src_unsorted[sorted_indices]
     offdiag_edge_dst_unsorted = offdiag_edge_dst_unsorted[sorted_indices]
-    offdiag_edge_shift_unsorted = offdiag_edge_shift_unsorted[sorted_indices]
+    offdiag_edge_shift_unsorted = offdiag_edge_shift_unsorted[:, sorted_indices]
     offdiag_disp_unsorted = offdiag_disp_unsorted[sorted_indices]
 
     # 6. Calculate lengths and sort off-diagonal edges
@@ -144,14 +144,14 @@ def compute_graph_features(
 
     offdiag_edge_src = offdiag_edge_src_unsorted[sorted_indices]
     offdiag_edge_dst = offdiag_edge_dst_unsorted[sorted_indices]
-    offdiag_edge_shift = offdiag_edge_shift_unsorted[sorted_indices]
+    offdiag_edge_shift = offdiag_edge_shift_unsorted[:, sorted_indices]
     offdiag_disp = offdiag_disp_unsorted[sorted_indices]
     offdiag_lengths = offdiag_lengths_unsorted[sorted_indices]
 
     # 7. Combine all edges and features
     edge_src = torch.cat([self_edge_src, offdiag_edge_src])
     edge_dst = torch.cat([self_edge_dst, offdiag_edge_dst])
-    edge_shift = torch.cat([self_edge_shift, offdiag_edge_shift])
+    edge_shift = torch.cat([self_edge_shift, offdiag_edge_shift], dim=1)
     edge_index = torch.stack([edge_src, edge_dst]).to(positions.device)
     edge_disp = torch.cat([self_disp, offdiag_disp], dim=0)
     edge_lengths = torch.cat(
