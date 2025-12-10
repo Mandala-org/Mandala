@@ -63,7 +63,8 @@ class BlockMatrix:
             print("Warning: BlockMatrix.__getitem__((i,j)) sums over periodic images.")
             ret = None
             for key in self.lookup:
-                if key[0] == item[0] and key[1] == item[1]:
+                # key is (sx, sy, sz, i, j)
+                if key[3] == item[0] and key[4] == item[1]:
                     k_key, k_idx = self.lookup[key]
                     block = self.pair_blocks[k_key][k_idx]
                     if ret is None:

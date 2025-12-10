@@ -108,7 +108,9 @@ def trace_matmul_sparse_block_matrix(A: BlockMatrix, B: BlockMatrix) -> torch.Te
     # </implementation>
     for (sx, sy, sz, i, j), (key, k) in A.lookup.items():
         if (-sx, -sy, -sz, j, i) not in B.lookup:
-            continue
+            raise ValueError(
+                f"Edge {(-sx, -sy, -sz, j, i)} (reverse of {(sx, sy, sz, i, j)}) missing in second matrix."
+            )
         key_rev, k_rev = B.lookup[(-sx, -sy, -sz, j, i)]
         out = out + torch.trace(A.pair_blocks[key][k] @ B.pair_blocks[key_rev][k_rev])
     return out
@@ -130,7 +132,9 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
         el_A, el_B = key.split("-")
         rev_key = f"{el_B}-{el_A}"
         if rev_key not in B.keys():
-            continue
+            raise ValueError(
+                f"Key {rev_key} missing in second matrix (reverse of {key} in first matrix)."
+            )
 
         blk_a = A.pair_blocks[key]  # (E, d_A, d_B)
         blk_b_rev = B.pair_blocks[rev_key]  # (E_rev, d_B, d_A)
@@ -163,21 +167,27 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
         # <assumptions>
         # - Aligns B's blocks to match the order of A's blocks for vectorized operation.
         # - Uses symmetric edge property.
+        # - Raises error if edges are missing (incompatible sparsity patterns).
         # </assumptions>
         # <implementation>
         # - For each edge in A `(sx, sy, sz, i, j)`:
-        # - Finds index of symmetric edge `(-sx, -sy, -sz, j, i)` in B using `mapping`.
-        # - Creates `idx_rev` tensor for gathering B's blocks.
+        # - Checks if symmetric edge `(-sx, -sy, -sz, j, i)` exists in B.
+        # - If not, raises ValueError.
+        # - Collects indices for B.
+        # - Performs vectorized einsum.
         # </implementation>
-        idx_rev = torch.tensor(
-            [
-                mapping[tuple(map(int, (-sx, -sy, -sz, j, i)))]
-                for sx, sy, sz, i, j in edges_a.t()
-            ],
-            device=blk_a.device,
-        )
+        indices_b = []
 
-        blk_b_aligned = blk_b_rev[idx_rev]  # (E, d_B, d_A)
+        for sx, sy, sz, i, j in edges_a.t():
+            rev_edge = tuple(map(int, (-sx, -sy, -sz, j, i)))
+            if rev_edge not in mapping:
+                raise ValueError(
+                    f"Edge {rev_edge} (reverse of {(sx, sy, sz, i, j)}) missing in second matrix."
+                )
+            indices_b.append(mapping[rev_edge])
+
+        idx_b_tensor = torch.tensor(indices_b, device=blk_a.device, dtype=torch.long)
+        blk_b_aligned = blk_b_rev[idx_b_tensor]
 
         # Trace of A_ij · B_ji
         total = total + torch.einsum("bij,bji->", blk_a, blk_b_aligned)

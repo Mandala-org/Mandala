@@ -25,8 +25,8 @@ def mock_block_matrix():
             d_i, d_j = mapper.block_dims(key)
             blk = torch.randn(d_i, d_j)
             pair_blocks.setdefault(key, []).append(blk)
-            pair_edges.setdefault(key, []).append([i, j, 0, 0, 0])
-            lookup[(i, j, 0, 0, 0)] = (key, len(pair_blocks[key]) - 1)
+            pair_edges.setdefault(key, []).append([0, 0, 0, i, j])
+            lookup[(0, 0, 0, i, j)] = (key, len(pair_blocks[key]) - 1)
     pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
     pair_edges = {
         k: torch.tensor(v, dtype=torch.long).t() for k, v in pair_edges.items()

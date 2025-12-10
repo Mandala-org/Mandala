@@ -139,9 +139,9 @@ def test_canonical_edge_ordering_tiebreaker():
     # Input edges (shuffled/reverse order to test sorting)
     # src, dst, sx, sy, sz
     edges_data = [
-        [0, 2, 0, 0, 0],  # dist 2
-        [0, 1, 0, 0, 0],  # dist 2
-        [0, 3, 0, 0, 0],  # dist 1
+        [0, 0, 0, 0, 2],  # dist 2
+        [0, 0, 0, 0, 1],  # dist 2
+        [0, 0, 0, 0, 3],  # dist 1
         [0, 0, 0, 0, 0],  # dist 0
     ]
     edges_tensor = torch.tensor(edges_data).T  # (5, 4)
@@ -194,7 +194,7 @@ def test_canonical_edge_ordering_tiebreaker():
     # Index 3: (0, 2) - Dist 2, dst 2
 
     # Check src/dst pairs
-    pairs = new_edges[:2, :].T.tolist()
+    pairs = new_edges[3:, :].T.tolist()
     assert pairs[0] == [0, 0], f"Expected [0, 0], got {pairs[0]}"
     assert pairs[1] == [0, 3], f"Expected [0, 3], got {pairs[1]}"
     assert pairs[2] == [0, 1], f"Expected [0, 1], got {pairs[2]}"

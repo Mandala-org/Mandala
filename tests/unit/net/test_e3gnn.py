@@ -41,7 +41,7 @@ def test_forward_smoke():
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": torch.tensor([[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]]),
-        "edge_shift": torch.zeros(E, 3, dtype=torch.long),
+        "edge_shift": torch.zeros(3, E, dtype=torch.long),
         "atoms": ("H", "H", "H", "H"),
         "num_self_edges": N,
         "index_gnn_cutoff": E,
