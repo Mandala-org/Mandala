@@ -406,25 +406,11 @@ class Snapshot:
             #     else None
             # )
             # print("Changing convention with [1, 2, 0]")
-            pos = (
-                # pos @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-                pos @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-                if pos is not None
-                else None
-            )
-            forces = (
-                # forces @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-                forces @ torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-                if forces is not None
-                else None
-            )
+
             change_of_basis = torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
-            box = (
-                # box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-                change_of_basis.T @ box @ change_of_basis
-                if box is not None
-                else None
-            )
+            pos = pos @ change_of_basis if pos is not None else None
+            forces = forces @ change_of_basis if forces is not None else None
+            box = box @ change_of_basis if box is not None else None
         elif self.density.basis == "fhi-aims" and target == "e3nn":
             conv = FHIaimsE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_e3nn(self.hamiltonian)
@@ -470,8 +456,8 @@ class Snapshot:
             ovl,
             den,
             positions=pos,
-            forces=self.forces,
-            box=self.box,
+            forces=forces,
+            box=box,
             stress=self.stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
