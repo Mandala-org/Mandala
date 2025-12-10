@@ -6,7 +6,7 @@ early_terminate:
   type: hyperband
   min_iter: 100  # Stop runs that are performing poorly after 20 epochs
 metric:
-  name: val_loss_matrix
+  name: train/loss_matrix_total
   goal: minimize
 
 
@@ -66,6 +66,10 @@ parameters:
   loss_coef_observables:
     value: 0.0
 
+  # --- Overfitting settings ---
+  lr_scheduler_target:
+    value: "train/loss_total"
+
 
 command:
   - ${env}
@@ -76,7 +80,7 @@ command:
   - --gpus=1  # Specify a single GPU
   - --num_workers=0
   - --n_snapshots_per_temp=1 # Use a subset for faster sweeps
-  - --val_n_snapshots=1
+  - --val_n_snapshots=0
   - --max_epochs=1000
   - --min_temp=300
   - --max_temp=300
