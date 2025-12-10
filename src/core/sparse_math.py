@@ -32,11 +32,28 @@ def trace_matmul_sparse(
         raise ValueError("edge_index cols must match number of blocks")
 
     #! Edge manipulation
+    # <assumptions>
+    # - `edge_index` is (E, 5) or (5, E) depending on usage, here assumed list of 5-tuples.
+    # - Builds lookup for O(1) access to block indices.
+    # </assumptions>
+    # <implementation>
+    # - Converts `edge_index` to list of tuples.
+    # - Creates dictionary mapping tuple to index `k`.
+    # </implementation>
     pairs = edge_index.tolist()
     lookup = {tuple(p): k for k, p in enumerate(pairs)}
 
     out = torch.zeros((), dtype=blocks_a.dtype, device=blocks_a.device)
     #! Edge manipulation
+    # <assumptions>
+    # - Computes trace of A * B.
+    # - Requires finding the symmetric block B_{ji} for each A_{ij}.
+    # </assumptions>
+    # <implementation>
+    # - Iterates over edges of A.
+    # - Finds index `rev_k` of symmetric edge `(-sx, -sy, -sz, j, i)` in B.
+    # - Accumulates trace of product.
+    # </implementation>
     for k, (sx, sy, sz, i, j) in enumerate(pairs):
         rev = (-sx, -sy, -sz, j, i)
         rev_k = lookup.get(rev, None)
@@ -80,6 +97,15 @@ def trace_matmul_sparse_block_matrix(A: BlockMatrix, B: BlockMatrix) -> torch.Te
         requires_grad=True,
     )
     #! Edge manipulation
+    # <assumptions>
+    # - Computes trace of A * B using `BlockMatrix` lookups.
+    # - Iterates over all blocks in A.
+    # </assumptions>
+    # <implementation>
+    # - For each block A_{ij} at `(sx, sy, sz, i, j)`:
+    # - Checks if symmetric block B_{ji} at `(-sx, -sy, -sz, j, i)` exists.
+    # - Accumulates trace of product.
+    # </implementation>
     for (sx, sy, sz, i, j), (key, k) in A.lookup.items():
         if (-sx, -sy, -sz, j, i) not in B.lookup:
             continue
@@ -111,10 +137,22 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
 
         edges_a = A.pair_edges[key]  # (2, E)   (i, j)
         #! Edge manipulation
+        # <assumptions>
+        # - Retrieves edges for the reverse key block in B.
+        # </assumptions>
+        # <implementation>
+        # - Accesses `pair_edges` for `rev_key`.
+        # </implementation>
         edges_b_rev = B.pair_edges[rev_key]  # (2, E')  (j, i)
 
         # map (j,i) tuple -> index in B
         #! Edge manipulation
+        # <assumptions>
+        # - Builds mapping for fast alignment of B's blocks to A's edges.
+        # </assumptions>
+        # <implementation>
+        # - Maps `(sx, sy, sz, i, j)` to index `idx` for `edges_b_rev`.
+        # </implementation>
         mapping = {
             tuple(map(int, (sx, sy, sz, i, j))): idx
             for idx, (sx, sy, sz, i, j) in enumerate(edges_b_rev.t())
@@ -122,6 +160,15 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
 
         # build index list such that order matches edges_a
         #! Edge manipulation
+        # <assumptions>
+        # - Aligns B's blocks to match the order of A's blocks for vectorized operation.
+        # - Uses symmetric edge property.
+        # </assumptions>
+        # <implementation>
+        # - For each edge in A `(sx, sy, sz, i, j)`:
+        # - Finds index of symmetric edge `(-sx, -sy, -sz, j, i)` in B using `mapping`.
+        # - Creates `idx_rev` tensor for gathering B's blocks.
+        # </implementation>
         idx_rev = torch.tensor(
             [
                 mapping[tuple(map(int, (-sx, -sy, -sz, j, i)))]

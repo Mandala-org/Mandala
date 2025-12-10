@@ -131,6 +131,20 @@ class Snapshot:
         The canonical order for each key is:
         1. Diagonal edges, sorted by their node index.
         2. Off-diagonal edges, sorted by the distance (ascending).
+
+        <assumptions>
+        - Enforces a deterministic edge order to ensure reproducibility and consistent batching.
+        - Separates self-interactions (diagonal) from inter-atomic interactions (off-diagonal).
+        - Uses Euclidean distance for sorting off-diagonal edges.
+        </assumptions>
+        <implementation>
+        - (Not yet implemented)
+        - Would iterate over all keys.
+        - For each key, split edges into diagonal and off-diagonal sets.
+        - Sort diagonal edges by atom index `i`.
+        - Sort off-diagonal edges by computed edge length.
+        - Concatenate sorted indices and reorder blocks/edges using `reorder_edges`.
+        </implementation>
         """
 
         raise NotImplementedError("canonicalize_edges is not implemented yet.")
@@ -151,12 +165,10 @@ class Snapshot:
         # )
 
     # ---------------------------------------------------------------- physics helpers
-    #! Edge manipulation
     def get_number_of_electrons(self) -> torch.Tensor:
         """Return *scalar* Tr(D·S)."""
         return trace_matmul_sparse_block_matrix(self.density, self.overlap)
 
-    #! Edge manipulation
     def get_energy(self) -> torch.Tensor:
         """Return *scalar* Tr(D·H)."""
         return trace_matmul_sparse_block_matrix(self.hamiltonian, self.density)
@@ -178,6 +190,17 @@ class Snapshot:
     #! Edge manipulation
     @staticmethod
     def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> BlockMatrix:
+        """
+        <assumptions>
+        - Helper for `Snapshot.load`.
+        - Reconstructs a `BlockMatrix` from a dictionary payload.
+        </assumptions>
+        <implementation>
+        - Loads `pair_blocks` and `pair_edges`, moving them to `device`.
+        - **Rebuilds lookup table**: Iterates over `pair_edges`. For each edge `(sx, sy, sz, i, j)` at index `idx`, sets `lookup[(sx, sy, sz, i, j)] = (key, idx)`.
+        - Note: The edge unpacking order `(sx, sy, sz, i, j)` must match the storage convention.
+        </implementation>
+        """
         from core.orbital_irrep_config import OrbitalIrrepConfig
         from collections import Counter
 
@@ -189,8 +212,8 @@ class Snapshot:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j, sx, sy, sz) in enumerate(edges.t().tolist()):
-                lookup[(i, j, sx, sy, sz)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         atom_counts = payload.get("atom_counts", Counter(atoms))
@@ -206,7 +229,6 @@ class Snapshot:
         )
 
     # public classmethod ----------------------------------------------------
-    #! Edge manipulation
     @classmethod
     def load(cls, path: str | os.PathLike, *, device="cpu") -> "Snapshot":
         payload_top = torch.load(path, map_location="cpu")
@@ -271,6 +293,15 @@ class Snapshot:
 
         cfg = self.density.orbital_cfg
         #! Edge manipulation
+        # <assumptions>
+        # - When changing basis (e.g. OpenMX -> E3NN), the coordinate system might also need rotation/permutation.
+        # - This section handles the geometric transformation of positions, forces, and box vectors.
+        # </assumptions>
+        # <implementation>
+        # - Retrieves a sample block to determine device.
+        # - Applies basis conversion to matrices (H, S, D).
+        # - Applies coordinate transformation to geometric tensors (pos, forces, box).
+        # </implementation>
         any_block = next(iter(self.hamiltonian.pair_blocks.values()))
         device = any_block.device
         pos = self.positions
@@ -422,6 +453,17 @@ class Snapshot:
     ) -> Dict[str, torch.Tensor]:
         """
         Return dict ``key → (E,3)`` of minimal-image displacement vectors.
+
+        <assumptions>
+        - Calculates the vector pointing from source atom to destination atom, including periodic boundary shifts.
+        - `delta = pos[dst] - pos[src] + shift @ box`.
+        - `shift` is the integer vector `(sx, sy, sz)` associated with the edge.
+        </assumptions>
+        <implementation>
+        - Iterates over all edges in the matrix.
+        - Unpacks `(sx, sy, sz, src, dst)` from `edges`.
+        - Constructs `edge_shift` tensor from `(sx, sy, sz)`.
+        - Computes displacement vector using positions and lattice box.
         """
         if self.positions is None or self.box is None:
             raise RuntimeError("Snapshot has no position/box information")
@@ -450,7 +492,6 @@ class Snapshot:
 
         return vecs
 
-    #! Edge manipulation
     def _edge_distances(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
@@ -459,7 +500,6 @@ class Snapshot:
         return {k: torch.linalg.norm(v, dim=-1) for k, v in disp.items()}
 
     # -------------------- public API -------------------------------------------
-    #! Edge manipulation
     def max_distance(self, which: str = "density") -> torch.Tensor:
         """
         Largest minimal-image distance appearing in *which* sparse matrix.
@@ -468,7 +508,6 @@ class Snapshot:
         d = self._edge_distances(mat)
         return torch.stack([v.max() for v in d.values()]).max()
 
-    #! Edge manipulation
     def filter_by_distance(self, cutoff: float, which: str = "density") -> "Snapshot":
         """
         Return a **new** snapshot where edges whose minimal-image distance
@@ -618,7 +657,6 @@ class Snapshot:
 
         return grid, dos
 
-    #! Edge manipulation
     def export_to_deephe3(self, path: str | os.PathLike):
         """
         Export the snapshot to the DeepH-E3 format.
@@ -669,6 +707,15 @@ class Snapshot:
         with h5py.File(path / "hamiltonians.h5", "w") as f:
             for key in self.hamiltonian.keys():
                 #! Edge manipulation
+                # <assumptions>
+                # - Exports Hamiltonian blocks to HDF5 format compatible with DeepH-E3.
+                # - HDF5 dataset names are string representations of the edge tuple `[sx, sy, sz, src, dst]`.
+                # </assumptions>
+                # <implementation>
+                # - Iterates over keys and edges.
+                # - Unpacks `(sx, sy, sz, src, dst)` from `edges`.
+                # - Creates HDF5 dataset for each block using the edge tuple as the name.
+                # </implementation>
                 edges = self.hamiltonian.pair_edges[key]
                 blocks = self.hamiltonian.pair_blocks[key]
 
