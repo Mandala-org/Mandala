@@ -508,9 +508,7 @@ class Snapshot:
         vecs: Dict[str, torch.Tensor] = {}
 
         for key, edges in mat.pair_edges.items():
-            #! Edge manipulation
             sx, sy, sz, src, dst = edges
-            #! Edge manipulation
             edge_shift = (
                 torch.stack([sx, sy, sz], dim=-1)
                 .to(self.positions.device)
