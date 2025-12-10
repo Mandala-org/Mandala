@@ -179,9 +179,11 @@ def parse_openmx_scfout(
             pair_blocks[key] = [b for (_ijr, b) in items]
             # pair_edges[key] = [[i, j, rn] for (i, j, rn), _ in items]
             pair_edges[key] = []
+            #! Edge manipulation
             for (i, j, rn), _ in items:
                 sx, sy, sz = rn_shift_map[rn]
                 pair_edges[key].append([sx, sy, sz, i, j])
+            #! Edge manipulation
             for idx, ((i, j, rn), _) in enumerate(items):
                 sx, sy, sz = rn_shift_map[rn]
                 lookup[(sx, sy, sz, i, j)] = (key, idx)
@@ -195,6 +197,7 @@ def parse_openmx_scfout(
         # 1. Test whether all edges are unique
         all_edges = set()
         for edges in pair_edges_t.values():
+            #! Edge manipulation
             for edge in edges.t().tolist():
                 all_edges.add(tuple(edge))
         if len(all_edges) != sum(len(edges.t()) for edges in pair_edges_t.values()):
@@ -202,27 +205,30 @@ def parse_openmx_scfout(
         # 2. Test whether lookup contains all edges
         if len(lookup) != len(all_edges):
             raise OpenMXParseError("Lookup size does not match edge count")
+        #! Edge manipulation
         for sx, sy, sz, i, j in all_edges:
             if (sx, sy, sz, i, j) not in lookup:
                 raise OpenMXParseError(f"Edge {(sx, sy, sz, i, j)} not found in lookup")
             key, idx = lookup[(sx, sy, sz, i, j)]
             if key not in pair_blocks_t or idx >= len(pair_blocks_t[key]):
                 raise OpenMXParseError(
-                    f"Edge {(i, j, sx, sy, sz)} lookup points to invalid block"
+                    f"Edge {(sx, sy, sz, i, j)} lookup points to invalid block"
                 )
         # 3. Test whether all self-edges are present
         for i, atom in enumerate(atoms):
             key = f"{atom}-{atom}"
             if key not in pair_blocks_t:
                 raise OpenMXParseError(f"Self-edge {key} not found in pair blocks")
-            if (i, i, 0, 0, 0) not in lookup:
+            #! Edge manipulation
+            if (0, 0, 0, i, i) not in lookup:
                 raise OpenMXParseError(f"Self-edge lookup for {key} missing")
         # 4. Test whether graph is symmetric
-        for i, j, sx, sy, sz in lookup:
-            key, idx = lookup[(i, j, sx, sy, sz)]
-            if (j, i, -sx, -sy, -sz) not in lookup:
+        #! Edge manipulation
+        for sx, sy, sz, i, j in lookup:
+            key, idx = lookup[(sx, sy, sz, i, j)]
+            if (-sx, -sy, -sz, j, i) not in lookup:
                 raise OpenMXParseError(
-                    f"Edge {(i, j, sx, sy, sz)} is not symmetric with {(j, i, -sx, -sy, -sz)}"
+                    f"Edge {(sx, sy, sz, i, j)} is not symmetric with {(-sx, -sy, -sz, j, i)}"
                 )
 
         return BlockMatrix(

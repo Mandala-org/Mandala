@@ -9,6 +9,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 
+#! Edge manipulation
 def _minimal_disp(
     pos: torch.Tensor,
     edges: torch.Tensor,
@@ -16,15 +17,17 @@ def _minimal_disp(
     inv_box: torch.Tensor | None = None,
 ) -> torch.Tensor:
     if box is None:
-        return pos[edges[1]] - pos[edges[0]]
+        return pos[edges[4]] - pos[edges[3]]
     if inv_box is None:
         inv_box = torch.inverse(box)
-    delta = pos[edges[1]] - pos[edges[0]]  # cart
+    #! Edge manipulation
+    delta = pos[edges[4]] - pos[edges[3]]  # cart
     frac = delta @ inv_box
     frac = frac - torch.round(frac)
     return frac @ box
 
 
+#! Edge manipulation
 def compute_graph_features(
     positions: torch.Tensor,
     box: torch.Tensor | None,
@@ -66,6 +69,7 @@ def compute_graph_features(
 
     # 3. Handle self-edges explicitly
     num_atoms = len(atoms)
+    #! Edge manipulation
     self_edge_src = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
     self_edge_dst = torch.arange(num_atoms, dtype=torch.long, device=positions.device)
     self_edge_shift = torch.zeros(

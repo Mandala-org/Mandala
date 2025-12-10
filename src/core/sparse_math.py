@@ -31,10 +31,12 @@ def trace_matmul_sparse(
     if edge_index.shape[0] != blocks_a.shape[0]:
         raise ValueError("edge_index cols must match number of blocks")
 
+    #! Edge manipulation
     pairs = edge_index.tolist()
     lookup = {tuple(p): k for k, p in enumerate(pairs)}
 
     out = torch.zeros((), dtype=blocks_a.dtype, device=blocks_a.device)
+    #! Edge manipulation
     for k, (sx, sy, sz, i, j) in enumerate(pairs):
         rev = (-sx, -sy, -sz, j, i)
         rev_k = lookup.get(rev, None)
@@ -77,6 +79,7 @@ def trace_matmul_sparse_block_matrix(A: BlockMatrix, B: BlockMatrix) -> torch.Te
         device=list(A.pair_blocks.values())[0].device,
         requires_grad=True,
     )
+    #! Edge manipulation
     for (sx, sy, sz, i, j), (key, k) in A.lookup.items():
         if (-sx, -sy, -sz, j, i) not in B.lookup:
             continue
@@ -107,15 +110,18 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
         blk_b_rev = B.pair_blocks[rev_key]  # (E_rev, d_B, d_A)
 
         edges_a = A.pair_edges[key]  # (2, E)   (i, j)
+        #! Edge manipulation
         edges_b_rev = B.pair_edges[rev_key]  # (2, E')  (j, i)
 
         # map (j,i) tuple -> index in B
+        #! Edge manipulation
         mapping = {
             tuple(map(int, (sx, sy, sz, i, j))): idx
             for idx, (sx, sy, sz, i, j) in enumerate(edges_b_rev.t())
         }
 
         # build index list such that order matches edges_a
+        #! Edge manipulation
         idx_rev = torch.tensor(
             [
                 mapping[tuple(map(int, (-sx, -sy, -sz, j, i)))]

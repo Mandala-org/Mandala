@@ -117,6 +117,7 @@ class EdgeUpdateBlock(nn.Module):
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
+        #! Edge manipulation
         src, dst = edge_index
         edge_old = edge
 
@@ -231,6 +232,7 @@ class NodeUpdateBlock(nn.Module):
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
+        #! Edge manipulation
         src, dst = edge_index
         node_old = node
 
