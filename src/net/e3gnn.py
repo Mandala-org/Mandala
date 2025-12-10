@@ -149,13 +149,17 @@ class E3GNN(pl.LightningModule):
     @staticmethod
     def _mse(pred, target):
         if pred.shape != target.shape:
-            raise ValueError("Shape mismatch in block loss")
+            raise ValueError(
+                f"Shape mismatch in block loss: {pred.shape=}, {target.shape=}"
+            )
         return torch.mean((pred - target) ** 2)
 
     @staticmethod
     def _mae(pred, target):
         if pred.shape != target.shape:
-            raise ValueError("Shape mismatch in block loss")
+            raise ValueError(
+                f"Shape mismatch in block loss: {pred.shape=}, {target.shape=}"
+            )
         return torch.mean(torch.abs(pred - target))
 
     def _wrap_head_output(
@@ -174,15 +178,6 @@ class E3GNN(pl.LightningModule):
             edges = payload["edges"]
             pair_vec[key] = vec
             pair_edges[key] = edges
-            #! Edge manipulation
-            # <assumptions>
-            # - Rebuilds the lookup table for the `IrrepsBlockData` object.
-            # - Assumes `edges` tensor follows `(sx, sy, sz, src, dst)` convention.
-            # </assumptions>
-            # <implementation>
-            # - Iterates over edges.
-            # - Maps `(sx, sy, sz, i, j)` to `(key, idx)`.
-            # </implementation>
             for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
                 lookup[(sx, sy, sz, i, j)] = (key, idx)
 
@@ -203,15 +198,6 @@ class E3GNN(pl.LightningModule):
 
         # If edge features are not precomputed, compute them on the fly
         if not self.cfg.precompute_edge_features:
-            #! Edge manipulation
-            # <assumptions>
-            # - Graph features are not precomputed in the dataset.
-            # - Computes topology on-the-fly using `compute_graph_features`.
-            # </assumptions>
-            # <implementation>
-            # - Calls `compute_graph_features` with positions, cell, and cutoffs.
-            # - Returns `edge_index` (2, E), `edge_shift` (3, E), `edge_vec` (E, 3), `edge_len` (E).
-            # </implementation>
             (
                 edge_index,
                 edge_shift,
@@ -230,14 +216,6 @@ class E3GNN(pl.LightningModule):
             )
 
             # Update x with the newly computed features
-            #! Edge manipulation
-            # <assumptions>
-            # - `x` is the input dictionary.
-            # - Updates `x` with computed graph features for downstream layers.
-            # </assumptions>
-            # <implementation>
-            # - Assigns `edge_index`, `edge_shift`, `edge_vec`, `edge_len` to `x`.
-            # </implementation>
             x["edge_index"] = edge_index
             x["edge_shift"] = edge_shift
             x["edge_type_idx"] = edge_type_idx
@@ -263,27 +241,10 @@ class E3GNN(pl.LightningModule):
         num_self_edges = x["num_self_edges"]
 
         edge_small = edge[num_self_edges:index_gnn_cutoff]
-        #! Edge manipulation
-        # <assumptions>
-        # - `edge_small` corresponds to short-range interactions (GNN cutoff).
-        # - `num_self_edges` is the number of self-interaction edges (diagonal).
-        # - `index_gnn_cutoff` is the index where the GNN cutoff ends.
-        # </assumptions>
-        # <implementation>
-        # - Slices `edge_index` to exclude self-edges and include only edges up to `index_gnn_cutoff`.
-        # </implementation>
         ei_small = x["edge_index"][:, num_self_edges:index_gnn_cutoff]
 
         edge_only_large = edge[index_gnn_cutoff:]
         edge_large = torch.cat([edge_small, edge_only_large], dim=0)
-        #! Edge manipulation
-        # <assumptions>
-        # - `edge_large` corresponds to all off-diagonal edges (up to `r_max`).
-        # - Used for deeper layers or final readout that requires longer range context.
-        # </assumptions>
-        # <implementation>
-        # - Slices `edge_index` to exclude self-edges (start from `num_self_edges`).
-        # </implementation>
         ei_large = x["edge_index"][:, num_self_edges:]
 
         for idx, blk in enumerate(self.mp_small):
@@ -300,16 +261,7 @@ class E3GNN(pl.LightningModule):
         # The head operates on a concatenation of node features (for self-edges)
         # and edge features (for off-diagonal edges).
 
-        # concatenate edge_index with edge shift
-        #! Edge manipulation
-        # <assumptions>
-        # - Prepares edge index for the head module.
-        # - Requires `(sx, sy, sz, src, dst)` format for block identification.
-        # </assumptions>
-        # <implementation>
-        # - Concatenates `edge_shift` (3, E) and `edge_index` (2, E) along dim 0.
-        # - Result is `(5, E)`.
-        # </implementation>
+        # concatenate edge_shift with edge_index
         head_edge_index = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
         head_edge_type_idx = x["edge_type_idx"]
         head_embeddings = torch.cat([node, edge_large], dim=0)
