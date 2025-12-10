@@ -39,7 +39,7 @@ def si_snapshot():
     base = Path("./data/big/silicon/2700K")
     matrix_path = base / "Si_DM"
     info_path = base / "info.txt"
-    cfg = Config(cutoff_matrix=7.5)
+    cfg = Config(cutoff_matrix=15.0)
     return Snapshot.from_openmx(
         str(matrix_path),
         str(info_path),
@@ -74,8 +74,8 @@ def factory_results():
         Path("data/big/silicon/2700K/info.txt"),
     )
     cfg = Config(
-        cutoff_gnn=4.5,
-        cutoff_matrix=7.5,
+        cutoff_gnn=7.0,
+        cutoff_matrix=40.0,
         device="cpu",
         train_target="matrix",
         dtype=torch.float32,

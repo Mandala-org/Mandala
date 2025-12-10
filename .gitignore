@@ -39,6 +39,12 @@ ray_results/
 # ruff
 .ruff_cache/
 
+# github
+.github/
+
+# coverage reports
+.coverage
+
 # throwaway notebooks
 notebooks/scratchpads
 
