@@ -65,13 +65,17 @@ def factory_results():
         Path("data/small/H2O/original/H2O.matrix"),
         Path("data/small/H2O/original/H2O.info.out"),
     )
-    PAIR_TRAIN_2 = (
-        Path("data/big/silicon/900K/Si_DM"),
-        Path("data/big/silicon/900K/info.txt"),
-    )
+    # PAIR_TRAIN_2 = (
+    #     Path("data/big/silicon/900K/Si_DM"),
+    #     Path("data/big/silicon/900K/info.txt"),
+    # )
+    # PAIR_VAL_1 = (
+    #     Path("data/big/silicon/2700K/Si_DM"),
+    #     Path("data/big/silicon/2700K/info.txt"),
+    # )
     PAIR_VAL_1 = (
-        Path("data/big/silicon/2700K/Si_DM"),
-        Path("data/big/silicon/2700K/info.txt"),
+        Path("data/small/H2O/original/H2O.matrix"),
+        Path("data/small/H2O/original/H2O.info.out"),
     )
     cfg = Config(
         cutoff_gnn=7.0,
@@ -83,7 +87,7 @@ def factory_results():
     )
     fac = DatasetFactory(cfg)
     fac.add_snapshot(*PAIR_TRAIN_1, purpose="train")
-    fac.add_snapshot(*PAIR_TRAIN_2, purpose="train")
+    # fac.add_snapshot(*PAIR_TRAIN_2, purpose="train")
     fac.add_snapshot(*PAIR_VAL_1, purpose="val")
     train_ds, val_ds, mapper = fac.create()
     return train_ds, val_ds, mapper
