@@ -22,11 +22,13 @@ from typing import Dict, List, Sequence, Tuple
 import torch
 import time  # needed for __getitem__ timing
 from torch.utils.data import Dataset
-from e3nn.o3 import Irreps, spherical_harmonics
-from e3nn.math import soft_one_hot_linspace
+from e3nn.o3 import Irreps
 
 from core.block_irrep_mapper import BlockIrrepMapper
+from net.common import Config
+
 from data.snapshot import Snapshot
+from data.graph_features import compute_graph_features
 from tqdm.auto import tqdm
 
 
@@ -44,53 +46,41 @@ class E3GNNDataset(Dataset):
         self,
         snapshot_paths: Sequence[Tuple[Path, Path]],
         mapper: BlockIrrepMapper,
-        *,
-        cutoff_gnn: float = 5.0,
-        cutoff_matrix: float = 7.5,
-        l_max_sh: int = 3,
-        n_radial: int = 64,
-        device: torch.device | str = "cpu",
-        dtype: torch.dtype = torch.float32,
-        cache_root: str | Path | None = None,
-        enable_forces: bool = False,
+        cfg: Config,
+        convention: str = "e3nn",
     ):
-        if cutoff_gnn >= cutoff_matrix:
-            raise ValueError("cutoff_gnn must be < cutoff_matrix")
+        self.cfg = cfg
+        self.convention = convention
+        if cfg.cutoff_gnn > cfg.cutoff_matrix:
+            raise ValueError("cutoff_gnn must be <= cutoff_matrix")
 
         if not snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
 
-        self.device = torch.device(device)
-        self.dtype = dtype
-        self.enable_forces = enable_forces
+        self.dtype = self.cfg.dtype
+
+        if cfg.train_on_forces and not self.cfg.enable_forces:
+            raise Exception("Forces must be enabled to train on them")
+        if cfg.train_on_stress and not self.cfg.enable_stress:
+            raise Exception("Stress must be enabled to train on it")
+
+        if cfg.cache_root and (self.cfg.enable_forces or self.cfg.enable_stress):
+            raise Exception("Caching must be disabled for forces and stress to work")
 
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
-        self.global_cfg = mapper.orbital_cfg
-        self.l_max_sh = int(l_max_sh)
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.l_max_sh)
-        self.n_radial = int(n_radial)
-        self.cut = float(cutoff_gnn)
-        self.cut_mat = float(cutoff_matrix)
-
-        # edge-type encoding (ordered pairs)
-        elems = self.global_cfg.elements()
-        self.edge_types: List[str] = [f"{a}-{b}" for a in elems for b in elems]
-        self.edge_type2idx: Dict[str, int] = {
-            k: i for i, k in enumerate(self.edge_types)
-        }
-        self.n_edge_types = len(self.edge_types)
+        self.orbital_cfg = mapper.orbital_cfg
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
 
         # configure cache root (if None, caching is disabled)
-        if cache_root is None:
-            self.cache_root = None
-        else:
-            self.cache_root = Path(cache_root).expanduser()
+        if cfg.cache_root is not None:
+            self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
+
         # preprocess all snapshots
-        self.samples: List[Tuple[Dict, Dict, Dict]] = []
+        self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
         for matrix_path, info_path in tqdm(snapshot_paths, desc="Loading snapshots"):
             sample = self._load_or_process_snapshot(matrix_path, info_path)
-            self.samples.append(sample)
+            self.snapshots.append(sample)
 
     # ---------------------------------------------------------------- snapshot caching & helpers
     def _load_or_process_snapshot(
@@ -102,17 +92,18 @@ class E3GNNDataset(Dataset):
         Load processed snapshot from cache if available, otherwise process and cache it.
         """
         # build cache key from snapshot payload and model settings
-        if self.cache_root is not None:
+        if self.cfg.cache_root is not None:
             key_obj = (
                 matrix_path.resolve(),
                 info_path.resolve(),
-                self.n_radial,
-                self.cut,
-                self.cut_mat,
-                self.l_max_sh,
+                self.cfg.n_radial,
+                self.cfg.cutoff_gnn,
+                self.cfg.cutoff_matrix,
+                self.cfg.l_max_gnn,
+                self.cfg.precompute_edge_features,
             )
             key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
-            cache_file = self.cache_root / f"{key_hash}.pt"
+            cache_file = self.cfg.cache_root / f"{key_hash}.pt"
             # attempt load from cache
             if cache_file.exists():
                 try:
@@ -124,185 +115,147 @@ class E3GNNDataset(Dataset):
         snapshot = Snapshot.from_openmx(
             matrix_path=matrix_path,
             info_path=info_path,
-            convention="e3nn",
+            convention=self.convention,
             symmetrize_density=True,
-            cutoff_radius=self.cut_mat,
+            cutoff_radius=self.cfg.cutoff_matrix,
+            cfg=self.cfg,
         )
-        sample = self._process_snapshot(snapshot)
+        sample = self._process_snapshot_to_sample(snapshot)
         # save to cache if enabled
-        if self.cache_root is not None:
+        if self.cfg.cache_root is not None:
             try:
-                self.cache_root.mkdir(parents=True, exist_ok=True)
+                self.cfg.cache_root.mkdir(parents=True, exist_ok=True)
                 torch.save(sample, cache_file)
             except Exception:
                 pass
         return sample
 
-    # ---------------------------------------------------------------- helpers
-    # ---------- minimal-image displacements ----------------------------------
-    @staticmethod
-    def _minimal_disp(
-        pos: torch.Tensor,
-        edges: torch.Tensor,
-        box: torch.Tensor | None,
-        inv_box: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        if box is None:
-            return pos[edges[1]] - pos[edges[0]]
-        if inv_box is None:
-            inv_box = torch.inverse(box)
-        delta = pos[edges[1]] - pos[edges[0]]  # cart
-        frac = delta @ inv_box
-        frac = frac - torch.round(frac)
-        return frac @ box
-
-    # ---------- build edge tensors for a given cutoff_gnn ------------------------
-    def _edge_tensors(
-        self,
-        snap: Snapshot,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int]:
-        """
-        Returns
-        -------
-        edge_index : (2, E_total) long
-        edge_type_idx : (E_total,) long
-        edge_length_emb : (E_total, n_radial) float
-        edge_sh : (E_total, sh_dim) float
-        index_gnn_cutoff : int
-        """
-        # 1. Collect all edges and their properties
-        edges = []
-        for key, pair_edges in snap.density.pair_edges.items():
-            for i in range(pair_edges.shape[1]):
-                src, dst = pair_edges[:, i]
-                edges.append(
-                    {
-                        "src": src.item(),
-                        "dst": dst.item(),
-                        "key": key,
-                    }
-                )
-
-        # 2. Separate self-edges and off-diagonal edges
-        self_edges = sorted(
-            [e for e in edges if e["src"] == e["dst"]], key=lambda e: e["src"]
-        )
-        offdiag_edges = [e for e in edges if e["src"] != e["dst"]]
-
-        # 3. Calculate lengths for off-diagonal edges and sort them
-        if offdiag_edges:
-            offdiag_edge_index = torch.tensor(
-                [[e["src"] for e in offdiag_edges], [e["dst"] for e in offdiag_edges]],
-                dtype=torch.long,
-                device=self.device,
-            )
-            disp = self._minimal_disp(
-                snap.positions,
-                offdiag_edge_index,
-                snap.box,
-            )
-            lengths = torch.linalg.norm(disp, dim=-1)
-            sorted_indices = torch.argsort(lengths)
-            offdiag_edges = [offdiag_edges[i] for i in sorted_indices]
-
-        # 4. Combine edges in the specified order
-        all_edges = self_edges + offdiag_edges
-        edge_index = torch.tensor(
-            [[e["src"] for e in all_edges], [e["dst"] for e in all_edges]],
-            dtype=torch.long,
-            device=self.device,
-        )
-        edge_type_idx = torch.tensor(
-            [self.edge_type2idx[e["key"]] for e in all_edges],
-            dtype=torch.long,
-            device=self.device,
-        )
-
-        # 5. Calculate geometric features for the final edge order
-        disp = self._minimal_disp(snap.positions, edge_index, snap.box)
-        lengths = torch.linalg.norm(disp, dim=-1)
-        edge_sh = spherical_harmonics(
-            self.sh_irreps, disp, normalize=True, normalization="component"
-        )
-        edge_length_emb = soft_one_hot_linspace(
-            lengths,
-            start=0.0,
-            end=self.cut_mat,
-            number=self.n_radial,
-            basis="gaussian",
-            cutoff=False,
-        )
-
-        # 6. Determine the GNN cutoff_gnn index
-        index_gnn_cutoff = len(self_edges) + torch.sum(lengths <= self.cut).item()
-
-        return (
-            edge_index,
-            edge_type_idx,
-            edge_length_emb,
-            edge_sh,
-            index_gnn_cutoff,
-        )
-
     # ---------- main per-snapshot routine -----------------------------------
-    def _process_snapshot(
+    def _process_snapshot_to_sample(
         self, snap: Snapshot
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         """
         Build graph inputs and targets from one Snapshot.
         """
-        snap.positions = snap.positions.to(self.dtype)
-        snap.box = snap.box.to(self.dtype)
-        if self.enable_forces:
-            snap.positions.requires_grad_(True)
+        # snap.positions = snap.positions.to(self.dtype)
+        # snap.box = snap.box.to(self.dtype)
+        # snap.forces = snap.forces.to(self.dtype)
+        # snap.stress = snap.stress.to(self.dtype)
 
-        (
-            edge_index,
-            edge_type_idx,
-            edge_length_emb,
-            edge_sh,
-            index_gnn_cutoff,
-        ) = self._edge_tensors(snap)
+        if self.cfg.enable_forces:
+            snap.positions.requires_grad_()
+        if self.cfg.enable_stress:
+            snap.box.requires_grad_()
+        if self.cfg.train_on_forces:
+            snap.forces.requires_grad_()
+        if self.cfg.train_on_stress:
+            snap.stress.requires_grad_()
 
         atoms = snap.density.atoms
-        elem2idx = {el: i for i, el in enumerate(self.global_cfg.elements())}
-        node_type_idx = torch.tensor(
-            [elem2idx[el] for el in atoms], dtype=torch.long, device=self.device
-        )
+        elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
+        node_type_idx = torch.tensor([elem2idx[el] for el in atoms], dtype=torch.long)
 
         x = {
-            "node_type_idx": node_type_idx.to(self.device),
-            "edge_index": edge_index.to(self.device),
-            "edge_type_idx": edge_type_idx.to(self.device),
-            "index_gnn_cutoff": index_gnn_cutoff,
-            "edge_length_emb": edge_length_emb.to(self.dtype).to(self.device),
-            "edge_sh": edge_sh.to(self.dtype).to(self.device),
-            "positions": snap.positions.to(self.device),
-            "box": snap.box.to(self.dtype).to(self.device),
+            "node_type_idx": node_type_idx,
+            "positions": snap.positions,
+            "box": snap.box,
             "atoms": atoms,
         }
 
-        y = {
-            "hamiltonian": snap.hamiltonian.to_vectors(self.mapper)
-            .to(self.dtype)
-            .to(self.device),
-            "overlap": snap.overlap.to_vectors(self.mapper)
-            .to(self.dtype)
-            .to(self.device),
-            "density": snap.density.to_vectors(self.mapper)
-            .to(self.dtype)
-            .to(self.device),
-            "energy": snap.get_energy().to(self.dtype).to(self.device),
-            "num_electrons": snap.get_number_of_electrons()
-            .to(self.dtype)
-            .to(self.device),
-        }
+        if self.cfg.precompute_edge_features:
+            (
+                edge_index,
+                edge_shift,
+                edge_type_idx,
+                edge_length_emb,
+                edge_sh,
+                index_gnn_cutoff,
+                num_self_edges,
+            ) = compute_graph_features(
+                positions=snap.positions,
+                box=snap.box,
+                atoms=snap.density.atoms,
+                cfg=self.cfg,
+                sh_irreps=self.sh_irreps,
+                edge_type2idx=self.mapper.edge_type2idx,
+            )
+            x["edge_index"] = edge_index
+            x["edge_shift"] = edge_shift
+            x["edge_type_idx"] = edge_type_idx
+            x["edge_length_emb"] = edge_length_emb
+            x["edge_sh"] = edge_sh
+            x["index_gnn_cutoff"] = index_gnn_cutoff
+            x["num_self_edges"] = num_self_edges
+
+        with torch.no_grad():
+            if self.cfg.train_target == "matrix":
+                hamiltonian_target = snap.hamiltonian
+                overlap_target = snap.overlap
+                density_target = snap.density
+            elif self.cfg.train_target == "irreps":
+                hamiltonian_target = snap.hamiltonian.to_vectors(self.mapper)
+                overlap_target = snap.overlap.to_vectors(self.mapper)
+                density_target = snap.density.to_vectors(self.mapper)
+            else:
+                raise ValueError(
+                    f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
+                )
+
+            y = {
+                "hamiltonian": hamiltonian_target,
+                "overlap": overlap_target,
+                "density": density_target,
+                "energy": snap.get_energy(),
+                "num_electrons": snap.get_number_of_electrons(),
+                "forces": snap.forces,
+                "stress": snap.stress,
+            }
+
+            target_index_map = {}
+            matrix_name = self.cfg.matrix_targets[0]
+            for key in y[matrix_name].pair_edges.keys():
+                edge_type_id = self.mapper.edge_type2idx[key]
+                #! Edge manipulation
+                # <assumptions>
+                # - Maps edges from the GNN graph (`x`) to the target matrix (`y`).
+                # - `edges_t` (target) follows `(sx, sy, sz, src, dst)` convention.
+                # - `edges_p` (graph) is constructed by concatenating `edge_shift` and `edge_index`.
+                # </assumptions>
+                # <implementation>
+                # - Retrieves target edges.
+                # - Filters graph edges and shifts by edge type.
+                # - Concatenates shift and indices to form `(5, E)` tensor.
+                # - Builds a mapping from edge tuple to target index.
+                # - Creates `tim` tensor mapping graph edges to target indices.
+                # </implementation>
+                edges_t = y[matrix_name].pair_edges[key]
+                print(f"{key} edges_t shape: {edges_t.shape}")
+                edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
+                print(f"{key} edges_p shape: {edges_p.shape}")
+                edge_shift_p = x["edge_shift"][:, x["edge_type_idx"] == edge_type_id]
+                print(f"{key} edge_shift_p shape: {edge_shift_p.shape}")
+                edges_p = torch.cat([edge_shift_p, edges_p], dim=0)
+                print(f"{key} edges_p (with shift) shape: {edges_p.shape}")
+                edge_t_to_id = {
+                    tuple(edge.tolist()): i for i, edge in enumerate(edges_t.T)
+                }
+                tim = torch.tensor(
+                    [
+                        edge_t_to_id[tuple(edge.tolist())]
+                        for edge in edges_p.T
+                        if tuple(edge.tolist()) in edge_t_to_id
+                    ],
+                    dtype=torch.long,
+                )
+                target_index_map[key] = tim
+                print(f"{key} tim shape: {tim.shape}")
+            y["target_index_map"] = target_index_map
 
         return x, y
 
     # ------------------- torch Dataset interface ---------------------------
     def __len__(self) -> int:
-        return len(self.samples)
+        return len(self.snapshots)
 
     def __getitem__(
         self, idx: int
@@ -310,13 +263,13 @@ class E3GNNDataset(Dataset):
         Dict[str, torch.Tensor], Dict[str, torch.Tensor], Dict[str, torch.Tensor]
     ]:
         t0 = time.perf_counter()
-        sample = self.samples[idx]
+        snapshot = self.snapshots[idx]
         t1 = time.perf_counter()
         try:
             self.loader_times.append(t1 - t0)
         except Exception:
             pass
-        return sample
+        return snapshot
 
     def to(self, device: torch.device | str) -> E3GNNDataset:
         """
@@ -327,14 +280,20 @@ class E3GNNDataset(Dataset):
             return self
         self.device = device
         # Explicitly move known fields
-        for idx, (x, y) in enumerate(self.samples):
+        for idx, (x, y) in enumerate(self.snapshots):
             # x
-            x["node_type_idx"] = x["node_type_idx"].to(device)
-            x["edge_index"] = x["edge_index"].to(device)
-            x["edge_type_idx"] = x["edge_type_idx"].to(device)
-            x["edge_length_emb"] = x["edge_length_emb"].to(device)
-            x["edge_sh"] = x["edge_sh"].to(device)
-            x["index_gnn_cutoff"] = x["index_gnn_cutoff"].to(device)
+            if "node_type_idx" in x:
+                x["node_type_idx"] = x["node_type_idx"].to(device)
+            if "edge_index" in x:
+                x["edge_index"] = x["edge_index"].to(device)
+            if "edge_shift" in x:
+                x["edge_shift"] = x["edge_shift"].to(device)
+            if "edge_type_idx" in x:
+                x["edge_type_idx"] = x["edge_type_idx"].to(device)
+            if "edge_length_emb" in x:
+                x["edge_length_emb"] = x["edge_length_emb"].to(device)
+            if "edge_sh" in x:
+                x["edge_sh"] = x["edge_sh"].to(device)
 
             # y targets
             y["hamiltonian"] = y["hamiltonian"].to(device)
@@ -343,5 +302,5 @@ class E3GNNDataset(Dataset):
             y["energy"] = y["energy"].to(device)
             y["num_electrons"] = y["num_electrons"].to(device)
 
-            self.samples[idx] = (x, y)
+            self.snapshots[idx] = (x, y)
         return self

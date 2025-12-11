@@ -4,9 +4,7 @@ openmx_parser.py
 Parses a single OpenMX ``*.scfout`` into a **Snapshot** object that bundles
 Hamiltonian H, Overlap S and Density D block-matrices.
 
-*  Handles junk header lines automatically (skips until first recognised header)
-*  Sums duplicate periodic-image blocks (different Rn) automatically
-*  Discards “position / momentum operator” overlap sections
+*  Sums duplicate periodic-image blocks (different Rn)
 *  Returns the matrices either in **OpenMX** or **E3NN** convention
 """
 
@@ -28,10 +26,13 @@ __all__ = ["OpenMXParseError", "parse_openmx_scfout"]
 
 # ---------------------------------------------------------------- regexes
 _SECTION_RE = re.compile(
-    r"^(Kohn-Sham Hamiltonian spin=0|Overlap matrix|Density matrix spin=0)$"
+    r"^(Kohn-Sham Hamiltonian spin=0|Overlap matrix|Density matrix spin=0|Overlap matrix with position operator x)$"
 )
 _HEADER_RE = re.compile(
-    r"global index=(\d+)\s+local index=\d+\s+\(global=(\d+),\s*Rn=[-]?\d+\)"
+    r"global index=(\d+)\s+local index=\d+\s+\(global=(\d+),\s*Rn=([-]?\d+)\)"
+)
+_HEADER_OVERLAP_POS_X_RE = re.compile(
+    r"global index=(\d+)\s+local index=\d+\s+\(global=(\d+),\s*Rn=([-]?\d+) ([-]?\d+) ([-]?\d+) ([-]?\d+)\)"
 )
 
 _SKIP_OVERLAP_RE = re.compile(r"^Overlap matrix with (position|momentum) operator")
@@ -77,10 +78,15 @@ def parse_openmx_scfout(
         "overlap": {},
         "density": {},
     }
+    rn_shift_map: Dict[int, Tuple[int, int, int]] = {}
 
-    def _add(mat: str, key: str, i: int, j: int, blk: torch.Tensor) -> None:
+    def _add(mat: str, key: str, i: int, j: int, rn: int, blk: torch.Tensor) -> None:
         dct = accum[mat].setdefault(key, {})
-        dct[(i, j)] = dct.get((i, j), torch.zeros_like(blk)) + blk
+        if (i, j, rn) in dct:
+            raise OpenMXParseError(
+                f"Duplicate block found for {mat} {key} ({i},{j}) Rn={rn}"
+            )
+        dct[(i, j, rn)] = blk
 
     # ─────────────────────────────────────── parse loop
     current: str | None = None  # "hamiltonian" | "overlap" | "density"
@@ -102,23 +108,38 @@ def parse_openmx_scfout(
                     current = "density"
                 elif line.startswith("Kohn-Sham"):
                     current = "hamiltonian"
+                elif line.startswith("Overlap matrix with position operator x"):
+                    current = "overlap position x"
                 else:  # bare “Overlap matrix”
                     current = "overlap"
                 continue
-
-            if _SKIP_OVERLAP_RE.match(line):
+            if _SKIP_OVERLAP_RE.match(line) and current != "overlap position x":
                 current = None  # discard position / momentum overlap blocks
                 continue
 
             # ---------- inside section: individual block -------------------
             if current is None:
                 continue
+
+            if current == "overlap position x":
+                m = _HEADER_OVERLAP_POS_X_RE.match(line)
+                if m:
+                    rn, sx, sy, sz = (
+                        int(m.group(3)),
+                        int(m.group(4)),
+                        int(m.group(5)),
+                        int(m.group(6)),
+                    )
+                    rn_shift_map[rn] = (sx, sy, sz)
+                continue
+
             m = _HEADER_RE.match(line)
             if not m:
                 continue
 
             i_glob = int(m.group(1)) - 1
             j_glob = int(m.group(2)) - 1
+            rn = int(m.group(3))
             el_i, el_j = atoms[i_glob], atoms[j_glob]
             key = f"{el_i}-{el_j}"
             d_i, d_j = mapper.block_dims(key)
@@ -140,22 +161,46 @@ def parse_openmx_scfout(
                 rows.append(nums)
 
             block = torch.tensor(rows, dtype=torch.float32)
-            _add(current, key, i_glob, j_glob, block)
+            _add(current, key, i_glob, j_glob, rn, block)
 
     # ─────────────────────────────────────── build BlockMatrix objects
-    def _to_mbd(sub: Dict[str, Dict[Tuple[int, int], torch.Tensor]]) -> BlockMatrix:
+    def _to_block_matrix(
+        sub: Dict[str, Dict[Tuple[int, int, int], torch.Tensor]],
+        rn_shift_map: Dict[int, Tuple[int, int, int]],
+    ) -> BlockMatrix:
         from collections import Counter
 
         pair_blocks: Dict[str, List[torch.Tensor]] = {}
         pair_edges: Dict[str, List[List[int]]] = {}
         lookup: Dict[Tuple[int, int], Tuple[str, int]] = {}
         for key, block_dict in sub.items():
-            # order edges deterministically by (i,j)
+            # order edges deterministically by (i, j, rn)
             items = sorted(block_dict.items(), key=lambda t: t[0])
-            pair_blocks[key] = [b for (_ij, b) in items]
-            pair_edges[key] = [[i, j] for (i, j), _ in items]
-            for idx, ((i, j), _) in enumerate(items):
-                lookup[(i, j)] = (key, idx)
+            pair_blocks[key] = [b for (_ijr, b) in items]
+            # pair_edges[key] = [[i, j, rn] for (i, j, rn), _ in items]
+            pair_edges[key] = []
+            #! Edge manipulation
+            # <assumptions>
+            # - Converts OpenMX `rn` index to `(sx, sy, sz)` shift using `rn_shift_map`.
+            # - Constructs edges in `(sx, sy, sz, i, j)` format.
+            # </assumptions>
+            # <implementation>
+            # - Iterates over sorted items.
+            # - Appends 5-tuple edge to `pair_edges`.
+            # </implementation>
+            for (i, j, rn), _ in items:
+                sx, sy, sz = rn_shift_map[rn]
+                pair_edges[key].append([sx, sy, sz, i, j])
+            #! Edge manipulation
+            # <assumptions>
+            # - Builds lookup table for O(1) access to blocks.
+            # </assumptions>
+            # <implementation>
+            # - Maps `(sx, sy, sz, i, j)` to `(key, idx)`.
+            # </implementation>
+            for idx, ((i, j, rn), _) in enumerate(items):
+                sx, sy, sz = rn_shift_map[rn]
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         pair_blocks_t = {k: torch.stack(v) for k, v in pair_blocks.items()}
         pair_edges_t = {
@@ -166,6 +211,13 @@ def parse_openmx_scfout(
         # 1. Test whether all edges are unique
         all_edges = set()
         for edges in pair_edges_t.values():
+            #! Edge manipulation
+            # <assumptions>
+            # - Collects all edges to verify uniqueness.
+            # </assumptions>
+            # <implementation>
+            # - Adds each edge tuple to `all_edges` set.
+            # </implementation>
             for edge in edges.t().tolist():
                 all_edges.add(tuple(edge))
         if len(all_edges) != sum(len(edges.t()) for edges in pair_edges_t.values()):
@@ -173,24 +225,51 @@ def parse_openmx_scfout(
         # 2. Test whether lookup contains all edges
         if len(lookup) != len(all_edges):
             raise OpenMXParseError("Lookup size does not match edge count")
-        for i, j in all_edges:
-            if (i, j) not in lookup:
-                raise OpenMXParseError(f"Edge {(i, j)} not found in lookup")
-            key, idx = lookup[(i, j)]
+        #! Edge manipulation
+        # <assumptions>
+        # - Verifies consistency between `pair_edges` and `lookup`.
+        # </assumptions>
+        # <implementation>
+        # - Checks if every edge in `all_edges` exists in `lookup`.
+        # - Checks if lookup index is valid.
+        # </implementation>
+        for sx, sy, sz, i, j in all_edges:
+            if (sx, sy, sz, i, j) not in lookup:
+                raise OpenMXParseError(f"Edge {(sx, sy, sz, i, j)} not found in lookup")
+            key, idx = lookup[(sx, sy, sz, i, j)]
             if key not in pair_blocks_t or idx >= len(pair_blocks_t[key]):
-                raise OpenMXParseError(f"Edge {(i, j)} lookup points to invalid block")
+                raise OpenMXParseError(
+                    f"Edge {(sx, sy, sz, i, j)} lookup points to invalid block"
+                )
         # 3. Test whether all self-edges are present
         for i, atom in enumerate(atoms):
             key = f"{atom}-{atom}"
             if key not in pair_blocks_t:
                 raise OpenMXParseError(f"Self-edge {key} not found in pair blocks")
-            if (i, i) not in lookup:
+            #! Edge manipulation
+            # <assumptions>
+            # - Ensures self-interaction blocks (diagonal, zero shift) are present.
+            # </assumptions>
+            # <implementation>
+            # - Checks for `(0, 0, 0, i, i)` in `lookup`.
+            # </implementation>
+            if (0, 0, 0, i, i) not in lookup:
                 raise OpenMXParseError(f"Self-edge lookup for {key} missing")
         # 4. Test whether graph is symmetric
-        for i, j in lookup:
-            key, idx = lookup[(i, j)]
-            if (j, i) not in lookup:
-                raise OpenMXParseError(f"Edge {(i, j)} is not symmetric with {(j, i)}")
+        #! Edge manipulation
+        # <assumptions>
+        # - Ensures the graph is symmetric: if edge (S, i, j) exists, (-S, j, i) must exist.
+        # </assumptions>
+        # <implementation>
+        # - Iterates over all edges in `lookup`.
+        # - Checks for existence of symmetric counterpart.
+        # </implementation>
+        for sx, sy, sz, i, j in lookup:
+            key, idx = lookup[(sx, sy, sz, i, j)]
+            if (-sx, -sy, -sz, j, i) not in lookup:
+                raise OpenMXParseError(
+                    f"Edge {(sx, sy, sz, i, j)} is not symmetric with {(-sx, -sy, -sz, j, i)}"
+                )
 
         return BlockMatrix(
             atoms=tuple(atoms),
@@ -202,9 +281,9 @@ def parse_openmx_scfout(
             basis="openmx",
         )
 
-    ham = _to_mbd(accum["hamiltonian"])
-    ovl = _to_mbd(accum["overlap"])
-    den = _to_mbd(accum["density"])
+    ham = _to_block_matrix(accum["hamiltonian"], rn_shift_map)
+    ovl = _to_block_matrix(accum["overlap"], rn_shift_map)
+    den = _to_block_matrix(accum["density"], rn_shift_map)
 
     if symmetrize_density:
         den = den + den.transpose()
@@ -215,6 +294,9 @@ def parse_openmx_scfout(
         ham = conv.matrix_to_e3nn(ham)
         ovl = conv.matrix_to_e3nn(ovl)
         den = conv.matrix_to_e3nn(den)
+        print(
+            "Warning: Parsed matrices converted to e3nn convention, positions may need adjustment."
+        )
     elif convention != "openmx":
         raise ValueError(f"convention must be 'openmx' or 'e3nn', not '{convention}'")
 

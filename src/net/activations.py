@@ -12,9 +12,8 @@ Supported kinds
 • "s2act"     →  e3nn.nn.S2Activation
 • "id"        →  identity (no non-linearity)
 
-The choice is controlled by ``hp.nonlin_kind`` (see HyperParams).
+The choice is controlled by ``cfg.nonlin_kind`` (see Config).
 Batch-Norm (equivariant) can be toggled independently through
-``hp.batch_norm`` – if enabled we apply it **before** the non-linearity.
 
 Scalar activation names ("silu", "relu", …) are mapped to the
 corresponding `torch.nn.Module` instances via :func:`scalar_activation`.
@@ -23,9 +22,12 @@ corresponding `torch.nn.Module` instances via :func:`scalar_activation`.
 from __future__ import annotations
 from typing import Dict, Callable
 
+import torch
 from torch import nn
 from e3nn.o3 import Irreps
-from e3nn.nn import Gate, NormActivation, BatchNorm
+from e3nn.nn import NormActivation, S2Activation
+
+from net.common import Config
 
 # Public ------------------------------------------------------------------- #
 __all__ = [
@@ -40,6 +42,9 @@ _SCALAR_ACTS: Dict[str, Callable[[], nn.Module]] = {
     "gelu": nn.GELU,
     "tanh": nn.Tanh,
     "sigmoid": nn.Sigmoid,
+    "leakyrelu": nn.LeakyReLU,
+    "softplus": nn.Softplus,
+    "softsign": nn.Softsign,
 }
 
 
@@ -53,30 +58,172 @@ def scalar_activation(name: str) -> nn.Module:
         ) from exc
 
 
-# -------------------------------------------------------------------------- #
-# Hyper-parameter stub (avoids circular import: common↔activations)
-class _HPStub:
-    nonlin_kind: str
-    activation_scalar: str
-    batch_norm: bool
-    norm_kind: str
+class GateScalarsMLP(nn.Module):
+    """
+    A module that
+    1. Takes scalars from inputs
+    2. Applies an MLP to them
+    3. Returns a concatenation of the original scalars (after application of a non-linearity)
+        and the non-scalars multiplied by the output of the MLP (per irrep).
+    """
+
+    def __init__(
+        self,
+        irreps: Irreps,
+        nonlin_scalars: nn.Module,
+        nonlin_gate: nn.Module = nn.SiLU(),
+    ):
+        """
+        Initialize the GateScalarsMLP module.
+        Parameters
+        ----------
+        irreps : Irreps
+            The irreducible representations of the input features.
+        nonlin_scalars : nn.Module
+            Non-linearity to apply to the scalar features.
+        nonlin_gate : nn.Module
+            Non-linearity to apply to the gate output (default: SiLU).
+        """
+        super().__init__()
+        self.irreps = irreps
+        self.nonlin_scalars = nonlin_scalars
+        self.n_scalars = sum(mul for mul, ir in irreps if ir.l == 0 and ir.p == 1)
+        self.n_non_scalars = sum(mul for mul, ir in irreps if ir.l > 0 or ir.p == -1)
+        self.mlp = nn.Sequential(
+            nn.Linear(self.n_scalars, 64),
+            nn.LeakyReLU(),
+            nn.Linear(64, self.n_non_scalars),
+            nonlin_gate,
+        )
+        if self.n_scalars == 0:
+            raise ValueError(
+                "No scalar irreps found in the provided Irreps. "
+                "Ensure that there are scalar components in the irreps."
+            )
+        if self.n_non_scalars == 0:
+            raise ValueError(
+                "No non-scalar irreps found in the provided Irreps. "
+                "Ensure that there are non-scalar components in the irreps."
+            )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass that applies the gate to the input tensor.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (..., irreps.dim).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (..., irreps.dim).
+        """
+        # Split scalars and non-scalars
+        scalars = []
+        start = 0
+        for mul, ir in self.irreps:
+            if ir.l == 0 and ir.p == 1:
+                # Scalars
+                end = start + mul * ir.dim
+                scalars.append(x[..., start:end])
+                start = end
+            else:
+                # Non-scalars
+                end = start + mul * ir.dim
+                start = end
+        scalars = torch.cat(scalars, dim=-1)
+
+        # Apply MLP to scalars and multiply with non-scalars
+        gate_output = self.mlp(scalars)
+
+        # Apply non-linearity to scalars
+        scalars = self.nonlin_scalars(scalars)
+
+        output = [scalars]
+        start_g = 0
+        start_x = self.n_scalars
+        for mul, ir in self.irreps:
+            if not (ir.l == 0 and ir.p == 1):
+                # Non-scalars
+                end_x = start_x + mul * ir.dim
+                non_scalars = x[..., start_x:end_x]
+                # Get the gate values for this irrep
+                end_g = start_g + mul
+                gate = gate_output[..., start_g:end_g].unsqueeze(-1)
+                # Reshape non_scalars to be able to multiply by gate
+                non_scalars = non_scalars.reshape(*non_scalars.shape[:-1], mul, ir.dim)
+                output.append((non_scalars * gate).reshape(*non_scalars.shape[:-2], -1))
+                start_g = end_g
+                start_x = end_x
+        return torch.cat(output, dim=-1)
 
 
-def _split_scalars_and_rest(irreps: Irreps):
-    """Return (Irreps[0e scalars], Irreps[others])."""
-    scalars, nonscalars = [], []
-    for mul, ir in irreps:
-        if ir.l == 0 and ir.p == 1:
-            scalars.append((mul, ir))
-        else:
-            nonscalars.append((mul, ir))
-    return Irreps(scalars).simplify(), Irreps(nonscalars).simplify()
+class GateMagnitudes(nn.Module):
+    """
+    A module that
+    1. Applies a non-linearity to the scalars in the input
+    2. Computes the magnitudes of the non-scalars
+    3. Applies an activation function to the magnitudes
+    4. Multiplies the non-scalars by the activation output
+    """
+
+    def __init__(
+        self, irreps: Irreps, nonlin_scalars: nn.Module, nonlin_gate: nn.Module
+    ):
+        super().__init__()
+        self.irreps = irreps
+        self.nonlin_scalars = nonlin_scalars
+        self.nonlin_gate = nonlin_gate
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass that applies the gate to the input tensor.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (..., irreps.dim).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (..., irreps.dim).
+        """
+        output = []
+        start = 0
+        for mul, ir in self.irreps:
+            if ir.l == 0 and ir.p == 1:
+                # Scalars
+                end = start + mul * ir.dim
+                scalars = x[..., start:end]
+                # Apply non-linearity to scalars
+                scalars = self.nonlin_scalars(scalars)
+                output.append(scalars)
+                start = end
+            else:
+                # Non-scalars
+                end = start + mul * ir.dim
+                non_scalars = x[..., start:end].reshape(*x.shape[:-1], mul, ir.dim)
+                # Compute magnitudes
+                magnitudes = torch.linalg.norm(non_scalars, dim=-1)
+                # Apply non-linearity to magnitudes
+                activations = self.nonlin_gate(magnitudes)
+                # Multiply non-scalars by magnitudes
+                non_scalars = non_scalars * (
+                    activations.unsqueeze(-1) / magnitudes.unsqueeze(-1)
+                )
+                # Reshape back to original shape
+                output.append(non_scalars.reshape(*x.shape[:-1], -1))
+                start = end
+        return torch.cat(output, dim=-1)
 
 
 # -------------------------------------------------------------------------- #
 def make_nonlinearity(
     irreps: Irreps,
-    hp: _HPStub,
+    cfg: Config,
 ) -> nn.Module:
     """
     Build an equivariant **normalisation + activation** module.
@@ -85,75 +232,45 @@ def make_nonlinearity(
     ----------
     irreps
         Input/output representation (unchanged by the non-linearity).
-    hp
+    cfg
         Any object that exposes the attributes used below
-        (`nonlin_kind`, `activation_scalar`, `batch_norm`, `norm_kind`).
+        (`nonlin_kind`, `activation_scalar`, `norm_kind`).
 
     Returns
     -------
     torch.nn.Module
         Callable that maps (..., irreps.dim) → (..., irreps.dim)
     """
-    kind = hp.nonlin_kind.lower()
-
-    # optional BatchNorm (equivariant)
-    pre_norm: nn.Module
-    if getattr(hp, "batch_norm", False):
-        pre_norm = BatchNorm(irreps)
-    else:
-        pre_norm = nn.Identity()
-
-    if kind == "id":
-        return nn.Sequential(pre_norm)  # nothing else
-
-    if kind == "gate":
-        scalars_ir, rest_ir = _split_scalars_and_rest(irreps)
-
-        # Gate requires one scalar *per* gated irrep
-        if (
-            scalars_ir.dim == 0
-            or rest_ir.dim == 0
-            or scalars_ir.num_irreps != rest_ir.num_irreps
-        ):
-            # fall back – not enough 0e scalars to gate everything
-            # ! WARNING: we should not use the fallback, but think of something else
-            kind = "normact"
-        else:
-            g_act = scalar_activation("sigmoid")
-            s_act = scalar_activation(hp.activation_scalar)
-            num = scalars_ir.num_irreps
-            return nn.Sequential(
-                pre_norm,
-                Gate(
-                    irreps_scalars=scalars_ir,
-                    act_scalars=[s_act] * num,
-                    irreps_gates=scalars_ir,
-                    act_gates=[g_act] * num,
-                    irreps_gated=rest_ir,
-                ),
-            )
+    kind = cfg.nonlin_kind.lower()
 
     if kind == "normact":
         # Norm kind: "component" (default) or "norm"
-        normalise_over = "component" if hp.norm_kind == "component" else "norm"
-        return nn.Sequential(
-            pre_norm,
-            NormActivation(
-                irreps,
-                scalar_activation(hp.activation_scalar),
-                normalize=normalise_over,
-            ),
-        )
-
-    if kind == "s2act":
-        layer = NormActivation(
+        normalise_over = "component" if cfg.norm_kind == "component" else "norm"
+        return NormActivation(
             irreps,
-            scalar_activation(hp.activation_scalar),
-            normalize="component",
+            scalar_activation(cfg.activation_scalar),
+            normalize=normalise_over,
         )
-        return nn.Sequential(pre_norm, layer)
-
-    raise ValueError(
-        f"Unknown nonlin_kind '{hp.nonlin_kind}'. "
-        f"Expected 'gate', 'normact', 's2act', or 'id'."
-    )
+    elif kind == "s2act":
+        return S2Activation(
+            irreps,
+            scalar_activation(cfg.activation_scalar),
+            res=cfg.s2act_res,
+        )
+    elif kind == "gate_scalars_mlp":
+        return GateScalarsMLP(
+            irreps,
+            scalar_activation(cfg.activation_scalar),
+            scalar_activation(cfg.activation_gate),
+        )
+    elif kind == "gate_magnitudes":
+        return GateMagnitudes(
+            irreps,
+            scalar_activation(cfg.activation_scalar),
+            scalar_activation(cfg.activation_gate),
+        )
+    else:
+        raise ValueError(
+            f"Unknown nonlin_kind '{cfg.nonlin_kind}'. "
+            f"Expected one of: 'normact', 's2act', 'gate_scalars_mlp', 'gate_magnitudes'."
+        )

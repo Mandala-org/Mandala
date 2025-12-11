@@ -1,0 +1,81 @@
+program: scripts/train_silicon.py
+project: mandala_small_steps
+name: silicon_hamiltonian_density_overlap_overfit_sweep
+method: bayes
+early_terminate:
+  type: hyperband
+  min_iter: 20  # Stop runs that are performing poorly after 20 epochs
+metric:
+  name: val_loss_matrix
+  goal: minimize
+
+
+parameters:
+  cutoff_gnn:
+    value: 5.0
+  cutoff_matrix:
+    value: 7.0
+  l_max_gnn:
+    distribution: int_uniform
+    min: 3
+    max: 4
+  num_layers_gnn:
+    value: 1
+  num_layers_matrix:
+    value: 1
+  edge_update_linear:
+    values: ["pre", "post"]
+  edge_update:
+    values: ["concat"]
+  edge_update_residual:
+    values: [True]
+  head_use_mlp_log_scale:
+    values: [False]
+  nonlin_kind:
+    value: "normact"
+  activation_scalar:
+    values: ["silu", "leakyrelu", "tanh"]
+  activation_gate:
+    values: ["sigmoid", "leakyrelu", "tanh"]
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-4
+    max: 1.0e-2
+  hidden_base_dim:
+    value: 64
+  dropout:
+    value: 0.0
+  n_radial:
+    value: 64
+  neck_depth:
+    value: 2
+  head_depth:
+    value: 2
+  train_target:
+    value: "matrix"
+
+  # --- Fixed parameters for Hamiltonian-only training ---
+  matrix_targets:
+    value: ["hamiltonian", "density", "overlap"]
+  train_on_energy:
+    value: False
+  train_on_num_electrons:
+    value: False
+  loss_coef_observables:
+    value: 0.0
+  loss_coef_observables:
+    value: 0.0
+
+
+command:
+  - ${env}
+  - python3
+  - -u # Unbuffered output for real-time logging
+  - ${program}
+  - ${args}
+  - --gpus=1  # Specify a single GPU
+  - --num_workers=0
+  - --n_snapshots_per_temp=1 # Use a subset for faster sweeps
+  - --max_epochs=1000
+  - --min_temp=3000
+  - --max_temp=3000

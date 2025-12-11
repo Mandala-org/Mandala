@@ -43,7 +43,7 @@ class BlockMatrix:
     atoms: Tuple[str, ...]
     atom_counts: Dict[str, int]
     pair_blocks: Dict[PairKey, torch.Tensor]  # (E_ab, d_A, d_B)
-    pair_edges: Dict[PairKey, torch.Tensor]  # (2, E_ab)
+    pair_edges: Dict[PairKey, torch.Tensor]  # (5, E_ab)
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
     orbital_cfg: OrbitalIrrepConfig
     basis: str  # "openmx" | "e3nn"
@@ -56,15 +56,32 @@ class BlockMatrix:
         return cls(tuple(atoms), Counter(atoms), {}, {}, {}, orbital_cfg, basis)
 
     # --------------- dict-like access -------------------------------------- #
+    #! Edge manipulation
     def __getitem__(self, item):
-        # item = (i, j) global indices
+        # item = (i, j) global indices, sum periodic images
         if isinstance(item, tuple) and len(item) == 2:
+            print("Warning: BlockMatrix.__getitem__((i,j)) sums over periodic images.")
+            ret = None
+            for key in self.lookup:
+                # key is (sx, sy, sz, i, j)
+                if key[3] == item[0] and key[4] == item[1]:
+                    k_key, k_idx = self.lookup[key]
+                    block = self.pair_blocks[k_key][k_idx]
+                    if ret is None:
+                        ret = block.clone()
+                    else:
+                        ret += block
+            if ret is None:
+                raise KeyError(f"No blocks found for indices {item}")
+            return ret
+        # item = (sx, sy, sz, i, j) global indices
+        if isinstance(item, tuple) and len(item) == 5:
             key, k = self.lookup[item]
             return self.pair_blocks[key][k]
         # item = "A-B"
         if isinstance(item, str):
             return self.pair_blocks[item]
-        raise KeyError("use (i,j) or 'A-B'")
+        raise KeyError("use (i,j), (sx,sy,sz,i,j) or 'A-B'")
 
     def edges(self, key: PairKey) -> torch.Tensor:
         return self.pair_edges[key]
@@ -75,43 +92,77 @@ class BlockMatrix:
     # ─────────────────────────────────────────────────────────────────────────
     #   helpers to access diagonal / off-diagonal blocks
     # ─────────────────────────────────────────────────────────────────────────
+    #! Edge manipulation
     def diag(self) -> Dict[PairKey, torch.Tensor]:
         """
         Return a **dict** ``key → tensor`` that contains *only the blocks whose
         global source/target atom are identical* (self-edges).
 
         Off-diagonal blocks are omitted; keys that would become empty disappear.
+
+        <assumptions>
+        - Self-edges are defined as edges where the source and target atom indices are identical.
+        - In the storage convention for homo-atomic pairs (e.g., "Si-Si"), the self-interaction blocks (where `i == j` and shift is 0) are stored *first*.
+        - Specifically, the first `atom_counts[el]` blocks in `pair_blocks[key]` correspond to the self-edges for atoms of element `el`.
+        </assumptions>
+        <implementation>
+        - Iterates over all `pair_blocks`.
+        - Skips hetero-atomic pairs (`el_a != el_b`).
+        - For homo-atomic pairs, slices the first `n_atoms` blocks: `blk[:n_atoms]`.
+        - Returns a dictionary of these diagonal blocks.
+        </implementation>
         """
         diag_dict: Dict[PairKey, torch.Tensor] = {}
         for key, blk in self.pair_blocks.items():
             el_a, el_b = key.split("-")
             if el_a != el_b:
                 continue
-
-            n_diag = self.atom_counts[el_a]
-            if blk.shape[0] >= n_diag:
-                diag_dict[key] = blk[-n_diag:]
+            n_atoms = self.atom_counts[el_a]
+            diag_dict[key] = blk[:n_atoms]
 
         return diag_dict
 
+    #! Edge manipulation
     def offdiag(self) -> Dict[PairKey, torch.Tensor]:
         """
         Same as :meth:`diag` but returns the **off-diagonal** blocks
         ( *i* ≠ *j* ).
+
+        <assumptions>
+        - Complementary to `diag`.
+        - For homo-atomic pairs, blocks *after* the first `n_atoms` are off-diagonal (inter-atom interactions or self-images).
+        - For hetero-atomic pairs, *all* blocks are off-diagonal.
+        </assumptions>
+        <implementation>
+        - Iterates over `pair_blocks`.
+        - If homo-atomic (`el_a == el_b`), slices from `n_atoms` to the end: `blk[n_atoms:]`.
+        - If hetero-atomic, includes the entire block tensor.
+        - Returns a dictionary of these off-diagonal blocks.
+        </implementation>
         """
         off_dict: Dict[PairKey, torch.Tensor] = {}
         for key, blk in self.pair_blocks.items():
             el_a, el_b = key.split("-")
             if el_a == el_b:
-                n_diag = self.atom_counts[el_a]
-                if blk.shape[0] > n_diag:
-                    off_dict[key] = blk[:-n_diag]
+                n_atoms = self.atom_counts[el_a]
+                off_dict[key] = blk[n_atoms:]
             else:
                 off_dict[key] = blk
         return off_dict
 
     # --------------- device handling --------------------------------------- #
+    #! Edge manipulation
     def to(self, device):
+        """
+        <assumptions>
+        - `pair_blocks` and `pair_edges` contain PyTorch tensors that need to be moved to the target device.
+        - `lookup` is a standard Python dictionary and does not require device transfer.
+        </assumptions>
+        <implementation>
+        - Creates new dictionaries `new_blocks` and `new_edges` by applying `.to(device)` to every tensor in `self.pair_blocks` and `self.pair_edges`.
+        - Returns a new `BlockMatrix` instance with these moved tensors, preserving other attributes.
+        </implementation>
+        """
         new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
         new_edges = {k: v.to(device) for k, v in self.pair_edges.items()}
         return BlockMatrix(
@@ -142,10 +193,30 @@ class BlockMatrix:
 
         # ------------------------------------------------------------------ transpose
 
+    #! Edge manipulation
     def transpose(self) -> "BlockMatrix":
         """
         Return a **new** snapshot representing the transposed matrix.
         Edge order is preserved from the original matrix where possible.
+
+        <assumptions>
+        - Transposition involves swapping the element pair key ("A-B" -> "B-A"), transposing the block tensors (swapping last two dimensions), and inverting the edge direction.
+        - Edge inversion transforms `(sx, sy, sz, i, j)` to `(-sx, -sy, -sz, j, i)`.
+        - If the matrix is symmetric (i.e., the transposed key "B-A" exists in the original matrix), the edge order in the transposed matrix should match the original "B-A" edge order to maintain consistency.
+        </assumptions>
+        <implementation>
+        1. **Naive Transpose**: Iterates over `pair_blocks`. For each key "A-B":
+           - Generates new key "B-A".
+           - Transposes blocks: `blk.transpose(-1, -2)`.
+           - Inverts edges: `[sx, sy, sz, i, j]` becomes `[-sx, -sy, -sz, j, i]`.
+        2. **Reordering**: For each transposed key "B-A":
+           - Checks if "B-A" existed in the original `pair_edges`.
+           - If yes, retrieves the *original* edge list for "B-A".
+           - Builds a mapping from the *transposed* edges to their indices.
+           - Constructs a permutation `perm` that reorders the transposed edges to match the original "B-A" order.
+           - Applies `perm` to `final_edges` and `final_blocks`.
+        3. **Lookup Rebuild**: Reconstructs the `lookup` table from the final edge lists.
+        </implementation>
         """
         # 1. Perform a simple transpose, flipping keys and edges.
         transposed_blocks = {}
@@ -154,7 +225,10 @@ class BlockMatrix:
             el_a, el_b = key.split("-")
             new_key = f"{el_b}-{el_a}"
             transposed_blocks[new_key] = blk.transpose(-1, -2).clone()
-            transposed_edges[new_key] = self.pair_edges[key].flip(0).clone()
+            edges = self.pair_edges[key]
+            transposed_edges[new_key] = torch.stack(
+                [-edges[0], -edges[1], -edges[2], edges[4], edges[3]]
+            )
 
         final_blocks = {}
         final_edges = {}
@@ -164,6 +238,7 @@ class BlockMatrix:
         for key, t_edges in transposed_edges.items():
             if key in self.pair_edges:
                 # This key existed in the original matrix. We should match its edge order.
+                #! Edge manipulation
                 original_edges = self.pair_edges[key]
 
                 # Build a map from a transposed edge to its current index.
@@ -193,8 +268,8 @@ class BlockMatrix:
         # Rebuild lookup
         new_lookup = {}
         for key, edges in final_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                new_lookup[(i, j)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                new_lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -206,13 +281,35 @@ class BlockMatrix:
             basis=self.basis,
         )
 
+    def __mul__(self, scalar: float) -> "BlockMatrix":
+        """
+        Scalar multiplication of all blocks by a float or int.
+        """
+        if not isinstance(scalar, (float, int)):
+            return NotImplemented
+        new_blocks = {k: v * scalar for k, v in self.pair_blocks.items()}
+        return self._replace_pair_blocks(new_blocks, basis=self.basis)
+
     # ------------------------------------------------------------------ edge reordering
+    #! Edge manipulation
     def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
         """
         Re-order edge *rows* for given keys. ``order_dict`` maps
         ``key -> permutation indices`` (1-D LongTensor of length ``E_key``).
 
         Keys **not** in ``order_dict`` keep their original order.
+
+        <assumptions>
+        - `order_dict` contains valid permutation indices for the specified keys.
+        - Used to align the edge order of this matrix with another matrix (e.g., for element-wise addition).
+        </assumptions>
+        <implementation>
+        - Iterates over all keys in `pair_blocks`.
+        - If a key is present in `order_dict`:
+            - Applies the permutation `idx` to `blk` (dimension 0) and `edges` (dimension 1).
+        - If not present, keeps the original blocks and edges.
+        - **Crucially**, rebuilds the `lookup` table for *all* keys, as the indices `k` in `(key, k)` have changed for the reordered blocks.
+        </implementation>
         """
         pair_blocks, pair_edges, lookup = {}, {}, {}
         for key, blk in self.pair_blocks.items():
@@ -224,8 +321,8 @@ class BlockMatrix:
                 edges = self.pair_edges[key]
             pair_blocks[key] = blk
             pair_edges[key] = edges
-            for new_k, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, new_k)
+            for new_k, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, new_k)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -239,8 +336,27 @@ class BlockMatrix:
 
     # ------------------------------------------------------------------ arithmetic
     # private helper ------------------------------------------------------------
+    #! Edge manipulation
     def _align_with(self, other: "BlockMatrix") -> Tuple["BlockMatrix", "BlockMatrix"]:
-        """Make sure the matrices have the same atoms, basis, orbital_cfg and edge order."""
+        """
+        Make sure the matrices have the same atoms, basis, orbital_cfg and edge order.
+
+        <assumptions>
+        - Two `BlockMatrix` objects can only be combined (add/sub) if they share the same physical system structure (atoms, basis, config).
+        - They must contain the same set of element pairs (keys).
+        - For each pair, they must contain the same set of edges, though potentially in a different order.
+        </assumptions>
+        <implementation>
+        - Validates metadata compatibility (atoms, basis, config, keys).
+        - For each key, checks if `pair_edges` are identical.
+        - If edge order differs:
+            - Builds a mapping `map_edge_to_idx` from edge tuple to index for `self`.
+            - Constructs a permutation `perm` by looking up `other`'s edges in this map. This permutation, when applied to `self`, makes `self`'s edge order match `other`.
+            - Stores `perm` in `reorder_dict`.
+        - If `reorder_dict` is not empty, calls `self.reorder_edges(reorder_dict)` to align `self` with `other`.
+        - Returns the aligned `(self, other)` tuple.
+        </implementation>
+        """
         if not isinstance(other, BlockMatrix):
             raise TypeError("Operand must be BlockMatrix")
         if self.atoms != other.atoms:
@@ -327,17 +443,18 @@ class BlockMatrix:
         """
         Assemble a full dense matrix of shape ``(Σ d_i, Σ d_i)`` where
         ``d_i`` is orbital dimension of atom *i*.
+        Summing all periodic images into the central cell.
         """
         offsets, total = self._atom_offsets()
         device = next(iter(self.pair_blocks.values())).device
         dtype = next(iter(self.pair_blocks.values())).dtype
         dense = torch.zeros(total, total, device=device, dtype=dtype)
 
-        for (i, j), (key, k) in self.lookup.items():
+        for (_sx, _sy, _sz, i, j), (key, k) in self.lookup.items():
             d_i, d_j = self.orbital_cfg.block_dims(key)
             r0 = int(offsets[i])
             c0 = int(offsets[j])
-            dense[r0 : r0 + d_i, c0 : c0 + d_j] = self.pair_blocks[key][k]
+            dense[r0 : r0 + d_i, c0 : c0 + d_j] += self.pair_blocks[key][k]
         return dense
 
     # ------------------ serialisation ------------------------------------
@@ -361,8 +478,21 @@ class BlockMatrix:
         torch.save(self._to_payload(), path)
 
     # ------------------ alternate constructors ---------------------------
+    #! Edge manipulation
     @classmethod
     def load(cls, path, device="cpu") -> "BlockMatrix":
+        """
+        <assumptions>
+        - The file at `path` contains a dictionary payload created by `_to_payload`.
+        - The payload includes `pair_edges` and `pair_blocks` but *not* the `lookup` table (to save space/complexity).
+        </assumptions>
+        <implementation>
+        - Loads the payload using `torch.load`.
+        - Moves `pair_blocks` and `pair_edges` to the specified `device`.
+        - **Rebuilds the lookup table**: Iterates through all edges in `pair_edges`. For each edge `(sx, sy, sz, i, j)` at index `idx` under `key`, sets `lookup[(sx, sy, sz, i, j)] = (key, idx)`.
+        - Returns a new `BlockMatrix` instance.
+        </implementation>
+        """
         import torch
         from core.orbital_irrep_config import OrbitalIrrepConfig
 
@@ -378,8 +508,8 @@ class BlockMatrix:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter
@@ -411,6 +541,7 @@ class BlockMatrix:
             basis=basis,
         )
 
+    #! Edge manipulation
     def _apply_edge_mask(
         self,
         mask_dict: Dict[PairKey, torch.Tensor | Sequence[bool]],
@@ -423,6 +554,19 @@ class BlockMatrix:
         entry in the 1-D boolean mask are kept.
 
         Keys **not** present in the dict are copied unchanged.
+
+        <assumptions>
+        - `mask_dict` provides a 1-D boolean mask for specific keys, matching the number of blocks/edges for that key.
+        - Used for filtering operations like sparsification or distance-based cutoff.
+        </assumptions>
+        <implementation>
+        - Iterates over `pair_blocks`.
+        - If key is in `mask_dict`:
+            - Applies boolean mask to `blk` (dim 0) and `edges` (dim 1).
+        - If `drop_empty` is True and a key ends up with zero blocks, it is removed.
+        - **Rebuilds the lookup table** for the surviving edges, as indices have changed.
+        - Returns a new `BlockMatrix`.
+        </implementation>
         """
         pair_blocks, pair_edges, lookup = {}, {}, {}
 
@@ -444,8 +588,8 @@ class BlockMatrix:
 
             pair_blocks[key] = blk_kept
             pair_edges[key] = edges_kept
-            for idx, (i, j) in enumerate(edges_kept.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges_kept.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         return BlockMatrix(
             atoms=self.atoms,
@@ -468,7 +612,49 @@ class BlockMatrix:
         matrix.basis = "openmx"
         return matrix
 
+    def change_basis(self, d_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
+        """
+        Change the basis of the snapshot using a dictionary of transformation matrices.
+        Each key in `d_dict` corresponds to an element symbol, and the value is a
+        transformation matrix that will be applied to the blocks associated with that element.
+        The transformation is applied as follows:
+        For a block corresponding to the pair (A-B):
+        .. math::
+            \\text{new\_block}_{AB} = d_{A} \\cdot \\text{block}_{AB} \\cdot d_{B}^T
+        where :math:`d_{A}` and :math:`d_{B}` are the transformation matrices for elements A and B,
+        respectively.
+        Parameters
+        ----------
+        d_dict : Dict[str, torch.Tensor]
+            A dictionary mapping element symbols to transformation matrices.
+            Each matrix should have the shape (d_A, d_A) for element A.
+        Returns
+        -------
+        BlockMatrix
+            A new BlockMatrix instance with the transformed blocks.
+        Notes
+        -----
+        This method assumes that the transformation matrices in `d_dict` are square matrices
+        with dimensions matching the orbital dimensions of the respective elements.
+        """
+        new_pair_blocks = {}
+        for key, blk in self.pair_blocks.items():
+            el_i, el_j = key.split("-")
+
+            new_pair_blocks[key] = d_dict[el_i] @ blk @ d_dict[el_j].T
+        # Return a new BlockMatrix with the updated blocks and unchanged edges
+        return BlockMatrix(
+            atoms=self.atoms,
+            atom_counts=self.atom_counts,
+            pair_blocks=new_pair_blocks,
+            pair_edges=self.pair_edges,
+            lookup=self.lookup,
+            orbital_cfg=self.orbital_cfg,
+            basis=self.basis,
+        )
+
     # ------------------------ alternate constructor -----------------------------
+    #! Edge manipulation
     @classmethod
     def from_dense(
         cls,
@@ -483,6 +669,21 @@ class BlockMatrix:
         """
         Build a block snapshot from a fully dense matrix *in global atom order*.
         Primarily for tests / debugging.
+
+        <assumptions>
+        - Input `matrix` is a dense tensor representing the full system Hamiltonian/Density/Overlap.
+        - The matrix is ordered by atom index, and within each atom by orbital index.
+        - **Crucially**, this method assumes *no periodic boundary conditions* (all shifts are 0).
+        </assumptions>
+        <implementation>
+        - Calculates start/end indices (offsets) for each atom's block in the dense matrix based on `orbital_cfg`.
+        - Iterates over all pairs of atoms `(i, j)`.
+        - Extracts the sub-block `matrix[r0:r0+di, c0:c0+dj]`.
+        - Assigns this block to the edge `(0, 0, 0, i, j)`.
+        - Stacks the collected blocks and edges into tensors.
+        - Optionally calls `sparsify` to remove small blocks.
+        - Returns a new `BlockMatrix`.
+        </implementation>
         """
         atoms = tuple(atoms)
         from collections import Counter
@@ -508,8 +709,9 @@ class BlockMatrix:
                     pair_blocks[key], pair_edges[key] = [], []
                 local_idx = len(pair_blocks[key])
                 pair_blocks[key].append(blk)
-                pair_edges[key].append([i, j])
-                lookup[(i, j)] = (key, local_idx)
+                pair_edges[key].append([0, 0, 0, i, j])
+                lookup[(0, 0, 0, i, j)] = (key, local_idx)
+        print("Warning: from_dense currently assumes no periodic images!")
         # stack
         pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
         pair_edges = {
@@ -525,6 +727,7 @@ class BlockMatrix:
 
         # ---------------------------------------------------------------- sparsify
 
+    #! Edge manipulation
     def sparsify(self, threshold: float) -> "BlockMatrix":
         """
         Return a **new** snapshot in which only blocks whose root-mean-square
@@ -544,6 +747,18 @@ class BlockMatrix:
         -----
         • Pruning is performed **per block** (first tensor dimension).
           Keys for which *all* blocks are removed disappear entirely.
+
+        <assumptions>
+        - Blocks with RMS value <= threshold are considered negligible and can be removed.
+        - This operation changes the graph topology (removes edges).
+        </assumptions>
+        <implementation>
+        - Computes RMS for each block: `blk.pow(2).mean(dim=(-2, -1)).sqrt()`.
+        - Creates a boolean mask `keep = rms > thr`.
+        - Filters `blk` and `edges` using this mask.
+        - **Rebuilds the lookup table** for the surviving edges.
+        - Returns a new `BlockMatrix`.
+        </implementation>
         """
         if not self.pair_blocks:
             return self  # nothing to do
@@ -570,8 +785,8 @@ class BlockMatrix:
                 new_edges[key] = edges_kept
 
                 # rebuild lookup for the surviving edges of this key
-                for local_idx, (i, j) in enumerate(edges_kept.t().tolist()):
-                    new_lookup[(i, j)] = (key, local_idx)
+                for local_idx, (sx, sy, sz, i, j) in enumerate(edges_kept.t().tolist()):
+                    new_lookup[(sx, sy, sz, i, j)] = (key, local_idx)
 
         # assemble the sparsified snapshot
         return BlockMatrix(
@@ -585,6 +800,7 @@ class BlockMatrix:
         )
 
     # ----------------------------------------------------------------- reload from payload
+    #! Edge manipulation
     @classmethod
     def from_payload(
         cls, payload: dict, device: str | torch.device = "cpu"
@@ -592,6 +808,16 @@ class BlockMatrix:
         """
         Build :class:`BlockMatrix` from a dict previously produced by
         :meth:`_to_payload`.  Used internally by Snapshot.load().
+
+        <assumptions>
+        - Payload contains `pair_edges` and `pair_blocks` but not `lookup`.
+        - Used for deserialization.
+        </assumptions>
+        <implementation>
+        - Reconstructs `BlockMatrix` from dictionary.
+        - Moves tensors to device.
+        - **Rebuilds lookup table** from `pair_edges`.
+        </implementation>
         """
         from core.orbital_irrep_config import OrbitalIrrepConfig  # local import
 
@@ -603,8 +829,8 @@ class BlockMatrix:
         # rebuild lookup table
         lookup: Dict[Tuple[int, int], Tuple[str, int]] = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter
@@ -623,7 +849,7 @@ class BlockMatrix:
 
     # ════════════════════════════════════════════════════════════════════════════
     #                                ROTATION
-    # ═══════════════════════���════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════════
     def rotate(self, R: torch.Tensor) -> "BlockMatrix":
         """
         Return a **new** :class:`BlockMatrix` whose *orbital reference frame*
@@ -708,38 +934,90 @@ class IrrepsBlockData:
     # ─────────────────────────────────────────────────────────────────────────
     #   diag / offdiag access for vector form
     # ─────────────────────────────────────────────────────────────────────────
+    #! Edge manipulation
     def diag(self) -> Dict[PairKey, torch.Tensor]:
+        """
+        <assumptions>
+        - Analogous to `BlockMatrix.diag`.
+        - Assumes first `n_atoms` vectors in homo-atomic pairs are self-interactions.
+        </assumptions>
+        <implementation>
+        - Iterates `pair_vectors`.
+        - Slices `vec[:n_atoms]` for homo-atomic pairs.
+        </implementation>
+        """
         diag_dict: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
             el_a, el_b = key.split("-")
             if el_a != el_b:
                 continue
-
-            n_diag = self.atom_counts[el_a]
-            if vec.shape[0] >= n_diag:
-                diag_dict[key] = vec[-n_diag:]
+            n_atoms = self.atom_counts[el_a]
+            diag_dict[key] = vec[:n_atoms]
         return diag_dict
 
+    #! Edge manipulation
     def offdiag(self) -> Dict[PairKey, torch.Tensor]:
+        """
+        <assumptions>
+        - Analogous to `BlockMatrix.offdiag`.
+        - Assumes vectors after `n_atoms` in homo-atomic pairs are off-diagonal.
+        </assumptions>
+        <implementation>
+        - Iterates `pair_vectors`.
+        - Slices `vec[n_atoms:]` for homo-atomic pairs.
+        - Takes full `vec` for hetero-atomic pairs.
+        </implementation>
+        """
         off_dict: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
             el_a, el_b = key.split("-")
             if el_a == el_b:
-                n_diag = self.atom_counts[el_a]
-                if vec.shape[0] > n_diag:
-                    off_dict[key] = vec[:-n_diag]
+                n_atoms = self.atom_counts[el_a]
+                off_dict[key] = vec[n_atoms:]
             else:
                 off_dict[key] = vec
         return off_dict
 
     # -------- indexing paralleling BlockMatrix -------- #
+    #! Edge manipulation
     def __getitem__(self, item):
+        """
+        <assumptions>
+        - Same indexing logic as `BlockMatrix.__getitem__`.
+        - `(i, j)` sums over periodic images.
+        - `(sx, sy, sz, i, j)` returns unique vector.
+        </assumptions>
+        <implementation>
+        - Handles `(i, j)` by summing vectors found via lookup.
+        - Handles `(sx, sy, sz, i, j)` by direct lookup.
+        - Handles `str` key by returning full tensor.
+        </implementation>
+        """
+        # item = (i, j) global indices, sum periodic images
         if isinstance(item, tuple) and len(item) == 2:
+            print(
+                "Warning: IrrepsBlockData.__getitem__((i,j)) sums over periodic images."
+            )
+            ret = None
+            for key in self.lookup:
+                if key[0] == item[0] and key[1] == item[1]:
+                    k_key, k_idx = self.lookup[key]
+                    vec = self.pair_vectors[k_key][k_idx]
+                    if ret is None:
+                        ret = vec.clone()
+                    else:
+                        ret += vec
+            if ret is None:
+                raise KeyError(f"No vectors found for indices {item}")
+            return ret
+        # item = (sx, sy, sz, i, j) global indices
+        if isinstance(item, tuple) and len(item) == 5:
             key, k = self.lookup[item]
             return self.pair_vectors[key][k]
+        # item = "A-B"
         if isinstance(item, str):
             return self.pair_vectors[item]
-        raise KeyError
+        raise KeyError("use (i,j), (sx,sy,sz,i,j) or 'A-B'")
 
     # ------------------------------------------------------------------ serialisation
     def _to_payload(self) -> dict:
@@ -763,8 +1041,20 @@ class IrrepsBlockData:
         torch.save(self._to_payload(), path)
 
     # --------------------- alternate constructor ----------------------------- #
+    #! Edge manipulation
     @classmethod
     def load(cls, path, device="cpu") -> "IrrepsBlockData":
+        """
+        <assumptions>
+        - Loads `IrrepsBlockData` from file.
+        - Payload lacks `lookup`.
+        </assumptions>
+        <implementation>
+        - Loads payload.
+        - Moves tensors to device.
+        - **Rebuilds lookup table** from `pair_edges`.
+        </implementation>
+        """
         import torch
         from core.orbital_irrep_config import OrbitalIrrepConfig
 
@@ -780,8 +1070,8 @@ class IrrepsBlockData:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         from collections import Counter

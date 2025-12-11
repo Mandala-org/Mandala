@@ -1,5 +1,5 @@
 data/big/** filter=lfs diff=lfs merge=lfs -text
-*.matrix filter=lfs diff=lfs merge=lfs -text
-*.out filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 *.csv filter=lfs diff=lfs merge=lfs -text
+*.matrix filter=lfs diff=lfs merge=lfs -text
+*.out filter=lfs diff=lfs merge=lfs -text
