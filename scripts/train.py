@@ -4,7 +4,7 @@
 #
 #  Usage examples:
 #    python scripts/train.py --config-name debug_cpu
-#    python scripts/train.py --config-name medium_gpu verbosity 2 bench_verbosity 0
+#    python scripts/train.py --config-name medium_gpu config.verbosity 2 config.verbosity 0
 #
 #  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
 #  Sweeps:    tune: 'wandb' → WandB Sweep Agent
@@ -28,43 +28,34 @@ from pytorch_lightning.loggers import WandbLogger
 
 from net.benchmark import BenchmarkCallback
 from data.factory import DatasetFactory
-from net.common import HyperParams
+from net.common import Config, get_torch_dtype
 from net.e3gnn import E3GNN
 
 
 @hydra.main(config_path="../conf", version_base="1.1")
-def main(cfg: DictConfig) -> None:
+def main(omega_cfg: DictConfig) -> None:
     # Extract grouped config settings
-    verbosity = cfg.logging.verbosity
-    bench_verbosity = cfg.logging.bench_verbosity
-    log_activation_mag = cfg.logging.log_activation_mag
-    gpus_cfg = cfg.training.gpus
-    tune_cfg = cfg.training.tune
+    cfg = Config(**omega_cfg.config)
+    cfg.dtype = get_torch_dtype(cfg.dtype)
 
     def vprint(msg: str) -> None:
-        if verbosity >= 1:
+        if cfg.verbosity >= 1:
             ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"{ts} {msg}")
 
     def vprint_detail(msg: str) -> None:
-        if verbosity >= 2:
+        if cfg.verbosity >= 2:
             ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"{ts} {msg}")
 
     vprint("Starting training script")
-    torch.manual_seed(cfg.training.seed)
+    torch.manual_seed(cfg.seed)
 
     # ------------------------------------------------------------------
     # 1. Dataset construction
     # ------------------------------------------------------------------
-    fact = DatasetFactory(
-        cutoff_gnn=cfg.data.cutoff_gnn,
-        cutoff_matrix=cfg.data.cutoff_matrix,
-        l_max_sh=cfg.model.l_max,
-        n_radial=cfg.data.n_radial,
-        device="cpu",
-    )
-    for entry in cfg.data.snapshots:
+    fact = DatasetFactory(cfg)
+    for entry in omega_cfg.dataset.snapshots:
         matrix_path = to_absolute_path(entry.matrix)
         info_path = to_absolute_path(entry.info)
         fact.add_snapshot(Path(matrix_path), Path(info_path), entry.purpose)
@@ -79,7 +70,7 @@ def main(cfg: DictConfig) -> None:
             ds or [],
             batch_size=1,
             shuffle=shuffle,
-            num_workers=cfg.data.num_workers,
+            num_workers=cfg.num_workers,
             pin_memory=True,
             collate_fn=lambda b: b[0],
         )
@@ -93,17 +84,16 @@ def main(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     # 3. Model instantiation
     # ------------------------------------------------------------------
-    hp = HyperParams(**cfg.model)
     # Hardware setup: interpret training.gpus as "cpu" or a GPU count
-    if isinstance(gpus_cfg, str) and gpus_cfg.lower() == "cpu":
+    if isinstance(cfg.gpus, str) and cfg.gpus.lower() == "cpu":
         accelerator = "cpu"
         devices = 1
     else:
         # parse GPU count
         try:
-            count = int(gpus_cfg) if isinstance(gpus_cfg, str) else gpus_cfg
+            count = int(cfg.gpus) if isinstance(cfg.gpus, str) else cfg.gpus
         except Exception:
-            raise ValueError(f"Invalid training.gpus value: {gpus_cfg}")
+            raise ValueError(f"Invalid training.gpus value: {cfg.gpus}")
         if count <= 0:
             accelerator = "cpu"
             devices = 1
@@ -112,25 +102,23 @@ def main(cfg: DictConfig) -> None:
             devices = list(range(count))
     model = E3GNN(
         mapper=mapper,
-        edge_types=ds_train.edge_types,
         cfg=cfg,
-        device="cuda" if accelerator == "gpu" else "cpu",
     )
     vprint(
-        f"Built model: l_max={hp.l_max}, hidden_base_dim={hp.hidden_base_dim}, "
-        f"layers_gnn={hp.num_layers_gnn}, layers_matrix={hp.num_layers_matrix}"
+        f"Built model: l_max_gnn={cfg.l_max_gnn}, hidden_base_dim={cfg.hidden_base_dim}, "
+        f"layers_gnn={cfg.num_layers_gnn}, layers_matrix={cfg.num_layers_matrix}"
     )
 
     # ------------------------------------------------------------------
     # 4. Logger setup
     # ------------------------------------------------------------------
-    run_name = cfg.logging.run_name or f"e3gnn_{dt.datetime.now():%Y%m%d_%H%M%S}"
-    if cfg.logging.wandb_project:
+    run_name = cfg.run_name or f"e3gnn_{dt.datetime.now():%Y%m%d_%H%M%S}"
+    if cfg.wandb_project:
         logger = WandbLogger(
-            project=cfg.logging.wandb_project,
+            project=cfg.wandb_project,
             name=run_name,
-            log_model=cfg.logging.log_model,
-            save_dir=to_absolute_path(cfg.logging.save_dir),
+            log_model=cfg.log_model,
+            save_dir=to_absolute_path(cfg.save_dir),
         )
         logger.experiment.config.update(
             OmegaConf.to_container(cfg, resolve=True), allow_val_change=True
@@ -154,10 +142,10 @@ def main(cfg: DictConfig) -> None:
         ),
         LearningRateMonitor(logging_interval="step"),
     ]
-    if bench_verbosity > 0:
+    if cfg.verbosity > 0:
         bench_cb = BenchmarkCallback(
-            verbosity=bench_verbosity,
-            log_activation_mag=log_activation_mag,
+            verbosity=cfg.verbosity,
+            log_activation_mag=cfg.log_activation_mag,
         )
         callbacks.append(bench_cb)
     vprint("Configured callbacks")
@@ -165,7 +153,7 @@ def main(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     # 6. Trainer
     # ------------------------------------------------------------------
-    if cfg.training.smoke_test:
+    if cfg.smoke_test:
         vprint("Smoke test mode enabled: running one batch of train and val.")
         trainer = pl.Trainer(
             accelerator=accelerator,
@@ -178,22 +166,22 @@ def main(cfg: DictConfig) -> None:
             logger=logger,
             accelerator=accelerator,
             devices=devices,
-            max_epochs=cfg.training.max_epochs,
-            precision=cfg.training.precision,
+            max_epochs=cfg.max_epochs,
+            # precision=cfg.precision,
             callbacks=callbacks,
             deterministic=True,
-            log_every_n_steps=cfg.training.log_every_n_steps,
-            gradient_clip_val=hp.grad_clip_val,
+            log_every_n_steps=cfg.log_every_n_steps,
+            gradient_clip_val=cfg.grad_clip_val,
         )
 
     # ------------------------------------------------------------------
     # 7. HPO integration
     # ------------------------------------------------------------------
-    if tune_cfg == "wandb":
+    if cfg.tune == "wandb":
         import wandb
 
         wandb.finish()
-    elif tune_cfg == "ray":
+    elif cfg.tune == "ray":
         from ray import tune
 
         tune.report(loss=0.0)
@@ -206,7 +194,7 @@ def main(cfg: DictConfig) -> None:
     vprint("Training complete")
 
     # 9. Detailed benchmark summary
-    if verbosity >= 2 and bench_cb is not None:
+    if cfg.verbosity >= 2 and bench_cb is not None:
         lt = np.array(bench_cb.loader_times) if bench_cb.loader_times else np.array([])
         if lt.size:
             vprint_detail(

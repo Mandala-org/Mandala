@@ -9,7 +9,7 @@ utilities.
 Key features
 ------------
 * Keeps three :class:`BlockMatrix` objects (`hamiltonian`, `overlap`,
-  `density`) under a unified interface.  Access via ``snap["density"]`` **or**
+  `density`) under a unified interface.  Access via ``snap[\"density\"]`` **or**
   attribute ``snap.density``.
 * Upon construction **re-orders edges** for every element-pair by *ascending*
   L2-norm of the density blocks - this yields deterministic ordering and is
@@ -17,7 +17,7 @@ Key features
 * Implements
 
     * ``get_number_of_electrons()``  →  Tr(D·S)
-    * ``get_energy()``                →  Tr(D·H)
+    * ``get_energy()``               →  Tr(D·H)
 
   using the highly-optimised
   :func:`core.sparse_math.trace_matmul_sparse_snap_vectorized`.
@@ -28,14 +28,20 @@ Key features
 from __future__ import annotations
 
 import os
+import json
+from pathlib import Path
 from typing import Dict, Any
-
 import torch
+import h5py
+from ase import Atoms
 
-from core.sparse_math import trace_matmul_sparse_snap_vectorized
+from core.sparse_math import (
+    trace_matmul_sparse_block_matrix,
+)
 from data.block_matrix import BlockMatrix
-from core.basis_converter import OpenMXE3NNConverter
+from core.basis_converter import OpenMXE3NNConverter, FHIaimsE3NNConverter
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from net.common import Config
 
 __all__ = ["Snapshot"]
 
@@ -51,10 +57,14 @@ class Snapshot:
         density: BlockMatrix,
         *,
         positions: torch.Tensor | None = None,  # (N,3)
+        forces: torch.Tensor | None = None,  # (N,3)
         box: torch.Tensor | None = None,  # (3,3)
+        stress: torch.Tensor | None = None,  # (3,3) stress tensor (multiplicative)
         matrix_path=None,  # optional path to the source file
         info_path=None,  # optional path to the source info file
         cutoff_radius: float | None = None,  # optional cutoff radius for filtering
+        cfg: Config | None = None,
+        info: Any = None,
     ) -> None:
         # quick consistency sanity checks
         self._check_compatibility(hamiltonian, overlap, density)
@@ -66,7 +76,9 @@ class Snapshot:
         }
 
         self.positions = positions
+        self.forces = forces
         self.box = box  # may be None for non-periodic test cases
+        self.stress = stress
 
         self.matrix_path = matrix_path  # optional path to the source file
         self.info_path = info_path
@@ -75,6 +87,9 @@ class Snapshot:
         self.hamiltonian = self._mats["hamiltonian"]
         self.overlap = self._mats["overlap"]
         self.density = self._mats["density"]
+
+        self.cfg = cfg
+        self.info = info
 
     # ---------------------------------------------------------------- compatibility
     @staticmethod
@@ -105,104 +120,143 @@ class Snapshot:
 
             if m.basis != first.basis:
                 raise ValueError(
-                    f"Matrices 0 and {i+1} must use the same basis (openmx/e3nn)"
+                    f"Matrices 0 and {i+1} must use the same basis (openmx/e3nn/fhi-aims)"
                 )
 
     # ---------------------------------------------------------------- edge ordering
+    #! Edge manipulation
     def canonicalize_edges(self) -> "Snapshot":
         """
         Return a new Snapshot with a canonical edge ordering for each key.
         The canonical order for each key is:
-        1. Off-diagonal edges, sorted by the L2 norm of their corresponding
-           density matrix block in ascending order.
-        2. Diagonal edges, sorted by their node index.
+        1. Diagonal edges, sorted by their node index.
+        2. Off-diagonal edges, sorted by the distance (ascending).
+
+        <assumptions>
+        - Enforces a deterministic edge order to ensure reproducibility and consistent batching.
+        - Separates self-interactions (diagonal) from inter-atomic interactions (off-diagonal).
+        - Uses Euclidean distance for sorting off-diagonal edges.
+        - "Diagonal" means src == dst AND shift == (0, 0, 0).
+        - Tie-breaking for off-diagonal edges uses the lexicographical order of (sx, sy, sz, src, dst).
+        </assumptions>
+        <implementation>
+        - Computes edge distances using `_edge_distances`.
+        - Iterates over each key in the density matrix.
+        - For each key:
+            - Identifies diagonal edges (src == dst & shift == 0).
+            - Identifies off-diagonal edges.
+            - Sorts diagonal edges by atom index.
+            - Sorts off-diagonal edges by (distance, sx, sy, sz, src, dst).
+            - Concatenates indices and stores in `order_dict`.
+        - Applies `reorder_edges` to Hamiltonian, Overlap, and Density matrices.
+        - Returns a new Snapshot with reordered matrices.
+        </implementation>
         """
-        density = self._mats["density"]
+        dists = self._edge_distances(self.density)
         order_dict = {}
 
-        for key, edges in density.pair_edges.items():
-            is_diag_mask = edges[0] == edges[1]
+        for key in self.density.pair_edges.keys():
+            edges = self.density.pair_edges[key]  # (5, E)
+            # edges rows: 0:sx, 1:sy, 2:sz, 3:src, 4:dst
 
-            # Get the sorting permutation for the diagonal edges
-            perm_diag = torch.argsort(edges[0] + edges[1] * 1e6)
-            diag_mask = is_diag_mask[perm_diag]
-            perm_diag = perm_diag[diag_mask]
+            # Get distances for this key
+            D = dists[key]  # (E,)
 
-            # Sort off-diagonal edges by density norm
-            norms = density.pair_blocks[key].pow(2).sum(dim=(-2, -1)).sqrt()
-            # Get the sorting permutation for the off-diagonal edges
-            perm_offdiag = torch.argsort(norms)
-            offdiag_mask = ~is_diag_mask[perm_offdiag]
-            perm_offdiag = perm_offdiag[offdiag_mask]
+            num_edges = edges.shape[1]
+            indices = torch.arange(num_edges, device=edges.device)
 
-            order_dict[key] = torch.cat([perm_offdiag, perm_diag])
+            # Identify diagonal edges: src == dst AND sx==0 AND sy==0 AND sz==0
+            sx = edges[0]
+            sy = edges[1]
+            sz = edges[2]
+            src = edges[3]
+            dst = edges[4]
 
-        # Apply the SAME permutation to every matrix
-        new_mats = {
-            name: mat.reorder_edges(order_dict) for name, mat in self._mats.items()
-        }
+            is_diag = (src == dst) & (sx == 0) & (sy == 0) & (sz == 0)
 
-        # # Sanity checks to make sure the graph make sense
-        # for mat in new_mats.values():
-        # lookup = mat.lookup
-        # pair_edges = mat.pair_edges
-        # pair_blocks = mat.pair_blocks
-        # atoms = mat.atoms
+            diag_indices = indices[is_diag]
+            off_diag_indices = indices[~is_diag]
 
-        # # 1. Test whether all edges are unique
-        # all_edges = set()
-        # for edges in pair_edges.values():
-        #     for edge in edges.t().tolist():
-        #         all_edges.add(tuple(edge))
-        # if len(all_edges) != sum(len(edges.t()) for edges in pair_edges.values()):
-        #     raise ValueError("Duplicate edges found in pair edges")
-        # # 2. Test whether lookup contains all edges
-        # if len(lookup) != len(all_edges):
-        #     raise ValueError("Lookup size does not match edge count")
-        # for (i, j) in all_edges:
-        #     if (i, j) not in lookup:
-        #         raise ValueError(f"Edge {(i, j)} not found in lookup")
-        #     key, idx = lookup[(i, j)]
-        #     if key not in pair_blocks or idx >= len(pair_blocks[key]):
-        #         raise ValueError(f"Edge {(i, j)} lookup points to invalid block")
-        # # 3. Test whether all self-edges are present
-        # for i, atom in enumerate(atoms):
-        #     key = f"{atom}-{atom}"
-        #     if key not in pair_blocks:
-        #         raise ValueError(f"Self-edge {key} not found in pair blocks")
-        #     if (i, i) not in lookup:
-        #         raise ValueError(f"Self-edge lookup for {key} missing")
-        # # 4. Test whether graph is symmetric
-        # for (i, j) in lookup:
-        #     key, idx = lookup[(i, j)]
-        #     if (j, i) not in lookup:
-        #         raise ValueError(f"Edge {(i, j)} is not symmetric with {(j, i)}")
+            # Sort diagonal indices by src
+            diag_src = src[diag_indices]
+            perm_diag = torch.argsort(diag_src)
+            sorted_diag_indices = diag_indices[perm_diag]
+
+            # Sort off-diagonal indices
+            # Primary key: distance
+            # Tie-breaker: sx, sy, sz, src, dst
+            od_idx = off_diag_indices
+            od_d = D[od_idx]
+            od_edges = edges[:, od_idx]  # (5, E_od)
+
+            # Move to CPU for sorting
+            od_d_cpu = od_d.cpu().tolist()
+            od_edges_cpu = od_edges.t().cpu().tolist()  # List of [sx, sy, sz, src, dst]
+            od_idx_cpu = od_idx.cpu().tolist()
+
+            # Combine into a list of tuples
+            # (dist, sx, sy, sz, src, dst, original_idx)
+            to_sort = []
+            for i in range(len(od_idx_cpu)):
+                row = od_edges_cpu[i]  # [sx, sy, sz, src, dst]
+                to_sort.append(
+                    (
+                        od_d_cpu[i],
+                        row[0],
+                        row[1],
+                        row[2],
+                        row[3],
+                        row[4],
+                        od_idx_cpu[i],
+                    )
+                )
+
+            to_sort.sort()
+
+            sorted_off_diag_indices = torch.tensor(
+                [x[-1] for x in to_sort], device=edges.device, dtype=torch.long
+            )
+
+            # Concatenate
+            final_indices = torch.cat([sorted_diag_indices, sorted_off_diag_indices])
+            order_dict[key] = final_indices
+
+        # Apply reordering
+        new_ham = self.hamiltonian.reorder_edges(order_dict)
+        new_ovl = self.overlap.reorder_edges(order_dict)
+        new_den = self.density.reorder_edges(order_dict)
 
         return Snapshot(
-            new_mats["hamiltonian"],
-            new_mats["overlap"],
-            new_mats["density"],
+            new_ham,
+            new_ovl,
+            new_den,
             positions=self.positions,
+            forces=self.forces,
             box=self.box,
+            stress=self.stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
+            info=self.info,
         )
 
     # ---------------------------------------------------------------- physics helpers
     def get_number_of_electrons(self) -> torch.Tensor:
         """Return *scalar* Tr(D·S)."""
-        return trace_matmul_sparse_snap_vectorized(self.density, self.overlap)
+        return trace_matmul_sparse_block_matrix(self.density, self.overlap)
 
     def get_energy(self) -> torch.Tensor:
         """Return *scalar* Tr(D·H)."""
-        return trace_matmul_sparse_snap_vectorized(self.hamiltonian, self.density)
+        return trace_matmul_sparse_block_matrix(self.hamiltonian, self.density)
 
     # ---------------------------------------------------------------- serialisation
     def _payload(self):
         return {
             "positions": self.positions.cpu() if self.positions is not None else None,
+            "forces": self.forces.cpu() if self.forces is not None else None,
             "box": self.box.cpu() if self.box is not None else None,
+            "stress": self.stress.cpu() if self.box is not None else None,
             "mats": {k: v._to_payload() for k, v in self._mats.items()},
         }
 
@@ -210,8 +264,20 @@ class Snapshot:
         torch.save(self._payload(), path)
 
     # helper to reconstruct one BlockMatrix from saved payload ----------
+    #! Edge manipulation
     @staticmethod
     def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> BlockMatrix:
+        """
+        <assumptions>
+        - Helper for `Snapshot.load`.
+        - Reconstructs a `BlockMatrix` from a dictionary payload.
+        </assumptions>
+        <implementation>
+        - Loads `pair_blocks` and `pair_edges`, moving them to `device`.
+        - **Rebuilds lookup table**: Iterates over `pair_edges`. For each edge `(sx, sy, sz, i, j)` at index `idx`, sets `lookup[(sx, sy, sz, i, j)] = (key, idx)`.
+        - Note: The edge unpacking order `(sx, sy, sz, i, j)` must match the storage convention.
+        </implementation>
+        """
         from core.orbital_irrep_config import OrbitalIrrepConfig
         from collections import Counter
 
@@ -223,8 +289,8 @@ class Snapshot:
         # rebuild lookup
         lookup = {}
         for key, edges in pair_edges.items():
-            for idx, (i, j) in enumerate(edges.t().tolist()):
-                lookup[(i, j)] = (key, idx)
+            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
+                lookup[(sx, sy, sz, i, j)] = (key, idx)
 
         atoms = tuple(payload["atoms"])
         atom_counts = payload.get("atom_counts", Counter(atoms))
@@ -247,18 +313,26 @@ class Snapshot:
             name: cls._matrix_from_payload(pld, device)
             for name, pld in payload_top["mats"].items()
         }
+        forces = payload_top.get("forces", None)
+        if forces is not None:
+            forces = forces.to(device)
         pos = payload_top.get("positions", None)
-        box = payload_top.get("box", None)
         if pos is not None:
             pos = pos.to(device)
+        box = payload_top.get("box", None)
         if box is not None:
             box = box.to(device)
+        stress = payload_top.get("stress", None)
+        if stress is not None:
+            stress = stress.to(device)
         return cls(
             mats["hamiltonian"],
             mats["overlap"],
             mats["density"],
             positions=pos,
+            forces=forces,
             box=box,
+            stress=stress,
             matrix_path=payload_top.get("matrix_path", None),
             info_path=payload_top.get("info_path", None),
             cutoff_radius=payload_top.get("cutoff_radius", None),
@@ -285,40 +359,81 @@ class Snapshot:
 
     def _change_basis(self, target: str) -> "Snapshot":
         """
-        Return a **new** snapshot in `target` basis ("openmx" | "e3nn").
+        Return a **new** snapshot in `target` basis ("openmx" | "e3nn" | "fhi-aims").
         If already in that basis the current instance is returned unchanged.
         """
-        if target not in {"openmx", "e3nn"}:
-            raise ValueError("target must be 'openmx' or 'e3nn'")
+        if target not in {"openmx", "e3nn", "fhi-aims"}:
+            raise ValueError("target must be 'openmx', 'e3nn', or 'fhi-aims'")
 
         if self.density.basis == target:
-            return self  # nothing to do
+            return self
 
-        cfg = self.density.orbital_cfg  # shared by all mats
-        # pick an arbitrary block to determine the device
-        any_block = next(iter(self.density.pair_blocks.values()))
-        conv = OpenMXE3NNConverter(cfg, device=any_block.device)
+        cfg = self.density.orbital_cfg
+        any_block = next(iter(self.hamiltonian.pair_blocks.values()))
+        device = any_block.device
+        pos = self.positions
+        forces = self.forces
+        box = self.box
 
-        if target == "e3nn":
+        if self.density.basis == "openmx" and target == "e3nn":
+            conv = OpenMXE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-        else:  # target == "openmx"
+
+            change_of_basis = torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+
+            pos = pos @ change_of_basis if pos is not None else None
+            forces = forces @ change_of_basis if forces is not None else None
+            box = box @ change_of_basis if box is not None else None
+        elif self.density.basis == "fhi-aims" and target == "e3nn":
+            conv = FHIaimsE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_e3nn(self.hamiltonian)
+            ovl = conv.matrix_to_e3nn(self.overlap)
+            den = conv.matrix_to_e3nn(self.density)
+        elif self.density.basis == "e3nn" and target == "openmx":
+            conv = OpenMXE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_openmx(self.hamiltonian)
             ovl = conv.matrix_to_openmx(self.overlap)
             den = conv.matrix_to_openmx(self.density)
 
-        # Constructor will re-order edges deterministically (norm is preserved
-        # by orthogonal transforms so ordering identical).
+            change_of_basis = torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+
+            pos = pos @ change_of_basis if pos is not None else None
+            forces = forces @ change_of_basis if forces is not None else None
+            box = box @ change_of_basis if box is not None else None
+        elif self.density.basis == "e3nn" and target == "fhi-aims":
+            conv = FHIaimsE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_fhiaims(self.hamiltonian)
+            ovl = conv.matrix_to_fhiaims(self.overlap)
+            den = conv.matrix_to_fhiaims(self.density)
+            box = (
+                box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+                if box is not None
+                else None
+            )
+            print("Warning!: wrong formula")
+        elif self.density.basis == "e3nn" and target == "fhi-aims":
+            conv = FHIaimsE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_fhiaims(self.hamiltonian)
+            ovl = conv.matrix_to_fhiaims(self.overlap)
+            den = conv.matrix_to_fhiaims(self.density)
+        else:
+            raise RuntimeError("Unsupported basis conversion")
+
         return Snapshot(
             ham,
             ovl,
             den,
-            positions=self.positions,
-            box=self.box,
+            positions=pos,
+            forces=forces,
+            box=box,
+            stress=self.stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
+            info=self.info,
         )
 
     # public façade --------------------------------------------------------
@@ -330,6 +445,10 @@ class Snapshot:
         """Return a (possibly new) Snapshot in the **OpenMX** convention."""
         return self._change_basis("openmx")
 
+    def to_fhiaims(self) -> "Snapshot":
+        """Return a (possibly new) Snapshot in the **FHI-AIMS** convention."""
+        return self._change_basis("fhi-aims")
+
     # ---------------------------------------------------------------- rotation
     def rotate(self, R: torch.Tensor) -> "Snapshot":
         """
@@ -339,46 +458,68 @@ class Snapshot:
         ham = self.hamiltonian.rotate(R)
         ovl = self.overlap.rotate(R)
         den = self.density.rotate(R)
+        if self.stress is not None:
+            print("Warning: stress rotation to be checked!")
         return Snapshot(
             ham,
             ovl,
             den,
             positions=self.positions @ R.T if self.positions is not None else None,
-            box=self.box @ R.T if self.box is not None else None,
-            matrix_path=None,  # set to None to invalidate the cache
+            forces=self.forces @ R.T if self.forces is not None else None,
+            box=R @ self.box if self.box is not None else None,
+            stress=(
+                self.stress @ R.T
+                if self.stress is not None and self.stress.shape != torch.Size([0])
+                else None
+            ),  # ! Check that it's correct
+            matrix_path=None,
             info_path=None,
             cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
+            info=self.info,
         )
 
-        # -------------------------------------------------------------------- helpers
-
-    # -------------------- minimal-image displacements ---------------------------
+    # -------------------------------------------------------------------- helpers
+    #! Edge manipulation
     def _edge_displacements(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
         """
         Return dict ``key → (E,3)`` of minimal-image displacement vectors.
 
-        Requires ``self.positions`` **and** ``self.box``.
+        <assumptions>
+        - Calculates the vector pointing from source atom to destination atom, including periodic boundary shifts.
+        - `delta = pos[dst] - pos[src] + shift @ box`.
+        - `shift` is the integer vector `(sx, sy, sz)` associated with the edge.
+        </assumptions>
+        <implementation>
+        - Iterates over all edges in the matrix.
+        - Unpacks `(sx, sy, sz, src, dst)` from `edges`.
+        - Constructs `edge_shift` tensor from `(sx, sy, sz)`.
+        - Computes displacement vector using positions and lattice box.
         """
         if self.positions is None or self.box is None:
             raise RuntimeError("Snapshot has no position/box information")
 
         if mat is None:
-            mat = self.density  # default
+            mat = self.density
 
-        inv_box = torch.inverse(self.box.to(self.positions))  # (3,3)
+        # inv_box = torch.inverse(self.box)
         vecs: Dict[str, torch.Tensor] = {}
 
-        for key, edges in mat.pair_edges.items():  # edges (2,E)
-            src, dst = edges
-            delta = self.positions[dst] - self.positions[src]  # (E,3)
+        for key, edges in mat.pair_edges.items():
+            sx, sy, sz, src, dst = edges
+            edge_shift = (
+                torch.stack([sx, sy, sz], dim=-1)
+                .to(self.positions.device)
+                .to(self.positions.dtype)
+            )
+            delta = self.positions[dst] - self.positions[src] + edge_shift @ self.box
 
-            # fractional coordinates & wrap to (-0.5,0.5]
-            frac = delta @ inv_box
-            frac_wrapped = frac - torch.round(frac)
-
-            vecs[key] = frac_wrapped @ self.box.to(self.positions)
+            # frac = delta @ inv_box
+            # frac_wrapped = frac - torch.round(frac)
+            # vecs[key] = frac_wrapped @ self.box
+            vecs[key] = delta
 
         return vecs
 
@@ -392,8 +533,7 @@ class Snapshot:
     # -------------------- public API -------------------------------------------
     def max_distance(self, which: str = "density") -> torch.Tensor:
         """
-        Largest minimal-image distance appearing in *which* sparse matrix
-        (\"hamiltonian\" | \"overlap\" | \"density\").
+        Largest minimal-image distance appearing in *which* sparse matrix.
         """
         mat = self._mats[which]
         d = self._edge_distances(mat)
@@ -403,8 +543,6 @@ class Snapshot:
         """
         Return a **new** snapshot where edges whose minimal-image distance
         exceeds ``cutoff`` (Å) are removed *in **all** three matrices*.
-
-        Edge set is taken from *which* (defaults to \"density\").
         """
         dist = self._edge_distances(self._mats[which])
         mask_dict = {k: (v <= cutoff) for k, v in dist.items()}
@@ -413,30 +551,31 @@ class Snapshot:
         ovl = self.overlap._apply_edge_mask(mask_dict)
         den = self.density._apply_edge_mask(mask_dict)
 
-        # Constructor will re-order edges by |D| again
         return Snapshot(
             ham,
             ovl,
             den,
             positions=self.positions,
+            forces=self.forces,
             box=self.box,
+            stress=self.stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=cutoff,
+            cfg=self.cfg,
+            info=self.info,
         )
 
     # ---------------------------------------------------------------- dunder access
     def __getitem__(self, item: str) -> BlockMatrix:
         return self._mats[item]
 
-    def __getattr__(self, name: str) -> Any:  # noqa: ANN401  (# type: ignore[override]
+    def __getattr__(self, name: str) -> Any:
         if name in self._mats:
             return self._mats[name]
         raise AttributeError(name)
 
-    # ════════════════════════════════════════════════════════════════════════
-    #                Convenient constructor from  *both*  OpenMX files
-    # ════════════════════════════════════════════════════════════════════════
+    # -------------------------------------------------------------------- constructors
     @staticmethod
     def from_openmx(
         matrix_path: str | os.PathLike,
@@ -445,46 +584,190 @@ class Snapshot:
         convention: str = "e3nn",
         symmetrize_density: bool = True,
         cutoff_radius: float | None = None,
+        dtype: torch.dtype = torch.float32,
+        cfg: Config = None,
     ) -> "Snapshot":
-        """
-        Build a :class:`Snapshot` directly from an **OpenMX SCF output pair**:
-
-        * ``matrix_path`` - the ``*.scfout`` file containing H/S/D blocks
-        * ``info_path``   - the corresponding ``*.out`` / ``*.info`` file
-          parsed by :func:`data.openmx_info_parser.parse_info_out`
-        """
-
         from data.openmx_info_parser import parse_info_out
         from data.openmx_parser import parse_openmx_scfout
 
-        # Parse auxiliary info file (atoms, positions, orbital spec…)
-        info = parse_info_out(info_path)
-
+        info = parse_info_out(info_path, dtype)
         atoms: list[str] = info.elements
         if not atoms:
             raise RuntimeError("Info-file does not contain <coordinates.forces>")
 
-        # orbital_set maps element -> compact string  ("3s2p2d1f")
         orb_cfg = OrbitalIrrepConfig.from_dict(info.orbital_set)
 
-        # ── ②  Let the existing parser build the block-matrix snapshot ──────
         snap = parse_openmx_scfout(
             matrix_path,
             atoms,
             orb_cfg,
-            convention=convention,
+            convention="openmx",
             symmetrize_density=symmetrize_density,
         )
 
-        snap.matrix_path = matrix_path  # store source file path
+        snap.matrix_path = matrix_path
         snap.info_path = info_path
-
-        # ── ③  Attach geometry (positions, later box) and return ────────────
-        snap.positions = info.xyz if info.xyz.numel() else None
+        snap.positions = info.positions if info.positions.numel() else None
+        snap.forces = info.forces if info.forces.numel() else None
         snap.box = info.box if info.box.numel() else None
-        # Users can still `.rotate(...)` / `.filter_by_distance(...)`
-        # without PBC if `box` stays *None*.
+        snap.stress = info.stress if info.box.numel() else None
+        snap.cfg = cfg
+        snap.info = info
+
         if cutoff_radius is not None:
             snap = snap.filter_by_distance(cutoff_radius)
 
-        return snap.canonicalize_edges()
+        snap = snap._change_basis(convention)
+
+        snap = snap.canonicalize_edges()
+        return snap
+
+    @staticmethod
+    def from_fhiaims(
+        geometry_path: str | os.PathLike,
+        basis_path: str | os.PathLike,
+        hamiltonian_path: str | os.PathLike,
+        overlap_path: str | os.PathLike,
+        density_path: str | os.PathLike,
+        *,
+        convention: str = "e3nn",
+        cutoff_radius: float | None = None,
+        cfg: Config = None,
+    ) -> "Snapshot":
+        from data.fhiaims_parser import parse_fhiaims_output
+
+        snap = parse_fhiaims_output(
+            geometry_path,
+            basis_path,
+            hamiltonian_path,
+            overlap_path,
+            density_path,
+        )
+
+        snap.cfg = cfg
+
+        if convention == "e3nn":
+            snap = snap.to_e3nn()
+
+        if cutoff_radius is not None:
+            snap = snap.filter_by_distance(cutoff_radius)
+
+        snap = snap.canonicalize_edges()
+        return snap
+
+    def dos(self, sigma=0.005, bin_width=0.001, E_min=-1.0, E_max=1.0):
+        """
+        Compute the density of states (DOS) for this snapshot.
+
+        Parameters
+        ----------
+        sigma : float
+            The broadening parameter for the DOS.
+        bin_width : float
+            The width of each energy bin.
+        E_min : float
+            The minimum energy to consider.
+        E_max : float
+            The maximum energy to consider.
+
+        Returns a dict with keys:
+        "energies" : torch.Tensor
+            The energy bins.
+        "dos" : torch.Tensor
+            The computed density of states for each energy bin.
+        """
+        H = self.hamiltonian.to_dense().detach()
+
+        eigenvalues, eigenvectors = torch.linalg.eigh(H)
+        ### setting up the energy bins
+        grid = torch.arange(E_min, E_max + bin_width, bin_width)
+        dos = torch.sum(
+            torch.exp(-((grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma**2)),
+            axis=1,
+        ) / (torch.sqrt(torch.tensor(2 * torch.pi)) * sigma)
+
+        return grid, dos
+
+    def export_to_deephe3(self, path: str | os.PathLike):
+        """
+        Export the snapshot to the DeepH-E3 format.
+
+        Parameters
+        ----------
+        path : str | os.PathLike
+            The directory where the files will be saved.
+        """
+        path = Path(path)
+        os.makedirs(path, exist_ok=True)
+
+        # save_element
+        atoms = Atoms(self.hamiltonian.atoms)
+        with open(path / "element.dat", "w") as f:
+            for number in atoms.numbers:
+                f.write(f"{number}\n")
+
+        # save_info
+        with open(path / "info.json", "w") as f:
+            json.dump(
+                {"fermi_level": self.info.fermi_level.item(), "isspinful": False}, f
+            )
+
+        # save_lat
+        with open(path / "lat.dat", "w") as f:
+            for row in self.box:
+                for el in row:
+                    f.write(f"{el} ")
+                f.write("\n")
+
+        # save_rlat
+        rlat = 2 * torch.pi * torch.linalg.inv(self.box).T
+        with open(path / "rlat.dat", "w") as f:
+            for row in rlat:
+                for el in row:
+                    f.write(f"{el} ")
+                f.write("\n")
+
+        # save_site_positions
+        with open(path / "site_positions.dat", "w") as f:
+            for row in self.positions.T:
+                for el in row:
+                    f.write(f"{el}\t")
+                f.write("\n")
+
+        # save_hamiltonians
+        with h5py.File(path / "hamiltonians.h5", "w") as f:
+            for key in self.hamiltonian.keys():
+                #! Edge manipulation
+                # <assumptions>
+                # - Exports Hamiltonian blocks to HDF5 format compatible with DeepH-E3.
+                # - HDF5 dataset names are string representations of the edge tuple `[sx, sy, sz, src, dst]`.
+                # </assumptions>
+                # <implementation>
+                # - Iterates over keys and edges.
+                # - Unpacks `(sx, sy, sz, src, dst)` from `edges`.
+                # - Creates HDF5 dataset for each block using the edge tuple as the name.
+                # </implementation>
+                edges = self.hamiltonian.pair_edges[key]
+                blocks = self.hamiltonian.pair_blocks[key]
+
+                # edges rows: 0:sx, 1:sy, 2:sz, 3:src, 4:dst
+                for i in range(edges.shape[1]):
+                    sx = edges[0, i].item()
+                    sy = edges[1, i].item()
+                    sz = edges[2, i].item()
+                    src = edges[3, i].item()
+                    dst = edges[4, i].item()
+
+                    # Key format: [sx, sy, sz, src, dst]
+                    name = str([sx, sy, sz, src, dst])
+                    f.create_dataset(
+                        name, data=blocks[i].to(torch.float64).cpu().numpy()
+                    )
+
+        # save_orbital_types
+        with open(path / "orbital_types.dat", "w") as f:
+            for atom in self.hamiltonian.atoms:
+                orbital_list = self.hamiltonian.orbital_cfg.element_to_irreps[atom].ls
+                for l in orbital_list:
+                    f.write(f"{l}\t")
+                f.write("\n")

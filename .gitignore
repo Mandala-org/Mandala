@@ -27,7 +27,7 @@ docs/_build/
 ray_results/
 
 # Notes
-notes/
+# notes/
 
 # egg-info
 *.egg-info/
@@ -39,5 +39,15 @@ notes/
 # ruff
 .ruff_cache/
 
+# github
+.github/
+
+# coverage reports
+.coverage
+
 # throwaway notebooks
 notebooks/scratchpads
+
+# temporary/testing files
+data/deeph_e3/7_7_reproduced/*
+data/deeph_e3/silicon_reproduced/*

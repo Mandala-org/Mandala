@@ -54,7 +54,6 @@ def snapshot_e3nn() -> "Snapshot":
 
 
 @pytest.mark.physics
-@pytest.mark.physics
 def test_identity_rotation_keeps_blocks(snapshot_e3nn):
     R = torch.eye(3)
     snap_id = snapshot_e3nn.rotate(R)
@@ -78,7 +77,6 @@ def test_identity_rotation_keeps_blocks(snapshot_e3nn):
 
 
 @pytest.mark.physics
-@pytest.mark.physics
 def test_rotation_invariants(snapshot_e3nn):
     """Energy and electron count must be invariant under rigid rotation."""
     theta = math.pi / 7.0
@@ -96,7 +94,6 @@ def test_rotation_invariants(snapshot_e3nn):
     ), "Electron count changed after rotation"
 
 
-@pytest.mark.physics
 @pytest.mark.physics
 def test_rotation_roundtrip(snapshot_e3nn):
     """R · Rᵀ should bring us back to the original snapshot."""

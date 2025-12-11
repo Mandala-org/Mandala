@@ -25,7 +25,7 @@ from e3nn.o3 import Irreps
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.block_matrix import BlockMatrix
 
-__all__ = ["OpenMXE3NNConverter"]
+__all__ = ["OpenMXE3NNConverter", "FHIaimsE3NNConverter"]
 
 
 # --------------------------------------------------------------------- U matrices
@@ -34,8 +34,18 @@ _U_OPENMX_TO_WIKI: Dict[int, torch.Tensor] = {
     1: torch.eye(3, dtype=torch.float32)[[1, 2, 0]],
     2: torch.eye(5, dtype=torch.float32)[[2, 4, 0, 3, 1]],
     3: torch.eye(7, dtype=torch.float32)[[6, 4, 2, 0, 1, 3, 5]],
+    4: torch.eye(9, dtype=torch.float32)[[8, 6, 4, 2, 0, 1, 3, 5, 7]],
 }
 _U_WIKI_TO_OPENMX = {l: U.T for l, U in _U_OPENMX_TO_WIKI.items()}
+
+_U_FHIAIMS_TO_WIKI: Dict[int, torch.Tensor] = {
+    0: torch.eye(1, dtype=torch.float32),
+    1: torch.eye(3, dtype=torch.float32),
+    2: torch.diag(torch.tensor([1, -1, 1, -1, -1], dtype=torch.float32)),
+    3: torch.diag(torch.tensor([1, 1, 1, 1, 1, -1, 1], dtype=torch.float32)),
+    4: torch.diag(torch.tensor([1, 1, 1, 1, 1, 1, -1, 1, -1], dtype=torch.float32)),
+}
+_U_WIKI_TO_FHIAIMS = {l: U.T for l, U in _U_FHIAIMS_TO_WIKI.items()}
 
 
 def _orbital_types_from_irreps(irreps: Irreps) -> List[int]:
@@ -99,3 +109,53 @@ class OpenMXE3NNConverter:
             for k, blk in matrix.pair_blocks.items()
         }
         return matrix._replace_pair_blocks(new_blocks, basis="openmx")
+
+
+class FHIaimsE3NNConverter:
+    """
+    Converts *all blocks in a snapshot* between ``basis="fhi-aims"`` and
+    ``basis="e3nn"``.
+    """
+
+    def __init__(self, orbital_cfg: OrbitalIrrepConfig, device="cpu"):
+        self.cfg = orbital_cfg
+        self.device = torch.device(device)
+
+        self._U_fhiaims2wiki: Dict[str, torch.Tensor] = {}
+        self._U_wiki2fhiaims: Dict[str, torch.Tensor] = {}
+        for el in self.cfg.elements():
+            typs = _orbital_types_from_irreps(self.cfg.element_to_irreps[el])
+            mats_U = [_U_FHIAIMS_TO_WIKI[l] for l in typs]
+            mats_V = [_U_WIKI_TO_FHIAIMS[l] for l in typs]
+            self._U_fhiaims2wiki[el] = torch.block_diag(*mats_U).to(self.device)
+            self._U_wiki2fhiaims[el] = torch.block_diag(*mats_V).to(self.device)
+
+    def block_fhiaims_to_e3nn(self, key: str, block: torch.Tensor) -> torch.Tensor:
+        el_i, el_j = key.split("-")
+        U_i = self._U_fhiaims2wiki[el_i]
+        U_j = self._U_fhiaims2wiki[el_j]
+        return U_i @ block @ U_j.T
+
+    def block_e3nn_to_fhiaims(self, key: str, block: torch.Tensor) -> torch.Tensor:
+        el_i, el_j = key.split("-")
+        V_i = self._U_wiki2fhiaims[el_i]
+        V_j = self._U_wiki2fhiaims[el_j]
+        return V_i @ block @ V_j.T
+
+    def matrix_to_e3nn(self, matrix: BlockMatrix) -> BlockMatrix:
+        if matrix.basis == "e3nn":
+            return matrix
+        new_blocks = {
+            k: self.block_fhiaims_to_e3nn(k, blk)
+            for k, blk in matrix.pair_blocks.items()
+        }
+        return matrix._replace_pair_blocks(new_blocks, basis="e3nn")
+
+    def matrix_to_fhiaims(self, matrix: BlockMatrix) -> BlockMatrix:
+        if matrix.basis == "fhi-aims":
+            return matrix
+        new_blocks = {
+            k: self.block_e3nn_to_fhiaims(k, blk)
+            for k, blk in matrix.pair_blocks.items()
+        }
+        return matrix._replace_pair_blocks(new_blocks, basis="fhi-aims")

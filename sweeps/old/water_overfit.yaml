@@ -1,0 +1,94 @@
+program: scripts/train_water.py
+project: mandala_small_steps
+name: water_sweep
+method: bayes
+early_terminate:
+  type: hyperband
+  min_iter: 100  # Stop runs that are performing poorly after 100 epochs
+metric:
+  name: train/hamiltonian_mae
+  goal: minimize
+
+
+parameters:
+  cutoff_gnn:
+    value: 4.0
+  cutoff_matrix:
+    value: 4.0
+  l_max_gnn:
+    distribution: int_uniform
+    min: 3
+    max: 4
+  num_layers_gnn:
+    distribution: int_uniform
+    min: 2
+    max: 4
+  num_layers_matrix:
+    value: 1
+  edge_update_linear:
+    values: ["pre", "post"]
+  edge_update:
+    value: "concat"
+  edge_update_residual:
+    value: True
+  head_use_mlp_log_scale:
+    value: False
+  nonlin_kind:
+    value: "normact"
+  activation_scalar:
+    values: ["silu", "leakyrelu", "tanh"]
+  activation_gate:
+    values: ["sigmoid", "leakyrelu", "tanh"]
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-2
+  hidden_base_dim:
+    value: 64
+  dropout:
+    value: 0.0
+  n_radial:
+    value: 64
+  neck_depth:
+    distribution: int_uniform
+    min: 1
+    max: 3
+  head_depth:
+    distribution: int_uniform
+    min: 1
+    max: 3
+  train_target:
+    value: "matrix"
+
+  matrix_targets:
+    value: ["hamiltonian", "density", "overlap"]
+  train_on_energy:
+    value: True
+  train_on_num_electrons:
+    value: True
+  loss_coef_observables:
+    distribution: log_uniform_values
+    min: 1.0e-9
+    max: 1.0e-6
+  loss_l1_fraction:
+    values:
+      - 0.0
+      - 0.5
+      - 0.9
+      - 0.98
+      - 1.0
+  lr_scheduler_target:
+    value: "train/loss_total"
+  precompute_edge_features:
+    value: False
+
+
+command:
+  - ${env}
+  - python3
+  - -u # Unbuffered output for real-time logging
+  - ${program}
+  - ${args}
+  - --gpus=1  # Specify a single GPU
+  - --num_workers=1
+  - --max_epochs=1000

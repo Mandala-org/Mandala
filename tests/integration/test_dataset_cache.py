@@ -1,9 +1,9 @@
 import pytest
 from pathlib import Path
-
 import torch
 
 from data.factory import DatasetFactory
+from net.common import Config
 
 
 @pytest.fixture
@@ -17,19 +17,19 @@ def silicon_pair():
 
 def load_dataset(pair, cache_dir, cutoff_gnn):
     mat, info = pair
-    fac = DatasetFactory(
+    cfg = Config(
         cutoff_gnn=cutoff_gnn,
         cutoff_matrix=7.5,
-        l_max_sh=3,
+        l_max_gnn=3,
         n_radial=64,
         device="cpu",
         cache_root=str(cache_dir),
+        safety_checks=True,
     )
-    fac.add_snapshot(mat, info, purpose="train")
-    ds, val_ds, _ = fac.create()
-    # Expect only train split
-    assert val_ds is None
-    return ds
+    fac = DatasetFactory(cfg)
+    fac.add_snapshot(mat, info)
+    train_ds, _, _ = fac.create()
+    return train_ds
 
 
 @pytest.mark.integration
@@ -54,7 +54,7 @@ def test_dataset_cache_with_silicon_data(tmp_path, silicon_pair):
     hamiltonian3 = y3["hamiltonian"]
 
     # 5. Check that some random matrix block is the same as in the first dataset
-    block_key = list(hamiltonian1.pair_vectors.keys())[0]
+    block_key = list(hamiltonian1.pair_blocks.keys())[0]
     assert torch.equal(
-        hamiltonian1.pair_vectors[block_key], hamiltonian3.pair_vectors[block_key]
+        hamiltonian1.pair_blocks[block_key], hamiltonian3.pair_blocks[block_key]
     )
