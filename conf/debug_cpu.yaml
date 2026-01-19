@@ -12,7 +12,7 @@ dataset:
 config:
   # data:
   cutoff_gnn: 4.0
-  cutoff_matrix: 6.0
+  cutoff_matrix: 8.0
   n_radial: 64
   num_workers: 0
   enable_forces: false
