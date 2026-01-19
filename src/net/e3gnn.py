@@ -30,6 +30,7 @@ from net.common import Config, build_hidden_irreps
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
 from net.heads import DeepHead
+from utils.summary import print_model_summary
 
 
 # DeepH-E3
@@ -143,6 +144,9 @@ class E3GNN(pl.LightningModule):
                 for name in self.cfg.matrix_targets
             }
         )
+
+        # Print model summary if verbosity >= 1
+        print_model_summary(self, verbosity=self.cfg.verbosity)
 
     # ------------------------ util helpers -----------------------------
     @staticmethod

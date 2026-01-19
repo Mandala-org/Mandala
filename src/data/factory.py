@@ -27,6 +27,7 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
 from data.openmx_info_parser import parse_info_out, InfoOutData
 from net.common import Config
+from utils.summary import print_dataset_summary
 
 Purpose = Literal["train", "val"]
 
@@ -117,6 +118,15 @@ class DatasetFactory:
             if self._pairs["val"]
             else None
         )
+
+        # Print dataset summaries if verbosity >= 1
+        print_dataset_summary(
+            train_ds, name="Training Dataset", verbosity=self.cfg.verbosity
+        )
+        if val_ds:
+            print_dataset_summary(
+                val_ds, name="Validation Dataset", verbosity=self.cfg.verbosity
+            )
 
         return train_ds, val_ds, mapper
 
