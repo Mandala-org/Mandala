@@ -210,47 +210,6 @@ class E3GNNDataset(Dataset):
                 "forces": snap.forces,
                 "stress": snap.stress,
             }
-
-            target_index_map = {}
-            matrix_name = self.cfg.matrix_targets[0]
-            for key in y[matrix_name].pair_edges.keys():
-                edge_type_id = self.mapper.edge_type2idx[key]
-                #! Edge manipulation
-                # <assumptions>
-                # - Maps edges from the GNN graph (`x`) to the target matrix (`y`).
-                # - `edges_t` (target) follows `(sx, sy, sz, src, dst)` convention.
-                # - `edges_p` (graph) is constructed by concatenating `edge_shift` and `edge_index`.
-                # </assumptions>
-                # <implementation>
-                # - Retrieves target edges.
-                # - Filters graph edges and shifts by edge type.
-                # - Concatenates shift and indices to form `(5, E)` tensor.
-                # - Builds a mapping from edge tuple to target index.
-                # - Creates `tim` tensor mapping graph edges to target indices.
-                # </implementation>
-                edges_t = y[matrix_name].pair_edges[key]
-                print(f"{key} edges_t shape: {edges_t.shape}")
-                edges_p = x["edge_index"][:, x["edge_type_idx"] == edge_type_id]
-                print(f"{key} edges_p shape: {edges_p.shape}")
-                edge_shift_p = x["edge_shift"][:, x["edge_type_idx"] == edge_type_id]
-                print(f"{key} edge_shift_p shape: {edge_shift_p.shape}")
-                edges_p = torch.cat([edge_shift_p, edges_p], dim=0)
-                print(f"{key} edges_p (with shift) shape: {edges_p.shape}")
-                edge_t_to_id = {
-                    tuple(edge.tolist()): i for i, edge in enumerate(edges_t.T)
-                }
-                tim = torch.tensor(
-                    [
-                        edge_t_to_id[tuple(edge.tolist())]
-                        for edge in edges_p.T
-                        if tuple(edge.tolist()) in edge_t_to_id
-                    ],
-                    dtype=torch.long,
-                )
-                target_index_map[key] = tim
-                print(f"{key} tim shape: {tim.shape}")
-            y["target_index_map"] = target_index_map
-
         return x, y
 
     # ------------------- torch Dataset interface ---------------------------

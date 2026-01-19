@@ -35,8 +35,8 @@ def make_mock_matrix():
                 pair_edges[key] = []
             local_idx = len(pair_blocks[key])
             pair_blocks[key].append(blk)
-            pair_edges[key].append([i, j, 0, 0, 0])
-            lookup[(i, j, 0, 0, 0)] = (key, local_idx)
+            pair_edges[key].append([0, 0, 0, i, j])
+            lookup[(0, 0, 0, i, j)] = (key, local_idx)
 
     # stack per key
     pair_blocks = {k: torch.stack(v) for k, v in pair_blocks.items()}
@@ -141,8 +141,8 @@ def test_basis_converter_roundtrip():
     assert matrix_back.basis == "openmx"
 
     # element‑wise equality for all blocks
-    for i, j in matrix_open.lookup:
-        assert torch.allclose(matrix_open[(i, j)], matrix_back[(i, j)], atol=1e-6)
+    for idx in matrix_open.lookup:
+        assert torch.allclose(matrix_open[idx], matrix_back[idx], atol=1e-6)
 
 
 @pytest.mark.integration

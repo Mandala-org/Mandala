@@ -466,7 +466,7 @@ class Snapshot:
             den,
             positions=self.positions @ R.T if self.positions is not None else None,
             forces=self.forces @ R.T if self.forces is not None else None,
-            box=R @ self.box if self.box is not None else None,
+            box=self.box @ R.T if self.box is not None else None,
             stress=(
                 self.stress @ R.T
                 if self.stress is not None and self.stress.shape != torch.Size([0])

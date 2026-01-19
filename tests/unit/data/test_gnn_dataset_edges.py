@@ -73,28 +73,3 @@ def test_process_snapshot_to_sample():
 
     # Run processing
     x, y = ds._process_snapshot_to_sample(snap)
-
-    # Check target_index_map
-    tim = y["target_index_map"]["H-H"]
-
-    # GNN edges (computed by compute_graph_features):
-    # Pos: 0.0, 2.0. Box 10.0. Cutoff 3.0.
-    # Finds:
-    # (0,0,0,0,0) -> Index 4
-    # (0,0,0,1,1) -> Index 5
-    # (0,0,0,0,1) -> Index 0
-    # (0,0,0,1,0) -> Index 1
-
-    # Edges 2 and 3 are distant (dist=8.0 or 12.0) so not found by GNN.
-
-    assert tim.shape[0] == 4
-    # Order: Self edges first, then off-diag sorted.
-    # 0: (0,0,0,0,0) -> 4
-    # 1: (0,0,0,1,1) -> 5
-    # 2: (0,0,0,0,1) -> 0
-    # 3: (0,0,0,1,0) -> 1
-
-    assert tim[0] == 4
-    assert tim[1] == 5
-    assert tim[2] == 0
-    assert tim[3] == 1

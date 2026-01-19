@@ -336,9 +336,9 @@ class E3GNN(pl.LightningModule):
 
                 # Handle size mismatch by truncating to the smaller size
                 # if preds.shape[0] > targets.shape[0] that means that cutoff_matrix
-                # is bigger than maximum distance in the system
+                # is bigger than maximum distance in the matrix
                 # if preds.shape[0] < targets.shape[0] that means that the maximum
-                # distance in the system is bigger than cutoff_matrix
+                # distance in the matrix is bigger than cutoff_matrix
                 min_n = min(preds.shape[0], targets.shape[0])
                 preds = preds[:min_n]
                 targets = targets[:min_n]
