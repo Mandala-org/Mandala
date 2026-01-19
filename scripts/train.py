@@ -134,7 +134,7 @@ def main(omega_cfg: DictConfig) -> None:
     bench_cb = None
     callbacks = [
         ModelCheckpoint(
-            monitor="val_loss",
+            monitor="val/loss_total",
             mode="min",
             save_top_k=3,
             dirpath=to_absolute_path(f"checkpoints/{run_name}"),
@@ -181,10 +181,6 @@ def main(omega_cfg: DictConfig) -> None:
         import wandb
 
         wandb.finish()
-    elif cfg.tune == "ray":
-        from ray import tune
-
-        tune.report(loss=0.0)
 
     # ------------------------------------------------------------------
     # 8. Training

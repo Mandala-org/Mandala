@@ -998,9 +998,11 @@ class IrrepsBlockData:
             print(
                 "Warning: IrrepsBlockData.__getitem__((i,j)) sums over periodic images."
             )
+            item_i, item_j = item
             ret = None
             for key in self.lookup:
-                if key[0] == item[0] and key[1] == item[1]:
+                sx, sy, sz, i, j = key
+                if i == item_i and j == item_j:
                     k_key, k_idx = self.lookup[key]
                     vec = self.pair_vectors[k_key][k_idx]
                     if ret is None:

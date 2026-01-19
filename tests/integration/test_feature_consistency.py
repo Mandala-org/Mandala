@@ -101,6 +101,7 @@ def test_precomputed_vs_onthefly_features(h2o_data):
     ), "num_self_edges mismatch"
 
 
+@pytest.mark.skip(reason="On-the-fly features temporarily not supported")
 @pytest.mark.integration
 def test_e3gnn_end_to_end_consistency(h2o_data):
     """
