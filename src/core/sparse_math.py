@@ -31,29 +31,10 @@ def trace_matmul_sparse(
     if edge_index.shape[0] != blocks_a.shape[0]:
         raise ValueError("edge_index cols must match number of blocks")
 
-    #! Edge manipulation
-    # <assumptions>
-    # - `edge_index` is (E, 5) or (5, E) depending on usage, here assumed list of 5-tuples.
-    # - Builds lookup for O(1) access to block indices.
-    # </assumptions>
-    # <implementation>
-    # - Converts `edge_index` to list of tuples.
-    # - Creates dictionary mapping tuple to index `k`.
-    # </implementation>
     pairs = edge_index.tolist()
     lookup = {tuple(p): k for k, p in enumerate(pairs)}
 
     out = torch.zeros((), dtype=blocks_a.dtype, device=blocks_a.device)
-    #! Edge manipulation
-    # <assumptions>
-    # - Computes trace of A * B.
-    # - Requires finding the symmetric block B_{ji} for each A_{ij}.
-    # </assumptions>
-    # <implementation>
-    # - Iterates over edges of A.
-    # - Finds index `rev_k` of symmetric edge `(-sx, -sy, -sz, j, i)` in B.
-    # - Accumulates trace of product.
-    # </implementation>
     for k, (sx, sy, sz, i, j) in enumerate(pairs):
         rev = (-sx, -sy, -sz, j, i)
         rev_k = lookup.get(rev, None)
@@ -96,16 +77,6 @@ def trace_matmul_sparse_block_matrix(A: BlockMatrix, B: BlockMatrix) -> torch.Te
         device=list(A.pair_blocks.values())[0].device,
         requires_grad=True,
     )
-    #! Edge manipulation
-    # <assumptions>
-    # - Computes trace of A * B using `BlockMatrix` lookups.
-    # - Iterates over all blocks in A.
-    # </assumptions>
-    # <implementation>
-    # - For each block A_{ij} at `(sx, sy, sz, i, j)`:
-    # - Checks if symmetric block B_{ji} at `(-sx, -sy, -sz, j, i)` exists.
-    # - Accumulates trace of product.
-    # </implementation>
     for (sx, sy, sz, i, j), (key, k) in A.lookup.items():
         if (-sx, -sy, -sz, j, i) not in B.lookup:
             raise ValueError(
