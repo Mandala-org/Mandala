@@ -31,6 +31,7 @@ from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
 from net.heads import DeepHead
 from utils.summary import print_model_summary
+from utils.units import HARTREE_TO_EV
 
 
 # DeepH-E3
@@ -357,6 +358,10 @@ class E3GNN(pl.LightningModule):
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
+            if name == "hamiltonian":
+                # Convert to eV^2 and eV for logging
+                mse_val = mse_val * (HARTREE_TO_EV**2)
+                mae_val = mae_val * HARTREE_TO_EV
             metrics[f"{stage}/{name}_mae"] = mae_val
             metrics[f"{stage}/{name}_mse"] = mse_val
 
@@ -381,7 +386,9 @@ class E3GNN(pl.LightningModule):
                 preds_matrix["hamiltonian"], preds_matrix["density"]
             )
             E_true = y["energy"]
-            metrics[f"{stage}/energy_mae"] = torch.mean(torch.abs(E_pred - E_true))
+            metrics[f"{stage}/energy_mae"] = (
+                torch.mean(torch.abs(E_pred - E_true)) * HARTREE_TO_EV
+            )
             if self.cfg.train_on_energy and not self.cfg.train_observables_on_gt:
                 loss_E_weighted = self.cfg.loss_coef_observables * self._mse(
                     E_pred, E_true
@@ -423,11 +430,11 @@ class E3GNN(pl.LightningModule):
             N_gt_D = trace_matmul_sparse_block_matrix(S_true, preds_matrix["density"])
 
             if self.cfg.log_partial_gt_observables:
-                metrics[f"{stage}/energy_mae_gt_density"] = torch.mean(
-                    torch.abs(E_gt_D - E_true)
+                metrics[f"{stage}/energy_mae_gt_density"] = (
+                    torch.mean(torch.abs(E_gt_D - E_true)) * HARTREE_TO_EV
                 )
-                metrics[f"{stage}/energy_mae_gt_hamiltonian"] = torch.mean(
-                    torch.abs(E_gt_H - E_true)
+                metrics[f"{stage}/energy_mae_gt_hamiltonian"] = (
+                    torch.mean(torch.abs(E_gt_H - E_true)) * HARTREE_TO_EV
                 )
                 metrics[f"{stage}/num_electrons_mae_gt_overlap"] = torch.mean(
                     torch.abs(N_gt_S - N_true)
