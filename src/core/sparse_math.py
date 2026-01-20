@@ -111,42 +111,15 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
         blk_b_rev = B.pair_blocks[rev_key]  # (E_rev, d_B, d_A)
 
         edges_a = A.pair_edges[key]  # (2, E)   (i, j)
-        #! Edge manipulation
-        # <assumptions>
-        # - Retrieves edges for the reverse key block in B.
-        # </assumptions>
-        # <implementation>
-        # - Accesses `pair_edges` for `rev_key`.
-        # </implementation>
         edges_b_rev = B.pair_edges[rev_key]  # (2, E')  (j, i)
 
         # map (j,i) tuple -> index in B
-        #! Edge manipulation
-        # <assumptions>
-        # - Builds mapping for fast alignment of B's blocks to A's edges.
-        # </assumptions>
-        # <implementation>
-        # - Maps `(sx, sy, sz, i, j)` to index `idx` for `edges_b_rev`.
-        # </implementation>
         mapping = {
             tuple(map(int, (sx, sy, sz, i, j))): idx
             for idx, (sx, sy, sz, i, j) in enumerate(edges_b_rev.t())
         }
 
         # build index list such that order matches edges_a
-        #! Edge manipulation
-        # <assumptions>
-        # - Aligns B's blocks to match the order of A's blocks for vectorized operation.
-        # - Uses symmetric edge property.
-        # - Raises error if edges are missing (incompatible sparsity patterns).
-        # </assumptions>
-        # <implementation>
-        # - For each edge in A `(sx, sy, sz, i, j)`:
-        # - Checks if symmetric edge `(-sx, -sy, -sz, j, i)` exists in B.
-        # - If not, raises ValueError.
-        # - Collects indices for B.
-        # - Performs vectorized einsum.
-        # </implementation>
         indices_b = []
 
         for sx, sy, sz, i, j in edges_a.t():
