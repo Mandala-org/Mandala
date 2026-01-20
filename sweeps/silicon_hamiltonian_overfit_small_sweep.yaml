@@ -4,7 +4,7 @@ name: silicon_hamiltonian_overfit_small
 method: bayes
 early_terminate:
   type: hyperband
-  min_iter: 100  # Stop runs that are performing poorly after 100 epochs
+  min_iter: 500  # Stop runs that are performing poorly after 500 epochs
 metric:
   name: train/loss_total
   goal: minimize
@@ -85,6 +85,6 @@ command:
   - --num_workers=0
   - --n_snapshots_per_temp=1 # Use a subset for faster sweeps
   - --val_n_snapshots=0
-  - --max_epochs=1000
+  - --max_epochs=4000
   - --min_temp=300
   - --max_temp=300

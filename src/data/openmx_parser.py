@@ -179,25 +179,9 @@ def parse_openmx_scfout(
             pair_blocks[key] = [b for (_ijr, b) in items]
             # pair_edges[key] = [[i, j, rn] for (i, j, rn), _ in items]
             pair_edges[key] = []
-            #! Edge manipulation
-            # <assumptions>
-            # - Converts OpenMX `rn` index to `(sx, sy, sz)` shift using `rn_shift_map`.
-            # - Constructs edges in `(sx, sy, sz, i, j)` format.
-            # </assumptions>
-            # <implementation>
-            # - Iterates over sorted items.
-            # - Appends 5-tuple edge to `pair_edges`.
-            # </implementation>
             for (i, j, rn), _ in items:
                 sx, sy, sz = rn_shift_map[rn]
                 pair_edges[key].append([sx, sy, sz, i, j])
-            #! Edge manipulation
-            # <assumptions>
-            # - Builds lookup table for O(1) access to blocks.
-            # </assumptions>
-            # <implementation>
-            # - Maps `(sx, sy, sz, i, j)` to `(key, idx)`.
-            # </implementation>
             for idx, ((i, j, rn), _) in enumerate(items):
                 sx, sy, sz = rn_shift_map[rn]
                 lookup[(sx, sy, sz, i, j)] = (key, idx)
@@ -211,13 +195,6 @@ def parse_openmx_scfout(
         # 1. Test whether all edges are unique
         all_edges = set()
         for edges in pair_edges_t.values():
-            #! Edge manipulation
-            # <assumptions>
-            # - Collects all edges to verify uniqueness.
-            # </assumptions>
-            # <implementation>
-            # - Adds each edge tuple to `all_edges` set.
-            # </implementation>
             for edge in edges.t().tolist():
                 all_edges.add(tuple(edge))
         if len(all_edges) != sum(len(edges.t()) for edges in pair_edges_t.values()):
@@ -225,14 +202,6 @@ def parse_openmx_scfout(
         # 2. Test whether lookup contains all edges
         if len(lookup) != len(all_edges):
             raise OpenMXParseError("Lookup size does not match edge count")
-        #! Edge manipulation
-        # <assumptions>
-        # - Verifies consistency between `pair_edges` and `lookup`.
-        # </assumptions>
-        # <implementation>
-        # - Checks if every edge in `all_edges` exists in `lookup`.
-        # - Checks if lookup index is valid.
-        # </implementation>
         for sx, sy, sz, i, j in all_edges:
             if (sx, sy, sz, i, j) not in lookup:
                 raise OpenMXParseError(f"Edge {(sx, sy, sz, i, j)} not found in lookup")
@@ -246,24 +215,9 @@ def parse_openmx_scfout(
             key = f"{atom}-{atom}"
             if key not in pair_blocks_t:
                 raise OpenMXParseError(f"Self-edge {key} not found in pair blocks")
-            #! Edge manipulation
-            # <assumptions>
-            # - Ensures self-interaction blocks (diagonal, zero shift) are present.
-            # </assumptions>
-            # <implementation>
-            # - Checks for `(0, 0, 0, i, i)` in `lookup`.
-            # </implementation>
             if (0, 0, 0, i, i) not in lookup:
                 raise OpenMXParseError(f"Self-edge lookup for {key} missing")
         # 4. Test whether graph is symmetric
-        #! Edge manipulation
-        # <assumptions>
-        # - Ensures the graph is symmetric: if edge (S, i, j) exists, (-S, j, i) must exist.
-        # </assumptions>
-        # <implementation>
-        # - Iterates over all edges in `lookup`.
-        # - Checks for existence of symmetric counterpart.
-        # </implementation>
         for sx, sy, sz, i, j in lookup:
             key, idx = lookup[(sx, sy, sz, i, j)]
             if (-sx, -sy, -sz, j, i) not in lookup:

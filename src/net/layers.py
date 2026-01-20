@@ -118,14 +118,6 @@ class EdgeUpdateBlock(nn.Module):
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
-        #! Edge manipulation
-        # <assumptions>
-        # - `edge_index` is a (2, E) tensor where row 0 is source, row 1 is destination.
-        # - Used to gather node features for edge updates.
-        # </assumptions>
-        # <implementation>
-        # - Unpacks `edge_index` into `src` and `dst`.
-        # </implementation>
         src, dst = edge_index
         edge_old = edge
 
@@ -215,14 +207,11 @@ class NodeUpdateBlock(nn.Module):
                 f"Unknown node update message aggregation: {self.cfg.node_update_message_agg}"
             )
 
-        self.tp = FullyConnectedTensorProduct(
-            node_irreps, hidden_irreps, hidden_irreps, internal_weights=True
-        )
-
         if cfg.node_update == "concat":
             post_lin_input_irreps = node_irreps + hidden_irreps
         else:
             post_lin_input_irreps = hidden_irreps
+
         self.post_lin = E3MLP(
             post_lin_input_irreps,
             hidden_irreps,
@@ -240,14 +229,6 @@ class NodeUpdateBlock(nn.Module):
 
     # ------------------------------------------------------------------
     def forward(self, node, edge, edge_index):
-        #! Edge manipulation
-        # <assumptions>
-        # - `edge_index` is a (2, E) tensor where row 0 is source, row 1 is destination.
-        # - `dst` is used as the index for aggregating messages (scatter sum/softmax).
-        # </assumptions>
-        # <implementation>
-        # - Unpacks `edge_index` into `src` and `dst`.
-        # </implementation>
         src, dst = edge_index
         node_old = node
 
@@ -272,9 +253,6 @@ class NodeUpdateBlock(nn.Module):
 
         if self.cfg.node_update == "concat":
             node = torch.cat([node_old, agg_msg], dim=-1)
-
-        elif self.cfg.node_update == "tensor_product":
-            node = self.tp(node_old, agg_msg)
 
         elif self.cfg.node_update == "replace" or (
             self.initial and self.cfg.node_update == "sum"

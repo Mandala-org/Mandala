@@ -62,7 +62,7 @@ class Config:
     edge_update_residual: bool = True  # use residual connections in edge update
 
     node_update_message_agg: str = "attention"  # "attention" | "sum"
-    node_update: str = "tensor_product"  # "tensor_product" | "concat" | "replace"
+    node_update: str = "concat"  # "concat" | "replace"
     node_update_residual: bool = True  # use residual connections in node update
 
     head_use_mlp_log_scale: bool = True  # whether to use MLP log scaling in the head

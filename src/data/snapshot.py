@@ -124,33 +124,12 @@ class Snapshot:
                 )
 
     # ---------------------------------------------------------------- edge ordering
-    #! Edge manipulation
     def canonicalize_edges(self) -> "Snapshot":
         """
         Return a new Snapshot with a canonical edge ordering for each key.
         The canonical order for each key is:
         1. Diagonal edges, sorted by their node index.
         2. Off-diagonal edges, sorted by the distance (ascending).
-
-        <assumptions>
-        - Enforces a deterministic edge order to ensure reproducibility and consistent batching.
-        - Separates self-interactions (diagonal) from inter-atomic interactions (off-diagonal).
-        - Uses Euclidean distance for sorting off-diagonal edges.
-        - "Diagonal" means src == dst AND shift == (0, 0, 0).
-        - Tie-breaking for off-diagonal edges uses the lexicographical order of (sx, sy, sz, src, dst).
-        </assumptions>
-        <implementation>
-        - Computes edge distances using `_edge_distances`.
-        - Iterates over each key in the density matrix.
-        - For each key:
-            - Identifies diagonal edges (src == dst & shift == 0).
-            - Identifies off-diagonal edges.
-            - Sorts diagonal edges by atom index.
-            - Sorts off-diagonal edges by (distance, sx, sy, sz, src, dst).
-            - Concatenates indices and stores in `order_dict`.
-        - Applies `reorder_edges` to Hamiltonian, Overlap, and Density matrices.
-        - Returns a new Snapshot with reordered matrices.
-        </implementation>
         """
         dists = self._edge_distances(self.density)
         order_dict = {}
@@ -264,20 +243,8 @@ class Snapshot:
         torch.save(self._payload(), path)
 
     # helper to reconstruct one BlockMatrix from saved payload ----------
-    #! Edge manipulation
     @staticmethod
     def _matrix_from_payload(payload: Dict[str, Any], device="cpu") -> BlockMatrix:
-        """
-        <assumptions>
-        - Helper for `Snapshot.load`.
-        - Reconstructs a `BlockMatrix` from a dictionary payload.
-        </assumptions>
-        <implementation>
-        - Loads `pair_blocks` and `pair_edges`, moving them to `device`.
-        - **Rebuilds lookup table**: Iterates over `pair_edges`. For each edge `(sx, sy, sz, i, j)` at index `idx`, sets `lookup[(sx, sy, sz, i, j)] = (key, idx)`.
-        - Note: The edge unpacking order `(sx, sy, sz, i, j)` must match the storage convention.
-        </implementation>
-        """
         from core.orbital_irrep_config import OrbitalIrrepConfig
         from collections import Counter
 
@@ -480,23 +447,11 @@ class Snapshot:
         )
 
     # -------------------------------------------------------------------- helpers
-    #! Edge manipulation
     def _edge_displacements(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
         """
         Return dict ``key → (E,3)`` of minimal-image displacement vectors.
-
-        <assumptions>
-        - Calculates the vector pointing from source atom to destination atom, including periodic boundary shifts.
-        - `delta = pos[dst] - pos[src] + shift @ box`.
-        - `shift` is the integer vector `(sx, sy, sz)` associated with the edge.
-        </assumptions>
-        <implementation>
-        - Iterates over all edges in the matrix.
-        - Unpacks `(sx, sy, sz, src, dst)` from `edges`.
-        - Constructs `edge_shift` tensor from `(sx, sy, sz)`.
-        - Computes displacement vector using positions and lattice box.
         """
         if self.positions is None or self.box is None:
             raise RuntimeError("Snapshot has no position/box information")
@@ -737,16 +692,6 @@ class Snapshot:
         # save_hamiltonians
         with h5py.File(path / "hamiltonians.h5", "w") as f:
             for key in self.hamiltonian.keys():
-                #! Edge manipulation
-                # <assumptions>
-                # - Exports Hamiltonian blocks to HDF5 format compatible with DeepH-E3.
-                # - HDF5 dataset names are string representations of the edge tuple `[sx, sy, sz, src, dst]`.
-                # </assumptions>
-                # <implementation>
-                # - Iterates over keys and edges.
-                # - Unpacks `(sx, sy, sz, src, dst)` from `edges`.
-                # - Creates HDF5 dataset for each block using the edge tuple as the name.
-                # </implementation>
                 edges = self.hamiltonian.pair_edges[key]
                 blocks = self.hamiltonian.pair_blocks[key]
 
