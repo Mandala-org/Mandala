@@ -1,12 +1,12 @@
 program: scripts/train_silicon.py
 project: mandala_rebirth
-name: silicon_hamiltonian_overfit_new
+name: silicon_hamiltonian_overfit_small
 method: bayes
 early_terminate:
   type: hyperband
   min_iter: 100  # Stop runs that are performing poorly after 100 epochs
 metric:
-  name: train/loss_matrix_total
+  name: train/loss_total
   goal: minimize
 
 
@@ -16,11 +16,15 @@ parameters:
   cutoff_matrix:
     value: 7.5
   l_max_gnn:
-    distribution: int_uniform
-    min: 3
-    max: 4
+    value: 4
+  l_max_matrix:
+    value: 4
+  hidden_base_dim:
+    value: 16
+  use_odd_features:
+    value: False
   num_layers_gnn:
-    value: 1
+    value: 0
   num_layers_matrix:
     value: 1
   edge_update_linear:
@@ -41,16 +45,18 @@ parameters:
     distribution: log_uniform_values
     min: 1.0e-5
     max: 1.0e-3
-  hidden_base_dim:
-    value: 64
+  lr_scheduler_factor:
+    value: 0.5
+  lr_scheduler_patience:
+    value: 60
   dropout:
     value: 0.0
   n_radial:
-    value: 64
+    value: 16
   neck_depth:
-    value: 2
+    value: 0
   head_depth:
-    value: 2
+    value: 1
   train_target:
     value: "matrix"
 

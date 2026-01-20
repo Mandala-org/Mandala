@@ -34,19 +34,6 @@ from utils.summary import print_model_summary
 from utils.units import HARTREE_TO_EV
 
 
-# DeepH-E3
-
-# Add DeepH-E3 to the Python path
-# deeph_path = Path(__file__).resolve().parents[2] / "external" / "DeepH-E3"
-# if str(deeph_path) not in sys.path:
-#     sys.path.append(str(deeph_path))
-
-# from deephe3.model import Net as DeepHE3Net
-# from deephe3.e3modules import e3TensorDecomp, Rotate
-# from deephe3.utils import MaskMSELoss
-# from torch_geometric.data import Data, Batch
-
-
 class E3GNN(pl.LightningModule):
     """
     Full network **and** training logic.
@@ -82,10 +69,12 @@ class E3GNN(pl.LightningModule):
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = build_hidden_irreps(
-            self.cfg.l_max_gnn, self.cfg.hidden_base_dim
+            self.cfg.l_max_gnn, self.cfg.hidden_base_dim, self.cfg.emb_use_odd_features
         )
         self.neck_irreps: Irreps = build_hidden_irreps(
-            self.cfg.l_max_matrix, self.cfg.hidden_base_dim
+            self.cfg.l_max_matrix,
+            self.cfg.hidden_base_dim,
+            self.cfg.emb_use_odd_features,
         )
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
 

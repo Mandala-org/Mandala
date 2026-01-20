@@ -83,6 +83,7 @@ class EdgeUpdateBlock(nn.Module):
             pre_lin_input_irreps = node_irreps + node_irreps
         else:
             pre_lin_input_irreps = node_irreps
+
         self.pre_lin = E3MLP(
             pre_lin_input_irreps,
             node_irreps,

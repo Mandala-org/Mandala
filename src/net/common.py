@@ -43,10 +43,12 @@ class Config:
     cutoff_matrix: float = 7.0
 
     # -------------- representation shape --------------------------------
-    l_max_gnn: int = 2
+    l_max_gnn: int = 4
     l_max_matrix: int = 4
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
     edge_type_emb_dim: int = 32  # edge type embedding size
+    emb_use_odd_features: bool = True  # use odd parity
+
     # node_type_emb_dim: int = 32  # node type embedding size
 
     # -------------- depth / topology ------------------------------------
@@ -91,8 +93,8 @@ class Config:
     batch_size: int = 1
     smoke_test: bool = False
     use_lr_scheduler: bool = True
-    lr_scheduler_factor: float = 0.25
-    lr_scheduler_patience: int = 10
+    lr_scheduler_factor: float = 0.5
+    lr_scheduler_patience: int = 60
     lr_scheduler_min_lr: float = 1e-8
     lr_scheduler_target: str = "val/loss_total"
 
@@ -183,10 +185,12 @@ def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
 # 2.  Hidden irreps auto-builder  (cached – deterministic)
 # ════════════════════════════════════════════════════════════════════════
 @lru_cache(maxsize=None)
-def build_hidden_irreps(l_max_gnn: int, base_dim: int) -> Irreps:
+def build_hidden_irreps(
+    l_max_gnn: int, base_dim: int, use_odd_features: bool = True
+) -> Irreps:
     """
     Create `Irreps` with multiplicity halved for every ℓ > 0
-    and *both* parity channels present.
+    and *both* parity channels present if `use_odd_features` is True (default).
 
     Example  (base_dim=32, l_max_gnn=2) ::
 
@@ -196,7 +200,8 @@ def build_hidden_irreps(l_max_gnn: int, base_dim: int) -> Irreps:
     for ell in range(l_max_gnn + 1):
         mul = max(base_dim // (2**ell), 1)
         parts.append(f"{mul}x{ell}e")
-        parts.append(f"{mul}x{ell}o")
+        if use_odd_features:
+            parts.append(f"{mul}x{ell}o")
     return Irreps("+".join(parts)).simplify()
 
 
