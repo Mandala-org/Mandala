@@ -70,14 +70,14 @@ class E3GNN(pl.LightningModule):
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = build_hidden_irreps(
-            self.cfg.l_max_gnn, self.cfg.hidden_base_dim, self.cfg.emb_use_odd_features
+            self.cfg.l_max, self.cfg.hidden_base_dim, self.cfg.emb_use_odd_features
         )
         self.neck_irreps: Irreps = build_hidden_irreps(
-            self.cfg.l_max_matrix,
+            self.cfg.l_max,
             self.cfg.hidden_base_dim,
             self.cfg.emb_use_odd_features,
         )
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
 
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(
@@ -324,10 +324,10 @@ class E3GNN(pl.LightningModule):
                 targets = t_items[key]
 
                 # Handle size mismatch by truncating to the smaller size
-                # if preds.shape[0] > targets.shape[0] that means that cutoff_matrix
+                # if preds.shape[0] > targets.shape[0] that means that cutoff_radius
                 # is bigger than maximum distance in the matrix
                 # if preds.shape[0] < targets.shape[0] that means that the maximum
-                # distance in the matrix is bigger than cutoff_matrix
+                # distance in the matrix is bigger than cutoff_radius
                 min_n = min(preds.shape[0], targets.shape[0])
                 preds = preds[:min_n]
                 targets = targets[:min_n]

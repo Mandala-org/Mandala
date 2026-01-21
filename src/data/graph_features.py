@@ -58,7 +58,7 @@ def compute_graph_features(
     # 'i' is the source atom index, 'j' is the destination atom index,
     # 'S' is the offset vector in lattice coordinates.
     src, dst, offsets = neighbor_list(
-        "ijS", ase_atoms, cfg.cutoff_matrix, self_interaction=False
+        "ijS", ase_atoms, cfg.cutoff_radius, self_interaction=False
     )
 
     # 3. Handle self-edges explicitly
@@ -196,7 +196,7 @@ def compute_graph_features(
     edge_length_emb = soft_one_hot_linspace(
         edge_lengths,
         start=0.0,
-        end=cfg.cutoff_matrix,
+        end=cfg.cutoff_radius,
         number=cfg.n_radial,
         basis="gaussian",
         cutoff=False,

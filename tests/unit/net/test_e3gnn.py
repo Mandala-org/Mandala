@@ -32,7 +32,7 @@ def test_forward_smoke():
     node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
     edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
     edge_len = torch.randn(E, cfg.n_radial)
-    sh = Irreps.spherical_harmonics(cfg.l_max_gnn)
+    sh = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh.dim)  # random SH features
 
     x = {

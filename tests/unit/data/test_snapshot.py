@@ -15,7 +15,7 @@ def _load_snapshot():
     # sample = Path("./data/small/H2O/original/H2O.matrix")
     # atoms = list("HHHHOO")
     # snap = parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
-    cfg = Config(cutoff_matrix=8.0)
+    cfg = Config(cutoff_radius=8.0)
     snap = Snapshot.from_openmx(
         Path("./data/small/H2O/original/H2O.matrix"),
         Path("./data/small/H2O/original/H2O.info.out"),
@@ -171,7 +171,7 @@ def test_canonical_edge_ordering_tiebreaker():
 
     # 3. Create Snapshot
     cfg = Config()
-    cfg.cutoff_matrix = 5.0  # Large enough
+    cfg.cutoff_radius = 5.0  # Large enough
 
     snap = Snapshot(
         hamiltonian=bm,

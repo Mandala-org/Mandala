@@ -34,8 +34,7 @@ def test_compute_graph_features():
     atoms = ("H", "H")
 
     cfg = Config(
-        cutoff_matrix=3.0,  # Should catch wrapped edge (dist 2.0)
-        cutoff_gnn=3.0,
+        cutoff_radius=3.0,  # Should catch wrapped edge (dist 2.0)
         n_radial=5,
     )
     sh_irreps = Irreps("1x0e + 1x1o")

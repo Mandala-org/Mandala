@@ -35,7 +35,7 @@ def test_edge_update_block_variants(node_combine, edge_update, residual):
         edge_update_residual=residual,
         safety_checks=True,
     )
-    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
     edge_blk = EdgeUpdateBlock(hid, cfg)
 
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)
@@ -66,7 +66,7 @@ def test_node_update_block_variants(message_agg, node_update, residual):
         node_update_residual=residual,
         safety_checks=True,
     )
-    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
     node_blk = NodeUpdateBlock(hid, cfg)
 
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)
@@ -79,7 +79,7 @@ def test_node_update_block_variants(message_agg, node_update, residual):
 def test_message_block_roundtrip():
     """Tests the full MessageBlock forward pass."""
     cfg = Config(safety_checks=True)
-    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
 
     blk = MessageBlock(hid, cfg)
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)

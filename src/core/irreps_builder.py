@@ -14,7 +14,7 @@ Purpose
 Rules implemented here
 ----------------------
 * Hidden scalar/vector width *decays by factor 2* with every increase in `ell`.
-  Example (`base_dim=64, l_max_gnn=3`) ::
+  Example (`base_dim=64, l_max=3`) ::
 
       l = 0  →  64x0e  + 64x0o
       l = 1  →  32x1e  + 32x1o
@@ -52,13 +52,13 @@ class IrrepsAutoBuilder:
 
     Parameters
     ----------
-    l_max_gnn
+    l_max
         Highest ell carried by *learned* features (excludes SH basis of geometry).
     base_dim
         Multiplicity at ell=0.  Multiplicity for ell>0 is `base_dim // (2**ell)`.
     """
 
-    l_max_gnn: int
+    l_max: int
     base_dim: int
 
     # declare the cache as a slot
@@ -70,7 +70,7 @@ class IrrepsAutoBuilder:
         """Computed once, cached on the instance."""
         if self._hidden_cache is None:
             parts: List[str] = []
-            for ell in range(self.l_max_gnn + 1):
+            for ell in range(self.l_max + 1):
                 mul = max(self.base_dim // (2**ell), 1)
                 parts.append(_make_even_odd_mul_str(mul, ell))
             ir_string = "+".join(filter(None, parts))
@@ -84,7 +84,7 @@ class IrrepsAutoBuilder:
         Spherical-harmonics irreps used for geometric embedding
         (`e3nn.o3.spherical_harmonics`).
         """
-        return Irreps.spherical_harmonics(self.l_max_gnn)
+        return Irreps.spherical_harmonics(self.l_max)
 
     # ------------------ tensor-product sanity ------------------------------ #
     @staticmethod
@@ -126,7 +126,7 @@ class IrrepsAutoBuilder:
 
     def summary(self) -> str:  # pragma: no cover
         return (
-            f"Auto-builder(l_max_gnn={self.l_max_gnn}, base_dim={self.base_dim}) ->\n"
+            f"Auto-builder(l_max={self.l_max}, base_dim={self.base_dim}) ->\n"
             f"    hidden   : {self.hidden_irreps}\n"
             f"    SH basis : {self.sh_irreps}"
         )
