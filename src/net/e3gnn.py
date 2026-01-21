@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Any
 
 import torch
+import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch import nn
 
@@ -91,29 +92,19 @@ class E3GNN(pl.LightningModule):
             info={"name": "edge_encoding"},
         )
 
-        # ---------- message-passing stacks -----------------------------
-        def _make_mp(info):
-            return MessageBlock(
-                self.hidden_irreps,
-                self.cfg,
-                initial=(
-                    self.node_enc.irreps_out
-                    if info["layer"] == 0 and info["graph"] == "small"
-                    else None
-                ),
-                info=info,
-            )
-
-        self.mp_small = nn.ModuleList(
+        # ---------- message-passing ------------------------------
+        self.mp_blocks = nn.ModuleList(
             [
-                _make_mp({"layer": i, "graph": "small"})
+                MessageBlock(
+                    node_irreps=self.hidden_irreps,
+                    edge_irreps=self.hidden_irreps,
+                    sh_irreps=self.sh_irreps,
+                    n_radial=self.cfg.n_radial,
+                    num_species=len(self.mapper.orbital_cfg.elements()),
+                    cfg=self.cfg,
+                    info={"layer": i},
+                )
                 for i in range(self.cfg.num_layers_gnn)
-            ]
-        )
-        self.mp_large = nn.ModuleList(
-            [
-                _make_mp({"layer": i, "graph": "large"})
-                for i in range(self.cfg.num_layers_matrix)
             ]
         )
 
@@ -230,24 +221,28 @@ class E3GNN(pl.LightningModule):
             assert edge.requires_grad, "Gradients not flowing through edge encoder!"
 
         # ---- message-passing -------------------------------------------
-        index_gnn_cutoff = x["index_gnn_cutoff"]
-        num_self_edges = x["num_self_edges"]
+        # Prepare one-hot encodings for self-connections
+        num_species = len(self.mapper.orbital_cfg.elements())
+        node_one_hot = F.one_hot(x["node_type_idx"], num_classes=num_species).float()
 
-        edge_small = edge[num_self_edges:index_gnn_cutoff]
-        ei_small = x["edge_index"][:, num_self_edges:index_gnn_cutoff]
+        # Edge one-hot: encode pairs of node types
+        src_type = x["node_type_idx"][x["edge_index"][0]]
+        dst_type = x["node_type_idx"][x["edge_index"][1]]
+        edge_one_hot = F.one_hot(
+            src_type * num_species + dst_type, num_classes=num_species * num_species
+        ).float()
 
-        edge_only_large = edge[index_gnn_cutoff:]
-        edge_large = torch.cat([edge_small, edge_only_large], dim=0)
-        ei_large = x["edge_index"][:, num_self_edges:]
-
-        for idx, blk in enumerate(self.mp_small):
-            node, edge_small = blk(
-                node, edge_small, ei_small, activation_mags=self._activation_mags
-            )
-
-        for idx, blk in enumerate(self.mp_large):
-            node, edge_large = blk(
-                node, edge_large, ei_large, activation_mags=self._activation_mags
+        # Single unified message-passing loop
+        for idx, blk in enumerate(self.mp_blocks):
+            node, edge = blk(
+                node=node,
+                edge=edge,
+                edge_index=x["edge_index"],
+                edge_sh=x["edge_sh"],
+                edge_length_emb=x["edge_length_emb"],
+                node_one_hot=node_one_hot,
+                edge_one_hot=edge_one_hot,
+                activation_mags=self._activation_mags,
             )
 
         # ---- heads -----------------------------------------------------
@@ -257,7 +252,7 @@ class E3GNN(pl.LightningModule):
         # concatenate edge_shift with edge_index
         head_edge_index = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
         head_edge_type_idx = x["edge_type_idx"]
-        head_embeddings = torch.cat([node, edge_large], dim=0)
+        head_embeddings = torch.cat([node, edge], dim=0)
 
         preds_raw = {
             name: head(head_embeddings, head_edge_type_idx, head_edge_index)

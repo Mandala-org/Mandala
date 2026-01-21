@@ -51,8 +51,6 @@ class E3GNNDataset(Dataset):
     ):
         self.cfg = cfg
         self.convention = convention
-        if cfg.cutoff_gnn > cfg.cutoff_matrix:
-            raise ValueError("cutoff_gnn must be <= cutoff_matrix")
 
         if not snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
@@ -97,7 +95,6 @@ class E3GNNDataset(Dataset):
                 matrix_path.resolve(),
                 info_path.resolve(),
                 self.cfg.n_radial,
-                self.cfg.cutoff_gnn,
                 self.cfg.cutoff_matrix,
                 self.cfg.l_max_gnn,
                 self.cfg.precompute_edge_features,
@@ -169,7 +166,6 @@ class E3GNNDataset(Dataset):
                 edge_type_idx,
                 edge_length_emb,
                 edge_sh,
-                index_gnn_cutoff,
                 num_self_edges,
             ) = compute_graph_features(
                 positions=snap.positions,
@@ -184,7 +180,6 @@ class E3GNNDataset(Dataset):
             x["edge_type_idx"] = edge_type_idx
             x["edge_length_emb"] = edge_length_emb
             x["edge_sh"] = edge_sh
-            x["index_gnn_cutoff"] = index_gnn_cutoff
             x["num_self_edges"] = num_self_edges
 
         with torch.no_grad():

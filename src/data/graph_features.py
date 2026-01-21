@@ -31,9 +31,7 @@ def compute_graph_features(
     cfg: Config,
     sh_irreps: Irreps,
     edge_type2idx: Dict[str, int],
-) -> Tuple[
-    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int, int, torch.Tensor
-]:
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int]:
     """
     Returns
     -------
@@ -42,7 +40,7 @@ def compute_graph_features(
     edge_type_idx : (E_total,) long
     edge_length_emb : (E_total, cfg.n_radial) float
     edge_sh : (E_total, sh_dim) float
-    index_gnn_cutoff : int
+    num_self_edges : int
     """
 
     # 1. Create ase.Atoms object
@@ -204,15 +202,11 @@ def compute_graph_features(
         cutoff=False,
     )
 
-    # 10. Determine the GNN cfg.cutoff_gnn index
-    index_gnn_cutoff = torch.sum(edge_lengths <= cfg.cutoff_gnn).item()
-
     return (
         edge_index,
         edge_shift,
         edge_type_idx,
         edge_length_emb,
         edge_sh,
-        index_gnn_cutoff,
         len(self_edge_src),
     )

@@ -19,7 +19,7 @@ from typing import List, Sequence, Tuple
 
 import torch
 from torch import nn
-from e3nn.o3 import Irreps, Linear
+from e3nn.o3 import Irreps, Linear, TensorProduct
 from omegaconf import OmegaConf
 
 # ════════════════════════════════════════════════════════════════════════
@@ -38,8 +38,7 @@ class Config:
     nonlinearity, regularization, radial basis, output heads, and loss weighting.
     """
 
-    # radii
-    cutoff_gnn: float = 7.0
+    # radii (unified cutoff - no small/large graph split)
     cutoff_matrix: float = 7.0
 
     # -------------- representation shape --------------------------------
@@ -52,17 +51,22 @@ class Config:
     # node_type_emb_dim: int = 32  # node type embedding size
 
     # -------------- depth / topology ------------------------------------
-    num_layers_gnn: int = 2
-    num_layers_matrix: int = 1
+    num_layers_gnn: int = 2  # unified number of message-passing layers
 
     # -------------- model variants --------------------------------------
+    # TensorProduct type: "separate_weight" | "fully_connected"
+    tp_type: str = "separate_weight"
+
+    # use self-connection (element-specific features)
+    use_self_connection: bool = True
+
     edge_update_node_combine: str = "concat"  # "sum" | "concat"
     edge_update_linear: str = "post"  # "pre" | "post" | "none"
     edge_update: str = "tensor_product"  # "tensor_product" | "concat" | "replace"
     edge_update_residual: bool = True  # use residual connections in edge update
 
-    node_update_message_agg: str = "attention"  # "attention" | "sum"
-    node_update: str = "concat"  # "concat" | "replace"
+    node_update_message_agg: str = "sum"  # "attention" | "sum"
+    node_update: str = "concat"  # "concat" | "replace" | "sum"
     node_update_residual: bool = True  # use residual connections in node update
 
     head_use_mlp_log_scale: bool = True  # whether to use MLP log scaling in the head
@@ -421,3 +425,80 @@ class E3MLP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 5.  SeparateWeightTensorProduct (from DeepH-E3)
+# ════════════════════════════════════════════════════════════════════════
+class SeparateWeightTensorProduct(nn.Module):
+    """
+    Tensor product with separate learnable weights for each input.
+
+    From DeepH-E3: z_i = W'_{ij} x_j ⊗ W''_{ik} y_k
+
+    This differs from FullyConnectedTensorProduct by having separate
+    weight matrices for each input irrep, which can be more expressive.
+    """
+
+    def __init__(self, irreps_in1, irreps_in2, irreps_out, **kwargs):
+        super().__init__()
+
+        # Ensure proper usage
+        if kwargs.pop("internal_weights", False):
+            raise ValueError(
+                "SeparateWeightTensorProduct requires internal_weights=False"
+            )
+        if not kwargs.pop("shared_weights", True):
+            raise ValueError("SeparateWeightTensorProduct requires shared_weights=True")
+
+        irreps_in1 = Irreps(irreps_in1)
+        irreps_in2 = Irreps(irreps_in2)
+        irreps_out = Irreps(irreps_out)
+
+        instr_tp = []
+        weights1, weights2 = [], []
+
+        for i1, (mul1, ir1) in enumerate(irreps_in1):
+            for i2, (mul2, ir2) in enumerate(irreps_in2):
+                for i_out, (mul_out, ir3) in enumerate(irreps_out):
+                    if ir3 in ir1 * ir2:
+                        weights1.append(nn.Parameter(torch.randn(mul1, mul_out)))
+                        weights2.append(nn.Parameter(torch.randn(mul2, mul_out)))
+                        instr_tp.append((i1, i2, i_out, "uvw", True, 1.0))
+
+        self.tp = TensorProduct(
+            irreps_in1,
+            irreps_in2,
+            irreps_out,
+            instr_tp,
+            internal_weights=False,
+            shared_weights=True,
+            **kwargs,
+        )
+
+        self.weights1 = nn.ParameterList(weights1)
+        self.weights2 = nn.ParameterList(weights2)
+
+    def forward(self, x1, x2):
+        """
+        Compute tensor product with separate weights.
+
+        Args:
+            x1: Tensor of shape (batch, irreps_in1.dim)
+            x2: Tensor of shape (batch, irreps_in2.dim)
+
+        Returns:
+            Tensor of shape (batch, irreps_out.dim)
+        """
+        if len(self.weights1) == 0:
+            # No valid tensor product paths - return empty tensor
+            batch_size = x1.shape[0]
+            return torch.zeros(batch_size, 0, dtype=x1.dtype, device=x1.device)
+
+        weights = []
+        for weight1, weight2 in zip(self.weights1, self.weights2):
+            # Outer product of weights: (mul1, mul_out) ⊗ (mul2, mul_out)
+            weight = weight1[:, None, :] * weight2[None, :, :]
+            weights.append(weight.view(-1))
+        weights = torch.cat(weights)
+        return self.tp(x1, x2, weights)
