@@ -68,7 +68,7 @@ class Config:
     node_update: str = "concat"  # "concat" | "replace" | "sum"
     node_update_residual: bool = True  # use residual connections in node update
 
-    head_use_mlp_log_scale: bool = True  # whether to use MLP log scaling in the head
+    head_use_mlp_log_scale: bool = False  # whether to use MLP log scaling in the head
 
     # -------------- MLP Layers Configuration -----------------------------
     edge_update_pre_lin_mlp_n_layers: int = 1
@@ -77,8 +77,10 @@ class Config:
     node_update_attention_mlp_n_layers: int = 1
     node_update_post_lin_mlp_n_layers: int = 1
 
-    neck_depth: int = 3
-    head_depth: int = 1
+    neck_depth: int = 1
+    head_depth: int = 3
+    head_use_self_edges: bool = True
+
     head_log_scale_mlp_n_layers: int = 1
 
     # -------------- non-linearity & norm --------------------------------

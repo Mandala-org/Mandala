@@ -250,7 +250,11 @@ class E3GNN(pl.LightningModule):
         # concatenate edge_shift with edge_index
         head_edge_index = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
         head_edge_type_idx = x["edge_type_idx"]
-        head_embeddings = torch.cat([node, edge], dim=0)
+
+        if self.cfg.head_use_self_edges:
+            head_embeddings = edge
+        else:
+            head_embeddings = torch.cat([node, edge[x["num_self_edges"] :]], dim=0)
 
         preds_raw = {
             name: head(head_embeddings, head_edge_type_idx, head_edge_index)
