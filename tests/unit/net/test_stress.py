@@ -21,7 +21,6 @@ def test_stress_with_real_data():
         n_radial=64,
         num_layers_gnn=3,
         hidden_base_dim=16,
-        num_layers_matrix=2,
         lr=1e-3,
         enable_stress=True,
         safety_checks=True,

@@ -151,24 +151,33 @@ def test_edge_update_block_equivariance(
         edge_update_pre_lin_mlp_n_layers=mlp_layers,
         edge_update_post_lin_mlp_n_layers=mlp_layers,
         safety_checks=True,
+        l_max=2,
     )
     hidden_irreps = build_hidden_irreps(cfg.l_max, 32)
-    layer = EdgeUpdateBlock(hidden_irreps, cfg)
+    num_species = 2
+    layer = EdgeUpdateBlock(hidden_irreps, hidden_irreps, num_species, cfg)
 
     # Inputs and Rotation
     node = generate_equivariant_input(hidden_irreps, batch_size=N)
     edge = generate_equivariant_input(hidden_irreps, batch_size=E)
     edge_index = torch.randint(0, N, (2, E))
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = generate_equivariant_input(sh_irreps, batch_size=E)
+    edge_length_emb = torch.randn(E, cfg.n_radial)
     rot = random_rotation_matrix()
     D_hidden = hidden_irreps.D_from_matrix(rot)
+    D_sh = sh_irreps.D_from_matrix(rot)
 
     # Transform inputs
     node_rotated = node @ D_hidden.T
     edge_rotated = edge @ D_hidden.T
+    edge_sh_rotated = edge_sh @ D_sh.T
 
     # Apply layer
-    y = layer(node, edge, edge_index)
-    y_rotated_input = layer(node_rotated, edge_rotated, edge_index)
+    y = layer(node, edge, edge_index, edge_sh, edge_length_emb)
+    y_rotated_input = layer(
+        node_rotated, edge_rotated, edge_index, edge_sh_rotated, edge_length_emb
+    )
 
     # Check equivariance
     y_rotated_output = y @ D_hidden.T
@@ -192,24 +201,33 @@ def test_node_update_block_equivariance(
         node_update_attention_mlp_n_layers=mlp_layers,
         node_update_post_lin_mlp_n_layers=mlp_layers,
         safety_checks=True,
+        l_max=2,
     )
     hidden_irreps = build_hidden_irreps(cfg.l_max, 32)
-    layer = NodeUpdateBlock(hidden_irreps, cfg)
+    num_species = 2
+    layer = NodeUpdateBlock(hidden_irreps, hidden_irreps, num_species, cfg)
 
     # Inputs and Rotation
     node = generate_equivariant_input(hidden_irreps, batch_size=N)
     edge = generate_equivariant_input(hidden_irreps, batch_size=E)
     edge_index = torch.randint(0, N, (2, E))
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = generate_equivariant_input(sh_irreps, batch_size=E)
+    edge_length_emb = torch.randn(E, cfg.n_radial)
     rot = random_rotation_matrix()
     D_hidden = hidden_irreps.D_from_matrix(rot)
+    D_sh = sh_irreps.D_from_matrix(rot)
 
     # Transform inputs
     node_rotated = node @ D_hidden.T
     edge_rotated = edge @ D_hidden.T
+    edge_sh_rotated = edge_sh @ D_sh.T
 
     # Apply layer
-    y = layer(node, edge, edge_index)
-    y_rotated_input = layer(node_rotated, edge_rotated, edge_index)
+    y = layer(node, edge, edge_index, edge_sh, edge_length_emb)
+    y_rotated_input = layer(
+        node_rotated, edge_rotated, edge_index, edge_sh_rotated, edge_length_emb
+    )
 
     # Check equivariance
     y_rotated_output = y @ D_hidden.T
@@ -219,24 +237,32 @@ def test_node_update_block_equivariance(
 def test_message_block_equivariance():
     """Tests the full MessageBlock as an integration test."""
     N, E = 10, 20
-    cfg = Config(safety_checks=True)
+    cfg = Config(safety_checks=True, l_max=2)
     hidden_irreps = build_hidden_irreps(cfg.l_max, 32)
-    layer = MessageBlock(hidden_irreps, cfg)
+    num_species = 2
+    layer = MessageBlock(hidden_irreps, hidden_irreps, num_species, cfg)
 
     # Inputs and Rotation
     node = generate_equivariant_input(hidden_irreps, batch_size=N)
     edge = generate_equivariant_input(hidden_irreps, batch_size=E)
     edge_index = torch.randint(0, N, (2, E))
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = generate_equivariant_input(sh_irreps, batch_size=E)
+    edge_length_emb = torch.randn(E, cfg.n_radial)
     rot = random_rotation_matrix()
     D_hidden = hidden_irreps.D_from_matrix(rot)
+    D_sh = sh_irreps.D_from_matrix(rot)
 
     # Transform inputs
     node_rotated = node @ D_hidden.T
     edge_rotated = edge @ D_hidden.T
+    edge_sh_rotated = edge_sh @ D_sh.T
 
     # Apply layer
-    node_out, edge_out = layer(node, edge, edge_index)
-    node_out_rot, edge_out_rot = layer(node_rotated, edge_rotated, edge_index)
+    node_out, edge_out = layer(node, edge, edge_index, edge_sh, edge_length_emb)
+    node_out_rot, edge_out_rot = layer(
+        node_rotated, edge_rotated, edge_index, edge_sh_rotated, edge_length_emb
+    )
 
     # Check equivariance for both outputs
     assert torch.allclose(node_out_rot, node_out @ D_hidden.T, atol=2e-4)

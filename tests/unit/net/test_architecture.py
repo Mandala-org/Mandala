@@ -213,6 +213,7 @@ def test_edge_update_block_new(use_self_connection):
         tp_type="separate_weight",
         n_radial=64,
         edge_update_residual=True,
+        l_max=2,
     )
 
     node_irreps = build_hidden_irreps(2, 16)
@@ -223,8 +224,6 @@ def test_edge_update_block_new(use_self_connection):
     edge_blk = EdgeUpdateBlock(
         node_irreps=node_irreps,
         edge_irreps=edge_irreps,
-        sh_irreps=sh_irreps,
-        n_radial=cfg.n_radial,
         num_species=num_species,
         cfg=cfg,
     )
@@ -265,6 +264,7 @@ def test_node_update_block_new(use_self_connection):
         tp_type="separate_weight",
         n_radial=64,
         node_update_residual=True,
+        l_max=2,
     )
 
     node_irreps = build_hidden_irreps(2, 16)
@@ -275,8 +275,6 @@ def test_node_update_block_new(use_self_connection):
     node_blk = NodeUpdateBlock(
         node_irreps=node_irreps,
         edge_irreps=edge_irreps,
-        sh_irreps=sh_irreps,
-        n_radial=cfg.n_radial,
         num_species=num_species,
         cfg=cfg,
     )
@@ -314,6 +312,7 @@ def test_message_block_new_signature():
         n_radial=64,
         edge_update_residual=True,
         node_update_residual=True,
+        l_max=2,
     )
 
     node_irreps = build_hidden_irreps(2, 16)
@@ -324,8 +323,6 @@ def test_message_block_new_signature():
     msg_blk = MessageBlock(
         node_irreps=node_irreps,
         edge_irreps=edge_irreps,
-        sh_irreps=sh_irreps,
-        n_radial=cfg.n_radial,
         num_species=num_species,
         cfg=cfg,
         info={"layer": 0},
@@ -366,6 +363,7 @@ def test_message_block_activation_magnitudes():
         tp_type="separate_weight",
         n_radial=64,
         log_activation_mag=True,
+        l_max=2,
     )
 
     node_irreps = build_hidden_irreps(2, 16)
@@ -376,8 +374,6 @@ def test_message_block_activation_magnitudes():
     msg_blk = MessageBlock(
         node_irreps=node_irreps,
         edge_irreps=edge_irreps,
-        sh_irreps=sh_irreps,
-        n_radial=cfg.n_radial,
         num_species=num_species,
         cfg=cfg,
         info={"layer": 0, "graph": "test"},

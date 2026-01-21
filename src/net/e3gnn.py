@@ -98,8 +98,6 @@ class E3GNN(pl.LightningModule):
                 MessageBlock(
                     node_irreps=self.hidden_irreps,
                     edge_irreps=self.hidden_irreps,
-                    sh_irreps=self.sh_irreps,
-                    n_radial=self.cfg.n_radial,
                     num_species=len(self.mapper.orbital_cfg.elements()),
                     cfg=self.cfg,
                     info={"layer": i},

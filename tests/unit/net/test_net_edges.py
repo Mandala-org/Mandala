@@ -47,18 +47,23 @@ def test_edge_update_block():
         edge_update_post_lin_mlp_n_layers=1,
         dropout=0.0,
         edge_update_residual=False,
+        l_max=2,
     )
     hidden_irreps = Irreps("1x0e")
+    num_species = 2
 
-    block = EdgeUpdateBlock(hidden_irreps, cfg)
+    block = EdgeUpdateBlock(hidden_irreps, hidden_irreps, num_species, cfg)
 
     # Mock input
     node = torch.randn(2, 1)
     edge = torch.randn(1, 1)
     edge_index = torch.tensor([[0], [1]])  # src=0, dst=1
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(1, sh_irreps.dim)
+    edge_length_emb = torch.randn(1, cfg.n_radial)
 
     # Forward
-    out = block(node, edge, edge_index)
+    out = block(node, edge, edge_index, edge_sh, edge_length_emb)
 
     assert out.shape == (1, 1)
 
@@ -72,17 +77,22 @@ def test_node_update_block():
         node_update_post_lin_mlp_n_layers=1,
         dropout=0.0,
         node_update_residual=False,
+        l_max=2,
     )
     hidden_irreps = Irreps("1x0e")
+    num_species = 2
 
-    block = NodeUpdateBlock(hidden_irreps, cfg)
+    block = NodeUpdateBlock(hidden_irreps, hidden_irreps, num_species, cfg)
 
     # Mock input
     node = torch.randn(2, 1)
     edge = torch.randn(1, 1)
     edge_index = torch.tensor([[0], [1]])  # src=0, dst=1
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(1, sh_irreps.dim)
+    edge_length_emb = torch.randn(1, cfg.n_radial)
 
     # Forward
-    out = block(node, edge, edge_index)
+    out = block(node, edge, edge_index, edge_sh, edge_length_emb)
 
     assert out.shape == (2, 1)

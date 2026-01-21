@@ -51,7 +51,6 @@ def test_compute_graph_features():
         edge_type_idx,
         edge_length_emb,
         edge_sh,
-        index_gnn_cutoff,
         num_self_edges,
     ) = compute_graph_features(pos, box, atoms, cfg, sh_irreps, edge_type2idx)
 

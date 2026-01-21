@@ -59,7 +59,8 @@ python3 -u scripts/train_silicon.py \
   --enable_stress=False \
   --symmetrize_output=True \
   --precompute_edge_features=True \
-  --safety_checks=False
+  --safety_checks=True \
+  --verbosity=2
 
 echo ""
 echo "Training complete!"

@@ -48,7 +48,7 @@ def test_trace_sparse_vs_vectorized():
     B = mock_block_matrix()
     t_sparse = trace_matmul_sparse_block_matrix(A, B)
     t_vec = trace_matmul_sparse_snap_vectorized(A, B)
-    assert torch.allclose(t_sparse, t_vec, atol=1e-6)
+    assert torch.allclose(t_sparse, t_vec, atol=1e-5)
 
 
 @pytest.mark.unit

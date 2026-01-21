@@ -51,12 +51,6 @@ def test_edge_sets(dataset):
     assert torch.all(self_edges[0] == self_edges[1])
     assert torch.all(self_edges[0] == torch.arange(num_atoms))
 
-    # ----  gnn edge set ⊂ matrix edge set
-    index_gnn_cutoff = x["index_gnn_cutoff"]
-    gnn_edges = {tuple(e.tolist()) for e in x["edge_index"][:, :index_gnn_cutoff].t()}
-    mat_edges = {tuple(e.tolist()) for e in x["edge_index"].t()}
-    assert gnn_edges.issubset(mat_edges)
-
     # ----  SH & radial embed sizes
     assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim
     assert x["edge_length_emb"].shape[1] == dataset.cfg.n_radial
