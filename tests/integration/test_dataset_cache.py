@@ -15,12 +15,10 @@ def silicon_pair():
     return mat, info
 
 
-def load_dataset(pair, cache_dir, cutoff_gnn):
+def load_dataset(pair, cache_dir, cutoff_radius):
     mat, info = pair
     cfg = Config(
-        cutoff_gnn=cutoff_gnn,
-        cutoff_matrix=7.5,
-        l_max_gnn=3,
+        cutoff_radius=cutoff_radius,
         n_radial=64,
         device="cpu",
         cache_root=str(cache_dir),
@@ -37,19 +35,19 @@ def test_dataset_cache_with_silicon_data(tmp_path, silicon_pair):
     cache_dir = tmp_path / "cache"
 
     # 1. Load with cutoff 5.0
-    ds1 = load_dataset(silicon_pair, cache_dir, cutoff_gnn=5.0)
+    ds1 = load_dataset(silicon_pair, cache_dir, cutoff_radius=5.0)
     x1, y1 = ds1[0]
     hamiltonian1 = y1["hamiltonian"]
 
     # 2. Load with cutoff 3.0
-    ds2 = load_dataset(silicon_pair, cache_dir, cutoff_gnn=3.0)
+    ds2 = load_dataset(silicon_pair, cache_dir, cutoff_radius=3.0)
     x2, _ = ds2[0]
 
     # 3. Check that the edge cutoff index is now smaller
     assert x2["index_gnn_cutoff"] < x1["index_gnn_cutoff"]
 
     # 4. Load with cutoff 5.0 again (cache hit) #! Test whether it is an actual cache hit
-    ds3 = load_dataset(silicon_pair, cache_dir, cutoff_gnn=5.0)
+    ds3 = load_dataset(silicon_pair, cache_dir, cutoff_radius=5.0)
     _, y3 = ds3[0]
     hamiltonian3 = y3["hamiltonian"]
 

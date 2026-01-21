@@ -13,8 +13,7 @@ def test_process_snapshot_to_sample():
     class MockDataset(E3GNNDataset):
         def __init__(self):
             self.cfg = Config(
-                cutoff_matrix=3.0,
-                cutoff_gnn=3.0,
+                cutoff_radius=3.0,
                 n_radial=5,
                 precompute_edge_features=True,
                 train_target="matrix",

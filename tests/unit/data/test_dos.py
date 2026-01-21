@@ -11,7 +11,7 @@ def snapshot():
     matrix_path = base / "Si_DM"
     info_path = base / "info.txt"
     cfg = Config(
-        cutoff_matrix=9.0,
+        cutoff_radius=9.0,
     )
     snap = Snapshot.from_openmx(
         str(matrix_path),

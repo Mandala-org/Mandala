@@ -1,0 +1,143 @@
+program: scripts/train_silicon.py
+project: mandala_deephe3_quick
+name: deephe3_quick_test
+method: grid  # Use grid search for systematic testing
+metric:
+  name: train/loss_total
+  goal: minimize
+
+parameters:
+  # ============ NEW DeepH-E3 Architecture Parameters ============
+
+  # Test both TensorProduct types
+  tp_type:
+    values: ["separate_weight"]
+    # values: ["separate_weight", "fully_connected"]
+
+  # Test with and without self-connection
+  use_self_connection:
+    # values: [True, False]
+    values: [True]
+
+  # ============ Core Architecture (Fixed for Speed) ============
+
+  cutoff_matrix:
+    value: 7.5
+
+  l_max_gnn:
+    value: 4
+  l_max_matrix:
+    value: 4
+  hidden_base_dim:
+    value: 16  # Small for fast testing
+  emb_use_odd_features:
+    value: True
+
+  # Test different layer counts
+  num_layers_gnn:
+    values: [1, 2]
+
+  # ============ Message-Passing (DeepH-E3 defaults) ============
+
+  node_update_message_agg:
+    value: "sum"
+  edge_update_residual:
+    value: True
+  node_update_residual:
+    value: True
+
+  # ============ Network Details (Fixed) ============
+
+  n_radial:
+    value: 64
+  radial_layers:
+    value: [128]
+
+  neck_depth:
+    value: 1
+  head_depth:
+    value: 1
+  head_use_mlp_log_scale:
+    value: False
+
+  nonlin_kind:
+    value: "normact"
+  activation_scalar:
+    value: "silu"
+  activation_gate:
+    value: "sigmoid"
+  norm_kind:
+    value: "component"
+
+  # ============ Training (Fixed) ============
+
+  lr:
+    value: 3.0e-4
+
+  use_lr_scheduler:
+    value: True
+  lr_scheduler_factor:
+    value: 0.5
+  lr_scheduler_patience:
+    value: 60
+  lr_scheduler_target:
+    value: "train/loss_total"
+
+  dropout:
+    value: 0.0
+
+  train_target:
+    value: "matrix"
+  loss_l1_fraction:
+    value: 0.0
+
+  # ============ Training Targets ============
+
+  matrix_targets:
+    value: ["hamiltonian"]
+
+  train_on_energy:
+    value: False
+  train_on_num_electrons:
+    value: False
+  enable_energy:
+    value: False
+  enable_num_electrons:
+    value: False
+  loss_coef_observables:
+    value: 0.0
+
+  train_on_forces:
+    value: False
+  train_on_stress:
+    value: False
+  enable_forces:
+    value: False
+  enable_stress:
+    value: False
+
+  # ============ Data Configuration ============
+
+  symmetrize_output:
+    value: True
+  precompute_edge_features:
+    value: True
+  safety_checks:
+    value: False
+
+command:
+  - ${env}
+  - python3
+  - -u
+  - ${program}
+  - ${args}
+  - --gpus=1
+  - --num_workers=4
+  - --n_snapshots_per_temp=1
+  - --val_n_snapshots=0
+  - --max_epochs=2000
+  - --min_temp=300
+  - --max_temp=300
+  - --batch_size=1
+  - --accumulate_grad_batches=1
+  - --log_every_n_steps=10

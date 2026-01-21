@@ -73,14 +73,14 @@ def test_node_encoder_equivariance():
     assert output.shape == (5, cfg.hidden_base_dim)
 
 
-@pytest.mark.parametrize("l_max_gnn", [1, 2, 3])
-def test_edge_encoder_equivariance(l_max_gnn):
+@pytest.mark.parametrize("l_max", [1, 2, 3])
+def test_edge_encoder_equivariance(l_max):
     """Tests the EdgeEncoder for equivariance."""
     E, N_edge_types, n_radial = 5, 7, 16
-    cfg = Config(l_max_gnn=l_max_gnn, n_radial=n_radial, safety_checks=True)
+    cfg = Config(l_max=l_max, n_radial=n_radial, safety_checks=True)
     layer = EdgeEncoder(
         n_edge_types=N_edge_types,
-        irreps_out=build_hidden_irreps(l_max_gnn, 32),
+        irreps_out=build_hidden_irreps(l_max, 32),
         cfg=cfg,
     )
 
@@ -152,7 +152,7 @@ def test_edge_update_block_equivariance(
         edge_update_post_lin_mlp_n_layers=mlp_layers,
         safety_checks=True,
     )
-    hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
+    hidden_irreps = build_hidden_irreps(cfg.l_max, 32)
     layer = EdgeUpdateBlock(hidden_irreps, cfg)
 
     # Inputs and Rotation
@@ -193,7 +193,7 @@ def test_node_update_block_equivariance(
         node_update_post_lin_mlp_n_layers=mlp_layers,
         safety_checks=True,
     )
-    hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
+    hidden_irreps = build_hidden_irreps(cfg.l_max, 32)
     layer = NodeUpdateBlock(hidden_irreps, cfg)
 
     # Inputs and Rotation
@@ -220,7 +220,7 @@ def test_message_block_equivariance():
     """Tests the full MessageBlock as an integration test."""
     N, E = 10, 20
     cfg = Config(safety_checks=True)
-    hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, 32)
+    hidden_irreps = build_hidden_irreps(cfg.l_max, 32)
     layer = MessageBlock(hidden_irreps, cfg)
 
     # Inputs and Rotation
@@ -253,8 +253,7 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
         neck_depth=mlp_layers,
         head_depth=mlp_layers,
         head_log_scale_mlp_n_layers=mlp_layers,
-        l_max_gnn=2,
-        l_max_matrix=3,
+        l_max=3,
         hidden_base_dim=16,
         safety_checks=True,
     )
@@ -267,8 +266,8 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     pair_keys = list(map(lambda pair: f"{pair[0]}-{pair[1]}", mapper._maps.keys()))
 
     # Layer
-    hidden_irreps = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
-    neck_irreps = build_hidden_irreps(cfg.l_max_matrix, cfg.hidden_base_dim)
+    hidden_irreps = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
+    neck_irreps = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
     layer = DeepHead(hidden_irreps, neck_irreps, pair_keys, mapper, cfg)
 
     # Inputs and Rotation

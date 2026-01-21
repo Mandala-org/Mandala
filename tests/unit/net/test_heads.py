@@ -13,8 +13,8 @@ def test_deep_head_shapes_and_device():
     pair_keys = ["H-H"]
     cfg = Config(neck_depth=2, dropout=0.1, safety_checks=True)
 
-    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
-    neck = build_hidden_irreps(cfg.l_max_matrix, cfg.hidden_base_dim)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
+    neck = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
 
     mapper = BlockIrrepMapper(orb_cfg)
     head = DeepHead(

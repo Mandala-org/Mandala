@@ -9,7 +9,7 @@ Typical usage
 -------------
 >>> from data.factory import DatasetFactory
 >>>
->>> fac = DatasetFactory(cutoff_gnn=4.5, cutoff_matrix=7.0, device="cpu")
+>>> fac = DatasetFactory(cutoff_radius=7.0, device="cpu")
 >>> fac.add_snapshot("run1-H2O.scfout", "run1-H2O.info.out", purpose="train")
 >>> fac.add_snapshot("run2-CO2.scfout", "run2-CO2.info.out", purpose="val")
 >>> train_ds, val_ds, mapper = fac.create()
@@ -145,7 +145,7 @@ def build_datasets(
     -------
     >>> train_ds, val_ds, mapper = build_datasets(
     ...     train_pairs=[("run1.scfout", "run1.info")],
-    ...     cfg=Config(cutoff_gnn=4.5),
+    ...     cfg=Config(cutoff_radius=7.0),
     ... )
     """
     fac = DatasetFactory(cfg, convention)

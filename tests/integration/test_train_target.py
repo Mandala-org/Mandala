@@ -26,7 +26,7 @@ def prepared_data():
         train_on_energy=False,
         train_on_num_electrons=False,
         safety_checks=True,
-        cutoff_matrix=14.0,
+        cutoff_radius=14.0,
     )
     fac = DatasetFactory(cfg)
     for m, i in paths:

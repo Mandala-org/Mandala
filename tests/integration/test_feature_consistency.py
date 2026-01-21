@@ -12,7 +12,7 @@ from net.e3gnn import E3GNN
 
 @pytest.fixture(scope="module")
 def h2o_data():
-    cfg = Config(cutoff_matrix=15.0)
+    cfg = Config(cutoff_radius=15.0)
     snap = Snapshot.from_openmx(
         matrix_path=Path("data/small/H2O/original/H2O.matrix"),
         info_path=Path("data/small/H2O/original/H2O.info.out"),
@@ -112,7 +112,7 @@ def test_e3gnn_end_to_end_consistency(h2o_data):
 
     # --- 1. Setup and run for PRECOMPUTED features ---
     cfg_precompute = Config(
-        l_max_gnn=1,
+        l_max=1,
         n_radial=16,
         precompute_edge_features=True,  # Precompute mode
         safety_checks=True,
@@ -135,7 +135,7 @@ def test_e3gnn_end_to_end_consistency(h2o_data):
 
     # --- 2. Setup and run for ON-THE-FLY features ---
     cfg_onthefly = Config(
-        l_max_gnn=1,
+        l_max=1,
         n_radial=16,
         precompute_edge_features=False,  # On-the-fly mode
         safety_checks=True,

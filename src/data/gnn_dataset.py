@@ -68,7 +68,7 @@ class E3GNNDataset(Dataset):
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
         self.orbital_cfg = mapper.orbital_cfg
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max_gnn)
+        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
 
         # configure cache root (if None, caching is disabled)
         if cfg.cache_root is not None:
@@ -95,8 +95,8 @@ class E3GNNDataset(Dataset):
                 matrix_path.resolve(),
                 info_path.resolve(),
                 self.cfg.n_radial,
-                self.cfg.cutoff_matrix,
-                self.cfg.l_max_gnn,
+                self.cfg.cutoff_radius,
+                self.cfg.l_max,
                 self.cfg.precompute_edge_features,
             )
             key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
@@ -114,7 +114,7 @@ class E3GNNDataset(Dataset):
             info_path=info_path,
             convention=self.convention,
             symmetrize_density=True,
-            cutoff_radius=self.cfg.cutoff_matrix,
+            cutoff_radius=self.cfg.cutoff_radius,
             cfg=self.cfg,
         )
         sample = self._process_snapshot_to_sample(snapshot)

@@ -39,11 +39,10 @@ class Config:
     """
 
     # radii (unified cutoff - no small/large graph split)
-    cutoff_matrix: float = 7.0
+    cutoff_radius: float = 7.0
 
     # -------------- representation shape --------------------------------
-    l_max_gnn: int = 4
-    l_max_matrix: int = 4
+    l_max: int = 4
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
     edge_type_emb_dim: int = 32  # edge type embedding size
     emb_use_odd_features: bool = True  # use odd parity
@@ -190,18 +189,18 @@ def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
 # ════════════════════════════════════════════════════════════════════════
 @lru_cache(maxsize=None)
 def build_hidden_irreps(
-    l_max_gnn: int, base_dim: int, use_odd_features: bool = True
+    l_max: int, base_dim: int, use_odd_features: bool = True
 ) -> Irreps:
     """
     Create `Irreps` with multiplicity halved for every ℓ > 0
     and *both* parity channels present if `use_odd_features` is True (default).
 
-    Example  (base_dim=32, l_max_gnn=2) ::
+    Example  (base_dim=32, l_max=2) ::
 
         32x0e + 32x0o + 16x1e + 16x1o + 8x2e + 8x2o
     """
     parts: List[str] = []
-    for ell in range(l_max_gnn + 1):
+    for ell in range(l_max + 1):
         mul = max(base_dim // (2**ell), 1)
         parts.append(f"{mul}x{ell}e")
         if use_odd_features:

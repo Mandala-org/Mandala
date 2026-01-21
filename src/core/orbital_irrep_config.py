@@ -146,10 +146,10 @@ class OrbitalIrrepConfig:
                 ) from exc
 
             # ---------- sanity: ℓ limit -----------------------------------
-            l_max_gnn_seen = max(ir.l for _, ir in irreps)
-            if l_max_gnn_seen > 10:
+            l_max_seen = max(ir.l for _, ir in irreps)
+            if l_max_seen > 10:
                 raise OrbitalIrrepConfigError(
-                    f"Element '{element}': l={l_max_gnn_seen} orbitals not supported (max 10)"
+                    f"Element '{element}': l={l_max_seen} orbitals not supported (max 10)"
                 )
 
             element_to_irreps[element] = irreps

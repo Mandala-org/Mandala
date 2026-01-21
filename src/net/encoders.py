@@ -119,7 +119,7 @@ class EdgeEncoder(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.irreps_out = irreps_out
-        self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max_gnn)
+        self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
         self.info = info
 
         # 1) scalar embeddings ------------------------------------------------

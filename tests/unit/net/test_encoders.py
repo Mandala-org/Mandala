@@ -23,8 +23,8 @@ def test_node_encoder_shape_no_diag():
 @pytest.mark.unit
 def test_edge_encoder_with_offdiag():
     cfg = Config(radial_layers=(64, 32), safety_checks=True)
-    hid = build_hidden_irreps(cfg.l_max_gnn, cfg.hidden_base_dim)
-    sh_irreps = Irreps.spherical_harmonics(cfg.l_max_gnn)
+    hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
 
     enc = EdgeEncoder(
         n_edge_types=3,
