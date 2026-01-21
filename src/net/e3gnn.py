@@ -96,7 +96,7 @@ class E3GNN(pl.LightningModule):
         self.mp_blocks = nn.ModuleList(
             [
                 MessageBlock(
-                    node_irreps=self.hidden_irreps,
+                    node_irreps=self.node_enc.irreps_out,
                     edge_irreps=self.hidden_irreps,
                     num_species=len(self.mapper.orbital_cfg.elements()),
                     cfg=self.cfg,

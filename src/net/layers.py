@@ -431,12 +431,17 @@ class NodeUpdateBlock(nn.Module):
         num_species: int,
         cfg: Config,
         info: dict = None,
+        node_irreps_out: Irreps = None,  # Output irreps for nodes (defaults to edge_irreps)
     ):
         super().__init__()
         self.cfg = cfg
         self.info = info
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
+
+        # Default: output nodes with same irreps as edges
+        if node_irreps_out is None:
+            node_irreps_out = edge_irreps
 
         # Resolve sh_irreps and n_radial from config
         sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
@@ -461,7 +466,7 @@ class NodeUpdateBlock(nn.Module):
             n_radial=n_radial,
             irreps_in1=irreps_in1,
             irreps_in2=irreps_in2,
-            irreps_out=node_irreps,
+            irreps_out=node_irreps_out,
             cfg=cfg,
             nonlin=True,
         )
@@ -485,9 +490,7 @@ class NodeUpdateBlock(nn.Module):
                 self.conv.irreps_out,
                 internal_weights=True,
                 shared_weights=True,
-            )
-
-        # Normalization and activation
+            )  # Normalization and activation
         self.norm_act = make_nonlinearity(self.conv.irreps_out, cfg)
 
         # Dropout
@@ -554,8 +557,8 @@ class NodeUpdateBlock(nn.Module):
         if self.dropout:
             node = self.dropout(node)
 
-        # Residual connection
-        if self.cfg.node_update_residual:
+        # Residual connection (only if dimensions match)
+        if self.cfg.node_update_residual and node.shape == node_old.shape:
             node = node + node_old
 
         return node
