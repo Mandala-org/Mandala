@@ -21,21 +21,19 @@ parameters:
 
   # ============ Core Architecture (Fixed for Speed) ============
 
-  cutoff_matrix:
+  cutoff_radius:
     value: 7.5
 
-  l_max_gnn:
-    value: 4
-  l_max_matrix:
+  l_max:
     value: 4
   hidden_base_dim:
-    value: 16  # Small for fast testing
+    value: 64
   emb_use_odd_features:
     value: True
 
   # Test different layer counts
   num_layers_gnn:
-    values: [1, 2]
+    value: 2
 
   # ============ Message-Passing (DeepH-E3 defaults) ============
 
