@@ -20,7 +20,6 @@ def test_non_zero_forces_with_real_data():
         l_max=2,
         n_radial=64,
         num_layers_gnn=3,
-        num_layers_matrix=2,
         hidden_base_dim=16,
         lr=1e-3,
         enable_forces=True,

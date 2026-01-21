@@ -41,41 +41,53 @@ def test_edge_encoder_forward():
 @pytest.mark.parametrize("residual", [True, False])
 @pytest.mark.unit
 def test_edge_update_block_shape(residual):
-    cfg = Config(edge_update_residual=residual, safety_checks=True)
+    cfg = Config(edge_update_residual=residual, safety_checks=True, l_max=2)
     hid_ir = Irreps("3x0e")
-    blk = EdgeUpdateBlock(hid_ir, cfg)
+    num_species = 2
+    blk = EdgeUpdateBlock(hid_ir, hid_ir, num_species, cfg)
     N, E = 5, 3
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
     # create simple edge_index linking first E nodes
     idx = torch.stack([torch.arange(E), torch.arange(E) + 1])
-    out = blk(node, edge, idx)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(E, sh_irreps.dim)
+    edge_length_emb = torch.randn(E, cfg.n_radial)
+    out = blk(node, edge, idx, edge_sh, edge_length_emb)
     assert out.shape == (E, hid_ir.dim)
 
 
 @pytest.mark.unit
 def test_node_update_block_shape():
-    cfg = Config(safety_checks=True)
+    cfg = Config(safety_checks=True, l_max=2)
     hid_ir = Irreps("4x0e")
-    blk = NodeUpdateBlock(hid_ir, cfg)
+    num_species = 2
+    blk = NodeUpdateBlock(hid_ir, hid_ir, num_species, cfg)
     N, E = 4, 2
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
     idx = torch.tensor([[0, 2], [1, 3]])
-    out = blk(node, edge, idx)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(E, sh_irreps.dim)
+    edge_length_emb = torch.randn(E, cfg.n_radial)
+    out = blk(node, edge, idx, edge_sh, edge_length_emb)
     assert out.shape == (N, hid_ir.dim)
 
 
 @pytest.mark.unit
 def test_message_block_edge_and_node_update():
-    cfg = Config(node_update_message_agg="attention", safety_checks=True)
+    cfg = Config(node_update_message_agg="attention", safety_checks=True, l_max=2)
     hid_ir = Irreps("8x0e")
-    blk = MessageBlock(hid_ir, cfg)
+    num_species = 2
+    blk = MessageBlock(hid_ir, hid_ir, num_species, cfg)
     N, E = 3, 2
     node = torch.randn(N, hid_ir.dim)
     edge = torch.randn(E, hid_ir.dim)
     idx = torch.tensor([[0, 1], [1, 2]])
-    node2, edge2 = blk(node, edge, idx)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(E, sh_irreps.dim)
+    edge_length_emb = torch.randn(E, cfg.n_radial)
+    node2, edge2 = blk(node, edge, idx, edge_sh, edge_length_emb)
     assert node2.shape == (N, hid_ir.dim)
     assert edge2.shape == (E, hid_ir.dim)
 

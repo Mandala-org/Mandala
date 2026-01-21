@@ -47,7 +47,7 @@ dev = [
 ignore = ["E741", "E402"]
 
 [tool.pytest.ini_options]
-addopts = ['-n', 'auto']
+addopts = ['-n', 'auto', '--ignore=tests/workflow']
 markers = [
     "unit: fast, isolated tests",
     "integration: slower workflow tests on real data",

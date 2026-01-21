@@ -1,6 +1,7 @@
 import pytest
 import torch
 from itertools import product
+from e3nn.o3 import Irreps
 
 from net.common import Config, build_hidden_irreps
 from net.layers import EdgeUpdateBlock, NodeUpdateBlock, MessageBlock
@@ -34,12 +35,17 @@ def test_edge_update_block_variants(node_combine, edge_update, residual):
         edge_update=edge_update,
         edge_update_residual=residual,
         safety_checks=True,
+        l_max=2,
     )
     hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
-    edge_blk = EdgeUpdateBlock(hid, cfg)
+    num_species = 2
+    edge_blk = EdgeUpdateBlock(hid, hid, num_species, cfg)
 
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)
-    edge_out = edge_blk(node, edge, ei)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(edge.shape[0], sh_irreps.dim)
+    edge_length_emb = torch.randn(edge.shape[0], cfg.n_radial)
+    edge_out = edge_blk(node, edge, ei, edge_sh, edge_length_emb)
 
     assert edge_out.shape == edge.shape
 
@@ -65,12 +71,17 @@ def test_node_update_block_variants(message_agg, node_update, residual):
         node_update=node_update,
         node_update_residual=residual,
         safety_checks=True,
+        l_max=2,
     )
     hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
-    node_blk = NodeUpdateBlock(hid, cfg)
+    num_species = 2
+    node_blk = NodeUpdateBlock(hid, hid, num_species, cfg)
 
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)
-    node_out = node_blk(node, edge, ei)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(edge.shape[0], sh_irreps.dim)
+    edge_length_emb = torch.randn(edge.shape[0], cfg.n_radial)
+    node_out = node_blk(node, edge, ei, edge_sh, edge_length_emb)
 
     assert node_out.shape == node.shape
 
@@ -78,12 +89,16 @@ def test_node_update_block_variants(message_agg, node_update, residual):
 @pytest.mark.unit
 def test_message_block_roundtrip():
     """Tests the full MessageBlock forward pass."""
-    cfg = Config(safety_checks=True)
+    cfg = Config(safety_checks=True, l_max=2)
     hid = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
+    num_species = 2
 
-    blk = MessageBlock(hid, cfg)
+    blk = MessageBlock(hid, hid, num_species, cfg)
     node, edge, ei = make_dummy_graph(hid_dim=hid.dim)
-    n2, e2 = blk(node, edge, ei)
+    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    edge_sh = torch.randn(edge.shape[0], sh_irreps.dim)
+    edge_length_emb = torch.randn(edge.shape[0], cfg.n_radial)
+    n2, e2 = blk(node, edge, ei, edge_sh, edge_length_emb)
 
     assert n2.shape == node.shape
     assert e2.shape == edge.shape

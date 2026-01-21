@@ -23,7 +23,7 @@ def test_forward_smoke():
     # ------- dummy orbital config ------------------
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
 
-    cfg = Config(num_layers_gnn=1, num_layers_matrix=1, safety_checks=True)
+    cfg = Config(num_layers_gnn=1, safety_checks=True)
 
     model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
 

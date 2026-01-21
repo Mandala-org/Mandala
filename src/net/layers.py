@@ -280,8 +280,6 @@ class EdgeUpdateBlock(nn.Module):
         self,
         node_irreps: Irreps,
         edge_irreps: Irreps,
-        sh_irreps: Irreps,
-        n_radial: int,
         num_species: int,
         cfg: Config,
         info: dict = None,
@@ -291,6 +289,10 @@ class EdgeUpdateBlock(nn.Module):
         self.info = info
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
+
+        # Resolve sh_irreps and n_radial from config
+        sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+        n_radial = cfg.n_radial
 
         # Pre-linear transformation
         self.lin_pre = E3MLP(
@@ -426,8 +428,6 @@ class NodeUpdateBlock(nn.Module):
         self,
         node_irreps: Irreps,
         edge_irreps: Irreps,
-        sh_irreps: Irreps,
-        n_radial: int,
         num_species: int,
         cfg: Config,
         info: dict = None,
@@ -437,6 +437,10 @@ class NodeUpdateBlock(nn.Module):
         self.info = info
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
+
+        # Resolve sh_irreps and n_radial from config
+        sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+        n_radial = cfg.n_radial
 
         # Pre-linear transformation
         self.lin_pre = E3MLP(
@@ -583,8 +587,6 @@ class MessageBlock(nn.Module):
         self,
         node_irreps: Irreps,
         edge_irreps: Irreps,
-        sh_irreps: Irreps,
-        n_radial: int,
         num_species: int,
         cfg: Config,
         info: dict = None,
@@ -598,8 +600,6 @@ class MessageBlock(nn.Module):
         self.edge_upd = EdgeUpdateBlock(
             node_irreps=node_irreps,
             edge_irreps=edge_irreps,
-            sh_irreps=sh_irreps,
-            n_radial=n_radial,
             num_species=num_species,
             cfg=cfg,
             info=info,
@@ -607,8 +607,6 @@ class MessageBlock(nn.Module):
         self.node_upd = NodeUpdateBlock(
             node_irreps=node_irreps,
             edge_irreps=edge_irreps,
-            sh_irreps=sh_irreps,
-            n_radial=n_radial,
             num_species=num_species,
             cfg=cfg,
             info=info,
