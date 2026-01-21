@@ -10,8 +10,7 @@ dataset:
 
 config:
   # data:
-  cutoff_gnn: 4.0
-  cutoff_matrix: 6.0
+  cutoff_radius: 6.0
   n_radial: 64
 
   # training:
@@ -27,9 +26,8 @@ config:
 
   # model:
   hidden_base_dim: 32
-  l_max_gnn: 2
+  l_max: 2
   num_layers_gnn: 2
-  num_layers_matrix: 1
   dropout: 0.0
   l1_reg_coef: 0.0
   l2_reg_coef: 0.0
