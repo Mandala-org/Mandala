@@ -44,7 +44,7 @@ def test_dataset_cache_with_silicon_data(tmp_path, silicon_pair):
     x2, _ = ds2[0]
 
     # 3. Check that the edge cutoff index is now smaller
-    assert x2["index_gnn_cutoff"] < x1["index_gnn_cutoff"]
+    assert x2["edge_index"].shape[1] < x1["edge_index"].shape[1]
 
     # 4. Load with cutoff 5.0 again (cache hit) #! Test whether it is an actual cache hit
     ds3 = load_dataset(silicon_pair, cache_dir, cutoff_radius=5.0)
