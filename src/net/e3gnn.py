@@ -93,18 +93,21 @@ class E3GNN(pl.LightningModule):
         )
 
         # ---------- message-passing ------------------------------
-        self.mp_blocks = nn.ModuleList(
-            [
+        # First layer: nodes start as scalars from node_enc
+        # Subsequent layers: nodes have full hidden_irreps after first NodeUpdateBlock expansion
+        self.mp_blocks = nn.ModuleList()
+        for i in range(self.cfg.num_layers_gnn):
+            # First layer uses node_enc output (scalars), rest use hidden_irreps
+            node_irreps_in = self.node_enc.irreps_out if i == 0 else self.hidden_irreps
+            self.mp_blocks.append(
                 MessageBlock(
-                    node_irreps=self.node_enc.irreps_out,
+                    node_irreps=node_irreps_in,
                     edge_irreps=self.hidden_irreps,
                     num_species=len(self.mapper.orbital_cfg.elements()),
                     cfg=self.cfg,
                     info={"layer": i},
                 )
-                for i in range(self.cfg.num_layers_gnn)
-            ]
-        )
+            )
 
         # ---------- heads ----------------------------------------------
         pair_keys = list(

@@ -63,7 +63,6 @@ def test_precomputed_vs_onthefly_features(h2o_data):
         edge_type_idx_direct,
         edge_length_emb_direct,
         edge_sh_direct,
-        index_gnn_cutoff_direct,
         num_self_edges_direct,
     ) = compute_graph_features(
         positions=snap.positions,
@@ -93,9 +92,6 @@ def test_precomputed_vs_onthefly_features(h2o_data):
     assert torch.allclose(x_precompute["edge_sh"], edge_sh_direct), "edge_sh mismatch"
 
     # For scalar integers, use direct comparison.
-    assert (
-        x_precompute["index_gnn_cutoff"] == index_gnn_cutoff_direct
-    ), "index_gnn_cutoff mismatch"
     assert (
         x_precompute["num_self_edges"] == num_self_edges_direct
     ), "num_self_edges mismatch"
