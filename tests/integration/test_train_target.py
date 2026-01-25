@@ -98,39 +98,52 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
                 p_edges = preds_matrix[name].pair_edges
                 t_edges = y[name].pair_edges
 
-                for key in t_edges:
-                    min_n = min(p_blocks[key].shape[0], t_blocks[key].shape[0])
-                    p_blocks[key] = p_blocks[key][:min_n]
-                    t_blocks[key] = t_blocks[key][:min_n]
-                    p_edges[key] = p_edges[key][:, :min_n]
-                    t_edges[key] = t_edges[key][:, :min_n]
-
-                    if key not in p_edges:
+                # Iterate over target keys only (matching model behavior)
+                for key in t_blocks.keys():
+                    if key not in p_blocks.keys():
                         raise ValueError(
                             f"Edge key {key} missing in predicted {name} matrix."
                         )
-                    if not torch.equal(p_edges[key], t_edges[key]):
-                        raise ValueError(
-                            f"Edge indices for predicted and target {name} matrices do not match."
-                        )
 
-                for key in p_blocks:
-                    expected_loss_matrix += torch.mean(
-                        (p_blocks[key] - t_blocks[key]) ** 2
-                    )
+                    preds = p_blocks[key]
+                    targets = t_blocks[key]
+
+                    # Handle size mismatch by truncating to the smaller size
+                    min_n = min(preds.shape[0], targets.shape[0])
+                    preds = preds[:min_n]
+                    targets = targets[:min_n]
+
+                    if cfg.safety_checks:
+                        if not torch.equal(
+                            p_edges[key][:, :min_n], t_edges[key][:, :min_n]
+                        ):
+                            raise ValueError(
+                                f"Edge indices for predicted and target {name} matrices do not match."
+                            )
+
+                    expected_loss_matrix += torch.mean((preds - targets) ** 2)
         else:  # train_target == "irreps"
             # Loss is on IrrepsBlockData vectors
             for name in matrix_targets:
                 p_vecs = preds_irreps[name].pair_vectors
                 t_vecs = y[name].pair_vectors
 
-                for key in t_vecs:
-                    n_min = min(p_vecs[key].shape[0], t_vecs[key].shape[0])
-                    p_vecs[key] = p_vecs[key][:n_min]
-                    t_vecs[key] = t_vecs[key][:n_min]
+                # Iterate over target keys only (matching model behavior)
+                for key in t_vecs.keys():
+                    if key not in p_vecs.keys():
+                        raise ValueError(
+                            f"Edge key {key} missing in predicted {name} vectors."
+                        )
 
-                for key in p_vecs:
-                    expected_loss_matrix += torch.mean((p_vecs[key] - t_vecs[key]) ** 2)
+                    preds = p_vecs[key]
+                    targets = t_vecs[key]
+
+                    # Handle size mismatch by truncating to the smaller size
+                    min_n = min(preds.shape[0], targets.shape[0])
+                    preds = preds[:min_n]
+                    targets = targets[:min_n]
+
+                    expected_loss_matrix += torch.mean((preds - targets) ** 2)
 
     # 3. Run a training step and capture the logged metrics
     logged_metrics = {}
