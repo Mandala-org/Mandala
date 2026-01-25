@@ -347,8 +347,13 @@ class E3GNN(pl.LightningModule):
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
+
+            # Store for combined loss BEFORE unit conversion
+            mse_for_loss = mse_val
+            mae_for_loss = mae_val
+
             if name == "hamiltonian":
-                # Convert to eV^2 and eV for logging
+                # Convert to eV^2 and eV for logging only
                 mse_val = mse_val * (HARTREE_TO_EV**2)
                 mae_val = mae_val * HARTREE_TO_EV
             metrics[f"{stage}/{name}_mae"] = mae_val
@@ -356,7 +361,7 @@ class E3GNN(pl.LightningModule):
 
             combined_matrix_losses[name] = (
                 1 - self.cfg.loss_l1_fraction
-            ) * mse_val + self.cfg.loss_l1_fraction * mae_val
+            ) * mse_for_loss + self.cfg.loss_l1_fraction * mae_for_loss
 
         loss_matrix = sum(combined_matrix_losses.values())
 
