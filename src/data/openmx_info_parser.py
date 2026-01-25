@@ -21,7 +21,9 @@ def recover_box(frac_coords: torch.Tensor, abs_coords: torch.Tensor) -> torch.Te
         if F.shape != A.shape or F.ndim != 2 or F.shape[1] != 3:
             raise ValueError("Inputs must both be (N,3) arrays")
 
-        cell, *_ = torch.linalg.lstsq(F, A)
+        # Use gelsd driver which is more deterministic than gelsy
+        # gelsd uses divide-and-conquer SVD which has better numerical stability
+        cell, *_ = torch.linalg.lstsq(F, A, driver="gelsd")
     return cell  # (3,3)
 
 
