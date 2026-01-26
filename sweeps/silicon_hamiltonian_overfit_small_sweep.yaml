@@ -24,8 +24,6 @@ parameters:
   use_odd_features:
     value: False
   num_layers_gnn:
-    value: 0
-  num_layers_matrix:
     value: 1
   edge_update_linear:
     values: ["pre", "post"]

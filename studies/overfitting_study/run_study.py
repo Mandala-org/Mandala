@@ -94,7 +94,6 @@ def main():
         lr_scheduler_factor=args.lr_scheduler_factor,
         hidden_base_dim=64,
         num_layers_gnn=4,
-        num_layers_matrix=2,
         neck_depth=3,
         head_depth=2,
         bench_verbosity=2,
