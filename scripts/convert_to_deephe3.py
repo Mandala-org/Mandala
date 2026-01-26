@@ -32,7 +32,7 @@ def main():
 
     args = parser.parse_args()
 
-    cfg = Config(cutoff_matrix=args.cutoff)
+    cfg = Config(cutoff_radius=args.cutoff)
 
     if not args.output_path.exists():
         os.makedirs(args.output_path, exist_ok=True)

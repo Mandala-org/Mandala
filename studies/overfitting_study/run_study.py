@@ -80,8 +80,7 @@ def main():
     # --- Data Loading ---
     print("Loading single silicon snapshot...")
     cfg = Config(
-        cutoff_gnn=5.0,
-        cutoff_matrix=8.0,
+        cutoff_radius=8.0,
         lr=args.lr,
         train_target=args.train_target,
         loss_coef_observables=0.0,  # Disable observable losses

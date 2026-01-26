@@ -22,8 +22,8 @@ parameters:
 
   # ============ Core Architecture ============
 
-  # Single unified cutoff (no more cutoff_gnn/cutoff_matrix split)
-  cutoff_matrix:
+  # Single unified cutoff
+  cutoff_radius:
     values: [6.0, 7.0, 8.0]
 
   # Irreps configuration
