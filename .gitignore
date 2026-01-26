@@ -27,7 +27,7 @@ docs/_build/
 ray_results/
 
 # Notes
-# notes/
+notes/
 
 # egg-info
 *.egg-info/
@@ -52,5 +52,6 @@ notebooks/scratchpads
 data/deeph_e3/7_7_reproduced/*
 data/deeph_e3/silicon_reproduced/*
 
-# notes
-notes/
+# models
+models/
+saved_models/
