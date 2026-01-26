@@ -213,5 +213,5 @@ def test_irreps_rotation_multiple_angles(water_snapshot, mapper):
             assert torch.allclose(
                 ham_irreps_rot_direct.pair_vectors[key],
                 ham_irreps_rot_roundtrip.pair_vectors[key],
-                atol=1e-4,
+                atol=2e-5,
             ), f"Rotation mismatch at angle {theta} for key {key}"
