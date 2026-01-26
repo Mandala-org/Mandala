@@ -27,7 +27,7 @@ parameters:
     values: [6.0, 7.0, 8.0]
 
   # Irreps configuration
-  l_max_gnn:
+  l_max:
     value: 4
   l_max_matrix:
     value: 4

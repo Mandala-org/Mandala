@@ -15,7 +15,7 @@ parameters:
     value: 7.5
   cutoff_matrix:
     value: 7.5
-  l_max_gnn:
+  l_max:
     value: 4
   l_max_matrix:
     value: 4

@@ -105,7 +105,7 @@ def main(omega_cfg: DictConfig) -> None:
         cfg=cfg,
     )
     vprint(
-        f"Built model: l_max_gnn={cfg.l_max_gnn}, hidden_base_dim={cfg.hidden_base_dim}, "
+        f"Built model: l_max={cfg.l_max}, hidden_base_dim={cfg.hidden_base_dim}, "
         f"layers_gnn={cfg.num_layers_gnn}, layers_matrix={cfg.num_layers_matrix}"
     )
 

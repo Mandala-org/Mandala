@@ -20,7 +20,7 @@ from core.sparse_math import trace_matmul_sparse_snap_vectorized  # noqa: E402
 
 # --- Hyperparameter Search Space ---
 SEARCH_SPACE = {
-    "l_max_gnn": {"distribution": "int_uniform", "min": 2, "max": 3},
+    "l_max": {"distribution": "int_uniform", "min": 2, "max": 3},
     "num_layers_gnn": {"distribution": "int_uniform", "min": 2, "max": 4},
     "num_layers_matrix": {"distribution": "int_uniform", "min": 1, "max": 3},
     "edge_update_linear": {"values": ["pre", "post"]},
@@ -64,13 +64,13 @@ def main():
     )
     args = parser.parse_args()
 
-    # 1. Load Silicon Snapshot Data (one sample per l_max_gnn)
-    print("Loading silicon snapshot data for all required l_max_gnn values...")
+    # 1. Load Silicon Snapshot Data (one sample per l_max)
+    print("Loading silicon snapshot data for all required l_max values...")
     data_samples = {}
-    l_max_gnn_space = SEARCH_SPACE["l_max_gnn"]
-    for l_max in range(l_max_gnn_space["min"], l_max_gnn_space["max"] + 1):
-        print(f"  Generating data for l_max_gnn = {l_max}...")
-        data_cfg = Config(cutoff_gnn=5.0, cutoff_matrix=8.0, l_max_gnn=l_max)
+    l_max_space = SEARCH_SPACE["l_max"]
+    for l_max in range(l_max_space["min"], l_max_space["max"] + 1):
+        print(f"  Generating data for l_max = {l_max}...")
+        data_cfg = Config(cutoff_gnn=5.0, cutoff_matrix=8.0, l_max=l_max)
         fac = DatasetFactory(data_cfg)
         fac.add_snapshot(
             "../../data/big/silicon/900K/Si_DM",
@@ -89,10 +89,10 @@ def main():
         hparams = sample_hyperparameters()
 
         if i < num_real_evals:
-            # Get the correct data sample for the sampled l_max_gnn
-            l_max_gnn = hparams["l_max_gnn"]
-            x, y = data_samples[l_max_gnn][0]
-            mapper = data_samples[l_max_gnn][1]
+            # Get the correct data sample for the sampled l_max
+            l_max = hparams["l_max"]
+            x, y = data_samples[l_max][0]
+            mapper = data_samples[l_max][1]
 
             # Create config and model
             cfg = Config(**hparams)
