@@ -229,10 +229,7 @@ class EquiConv(nn.Module):
             Tensor of shape (batch, irreps_out.dim)
         """
         # Tensor product
-        if self.cfg.tp_type == "separate_weight":
-            z = self.tp(fea_in1, fea_in2)
-        else:
-            z = self.tp(fea_in1, fea_in2)
+        z = self.tp(fea_in1, fea_in2)
 
         # Handle empty output
         if z.shape[-1] == 0:
