@@ -22,7 +22,6 @@ from core.sparse_math import trace_matmul_sparse_snap_vectorized  # noqa: E402
 SEARCH_SPACE = {
     "l_max": {"distribution": "int_uniform", "min": 2, "max": 3},
     "num_layers_gnn": {"distribution": "int_uniform", "min": 2, "max": 4},
-    "num_layers_matrix": {"distribution": "int_uniform", "min": 1, "max": 3},
     "edge_update_linear": {"values": ["pre", "post"]},
     "edge_update": {"values": ["tensor_product", "concat", "replace"]},
     "edge_update_residual": {"values": [True, False]},

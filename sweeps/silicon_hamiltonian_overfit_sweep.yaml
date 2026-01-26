@@ -21,8 +21,6 @@ parameters:
     max: 4
   num_layers_gnn:
     value: 1
-  num_layers_matrix:
-    value: 1
   edge_update_linear:
     values: ["pre", "post"]
   edge_update:
