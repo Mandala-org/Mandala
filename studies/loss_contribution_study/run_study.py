@@ -71,7 +71,7 @@ def main():
     print(f"Saving results to: {output_dir}")
 
     print("Loading silicon snapshot data...")
-    data_cfg = Config(cutoff_gnn=5.0, cutoff_matrix=8.0)
+    data_cfg = Config(cutoff_radius=8.0)
     fac = DatasetFactory(data_cfg)
     fac.add_snapshot(
         "../../data/big/silicon/900K/Si_DM", "../../data/big/silicon/900K/info.txt"

@@ -11,9 +11,7 @@ metric:
 
 
 parameters:
-  cutoff_gnn:
-    value: 7.5
-  cutoff_matrix:
+  cutoff_radius:
     value: 7.5
   l_max:
     distribution: int_uniform

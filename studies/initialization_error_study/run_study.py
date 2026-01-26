@@ -69,7 +69,7 @@ def main():
     l_max_space = SEARCH_SPACE["l_max"]
     for l_max in range(l_max_space["min"], l_max_space["max"] + 1):
         print(f"  Generating data for l_max = {l_max}...")
-        data_cfg = Config(cutoff_gnn=5.0, cutoff_matrix=8.0, l_max=l_max)
+        data_cfg = Config(cutoff_radius=8.0, l_max=l_max)
         fac = DatasetFactory(data_cfg)
         fac.add_snapshot(
             "../../data/big/silicon/900K/Si_DM",
