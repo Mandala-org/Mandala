@@ -829,6 +829,63 @@ class IrrepsBlockData:
             return self.pair_vectors[item]
         raise KeyError("use (i,j), (sx,sy,sz,i,j) or 'A-B'")
 
+    # ════════════════════════════════════════════════════════════════════════════
+    #                                ROTATION
+    # ═══════════════════════════════════════════════════════════════════════════
+    def rotate(self, R: torch.Tensor, mapper: BlockIrrepMapper) -> "IrrepsBlockData":
+        """
+        Return a **new** :class:`IrrepsBlockData` whose *orbital reference frame*
+        has been rotated by the (3 x 3) matrix **R** (active rotation).
+
+        Parameters
+        ----------
+        R
+            The (3 x 3) rotation matrix.
+        mapper
+            The BlockIrrepMapper that provides the pair irreps for computing
+            Wigner-D matrices.
+
+        Notes
+        -----
+        * For irrep vectors representing the tensor product of orbitals from
+          atoms A and B, we apply the Wigner-D matrix for the output irreps:
+
+              v'_(A,B)  =  D_out(R) · v_(A,B)
+
+          where ``D_out = pair_irreps.D_from_matrix(R)`` acts on the tensor
+          product irreps.
+        """
+        if R.shape != (3, 3):
+            raise ValueError("R must be a 3x3 rotation matrix")
+
+        device = next(iter(self.pair_vectors.values())).device
+        R = R.to(device=device, dtype=torch.float32)
+
+        # cache one Wigner-D matrix per pair type
+        D_cache: Dict[PairKey, torch.Tensor] = {}
+        for key in self.pair_vectors.keys():
+            pair_irreps = mapper.get_pair_irreps(key)
+            D_cache[key] = pair_irreps.D_from_matrix(R)  # (n_vec, n_vec)
+
+        # rotate every vector ------------------------------------------------
+        new_vectors: Dict[PairKey, torch.Tensor] = {}
+        for key, vec in self.pair_vectors.items():
+            D = D_cache[key]
+            # tensor contraction:  (E, n_vec)
+            vec_rot = vec @ D.T
+            new_vectors[key] = vec_rot
+
+        # edge indices / lookup are unchanged
+        return IrrepsBlockData(
+            atoms=self.atoms,
+            atom_counts=self.atom_counts,
+            pair_vectors=new_vectors,
+            pair_edges=self.pair_edges,
+            lookup=self.lookup,
+            orbital_cfg=self.orbital_cfg,
+            basis=self.basis,
+        )
+
     # ------------------------------------------------------------------ serialisation
     def _to_payload(self) -> dict:
         """
