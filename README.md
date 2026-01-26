@@ -3,7 +3,7 @@
 An E(3)-equivariant Graph Neural Network implementation framework to predict
 **block-sparse DFT matrices** (Hamiltonian **H** and Density **D**)
 in linear time using E3NN + PyTorch. Designed for arbitrary chemistry,
-hyperoptimization and distributed training on HPC clusters.
+wide hyperparameter optimization and distributed training on HPC clusters.
 
 ## Quickstart
 
