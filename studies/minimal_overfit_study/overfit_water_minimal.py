@@ -394,12 +394,20 @@ if __name__ == "__main__":
     # )
     hidden_irreps = Irreps(
         f"{CONFIG['hidden_dim']}x0e\
+        + {CONFIG['hidden_dim']}x0o\
+        + {CONFIG['hidden_dim']//2}x1e\
         + {CONFIG['hidden_dim']//2}x1o\
-        + {CONFIG['hidden_dim']//4}x2e\
-        + {CONFIG['hidden_dim']//8}x3o\
-        + {CONFIG['hidden_dim']//16}x4e\
     "
     )
+
+    # + {CONFIG['hidden_dim']//4}x2e\
+    # + {CONFIG['hidden_dim']//4}x2o\
+    # + {CONFIG['hidden_dim']//8}x3o\
+    # + {CONFIG['hidden_dim']//16}x4e\
+    # + {CONFIG['hidden_dim']//2}x1e\
+    # + {CONFIG['hidden_dim']//8}x3e\
+    # + {CONFIG['hidden_dim']//16}x4o\
+
     print(f"  Hidden irreps: {hidden_irreps}")
 
     # Instantiate network
