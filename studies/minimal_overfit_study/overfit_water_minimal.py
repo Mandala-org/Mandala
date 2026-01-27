@@ -68,6 +68,8 @@ CONFIG = {
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     # Target
     "train_target": "matrix",  # Train on matrix blocks, not irrep vectors
+    # Checkpointing
+    "checkpoint_dir": project_root / "studies/minimal_overfit_study/checkpoints",
 }
 
 # Initialize WandB
@@ -86,6 +88,10 @@ print(f"  Learning rate: {CONFIG['lr']}")
 print(f"  Epochs: {CONFIG['num_epochs']}")
 
 device = torch.device(CONFIG["device"])
+
+# Create checkpoint directory
+CONFIG["checkpoint_dir"].mkdir(parents=True, exist_ok=True)
+print(f"  Checkpoint directory: {CONFIG['checkpoint_dir']}")
 
 # =============================================================================
 # LOAD DATA
@@ -579,6 +585,10 @@ history = {
     "mae_H": [],
 }
 
+# Track best model
+best_loss = float("inf")
+best_epoch = 0
+
 print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
 print(f"Training for {CONFIG['num_epochs']} epochs...\n")
 
@@ -700,6 +710,24 @@ for epoch in range(CONFIG["num_epochs"]):
             }
         )
 
+        # Save best model
+        if loss.item() < best_loss:
+            best_loss = loss.item()
+            best_epoch = epoch
+            best_model_path = CONFIG["checkpoint_dir"] / "best_model.pt"
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": network.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": loss.item(),
+                    "mae_H": mae_H,
+                    "config": CONFIG,
+                },
+                best_model_path,
+            )
+            print(f"  ✓ Best model saved (loss: {loss.item():.6e})")
+
         # Check for convergence
         if loss.item() < 1e-8:
             print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
@@ -771,12 +799,30 @@ with torch.no_grad():
     # Log final metrics to WandB
     wandb.log(final_metrics)
 
+# Save final model
+final_model_path = CONFIG["checkpoint_dir"] / "final_model.pt"
+torch.save(
+    {
+        "epoch": epoch,
+        "model_state_dict": network.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "loss": history["loss"][-1],
+        "mae_H": history["mae_H"][-1],
+        "config": CONFIG,
+        "history": history,
+    },
+    final_model_path,
+)
+
 print("\n" + "=" * 80)
 print("STUDY COMPLETE")
 print("=" * 80)
 print(f"\nTotal training epochs: {epoch + 1}")
 print(f"Final loss: {history['loss'][-1]:.6e}")
-print(f"Best loss: {min(history['loss']):.6e}")
+print(f"Best loss: {min(history['loss']):.6e} (epoch {best_epoch + 1})")
+print(f"\nCheckpoints saved:")
+print(f"  Best model: {CONFIG['checkpoint_dir'] / 'best_model.pt'}")
+print(f"  Final model: {final_model_path}")
 print("\n✓ Minimal overfit study finished successfully!")
 
 # Finish WandB run
