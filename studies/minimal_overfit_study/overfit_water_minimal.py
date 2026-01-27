@@ -35,10 +35,8 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 # Import only low-level data structures
-from data.openmx_parser import parse_openmx_file
-from data.openmx_info_parser import parse_info_out
+from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
-from core.basis_converter import OpenMXE3NNConverter
 
 # WandB for logging
 import wandb
@@ -94,55 +92,50 @@ device = torch.device(CONFIG["device"])
 # =============================================================================
 print("\n[DATA] Loading single water snapshot...")
 
-# Parse OpenMX files
+# Load snapshot using Snapshot.from_openmx
 print(f"  Matrix file: {CONFIG['data_path']}")
 print(f"  Info file: {CONFIG['info_path']}")
 
-info_data = parse_info_out(CONFIG["info_path"])
-print(f"\n  Parsed info:")
-print(f"    Elements: {info_data.elements}")
-print(f"    Num atoms: {len(info_data.elements)}")
-print(f"    Positions shape: {info_data.positions.shape}")
-print(f"    Cell shape: {info_data.box.shape if info_data.box is not None else None}")
+snapshot = Snapshot.from_openmx(
+    matrix_path=CONFIG["data_path"],
+    info_path=CONFIG["info_path"],
+    convention="e3nn",  # Automatically converts to e3nn basis
+    symmetrize_density=True,
+    cutoff_radius=None,  # No filtering, we'll use all edges
+    dtype=torch.float32,
+)
 
-# Parse matrix data
-matrix_data = parse_openmx_file(CONFIG["data_path"])
-print(f"\n  Parsed matrices:")
-print(f"    Hamiltonian keys: {list(matrix_data['hamiltonian'].pair_blocks.keys())}")
-print(f"    Overlap keys: {list(matrix_data['overlap'].pair_blocks.keys())}")
-print(f"    Density keys: {list(matrix_data['density'].pair_blocks.keys())}")
+print(f"\n  Snapshot loaded:")
+print(f"    Elements: {snapshot.hamiltonian.atoms}")
+print(f"    Num atoms: {len(snapshot.hamiltonian.atoms)}")
+print(f"    Positions shape: {snapshot.positions.shape}")
+print(f"    Box shape: {snapshot.box.shape if snapshot.box is not None else None}")
+print(f"    Basis: {snapshot.hamiltonian.basis}")
 
-# Extract target matrices
-hamiltonian_openmx = matrix_data["hamiltonian"]
-overlap_openmx = matrix_data["overlap"]
-density_openmx = matrix_data["density"]
+print(f"\n  Matrices:")
+print(f"    Hamiltonian keys: {list(snapshot.hamiltonian.pair_blocks.keys())}")
+print(f"    Overlap keys: {list(snapshot.overlap.pair_blocks.keys())}")
+print(f"    Density keys: {list(snapshot.density.pair_blocks.keys())}")
 
 print(f"\n  Hamiltonian blocks:")
-for key, blocks in hamiltonian_openmx.pair_blocks.items():
+for key, blocks in snapshot.hamiltonian.pair_blocks.items():
     print(
-        f"    {key}: shape {blocks.shape}, edges {hamiltonian_openmx.pair_edges[key].shape}"
+        f"    {key}: shape {blocks.shape}, edges {snapshot.hamiltonian.pair_edges[key].shape}"
     )
 
-# Build orbital configuration
-orbital_cfg = hamiltonian_openmx.orbital_cfg
+# Extract components
+hamiltonian_e3nn = snapshot.hamiltonian.to(device)
+overlap_e3nn = snapshot.overlap.to(device)
+density_e3nn = snapshot.density.to(device)
+orbital_cfg = snapshot.hamiltonian.orbital_cfg
+positions = snapshot.positions.to(device)
+box = snapshot.box.to(device) if snapshot.box is not None else None
+atoms_list = list(snapshot.hamiltonian.atoms)
+
 print(f"\n  Orbital configuration:")
 for elem in orbital_cfg.elements():
     irreps = orbital_cfg.element_to_irreps[elem]
     print(f"    {elem}: {irreps} (dim={irreps.dim})")
-
-# Convert from OpenMX basis to E3NN basis
-print("\n[BASIS] Converting from OpenMX to E3NN convention...")
-converter = OpenMXE3NNConverter(orbital_cfg, device=device)
-hamiltonian_e3nn = converter.matrix_to_e3nn(hamiltonian_openmx).to(device)
-
-# Apply coordinate transformation: OpenMX (y,z,x) → e3nn (x,y,z)
-# This matches Snapshot._change_basis() logic
-print("  Applying coordinate transformation to positions and box...")
-change_of_basis = torch.eye(3, dtype=torch.float32, device=device)[
-    [2, 0, 1]
-]  # Permutation (y,z,x) → (x,y,z)
-print(f"  Change-of-basis matrix:\n{change_of_basis}")
-print("  ✓ Basis conversion complete (matrices + coordinates)")
 
 # Create BlockIrrepMapper
 print("\n[MAPPER] Creating BlockIrrepMapper...")
@@ -166,18 +159,9 @@ for key in target_H_matrix.pair_blocks.keys():
 # =============================================================================
 print("\n[GRAPH] Constructing molecular graph...")
 
-# Apply coordinate transformation to positions and box
-positions_openmx = info_data.positions.to(device)
-box_openmx = info_data.box.to(device) if info_data.box is not None else None
-
-positions = positions_openmx @ change_of_basis  # Transform to e3nn frame
-box = box_openmx @ change_of_basis if box_openmx is not None else None
-
-atoms_list = info_data.elements
 num_atoms = len(atoms_list)
 
 print(f"  Atoms: {atoms_list}")
-print(f"  Positions (OpenMX frame):\n{positions_openmx}")
 print(f"  Positions (e3nn frame):\n{positions}")
 if box is not None:
     print(f"  Box (e3nn frame):\n{box}")
@@ -322,7 +306,9 @@ class MinimalEdgeEncoder(nn.Module):
         self.num_edge_types = num_edge_types
 
         # Linear projection from radial basis + edge type one-hot to scalars
-        scalar_dim = hidden_irreps.count(Irreps("0e"))
+        from e3nn.o3 import Irrep
+
+        scalar_dim = sum(mul for mul, ir in hidden_irreps if ir == Irrep("0e"))
         self.radial_proj = nn.Linear(n_radial + num_edge_types, scalar_dim)
 
         # Tensor product: scalars ⊗ SH → hidden_irreps
@@ -330,7 +316,8 @@ class MinimalEdgeEncoder(nn.Module):
             Irreps(f"{scalar_dim}x0e"),
             sh_irreps,
             hidden_irreps,
-            shared_weights=False,
+            internal_weights=True,
+            shared_weights=True,
         )
         print(
             f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
@@ -383,7 +370,8 @@ class MinimalMessageBlock(nn.Module):
             concat_irreps,
             sh_irreps,
             hidden_irreps,
-            shared_weights=False,
+            internal_weights=True,
+            shared_weights=True,
         )
 
         # Node update: aggregate messages + self-connection
@@ -504,9 +492,12 @@ class MinimalNetwork(nn.Module):
     ):
         super().__init__()
 
-        self.node_enc = MinimalNodeEncoder(
-            num_elements, hidden_irreps.count(Irreps("0e"))
-        )
+        # Count scalar irreps correctly
+        from e3nn.o3 import Irrep
+
+        scalar_dim = sum(mul for mul, ir in hidden_irreps if ir == Irrep("0e"))
+
+        self.node_enc = MinimalNodeEncoder(num_elements, scalar_dim)
         self.edge_enc = MinimalEdgeEncoder(
             n_radial, num_edge_types, hidden_irreps, sh_irreps
         )
