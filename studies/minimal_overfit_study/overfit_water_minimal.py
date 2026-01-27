@@ -20,6 +20,7 @@ Verbose logging at every step for educational purposes.
 import sys
 import os
 from pathlib import Path
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -44,9 +45,8 @@ from core.block_irrep_mapper import BlockIrrepMapper
 # WandB for logging
 import wandb
 
-print("=" * 80)
-print("MINIMAL WATER OVERFIT STUDY - EXPLICIT IMPLEMENTATION")
-print("=" * 80)
+# Global flag to control printing during class initialization
+_VERBOSE = True
 
 # =============================================================================
 # NETWORK CLASS DEFINITIONS
@@ -82,7 +82,8 @@ class e3LayerNorm(nn.Module):
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
 
-        print(f"    [e3LayerNorm] Irreps: {self.irreps_in}, affine={affine}")
+        if _VERBOSE:
+            print(f"    [e3LayerNorm] Irreps: {self.irreps_in}, affine={affine}")
 
     def forward(self, x: torch.Tensor, batch: torch.Tensor = None):
         if batch is None:
@@ -132,6 +133,8 @@ class e3LayerNorm(nn.Module):
 
 def log_activation_magnitudes(features, irreps, name=""):
     """Log per-irrep activation magnitudes."""
+    if not _VERBOSE:
+        return
     stats = []
     ix = 0
     for mul, ir in irreps:
@@ -149,9 +152,10 @@ class MinimalNodeEncoder(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(num_elements, hidden_dim)
         self.irreps_out = Irreps(f"{hidden_dim}x0e")
-        print(
-            f"    [NodeEncoder] Input: {num_elements} elements → Output: {self.irreps_out}"
-        )
+        if _VERBOSE:
+            print(
+                f"    [NodeEncoder] Input: {num_elements} elements → Output: {self.irreps_out}"
+            )
 
     def forward(self, node_type_idx):
         out = self.embedding(node_type_idx)
@@ -204,12 +208,15 @@ class MinimalEdgeEncoder(nn.Module):
         # Layer norm
         self.norm = e3LayerNorm(self.irreps_out)
 
-        print(
-            f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
-        )
-        print(f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → {irreps_tp_out}")
-        print(f"                  Gate: {irreps_tp_out} → {self.irreps_out}")
-        print(f"                  Norm: {self.irreps_out}")
+        if _VERBOSE:
+            print(
+                f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
+            )
+            print(
+                f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → {irreps_tp_out}"
+            )
+            print(f"                  Gate: {irreps_tp_out} → {self.irreps_out}")
+            print(f"                  Norm: {self.irreps_out}")
 
     def forward(self, edge_length_emb, edge_type_idx, edge_sh, batch_edge):
         # Create edge type one-hot
@@ -232,22 +239,25 @@ class MinimalEdgeEncoder(nn.Module):
         # Layer norm
         edge_feat = self.norm(edge_feat, batch_edge)
 
-        print(
-            f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} → Combined: {combined.shape}"
-        )
-        print(
-            f"                            → Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
-        )
-        print(
-            f"                            ⊗ SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
-        )
-        print(
-            f"                            → TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
-        )
-        print(
-            f"                            → Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
-        )
-        log_activation_magnitudes(edge_feat, self.irreps_out, "EdgeEncoder activations")
+        if _VERBOSE:
+            print(
+                f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} → Combined: {combined.shape}"
+            )
+            print(
+                f"                            → Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
+            )
+            print(
+                f"                            ⊗ SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
+            )
+            print(
+                f"                            → TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
+            )
+            print(
+                f"                            → Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
+            )
+            log_activation_magnitudes(
+                edge_feat, self.irreps_out, "EdgeEncoder activations"
+            )
         return edge_feat
 
 
@@ -299,26 +309,28 @@ class MinimalMessageBlock(nn.Module):
         )
         self.node_norm = e3LayerNorm(self.node_gate.irreps_out)
 
-        print(f"    [MessageBlock] Irreps:")
-        print(
-            f"      Edge update: concat({node_irreps}, {node_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
-        )
-        print(f"                   → TP: {irreps_tp_out}")
-        print(f"                   → Gate: {self.edge_gate.irreps_out}")
-        print(
-            f"      Node update: concat(messages {hidden_irreps}, self {node_irreps})"
-        )
-        print(f"                   → Linear: {irreps_node_tp_out}")
-        print(f"                   → Gate: {self.node_gate.irreps_out}")
+        if _VERBOSE:
+            print(f"    [MessageBlock] Irreps:")
+            print(
+                f"      Edge update: concat({node_irreps}, {node_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
+            )
+            print(f"                   → TP: {irreps_tp_out}")
+            print(f"                   → Gate: {self.edge_gate.irreps_out}")
+            print(
+                f"      Node update: concat(messages {hidden_irreps}, self {node_irreps})"
+            )
+            print(f"                   → Linear: {irreps_node_tp_out}")
+            print(f"                   → Gate: {self.node_gate.irreps_out}")
 
     def forward(
         self, node_feat, edge_feat, edge_index, edge_sh, batch_node, batch_edge
     ):
         N = node_feat.shape[0]
 
-        print(
-            f"      [MessageBlock.forward] Input: nodes {node_feat.shape} (irreps: {self.node_irreps}), edges {edge_feat.shape} (irreps: {self.edge_irreps})"
-        )
+        if _VERBOSE:
+            print(
+                f"      [MessageBlock.forward] Input: nodes {node_feat.shape} (irreps: {self.node_irreps}), edges {edge_feat.shape} (irreps: {self.edge_irreps})"
+            )
 
         # Edge update: concatenate src node, dst node, and edge features
         src_idx = edge_index[0]
@@ -328,29 +340,32 @@ class MinimalMessageBlock(nn.Module):
         dst_node = node_feat[dst_idx]
 
         edge_concat = torch.cat([src_node, dst_node, edge_feat], dim=-1)
-        print(
-            f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} → {edge_concat.shape}"
-        )
+        if _VERBOSE:
+            print(
+                f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} → {edge_concat.shape}"
+            )
 
         # Apply TP with spherical harmonics
         edge_tp = self.edge_update_tp(edge_concat, edge_sh)
         edge_feat_new = self.edge_gate(edge_tp)
         edge_feat_new = self.edge_norm(edge_feat_new, batch_edge)
 
-        print(
-            f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_tp.shape}"
-        )
-        print(
-            f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
-        )
-        log_activation_magnitudes(
-            edge_feat_new, self.edge_gate.irreps_out, "Edge activations"
-        )
+        if _VERBOSE:
+            print(
+                f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_tp.shape}"
+            )
+            print(
+                f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
+            )
+            log_activation_magnitudes(
+                edge_feat_new, self.edge_gate.irreps_out, "Edge activations"
+            )
 
         # Node update: aggregate edge messages + self-connection
         messages = torch.zeros(N, edge_feat_new.shape[1], device=edge_feat_new.device)
         messages.index_add_(0, dst_idx, edge_feat_new)
-        print(f"                            Messages aggregated: {messages.shape}")
+        if _VERBOSE:
+            print(f"                            Messages aggregated: {messages.shape}")
 
         # Concatenate with self-connection
         node_concat = torch.cat([messages, node_feat], dim=-1)
@@ -358,15 +373,16 @@ class MinimalMessageBlock(nn.Module):
         node_feat_new = self.node_gate(node_linear)
         node_feat_new = self.node_norm(node_feat_new, batch_node)
 
-        print(
-            f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
-        )
-        print(
-            f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
-        )
-        log_activation_magnitudes(
-            node_feat_new, self.node_gate.irreps_out, "Node activations"
-        )
+        if _VERBOSE:
+            print(
+                f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
+            )
+            print(
+                f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
+            )
+            log_activation_magnitudes(
+                node_feat_new, self.node_gate.irreps_out, "Node activations"
+            )
 
         return node_feat_new, edge_feat_new
 
@@ -383,7 +399,8 @@ class MinimalHead(nn.Module):
         for edge_type in mapper.edge_types:
             pair_irreps = mapper.get_pair_irreps(edge_type)
             self.projections[edge_type] = Linear(hidden_irreps, pair_irreps)
-            print(f"    [Head] {edge_type}: {hidden_irreps} → {pair_irreps}")
+            if _VERBOSE:
+                print(f"    [Head] {edge_type}: {hidden_irreps} → {pair_irreps}")
 
     def forward(self, edge_feat, edge_type_idx, edge_index, edge_shift):
         """
@@ -412,9 +429,10 @@ class MinimalHead(nn.Module):
                     "vectors": pred_vectors,
                     "edges": selected_edges,
                 }
-                print(
-                    f"      [Head.forward] {type_str}: {mask.sum().item()} edges → vectors {pred_vectors.shape}"
-                )
+                if _VERBOSE:
+                    print(
+                        f"      [Head.forward] {type_str}: {mask.sum().item()} edges → vectors {pred_vectors.shape}"
+                    )
 
         return outputs
 
@@ -457,7 +475,8 @@ class MinimalNetwork(nn.Module):
 
         self.head = MinimalHead(hidden_irreps, mapper)
 
-        print(f"  Total parameters: {sum(p.numel() for p in self.parameters()):,}")
+        if _VERBOSE:
+            print(f"  Total parameters: {sum(p.numel() for p in self.parameters()):,}")
 
     def forward(
         self,
@@ -470,7 +489,8 @@ class MinimalNetwork(nn.Module):
         batch_node,
         batch_edge,
     ):
-        print("    [Forward] Starting forward pass...")
+        if _VERBOSE:
+            print("    [Forward] Starting forward pass...")
 
         # Encode
         node_feat = self.node_enc(node_type_idx)
@@ -478,7 +498,10 @@ class MinimalNetwork(nn.Module):
 
         # Message passing (both nodes and edges get updated)
         for i, mp_layer in enumerate(self.mp_layers):
-            print(f"    [Forward] Message passing layer {i + 1}/{len(self.mp_layers)}")
+            if _VERBOSE:
+                print(
+                    f"    [Forward] Message passing layer {i + 1}/{len(self.mp_layers)}"
+                )
             node_feat, edge_feat = mp_layer(
                 node_feat, edge_feat, edge_index, edge_sh, batch_node, batch_edge
             )
@@ -487,7 +510,8 @@ class MinimalNetwork(nn.Module):
         head_feat = edge_feat
 
         # Head
-        print(f"    [Forward] Applying head...")
+        if _VERBOSE:
+            print(f"    [Forward] Applying head...")
         outputs = self.head(head_feat, edge_type_idx, edge_index, edge_shift)
 
         return outputs
@@ -496,38 +520,130 @@ class MinimalNetwork(nn.Module):
 if __name__ == "__main__":
 
     # =============================================================================
+    # PARSE ARGUMENTS
+    # =============================================================================
+    parser = argparse.ArgumentParser(
+        description="Minimal E(3)-Equivariant Network: Overfit Single Water Structure"
+    )
+    parser.add_argument(
+        "--data-path",
+        type=str,
+        default=str(project_root / "data/small/H2O/original/H2O.matrix"),
+        help="Path to the matrix file",
+    )
+    parser.add_argument(
+        "--info-path",
+        type=str,
+        default=str(project_root / "data/small/H2O/original/H2O.info.out"),
+        help="Path to the info file",
+    )
+    parser.add_argument(
+        "--hidden-dim",
+        type=int,
+        default=32,
+        help="Hidden dimension for features",
+    )
+    parser.add_argument(
+        "--l-max",
+        type=int,
+        default=2,
+        help="Maximum angular momentum",
+    )
+    parser.add_argument(
+        "--num-layers",
+        type=int,
+        default=2,
+        help="Number of message passing layers",
+    )
+    parser.add_argument(
+        "--cutoff-radius",
+        type=float,
+        default=8.0,
+        help="Cutoff radius in Angstroms",
+    )
+    parser.add_argument(
+        "--n-radial",
+        type=int,
+        default=16,
+        help="Number of radial basis functions",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=1e-3,
+        help="Learning rate",
+    )
+    parser.add_argument(
+        "--num-epochs",
+        type=int,
+        default=1000,
+        help="Number of training epochs",
+    )
+    parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=200,
+        help="Interval for logging",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else "cpu",
+        help="Device to use (cuda or cpu)",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default=str(project_root / "studies/minimal_overfit_study/checkpoints"),
+        help="Directory to save checkpoints",
+    )
+    parser.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable WandB logging",
+    )
+
+    args = parser.parse_args()
+
+    # =============================================================================
     # CONFIGURATION
     # =============================================================================
+    print("=" * 80)
+    print("MINIMAL WATER OVERFIT STUDY - EXPLICIT IMPLEMENTATION")
+    print("=" * 80)
     print("\n[CONFIG] Setting up hyperparameters...")
 
     CONFIG = {
         # Data
-        "data_path": project_root / "data/small/H2O/original/H2O.matrix",
-        "info_path": project_root / "data/small/H2O/original/H2O.info.out",
+        "data_path": Path(args.data_path),
+        "info_path": Path(args.info_path),
         # Network architecture
-        "hidden_dim": 32,  # Small for faster overfitting
-        "l_max": 2,  # Up to d orbitals
-        "num_layers": 2,  # Minimal depth
-        "cutoff_radius": 8.0,  # Angstroms
-        "n_radial": 16,  # Radial basis functions
+        "hidden_dim": args.hidden_dim,
+        "l_max": args.l_max,
+        "num_layers": args.num_layers,
+        "cutoff_radius": args.cutoff_radius,
+        "n_radial": args.n_radial,
         # Training
-        "lr": 1e-3,  # Aggressive learning rate for overfitting
-        "num_epochs": 1000,
-        "log_interval": 200,
+        "lr": args.lr,
+        "num_epochs": args.num_epochs,
+        "log_interval": args.log_interval,
         # Device
-        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "device": args.device,
         # Target
-        "train_target": "matrix",  # Train on matrix blocks, not irrep vectors
+        "train_target": "matrix",
         # Checkpointing
-        "checkpoint_dir": project_root / "studies/minimal_overfit_study/checkpoints",
+        "checkpoint_dir": Path(args.checkpoint_dir),
     }
 
     # Initialize WandB
-    wandb.init(
-        project="mandala-minimal-overfit",
-        name="water-single-minimal",
-        config=CONFIG,
-    )
+    if not args.no_wandb:
+        wandb.init(
+            project="mandala-minimal-overfit",
+            name="water-single-minimal",
+            config=CONFIG,
+        )
+    else:
+        wandb.init(mode="disabled")
 
     print(f"  Device: {CONFIG['device']}")
     print(f"  Hidden dim: {CONFIG['hidden_dim']}")
@@ -897,14 +1013,15 @@ if __name__ == "__main__":
             print(f"  MAE H: {mae_H:.6e}")
 
             # Log to WandB
-            wandb.log(
-                {
-                    "epoch": epoch,
-                    "loss": loss.item(),
-                    "mse_H": loss_H.item(),
-                    "mae_H": mae_H,
-                }
-            )
+            if not args.no_wandb:
+                wandb.log(
+                    {
+                        "epoch": epoch,
+                        "loss": loss.item(),
+                        "mse_H": loss_H.item(),
+                        "mae_H": mae_H,
+                    }
+                )
 
             # Save best model
             if loss.item() < best_loss:
@@ -1000,7 +1117,8 @@ if __name__ == "__main__":
             final_metrics[f"final/{key}_mae"] = block_mae
 
         # Log final metrics to WandB
-        wandb.log(final_metrics)
+        if not args.no_wandb:
+            wandb.log(final_metrics)
 
     # Save final model
     final_model_path = CONFIG["checkpoint_dir"] / "final_model.pt"
@@ -1029,4 +1147,5 @@ if __name__ == "__main__":
     print("\n✓ Minimal overfit study finished successfully!")
 
     # Finish WandB run
-    wandb.finish()
+    if not args.no_wandb:
+        wandb.finish()
