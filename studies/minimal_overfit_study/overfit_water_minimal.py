@@ -37,7 +37,6 @@ from ase.neighborlist import neighbor_list
 # Import only low-level data structures
 from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
-from net.common import build_hidden_irreps
 
 # WandB for logging
 import wandb
@@ -390,8 +389,16 @@ if __name__ == "__main__":
     # =============================================================================
     print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
 
-    hidden_irreps = build_hidden_irreps(
-        l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
+    # hidden_irreps = build_hidden_irreps(
+    #     l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
+    # )
+    hidden_irreps = Irreps(
+        f"{CONFIG['hidden_dim']}x0e\
+        + {CONFIG['hidden_dim']//2}x1o\
+        + {CONFIG['hidden_dim']//4}x2e\
+        + {CONFIG['hidden_dim']//8}x3o\
+        + {CONFIG['hidden_dim']//16}x4e\
+    "
     )
     print(f"  Hidden irreps: {hidden_irreps}")
 

@@ -320,12 +320,37 @@ class MinimalMessageBlock(nn.Module):
             f"      [MessageBlock.forward] Input: nodes {node_feat.shape} (irreps: {self.node_irreps}), edges {edge_feat.shape} (irreps: {self.edge_irreps})"
         )
 
-        # Edge update: concatenate src node, dst node, and edge features
         src_idx = edge_index[0]
         dst_idx = edge_index[1]
 
-        src_node = node_feat[src_idx]
-        dst_node = node_feat[dst_idx]
+        # Node update first (like DeepH-E3): aggregate current edge messages + self-connection
+        messages = torch.zeros(N, edge_feat.shape[1], device=edge_feat.device)
+        messages.index_add_(0, dst_idx, edge_feat)
+        print(f"                            Messages aggregated: {messages.shape}")
+
+        # Concatenate with self-connection
+        node_concat = torch.cat([messages, node_feat], dim=-1)
+        node_linear = self.node_update_lin(node_concat)
+        node_feat_new = self.node_gate(node_linear)
+        node_feat_new = self.node_norm(node_feat_new, batch_node)
+
+        print(
+            f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
+        )
+        print(
+            f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
+        )
+        log_activation_magnitudes(
+            node_feat_new,
+            self.node_gate.irreps_out,
+            "Node activations",
+            f"Layer{self.layer_idx+1}_Node",
+            log_to_wandb,
+        )
+
+        # Edge update second: use updated nodes
+        src_node = node_feat_new[src_idx]
+        dst_node = node_feat_new[dst_idx]
 
         edge_concat = torch.cat([src_node, dst_node, edge_feat], dim=-1)
         print(
@@ -348,31 +373,6 @@ class MinimalMessageBlock(nn.Module):
             self.edge_gate.irreps_out,
             "Edge activations",
             f"Layer{self.layer_idx+1}_Edge",
-            log_to_wandb,
-        )
-
-        # Node update: aggregate edge messages + self-connection
-        messages = torch.zeros(N, edge_feat_new.shape[1], device=edge_feat_new.device)
-        messages.index_add_(0, dst_idx, edge_feat_new)
-        print(f"                            Messages aggregated: {messages.shape}")
-
-        # Concatenate with self-connection
-        node_concat = torch.cat([messages, node_feat], dim=-1)
-        node_linear = self.node_update_lin(node_concat)
-        node_feat_new = self.node_gate(node_linear)
-        node_feat_new = self.node_norm(node_feat_new, batch_node)
-
-        print(
-            f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
-        )
-        print(
-            f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
-        )
-        log_activation_magnitudes(
-            node_feat_new,
-            self.node_gate.irreps_out,
-            "Node activations",
-            f"Layer{self.layer_idx+1}_Node",
             log_to_wandb,
         )
 
