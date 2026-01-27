@@ -249,17 +249,22 @@ class MinimalMessageBlock(nn.Module):
         self.hidden_irreps = hidden_irreps
         self.layer_idx = layer_idx
 
-        # Edge update: concat(src_node, dst_node, edge) ⊗ SH → TP output
-        concat_irreps = node_irreps + node_irreps + edge_irreps
-
-        # Gate setup for edge update
+        # Gate setup for both updates
         irreps_scalars = Irreps([(mul, ir) for mul, ir in hidden_irreps if ir.l == 0])
         irreps_gated = Irreps([(mul, ir) for mul, ir in hidden_irreps if ir.l > 0])
         irreps_gates = Irreps([(mul, "0e") for mul, _ in irreps_gated])
         irreps_tp_out = irreps_scalars + irreps_gates + irreps_gated
 
+        # Node update: aggregate messages (edge_irreps) + self-connection (node_irreps)
+        # Output will be hidden_irreps
+        # (No TP needed, just linear projection)
+
+        # Edge update: concat(updated_src_node, updated_dst_node, edge) ⊗ SH → TP output
+        # After node update, nodes have hidden_irreps
+        edge_concat_irreps = hidden_irreps + hidden_irreps + edge_irreps
+
         self.edge_update_tp = FullyConnectedTensorProduct(
-            concat_irreps,
+            edge_concat_irreps,
             sh_irreps,
             irreps_tp_out,
             internal_weights=True,
@@ -293,16 +298,14 @@ class MinimalMessageBlock(nn.Module):
         self.node_norm = e3LayerNorm(self.node_gate.irreps_out)
 
         print(f"    [MessageBlock] Irreps:")
+        print(f"      Node update: concat(messages {edge_irreps}, self {node_irreps})")
+        print(f"                   → Linear: {irreps_node_tp_out}")
+        print(f"                   → Gate: {self.node_gate.irreps_out}")
         print(
-            f"      Edge update: concat({node_irreps}, {node_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
+            f"      Edge update: concat({hidden_irreps}, {hidden_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
         )
         print(f"                   → TP: {irreps_tp_out}")
         print(f"                   → Gate: {self.edge_gate.irreps_out}")
-        print(
-            f"      Node update: concat(messages {hidden_irreps}, self {node_irreps})"
-        )
-        print(f"                   → Linear: {irreps_node_tp_out}")
-        print(f"                   → Gate: {self.node_gate.irreps_out}")
 
     def forward(
         self,
