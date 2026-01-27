@@ -34,6 +34,7 @@ from ase.neighborlist import neighbor_list
 from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
 from core.block_irrep_mapper import BlockIrrepMapper
+from net.common import build_hidden_irreps
 
 # Import network classes and utilities from common module
 from common import (
@@ -134,7 +135,7 @@ def compute_metrics(H_pred, H_gt, S):
     }
 
 
-def build_graph_inputs(snapshot, cutoff_radius, device):
+def build_graph_inputs(snapshot, cutoff_radius, n_radial, l_max, device):
     """Build graph inputs from a snapshot (same as in training script)."""
 
     positions = snapshot.positions.to(device)
@@ -181,7 +182,7 @@ def build_graph_inputs(snapshot, cutoff_radius, device):
     edge_dist = torch.linalg.norm(edge_vec, dim=1)
 
     # Spherical harmonics
-    sh_irreps = Irreps.spherical_harmonics(2)  # l_max=2
+    sh_irreps = Irreps.spherical_harmonics(l_max)
     edge_vec_norm = edge_vec.clone()
     non_zero_mask = edge_dist > 1e-6
     edge_vec_norm[non_zero_mask] = edge_vec[non_zero_mask] / edge_dist[
@@ -194,11 +195,11 @@ def build_graph_inputs(snapshot, cutoff_radius, device):
         edge_dist,
         start=0.0,
         end=cutoff_radius,
-        number=16,  # n_radial
+        number=n_radial,
         basis="gaussian",
         cutoff=False,
     )
-    edge_length_emb = edge_length_emb * 16**0.5
+    edge_length_emb = edge_length_emb * n_radial**0.5
 
     # Edge type indices
     element_to_idx = {elem: idx for idx, elem in enumerate(orbital_cfg.elements())}
@@ -513,14 +514,23 @@ def main():
     print(f"  Rotation matrix:\n{R}")
 
     # Build network
-    print(f"\n[NETWORK] Reconstructing network architecture...")
+    print(f"\n[NETWORK] Reconstructing network architecture from config...")
     orbital_cfg = snapshot_orig.hamiltonian.orbital_cfg
     num_elements = len(orbital_cfg.elements())
     num_edge_types = num_elements**2
-    hidden_irreps = Irreps(
-        f"{config['hidden_dim']}x0e + {config['hidden_dim']}x1o + {config['hidden_dim']}x2e"
+
+    # Reconstruct irreps using the same function as training
+    print(
+        f"  Config: l_max={config['l_max']}, hidden_dim={config['hidden_dim']}, n_radial={config['n_radial']}, num_layers={config['num_layers']}"
+    )
+
+    hidden_irreps = build_hidden_irreps(
+        l_max=config["l_max"], base_dim=config["hidden_dim"], use_odd_features=True
     )
     sh_irreps = Irreps.spherical_harmonics(config["l_max"])
+
+    print(f"  Hidden irreps: {hidden_irreps}")
+    print(f"  SH irreps: {sh_irreps}")
 
     mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch.float32)
 
@@ -532,6 +542,7 @@ def main():
         sh_irreps=sh_irreps,
         num_layers=config["num_layers"],
         mapper=mapper,
+        verbose=False,  # Disable verbose output during analysis
     ).to(device)
 
     network.load_state_dict(checkpoint["model_state_dict"])
@@ -542,13 +553,23 @@ def main():
     # Build graph inputs for original
     print(f"\n[GRAPH] Building graph inputs for original structure...")
     graph_inputs_orig = build_graph_inputs(
-        snapshot_orig, config["cutoff_radius"], device
+        snapshot_orig,
+        config["cutoff_radius"],
+        config["n_radial"],
+        config["l_max"],
+        device,
     )
     print(f"  Total edges: {graph_inputs_orig['edge_index'].shape[1]}")
 
     # Build graph inputs for rotated
     print(f"\n[GRAPH] Building graph inputs for rotated structure...")
-    graph_inputs_rot = build_graph_inputs(snapshot_rot, config["cutoff_radius"], device)
+    graph_inputs_rot = build_graph_inputs(
+        snapshot_rot,
+        config["cutoff_radius"],
+        config["n_radial"],
+        config["l_max"],
+        device,
+    )
     print(f"  Total edges: {graph_inputs_rot['edge_index'].shape[1]}")
 
     # Predict on original
