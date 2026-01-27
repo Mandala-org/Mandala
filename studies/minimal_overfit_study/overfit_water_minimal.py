@@ -909,7 +909,7 @@ if __name__ == "__main__":
 
         # Temporarily suppress forward pass logging
         verbose = (epoch % CONFIG["log_interval"] == 0) and (
-            epoch < 10 or epoch % (CONFIG["log_interval"] * 5) == 0
+            epoch < 10 or epoch % (CONFIG["log_interval"]) == 0
         )
 
         if not verbose:
