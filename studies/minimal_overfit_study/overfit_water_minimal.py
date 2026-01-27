@@ -30,9 +30,12 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from e3nn.o3 import Irreps, spherical_harmonics, Linear, FullyConnectedTensorProduct
+from e3nn.nn import Gate
 from e3nn.math import soft_one_hot_linspace
 from ase import Atoms
 from ase.neighborlist import neighbor_list
+from torch_scatter import scatter
+from torch_geometric.utils import degree
 
 # Import only low-level data structures
 from data.snapshot import Snapshot
@@ -48,6 +51,95 @@ print("=" * 80)
 # =============================================================================
 # NETWORK CLASS DEFINITIONS
 # =============================================================================
+
+
+class e3LayerNorm(nn.Module):
+    """E(3)-equivariant layer normalization (from DeepH-E3)."""
+
+    def __init__(self, irreps_in, eps=1e-5, affine=True, normalization="component"):
+        super().__init__()
+
+        self.irreps_in = Irreps(irreps_in)
+        self.eps = eps
+        self.normalization = normalization
+
+        if affine:
+            ib, iw = 0, 0
+            weight_slices, bias_slices = [], []
+            for mul, ir in irreps_in:
+                if ir.is_scalar():  # bias only to 0e
+                    bias_slices.append(slice(ib, ib + mul))
+                    ib += mul
+                else:
+                    bias_slices.append(None)
+                weight_slices.append(slice(iw, iw + mul))
+                iw += mul
+            self.weight = nn.Parameter(torch.ones([iw]))
+            self.bias = nn.Parameter(torch.zeros([ib]))
+            self.bias_slices = bias_slices
+            self.weight_slices = weight_slices
+        else:
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
+
+        print(f"    [e3LayerNorm] Irreps: {self.irreps_in}, affine={affine}")
+
+    def forward(self, x: torch.Tensor, batch: torch.Tensor = None):
+        if batch is None:
+            batch = torch.full([x.shape[0]], 0, dtype=torch.int64, device=x.device)
+
+        batch_size = int(batch.max()) + 1
+        batch_degree = (
+            degree(batch, batch_size, dtype=torch.int64).clamp_(min=1).to(dtype=x.dtype)
+        )
+
+        out = []
+        ix = 0
+        for index, (mul, ir) in enumerate(self.irreps_in):
+            field = x[:, ix : ix + mul * ir.dim].reshape(-1, mul, ir.dim)
+
+            # Subtract mean for scalars
+            if ir.l == 0:
+                mean = (
+                    scatter(
+                        field, batch, dim=0, dim_size=batch_size, reduce="add"
+                    ).mean(dim=1, keepdim=True)
+                    / batch_degree[:, None, None]
+                )
+                field = field - mean[batch]
+
+            # Normalize
+            norm = scatter(
+                field.abs().pow(2), batch, dim=0, dim_size=batch_size, reduce="mean"
+            ).mean(dim=[1, 2], keepdim=True)
+            if self.normalization == "norm":
+                norm = norm * ir.dim
+            field = field / (norm.sqrt()[batch] + self.eps)
+
+            # Affine transformation
+            if self.weight is not None:
+                weight = self.weight[self.weight_slices[index]]
+                field = field * weight[None, :, None]
+            if self.bias is not None and ir.is_scalar():
+                bias = self.bias[self.bias_slices[index]]
+                field = field + bias[None, :, None]
+
+            out.append(field.reshape(-1, mul * ir.dim))
+            ix += mul * ir.dim
+
+        return torch.cat(out, dim=-1)
+
+
+def log_activation_magnitudes(features, irreps, name=""):
+    """Log per-irrep activation magnitudes."""
+    stats = []
+    ix = 0
+    for mul, ir in irreps:
+        field = features[:, ix : ix + mul * ir.dim]
+        mag = torch.norm(field, dim=-1).mean().item()
+        stats.append(f"{ir}: {mag:.4f}")
+        ix += mul * ir.dim
+    print(f"      [{name}] Magnitudes per irrep: {', '.join(stats)}")
 
 
 class MinimalNodeEncoder(nn.Module):
@@ -70,11 +162,10 @@ class MinimalNodeEncoder(nn.Module):
 
 
 class MinimalEdgeEncoder(nn.Module):
-    """Encode edge distance + edge type + spherical harmonics."""
+    """Encode edge distance + edge type + spherical harmonics with Gate nonlinearity."""
 
     def __init__(self, n_radial, num_edge_types, hidden_irreps, sh_irreps):
         super().__init__()
-        self.irreps_out = hidden_irreps
         self.num_edge_types = num_edge_types
 
         # Linear projection from radial basis + edge type one-hot to scalars
@@ -83,22 +174,44 @@ class MinimalEdgeEncoder(nn.Module):
         scalar_dim = sum(mul for mul, ir in hidden_irreps if ir == Irrep("0e"))
         self.radial_proj = nn.Linear(n_radial + num_edge_types, scalar_dim)
 
-        # Tensor product: scalars ⊗ SH → hidden_irreps
+        # Gate nonlinearity setup
+        irreps_scalars = Irreps([(mul, ir) for mul, ir in hidden_irreps if ir.l == 0])
+        irreps_gated = Irreps([(mul, ir) for mul, ir in hidden_irreps if ir.l > 0])
+        irreps_gates = Irreps([(mul, "0e") for mul, _ in irreps_gated])
+
+        # TP output must produce both scalars, gates, and gated features
+        irreps_tp_out = irreps_scalars + irreps_gates + irreps_gated
+
+        # Tensor product: scalars ⊗ SH → TP output
         self.tp = FullyConnectedTensorProduct(
             Irreps(f"{scalar_dim}x0e"),
             sh_irreps,
-            hidden_irreps,
+            irreps_tp_out,
             internal_weights=True,
             shared_weights=True,
         )
+
+        # Gate nonlinearity
+        self.gate = Gate(
+            irreps_scalars,
+            [F.silu] * len(irreps_scalars),
+            irreps_gates,
+            [torch.sigmoid] * len(irreps_gates),
+            irreps_gated,
+        )
+        self.irreps_out = self.gate.irreps_out
+
+        # Layer norm
+        self.norm = e3LayerNorm(self.irreps_out)
+
         print(
             f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
         )
-        print(
-            f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → Irreps out: {hidden_irreps}"
-        )
+        print(f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → {irreps_tp_out}")
+        print(f"                  Gate: {irreps_tp_out} → {self.irreps_out}")
+        print(f"                  Norm: {self.irreps_out}")
 
-    def forward(self, edge_length_emb, edge_type_idx, edge_sh):
+    def forward(self, edge_length_emb, edge_type_idx, edge_sh, batch_edge):
         # Create edge type one-hot
         edge_type_onehot = F.one_hot(
             edge_type_idx, num_classes=self.num_edge_types
@@ -111,7 +224,14 @@ class MinimalEdgeEncoder(nn.Module):
         radial_feat = self.radial_proj(combined)  # (E, scalar_dim)
 
         # Tensor product with spherical harmonics
-        edge_feat = self.tp(radial_feat, edge_sh)
+        tp_out = self.tp(radial_feat, edge_sh)
+
+        # Gate nonlinearity
+        edge_feat = self.gate(tp_out)
+
+        # Layer norm
+        edge_feat = self.norm(edge_feat, batch_edge)
+
         print(
             f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} → Combined: {combined.shape}"
         )
@@ -122,13 +242,17 @@ class MinimalEdgeEncoder(nn.Module):
             f"                            ⊗ SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
         )
         print(
-            f"                            → Output: {edge_feat.shape} (irreps: {self.irreps_out})"
+            f"                            → TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
         )
+        print(
+            f"                            → Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
+        )
+        log_activation_magnitudes(edge_feat, self.irreps_out, "EdgeEncoder activations")
         return edge_feat
 
 
 class MinimalMessageBlock(nn.Module):
-    """Message passing layer with edge update + node update (like DeepH-E3/E3GNN)."""
+    """Message passing layer with edge update + node update with Gate and LayerNorm."""
 
     def __init__(self, node_irreps, edge_irreps, hidden_irreps, sh_irreps):
         super().__init__()
@@ -136,30 +260,60 @@ class MinimalMessageBlock(nn.Module):
         self.edge_irreps = edge_irreps
         self.hidden_irreps = hidden_irreps
 
-        # Edge update: concat(src_node, dst_node, edge) ⊗ SH → new edge
+        # Edge update: concat(src_node, dst_node, edge) ⊗ SH → TP output
         concat_irreps = node_irreps + node_irreps + edge_irreps
+
+        # Gate setup for edge update
+        irreps_scalars = Irreps([(mul, ir) for mul, ir in hidden_irreps if ir.l == 0])
+        irreps_gated = Irreps([(mul, ir) for mul, ir in hidden_irreps if ir.l > 0])
+        irreps_gates = Irreps([(mul, "0e") for mul, _ in irreps_gated])
+        irreps_tp_out = irreps_scalars + irreps_gates + irreps_gated
+
         self.edge_update_tp = FullyConnectedTensorProduct(
             concat_irreps,
             sh_irreps,
-            hidden_irreps,
+            irreps_tp_out,
             internal_weights=True,
             shared_weights=True,
         )
 
-        # Node update: aggregate messages + self-connection
-        self.node_update_lin = Linear(hidden_irreps + node_irreps, hidden_irreps)
+        self.edge_gate = Gate(
+            irreps_scalars,
+            [F.silu] * len(irreps_scalars),
+            irreps_gates,
+            [torch.sigmoid] * len(irreps_gates),
+            irreps_gated,
+        )
+        self.edge_norm = e3LayerNorm(self.edge_gate.irreps_out)
+
+        # Node update: aggregate messages + self-connection → TP output
+        irreps_node_tp_out = irreps_scalars + irreps_gates + irreps_gated
+        self.node_update_lin = Linear(hidden_irreps + node_irreps, irreps_node_tp_out)
+
+        self.node_gate = Gate(
+            irreps_scalars,
+            [F.silu] * len(irreps_scalars),
+            irreps_gates,
+            [torch.sigmoid] * len(irreps_gates),
+            irreps_gated,
+        )
+        self.node_norm = e3LayerNorm(self.node_gate.irreps_out)
 
         print(f"    [MessageBlock] Irreps:")
         print(
             f"      Edge update: concat({node_irreps}, {node_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
         )
-        print(f"                   → Irreps out: {hidden_irreps}")
+        print(f"                   → TP: {irreps_tp_out}")
+        print(f"                   → Gate: {self.edge_gate.irreps_out}")
         print(
             f"      Node update: concat(messages {hidden_irreps}, self {node_irreps})"
         )
-        print(f"                   → Irreps out: {hidden_irreps}")
+        print(f"                   → Linear: {irreps_node_tp_out}")
+        print(f"                   → Gate: {self.node_gate.irreps_out}")
 
-    def forward(self, node_feat, edge_feat, edge_index, edge_sh):
+    def forward(
+        self, node_feat, edge_feat, edge_index, edge_sh, batch_node, batch_edge
+    ):
         N = node_feat.shape[0]
 
         print(
@@ -179,23 +333,39 @@ class MinimalMessageBlock(nn.Module):
         )
 
         # Apply TP with spherical harmonics
-        edge_feat_new = self.edge_update_tp(edge_concat, edge_sh)
+        edge_tp = self.edge_update_tp(edge_concat, edge_sh)
+        edge_feat_new = self.edge_gate(edge_tp)
+        edge_feat_new = self.edge_norm(edge_feat_new, batch_edge)
+
         print(
-            f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_feat_new.shape} (irreps: {self.hidden_irreps})"
+            f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_tp.shape}"
+        )
+        print(
+            f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
+        )
+        log_activation_magnitudes(
+            edge_feat_new, self.edge_gate.irreps_out, "Edge activations"
         )
 
         # Node update: aggregate edge messages + self-connection
         messages = torch.zeros(N, edge_feat_new.shape[1], device=edge_feat_new.device)
         messages.index_add_(0, dst_idx, edge_feat_new)
-        print(
-            f"                            Messages aggregated: {messages.shape} (irreps: {self.hidden_irreps})"
-        )
+        print(f"                            Messages aggregated: {messages.shape}")
 
         # Concatenate with self-connection
         node_concat = torch.cat([messages, node_feat], dim=-1)
-        node_feat_new = self.node_update_lin(node_concat)
+        node_linear = self.node_update_lin(node_concat)
+        node_feat_new = self.node_gate(node_linear)
+        node_feat_new = self.node_norm(node_feat_new, batch_node)
+
         print(
-            f"                            Node update: {node_concat.shape} → {node_feat_new.shape} (irreps: {self.hidden_irreps})"
+            f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
+        )
+        print(
+            f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
+        )
+        log_activation_magnitudes(
+            node_feat_new, self.node_gate.irreps_out, "Node activations"
         )
 
         return node_feat_new, edge_feat_new
@@ -297,17 +467,21 @@ class MinimalNetwork(nn.Module):
         edge_shift,
         edge_length_emb,
         edge_sh,
+        batch_node,
+        batch_edge,
     ):
         print("    [Forward] Starting forward pass...")
 
         # Encode
         node_feat = self.node_enc(node_type_idx)
-        edge_feat = self.edge_enc(edge_length_emb, edge_type_idx, edge_sh)
+        edge_feat = self.edge_enc(edge_length_emb, edge_type_idx, edge_sh, batch_edge)
 
         # Message passing (both nodes and edges get updated)
         for i, mp_layer in enumerate(self.mp_layers):
             print(f"    [Forward] Message passing layer {i + 1}/{len(self.mp_layers)}")
-            node_feat, edge_feat = mp_layer(node_feat, edge_feat, edge_index, edge_sh)
+            node_feat, edge_feat = mp_layer(
+                node_feat, edge_feat, edge_index, edge_sh, batch_node, batch_edge
+            )
 
         # Use edge features for head
         head_feat = edge_feat
@@ -339,7 +513,7 @@ if __name__ == "__main__":
         # Training
         "lr": 1e-3,  # Aggressive learning rate for overfitting
         "num_epochs": 1000,
-        "log_interval": 50,
+        "log_interval": 200,
         # Device
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         # Target
@@ -553,6 +727,11 @@ if __name__ == "__main__":
     print(f"  Edge types (first 10): {edge_type_strs[:10]}")
     print(f"  Edge type indices (first 10): {edge_type_idx[:10].tolist()}")
 
+    # Create batch indices (all nodes/edges belong to the same graph)
+    batch_node = torch.zeros(num_atoms, dtype=torch.long, device=device)
+    batch_edge = torch.zeros(edge_index.shape[1], dtype=torch.long, device=device)
+    print(f"\n  Batch indices: nodes {batch_node.shape}, edges {batch_edge.shape}")
+
     # =============================================================================
     # DEFINE MINIMAL NETWORK
     # =============================================================================
@@ -629,6 +808,8 @@ if __name__ == "__main__":
             edge_shift,
             edge_length_emb,
             edge_sh,
+            batch_node,
+            batch_edge,
         )
 
         if not verbose:
@@ -744,7 +925,7 @@ if __name__ == "__main__":
                 print(f"  ✓ Best model saved (loss: {loss.item():.6e})")
 
             # Check for convergence
-            if loss.item() < 1e-8:
+            if loss.item() < 1e-10:
                 print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
                 break
 
@@ -764,6 +945,8 @@ if __name__ == "__main__":
             edge_shift,
             edge_length_emb,
             edge_sh,
+            batch_node,
+            batch_edge,
         )
 
         # Reconstruct full predictions
