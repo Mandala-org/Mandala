@@ -167,12 +167,16 @@ class MinimalEdgeEncoder(nn.Module):
             shared_weights=True,
         )
 
-        # Gate nonlinearity
+        # Gate nonlinearity with parity-aware activations (like DeepH-E3)
+        # Use silu for even parity (+1), tanh for odd parity (-1)
+        act_scalar = {1: F.silu, -1: torch.tanh}
+        act_gate = {1: torch.sigmoid, -1: torch.tanh}
+
         self.gate = Gate(
             irreps_scalars,
-            [F.silu] * len(irreps_scalars),
+            [act_scalar[ir.p] for _, ir in irreps_scalars],
             irreps_gates,
-            [torch.sigmoid] * len(irreps_gates),
+            [act_gate[ir.p] for _, ir in irreps_gates],
             irreps_gated,
         )
         self.irreps_out = self.gate.irreps_out
@@ -262,11 +266,15 @@ class MinimalMessageBlock(nn.Module):
             shared_weights=True,
         )
 
+        # Gate nonlinearity with parity-aware activations
+        act_scalar = {1: F.silu, -1: torch.tanh}
+        act_gate = {1: torch.sigmoid, -1: torch.tanh}
+
         self.edge_gate = Gate(
             irreps_scalars,
-            [F.silu] * len(irreps_scalars),
+            [act_scalar[ir.p] for _, ir in irreps_scalars],
             irreps_gates,
-            [torch.sigmoid] * len(irreps_gates),
+            [act_gate[ir.p] for _, ir in irreps_gates],
             irreps_gated,
         )
         self.edge_norm = e3LayerNorm(self.edge_gate.irreps_out)
@@ -277,9 +285,9 @@ class MinimalMessageBlock(nn.Module):
 
         self.node_gate = Gate(
             irreps_scalars,
-            [F.silu] * len(irreps_scalars),
+            [act_scalar[ir.p] for _, ir in irreps_scalars],
             irreps_gates,
-            [torch.sigmoid] * len(irreps_gates),
+            [act_gate[ir.p] for _, ir in irreps_gates],
             irreps_gated,
         )
         self.node_norm = e3LayerNorm(self.node_gate.irreps_out)

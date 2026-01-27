@@ -37,6 +37,7 @@ from ase.neighborlist import neighbor_list
 # Import only low-level data structures
 from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
+from net.common import build_hidden_irreps
 
 # WandB for logging
 import wandb
@@ -389,8 +390,8 @@ if __name__ == "__main__":
     # =============================================================================
     print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
 
-    hidden_irreps = Irreps(
-        f"{CONFIG['hidden_dim']}x0e + {CONFIG['hidden_dim']}x1o + {CONFIG['hidden_dim']}x2e"
+    hidden_irreps = build_hidden_irreps(
+        l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
     )
     print(f"  Hidden irreps: {hidden_irreps}")
 
@@ -518,6 +519,9 @@ if __name__ == "__main__":
         # Backward
         loss.backward()
         optimizer.step()
+
+        # Log training loss at every step
+        wandb.log({"train/loss_step": loss.item(), "epoch": epoch})
 
         # Logging
         if epoch % CONFIG["log_interval"] == 0:
