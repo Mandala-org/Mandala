@@ -46,242 +46,8 @@ print("MINIMAL WATER OVERFIT STUDY - EXPLICIT IMPLEMENTATION")
 print("=" * 80)
 
 # =============================================================================
-# CONFIGURATION
+# NETWORK CLASS DEFINITIONS
 # =============================================================================
-print("\n[CONFIG] Setting up hyperparameters...")
-
-CONFIG = {
-    # Data
-    "data_path": project_root / "data/small/H2O/original/H2O.matrix",
-    "info_path": project_root / "data/small/H2O/original/H2O.info.out",
-    # Network architecture
-    "hidden_dim": 32,  # Small for faster overfitting
-    "l_max": 2,  # Up to d orbitals
-    "num_layers": 2,  # Minimal depth
-    "cutoff_radius": 8.0,  # Angstroms
-    "n_radial": 16,  # Radial basis functions
-    # Training
-    "lr": 1e-3,  # Aggressive learning rate for overfitting
-    "num_epochs": 1000,
-    "log_interval": 50,
-    # Device
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-    # Target
-    "train_target": "matrix",  # Train on matrix blocks, not irrep vectors
-    # Checkpointing
-    "checkpoint_dir": project_root / "studies/minimal_overfit_study/checkpoints",
-}
-
-# Initialize WandB
-wandb.init(
-    project="mandala-minimal-overfit",
-    name="water-single-minimal",
-    config=CONFIG,
-)
-
-print(f"  Device: {CONFIG['device']}")
-print(f"  Hidden dim: {CONFIG['hidden_dim']}")
-print(f"  L_max: {CONFIG['l_max']}")
-print(f"  Num layers: {CONFIG['num_layers']}")
-print(f"  Cutoff radius: {CONFIG['cutoff_radius']} Å")
-print(f"  Learning rate: {CONFIG['lr']}")
-print(f"  Epochs: {CONFIG['num_epochs']}")
-
-device = torch.device(CONFIG["device"])
-
-# Create checkpoint directory
-CONFIG["checkpoint_dir"].mkdir(parents=True, exist_ok=True)
-print(f"  Checkpoint directory: {CONFIG['checkpoint_dir']}")
-
-# =============================================================================
-# LOAD DATA
-# =============================================================================
-print("\n[DATA] Loading single water snapshot...")
-
-# Load snapshot using Snapshot.from_openmx
-print(f"  Matrix file: {CONFIG['data_path']}")
-print(f"  Info file: {CONFIG['info_path']}")
-
-snapshot = Snapshot.from_openmx(
-    matrix_path=CONFIG["data_path"],
-    info_path=CONFIG["info_path"],
-    convention="e3nn",  # Automatically converts to e3nn basis
-    symmetrize_density=True,
-    cutoff_radius=None,  # No filtering, we'll use all edges
-    dtype=torch.float32,
-)
-
-print(f"\n  Snapshot loaded:")
-print(f"    Elements: {snapshot.hamiltonian.atoms}")
-print(f"    Num atoms: {len(snapshot.hamiltonian.atoms)}")
-print(f"    Positions shape: {snapshot.positions.shape}")
-print(f"    Box shape: {snapshot.box.shape if snapshot.box is not None else None}")
-print(f"    Basis: {snapshot.hamiltonian.basis}")
-
-print(f"\n  Matrices:")
-print(f"    Hamiltonian keys: {list(snapshot.hamiltonian.pair_blocks.keys())}")
-print(f"    Overlap keys: {list(snapshot.overlap.pair_blocks.keys())}")
-print(f"    Density keys: {list(snapshot.density.pair_blocks.keys())}")
-
-print(f"\n  Hamiltonian blocks:")
-for key, blocks in snapshot.hamiltonian.pair_blocks.items():
-    print(
-        f"    {key}: shape {blocks.shape}, edges {snapshot.hamiltonian.pair_edges[key].shape}"
-    )
-
-# Extract components
-hamiltonian_e3nn = snapshot.hamiltonian.to(device)
-overlap_e3nn = snapshot.overlap.to(device)
-density_e3nn = snapshot.density.to(device)
-orbital_cfg = snapshot.hamiltonian.orbital_cfg
-positions = snapshot.positions.to(device)
-box = snapshot.box.to(device) if snapshot.box is not None else None
-atoms_list = list(snapshot.hamiltonian.atoms)
-
-print(f"\n  Orbital configuration:")
-for elem in orbital_cfg.elements():
-    irreps = orbital_cfg.element_to_irreps[elem]
-    print(f"    {elem}: {irreps} (dim={irreps.dim})")
-
-# Create BlockIrrepMapper
-print("\n[MAPPER] Creating BlockIrrepMapper...")
-mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch.float32)
-print(f"  Mapper edge types: {mapper.edge_types}")
-print(f"  Mapper edge_type2idx: {mapper.edge_type2idx}")
-
-# Store target as matrix blocks (train_target = "matrix")
-print("\n[TARGETS] Storing target as matrix blocks...")
-target_H_matrix = hamiltonian_e3nn
-
-print("  Target matrix blocks:")
-for key in target_H_matrix.pair_blocks.keys():
-    block_shape = target_H_matrix.pair_blocks[key].shape
-    edge_shape = target_H_matrix.pair_edges[key].shape
-    pair_irreps = mapper.get_pair_irreps(key)
-    print(f"    {key}: blocks {block_shape}, edges {edge_shape}, irreps {pair_irreps}")
-
-# =============================================================================
-# BUILD GRAPH
-# =============================================================================
-print("\n[GRAPH] Constructing molecular graph...")
-
-num_atoms = len(atoms_list)
-
-print(f"  Atoms: {atoms_list}")
-print(f"  Positions (e3nn frame):\n{positions}")
-if box is not None:
-    print(f"  Box (e3nn frame):\n{box}")
-
-# Create ASE atoms object for neighbor list
-ase_atoms = Atoms(
-    symbols=atoms_list,
-    positions=positions.cpu().numpy(),
-    cell=box.cpu().numpy() if box is not None else None,
-    pbc=box is not None,
-)
-
-# Find neighbors using ASE
-print(f"\n  Finding neighbors within {CONFIG['cutoff_radius']} Å...")
-src, dst, offsets = neighbor_list(
-    "ijS", ase_atoms, CONFIG["cutoff_radius"], self_interaction=False
-)
-
-print(f"  Found {len(src)} off-diagonal edges")
-print(f"  Edge list (first 10):")
-for i in range(min(10, len(src))):
-    print(f"    {src[i]} → {dst[i]} (offset: {offsets[i]})")
-
-# Add self-edges
-self_src = torch.arange(num_atoms, dtype=torch.long, device=device)
-self_dst = torch.arange(num_atoms, dtype=torch.long, device=device)
-self_offsets = torch.zeros((num_atoms, 3), dtype=torch.long, device=device)
-
-# Combine all edges
-all_src = torch.cat([self_src, torch.from_numpy(src).to(device)])
-all_dst = torch.cat([self_dst, torch.from_numpy(dst).to(device)])
-all_offsets = torch.cat([self_offsets, torch.from_numpy(offsets).to(device).long()])
-
-edge_index = torch.stack([all_src, all_dst], dim=0)  # (2, E)
-edge_shift = all_offsets.T  # (3, E)
-
-num_self_edges = num_atoms
-print(
-    f"  Total edges: {edge_index.shape[1]} ({num_self_edges} self + {edge_index.shape[1] - num_self_edges} off-diagonal)"
-)
-
-# Compute edge vectors and distances
-print("\n  Computing edge displacements and distances...")
-if box is not None:
-    shift_float = edge_shift.T.float()
-    edge_vec = positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
-else:
-    edge_vec = positions[edge_index[1]] - positions[edge_index[0]]
-
-edge_dist = torch.linalg.norm(edge_vec, dim=1)
-
-print(
-    f"  Edge distances (Å): min={edge_dist.min().item():.3f}, max={edge_dist.max().item():.3f}, mean={edge_dist.mean().item():.3f}"
-)
-print(f"  Self-edge distances: {edge_dist[:num_self_edges]}")
-
-# Compute spherical harmonics
-print(f"\n  Computing spherical harmonics (l_max={CONFIG['l_max']})...")
-sh_irreps = Irreps.spherical_harmonics(CONFIG["l_max"])
-print(f"  SH irreps: {sh_irreps}")
-
-# Normalize edge vectors (avoid division by zero for self-edges)
-edge_vec_norm = edge_vec.clone()
-non_zero_mask = edge_dist > 1e-6
-edge_vec_norm[non_zero_mask] = edge_vec[non_zero_mask] / edge_dist[
-    non_zero_mask
-].unsqueeze(-1)
-
-edge_sh = spherical_harmonics(sh_irreps, edge_vec_norm, normalize=False)
-print(f"  Edge SH shape: {edge_sh.shape}")
-
-# Radial basis functions
-print(f"\n  Computing radial embeddings ({CONFIG['n_radial']} basis functions)...")
-edge_length_emb = soft_one_hot_linspace(
-    edge_dist,
-    start=0.0,
-    end=CONFIG["cutoff_radius"],
-    number=CONFIG["n_radial"],
-    basis="gaussian",
-    cutoff=False,
-)
-edge_length_emb = edge_length_emb * CONFIG["n_radial"] ** 0.5  # Normalization
-print(f"  Edge length embedding shape: {edge_length_emb.shape}")
-
-# Edge type indices
-print("\n  Computing edge type indices...")
-element_to_idx = {elem: idx for idx, elem in enumerate(orbital_cfg.elements())}
-print(f"  Element to index: {element_to_idx}")
-
-node_type_idx = torch.tensor([element_to_idx[a] for a in atoms_list], device=device)
-src_type = node_type_idx[edge_index[0]]
-dst_type = node_type_idx[edge_index[1]]
-
-# Create edge type strings and map to indices
-edge_type_strs = [
-    f"{atoms_list[edge_index[0, i].item()]}-{atoms_list[edge_index[1, i].item()]}"
-    for i in range(edge_index.shape[1])
-]
-edge_type_idx = torch.tensor(
-    [mapper.edge_type2idx[et] for et in edge_type_strs], device=device
-)
-
-print(f"  Edge types (first 10): {edge_type_strs[:10]}")
-print(f"  Edge type indices (first 10): {edge_type_idx[:10].tolist()}")
-
-# =============================================================================
-# DEFINE MINIMAL NETWORK
-# =============================================================================
-print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
-
-hidden_irreps = Irreps(
-    f"{CONFIG['hidden_dim']}x0e + {CONFIG['hidden_dim']}x1o + {CONFIG['hidden_dim']}x2e"
-)
-print(f"  Hidden irreps: {hidden_irreps}")
 
 
 class MinimalNodeEncoder(nn.Module):
@@ -553,277 +319,531 @@ class MinimalNetwork(nn.Module):
         return outputs
 
 
-# Instantiate network
-print("\nInstantiating network...")
-num_elements = len(orbital_cfg.elements())
-num_edge_types = num_elements**2
-network = MinimalNetwork(
-    num_elements=num_elements,
-    n_radial=CONFIG["n_radial"],
-    num_edge_types=num_edge_types,
-    hidden_irreps=hidden_irreps,
-    sh_irreps=sh_irreps,
-    num_layers=CONFIG["num_layers"],
-    mapper=mapper,
-).to(device)
+if __name__ == "__main__":
 
-print("\n✓ Network architecture complete!")
+    # =============================================================================
+    # CONFIGURATION
+    # =============================================================================
+    print("\n[CONFIG] Setting up hyperparameters...")
 
-# =============================================================================
-# TRAINING LOOP
-# =============================================================================
-print("\n" + "=" * 80)
-print("TRAINING TO OVERFIT")
-print("=" * 80)
+    CONFIG = {
+        # Data
+        "data_path": project_root / "data/small/H2O/original/H2O.matrix",
+        "info_path": project_root / "data/small/H2O/original/H2O.info.out",
+        # Network architecture
+        "hidden_dim": 32,  # Small for faster overfitting
+        "l_max": 2,  # Up to d orbitals
+        "num_layers": 2,  # Minimal depth
+        "cutoff_radius": 8.0,  # Angstroms
+        "n_radial": 16,  # Radial basis functions
+        # Training
+        "lr": 1e-3,  # Aggressive learning rate for overfitting
+        "num_epochs": 1000,
+        "log_interval": 50,
+        # Device
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        # Target
+        "train_target": "matrix",  # Train on matrix blocks, not irrep vectors
+        # Checkpointing
+        "checkpoint_dir": project_root / "studies/minimal_overfit_study/checkpoints",
+    }
 
-optimizer = Adam(network.parameters(), lr=CONFIG["lr"])
-
-# Training history
-history = {
-    "loss": [],
-    "mse_H": [],
-    "mae_H": [],
-}
-
-# Track best model
-best_loss = float("inf")
-best_epoch = 0
-
-print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
-print(f"Training for {CONFIG['num_epochs']} epochs...\n")
-
-for epoch in range(CONFIG["num_epochs"]):
-    network.train()
-    optimizer.zero_grad()
-
-    # Forward pass (suppress detailed logging during training)
-    if epoch % CONFIG["log_interval"] == 0:
-        print(f"\n{'=' * 60}")
-        print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}")
-        print(f"{'=' * 60}")
-
-    # Temporarily suppress forward pass logging
-    verbose = (epoch % CONFIG["log_interval"] == 0) and (
-        epoch < 10 or epoch % (CONFIG["log_interval"] * 5) == 0
+    # Initialize WandB
+    wandb.init(
+        project="mandala-minimal-overfit",
+        name="water-single-minimal",
+        config=CONFIG,
     )
 
-    if not verbose:
-        # Silence print by redirecting to nowhere temporarily
-        old_stdout = sys.stdout
-        sys.stdout = open(os.devnull, "w")
+    print(f"  Device: {CONFIG['device']}")
+    print(f"  Hidden dim: {CONFIG['hidden_dim']}")
+    print(f"  L_max: {CONFIG['l_max']}")
+    print(f"  Num layers: {CONFIG['num_layers']}")
+    print(f"  Cutoff radius: {CONFIG['cutoff_radius']} Å")
+    print(f"  Learning rate: {CONFIG['lr']}")
+    print(f"  Epochs: {CONFIG['num_epochs']}")
 
-    pred_raw = network(
-        node_type_idx, edge_type_idx, edge_index, edge_shift, edge_length_emb, edge_sh
+    device = torch.device(CONFIG["device"])
+
+    # Create checkpoint directory
+    CONFIG["checkpoint_dir"].mkdir(parents=True, exist_ok=True)
+    print(f"  Checkpoint directory: {CONFIG['checkpoint_dir']}")
+
+    # =============================================================================
+    # LOAD DATA
+    # =============================================================================
+    print("\n[DATA] Loading single water snapshot...")
+
+    # Load snapshot using Snapshot.from_openmx
+    print(f"  Matrix file: {CONFIG['data_path']}")
+    print(f"  Info file: {CONFIG['info_path']}")
+
+    snapshot = Snapshot.from_openmx(
+        matrix_path=CONFIG["data_path"],
+        info_path=CONFIG["info_path"],
+        convention="e3nn",  # Automatically converts to e3nn basis
+        symmetrize_density=True,
+        cutoff_radius=None,  # No filtering, we'll use all edges
+        dtype=torch.float32,
     )
 
-    if not verbose:
-        sys.stdout.close()
-        sys.stdout = old_stdout
+    print(f"\n  Snapshot loaded:")
+    print(f"    Elements: {snapshot.hamiltonian.atoms}")
+    print(f"    Num atoms: {len(snapshot.hamiltonian.atoms)}")
+    print(f"    Positions shape: {snapshot.positions.shape}")
+    print(f"    Box shape: {snapshot.box.shape if snapshot.box is not None else None}")
+    print(f"    Basis: {snapshot.hamiltonian.basis}")
 
-    # Wrap predictions into IrrepsBlockData then convert to matrix blocks
-    from collections import Counter
-    from data.block_matrix import IrrepsBlockData
+    print(f"\n  Matrices:")
+    print(f"    Hamiltonian keys: {list(snapshot.hamiltonian.pair_blocks.keys())}")
+    print(f"    Overlap keys: {list(snapshot.overlap.pair_blocks.keys())}")
+    print(f"    Density keys: {list(snapshot.density.pair_blocks.keys())}")
 
-    pair_vec_H = {}
-    pair_edges_dict = {}
-    lookup_dict = {}
-
-    for key, payload in pred_raw.items():
-        pair_vec_H[key] = payload["vectors"]
-        pair_edges_dict[key] = payload["edges"]
-
-        for idx, edge_5d in enumerate(payload["edges"].t()):
-            sx, sy, sz, i, j = edge_5d.tolist()
-            lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (key, idx)
-
-    pred_H_irreps = IrrepsBlockData(
-        atoms=tuple(atoms_list),
-        atom_counts=Counter(atoms_list),
-        pair_vectors=pair_vec_H,
-        pair_edges=pair_edges_dict,
-        lookup=lookup_dict,
-        orbital_cfg=orbital_cfg,
-    )
-
-    # Convert to matrix blocks (train_target = "matrix")
-    pred_H_matrix = pred_H_irreps.to_blocks(mapper)
-
-    # Compute loss on matrix blocks
-    loss_H = 0.0
-
-    for key in target_H_matrix.pair_blocks.keys():
-        if key in pred_H_matrix.pair_blocks:
-            # Match sizes (predictions might have more edges due to cutoff)
-            pred_blocks = pred_H_matrix.pair_blocks[key]
-            targ_blocks = target_H_matrix.pair_blocks[key]
-            min_n = min(pred_blocks.shape[0], targ_blocks.shape[0])
-
-            loss_H += F.mse_loss(pred_blocks[:min_n], targ_blocks[:min_n])
-
-    # Total loss (only Hamiltonian)
-    loss = loss_H
-
-    # Backward
-    loss.backward()
-    optimizer.step()
-
-    # Logging
-    if epoch % CONFIG["log_interval"] == 0:
-        # Compute MAE on matrix blocks
-        mae_H = sum(
-            torch.mean(
-                torch.abs(
-                    pred_H_matrix.pair_blocks[k][
-                        : min(
-                            pred_H_matrix.pair_blocks[k].shape[0],
-                            target_H_matrix.pair_blocks[k].shape[0],
-                        )
-                    ]
-                    - target_H_matrix.pair_blocks[k][
-                        : min(
-                            pred_H_matrix.pair_blocks[k].shape[0],
-                            target_H_matrix.pair_blocks[k].shape[0],
-                        )
-                    ]
-                )
-            )
-            for k in target_H_matrix.pair_blocks.keys()
-            if k in pred_H_matrix.pair_blocks
-        ).item()
-
-        history["loss"].append(loss.item())
-        history["mse_H"].append(loss_H.item())
-        history["mae_H"].append(mae_H)
-
-        # Log to console
-        print(f"\n[METRICS]")
-        print(f"  Loss (MSE): {loss.item():.6e}")
-        print(f"  MAE H: {mae_H:.6e}")
-
-        # Log to WandB
-        wandb.log(
-            {
-                "epoch": epoch,
-                "loss": loss.item(),
-                "mse_H": loss_H.item(),
-                "mae_H": mae_H,
-            }
+    print(f"\n  Hamiltonian blocks:")
+    for key, blocks in snapshot.hamiltonian.pair_blocks.items():
+        print(
+            f"    {key}: shape {blocks.shape}, edges {snapshot.hamiltonian.pair_edges[key].shape}"
         )
 
-        # Save best model
-        if loss.item() < best_loss:
-            best_loss = loss.item()
-            best_epoch = epoch
-            best_model_path = CONFIG["checkpoint_dir"] / "best_model.pt"
-            torch.save(
+    # Extract components
+    hamiltonian_e3nn = snapshot.hamiltonian.to(device)
+    overlap_e3nn = snapshot.overlap.to(device)
+    density_e3nn = snapshot.density.to(device)
+    orbital_cfg = snapshot.hamiltonian.orbital_cfg
+    positions = snapshot.positions.to(device)
+    box = snapshot.box.to(device) if snapshot.box is not None else None
+    atoms_list = list(snapshot.hamiltonian.atoms)
+
+    print(f"\n  Orbital configuration:")
+    for elem in orbital_cfg.elements():
+        irreps = orbital_cfg.element_to_irreps[elem]
+        print(f"    {elem}: {irreps} (dim={irreps.dim})")
+
+    # Create BlockIrrepMapper
+    print("\n[MAPPER] Creating BlockIrrepMapper...")
+    mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch.float32)
+    print(f"  Mapper edge types: {mapper.edge_types}")
+    print(f"  Mapper edge_type2idx: {mapper.edge_type2idx}")
+
+    # Store target as matrix blocks (train_target = "matrix")
+    print("\n[TARGETS] Storing target as matrix blocks...")
+    target_H_matrix = hamiltonian_e3nn
+
+    print("  Target matrix blocks:")
+    for key in target_H_matrix.pair_blocks.keys():
+        block_shape = target_H_matrix.pair_blocks[key].shape
+        edge_shape = target_H_matrix.pair_edges[key].shape
+        pair_irreps = mapper.get_pair_irreps(key)
+        print(
+            f"    {key}: blocks {block_shape}, edges {edge_shape}, irreps {pair_irreps}"
+        )
+
+    # =============================================================================
+    # BUILD GRAPH
+    # =============================================================================
+    print("\n[GRAPH] Constructing molecular graph...")
+
+    num_atoms = len(atoms_list)
+
+    print(f"  Atoms: {atoms_list}")
+    print(f"  Positions (e3nn frame):\n{positions}")
+    if box is not None:
+        print(f"  Box (e3nn frame):\n{box}")
+
+    # Create ASE atoms object for neighbor list
+    ase_atoms = Atoms(
+        symbols=atoms_list,
+        positions=positions.cpu().numpy(),
+        cell=box.cpu().numpy() if box is not None else None,
+        pbc=box is not None,
+    )
+
+    # Find neighbors using ASE
+    print(f"\n  Finding neighbors within {CONFIG['cutoff_radius']} Å...")
+    src, dst, offsets = neighbor_list(
+        "ijS", ase_atoms, CONFIG["cutoff_radius"], self_interaction=False
+    )
+
+    print(f"  Found {len(src)} off-diagonal edges")
+    print(f"  Edge list (first 10):")
+    for i in range(min(10, len(src))):
+        print(f"    {src[i]} → {dst[i]} (offset: {offsets[i]})")
+
+    # Add self-edges
+    self_src = torch.arange(num_atoms, dtype=torch.long, device=device)
+    self_dst = torch.arange(num_atoms, dtype=torch.long, device=device)
+    self_offsets = torch.zeros((num_atoms, 3), dtype=torch.long, device=device)
+
+    # Combine all edges
+    all_src = torch.cat([self_src, torch.from_numpy(src).to(device)])
+    all_dst = torch.cat([self_dst, torch.from_numpy(dst).to(device)])
+    all_offsets = torch.cat([self_offsets, torch.from_numpy(offsets).to(device).long()])
+
+    edge_index = torch.stack([all_src, all_dst], dim=0)  # (2, E)
+    edge_shift = all_offsets.T  # (3, E)
+
+    num_self_edges = num_atoms
+    print(
+        f"  Total edges: {edge_index.shape[1]} ({num_self_edges} self + {edge_index.shape[1] - num_self_edges} off-diagonal)"
+    )
+
+    # Compute edge vectors and distances
+    print("\n  Computing edge displacements and distances...")
+    if box is not None:
+        shift_float = edge_shift.T.float()
+        edge_vec = (
+            positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
+        )
+    else:
+        edge_vec = positions[edge_index[1]] - positions[edge_index[0]]
+
+    edge_dist = torch.linalg.norm(edge_vec, dim=1)
+
+    print(
+        f"  Edge distances (Å): min={edge_dist.min().item():.3f}, max={edge_dist.max().item():.3f}, mean={edge_dist.mean().item():.3f}"
+    )
+    print(f"  Self-edge distances: {edge_dist[:num_self_edges]}")
+
+    # Compute spherical harmonics
+    print(f"\n  Computing spherical harmonics (l_max={CONFIG['l_max']})...")
+    sh_irreps = Irreps.spherical_harmonics(CONFIG["l_max"])
+    print(f"  SH irreps: {sh_irreps}")
+
+    # Normalize edge vectors (avoid division by zero for self-edges)
+    edge_vec_norm = edge_vec.clone()
+    non_zero_mask = edge_dist > 1e-6
+    edge_vec_norm[non_zero_mask] = edge_vec[non_zero_mask] / edge_dist[
+        non_zero_mask
+    ].unsqueeze(-1)
+
+    edge_sh = spherical_harmonics(sh_irreps, edge_vec_norm, normalize=False)
+    print(f"  Edge SH shape: {edge_sh.shape}")
+
+    # Radial basis functions
+    print(f"\n  Computing radial embeddings ({CONFIG['n_radial']} basis functions)...")
+    edge_length_emb = soft_one_hot_linspace(
+        edge_dist,
+        start=0.0,
+        end=CONFIG["cutoff_radius"],
+        number=CONFIG["n_radial"],
+        basis="gaussian",
+        cutoff=False,
+    )
+    edge_length_emb = edge_length_emb * CONFIG["n_radial"] ** 0.5  # Normalization
+    print(f"  Edge length embedding shape: {edge_length_emb.shape}")
+
+    # Edge type indices
+    print("\n  Computing edge type indices...")
+    element_to_idx = {elem: idx for idx, elem in enumerate(orbital_cfg.elements())}
+    print(f"  Element to index: {element_to_idx}")
+
+    node_type_idx = torch.tensor([element_to_idx[a] for a in atoms_list], device=device)
+    src_type = node_type_idx[edge_index[0]]
+    dst_type = node_type_idx[edge_index[1]]
+
+    # Create edge type strings and map to indices
+    edge_type_strs = [
+        f"{atoms_list[edge_index[0, i].item()]}-{atoms_list[edge_index[1, i].item()]}"
+        for i in range(edge_index.shape[1])
+    ]
+    edge_type_idx = torch.tensor(
+        [mapper.edge_type2idx[et] for et in edge_type_strs], device=device
+    )
+
+    print(f"  Edge types (first 10): {edge_type_strs[:10]}")
+    print(f"  Edge type indices (first 10): {edge_type_idx[:10].tolist()}")
+
+    # =============================================================================
+    # DEFINE MINIMAL NETWORK
+    # =============================================================================
+    print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
+
+    hidden_irreps = Irreps(
+        f"{CONFIG['hidden_dim']}x0e + {CONFIG['hidden_dim']}x1o + {CONFIG['hidden_dim']}x2e"
+    )
+    print(f"  Hidden irreps: {hidden_irreps}")
+
+    # Instantiate network
+    print("\nInstantiating network...")
+    num_elements = len(orbital_cfg.elements())
+    num_edge_types = num_elements**2
+    network = MinimalNetwork(
+        num_elements=num_elements,
+        n_radial=CONFIG["n_radial"],
+        num_edge_types=num_edge_types,
+        hidden_irreps=hidden_irreps,
+        sh_irreps=sh_irreps,
+        num_layers=CONFIG["num_layers"],
+        mapper=mapper,
+    ).to(device)
+
+    print("\n✓ Network architecture complete!")
+
+    # =============================================================================
+    # TRAINING LOOP
+    # =============================================================================
+    print("\n" + "=" * 80)
+    print("TRAINING TO OVERFIT")
+    print("=" * 80)
+
+    optimizer = Adam(network.parameters(), lr=CONFIG["lr"])
+
+    # Training history
+    history = {
+        "loss": [],
+        "mse_H": [],
+        "mae_H": [],
+    }
+
+    # Track best model
+    best_loss = float("inf")
+    best_epoch = 0
+
+    print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
+    print(f"Training for {CONFIG['num_epochs']} epochs...\n")
+
+    for epoch in range(CONFIG["num_epochs"]):
+        network.train()
+        optimizer.zero_grad()
+
+        # Forward pass (suppress detailed logging during training)
+        if epoch % CONFIG["log_interval"] == 0:
+            print(f"\n{'=' * 60}")
+            print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}")
+            print(f"{'=' * 60}")
+
+        # Temporarily suppress forward pass logging
+        verbose = (epoch % CONFIG["log_interval"] == 0) and (
+            epoch < 10 or epoch % (CONFIG["log_interval"] * 5) == 0
+        )
+
+        if not verbose:
+            # Silence print by redirecting to nowhere temporarily
+            old_stdout = sys.stdout
+            sys.stdout = open(os.devnull, "w")
+
+        pred_raw = network(
+            node_type_idx,
+            edge_type_idx,
+            edge_index,
+            edge_shift,
+            edge_length_emb,
+            edge_sh,
+        )
+
+        if not verbose:
+            sys.stdout.close()
+            sys.stdout = old_stdout
+
+        # Wrap predictions into IrrepsBlockData then convert to matrix blocks
+        from collections import Counter
+        from data.block_matrix import IrrepsBlockData
+
+        pair_vec_H = {}
+        pair_edges_dict = {}
+        lookup_dict = {}
+
+        for key, payload in pred_raw.items():
+            pair_vec_H[key] = payload["vectors"]
+            pair_edges_dict[key] = payload["edges"]
+
+            for idx, edge_5d in enumerate(payload["edges"].t()):
+                sx, sy, sz, i, j = edge_5d.tolist()
+                lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (key, idx)
+
+        pred_H_irreps = IrrepsBlockData(
+            atoms=tuple(atoms_list),
+            atom_counts=Counter(atoms_list),
+            pair_vectors=pair_vec_H,
+            pair_edges=pair_edges_dict,
+            lookup=lookup_dict,
+            orbital_cfg=orbital_cfg,
+        )
+
+        # Convert to matrix blocks (train_target = "matrix")
+        pred_H_matrix = pred_H_irreps.to_blocks(mapper)
+
+        # Compute loss on matrix blocks
+        loss_H = 0.0
+
+        for key in target_H_matrix.pair_blocks.keys():
+            if key in pred_H_matrix.pair_blocks:
+                # Match sizes (predictions might have more edges due to cutoff)
+                pred_blocks = pred_H_matrix.pair_blocks[key]
+                targ_blocks = target_H_matrix.pair_blocks[key]
+                min_n = min(pred_blocks.shape[0], targ_blocks.shape[0])
+
+                loss_H += F.mse_loss(pred_blocks[:min_n], targ_blocks[:min_n])
+
+        # Total loss (only Hamiltonian)
+        loss = loss_H
+
+        # Backward
+        loss.backward()
+        optimizer.step()
+
+        # Logging
+        if epoch % CONFIG["log_interval"] == 0:
+            # Compute MAE on matrix blocks
+            mae_H = sum(
+                torch.mean(
+                    torch.abs(
+                        pred_H_matrix.pair_blocks[k][
+                            : min(
+                                pred_H_matrix.pair_blocks[k].shape[0],
+                                target_H_matrix.pair_blocks[k].shape[0],
+                            )
+                        ]
+                        - target_H_matrix.pair_blocks[k][
+                            : min(
+                                pred_H_matrix.pair_blocks[k].shape[0],
+                                target_H_matrix.pair_blocks[k].shape[0],
+                            )
+                        ]
+                    )
+                )
+                for k in target_H_matrix.pair_blocks.keys()
+                if k in pred_H_matrix.pair_blocks
+            ).item()
+
+            history["loss"].append(loss.item())
+            history["mse_H"].append(loss_H.item())
+            history["mae_H"].append(mae_H)
+
+            # Log to console
+            print(f"\n[METRICS]")
+            print(f"  Loss (MSE): {loss.item():.6e}")
+            print(f"  MAE H: {mae_H:.6e}")
+
+            # Log to WandB
+            wandb.log(
                 {
                     "epoch": epoch,
-                    "model_state_dict": network.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
                     "loss": loss.item(),
+                    "mse_H": loss_H.item(),
                     "mae_H": mae_H,
-                    "config": CONFIG,
-                },
-                best_model_path,
+                }
             )
-            print(f"  ✓ Best model saved (loss: {loss.item():.6e})")
 
-        # Check for convergence
-        if loss.item() < 1e-8:
-            print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
-            break
+            # Save best model
+            if loss.item() < best_loss:
+                best_loss = loss.item()
+                best_epoch = epoch
+                best_model_path = CONFIG["checkpoint_dir"] / "best_model.pt"
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": network.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "loss": loss.item(),
+                        "mae_H": mae_H,
+                        "config": CONFIG,
+                    },
+                    best_model_path,
+                )
+                print(f"  ✓ Best model saved (loss: {loss.item():.6e})")
 
-# =============================================================================
-# FINAL EVALUATION
-# =============================================================================
-print("\n" + "=" * 80)
-print("FINAL EVALUATION")
-print("=" * 80)
+            # Check for convergence
+            if loss.item() < 1e-8:
+                print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
+                break
 
-network.eval()
-with torch.no_grad():
-    pred_raw = network(
-        node_type_idx, edge_type_idx, edge_index, edge_shift, edge_length_emb, edge_sh
-    )
+    # =============================================================================
+    # FINAL EVALUATION
+    # =============================================================================
+    print("\n" + "=" * 80)
+    print("FINAL EVALUATION")
+    print("=" * 80)
 
-    # Reconstruct full predictions
-    pair_vec_H = {}
-    pair_edges_dict = {}
-    lookup_dict = {}
-
-    for key, payload in pred_raw.items():
-        pair_vec_H[key] = payload["vectors"]
-        pair_edges_dict[key] = payload["edges"]
-
-        for idx, edge_5d in enumerate(payload["edges"].t()):
-            sx, sy, sz, i, j = edge_5d.tolist()
-            lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (key, idx)
-
-    pred_H_irreps = IrrepsBlockData(
-        atoms=tuple(atoms_list),
-        atom_counts=Counter(atoms_list),
-        pair_vectors=pair_vec_H,
-        pair_edges=pair_edges_dict,
-        lookup=lookup_dict,
-        orbital_cfg=orbital_cfg,
-    )
-
-    # Convert to blocks
-    pred_H_matrix = pred_H_irreps.to_blocks(mapper)
-
-    print("\n[FINAL PREDICTIONS - Hamiltonian]")
-    final_metrics = {}
-    for key in pred_H_matrix.pair_blocks.keys():
-        pred_block = pred_H_matrix.pair_blocks[key]
-        true_block = target_H_matrix.pair_blocks[key]
-        min_n = min(pred_block.shape[0], true_block.shape[0])
-
-        block_mse = F.mse_loss(pred_block[:min_n], true_block[:min_n]).item()
-        block_mae = torch.mean(
-            torch.abs(pred_block[:min_n] - true_block[:min_n])
-        ).item()
-
-        pair_irreps = mapper.get_pair_irreps(key)
-
-        print(f"\n  {key}:")
-        print(f"    Block shape: {pred_block.shape}, Irreps: {pair_irreps}")
-        print(f"    MSE: {block_mse:.6e}")
-        print(f"    MAE: {block_mae:.6e}")
-        print(
-            f"    Relative error: {block_mae / (torch.abs(true_block[:min_n]).mean().item() + 1e-10):.6%}"
+    network.eval()
+    with torch.no_grad():
+        pred_raw = network(
+            node_type_idx,
+            edge_type_idx,
+            edge_index,
+            edge_shift,
+            edge_length_emb,
+            edge_sh,
         )
 
-        final_metrics[f"final/{key}_mse"] = block_mse
-        final_metrics[f"final/{key}_mae"] = block_mae
+        # Reconstruct full predictions
+        pair_vec_H = {}
+        pair_edges_dict = {}
+        lookup_dict = {}
 
-    # Log final metrics to WandB
-    wandb.log(final_metrics)
+        for key, payload in pred_raw.items():
+            pair_vec_H[key] = payload["vectors"]
+            pair_edges_dict[key] = payload["edges"]
 
-# Save final model
-final_model_path = CONFIG["checkpoint_dir"] / "final_model.pt"
-torch.save(
-    {
-        "epoch": epoch,
-        "model_state_dict": network.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "loss": history["loss"][-1],
-        "mae_H": history["mae_H"][-1],
-        "config": CONFIG,
-        "history": history,
-    },
-    final_model_path,
-)
+            for idx, edge_5d in enumerate(payload["edges"].t()):
+                sx, sy, sz, i, j = edge_5d.tolist()
+                lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (key, idx)
 
-print("\n" + "=" * 80)
-print("STUDY COMPLETE")
-print("=" * 80)
-print(f"\nTotal training epochs: {epoch + 1}")
-print(f"Final loss: {history['loss'][-1]:.6e}")
-print(f"Best loss: {min(history['loss']):.6e} (epoch {best_epoch + 1})")
-print(f"\nCheckpoints saved:")
-print(f"  Best model: {CONFIG['checkpoint_dir'] / 'best_model.pt'}")
-print(f"  Final model: {final_model_path}")
-print("\n✓ Minimal overfit study finished successfully!")
+        pred_H_irreps = IrrepsBlockData(
+            atoms=tuple(atoms_list),
+            atom_counts=Counter(atoms_list),
+            pair_vectors=pair_vec_H,
+            pair_edges=pair_edges_dict,
+            lookup=lookup_dict,
+            orbital_cfg=orbital_cfg,
+        )
 
-# Finish WandB run
-wandb.finish()
+        # Convert to blocks
+        pred_H_matrix = pred_H_irreps.to_blocks(mapper)
+
+        print("\n[FINAL PREDICTIONS - Hamiltonian]")
+        final_metrics = {}
+        for key in pred_H_matrix.pair_blocks.keys():
+            pred_block = pred_H_matrix.pair_blocks[key]
+            true_block = target_H_matrix.pair_blocks[key]
+            min_n = min(pred_block.shape[0], true_block.shape[0])
+
+            block_mse = F.mse_loss(pred_block[:min_n], true_block[:min_n]).item()
+            block_mae = torch.mean(
+                torch.abs(pred_block[:min_n] - true_block[:min_n])
+            ).item()
+
+            pair_irreps = mapper.get_pair_irreps(key)
+
+            print(f"\n  {key}:")
+            print(f"    Block shape: {pred_block.shape}, Irreps: {pair_irreps}")
+            print(f"    MSE: {block_mse:.6e}")
+            print(f"    MAE: {block_mae:.6e}")
+            print(
+                f"    Relative error: {block_mae / (torch.abs(true_block[:min_n]).mean().item() + 1e-10):.6%}"
+            )
+
+            final_metrics[f"final/{key}_mse"] = block_mse
+            final_metrics[f"final/{key}_mae"] = block_mae
+
+        # Log final metrics to WandB
+        wandb.log(final_metrics)
+
+    # Save final model
+    final_model_path = CONFIG["checkpoint_dir"] / "final_model.pt"
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": network.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "loss": history["loss"][-1],
+            "mae_H": history["mae_H"][-1],
+            "config": CONFIG,
+            "history": history,
+        },
+        final_model_path,
+    )
+
+    print("\n" + "=" * 80)
+    print("STUDY COMPLETE")
+    print("=" * 80)
+    print(f"\nTotal training epochs: {epoch + 1}")
+    print(f"Final loss: {history['loss'][-1]:.6e}")
+    print(f"Best loss: {min(history['loss']):.6e} (epoch {best_epoch + 1})")
+    print(f"\nCheckpoints saved:")
+    print(f"  Best model: {CONFIG['checkpoint_dir'] / 'best_model.pt'}")
+    print(f"  Final model: {final_model_path}")
+    print("\n✓ Minimal overfit study finished successfully!")
+
+    # Finish WandB run
+    wandb.finish()
