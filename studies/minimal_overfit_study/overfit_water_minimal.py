@@ -663,7 +663,7 @@ if __name__ == "__main__":
 
     # Initialize WandB
     wandb_kwargs = {
-        "project": "mandala-minimal-overfit",
+        "project": "mandala-minimal-overfit-study",
         "config": CONFIG,
     }
     if args.run_name is not None:
