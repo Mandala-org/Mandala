@@ -35,10 +35,10 @@ from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
 from core.block_irrep_mapper import BlockIrrepMapper
 
-# Import network classes from training script
-# (We need to define them here since we'll load the state dict)
-from overfit_water_minimal import (
+# Import network classes and utilities from common module
+from common import (
     MinimalNetwork,
+    compute_mu_H,
 )
 
 print("=" * 80)
@@ -83,35 +83,6 @@ def parse_args():
         help="Use dynamic color range based on 95th percentile of abs(H) instead of fixed [-1, 1]",
     )
     return parser.parse_args()
-
-
-def compute_mu_H(H_pred, H_gt, S):
-    """
-    Compute the mu_H correction factor.
-
-    mu_H = sum_{ij} (H_pred_ij - H_gt_ij) * S_ij / sum_{ij} S_ij^2
-    """
-    numerator = 0.0
-    denominator = 0.0
-
-    for key in H_gt.pair_blocks.keys():
-        if key in H_pred.pair_blocks and key in S.pair_blocks:
-            pred_blocks = H_pred.pair_blocks[key]
-            gt_blocks = H_gt.pair_blocks[key]
-            s_blocks = S.pair_blocks[key]
-
-            min_n = min(pred_blocks.shape[0], gt_blocks.shape[0], s_blocks.shape[0])
-
-            diff = pred_blocks[:min_n] - gt_blocks[:min_n]
-            s_val = s_blocks[:min_n]
-
-            numerator += torch.sum(diff * s_val).item()
-            denominator += torch.sum(s_val * s_val).item()
-
-    if denominator > 1e-10:
-        return numerator / denominator
-    else:
-        return 0.0
 
 
 def compute_metrics(H_pred, H_gt, S):
