@@ -45,9 +45,6 @@ from core.block_irrep_mapper import BlockIrrepMapper
 # WandB for logging
 import wandb
 
-# Global flag to control printing during class initialization
-_VERBOSE = True
-
 # =============================================================================
 # NETWORK CLASS DEFINITIONS
 # =============================================================================
@@ -82,8 +79,7 @@ class e3LayerNorm(nn.Module):
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
 
-        if _VERBOSE:
-            print(f"    [e3LayerNorm] Irreps: {self.irreps_in}, affine={affine}")
+        print(f"    [e3LayerNorm] Irreps: {self.irreps_in}, affine={affine}")
 
     def forward(self, x: torch.Tensor, batch: torch.Tensor = None):
         if batch is None:
@@ -131,17 +127,30 @@ class e3LayerNorm(nn.Module):
         return torch.cat(out, dim=-1)
 
 
-def log_activation_magnitudes(features, irreps, name=""):
+def log_activation_magnitudes(
+    features, irreps, name="", wandb_prefix="", log_to_wandb=False
+):
     """Log per-irrep activation magnitudes."""
-    if not _VERBOSE:
-        return
     stats = []
     ix = 0
     for mul, ir in irreps:
         field = features[:, ix : ix + mul * ir.dim]
-        mag = torch.norm(field, dim=-1).mean().item()
-        stats.append(f"{ir}: {mag:.4f}")
+        norms = torch.norm(field.reshape(-1, ir.dim), dim=-1)
+        mean_mag = norms.mean().item()
+        median_mag = norms.median().item()
+        stats.append(f"{ir}: {mean_mag:.4f}")
+
+        # Log to wandb if requested
+        if log_to_wandb and wandb_prefix:
+            wandb.log(
+                {
+                    f"activations/{wandb_prefix}/{ir}_mean": mean_mag,
+                    f"activations/{wandb_prefix}/{ir}_median": median_mag,
+                }
+            )
+
         ix += mul * ir.dim
+
     print(f"      [{name}] Magnitudes per irrep: {', '.join(stats)}")
 
 
@@ -152,10 +161,9 @@ class MinimalNodeEncoder(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(num_elements, hidden_dim)
         self.irreps_out = Irreps(f"{hidden_dim}x0e")
-        if _VERBOSE:
-            print(
-                f"    [NodeEncoder] Input: {num_elements} elements → Output: {self.irreps_out}"
-            )
+        print(
+            f"    [NodeEncoder] Input: {num_elements} elements → Output: {self.irreps_out}"
+        )
 
     def forward(self, node_type_idx):
         out = self.embedding(node_type_idx)
@@ -208,17 +216,16 @@ class MinimalEdgeEncoder(nn.Module):
         # Layer norm
         self.norm = e3LayerNorm(self.irreps_out)
 
-        if _VERBOSE:
-            print(
-                f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
-            )
-            print(
-                f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → {irreps_tp_out}"
-            )
-            print(f"                  Gate: {irreps_tp_out} → {self.irreps_out}")
-            print(f"                  Norm: {self.irreps_out}")
+        print(
+            f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
+        )
+        print(f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → {irreps_tp_out}")
+        print(f"                  Gate: {irreps_tp_out} → {self.irreps_out}")
+        print(f"                  Norm: {self.irreps_out}")
 
-    def forward(self, edge_length_emb, edge_type_idx, edge_sh, batch_edge):
+    def forward(
+        self, edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb=False
+    ):
         # Create edge type one-hot
         edge_type_onehot = F.one_hot(
             edge_type_idx, num_classes=self.num_edge_types
@@ -239,36 +246,40 @@ class MinimalEdgeEncoder(nn.Module):
         # Layer norm
         edge_feat = self.norm(edge_feat, batch_edge)
 
-        if _VERBOSE:
-            print(
-                f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} → Combined: {combined.shape}"
-            )
-            print(
-                f"                            → Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
-            )
-            print(
-                f"                            ⊗ SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
-            )
-            print(
-                f"                            → TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
-            )
-            print(
-                f"                            → Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
-            )
-            log_activation_magnitudes(
-                edge_feat, self.irreps_out, "EdgeEncoder activations"
-            )
+        print(
+            f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} → Combined: {combined.shape}"
+        )
+        print(
+            f"                            → Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
+        )
+        print(
+            f"                            ⊗ SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
+        )
+        print(
+            f"                            → TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
+        )
+        print(
+            f"                            → Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
+        )
+        log_activation_magnitudes(
+            edge_feat,
+            self.irreps_out,
+            "EdgeEncoder activations",
+            "EdgeEncoder",
+            log_to_wandb,
+        )
         return edge_feat
 
 
 class MinimalMessageBlock(nn.Module):
     """Message passing layer with edge update + node update with Gate and LayerNorm."""
 
-    def __init__(self, node_irreps, edge_irreps, hidden_irreps, sh_irreps):
+    def __init__(self, node_irreps, edge_irreps, hidden_irreps, sh_irreps, layer_idx=0):
         super().__init__()
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
         self.hidden_irreps = hidden_irreps
+        self.layer_idx = layer_idx
 
         # Edge update: concat(src_node, dst_node, edge) ⊗ SH → TP output
         concat_irreps = node_irreps + node_irreps + edge_irreps
@@ -309,28 +320,33 @@ class MinimalMessageBlock(nn.Module):
         )
         self.node_norm = e3LayerNorm(self.node_gate.irreps_out)
 
-        if _VERBOSE:
-            print(f"    [MessageBlock] Irreps:")
-            print(
-                f"      Edge update: concat({node_irreps}, {node_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
-            )
-            print(f"                   → TP: {irreps_tp_out}")
-            print(f"                   → Gate: {self.edge_gate.irreps_out}")
-            print(
-                f"      Node update: concat(messages {hidden_irreps}, self {node_irreps})"
-            )
-            print(f"                   → Linear: {irreps_node_tp_out}")
-            print(f"                   → Gate: {self.node_gate.irreps_out}")
+        print(f"    [MessageBlock] Irreps:")
+        print(
+            f"      Edge update: concat({node_irreps}, {node_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
+        )
+        print(f"                   → TP: {irreps_tp_out}")
+        print(f"                   → Gate: {self.edge_gate.irreps_out}")
+        print(
+            f"      Node update: concat(messages {hidden_irreps}, self {node_irreps})"
+        )
+        print(f"                   → Linear: {irreps_node_tp_out}")
+        print(f"                   → Gate: {self.node_gate.irreps_out}")
 
     def forward(
-        self, node_feat, edge_feat, edge_index, edge_sh, batch_node, batch_edge
+        self,
+        node_feat,
+        edge_feat,
+        edge_index,
+        edge_sh,
+        batch_node,
+        batch_edge,
+        log_to_wandb=False,
     ):
         N = node_feat.shape[0]
 
-        if _VERBOSE:
-            print(
-                f"      [MessageBlock.forward] Input: nodes {node_feat.shape} (irreps: {self.node_irreps}), edges {edge_feat.shape} (irreps: {self.edge_irreps})"
-            )
+        print(
+            f"      [MessageBlock.forward] Input: nodes {node_feat.shape} (irreps: {self.node_irreps}), edges {edge_feat.shape} (irreps: {self.edge_irreps})"
+        )
 
         # Edge update: concatenate src node, dst node, and edge features
         src_idx = edge_index[0]
@@ -340,32 +356,33 @@ class MinimalMessageBlock(nn.Module):
         dst_node = node_feat[dst_idx]
 
         edge_concat = torch.cat([src_node, dst_node, edge_feat], dim=-1)
-        if _VERBOSE:
-            print(
-                f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} → {edge_concat.shape}"
-            )
+        print(
+            f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} → {edge_concat.shape}"
+        )
 
         # Apply TP with spherical harmonics
         edge_tp = self.edge_update_tp(edge_concat, edge_sh)
         edge_feat_new = self.edge_gate(edge_tp)
         edge_feat_new = self.edge_norm(edge_feat_new, batch_edge)
 
-        if _VERBOSE:
-            print(
-                f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_tp.shape}"
-            )
-            print(
-                f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
-            )
-            log_activation_magnitudes(
-                edge_feat_new, self.edge_gate.irreps_out, "Edge activations"
-            )
+        print(
+            f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_tp.shape}"
+        )
+        print(
+            f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
+        )
+        log_activation_magnitudes(
+            edge_feat_new,
+            self.edge_gate.irreps_out,
+            "Edge activations",
+            f"Layer{self.layer_idx+1}_Edge",
+            log_to_wandb,
+        )
 
         # Node update: aggregate edge messages + self-connection
         messages = torch.zeros(N, edge_feat_new.shape[1], device=edge_feat_new.device)
         messages.index_add_(0, dst_idx, edge_feat_new)
-        if _VERBOSE:
-            print(f"                            Messages aggregated: {messages.shape}")
+        print(f"                            Messages aggregated: {messages.shape}")
 
         # Concatenate with self-connection
         node_concat = torch.cat([messages, node_feat], dim=-1)
@@ -373,16 +390,19 @@ class MinimalMessageBlock(nn.Module):
         node_feat_new = self.node_gate(node_linear)
         node_feat_new = self.node_norm(node_feat_new, batch_node)
 
-        if _VERBOSE:
-            print(
-                f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
-            )
-            print(
-                f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
-            )
-            log_activation_magnitudes(
-                node_feat_new, self.node_gate.irreps_out, "Node activations"
-            )
+        print(
+            f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
+        )
+        print(
+            f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
+        )
+        log_activation_magnitudes(
+            node_feat_new,
+            self.node_gate.irreps_out,
+            "Node activations",
+            f"Layer{self.layer_idx+1}_Node",
+            log_to_wandb,
+        )
 
         return node_feat_new, edge_feat_new
 
@@ -399,8 +419,7 @@ class MinimalHead(nn.Module):
         for edge_type in mapper.edge_types:
             pair_irreps = mapper.get_pair_irreps(edge_type)
             self.projections[edge_type] = Linear(hidden_irreps, pair_irreps)
-            if _VERBOSE:
-                print(f"    [Head] {edge_type}: {hidden_irreps} → {pair_irreps}")
+            print(f"    [Head] {edge_type}: {hidden_irreps} → {pair_irreps}")
 
     def forward(self, edge_feat, edge_type_idx, edge_index, edge_shift):
         """
@@ -429,10 +448,9 @@ class MinimalHead(nn.Module):
                     "vectors": pred_vectors,
                     "edges": selected_edges,
                 }
-                if _VERBOSE:
-                    print(
-                        f"      [Head.forward] {type_str}: {mask.sum().item()} edges → vectors {pred_vectors.shape}"
-                    )
+                print(
+                    f"      [Head.forward] {type_str}: {mask.sum().item()} edges → vectors {pred_vectors.shape}"
+                )
 
         return outputs
 
@@ -469,14 +487,17 @@ class MinimalNetwork(nn.Module):
             edge_irreps_in = hidden_irreps
             self.mp_layers.append(
                 MinimalMessageBlock(
-                    node_irreps_in, edge_irreps_in, hidden_irreps, sh_irreps
+                    node_irreps_in,
+                    edge_irreps_in,
+                    hidden_irreps,
+                    sh_irreps,
+                    layer_idx=i,
                 )
             )
 
         self.head = MinimalHead(hidden_irreps, mapper)
 
-        if _VERBOSE:
-            print(f"  Total parameters: {sum(p.numel() for p in self.parameters()):,}")
+        print(f"  Total parameters: {sum(p.numel() for p in self.parameters()):,}")
 
     def forward(
         self,
@@ -488,30 +509,34 @@ class MinimalNetwork(nn.Module):
         edge_sh,
         batch_node,
         batch_edge,
+        log_to_wandb=False,
     ):
-        if _VERBOSE:
-            print("    [Forward] Starting forward pass...")
+        print("    [Forward] Starting forward pass...")
 
         # Encode
         node_feat = self.node_enc(node_type_idx)
-        edge_feat = self.edge_enc(edge_length_emb, edge_type_idx, edge_sh, batch_edge)
+        edge_feat = self.edge_enc(
+            edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb
+        )
 
         # Message passing (both nodes and edges get updated)
         for i, mp_layer in enumerate(self.mp_layers):
-            if _VERBOSE:
-                print(
-                    f"    [Forward] Message passing layer {i + 1}/{len(self.mp_layers)}"
-                )
+            print(f"    [Forward] Message passing layer {i + 1}/{len(self.mp_layers)}")
             node_feat, edge_feat = mp_layer(
-                node_feat, edge_feat, edge_index, edge_sh, batch_node, batch_edge
+                node_feat,
+                edge_feat,
+                edge_index,
+                edge_sh,
+                batch_node,
+                batch_edge,
+                log_to_wandb,
             )
 
         # Use edge features for head
         head_feat = edge_feat
 
         # Head
-        if _VERBOSE:
-            print(f"    [Forward] Applying head...")
+        print(f"    [Forward] Applying head...")
         outputs = self.head(head_feat, edge_type_idx, edge_index, edge_shift)
 
         return outputs
@@ -912,6 +937,9 @@ if __name__ == "__main__":
             epoch < 10 or epoch % (CONFIG["log_interval"]) == 0
         )
 
+        # Enable activation logging only during log intervals
+        log_activations = epoch % CONFIG["log_interval"] == 0
+
         if not verbose:
             # Silence print by redirecting to nowhere temporarily
             old_stdout = sys.stdout
@@ -926,6 +954,7 @@ if __name__ == "__main__":
             edge_sh,
             batch_node,
             batch_edge,
+            log_to_wandb=log_activations,
         )
 
         if not verbose:
