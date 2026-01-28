@@ -17,7 +17,9 @@ import wandb
 class e3LayerNorm(nn.Module):
     """E(3)-equivariant layer normalization (from DeepH-E3)."""
 
-    def __init__(self, irreps_in, eps=1e-5, affine=True, normalization="component"):
+    def __init__(
+        self, irreps_in, eps=1e-5, affine=True, normalization="component", verbose=True
+    ):
         super().__init__()
 
         self.irreps_in = Irreps(irreps_in)
@@ -43,7 +45,8 @@ class e3LayerNorm(nn.Module):
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
 
-        print(f"    [e3LayerNorm] Irreps: {self.irreps_in}, affine={affine}")
+        if verbose:
+            print(f"    [e3LayerNorm] Irreps: {self.irreps_in}, affine={affine}")
 
     def forward(self, x: torch.Tensor, batch: torch.Tensor = None):
         if batch is None:
@@ -181,13 +184,16 @@ class MinimalEdgeEncoder(nn.Module):
         )
         self.irreps_out = self.gate.irreps_out
 
-        # Layer norm
-        self.norm = e3LayerNorm(self.irreps_out)
+        # Layer norm (verbose=False to avoid duplicate prints)
+        self.norm = e3LayerNorm(self.irreps_out, verbose=False)
 
         print(
             f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
         )
         print(f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → {irreps_tp_out}")
+        print(
+            f"                  Note: TP creates separate scalar groups for each L, combined by Gate"
+        )
         print(f"                  Gate: {irreps_tp_out} → {self.irreps_out}")
         print(f"                  Norm: {self.irreps_out}")
 
@@ -282,11 +288,21 @@ class MinimalMessageBlock(nn.Module):
             [act_gate[ir.p] for _, ir in irreps_gates],
             irreps_gated,
         )
-        self.edge_norm = e3LayerNorm(self.edge_gate.irreps_out)
+        self.edge_norm = e3LayerNorm(self.edge_gate.irreps_out, verbose=False)
 
-        # Node update: aggregate messages + self-connection → TP output
+        # Node update: aggregate messages + self-connection → Linear (not TP)
         irreps_node_tp_out = irreps_scalars + irreps_gates + irreps_gated
         self.node_update_lin = Linear(hidden_irreps + node_irreps, irreps_node_tp_out)
+
+        # Check if Linear can produce all requested output irreps
+        input_irreps = Irreps(hidden_irreps) + Irreps(node_irreps)
+        output_irreps = Irreps(irreps_node_tp_out)
+        for mul_out, ir_out in output_irreps:
+            can_produce = any(ir_in == ir_out for _, ir_in in input_irreps)
+            if not can_produce:
+                print(
+                    f"    ⚠️  WARNING: Linear layer cannot produce {ir_out} from input {input_irreps}"
+                )
 
         self.node_gate = Gate(
             irreps_scalars,
@@ -295,7 +311,7 @@ class MinimalMessageBlock(nn.Module):
             [act_gate[ir.p] for _, ir in irreps_gates],
             irreps_gated,
         )
-        self.node_norm = e3LayerNorm(self.node_gate.irreps_out)
+        self.node_norm = e3LayerNorm(self.node_gate.irreps_out, verbose=False)
 
         print(f"    [MessageBlock] Irreps:")
         print(f"      Node update: concat(messages {edge_irreps}, self {node_irreps})")
@@ -395,6 +411,19 @@ class MinimalHead(nn.Module):
             pair_irreps = mapper.get_pair_irreps(edge_type)
             self.projections[edge_type] = Linear(hidden_irreps, pair_irreps)
             print(f"    [Head] {edge_type}: {hidden_irreps} → {pair_irreps}")
+
+            # Check if Linear can produce all requested output irreps
+            input_irreps = Irreps(hidden_irreps)
+            output_irreps = Irreps(pair_irreps)
+            missing_irreps = []
+            for mul_out, ir_out in output_irreps:
+                can_produce = any(ir_in == ir_out for _, ir_in in input_irreps)
+                if not can_produce:
+                    missing_irreps.append(str(ir_out))
+            if missing_irreps:
+                print(
+                    f"    ⚠️  WARNING [{edge_type}]: Cannot produce irreps {', '.join(set(missing_irreps))} from {hidden_irreps}"
+                )
 
     def forward(self, edge_feat, edge_type_idx, edge_index, edge_shift):
         """
