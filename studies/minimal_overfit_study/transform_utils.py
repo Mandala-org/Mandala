@@ -66,18 +66,24 @@ class ConfigurableBasisConverter:
                 if l in self.l_overrides:
                     perm_str = self.l_overrides[l]
                     if perm_str == "none":
-                        mat = torch.eye(2 * l + 1, dtype=torch.float32)
+                        mat = torch.eye(
+                            2 * l + 1, dtype=torch.float32, device=self.device
+                        )
                     else:
                         perm = [int(x) for x in perm_str.split(",")]
-                        mat = torch.eye(2 * l + 1, dtype=torch.float32)[perm]
+                        mat = torch.eye(
+                            2 * l + 1, dtype=torch.float32, device=self.device
+                        )[perm]
                 else:
                     # Use mode
                     if self.mode == "standard":
-                        mat = _U_OPENMX_TO_WIKI[l]
+                        mat = _U_OPENMX_TO_WIKI[l].to(self.device)
                     elif self.mode == "inverse":
-                        mat = _U_WIKI_TO_OPENMX[l]
+                        mat = _U_WIKI_TO_OPENMX[l].to(self.device)
                     elif self.mode == "none":
-                        mat = torch.eye(2 * l + 1, dtype=torch.float32)
+                        mat = torch.eye(
+                            2 * l + 1, dtype=torch.float32, device=self.device
+                        )
                     else:
                         raise ValueError(f"Unknown mode: {self.mode}")
 
