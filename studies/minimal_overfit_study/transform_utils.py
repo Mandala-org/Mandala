@@ -96,6 +96,8 @@ class ConfigurableBasisConverter:
         el_i, el_j = key.split("-")
         U_i = self._U_openmx2wiki[el_i]
         U_j = self._U_openmx2wiki[el_j]
+        # Ensure block is on the same device as transformation matrices
+        block = block.to(self.device)
         return U_i @ block @ U_j.T
 
     def matrix_transform(self, matrix: BlockMatrix) -> BlockMatrix:
