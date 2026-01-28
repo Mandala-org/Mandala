@@ -47,6 +47,65 @@ print("MINIMAL MODEL ANALYSIS")
 print("=" * 80)
 
 
+# =============================================================================
+# HELPER FUNCTIONS FOR PARTIAL TRAINING
+# =============================================================================
+def get_diagonal_mask(edges_5d):
+    """
+    Get mask for diagonal blocks (self-interactions: sx=sy=sz=0, i=j).
+
+    Args:
+        edges_5d: (5, num_edges) tensor with [sx, sy, sz, i, j]
+
+    Returns:
+        Boolean mask of shape (num_edges,) with True for diagonal blocks
+    """
+    sx, sy, sz, i, j = edges_5d[0], edges_5d[1], edges_5d[2], edges_5d[3], edges_5d[4]
+    is_self_interaction = (sx == 0) & (sy == 0) & (sz == 0)
+    is_same_atom = i == j
+    return is_self_interaction & is_same_atom
+
+
+def filter_blocks_by_partial_train(block_matrix, partial_train):
+    """
+    Filter blocks based on partial_train setting.
+
+    Args:
+        block_matrix: BlockMatrix object
+        partial_train: "diag", "offdiag", or None
+
+    Returns:
+        Dictionary mapping edge_type -> (filtered_blocks, mask)
+    """
+    if partial_train is None:
+        # Return all blocks with full mask
+        return {
+            key: (
+                blocks,
+                torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device),
+            )
+            for key, blocks in block_matrix.pair_blocks.items()
+        }
+
+    filtered_data = {}
+    for key in block_matrix.pair_blocks.keys():
+        blocks = block_matrix.pair_blocks[key]
+        edges = block_matrix.pair_edges[key]  # (5, num_edges)
+
+        diag_mask = get_diagonal_mask(edges)
+
+        if partial_train == "diag":
+            mask = diag_mask
+        elif partial_train == "offdiag":
+            mask = ~diag_mask
+        else:
+            mask = torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device)
+
+        filtered_data[key] = (blocks, mask)
+
+    return filtered_data
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Analyze trained minimal E(3)-GNN model"
@@ -86,8 +145,20 @@ def parse_args():
     return parser.parse_args()
 
 
-def compute_metrics(H_pred, H_gt, S):
-    """Compute MAE, MSE, and modified MAE with mu_H correction."""
+def compute_metrics(H_pred, H_gt, S, partial_train=None):
+    """Compute MAE, MSE, and modified MAE with mu_H correction.
+
+    Args:
+        H_pred: Predicted Hamiltonian BlockMatrix
+        H_gt: Ground truth Hamiltonian BlockMatrix
+        S: Overlap BlockMatrix
+        partial_train: "diag", "offdiag", or None - filters which blocks to evaluate
+    """
+
+    # Filter blocks based on partial_train setting
+    filtered_pred = filter_blocks_by_partial_train(H_pred, partial_train)
+    filtered_gt = filter_blocks_by_partial_train(H_gt, partial_train)
+    filtered_s = filter_blocks_by_partial_train(S, partial_train)
 
     # Standard MAE and MSE
     mae = 0.0
@@ -96,36 +167,64 @@ def compute_metrics(H_pred, H_gt, S):
 
     for key in H_gt.pair_blocks.keys():
         if key in H_pred.pair_blocks:
-            pred_blocks = H_pred.pair_blocks[key]
-            gt_blocks = H_gt.pair_blocks[key]
-            min_n = min(pred_blocks.shape[0], gt_blocks.shape[0])
+            pred_blocks_full = H_pred.pair_blocks[key]
+            gt_blocks_full = H_gt.pair_blocks[key]
+            _, pred_mask = filtered_pred[key]
+            _, gt_mask = filtered_gt[key]
 
-            diff = pred_blocks[:min_n] - gt_blocks[:min_n]
-            mae += torch.sum(torch.abs(diff)).item()
-            mse += torch.sum(diff**2).item()
-            total_elements += diff.numel()
+            min_n = min(pred_blocks_full.shape[0], gt_blocks_full.shape[0])
+            mask = pred_mask[:min_n] & gt_mask[:min_n]
 
-    mae /= total_elements
-    mse /= total_elements
+            if mask.any():
+                pred_blocks = pred_blocks_full[:min_n][mask]
+                gt_blocks = gt_blocks_full[:min_n][mask]
+
+                diff = pred_blocks - gt_blocks
+                mae += torch.sum(torch.abs(diff)).item()
+                mse += torch.sum(diff**2).item()
+                total_elements += diff.numel()
+
+    if total_elements > 0:
+        mae /= total_elements
+        mse /= total_elements
+    else:
+        mae = 0.0
+        mse = 0.0
 
     # Modified MAE with mu_H correction
-    mu_H = compute_mu_H(H_pred, H_gt, S)
+    # Note: compute_mu_H should also respect filtering
+    mu_H = compute_mu_H(H_pred, H_gt, S)  # This uses all blocks for mu_H estimation
 
     mae_mod = 0.0
     for key in H_gt.pair_blocks.keys():
         if key in H_pred.pair_blocks and key in S.pair_blocks:
-            pred_blocks = H_pred.pair_blocks[key]
-            gt_blocks = H_gt.pair_blocks[key]
-            s_blocks = S.pair_blocks[key]
+            pred_blocks_full = H_pred.pair_blocks[key]
+            gt_blocks_full = H_gt.pair_blocks[key]
+            s_blocks_full = S.pair_blocks[key]
 
-            min_n = min(pred_blocks.shape[0], gt_blocks.shape[0], s_blocks.shape[0])
+            _, pred_mask = filtered_pred[key]
+            _, gt_mask = filtered_gt[key]
+            _, s_mask = filtered_s[key]
 
-            diff_corrected = (
-                pred_blocks[:min_n] - gt_blocks[:min_n] - mu_H * s_blocks[:min_n]
+            min_n = min(
+                pred_blocks_full.shape[0],
+                gt_blocks_full.shape[0],
+                s_blocks_full.shape[0],
             )
-            mae_mod += torch.sum(torch.abs(diff_corrected)).item()
+            mask = pred_mask[:min_n] & gt_mask[:min_n] & s_mask[:min_n]
 
-    mae_mod /= total_elements
+            if mask.any():
+                pred_blocks = pred_blocks_full[:min_n][mask]
+                gt_blocks = gt_blocks_full[:min_n][mask]
+                s_blocks = s_blocks_full[:min_n][mask]
+
+                diff_corrected = pred_blocks - gt_blocks - mu_H * s_blocks
+                mae_mod += torch.sum(torch.abs(diff_corrected)).item()
+
+    if total_elements > 0:
+        mae_mod /= total_elements
+    else:
+        mae_mod = 0.0
 
     return {
         "mae": mae,
@@ -237,6 +336,12 @@ def predict_hamiltonian(network, graph_inputs, device):
         old_stdout = sys.stdout
         sys.stdout = open(os.devnull, "w")
 
+        # Create batch indices (single graph)
+        num_nodes = graph_inputs["node_type_idx"].shape[0]
+        num_edges = graph_inputs["edge_index"].shape[1]
+        batch_node = torch.zeros(num_nodes, dtype=torch.long, device=device)
+        batch_edge = torch.zeros(num_edges, dtype=torch.long, device=device)
+
         pred_raw = network(
             graph_inputs["node_type_idx"],
             graph_inputs["edge_type_idx"],
@@ -244,6 +349,8 @@ def predict_hamiltonian(network, graph_inputs, device):
             graph_inputs["edge_shift"],
             graph_inputs["edge_length_emb"],
             graph_inputs["edge_sh"],
+            batch_node,
+            batch_edge,
         )
 
         sys.stdout.close()
@@ -277,9 +384,19 @@ def predict_hamiltonian(network, graph_inputs, device):
     return pred_H_matrix
 
 
-def extract_partial_hamiltonian(H, S, atoms_list, orbital_cfg, sx, sy, sz):
+def extract_partial_hamiltonian(
+    H, S, atoms_list, orbital_cfg, sx, sy, sz, partial_train=None
+):
     """
     Extract a partial Hamiltonian matrix for a specific [sx, sy, sz] shift.
+
+    Args:
+        H: Hamiltonian BlockMatrix
+        S: Overlap BlockMatrix
+        atoms_list: List of atom symbols
+        orbital_cfg: Orbital configuration
+        sx, sy, sz: Cell shift indices
+        partial_train: "diag", "offdiag", or None - filters which blocks to extract
 
     Returns a dense matrix where blocks are filled in based on atom types.
     """
@@ -299,18 +416,31 @@ def extract_partial_hamiltonian(H, S, atoms_list, orbital_cfg, sx, sy, sz):
         atom_ranges.append((current_idx, current_idx + dim))
         current_idx += dim
 
+    # Get diagonal mask for filtering if needed
+    filtered_H = filter_blocks_by_partial_train(H, partial_train)
+    filtered_S = (
+        filter_blocks_by_partial_train(S, partial_train) if S is not None else None
+    )
+
     # Fill in blocks for this specific shift
     for key in H.pair_blocks.keys():
         H_blocks = H.pair_blocks[key]
         H_edges = H.pair_edges[key]
+        _, h_mask = filtered_H[key]
 
         if S is not None and key in S.pair_blocks:
             S_blocks = S.pair_blocks[key]
+            _, s_mask = filtered_S[key]
         else:
             S_blocks = None
+            s_mask = None
 
         # Find edges with the specified shift
         for idx in range(H_edges.shape[1]):
+            # Skip if filtered out by partial_train
+            if not h_mask[idx]:
+                continue
+
             shift_x, shift_y, shift_z, i, j = H_edges[:, idx].tolist()
 
             if int(shift_x) == sx and int(shift_y) == sy and int(shift_z) == sz:
@@ -325,7 +455,7 @@ def extract_partial_hamiltonian(H, S, atoms_list, orbital_cfg, sx, sy, sz):
                 H_dense[i_start:i_end, j_start:j_end] = block_H
 
                 # Fill overlap if available
-                if S_blocks is not None:
+                if S_blocks is not None and (s_mask is None or s_mask[idx]):
                     block_S = S_blocks[idx].cpu().numpy()
                     S_dense[i_start:i_end, j_start:j_end] = block_S
 
@@ -333,7 +463,15 @@ def extract_partial_hamiltonian(H, S, atoms_list, orbital_cfg, sx, sy, sz):
 
 
 def visualize_hamiltonians(
-    H_pred, H_gt, S, atoms_list, orbital_cfg, k_range, output_dir, dynamic_range=False
+    H_pred,
+    H_gt,
+    S,
+    atoms_list,
+    orbital_cfg,
+    k_range,
+    output_dir,
+    dynamic_range=False,
+    partial_train=None,
 ):
     """
     Visualize Hamiltonians for all [sx, sy, sz] combinations in [-k, k]^3.
@@ -347,6 +485,7 @@ def visualize_hamiltonians(
     Args:
         dynamic_range: If True, use 95th percentile of abs(H_gt) for color range.
                       If False, use fixed [-1, 1] range.
+        partial_train: "diag", "offdiag", or None - filters which blocks to visualize
     """
 
     output_dir = Path(output_dir)
@@ -356,7 +495,12 @@ def visualize_hamiltonians(
     mu_H = compute_mu_H(H_pred, H_gt, S)
 
     print(f"\nVisualizing Hamiltonians for shifts in [{-k_range}, {k_range}]^3")
-    print(f"mu_H correction factor: {mu_H:.6e}\n")
+    print(f"mu_H correction factor: {mu_H:.6e}")
+    if partial_train is not None:
+        print(
+            f"Partial training mode: {partial_train} (showing {partial_train} blocks only)"
+        )
+    print()
 
     # Iterate over all shifts
     shifts_to_plot = []
@@ -370,10 +514,17 @@ def visualize_hamiltonians(
 
         # Extract partial Hamiltonians
         H_gt_dense, S_dense, dim = extract_partial_hamiltonian(
-            H_gt, S, atoms_list, orbital_cfg, sx, sy, sz
+            H_gt, S, atoms_list, orbital_cfg, sx, sy, sz, partial_train=partial_train
         )
         H_pred_dense, _, _ = extract_partial_hamiltonian(
-            H_pred, None, atoms_list, orbital_cfg, sx, sy, sz
+            H_pred,
+            None,
+            atoms_list,
+            orbital_cfg,
+            sx,
+            sy,
+            sz,
+            partial_train=partial_train,
         )
 
         # Compute differences
@@ -387,7 +538,10 @@ def visualize_hamiltonians(
 
         # Create figure with 2x2 subplots (skip overlap)
         fig, axes = plt.subplots(2, 2, figsize=(12, 12))
-        fig.suptitle(f"Hamiltonian Analysis: shift = [{sx}, {sy}, {sz}]", fontsize=16)
+        title = f"Hamiltonian Analysis: shift = [{sx}, {sy}, {sz}]"
+        if partial_train is not None:
+            title += f" ({partial_train} blocks only)"
+        fig.suptitle(title, fontsize=16)
 
         # Determine color range
         if dynamic_range:
@@ -479,10 +633,13 @@ def main():
 
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     config = checkpoint["config"]
+    partial_train = config.get("partial_train", None)  # Extract partial_train setting
 
     print(f"  Loaded from epoch {checkpoint['epoch']}")
     print(f"  Training loss: {checkpoint['loss']:.6e}")
     print(f"  Training MAE_H: {checkpoint['mae_H']:.6e}")
+    if partial_train is not None:
+        print(f"  Partial training mode: {partial_train}")
 
     # Load original data
     print(f"\n[DATA] Loading original water snapshot...")
@@ -524,12 +681,17 @@ def main():
         f"  Config: l_max={config['l_max']}, hidden_dim={config['hidden_dim']}, n_radial={config['n_radial']}, num_layers={config['num_layers']}"
     )
 
-    hidden_irreps = build_hidden_irreps(
-        l_max=config["l_max"], base_dim=config["hidden_dim"], use_odd_features=True
-    )
+    # Use hidden_irreps from config if available, otherwise build from scratch
+    if "hidden_irreps" in config and config["hidden_irreps"] is not None:
+        hidden_irreps = Irreps(config["hidden_irreps"])
+        print(f"  Using hidden_irreps from config: {hidden_irreps}")
+    else:
+        hidden_irreps = build_hidden_irreps(
+            l_max=config["l_max"], base_dim=config["hidden_dim"], use_odd_features=True
+        )
+        print(f"  Built hidden_irreps from l_max and hidden_dim: {hidden_irreps}")
     sh_irreps = Irreps.spherical_harmonics(config["l_max"])
 
-    print(f"  Hidden irreps: {hidden_irreps}")
     print(f"  SH irreps: {sh_irreps}")
 
     mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch.float32)
@@ -587,8 +749,12 @@ def main():
     # Compute metrics for original
     print(f"\n{'='*80}")
     print("ORIGINAL STRUCTURE METRICS")
+    if partial_train is not None:
+        print(f"(evaluating {partial_train} blocks only)")
     print(f"{'='*80}")
-    metrics_orig = compute_metrics(H_pred_orig, H_gt_orig, S_orig)
+    metrics_orig = compute_metrics(
+        H_pred_orig, H_gt_orig, S_orig, partial_train=partial_train
+    )
     print(f"  MAE:       {metrics_orig['mae']:.6e}")
     print(f"  MSE:       {metrics_orig['mse']:.6e}")
     print(f"  MAE_mod:   {metrics_orig['mae_mod']:.6e}")
@@ -597,8 +763,12 @@ def main():
     # Compute metrics for rotated
     print(f"\n{'='*80}")
     print("ROTATED STRUCTURE METRICS")
+    if partial_train is not None:
+        print(f"(evaluating {partial_train} blocks only)")
     print(f"{'='*80}")
-    metrics_rot = compute_metrics(H_pred_rot, H_gt_rot, S_rot)
+    metrics_rot = compute_metrics(
+        H_pred_rot, H_gt_rot, S_rot, partial_train=partial_train
+    )
     print(f"  MAE:       {metrics_rot['mae']:.6e}")
     print(f"  MSE:       {metrics_rot['mse']:.6e}")
     print(f"  MAE_mod:   {metrics_rot['mae_mod']:.6e}")
@@ -618,6 +788,7 @@ def main():
         args.k_range,
         output_dir_orig,
         dynamic_range=args.dynamic_range,
+        partial_train=partial_train,
     )
 
     # Visualize rotated
@@ -634,6 +805,7 @@ def main():
         args.k_range,
         output_dir_rot,
         dynamic_range=args.dynamic_range,
+        partial_train=partial_train,
     )
 
     # Save metrics to file
@@ -644,7 +816,10 @@ def main():
         f.write(f"Run name: {run_name}\n")
         f.write(f"Checkpoint: {model_path}\n")
         f.write(f"Training epoch: {checkpoint['epoch']}\n")
-        f.write(f"Training loss: {checkpoint['loss']:.6e}\n\n")
+        f.write(f"Training loss: {checkpoint['loss']:.6e}\n")
+        if partial_train is not None:
+            f.write(f"Partial training mode: {partial_train}\n")
+        f.write("\n")
         f.write("ORIGINAL STRUCTURE METRICS\n")
         f.write("-" * 80 + "\n")
         f.write(f"MAE:       {metrics_orig['mae']:.6e}\n")
