@@ -25,6 +25,8 @@ import torch
 import torch.nn.functional as F
 from torch.optim import Adam
 
+from net.common import build_hidden_irreps
+
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -389,24 +391,9 @@ if __name__ == "__main__":
     # =============================================================================
     print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
 
-    # hidden_irreps = build_hidden_irreps(
-    #     l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
-    # )
-    hidden_irreps = Irreps(
-        f"{CONFIG['hidden_dim']}x0e\
-        + {CONFIG['hidden_dim']}x0o\
-        + {CONFIG['hidden_dim']//2}x1e\
-        + {CONFIG['hidden_dim']//2}x1o\
-    "
+    hidden_irreps = build_hidden_irreps(
+        l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
     )
-
-    # + {CONFIG['hidden_dim']//4}x2e\
-    # + {CONFIG['hidden_dim']//4}x2o\
-    # + {CONFIG['hidden_dim']//8}x3o\
-    # + {CONFIG['hidden_dim']//16}x4e\
-    # + {CONFIG['hidden_dim']//2}x1e\
-    # + {CONFIG['hidden_dim']//8}x3e\
-    # + {CONFIG['hidden_dim']//16}x4o\
 
     print(f"  Hidden irreps: {hidden_irreps}")
 
