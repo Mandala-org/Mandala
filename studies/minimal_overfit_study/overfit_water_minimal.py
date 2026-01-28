@@ -191,8 +191,7 @@ if __name__ == "__main__":
     print(f"  Run-specific checkpoint directory: {run_checkpoint_dir}")
 
     print(f"  Device: {CONFIG['device']}")
-    print(f"  Hidden dim: {CONFIG['hidden_dim']}")
-    print(f"  L_max: {CONFIG['l_max']}")
+    print(f"  Hidden irreps: {CONFIG['hidden_irreps']}")
     print(f"  Num layers: {CONFIG['num_layers']}")
     print(f"  Cutoff radius: {CONFIG['cutoff_radius']} Å")
     print(f"  Learning rate: {CONFIG['lr']}")
