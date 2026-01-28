@@ -140,7 +140,13 @@ def parse_args():
     parser.add_argument(
         "--dynamic-range",
         action="store_true",
-        help="Use dynamic color range based on 95th percentile of abs(H) instead of fixed [-1, 1]",
+        help="Use dynamic color range based on percentile of abs(H) instead of fixed [-1, 1]",
+    )
+    parser.add_argument(
+        "--percentile",
+        type=float,
+        default=80.0,
+        help="Percentile for dynamic color range (default: 80.0)",
     )
     parser.add_argument(
         "--split-by-irrep",
@@ -571,6 +577,7 @@ def visualize_hamiltonians(
     dynamic_range=False,
     partial_train=None,
     filename_prefix="hamiltonian",
+    percentile=80.0,
 ):
     """
     Visualize Hamiltonians for all [sx, sy, sz] combinations in [-k, k]^3.
@@ -582,10 +589,11 @@ def visualize_hamiltonians(
     - Difference with mu_H correction
 
     Args:
-        dynamic_range: If True, use 95th percentile of abs(H_gt) for color range.
+        dynamic_range: If True, use percentile of abs(H_gt) for color range.
                       If False, use fixed [-1, 1] range.
         partial_train: "diag", "offdiag", or None - filters which blocks to visualize
         filename_prefix: Prefix for the output filename (e.g., "hamiltonian" or "hamiltonian_0e")
+        percentile: Percentile value for dynamic color range (default: 80.0)
     """
 
     output_dir = Path(output_dir)
@@ -657,8 +665,8 @@ def visualize_hamiltonians(
 
         # Determine color range
         if dynamic_range:
-            # Use 95th percentile of abs(H_gt)
-            v = np.percentile(np.abs(H_gt_dense), 95)
+            # Use specified percentile of abs(H_gt)
+            v = np.percentile(np.abs(H_gt_dense), percentile)
             vmin, vmax = -v, v
         else:
             vmin, vmax = -1, 1
@@ -756,8 +764,10 @@ def main():
     # Load original data
     print(f"\n[DATA] Loading original water snapshot...")
     snapshot_orig = Snapshot.from_openmx(
-        matrix_path=config["data_path"],
-        info_path=config["info_path"],
+        # matrix_path=config["data_path"],
+        matrix_path="/home/bartek/casus/mandala/data/small/H2O/original/H2O.matrix",
+        # info_path=config["info_path"],
+        info_path="/home/bartek/casus/mandala/data/small/H2O/original/H2O.info.out",
         convention="e3nn",
         symmetrize_density=True,
         cutoff_radius=None,
@@ -901,6 +911,7 @@ def main():
         dynamic_range=args.dynamic_range,
         partial_train=partial_train,
         filename_prefix="hamiltonian",
+        percentile=args.percentile,
     )
 
     # Visualize rotated
@@ -918,6 +929,7 @@ def main():
         dynamic_range=args.dynamic_range,
         partial_train=partial_train,
         filename_prefix="hamiltonian_rotated",
+        percentile=args.percentile,
     )
 
     # Visualize irrep contributions if requested
@@ -964,6 +976,7 @@ def main():
                 dynamic_range=args.dynamic_range,
                 partial_train=partial_train,
                 filename_prefix=f"hamiltonian_{irrep_str}",
+                percentile=args.percentile,
             )
             print(f"    Visualizations saved with prefix: hamiltonian_{irrep_str}_*")
 
