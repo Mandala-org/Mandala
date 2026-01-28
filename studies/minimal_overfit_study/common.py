@@ -211,7 +211,7 @@ class MinimalEdgeEncoder(nn.Module):
         # TP output must produce both scalars, gates, and gated features
         irreps_tp_out = irreps_scalars + irreps_gates + irreps_gated
 
-        # Tensor product: scalars ⊗ SH -> TP output
+        # Tensor product: scalars (x) SH -> TP output
         self.tp = FullyConnectedTensorProduct(
             Irreps(f"{scalar_dim}x0e"),
             sh_irreps,
@@ -240,7 +240,9 @@ class MinimalEdgeEncoder(nn.Module):
         print(
             f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) -> scalars({scalar_dim}x0e)"
         )
-        print(f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} -> {irreps_tp_out}")
+        print(
+            f"                  TP: {scalar_dim}x0e (x) {sh_irreps} -> {irreps_tp_out}"
+        )
         print(
             f"                  Note: TP creates separate scalar groups for each L, combined by Gate"
         )
@@ -281,7 +283,7 @@ class MinimalEdgeEncoder(nn.Module):
             f"                            -> Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
         )
         print(
-            f"                            ⊗ SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
+            f"                            (x) SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
         )
         print(
             f"                            -> TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
@@ -319,7 +321,7 @@ class MinimalMessageBlock(nn.Module):
         # Output will be hidden_irreps
         # (No TP needed, just linear projection)
 
-        # Edge update: concat(updated_src_node, updated_dst_node, edge) ⊗ SH -> TP output
+        # Edge update: concat(updated_src_node, updated_dst_node, edge) (x) SH -> TP output
         # After node update, nodes have hidden_irreps
         edge_concat_irreps = hidden_irreps + hidden_irreps + edge_irreps
 
@@ -372,7 +374,7 @@ class MinimalMessageBlock(nn.Module):
         print(f"                   -> Linear: {irreps_node_tp_out}")
         print(f"                   -> Gate: {self.node_gate.irreps_out}")
         print(
-            f"      Edge update: concat({hidden_irreps}, {hidden_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
+            f"      Edge update: concat({hidden_irreps}, {hidden_irreps}, {edge_irreps}) (x) {sh_irreps}"
         )
         print(f"                   -> TP: {irreps_tp_out}")
         print(f"                   -> Gate: {self.edge_gate.irreps_out}")
@@ -451,7 +453,7 @@ class MinimalMessageBlock(nn.Module):
         check_for_nans(edge_feat_new, f"MessageBlock[{self.layer_idx}].edge_norm")
 
         print(
-            f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} -> {edge_tp.shape}"
+            f"                            Edge TP: {edge_concat.shape} (x) {edge_sh.shape} -> {edge_tp.shape}"
         )
         print(
             f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"

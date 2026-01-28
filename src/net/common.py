@@ -435,7 +435,7 @@ class SeparateWeightTensorProduct(nn.Module):
     """
     Tensor product with separate learnable weights for each input.
 
-    From DeepH-E3: z_i = W'_{ij} x_j ⊗ W''_{ik} y_k
+    From DeepH-E3: z_i = W'_{ij} x_j (x) W''_{ik} y_k
 
     This differs from FullyConnectedTensorProduct by having separate
     weight matrices for each input irrep, which can be more expressive.
@@ -498,7 +498,7 @@ class SeparateWeightTensorProduct(nn.Module):
 
         weights = []
         for weight1, weight2 in zip(self.weights1, self.weights2):
-            # Outer product of weights: (mul1, mul_out) ⊗ (mul2, mul_out)
+            # Outer product of weights: (mul1, mul_out) (x) (mul2, mul_out)
             weight = weight1[:, None, :] * weight2[None, :, :]
             weights.append(weight.view(-1))
         weights = torch.cat(weights)
