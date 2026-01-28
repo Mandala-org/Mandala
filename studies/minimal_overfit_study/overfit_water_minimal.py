@@ -73,13 +73,19 @@ if __name__ == "__main__":
         "--hidden-dim",
         type=int,
         default=32,
-        help="Hidden dimension for features",
+        help="Hidden dimension for features (used if --hidden-irreps not provided)",
     )
     parser.add_argument(
         "--l-max",
         type=int,
         default=2,
-        help="Maximum angular momentum",
+        help="Maximum angular momentum (used if --hidden-irreps not provided)",
+    )
+    parser.add_argument(
+        "--hidden-irreps",
+        type=str,
+        default=None,
+        help="Hidden irreps string (e.g., '32x0e+32x1o+32x2e'). If not provided, will be constructed using build_hidden_irreps with --hidden-dim and --l-max",
     )
     parser.add_argument(
         "--num-layers",
@@ -153,6 +159,7 @@ if __name__ == "__main__":
         # Network architecture
         "hidden_dim": args.hidden_dim,
         "l_max": args.l_max,
+        "hidden_irreps": args.hidden_irreps,  # Can be None
         "num_layers": args.num_layers,
         "cutoff_radius": args.cutoff_radius,
         "n_radial": args.n_radial,
@@ -391,11 +398,17 @@ if __name__ == "__main__":
     # =============================================================================
     print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
 
-    hidden_irreps = build_hidden_irreps(
-        l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
-    )
-
-    print(f"  Hidden irreps: {hidden_irreps}")
+    # Use provided hidden_irreps or build them automatically
+    if CONFIG["hidden_irreps"] is not None:
+        hidden_irreps = Irreps(CONFIG["hidden_irreps"])
+        print(f"  Using provided hidden irreps: {hidden_irreps}")
+    else:
+        hidden_irreps = build_hidden_irreps(
+            l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
+        )
+        print(f"  Built hidden irreps: {hidden_irreps}")
+        # Store the constructed irreps in config for checkpoint saving
+        CONFIG["hidden_irreps"] = str(hidden_irreps)
 
     # Instantiate network
     print("\nInstantiating network...")
