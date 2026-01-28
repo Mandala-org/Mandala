@@ -142,6 +142,11 @@ def parse_args():
         action="store_true",
         help="Use dynamic color range based on 95th percentile of abs(H) instead of fixed [-1, 1]",
     )
+    parser.add_argument(
+        "--split-by-irrep",
+        action="store_true",
+        help="Generate separate visualizations for each irrep's contribution to the Hamiltonian",
+    )
     return parser.parse_args()
 
 
@@ -327,6 +332,75 @@ def build_graph_inputs(snapshot, cutoff_radius, n_radial, l_max, device):
     }
 
 
+def filter_irreps_block_data_by_irrep(irreps_block_data, target_irrep_str, mapper):
+    """
+    Filter IrrepsBlockData to keep only contributions from a specific irrep.
+
+    Args:
+        irreps_block_data: IrrepsBlockData object
+        target_irrep_str: String like "0e", "1o", "2e", etc.
+        mapper: BlockIrrepMapper
+
+    Returns:
+        IrrepsBlockData with only the target irrep's contributions
+    """
+    from e3nn.o3 import Irrep
+
+    target_irrep = Irrep(target_irrep_str)
+    filtered_pair_vectors = {}
+
+    for edge_type, vectors in irreps_block_data.pair_vectors.items():
+        # Get the irreps for this edge type
+        pair_irreps = mapper.get_pair_irreps(edge_type)
+
+        # Create a mask for the target irrep
+        filtered_vectors = torch.zeros_like(vectors)
+
+        start_idx = 0
+        for mul, irrep in pair_irreps:
+            end_idx = start_idx + mul * irrep.dim
+
+            # If this irrep matches the target, keep it
+            if irrep == target_irrep:
+                filtered_vectors[:, start_idx:end_idx] = vectors[:, start_idx:end_idx]
+
+            start_idx = end_idx
+
+        filtered_pair_vectors[edge_type] = filtered_vectors
+
+    # Create new IrrepsBlockData with filtered vectors
+    return IrrepsBlockData(
+        atoms=irreps_block_data.atoms,
+        atom_counts=irreps_block_data.atom_counts,
+        pair_vectors=filtered_pair_vectors,
+        pair_edges=irreps_block_data.pair_edges,
+        lookup=irreps_block_data.lookup,
+        orbital_cfg=irreps_block_data.orbital_cfg,
+    )
+
+
+def get_all_irreps_in_hamiltonian(mapper):
+    """
+    Get a list of all unique irreps present in the Hamiltonian.
+
+    Args:
+        mapper: BlockIrrepMapper
+
+    Returns:
+        List of unique Irrep objects
+    """
+
+    irreps_set = set()
+    for edge_type in mapper.edge_types:
+        pair_irreps = mapper.get_pair_irreps(edge_type)
+        for mul, irrep in pair_irreps:
+            if mul > 0:  # Only include irreps that are actually present
+                irreps_set.add(irrep)
+
+    # Sort by l, then by parity
+    return sorted(irreps_set, key=lambda ir: (ir.l, ir.p))
+
+
 def predict_hamiltonian(network, graph_inputs, device):
     """Run model forward pass and convert to BlockMatrix."""
 
@@ -382,6 +456,30 @@ def predict_hamiltonian(network, graph_inputs, device):
     pred_H_matrix = pred_H_irreps.to_blocks(graph_inputs["mapper"])
 
     return pred_H_matrix
+
+
+def split_hamiltonian_by_irrep(H_matrix, mapper, target_irrep_str):
+    """
+    Split a BlockMatrix Hamiltonian to keep only one irrep's contribution.
+
+    Args:
+        H_matrix: BlockMatrix Hamiltonian
+        mapper: BlockIrrepMapper
+        target_irrep_str: String like "0e", "1o", "2e", etc.
+
+    Returns:
+        BlockMatrix with only the target irrep's contribution
+    """
+    # Convert to IrrepsBlockData
+    irreps_data = H_matrix.to_vectors(mapper)
+
+    # Filter by irrep
+    filtered_irreps = filter_irreps_block_data_by_irrep(
+        irreps_data, target_irrep_str, mapper
+    )
+
+    # Convert back to BlockMatrix
+    return filtered_irreps.to_blocks(mapper)
 
 
 def extract_partial_hamiltonian(
@@ -472,6 +570,7 @@ def visualize_hamiltonians(
     output_dir,
     dynamic_range=False,
     partial_train=None,
+    filename_prefix="hamiltonian",
 ):
     """
     Visualize Hamiltonians for all [sx, sy, sz] combinations in [-k, k]^3.
@@ -486,6 +585,7 @@ def visualize_hamiltonians(
         dynamic_range: If True, use 95th percentile of abs(H_gt) for color range.
                       If False, use fixed [-1, 1] range.
         partial_train: "diag", "offdiag", or None - filters which blocks to visualize
+        filename_prefix: Prefix for the output filename (e.g., "hamiltonian" or "hamiltonian_0e")
     """
 
     output_dir = Path(output_dir)
@@ -538,7 +638,19 @@ def visualize_hamiltonians(
 
         # Create figure with 2x2 subplots (skip overlap)
         fig, axes = plt.subplots(2, 2, figsize=(12, 12))
-        title = f"Hamiltonian Analysis: shift = [{sx}, {sy}, {sz}]"
+
+        # Build title with irrep information if present
+        if filename_prefix == "hamiltonian":
+            title = f"Hamiltonian Analysis: shift = [{sx}, {sy}, {sz}]"
+        elif filename_prefix == "hamiltonian_rotated":
+            title = f"Hamiltonian Analysis (Rotated): shift = [{sx}, {sy}, {sz}]"
+        else:
+            # Extract irrep from prefix (e.g., "hamiltonian_0e" -> "0e")
+            irrep_name = filename_prefix.replace("hamiltonian_", "")
+            title = (
+                f"Hamiltonian Analysis - Irrep {irrep_name}: shift = [{sx}, {sy}, {sz}]"
+            )
+
         if partial_train is not None:
             title += f" ({partial_train} blocks only)"
         fig.suptitle(title, fontsize=16)
@@ -582,7 +694,7 @@ def visualize_hamiltonians(
         plt.colorbar(im3, ax=axes[1, 1])
 
         # Save figure
-        filename = f"hamiltonian_sx{sx:+d}_sy{sy:+d}_sz{sz:+d}.png"
+        filename = f"{filename_prefix}_sx{sx:+d}_sy{sy:+d}_sz{sz:+d}.png"
         filepath = output_dir / filename
         plt.tight_layout()
         plt.savefig(filepath, dpi=150, bbox_inches="tight")
@@ -778,7 +890,6 @@ def main():
     print(f"\n{'='*80}")
     print("VISUALIZING ORIGINAL STRUCTURE")
     print(f"{'='*80}")
-    output_dir_orig = output_dir / "original"
     visualize_hamiltonians(
         H_pred_orig,
         H_gt_orig,
@@ -786,16 +897,16 @@ def main():
         list(snapshot_orig.hamiltonian.atoms),
         orbital_cfg,
         args.k_range,
-        output_dir_orig,
+        output_dir,
         dynamic_range=args.dynamic_range,
         partial_train=partial_train,
+        filename_prefix="hamiltonian",
     )
 
     # Visualize rotated
     print(f"\n{'='*80}")
     print("VISUALIZING ROTATED STRUCTURE")
     print(f"{'='*80}")
-    output_dir_rot = output_dir / "rotated"
     visualize_hamiltonians(
         H_pred_rot,
         H_gt_rot,
@@ -803,10 +914,58 @@ def main():
         list(snapshot_rot.hamiltonian.atoms),
         orbital_cfg,
         args.k_range,
-        output_dir_rot,
+        output_dir,
         dynamic_range=args.dynamic_range,
         partial_train=partial_train,
+        filename_prefix="hamiltonian_rotated",
     )
+
+    # Visualize irrep contributions if requested
+    if args.split_by_irrep:
+        print(f"\n{'='*80}")
+        print("VISUALIZING IRREP CONTRIBUTIONS")
+        print(f"{'='*80}")
+
+        # Get all irreps present in the Hamiltonian
+        all_irreps = get_all_irreps_in_hamiltonian(graph_inputs_orig["mapper"])
+        print(
+            f"\nFound {len(all_irreps)} unique irreps: {[str(ir) for ir in all_irreps]}"
+        )
+
+        for irrep in all_irreps:
+            irrep_str = str(irrep)
+            print(f"\n  Processing irrep: {irrep_str}")
+
+            # Split original structure by irrep
+            H_gt_orig_split = split_hamiltonian_by_irrep(
+                H_gt_orig, graph_inputs_orig["mapper"], irrep_str
+            )
+            H_pred_orig_split = split_hamiltonian_by_irrep(
+                H_pred_orig, graph_inputs_orig["mapper"], irrep_str
+            )
+
+            # Compute metrics for this irrep
+            metrics_irrep = compute_metrics(
+                H_pred_orig_split, H_gt_orig_split, S_orig, partial_train=partial_train
+            )
+            print(
+                f"    MAE: {metrics_irrep['mae']:.6e}, MSE: {metrics_irrep['mse']:.6e}"
+            )
+
+            # Visualize
+            visualize_hamiltonians(
+                H_pred_orig_split,
+                H_gt_orig_split,
+                S_orig,
+                list(snapshot_orig.hamiltonian.atoms),
+                orbital_cfg,
+                args.k_range,
+                output_dir,
+                dynamic_range=args.dynamic_range,
+                partial_train=partial_train,
+                filename_prefix=f"hamiltonian_{irrep_str}",
+            )
+            print(f"    Visualizations saved with prefix: hamiltonian_{irrep_str}_*")
 
     # Save metrics to file
     metrics_file = output_dir / "metrics.txt"
