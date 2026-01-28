@@ -1,7 +1,7 @@
 program: studies/minimal_overfit_study/overfit_water_transform_exploration.py
 method: grid
 metric:
-  name: validation/1e_loss
+  name: loss
   goal: minimize
 
 # Grid search over transformation variants
