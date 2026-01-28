@@ -212,7 +212,7 @@ def load_snapshot_with_transforms(
     positions = apply_coordinate_transform(info.positions, coord_permutation, mirror_x)
 
     # Box permutation (default to same as coordinates)
-    if box_permutation is None:
+    if box_permutation is None or box_permutation == "same":
         box_perm = coord_permutation
     else:
         box_perm = box_permutation
