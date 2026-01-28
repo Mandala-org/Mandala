@@ -44,7 +44,7 @@ parameters:
     value: 4
 
   hidden-irreps:
-    value: "16x0e+8x1o+8x1e+4x2e+4x2o+4x3o+4x3e+2x4e"
+    value: "32x0e+32x1o+32x1e+16x2e+16x2o+8x3o+8x3e+4x4e"
 
   train-on-irrep-parts:
     value: true
