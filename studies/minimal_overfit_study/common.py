@@ -123,7 +123,11 @@ class e3LayerNorm(nn.Module):
             ).mean(dim=[1, 2], keepdim=True)
             if self.normalization == "norm":
                 norm = norm * ir.dim
-            field = field / (norm.sqrt()[batch] + self.eps)
+
+            # Add epsilon before sqrt for numerical stability
+            # Use larger epsilon if norm is very small to prevent gradient issues
+            safe_norm = torch.sqrt(norm + self.eps)
+            field = field / (safe_norm[batch] + self.eps)
 
             # Affine transformation
             if self.weight is not None:
