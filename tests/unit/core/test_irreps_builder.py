@@ -6,7 +6,7 @@ from core.irreps_builder import IrrepsAutoBuilder, IrrepsBuilderError
 
 @pytest.fixture(scope="module")
 def builder():
-    return IrrepsAutoBuilder(l_max=2, base_dim=16)  # 16 → 8 → 4 multiplicities
+    return IrrepsAutoBuilder(l_max=2, base_dim=16)  # 16 -> 8 -> 4 multiplicities
 
 
 @pytest.mark.unit
@@ -19,7 +19,7 @@ def test_hidden_irreps_shape(builder):
 @pytest.mark.unit
 def test_sh_irreps(builder):
     sh = builder.sh_irreps
-    assert sh.dim == 1 + 3 + 5  # up to l=2 → total dim 9
+    assert sh.dim == 1 + 3 + 5  # up to l=2 -> total dim 9
 
 
 @pytest.mark.unit

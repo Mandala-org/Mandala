@@ -16,8 +16,8 @@ Key features
   helpful for compression / batching.
 * Implements
 
-    * ``get_number_of_electrons()``  →  Tr(D·S)
-    * ``get_energy()``               →  Tr(D·H)
+    * ``get_number_of_electrons()``  ->  Tr(D·S)
+    * ``get_energy()``               ->  Tr(D·H)
 
   using the highly-optimised
   :func:`core.sparse_math.trace_matmul_sparse_snap_vectorized`.
@@ -438,7 +438,7 @@ class Snapshot:
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
         """
-        Return dict ``key → (E,3)`` of minimal-image displacement vectors.
+        Return dict ``key -> (E,3)`` of minimal-image displacement vectors.
         """
         if self.positions is None or self.box is None:
             raise RuntimeError("Snapshot has no position/box information")
@@ -468,7 +468,7 @@ class Snapshot:
     def _edge_distances(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
-        """Return dict ``key → (E,)`` with minimal-image distances."""
+        """Return dict ``key -> (E,)`` with minimal-image distances."""
         disp = self._edge_displacements(mat)
         return {k: torch.linalg.norm(v, dim=-1) for k, v in disp.items()}
 

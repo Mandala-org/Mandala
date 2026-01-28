@@ -114,7 +114,7 @@ class Config:
     n_radial: int = 64
     radial_layers: Sequence[int] = field(
         default_factory=lambda: (128,)
-    )  # e.g. (128,) → 2-layer MLP
+    )  # e.g. (128,) -> 2-layer MLP
     share_radial: bool = True
 
     # -------------- output head ----------------------------------------
