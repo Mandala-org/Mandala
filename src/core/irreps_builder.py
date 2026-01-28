@@ -106,12 +106,12 @@ class IrrepsAutoBuilder:
     ) -> None:
         """
         Raise :class:`IrrepsBuilderError` if **any** component in *desired*
-        cannot be produced by `irreps_in1 ⊗ irreps_in2`.
+        cannot be produced by `irreps_in1 (x) irreps_in2`.
         """
         for _, ir in Irreps(desired):
             if not self.tp_path_exists(irreps_in1, irreps_in2, ir):
                 raise IrrepsBuilderError(
-                    f"Tensor product {irreps_in1} ⊗ {irreps_in2} cannot produce {ir}"
+                    f"Tensor product {irreps_in1} (x) {irreps_in2} cannot produce {ir}"
                 )
 
     # ------------------ short helpers used elsewhere ----------------------- #

@@ -89,7 +89,7 @@ class EquiConv(nn.Module):
     E(3)-equivariant convolution with radial MLP weighting.
 
     Similar to DeepH-E3's EquiConv. Combines:
-    - Tensor product: irreps_in1 ⊗ irreps_in2 -> irreps_out
+    - Tensor product: irreps_in1 (x) irreps_in2 -> irreps_out
     - Radial MLP: generates weights from edge length embeddings
     - Optional Gate nonlinearity
     - Element-wise multiplication with learned weights
