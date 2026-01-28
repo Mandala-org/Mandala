@@ -148,6 +148,13 @@ if __name__ == "__main__":
         default=1.0,
         help="Gradient clipping max norm (default: 1.0, set to 0 to disable)",
     )
+    parser.add_argument(
+        "--partial-train",
+        type=str,
+        default=None,
+        choices=["diag", "offdiag", None],
+        help="Train on partial data: 'diag' (diagonal blocks only), 'offdiag' (off-diagonal only), or None (all blocks)",
+    )
 
     args = parser.parse_args()
 
@@ -175,6 +182,7 @@ if __name__ == "__main__":
         "num_epochs": args.num_epochs,
         "log_interval": args.log_interval,
         "grad_clip": args.grad_clip,
+        "partial_train": args.partial_train,
         # Device
         "device": args.device,
         # Target
@@ -210,6 +218,10 @@ if __name__ == "__main__":
         print(f"  Gradient clipping: {CONFIG['grad_clip']}")
     else:
         print(f"  Gradient clipping: disabled")
+    if CONFIG["partial_train"] is not None:
+        print(f"  Partial training: {CONFIG['partial_train']} blocks only")
+    else:
+        print(f"  Partial training: disabled (training on all blocks)")
 
     device = torch.device(CONFIG["device"])
 
@@ -403,6 +415,71 @@ if __name__ == "__main__":
     print(f"\n  Batch indices: nodes {batch_node.shape}, edges {batch_edge.shape}")
 
     # =============================================================================
+    # HELPER FUNCTIONS FOR PARTIAL TRAINING
+    # =============================================================================
+    def get_diagonal_mask(edges_5d):
+        """
+        Get mask for diagonal blocks (self-interactions: sx=sy=sz=0, i=j).
+
+        Args:
+            edges_5d: (5, num_edges) tensor with [sx, sy, sz, i, j]
+
+        Returns:
+            Boolean mask of shape (num_edges,) with True for diagonal blocks
+        """
+        sx, sy, sz, i, j = (
+            edges_5d[0],
+            edges_5d[1],
+            edges_5d[2],
+            edges_5d[3],
+            edges_5d[4],
+        )
+        is_self_interaction = (sx == 0) & (sy == 0) & (sz == 0)
+        is_same_atom = i == j
+        return is_self_interaction & is_same_atom
+
+    def filter_blocks_by_partial_train(block_matrix, partial_train):
+        """
+        Filter blocks based on partial_train setting.
+
+        Args:
+            block_matrix: BlockMatrix object
+            partial_train: "diag", "offdiag", or None
+
+        Returns:
+            Dictionary mapping edge_type -> (filtered_blocks, mask)
+        """
+        if partial_train is None:
+            # Return all blocks with full mask
+            return {
+                key: (
+                    blocks,
+                    torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device),
+                )
+                for key, blocks in block_matrix.pair_blocks.items()
+            }
+
+        filtered_data = {}
+        for key in block_matrix.pair_blocks.keys():
+            blocks = block_matrix.pair_blocks[key]
+            edges = block_matrix.pair_edges[key]  # (5, num_edges)
+
+            diag_mask = get_diagonal_mask(edges)
+
+            if partial_train == "diag":
+                mask = diag_mask
+            elif partial_train == "offdiag":
+                mask = ~diag_mask
+            else:
+                mask = torch.ones(
+                    blocks.shape[0], dtype=torch.bool, device=blocks.device
+                )
+
+            filtered_data[key] = (blocks, mask)
+
+        return filtered_data
+
+    # =============================================================================
     # DEFINE MINIMAL NETWORK
     # =============================================================================
     print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
@@ -525,17 +602,28 @@ if __name__ == "__main__":
         # Convert to matrix blocks (train_target = "matrix")
         pred_H_matrix = pred_H_irreps.to_blocks(mapper)
 
-        # Compute loss on matrix blocks
+        # Compute loss on matrix blocks with optional filtering
         loss_H = 0.0
+        filtered_target = filter_blocks_by_partial_train(
+            target_H_matrix, CONFIG["partial_train"]
+        )
 
         for key in target_H_matrix.pair_blocks.keys():
             if key in pred_H_matrix.pair_blocks:
+                # Get filtered target blocks and mask
+                targ_blocks_full = target_H_matrix.pair_blocks[key]
+                _, mask = filtered_target[key]
+
                 # Match sizes (predictions might have more edges due to cutoff)
                 pred_blocks = pred_H_matrix.pair_blocks[key]
-                targ_blocks = target_H_matrix.pair_blocks[key]
-                min_n = min(pred_blocks.shape[0], targ_blocks.shape[0])
+                min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
 
-                loss_H += F.mse_loss(pred_blocks[:min_n], targ_blocks[:min_n])
+                # Apply mask to select only relevant blocks
+                mask = mask[:min_n]
+                if mask.any():
+                    pred_blocks_filtered = pred_blocks[:min_n][mask]
+                    targ_blocks_filtered = targ_blocks_full[:min_n][mask]
+                    loss_H += F.mse_loss(pred_blocks_filtered, targ_blocks_filtered)
 
         # Total loss (only Hamiltonian)
         loss = loss_H
@@ -623,9 +711,81 @@ if __name__ == "__main__":
 
         # Logging
         if epoch % CONFIG["log_interval"] == 0:
-            # Compute detailed metrics
+            # Compute detailed metrics with filtering
+            # First filter both predictions and targets
+            filtered_pred = filter_blocks_by_partial_train(
+                pred_H_matrix, CONFIG["partial_train"]
+            )
+            filtered_target = filter_blocks_by_partial_train(
+                target_H_matrix, CONFIG["partial_train"]
+            )
+            filtered_overlap = filter_blocks_by_partial_train(
+                overlap_e3nn, CONFIG["partial_train"]
+            )
+
+            # Create filtered versions for metrics computation
+            from data.block_matrix import BlockMatrix
+
+            pred_filtered_blocks = {}
+            target_filtered_blocks = {}
+            overlap_filtered_blocks = {}
+
+            for key in target_H_matrix.pair_blocks.keys():
+                if key in pred_H_matrix.pair_blocks:
+                    pred_full, pred_mask = filtered_pred[key]
+                    targ_full, targ_mask = filtered_target[key]
+                    ovlp_full, ovlp_mask = filtered_overlap[key]
+
+                    min_n = min(
+                        pred_full.shape[0], targ_full.shape[0], ovlp_full.shape[0]
+                    )
+                    mask = pred_mask[:min_n] & targ_mask[:min_n] & ovlp_mask[:min_n]
+
+                    if mask.any():
+                        pred_filtered_blocks[key] = pred_full[:min_n][mask]
+                        target_filtered_blocks[key] = targ_full[:min_n][mask]
+                        overlap_filtered_blocks[key] = ovlp_full[:min_n][mask]
+
+            # Create temporary BlockMatrix objects for metrics computation
+            pred_filtered = BlockMatrix(
+                atoms=target_H_matrix.atoms,
+                atom_counts=target_H_matrix.atom_counts,
+                pair_blocks=pred_filtered_blocks,
+                pair_edges={
+                    key: target_H_matrix.pair_edges[key]
+                    for key in pred_filtered_blocks.keys()
+                },
+                lookup=target_H_matrix.lookup,
+                orbital_cfg=target_H_matrix.orbital_cfg,
+                basis=target_H_matrix.basis,
+            )
+            target_filtered = BlockMatrix(
+                atoms=target_H_matrix.atoms,
+                atom_counts=target_H_matrix.atom_counts,
+                pair_blocks=target_filtered_blocks,
+                pair_edges={
+                    key: target_H_matrix.pair_edges[key]
+                    for key in target_filtered_blocks.keys()
+                },
+                lookup=target_H_matrix.lookup,
+                orbital_cfg=target_H_matrix.orbital_cfg,
+                basis=target_H_matrix.basis,
+            )
+            overlap_filtered = BlockMatrix(
+                atoms=overlap_e3nn.atoms,
+                atom_counts=overlap_e3nn.atom_counts,
+                pair_blocks=overlap_filtered_blocks,
+                pair_edges={
+                    key: overlap_e3nn.pair_edges[key]
+                    for key in overlap_filtered_blocks.keys()
+                },
+                lookup=overlap_e3nn.lookup,
+                orbital_cfg=overlap_e3nn.orbital_cfg,
+                basis=overlap_e3nn.basis,
+            )
+
             detailed_metrics = compute_detailed_metrics(
-                pred_H_matrix, target_H_matrix, overlap_e3nn
+                pred_filtered, target_filtered, overlap_filtered
             )
 
             # Legacy mae_H for history
@@ -732,9 +892,76 @@ if __name__ == "__main__":
         # Convert to blocks
         pred_H_matrix = pred_H_irreps.to_blocks(mapper)
 
+        # Filter for partial training if needed
+        filtered_pred = filter_blocks_by_partial_train(
+            pred_H_matrix, CONFIG["partial_train"]
+        )
+        filtered_target = filter_blocks_by_partial_train(
+            target_H_matrix, CONFIG["partial_train"]
+        )
+        filtered_overlap = filter_blocks_by_partial_train(
+            overlap_e3nn, CONFIG["partial_train"]
+        )
+
+        # Create filtered versions for metrics computation
+        from data.block_matrix import BlockMatrix
+
+        pred_filtered_blocks = {}
+        target_filtered_blocks = {}
+        overlap_filtered_blocks = {}
+
+        for key in target_H_matrix.pair_blocks.keys():
+            if key in pred_H_matrix.pair_blocks:
+                pred_full, pred_mask = filtered_pred[key]
+                targ_full, targ_mask = filtered_target[key]
+                ovlp_full, ovlp_mask = filtered_overlap[key]
+
+                min_n = min(pred_full.shape[0], targ_full.shape[0], ovlp_full.shape[0])
+                mask = pred_mask[:min_n] & targ_mask[:min_n] & ovlp_mask[:min_n]
+
+                if mask.any():
+                    pred_filtered_blocks[key] = pred_full[:min_n][mask]
+                    target_filtered_blocks[key] = targ_full[:min_n][mask]
+                    overlap_filtered_blocks[key] = ovlp_full[:min_n][mask]
+
+        # Create temporary BlockMatrix objects for metrics computation
+        pred_filtered = BlockMatrix(
+            atoms=target_H_matrix.atoms,
+            atom_counts=target_H_matrix.atom_counts,
+            pair_blocks=pred_filtered_blocks,
+            pair_edges={
+                key: target_H_matrix.pair_edges[key]
+                for key in pred_filtered_blocks.keys()
+            },
+            lookup=target_H_matrix.lookup,
+            orbital_cfg=target_H_matrix.orbital_cfg,
+        )
+        target_filtered = BlockMatrix(
+            atoms=target_H_matrix.atoms,
+            atom_counts=target_H_matrix.atom_counts,
+            pair_blocks=target_filtered_blocks,
+            pair_edges={
+                key: target_H_matrix.pair_edges[key]
+                for key in target_filtered_blocks.keys()
+            },
+            lookup=target_H_matrix.lookup,
+            orbital_cfg=target_H_matrix.orbital_cfg,
+        )
+        overlap_filtered = BlockMatrix(
+            atoms=overlap_e3nn.atoms,
+            atom_counts=overlap_e3nn.atom_counts,
+            pair_blocks=overlap_filtered_blocks,
+            pair_edges={
+                key: overlap_e3nn.pair_edges[key]
+                for key in overlap_filtered_blocks.keys()
+            },
+            lookup=overlap_e3nn.lookup,
+            orbital_cfg=overlap_e3nn.orbital_cfg,
+        )
+
         # Compute detailed metrics for final evaluation
         final_detailed_metrics = compute_detailed_metrics(
-            pred_H_matrix, target_H_matrix, overlap_e3nn
+            pred_filtered, target_filtered, overlap_filtered
         )
 
         print("\n[FINAL PREDICTIONS - Hamiltonian]")
@@ -762,24 +989,38 @@ if __name__ == "__main__":
         }
 
         print("\n  Per-block Metrics:")
-        for key in pred_H_matrix.pair_blocks.keys():
-            pred_block = pred_H_matrix.pair_blocks[key]
-            true_block = target_H_matrix.pair_blocks[key]
-            min_n = min(pred_block.shape[0], true_block.shape[0])
+        for key in pred_filtered_blocks.keys():
+            pred_block = pred_filtered_blocks[key]
+            true_block = target_filtered_blocks[key]
 
-            block_mse = F.mse_loss(pred_block[:min_n], true_block[:min_n]).item()
-            block_mae = torch.mean(
-                torch.abs(pred_block[:min_n] - true_block[:min_n])
-            ).item()
+            block_mse = F.mse_loss(pred_block, true_block).item()
+            block_mae = torch.mean(torch.abs(pred_block - true_block)).item()
 
             pair_irreps = mapper.get_pair_irreps(key)
 
+            # Get mask info for reporting
+            _, mask = filtered_pred[key]
+            num_selected = (
+                mask[: pred_H_matrix.pair_blocks[key].shape[0]].sum().item()
+                if key in pred_H_matrix.pair_blocks
+                else 0
+            )
+            num_total = (
+                pred_H_matrix.pair_blocks[key].shape[0]
+                if key in pred_H_matrix.pair_blocks
+                else 0
+            )
+
             print(f"\n  {key}:")
             print(f"    Block shape: {pred_block.shape}, Irreps: {pair_irreps}")
+            if CONFIG["partial_train"] is not None:
+                print(
+                    f"    Selected blocks: {num_selected}/{num_total} ({CONFIG['partial_train']})"
+                )
             print(f"    MSE: {block_mse:.6e}")
             print(f"    MAE: {block_mae:.6e}")
             print(
-                f"    Relative error: {block_mae / (torch.abs(true_block[:min_n]).mean().item() + 1e-10):.6%}"
+                f"    Relative error: {block_mae / (torch.abs(true_block).mean().item() + 1e-10):.6%}"
             )
 
             final_metrics[f"final/{key}_mse"] = block_mse
