@@ -186,7 +186,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--mirror-x",
-        action="store_true",
+        type=lambda x: x.lower() == "true" if isinstance(x, str) else bool(x),
+        default=False,
         help="Mirror x coordinate (test parity breaking)",
     )
 

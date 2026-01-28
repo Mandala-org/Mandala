@@ -20,9 +20,9 @@ parameters:
   box-permutation:
     values: ["same", "none"]
 
-  # No mirroring in minimal sweep
+  # Mirroring option
   mirror-x:
-    values: [true, false]
+    value: false
 
   # Fixed training hyperparameters
   lr:
