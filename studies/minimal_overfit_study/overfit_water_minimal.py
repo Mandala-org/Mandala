@@ -597,6 +597,7 @@ if __name__ == "__main__":
             pair_edges=pair_edges_dict,
             lookup=lookup_dict,
             orbital_cfg=orbital_cfg,
+            basis=target_H_matrix.basis,
         )
 
         # Convert to matrix blocks (train_target = "matrix")
@@ -936,6 +937,7 @@ if __name__ == "__main__":
             },
             lookup=target_H_matrix.lookup,
             orbital_cfg=target_H_matrix.orbital_cfg,
+            basis=target_H_matrix.basis,
         )
         target_filtered = BlockMatrix(
             atoms=target_H_matrix.atoms,
@@ -947,6 +949,7 @@ if __name__ == "__main__":
             },
             lookup=target_H_matrix.lookup,
             orbital_cfg=target_H_matrix.orbital_cfg,
+            basis=target_H_matrix.basis,
         )
         overlap_filtered = BlockMatrix(
             atoms=overlap_e3nn.atoms,
@@ -958,6 +961,7 @@ if __name__ == "__main__":
             },
             lookup=overlap_e3nn.lookup,
             orbital_cfg=overlap_e3nn.orbital_cfg,
+            basis=overlap_e3nn.basis,
         )
 
         # Compute detailed metrics for final evaluation
