@@ -887,6 +887,7 @@ if __name__ == "__main__":
             pair_edges=pair_edges_dict,
             lookup=lookup_dict,
             orbital_cfg=orbital_cfg,
+            basis=target_H_matrix.basis,
         )
 
         # Convert to blocks
