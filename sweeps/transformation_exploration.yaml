@@ -14,7 +14,7 @@ parameters:
     values: ["standard", "inverse", "none"]
 
   sh-l1-override:
-    values: ["2,0,1", "1,2,0", "none", null]
+    values: ["2,0,1", "1,2,0", "none"]
 
   # Box permutation fixed to follow coordinates
   box-permutation:
