@@ -178,14 +178,14 @@ class MinimalNodeEncoder(nn.Module):
         self.embedding = nn.Embedding(num_elements, hidden_dim)
         self.irreps_out = Irreps(f"{hidden_dim}x0e")
         print(
-            f"    [NodeEncoder] Input: {num_elements} elements → Output: {self.irreps_out}"
+            f"    [NodeEncoder] Input: {num_elements} elements -> Output: {self.irreps_out}"
         )
 
     def forward(self, node_type_idx):
         out = self.embedding(node_type_idx)
         check_for_nans(out, "NodeEncoder.embedding")
         print(
-            f"      [NodeEncoder.forward] Input shape: {node_type_idx.shape} → Output: {out.shape} (irreps: {self.irreps_out})"
+            f"      [NodeEncoder.forward] Input shape: {node_type_idx.shape} -> Output: {out.shape} (irreps: {self.irreps_out})"
         )
         return out
 
@@ -211,7 +211,7 @@ class MinimalEdgeEncoder(nn.Module):
         # TP output must produce both scalars, gates, and gated features
         irreps_tp_out = irreps_scalars + irreps_gates + irreps_gated
 
-        # Tensor product: scalars ⊗ SH → TP output
+        # Tensor product: scalars ⊗ SH -> TP output
         self.tp = FullyConnectedTensorProduct(
             Irreps(f"{scalar_dim}x0e"),
             sh_irreps,
@@ -238,13 +238,13 @@ class MinimalEdgeEncoder(nn.Module):
         self.norm = e3LayerNorm(self.irreps_out, verbose=False)
 
         print(
-            f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) → scalars({scalar_dim}x0e)"
+            f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) -> scalars({scalar_dim}x0e)"
         )
-        print(f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} → {irreps_tp_out}")
+        print(f"                  TP: {scalar_dim}x0e ⊗ {sh_irreps} -> {irreps_tp_out}")
         print(
             f"                  Note: TP creates separate scalar groups for each L, combined by Gate"
         )
-        print(f"                  Gate: {irreps_tp_out} → {self.irreps_out}")
+        print(f"                  Gate: {irreps_tp_out} -> {self.irreps_out}")
         print(f"                  Norm: {self.irreps_out}")
 
     def forward(
@@ -275,19 +275,19 @@ class MinimalEdgeEncoder(nn.Module):
         check_for_nans(edge_feat, "EdgeEncoder.norm", edge_feat)
 
         print(
-            f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} → Combined: {combined.shape}"
+            f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} -> Combined: {combined.shape}"
         )
         print(
-            f"                            → Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
+            f"                            -> Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
         )
         print(
             f"                            ⊗ SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
         )
         print(
-            f"                            → TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
+            f"                            -> TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
         )
         print(
-            f"                            → Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
+            f"                            -> Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
         )
         log_activation_magnitudes(
             edge_feat,
@@ -319,7 +319,7 @@ class MinimalMessageBlock(nn.Module):
         # Output will be hidden_irreps
         # (No TP needed, just linear projection)
 
-        # Edge update: concat(updated_src_node, updated_dst_node, edge) ⊗ SH → TP output
+        # Edge update: concat(updated_src_node, updated_dst_node, edge) ⊗ SH -> TP output
         # After node update, nodes have hidden_irreps
         edge_concat_irreps = hidden_irreps + hidden_irreps + edge_irreps
 
@@ -344,7 +344,7 @@ class MinimalMessageBlock(nn.Module):
         )
         self.edge_norm = e3LayerNorm(self.edge_gate.irreps_out, verbose=False)
 
-        # Node update: aggregate messages + self-connection → Linear (not TP)
+        # Node update: aggregate messages + self-connection -> Linear (not TP)
         irreps_node_tp_out = irreps_scalars + irreps_gates + irreps_gated
         self.node_update_lin = Linear(hidden_irreps + node_irreps, irreps_node_tp_out)
 
@@ -369,13 +369,13 @@ class MinimalMessageBlock(nn.Module):
 
         print(f"    [MessageBlock] Irreps:")
         print(f"      Node update: concat(messages {edge_irreps}, self {node_irreps})")
-        print(f"                   → Linear: {irreps_node_tp_out}")
-        print(f"                   → Gate: {self.node_gate.irreps_out}")
+        print(f"                   -> Linear: {irreps_node_tp_out}")
+        print(f"                   -> Gate: {self.node_gate.irreps_out}")
         print(
             f"      Edge update: concat({hidden_irreps}, {hidden_irreps}, {edge_irreps}) ⊗ {sh_irreps}"
         )
-        print(f"                   → TP: {irreps_tp_out}")
-        print(f"                   → Gate: {self.edge_gate.irreps_out}")
+        print(f"                   -> TP: {irreps_tp_out}")
+        print(f"                   -> Gate: {self.edge_gate.irreps_out}")
 
     def forward(
         self,
@@ -418,7 +418,7 @@ class MinimalMessageBlock(nn.Module):
         check_for_nans(node_feat_new, f"MessageBlock[{self.layer_idx}].node_norm")
 
         print(
-            f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
+            f"                            Node Linear: {node_concat.shape} -> {node_linear.shape}"
         )
         print(
             f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
@@ -437,7 +437,7 @@ class MinimalMessageBlock(nn.Module):
 
         edge_concat = torch.cat([src_node, dst_node, edge_feat], dim=-1)
         print(
-            f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} → {edge_concat.shape}"
+            f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} -> {edge_concat.shape}"
         )
 
         # Apply TP with spherical harmonics
@@ -451,7 +451,7 @@ class MinimalMessageBlock(nn.Module):
         check_for_nans(edge_feat_new, f"MessageBlock[{self.layer_idx}].edge_norm")
 
         print(
-            f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_tp.shape}"
+            f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} -> {edge_tp.shape}"
         )
         print(
             f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
@@ -479,7 +479,7 @@ class MinimalHead(nn.Module):
         for edge_type in mapper.edge_types:
             pair_irreps = mapper.get_pair_irreps(edge_type)
             self.projections[edge_type] = Linear(hidden_irreps, pair_irreps)
-            print(f"    [Head] {edge_type}: {hidden_irreps} → {pair_irreps}")
+            print(f"    [Head] {edge_type}: {hidden_irreps} -> {pair_irreps}")
 
             # Check if Linear can produce all requested output irreps
             input_irreps = Irreps(hidden_irreps)
@@ -496,7 +496,7 @@ class MinimalHead(nn.Module):
 
     def forward(self, edge_feat, edge_type_idx, edge_index, edge_shift):
         """
-        Returns: dict[pair_key] → {"vectors": tensor, "edges": tensor}
+        Returns: dict[pair_key] -> {"vectors": tensor, "edges": tensor}
         """
         outputs = {}
 
@@ -525,7 +525,7 @@ class MinimalHead(nn.Module):
                     "edges": selected_edges,
                 }
                 print(
-                    f"      [Head.forward] {type_str}: {mask.sum().item()} edges → vectors {pred_vectors.shape}"
+                    f"      [Head.forward] {type_str}: {mask.sum().item()} edges -> vectors {pred_vectors.shape}"
                 )
 
         return outputs

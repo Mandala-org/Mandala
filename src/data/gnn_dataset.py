@@ -4,7 +4,7 @@ gnn_dataset.py
 
 In-memory dataset that converts :class:`Snapshot` objects into graph dict:
 
-* **x**    → Full graph. Sub-graph corresponding to smaller, message-passing edge index available through index_gnn_cutoff
+* **x**    -> Full graph. Sub-graph corresponding to smaller, message-passing edge index available through index_gnn_cutoff
 
 Targets *y* (Hamiltonian / Overlap / Density + energy, electrons)
 are provided as snapshot-level information; training code can access

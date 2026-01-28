@@ -49,7 +49,7 @@ def blocks_to_vectors(
     mapper: BlockIrrepMapper, pair: Union[Tuple[str, str], str], blocks: torch.Tensor
 ) -> torch.Tensor:
     """
-    Convenience shim → delegates to :class:`BlockIrrepMapper`.
+    Convenience shim -> delegates to :class:`BlockIrrepMapper`.
     """
     return mapper.blocks_to_vectors(pair, blocks)
 

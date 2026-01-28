@@ -49,7 +49,7 @@ _U_WIKI_TO_FHIAIMS = {l: U.T for l, U in _U_FHIAIMS_TO_WIKI.items()}
 
 
 def _orbital_types_from_irreps(irreps: Irreps) -> List[int]:
-    """Expand [(mul,l)] → [l,l,...] multiplicity times."""
+    """Expand [(mul,l)] -> [l,l,...] multiplicity times."""
     types: List[int] = []
     for mul, (l, _p) in irreps:
         types.extend([l] * mul)

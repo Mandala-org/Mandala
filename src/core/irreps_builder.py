@@ -16,10 +16,10 @@ Rules implemented here
 * Hidden scalar/vector width *decays by factor 2* with every increase in `ell`.
   Example (`base_dim=64, l_max=3`) ::
 
-      l = 0  →  64x0e  + 64x0o
-      l = 1  →  32x1e  + 32x1o
-      l = 2  →  16x2e  + 16x2o
-      l = 3  →   8x3e  +  8x3o
+      l = 0  ->  64x0e  + 64x0o
+      l = 1  ->  32x1e  + 32x1o
+      l = 2  ->  16x2e  + 16x2o
+      l = 3  ->   8x3e  +  8x3o
 
 * Both **even** and **odd** parity channels are included for every `ell`
   because a real-orbital Hamiltonian couples even↔odd via translations.

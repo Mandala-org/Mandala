@@ -1,5 +1,5 @@
 """
-Encoders for node and edge raw features → hidden irreps.
+Encoders for node and edge raw features -> hidden irreps.
 
 Features
 --------
@@ -48,7 +48,7 @@ def _magnitude_splits(
 # --------------------------------------------------------------------------- #
 class NodeEncoder(nn.Module):
     """
-    Node features = *only* element one-hot → learned embedding (scalars).
+    Node features = *only* element one-hot -> learned embedding (scalars).
 
     The embedding is mapped (Linear) to `irreps_out` (scalars only in our
     current setup, but we keep it general).

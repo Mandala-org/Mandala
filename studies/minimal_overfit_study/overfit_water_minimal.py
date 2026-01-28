@@ -9,10 +9,10 @@ importing high-level classes like E3GNN or E3GNNDataset.
 Goal: Achieve highest possible accuracy through aggressive overfitting.
 
 Architecture:
-- Simple node encoder: element embedding → scalars
+- Simple node encoder: element embedding -> scalars
 - Simple edge encoder: distance + spherical harmonics
 - 1-2 message passing layers with basic tensor products
-- Simple head: edge features → matrix blocks via BlockIrrepMapper
+- Simple head: edge features -> matrix blocks via BlockIrrepMapper
 
 Verbose logging at every step for educational purposes.
 """
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     print(f"  Found {len(src)} off-diagonal edges")
     print(f"  Edge list (first 10):")
     for i in range(min(10, len(src))):
-        print(f"    {src[i]} → {dst[i]} (offset: {offsets[i]})")
+        print(f"    {src[i]} -> {dst[i]} (offset: {offsets[i]})")
 
     # Add self-edges
     self_src = torch.arange(num_atoms, dtype=torch.long, device=device)

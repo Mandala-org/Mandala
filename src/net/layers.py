@@ -4,7 +4,7 @@ layers.py
 
 E(3)-equivariant message-passing blocks:
 
-*   uses `torch_scatter.scatter` for edge→node aggregation
+*   uses `torch_scatter.scatter` for edge->node aggregation
 *   dropout is `e3nn.nn.Dropout` (acts on *all* irrep coeffs)
 *   normalisation + activation selected via `make_nonlinearity`
 """
@@ -89,7 +89,7 @@ class EquiConv(nn.Module):
     E(3)-equivariant convolution with radial MLP weighting.
 
     Similar to DeepH-E3's EquiConv. Combines:
-    - Tensor product: irreps_in1 ⊗ irreps_in2 → irreps_out
+    - Tensor product: irreps_in1 ⊗ irreps_in2 -> irreps_out
     - Radial MLP: generates weights from edge length embeddings
     - Optional Gate nonlinearity
     - Element-wise multiplication with learned weights
@@ -266,7 +266,7 @@ class EdgeUpdateBlock(nn.Module):
     """
     Edge update block following DeepH-E3 architecture.
 
-    For each edge (i → j):
+    For each edge (i -> j):
       • Concatenate node[i], node[j], and edge features
       • Apply EquiConv with spherical harmonics and radial weighting
       • Apply linear transformation and nonlinearity

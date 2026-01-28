@@ -72,7 +72,7 @@ def parse_openmx_scfout(
         orbital_cfg, diagonal=False, device="cpu", dtype=torch.float32
     )
 
-    # ─────────────────────────────────────── storage: mat→key→(i,j)→tensor
+    # ─────────────────────────────────────── storage: mat->key->(i,j)->tensor
     accum: Dict[str, Dict[str, Dict[Tuple[int, int], torch.Tensor]]] = {
         "hamiltonian": {},
         "overlap": {},
