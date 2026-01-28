@@ -1,0 +1,58 @@
+program: studies/minimal_overfit_study/overfit_water_transform_exploration.py
+method: grid
+metric:
+  name: validation/1e_loss
+  goal: minimize
+
+# Grid search over transformation variants
+parameters:
+  # Transformation parameters (grid search)
+  coord-permutation:
+    values: ["2,0,1", "1,2,0", "none"]
+
+  sh-transform-mode:
+    values: ["standard", "inverse", "none"]
+
+  sh-l1-override:
+    values: ["2,0,1", "1,2,0", "none"]
+
+  # Box permutation fixed to follow coordinates
+  box-permutation:
+    values: ["same", "none"]
+
+  # Mirroring option
+  mirror-x:
+    value: false
+
+  # Fixed training hyperparameters
+  lr:
+    value: 0.001
+
+  num-layers:
+    value: 1
+
+  num-epochs:
+    value: 10000
+
+  cutoff-radius:
+    value: 8.0
+
+  n-radial:
+    value: 64
+
+  l-max:
+    value: 4
+
+  hidden-irreps:
+    value: "16x0e+8x1o+8x1e+4x2e+4x2o+4x3o+4x3e+2x4e"
+
+  train-on-irrep-parts:
+    value: true
+
+  log-interval:
+    value: 200
+
+# Run configuration
+name: transformation-exploration
+project: mandala-transform-exploration
+entity: b-brzoza
