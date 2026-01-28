@@ -14,6 +14,51 @@ from torch_geometric.utils import degree
 import wandb
 
 
+def check_for_nans(tensor, name, input_tensor=None):
+    """
+    Check if tensor contains NaNs and raise error with diagnostics.
+
+    Args:
+        tensor: The tensor to check
+        name: Name/location of the operation (e.g., "EdgeEncoder.radial_proj")
+        input_tensor: Optional input tensor for additional diagnostics
+    """
+    if torch.isnan(tensor).any():
+        nan_count = torch.isnan(tensor).sum().item()
+        total_count = tensor.numel()
+
+        print(f"\n{'='*80}")
+        print(f"❌ NaN DETECTED in {name}")
+        print(f"{'='*80}")
+        print(
+            f"NaN count: {nan_count}/{total_count} elements ({100*nan_count/total_count:.2f}%)"
+        )
+        print(f"Output shape: {tensor.shape}")
+
+        # Stats on non-NaN values
+        non_nan_mask = ~torch.isnan(tensor)
+        if non_nan_mask.any():
+            non_nan_values = tensor[non_nan_mask]
+            print(
+                f"Non-NaN stats: min={non_nan_values.min().item():.6e}, max={non_nan_values.max().item():.6e}, mean={non_nan_values.mean().item():.6e}"
+            )
+        else:
+            print("All values are NaN!")
+
+        # Input tensor stats if provided
+        if input_tensor is not None:
+            print(f"\nInput shape: {input_tensor.shape}")
+            if torch.isnan(input_tensor).any():
+                print(f"⚠️  Input already contains NaNs!")
+            else:
+                print(
+                    f"Input stats: min={input_tensor.min().item():.6e}, max={input_tensor.max().item():.6e}, mean={input_tensor.mean().item():.6e}"
+                )
+
+        print(f"{'='*80}\n")
+        raise RuntimeError(f"NaN detected in {name}. Training stopped.")
+
+
 class e3LayerNorm(nn.Module):
     """E(3)-equivariant layer normalization (from DeepH-E3)."""
 
@@ -134,6 +179,7 @@ class MinimalNodeEncoder(nn.Module):
 
     def forward(self, node_type_idx):
         out = self.embedding(node_type_idx)
+        check_for_nans(out, "NodeEncoder.embedding")
         print(
             f"      [NodeEncoder.forward] Input shape: {node_type_idx.shape} → Output: {out.shape} (irreps: {self.irreps_out})"
         )
@@ -210,15 +256,19 @@ class MinimalEdgeEncoder(nn.Module):
 
         # Project to scalars
         radial_feat = self.radial_proj(combined)  # (E, scalar_dim)
+        check_for_nans(radial_feat, "EdgeEncoder.radial_proj", combined)
 
         # Tensor product with spherical harmonics
         tp_out = self.tp(radial_feat, edge_sh)
+        check_for_nans(tp_out, "EdgeEncoder.tp", radial_feat)
 
         # Gate nonlinearity
         edge_feat = self.gate(tp_out)
+        check_for_nans(edge_feat, "EdgeEncoder.gate", tp_out)
 
         # Layer norm
         edge_feat = self.norm(edge_feat, batch_edge)
+        check_for_nans(edge_feat, "EdgeEncoder.norm", edge_feat)
 
         print(
             f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} → Combined: {combined.shape}"
@@ -345,13 +395,23 @@ class MinimalMessageBlock(nn.Module):
         # Node update first (like DeepH-E3): aggregate current edge messages + self-connection
         messages = torch.zeros(N, edge_feat.shape[1], device=edge_feat.device)
         messages.index_add_(0, dst_idx, edge_feat)
+        check_for_nans(
+            messages, f"MessageBlock[{self.layer_idx}].messages_aggregate", edge_feat
+        )
         print(f"                            Messages aggregated: {messages.shape}")
 
         # Concatenate with self-connection
         node_concat = torch.cat([messages, node_feat], dim=-1)
         node_linear = self.node_update_lin(node_concat)
+        check_for_nans(
+            node_linear, f"MessageBlock[{self.layer_idx}].node_linear", node_concat
+        )
         node_feat_new = self.node_gate(node_linear)
+        check_for_nans(
+            node_feat_new, f"MessageBlock[{self.layer_idx}].node_gate", node_linear
+        )
         node_feat_new = self.node_norm(node_feat_new, batch_node)
+        check_for_nans(node_feat_new, f"MessageBlock[{self.layer_idx}].node_norm")
 
         print(
             f"                            Node Linear: {node_concat.shape} → {node_linear.shape}"
@@ -378,8 +438,13 @@ class MinimalMessageBlock(nn.Module):
 
         # Apply TP with spherical harmonics
         edge_tp = self.edge_update_tp(edge_concat, edge_sh)
+        check_for_nans(edge_tp, f"MessageBlock[{self.layer_idx}].edge_tp", edge_concat)
         edge_feat_new = self.edge_gate(edge_tp)
+        check_for_nans(
+            edge_feat_new, f"MessageBlock[{self.layer_idx}].edge_gate", edge_tp
+        )
         edge_feat_new = self.edge_norm(edge_feat_new, batch_edge)
+        check_for_nans(edge_feat_new, f"MessageBlock[{self.layer_idx}].edge_norm")
 
         print(
             f"                            Edge TP: {edge_concat.shape} ⊗ {edge_sh.shape} → {edge_tp.shape}"
@@ -438,6 +503,9 @@ class MinimalHead(nn.Module):
             if mask.any():
                 selected_feat = edge_feat[mask]
                 pred_vectors = proj(selected_feat)
+                check_for_nans(
+                    pred_vectors, f"Head.{type_str}_projection", selected_feat
+                )
 
                 # Build 5D edge tensor (sx, sy, sz, i, j)
                 selected_edges = torch.cat(
