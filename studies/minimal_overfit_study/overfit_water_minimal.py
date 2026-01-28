@@ -21,6 +21,7 @@ import sys
 import os
 from pathlib import Path
 import argparse
+import time
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
@@ -155,6 +156,11 @@ if __name__ == "__main__":
         choices=["diag", "offdiag", None],
         help="Train on partial data: 'diag' (diagonal blocks only), 'offdiag' (off-diagonal only), or None (all blocks)",
     )
+    parser.add_argument(
+        "--train-on-irrep-parts",
+        action="store_true",
+        help="Decompose loss into per-irrep contributions (log to partial/* in wandb)",
+    )
 
     args = parser.parse_args()
 
@@ -183,6 +189,7 @@ if __name__ == "__main__":
         "log_interval": args.log_interval,
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
+        "train_on_irrep_parts": args.train_on_irrep_parts,
         # Device
         "device": args.device,
         # Target
@@ -222,6 +229,10 @@ if __name__ == "__main__":
         print(f"  Partial training: {CONFIG['partial_train']} blocks only")
     else:
         print(f"  Partial training: disabled (training on all blocks)")
+    if CONFIG["train_on_irrep_parts"]:
+        print(f"  Train on irrep parts: enabled (decomposed per-irrep loss)")
+    else:
+        print(f"  Train on irrep parts: disabled (standard loss)")
 
     device = torch.device(CONFIG["device"])
 
@@ -415,8 +426,81 @@ if __name__ == "__main__":
     print(f"\n  Batch indices: nodes {batch_node.shape}, edges {batch_edge.shape}")
 
     # =============================================================================
-    # HELPER FUNCTIONS FOR PARTIAL TRAINING
+    # HELPER FUNCTIONS FOR PARTIAL TRAINING AND IRREP FILTERING
     # =============================================================================
+    def filter_irreps_block_data_by_irrep(irreps_block_data, target_irrep):
+        """
+        Filter IrrepsBlockData to only include contributions from a specific irrep.
+        All other irrep components are zeroed out.
+
+        Args:
+            irreps_block_data: IrrepsBlockData object
+            target_irrep: e3nn.o3.Irrep to keep (e.g., Irrep("0e"), Irrep("1o"))
+
+        Returns:
+            Filtered IrrepsBlockData with only target_irrep contributions
+        """
+        from e3nn.o3 import Irrep
+        from data.block_matrix import IrrepsBlockData
+
+        if isinstance(target_irrep, str):
+            target_irrep = Irrep(target_irrep)
+
+        filtered_vectors = {}
+
+        for edge_type, vectors in irreps_block_data.pair_vectors.items():
+            # Get pair irreps for this edge type
+            pair_irreps = mapper.get_pair_irreps(edge_type)
+
+            # Create mask for target irrep
+            filtered_vec = torch.zeros_like(vectors)
+            start_idx = 0
+
+            for mul, irrep in pair_irreps:
+                irrep_dim = irrep.dim * mul
+
+                if irrep == target_irrep:
+                    # Keep this irrep's contribution
+                    filtered_vec[:, start_idx : start_idx + irrep_dim] = vectors[
+                        :, start_idx : start_idx + irrep_dim
+                    ]
+
+                start_idx += irrep_dim
+
+            filtered_vectors[edge_type] = filtered_vec
+
+        return IrrepsBlockData(
+            atoms=irreps_block_data.atoms,
+            atom_counts=irreps_block_data.atom_counts,
+            pair_vectors=filtered_vectors,
+            pair_edges=irreps_block_data.pair_edges,
+            lookup=irreps_block_data.lookup,
+            orbital_cfg=irreps_block_data.orbital_cfg,
+            basis=irreps_block_data.basis,
+        )
+
+    def get_all_irreps_in_hamiltonian(irreps_block_data):
+        """
+        Get list of all unique irreps present in the Hamiltonian.
+
+        Args:
+            irreps_block_data: IrrepsBlockData object
+
+        Returns:
+            List of unique Irrep objects, sorted by (l, parity)
+        """
+
+        unique_irreps = set()
+
+        for edge_type in irreps_block_data.pair_vectors.keys():
+            pair_irreps = mapper.get_pair_irreps(edge_type)
+            for mul, irrep in pair_irreps:
+                if mul > 0:  # Only include irreps that are actually present
+                    unique_irreps.add(irrep)
+
+        # Sort by (l, p) where p=1 for even, p=-1 for odd
+        return sorted(unique_irreps, key=lambda ir: (ir.l, ir.p))
+
     def get_diagonal_mask(edges_5d):
         """
         Get mask for diagonal blocks (self-interactions: sx=sy=sz=0, i=j).
@@ -513,6 +597,20 @@ if __name__ == "__main__":
     print("\n✓ Network architecture complete!")
 
     # =============================================================================
+    # PREPARE TARGET IN IRREPS SPACE (if needed for irrep-decomposed loss)
+    # =============================================================================
+    target_H_irreps = None
+    all_irreps = None
+
+    if CONFIG["train_on_irrep_parts"]:
+        print("\n[IRREP DECOMPOSITION] Converting target to irreps space...")
+        target_H_irreps = target_H_matrix.to_vectors(mapper)
+        all_irreps = get_all_irreps_in_hamiltonian(target_H_irreps)
+        print(
+            f"  Found {len(all_irreps)} unique irreps: {[str(ir) for ir in all_irreps]}"
+        )
+
+    # =============================================================================
     # TRAINING LOOP
     # =============================================================================
     print("\n" + "=" * 80)
@@ -531,6 +629,9 @@ if __name__ == "__main__":
     # Track best model
     best_loss = float("inf")
     best_epoch = 0
+
+    # Track timing
+    last_log_time = time.time()
 
     print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
     print(f"Training for {CONFIG['num_epochs']} epochs...\n")
@@ -603,28 +704,73 @@ if __name__ == "__main__":
         # Convert to matrix blocks (train_target = "matrix")
         pred_H_matrix = pred_H_irreps.to_blocks(mapper)
 
-        # Compute loss on matrix blocks with optional filtering
-        loss_H = 0.0
-        filtered_target = filter_blocks_by_partial_train(
-            target_H_matrix, CONFIG["partial_train"]
-        )
+        # Compute loss - either standard or per-irrep decomposed
+        if CONFIG["train_on_irrep_parts"]:
+            # Per-irrep decomposed loss
+            loss_H = 0.0
+            irrep_losses = {}
 
-        for key in target_H_matrix.pair_blocks.keys():
-            if key in pred_H_matrix.pair_blocks:
-                # Get filtered target blocks and mask
-                targ_blocks_full = target_H_matrix.pair_blocks[key]
-                _, mask = filtered_target[key]
+            for irrep in all_irreps:
+                # Filter both prediction and target by this irrep
+                pred_irrep_filtered = filter_irreps_block_data_by_irrep(
+                    pred_H_irreps, irrep
+                )
+                target_irrep_filtered = filter_irreps_block_data_by_irrep(
+                    target_H_irreps, irrep
+                )
 
-                # Match sizes (predictions might have more edges due to cutoff)
-                pred_blocks = pred_H_matrix.pair_blocks[key]
-                min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+                # Convert to matrix blocks
+                pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
+                target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
 
-                # Apply mask to select only relevant blocks
-                mask = mask[:min_n]
-                if mask.any():
-                    pred_blocks_filtered = pred_blocks[:min_n][mask]
-                    targ_blocks_filtered = targ_blocks_full[:min_n][mask]
-                    loss_H += F.mse_loss(pred_blocks_filtered, targ_blocks_filtered)
+                # Apply partial_train filtering
+                filtered_target_irrep = filter_blocks_by_partial_train(
+                    target_irrep_blocks, CONFIG["partial_train"]
+                )
+
+                # Compute loss for this irrep
+                irrep_loss = 0.0
+                for key in target_irrep_blocks.pair_blocks.keys():
+                    if key in pred_irrep_blocks.pair_blocks:
+                        targ_blocks_full = target_irrep_blocks.pair_blocks[key]
+                        _, mask = filtered_target_irrep[key]
+
+                        pred_blocks = pred_irrep_blocks.pair_blocks[key]
+                        min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+
+                        mask = mask[:min_n]
+                        if mask.any():
+                            pred_blocks_filtered = pred_blocks[:min_n][mask]
+                            targ_blocks_filtered = targ_blocks_full[:min_n][mask]
+                            irrep_loss += F.mse_loss(
+                                pred_blocks_filtered, targ_blocks_filtered
+                            )
+
+                irrep_losses[str(irrep)] = irrep_loss
+                loss_H += irrep_loss
+        else:
+            # Standard loss computation
+            loss_H = 0.0
+            filtered_target = filter_blocks_by_partial_train(
+                target_H_matrix, CONFIG["partial_train"]
+            )
+
+            for key in target_H_matrix.pair_blocks.keys():
+                if key in pred_H_matrix.pair_blocks:
+                    # Get filtered target blocks and mask
+                    targ_blocks_full = target_H_matrix.pair_blocks[key]
+                    _, mask = filtered_target[key]
+
+                    # Match sizes (predictions might have more edges due to cutoff)
+                    pred_blocks = pred_H_matrix.pair_blocks[key]
+                    min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+
+                    # Apply mask to select only relevant blocks
+                    mask = mask[:min_n]
+                    if mask.any():
+                        pred_blocks_filtered = pred_blocks[:min_n][mask]
+                        targ_blocks_filtered = targ_blocks_full[:min_n][mask]
+                        loss_H += F.mse_loss(pred_blocks_filtered, targ_blocks_filtered)
 
         # Total loss (only Hamiltonian)
         loss = loss_H
@@ -708,7 +854,14 @@ if __name__ == "__main__":
         optimizer.step()
 
         # Log training loss at every step
-        wandb.log({"train/loss_step": loss.item(), "epoch": epoch})
+        step_log = {"train/loss_step": loss.item(), "epoch": epoch}
+
+        # Log per-irrep losses if enabled
+        if CONFIG["train_on_irrep_parts"]:
+            for irrep_str, irrep_loss in irrep_losses.items():
+                step_log[f"partial/{irrep_str}"] = irrep_loss.item()
+
+        wandb.log(step_log)
 
         # Logging
         if epoch % CONFIG["log_interval"] == 0:
@@ -796,9 +949,40 @@ if __name__ == "__main__":
             history["mse_H"].append(loss_H.item())
             history["mae_H"].append(mae_H)
 
+            # Calculate timing
+            current_time = time.time()
+            time_elapsed = current_time - last_log_time
+            epochs_since_last_log = CONFIG["log_interval"] if epoch > 0 else 1
+            avg_epoch_time = time_elapsed / epochs_since_last_log
+            last_log_time = current_time
+
             # Log to console
             print(f"\n[METRICS]")
+            print(
+                f"  Avg epoch time:       {avg_epoch_time:.3f}s ({epochs_since_last_log} epochs in {time_elapsed:.1f}s)"
+            )
             print(f"  Loss (MSE):           {loss.item():.6e}")
+
+            # Print per-irrep loss contributions if enabled
+            if CONFIG["train_on_irrep_parts"]:
+                print(f"\n  Per-Irrep Loss Contributions:")
+                # Sort irreps by loss (descending) for better readability
+                sorted_irreps = sorted(
+                    irrep_losses.items(), key=lambda x: x[1].item(), reverse=True
+                )
+                total_loss_check = sum(
+                    irrep_loss.item() for _, irrep_loss in sorted_irreps
+                )
+                for irrep_str, irrep_loss in sorted_irreps:
+                    percentage = (
+                        (irrep_loss.item() / total_loss_check * 100)
+                        if total_loss_check > 0
+                        else 0
+                    )
+                    print(
+                        f"    {irrep_str:4s}: {irrep_loss.item():.6e} ({percentage:5.1f}%)"
+                    )
+
             print(f"  MAE H:                {detailed_metrics['mae']:.6e}")
             print(f"  MSE H:                {detailed_metrics['mse']:.6e}")
             print(f"  MAE H (modified):     {detailed_metrics['mae_mod']:.6e}")
