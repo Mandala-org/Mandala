@@ -22,7 +22,7 @@ parameters:
 
   # Mirroring option
   mirror-x:
-    value: false
+    values: [false, true]
 
   # Fixed training hyperparameters
   lr:
