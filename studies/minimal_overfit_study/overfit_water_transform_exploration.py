@@ -152,7 +152,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--train-on-irrep-parts",
-        action="store_true",
+        type=lambda x: x.lower() == "true" if isinstance(x, str) else bool(x),
+        default=False,
         help="Decompose loss into per-irrep contributions (log to partial/* in wandb)",
     )
     # Transformation exploration arguments
