@@ -368,6 +368,65 @@ class BlockMatrix:
             dense[r0 : r0 + d_i, c0 : c0 + d_j] += self.pair_blocks[key][k]
         return dense
 
+    def to_dense_k(self, lattice, wave,
+                   wave_frac=True) -> torch.Tensor:
+        """
+        Assemble a full dense matrix of shape ``(Σ d_i, Σ d_i)`` where
+        ``d_i`` is orbital dimension of atom *i*.
+        Summing all periodic images into the central cell. Additionally,
+        computes the phase factors for the fourier transform to
+        reciprocal space and multiplies each (d_i,d_j) by the
+        appropriate factor.
+        Inputs:
+            lattice: Ndim x Ndim matrix, torch.tensor
+                the lattice vectors of the Hamiltonian stored row-wise.
+                [[x],[y],[z]]
+            k: Ndim vector, torch.tensor
+                The reciprocal lattice vector that determines the
+                reciprocal Hamiltonian to compute.
+                [1/x,1/y,1/z]
+        """
+
+        offsets, total = self._atom_offsets()
+        device = next(iter(self.pair_blocks.values())).device
+        dtype = next(iter(self.pair_blocks.values())).dtype
+
+        # decide on the complex type to store the k hamiltonian
+        if dtype == torch.float32:
+            ctype = torch.complex64
+        elif dtype == torch.float64:
+            ctype = torch.complex128
+        else:
+            ctype = torch.complex
+
+        #initalize dense and wave on device
+        dense = torch.zeros(total, total, device=device, dtype=ctype)
+        wave = wave.to(device=device, dtype=dtype)
+
+        # transform the fractional k_space to cartesian k-space
+        if wave_frac:
+
+            # compute the reciprocal lattice vectors
+            inv_lat = 2*torch.pi*torch.linalg.inv(lattice.T).T
+
+            # bring the wave vector into the inverse cartesian coordinates
+            wave = torch.matmul(inv_lat, wave)
+
+        for (_sx, _sy, _sz, i, j), (key, k) in self.lookup.items():
+            # construct the translation vector
+            trans = torch.matmul(lattice.T, torch.tensor([_sx,_sy,_sz],
+                                         device=device, dtype=dtype))
+
+            # compute the fourier component
+            fij = torch.exp(1j*torch.matmul(wave, trans))
+
+            # perform sum
+            d_i, d_j = self.orbital_cfg.block_dims(key)
+            r0 = int(offsets[i])
+            c0 = int(offsets[j])
+            dense[r0 : r0 + d_i, c0 : c0 + d_j] += fij*self.pair_blocks[key][k]
+        return dense
+
     # ------------------ serialisation ------------------------------------
     def _to_payload(self) -> dict:
         """Plain python types + **CPU** tensors → ready for torch.save."""
