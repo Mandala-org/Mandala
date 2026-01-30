@@ -56,21 +56,6 @@ The instructions depend on having cuda12.1 installed.
 Other versions of cuda or torch have not been tested.
 Requires Python 3.10 or older.
 
-The tests should run
-
-```bash
-# Download test data
-git lfs pull
-# Run tests
-pytest
-```
-
-To launch training, pick a config and run:
-
-```bash
-python scripts/train.py --config-name debug_cpu
-```
-
 Before running tests make sure to download lsf-handled files (see [#7](https://github.com/Mandala-org/Mandala/issues/7) if not on debian-based system)
 ```bash
 sudo apt install git-lfs
