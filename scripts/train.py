@@ -4,7 +4,6 @@
 #
 #  Usage examples:
 #    python scripts/train.py --config-name debug_cpu
-#    python scripts/train.py --config-name medium_gpu config.verbosity 2 config.verbosity 0
 #
 #  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
 #  Sweeps:    tune: 'wandb' → WandB Sweep Agent
@@ -87,6 +86,9 @@ def main(omega_cfg: DictConfig) -> None:
     # Hardware setup: interpret training.gpus as "cpu" or a GPU count
     if isinstance(cfg.gpus, str) and cfg.gpus.lower() == "cpu":
         accelerator = "cpu"
+        devices = 1
+    if isinstance(cfg.gpus, str) and cfg.gpus.lower() == "mps":
+        accelerator = "mps"
         devices = 1
     else:
         # parse GPU count
