@@ -71,7 +71,7 @@ To launch training, pick a config and run:
 python scripts/train.py --config-name debug_cpu
 ```
 
-Before running tests make sure to download lsf-handled files
+Before running tests make sure to download lsf-handled files (see #7 if not on debian-based system)
 ```bash
 sudo apt install git-lfs
 git lfs install
