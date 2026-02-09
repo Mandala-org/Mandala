@@ -17,7 +17,7 @@ Target objective:
   - `src/net/equiformer_v2/`
 
 - Our Equiformer-based SO(2) wrappers for Mandala irreps:
-  - Main verbose/explained version:
+  - Main version:
     - `src/net/so2_ops_equiformer_direct_min.py`
   - Masked/index-precomputed variant:
     - `src/net/so2_ops_equiformer_direct_masked.py`
