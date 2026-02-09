@@ -1,91 +1,41 @@
-# Mandala
+# Mandala: SO(2) Tensor Product Acceleration Branch
 
-An E(3)-equivariant Graph Neural Network implementation framework to predict
-**block-sparse DFT matrices** (Hamiltonian **H** and Density **D**)
-in linear time using E3NN + PyTorch. Designed for arbitrary chemistry,
-hyperoptimization and distributed training on HPC clusters.
+This branch focuses on replacing the standard SO(3) tensor product path with an SO(2)-reduced formulation based on edge-frame rotation, following:
 
-## HPC (CUDA) Quickstart
+- "Reducing SO(3) Convolutions to SO(2) for Efficient Equivariant GNNs"
 
-To install run
+Target objective:
 
-```bash
-# Clone the repository
-git clone git@github.com:Mandala-org/Mandala.git mandala
-cd mandala
-# Create venv
-python3.10 -m venv mandala-venv
-source mandala-venv/bin/activate
-# Update pip
-python -m pip install --upgrade pip
-# Install torch if you don't have it
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-# Install torch-scatter
-pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
-# Install Mandala
-pip install -e .[dev]
-```
+- reduce tensor-product-like compute from `O(L^6)` to `O(L^3)` by rotating features into an edge-aligned frame, applying SO(2) operations, then rotating back.
 
-Installation requires gcc>=9.3.0 and cmake.
-The instructions depend on having cuda12.1 installed.
-Other versions of cuda or torch have not been tested.
-Requires Python 3.10 or older.
+## Where The New Pieces Are
 
-The tests should run
+- Edge-alignment rotation utility:
+  - `src/net/common.py:508` -> `_rotation_matrix_align_y(...)`
 
-```bash
-# Download test data
-git lfs pull
-# Run tests
-pytest
-```
+- Full EquiformerV2 code imported from upstream implementation:
+  - `src/net/equiformer_v2/`
 
-To launch training, pick a config and run:
+- Our Equiformer-based SO(2) wrappers for Mandala irreps:
+  - Main verbose/explained version:
+    - `src/net/so2_ops_equiformer_direct_min.py`
+  - Masked/index-precomputed variant:
+    - `src/net/so2_ops_equiformer_direct_masked.py`
 
-```bash
-python scripts/train.py --config-name debug_cpu
-```
+- Benchmark notebook:
+  - `notebooks/demos/SO2 Tensor Product Benchmark.ipynb`
 
-## Private computer Quickstart
+## Benchmark Scope
 
-To install run
+Current comparisons in the notebook are centered on:
 
-```bash
-# Clone the repository
-git clone git@github.com:Mandala-org/Mandala.git mandala
-cd mandala
-# Create venv
-python3.10 -m venv mandala-venv
-source mandala-venv/bin/activate
-# Update pip
-python -m pip install --upgrade pip
-# Install torch if you don't have it
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-# Install wheel and then torch-scatter
-pip install wheel
-pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1.html --no-build-isolation
-# Install Mandala
-pip install -e .[dev]
-```
+- `FullyConnectedTensorProduct` (e3nn baseline)
+- `SeparateWeightTensorProduct` (e3nn baseline)
+- `SO2OpsEquiformerDirect` (ours)
+- `SO2OpsEquiformerDirectMasked` (ours, masked pack/unpack path)
+- Pure Equiformer SO(2) block timing (isolated rotate -> SO(2) -> rotate_inv)
 
-Installation requires gcc>=9.3.0 and cmake.
-Requires Python 3.10 or older.
+## Notes
 
-Before running tests make sure to download lsf-handled files
-```bash
-sudo apt install git-lfs
-git lfs install
-git lfs pull
-```
-
-The tests should run
-
-```bash
-python -m pytest
-```
-
-To launch training, pick a config and run:
-
-```bash
-python scripts/train.py --config-name debug_cpu
-```
+- `RotatedTensorProduct` remains useful as a sanity/reference wrapper.
+- Fast experimental rotated TP classes were removed from this branch to keep the benchmark focused on Equiformer-based SO(2) paths.

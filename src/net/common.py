@@ -19,7 +19,7 @@ from typing import List, Sequence, Tuple
 
 import torch
 from torch import nn
-from e3nn.o3 import Irreps, Linear, TensorProduct
+from e3nn.o3 import Irreps, Irrep, Linear, TensorProduct, FullyConnectedTensorProduct
 from omegaconf import OmegaConf
 
 # ════════════════════════════════════════════════════════════════════════
@@ -503,3 +503,118 @@ class SeparateWeightTensorProduct(nn.Module):
             weights.append(weight.view(-1))
         weights = torch.cat(weights)
         return self.tp(x1, x2, weights)
+
+
+def _rotation_matrix_align_y(r_hat: torch.Tensor) -> torch.Tensor:
+    """
+    Build rotation matrices that map each unit vector to +y axis.
+
+    Args:
+        r_hat: Tensor of shape (B, 3), assumed nonzero. Will be normalized.
+
+    Returns:
+        Tensor of shape (B, 3, 3) with R @ r_hat = [0, 1, 0]^T (approx).
+    """
+    if r_hat.ndim != 2 or r_hat.shape[-1] != 3:
+        raise ValueError("r_hat must have shape (B, 3)")
+
+    device = r_hat.device
+    dtype = r_hat.dtype
+
+    eps = 1e-8
+    y_axis = torch.tensor([0.0, 1.0, 0.0], device=device, dtype=dtype)
+    y_axis = y_axis.expand_as(r_hat)
+
+    # Normalize and handle degenerate inputs.
+    r_norm = r_hat.norm(dim=-1, keepdim=True)
+    r_hat = r_hat / (r_norm + eps)
+    near_zero = (r_norm.squeeze(-1) < eps)
+    if torch.any(near_zero):
+        r_hat = r_hat.clone()
+        r_hat[near_zero] = y_axis[near_zero]
+
+    # Build an orthonormal basis {x, y, z} with y = r_hat.
+    # Choose a reference axis not parallel to r_hat to avoid degeneracy.
+    z_axis = torch.tensor([0.0, 0.0, 1.0], device=device, dtype=dtype).expand_as(r_hat)
+    x_axis = torch.tensor([1.0, 0.0, 0.0], device=device, dtype=dtype).expand_as(r_hat)
+    use_z = (r_hat[..., 2].abs() < 0.9).unsqueeze(-1)
+    ref = torch.where(use_z, z_axis, x_axis)
+
+    x_axis_aligned = torch.cross(r_hat, ref, dim=-1)
+    x_axis_aligned = x_axis_aligned / (x_axis_aligned.norm(dim=-1, keepdim=True) + eps)
+    z_axis_aligned = torch.cross(x_axis_aligned, r_hat, dim=-1)
+
+    # Rows of R are the basis vectors so that R @ r_hat = y_axis.
+    R = torch.stack([x_axis_aligned, r_hat, z_axis_aligned], dim=-2)
+    return R
+
+
+class RotatedTensorProduct(nn.Module):
+    """
+    Tensor product wrapper that rotates inputs into an edge-aligned frame.
+
+     This keeps the full tensor product in the rotated frame. It is intended for benchmarking
+    and sanity checks.
+    """
+
+    def __init__(
+        self,
+        irreps_in1,
+        irreps_in2,
+        irreps_out,
+        *,
+        tp: nn.Module | None = None,
+        **tp_kwargs,
+    ):
+        super().__init__()
+        self.irreps_in1 = Irreps(irreps_in1)
+        self.irreps_in2 = Irreps(irreps_in2)
+        self.irreps_out = Irreps(irreps_out)
+
+        if tp is None:
+            self.tp = FullyConnectedTensorProduct(
+                self.irreps_in1, self.irreps_in2, self.irreps_out, **tp_kwargs
+            )
+        else:
+            self.tp = tp
+            for attr, expected in [
+                ("irreps_in1", self.irreps_in1),
+                ("irreps_in2", self.irreps_in2),
+                ("irreps_out", self.irreps_out),
+            ]:
+                actual = getattr(tp, attr, None)
+                if actual is not None and Irreps(actual) != expected:
+                    raise ValueError(
+                        f"tp.{attr}={actual} does not match expected {expected}"
+                    )
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor, r_hat: torch.Tensor):
+        """
+        Args:
+            x1: (B, irreps_in1.dim)
+            x2: (B, irreps_in2.dim)
+            r_hat: (B, 3) edge direction vectors
+        """
+        if x1.shape[0] != x2.shape[0] or x1.shape[0] != r_hat.shape[0]:
+            raise ValueError("x1, x2, and r_hat must share the same batch dimension")
+
+        R = _rotation_matrix_align_y(r_hat)
+
+
+        def _safe_d_from_matrix(irreps: Irreps, rot: torch.Tensor, like: torch.Tensor):
+            if rot.device.type == "cpu":
+                d = irreps.D_from_matrix(rot)
+            else:
+                d = irreps.D_from_matrix(rot.cpu()).to(device=like.device)
+            return d.to(dtype=like.dtype)
+
+        D_in1 = _safe_d_from_matrix(self.irreps_in1, R, x1)
+        D_in2 = _safe_d_from_matrix(self.irreps_in2, R, x2)
+        D_out = _safe_d_from_matrix(self.irreps_out, R, x1)
+
+        x1_rot = torch.einsum("bij,bj->bi", D_in1, x1)
+        x2_rot = torch.einsum("bij,bj->bi", D_in2, x2)
+
+        y_rot = self.tp(x1_rot, x2_rot)
+        y = torch.einsum("bij,bj->bi", D_out.transpose(-1, -2), y_rot)
+        return y
