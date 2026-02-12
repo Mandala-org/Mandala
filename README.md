@@ -16,6 +16,7 @@ cd mandala
 # Get proper Python version and utils (provided for Debian-based systems)
 sudo add-apt-repository -y 'ppa:deadsnakes/ppa'
 sudo apt install python3.10 python3.10-venv python3.10-distutils
+sudo apt install python3-dev build-essential
 # Create venv
 python3.10 -m venv mandala-venv
 source mandala-venv/bin/activate
