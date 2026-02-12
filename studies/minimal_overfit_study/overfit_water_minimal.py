@@ -709,6 +709,10 @@ if __name__ == "__main__":
             # Per-irrep decomposed loss
             loss_H = 0.0
             irrep_losses = {}
+            irrep_abs = {}
+            irrep_rel = {}
+            # small epsilon to avoid division by zero when computing relative error
+            _REL_EPS = 1e-12
 
             for irrep in all_irreps:
                 # Filter both prediction and target by this irrep
@@ -728,8 +732,12 @@ if __name__ == "__main__":
                     target_irrep_blocks, CONFIG["partial_train"]
                 )
 
-                # Compute loss for this irrep
+                # Compute loss for this irrep and absolute/relative contributions
                 irrep_loss = 0.0
+                abs_sum = 0.0
+                targ_abs_sum = 0.0
+                elem_count = 0
+
                 for key in target_irrep_blocks.pair_blocks.keys():
                     if key in pred_irrep_blocks.pair_blocks:
                         targ_blocks_full = target_irrep_blocks.pair_blocks[key]
@@ -746,8 +754,24 @@ if __name__ == "__main__":
                                 pred_blocks_filtered, targ_blocks_filtered
                             )
 
-                irrep_losses[str(irrep)] = irrep_loss
+                            # Absolute magnitude of error and target magnitude
+                            diff = pred_blocks_filtered - targ_blocks_filtered
+                            abs_sum += float(torch.sum(torch.abs(diff)).item())
+                            targ_abs_sum += float(
+                                torch.sum(torch.abs(targ_blocks_filtered)).item()
+                            )
+                            elem_count += int(pred_blocks_filtered.numel())
+
+                irrep_str = str(irrep)
+                irrep_losses[irrep_str] = irrep_loss
                 loss_H += irrep_loss
+
+                # Mean absolute error for this irrep (avoid division by zero)
+                mean_abs = abs_sum / elem_count if elem_count > 0 else 0.0
+                rel = abs_sum / (targ_abs_sum + _REL_EPS)
+
+                irrep_abs[irrep_str] = mean_abs
+                irrep_rel[irrep_str] = rel
         else:
             # Standard loss computation
             loss_H = 0.0
@@ -860,6 +884,9 @@ if __name__ == "__main__":
         if CONFIG["train_on_irrep_parts"]:
             for irrep_str, irrep_loss in irrep_losses.items():
                 step_log[f"partial/{irrep_str}"] = irrep_loss.item()
+                # Log mean absolute error and relative error for this irrep
+                step_log[f"partial_abs/{irrep_str}"] = irrep_abs.get(irrep_str, 0.0)
+                step_log[f"partial_rel/{irrep_str}"] = irrep_rel.get(irrep_str, 0.0)
 
         wandb.log(step_log)
 
@@ -979,8 +1006,13 @@ if __name__ == "__main__":
                         if total_loss_check > 0
                         else 0
                     )
+                    rel_val = (
+                        irrep_rel.get(irrep_str, 0.0)
+                        if "irrep_rel" in locals()
+                        else 0.0
+                    )
                     print(
-                        f"    {irrep_str:4s}: {irrep_loss.item():.6e} ({percentage:5.1f}%)"
+                        f"    {irrep_str:4s}: {irrep_loss.item():.6e} ({percentage:5.1f}%)  rel: {rel_val:.3%}"
                     )
 
             print(f"  MAE H:                {detailed_metrics['mae']:.6e}")
@@ -1214,6 +1246,53 @@ if __name__ == "__main__":
 
             final_metrics[f"final/{key}_mse"] = block_mse
             final_metrics[f"final/{key}_mae"] = block_mae
+
+        # If irrep decomposition was used, compute and log final per-irrep absolute and relative errors
+        if CONFIG["train_on_irrep_parts"] and target_H_irreps is not None:
+            final_partial_abs = {}
+            final_partial_rel = {}
+            _REL_EPS = 1e-12
+            for irrep in all_irreps:
+                # Filter both prediction and target by this irrep
+                pred_irrep_filtered = filter_irreps_block_data_by_irrep(
+                    pred_H_irreps, irrep
+                )
+                target_irrep_filtered = filter_irreps_block_data_by_irrep(
+                    target_H_irreps, irrep
+                )
+
+                pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
+                target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
+
+                abs_sum = 0.0
+                targ_abs_sum = 0.0
+                elem_count = 0
+
+                for key in target_irrep_blocks.pair_blocks.keys():
+                    if key in pred_irrep_blocks.pair_blocks:
+                        pred_blocks = pred_irrep_blocks.pair_blocks[key]
+                        targ_blocks_full = target_irrep_blocks.pair_blocks[key]
+                        min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+                        if min_n <= 0:
+                            continue
+                        pred_sel = pred_blocks[:min_n]
+                        targ_sel = targ_blocks_full[:min_n]
+                        diff = pred_sel - targ_sel
+                        abs_sum += float(torch.sum(torch.abs(diff)).item())
+                        targ_abs_sum += float(torch.sum(torch.abs(targ_sel)).item())
+                        elem_count += int(pred_sel.numel())
+
+                irrep_str = str(irrep)
+                mean_abs = abs_sum / elem_count if elem_count > 0 else 0.0
+                rel = abs_sum / (targ_abs_sum + _REL_EPS)
+                final_partial_abs[irrep_str] = mean_abs
+                final_partial_rel[irrep_str] = rel
+
+            # Merge into final_metrics for WandB
+            for ir, v in final_partial_abs.items():
+                final_metrics[f"partial_abs/{ir}"] = v
+            for ir, v in final_partial_rel.items():
+                final_metrics[f"partial_rel/{ir}"] = v
 
         # Log final metrics to WandB
         wandb.log(final_metrics)
