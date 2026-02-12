@@ -1273,9 +1273,9 @@ if __name__ == "__main__":
                 pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
                 target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
 
-                abs_sum = 0.0
-                targ_abs_sum = 0.0
-                elem_count = 0
+                block_rel_errors = []
+                block_abs_errors = []
+                block_counts = []
 
                 for key in target_irrep_blocks.pair_blocks.keys():
                     if key in pred_irrep_blocks.pair_blocks:
@@ -1287,13 +1287,25 @@ if __name__ == "__main__":
                         pred_sel = pred_blocks[:min_n]
                         targ_sel = targ_blocks_full[:min_n]
                         diff = pred_sel - targ_sel
-                        abs_sum += float(torch.sum(torch.abs(diff)).item())
-                        targ_abs_sum += float(torch.sum(torch.abs(targ_sel)).item())
-                        elem_count += int(pred_sel.numel())
+                        abs_error = torch.mean(torch.abs(diff)).item()
+                        targ_abs = torch.mean(torch.abs(targ_sel)).item()
+                        rel_error = abs_error / (targ_abs + _REL_EPS)
+                        block_rel_errors.append(rel_error)
+                        block_abs_errors.append(abs_error)
+                        block_counts.append(pred_sel.numel())
 
                 irrep_str = str(irrep)
-                mean_abs = abs_sum / elem_count if elem_count > 0 else 0.0
-                rel = abs_sum / (targ_abs_sum + _REL_EPS)
+                # Average over blocks
+                mean_abs = (
+                    sum(block_abs_errors) / len(block_abs_errors)
+                    if block_abs_errors
+                    else 0.0
+                )
+                rel = (
+                    sum(block_rel_errors) / len(block_rel_errors)
+                    if block_rel_errors
+                    else 0.0
+                )
                 final_partial_abs[irrep_str] = mean_abs
                 final_partial_rel[irrep_str] = rel
 
