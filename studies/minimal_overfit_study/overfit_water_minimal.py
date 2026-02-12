@@ -636,433 +636,449 @@ if __name__ == "__main__":
     print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
     print(f"Training for {CONFIG['num_epochs']} epochs...\n")
 
-    for epoch in range(CONFIG["num_epochs"]):
-        network.train()
-        optimizer.zero_grad()
+    try:
+        for epoch in range(CONFIG["num_epochs"]):
+            network.train()
+            optimizer.zero_grad()
 
-        # Forward pass (suppress detailed logging during training)
-        if epoch % CONFIG["log_interval"] == 0:
-            print(f"\n{'=' * 60}")
-            print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}")
-            print(f"{'=' * 60}")
+            # Forward pass (suppress detailed logging during training)
+            if epoch % CONFIG["log_interval"] == 0:
+                print(f"\n{'=' * 60}")
+                print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}")
+                print(f"{'=' * 60}")
 
-        # Temporarily suppress forward pass logging
-        verbose = (epoch % CONFIG["log_interval"] == 0) and (
-            epoch < 10 or epoch % (CONFIG["log_interval"]) == 0
-        )
+            # Temporarily suppress forward pass logging
+            verbose = (epoch % CONFIG["log_interval"] == 0) and (
+                epoch < 10 or epoch % (CONFIG["log_interval"]) == 0
+            )
 
-        # Enable activation logging only during log intervals
-        log_activations = epoch % CONFIG["log_interval"] == 0
+            # Enable activation logging only during log intervals
+            log_activations = epoch % CONFIG["log_interval"] == 0
 
-        if not verbose:
-            # Silence print by redirecting to nowhere temporarily
-            old_stdout = sys.stdout
-            sys.stdout = open(os.devnull, "w")
+            if not verbose:
+                # Silence print by redirecting to nowhere temporarily
+                old_stdout = sys.stdout
+                sys.stdout = open(os.devnull, "w")
 
-        pred_raw = network(
-            node_type_idx,
-            edge_type_idx,
-            edge_index,
-            edge_shift,
-            edge_length_emb,
-            edge_sh,
-            batch_node,
-            batch_edge,
-            log_to_wandb=log_activations,
-        )
+            pred_raw = network(
+                node_type_idx,
+                edge_type_idx,
+                edge_index,
+                edge_shift,
+                edge_length_emb,
+                edge_sh,
+                batch_node,
+                batch_edge,
+                log_to_wandb=log_activations,
+            )
 
-        if not verbose:
-            sys.stdout.close()
-            sys.stdout = old_stdout
+            if not verbose:
+                sys.stdout.close()
+                sys.stdout = old_stdout
 
-        # Wrap predictions into IrrepsBlockData then convert to matrix blocks
-        from collections import Counter
-        from data.block_matrix import IrrepsBlockData
+            # Wrap predictions into IrrepsBlockData then convert to matrix blocks
+            from collections import Counter
+            from data.block_matrix import IrrepsBlockData
 
-        pair_vec_H = {}
-        pair_edges_dict = {}
-        lookup_dict = {}
+            pair_vec_H = {}
+            pair_edges_dict = {}
+            lookup_dict = {}
 
-        for key, payload in pred_raw.items():
-            pair_vec_H[key] = payload["vectors"]
-            pair_edges_dict[key] = payload["edges"]
+            for key, payload in pred_raw.items():
+                pair_vec_H[key] = payload["vectors"]
+                pair_edges_dict[key] = payload["edges"]
 
-            for idx, edge_5d in enumerate(payload["edges"].t()):
-                sx, sy, sz, i, j = edge_5d.tolist()
-                lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (key, idx)
+                for idx, edge_5d in enumerate(payload["edges"].t()):
+                    sx, sy, sz, i, j = edge_5d.tolist()
+                    lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
+                        key,
+                        idx,
+                    )
 
-        pred_H_irreps = IrrepsBlockData(
-            atoms=tuple(atoms_list),
-            atom_counts=Counter(atoms_list),
-            pair_vectors=pair_vec_H,
-            pair_edges=pair_edges_dict,
-            lookup=lookup_dict,
-            orbital_cfg=orbital_cfg,
-            basis=target_H_matrix.basis,
-        )
+            pred_H_irreps = IrrepsBlockData(
+                atoms=tuple(atoms_list),
+                atom_counts=Counter(atoms_list),
+                pair_vectors=pair_vec_H,
+                pair_edges=pair_edges_dict,
+                lookup=lookup_dict,
+                orbital_cfg=orbital_cfg,
+                basis=target_H_matrix.basis,
+            )
 
-        # Convert to matrix blocks (train_target = "matrix")
-        pred_H_matrix = pred_H_irreps.to_blocks(mapper)
+            # Convert to matrix blocks (train_target = "matrix")
+            pred_H_matrix = pred_H_irreps.to_blocks(mapper)
 
-        # Compute loss - either standard or per-irrep decomposed
-        if CONFIG["train_on_irrep_parts"]:
-            # Per-irrep decomposed loss
-            loss_H = 0.0
-            irrep_losses = {}
-            irrep_abs = {}
-            irrep_rel = {}
-            # small epsilon to avoid division by zero when computing relative error
-            _REL_EPS = 1e-12
+            # Compute loss - either standard or per-irrep decomposed
+            if CONFIG["train_on_irrep_parts"]:
+                # Per-irrep decomposed loss
+                loss_H = 0.0
+                irrep_losses = {}
+                irrep_abs = {}
+                irrep_rel = {}
+                # small epsilon to avoid division by zero when computing relative error
+                _REL_EPS = 1e-12
 
-            for irrep in all_irreps:
-                # Filter both prediction and target by this irrep
-                pred_irrep_filtered = filter_irreps_block_data_by_irrep(
-                    pred_H_irreps, irrep
+                for irrep in all_irreps:
+                    # Filter both prediction and target by this irrep
+                    pred_irrep_filtered = filter_irreps_block_data_by_irrep(
+                        pred_H_irreps, irrep
+                    )
+                    target_irrep_filtered = filter_irreps_block_data_by_irrep(
+                        target_H_irreps, irrep
+                    )
+
+                    # Convert to matrix blocks
+                    pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
+                    target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
+
+                    # Apply partial_train filtering
+                    filtered_target_irrep = filter_blocks_by_partial_train(
+                        target_irrep_blocks, CONFIG["partial_train"]
+                    )
+
+                    # Compute loss for this irrep and absolute/relative contributions
+                    irrep_loss = 0.0
+                    abs_sum = 0.0
+                    targ_abs_sum = 0.0
+                    elem_count = 0
+
+                    for key in target_irrep_blocks.pair_blocks.keys():
+                        if key in pred_irrep_blocks.pair_blocks:
+                            targ_blocks_full = target_irrep_blocks.pair_blocks[key]
+                            _, mask = filtered_target_irrep[key]
+
+                            pred_blocks = pred_irrep_blocks.pair_blocks[key]
+                            min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+
+                            mask = mask[:min_n]
+                            if mask.any():
+                                pred_blocks_filtered = pred_blocks[:min_n][mask]
+                                targ_blocks_filtered = targ_blocks_full[:min_n][mask]
+                                irrep_loss += F.mse_loss(
+                                    pred_blocks_filtered, targ_blocks_filtered
+                                )
+
+                                # Absolute magnitude of error and target magnitude
+                                diff = pred_blocks_filtered - targ_blocks_filtered
+                                abs_sum += float(torch.sum(torch.abs(diff)).item())
+                                targ_abs_sum += float(
+                                    torch.sum(torch.abs(targ_blocks_filtered)).item()
+                                )
+                                elem_count += int(pred_blocks_filtered.numel())
+
+                    irrep_str = str(irrep)
+                    irrep_losses[irrep_str] = irrep_loss
+                    loss_H += irrep_loss
+
+                    # Mean absolute error for this irrep (avoid division by zero)
+                    mean_abs = abs_sum / elem_count if elem_count > 0 else 0.0
+                    rel = abs_sum / (targ_abs_sum + _REL_EPS)
+
+                    irrep_abs[irrep_str] = mean_abs
+                    irrep_rel[irrep_str] = rel
+            else:
+                # Standard loss computation
+                loss_H = 0.0
+                filtered_target = filter_blocks_by_partial_train(
+                    target_H_matrix, CONFIG["partial_train"]
                 )
-                target_irrep_filtered = filter_irreps_block_data_by_irrep(
-                    target_H_irreps, irrep
-                )
 
-                # Convert to matrix blocks
-                pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
-                target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
+                for key in target_H_matrix.pair_blocks.keys():
+                    if key in pred_H_matrix.pair_blocks:
+                        # Get filtered target blocks and mask
+                        targ_blocks_full = target_H_matrix.pair_blocks[key]
+                        _, mask = filtered_target[key]
 
-                # Apply partial_train filtering
-                filtered_target_irrep = filter_blocks_by_partial_train(
-                    target_irrep_blocks, CONFIG["partial_train"]
-                )
-
-                # Compute loss for this irrep and absolute/relative contributions
-                irrep_loss = 0.0
-                abs_sum = 0.0
-                targ_abs_sum = 0.0
-                elem_count = 0
-
-                for key in target_irrep_blocks.pair_blocks.keys():
-                    if key in pred_irrep_blocks.pair_blocks:
-                        targ_blocks_full = target_irrep_blocks.pair_blocks[key]
-                        _, mask = filtered_target_irrep[key]
-
-                        pred_blocks = pred_irrep_blocks.pair_blocks[key]
+                        # Match sizes (predictions might have more edges due to cutoff)
+                        pred_blocks = pred_H_matrix.pair_blocks[key]
                         min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
 
+                        # Apply mask to select only relevant blocks
                         mask = mask[:min_n]
                         if mask.any():
                             pred_blocks_filtered = pred_blocks[:min_n][mask]
                             targ_blocks_filtered = targ_blocks_full[:min_n][mask]
-                            irrep_loss += F.mse_loss(
+                            loss_H += F.mse_loss(
                                 pred_blocks_filtered, targ_blocks_filtered
                             )
 
-                            # Absolute magnitude of error and target magnitude
-                            diff = pred_blocks_filtered - targ_blocks_filtered
-                            abs_sum += float(torch.sum(torch.abs(diff)).item())
-                            targ_abs_sum += float(
-                                torch.sum(torch.abs(targ_blocks_filtered)).item()
-                            )
-                            elem_count += int(pred_blocks_filtered.numel())
+            # Total loss (only Hamiltonian)
+            loss = loss_H
 
-                irrep_str = str(irrep)
-                irrep_losses[irrep_str] = irrep_loss
-                loss_H += irrep_loss
-
-                # Mean absolute error for this irrep (avoid division by zero)
-                mean_abs = abs_sum / elem_count if elem_count > 0 else 0.0
-                rel = abs_sum / (targ_abs_sum + _REL_EPS)
-
-                irrep_abs[irrep_str] = mean_abs
-                irrep_rel[irrep_str] = rel
-        else:
-            # Standard loss computation
-            loss_H = 0.0
-            filtered_target = filter_blocks_by_partial_train(
-                target_H_matrix, CONFIG["partial_train"]
-            )
-
-            for key in target_H_matrix.pair_blocks.keys():
-                if key in pred_H_matrix.pair_blocks:
-                    # Get filtered target blocks and mask
-                    targ_blocks_full = target_H_matrix.pair_blocks[key]
-                    _, mask = filtered_target[key]
-
-                    # Match sizes (predictions might have more edges due to cutoff)
-                    pred_blocks = pred_H_matrix.pair_blocks[key]
-                    min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
-
-                    # Apply mask to select only relevant blocks
-                    mask = mask[:min_n]
-                    if mask.any():
-                        pred_blocks_filtered = pred_blocks[:min_n][mask]
-                        targ_blocks_filtered = targ_blocks_full[:min_n][mask]
-                        loss_H += F.mse_loss(pred_blocks_filtered, targ_blocks_filtered)
-
-        # Total loss (only Hamiltonian)
-        loss = loss_H
-
-        # Check for NaN or Inf in loss before backward pass
-        if torch.isnan(loss) or torch.isinf(loss):
-            print(f"\n{'='*80}")
-            print(f"❌ TRAINING FAILED at epoch {epoch + 1}")
-            print(f"{'='*80}")
-            if torch.isnan(loss):
-                print(f"Loss is NaN: {loss.item()}")
-                print("This indicates numerical instability in the forward pass.")
-            else:
-                print(f"Loss is Inf: {loss.item()}")
+            # Check for NaN or Inf in loss before backward pass
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"\n{'='*80}")
+                print(f"❌ TRAINING FAILED at epoch {epoch + 1}")
+                print(f"{'='*80}")
+                if torch.isnan(loss):
+                    print(f"Loss is NaN: {loss.item()}")
+                    print("This indicates numerical instability in the forward pass.")
+                else:
+                    print(f"Loss is Inf: {loss.item()}")
+                    print(
+                        "Loss has exploded. Try reducing learning rate or adding regularization."
+                    )
                 print(
-                    "Loss has exploded. Try reducing learning rate or adding regularization."
+                    f"\nLast valid loss (epoch {epoch}): {history['loss'][-1] if history['loss'] else 'N/A'}"
                 )
-            print(
-                f"\nLast valid loss (epoch {epoch}): {history['loss'][-1] if history['loss'] else 'N/A'}"
-            )
-            print(
-                f"\nTraining stopped. Checkpoint saved at epoch {best_epoch + 1} with loss {best_loss:.6e}"
-            )
-            print(f"{'='*80}\n")
-            wandb.log(
-                {
-                    "training_failed": True,
-                    "failure_epoch": epoch,
-                    "failure_type": "NaN" if torch.isnan(loss) else "Inf",
-                }
-            )
-            break
+                print(
+                    f"\nTraining stopped. Checkpoint saved at epoch {best_epoch + 1} with loss {best_loss:.6e}"
+                )
+                print(f"{'='*80}\n")
+                wandb.log(
+                    {
+                        "training_failed": True,
+                        "failure_epoch": epoch,
+                        "failure_type": "NaN" if torch.isnan(loss) else "Inf",
+                    }
+                )
+                break
 
-        # Backward
-        loss.backward()
+            # Backward
+            loss.backward()
 
-        # Gradient clipping to prevent exploding gradients
-        if CONFIG["grad_clip"] > 0:
-            grad_norm = clip_grad_norm_(network.parameters(), CONFIG["grad_clip"])
-            # Log gradient norm periodically
-            if epoch % CONFIG["log_interval"] == 0:
-                wandb.log({"grad_norm": grad_norm.item(), "epoch": epoch})
+            # Gradient clipping to prevent exploding gradients
+            if CONFIG["grad_clip"] > 0:
+                grad_norm = clip_grad_norm_(network.parameters(), CONFIG["grad_clip"])
+                # Log gradient norm periodically
+                if epoch % CONFIG["log_interval"] == 0:
+                    wandb.log({"grad_norm": grad_norm.item(), "epoch": epoch})
 
-        # Check for NaN/Inf in gradients
-        has_nan_grad = False
-        for name, param in network.named_parameters():
-            if param.grad is not None:
-                if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
-                    print(f"\n{'='*80}")
-                    print(f"❌ TRAINING FAILED at epoch {epoch + 1}")
-                    print(f"{'='*80}")
-                    print(f"Gradient contains NaN or Inf in parameter: {name}")
-                    print(f"This indicates numerical instability in the backward pass.")
-                    print(f"\nSuggestions:")
-                    print(f"  - Reduce learning rate (current: {CONFIG['lr']})")
-                    print(
-                        f"  - Increase gradient clipping (current: {CONFIG['grad_clip']})"
-                    )
-                    print(f"  - Check if irreps contain invalid combinations")
-                    print(
-                        f"\nLast valid loss (epoch {epoch}): {history['loss'][-1] if history['loss'] else 'N/A'}"
-                    )
-                    print(
-                        f"Training stopped. Checkpoint saved at epoch {best_epoch + 1} with loss {best_loss:.6e}"
-                    )
-                    print(f"{'='*80}\n")
-                    wandb.log(
-                        {
-                            "training_failed": True,
-                            "failure_epoch": epoch,
-                            "failure_type": "gradient_nan_inf",
-                            "failed_param": name,
-                        }
-                    )
-                    has_nan_grad = True
-                    break
+            # Check for NaN/Inf in gradients
+            has_nan_grad = False
+            for name, param in network.named_parameters():
+                if param.grad is not None:
+                    if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
+                        print(f"\n{'='*80}")
+                        print(f"❌ TRAINING FAILED at epoch {epoch + 1}")
+                        print(f"{'='*80}")
+                        print(f"Gradient contains NaN or Inf in parameter: {name}")
+                        print(
+                            f"This indicates numerical instability in the backward pass."
+                        )
+                        print(f"\nSuggestions:")
+                        print(f"  - Reduce learning rate (current: {CONFIG['lr']})")
+                        print(
+                            f"  - Increase gradient clipping (current: {CONFIG['grad_clip']})"
+                        )
+                        print(f"  - Check if irreps contain invalid combinations")
+                        print(
+                            f"\nLast valid loss (epoch {epoch}): {history['loss'][-1] if history['loss'] else 'N/A'}"
+                        )
+                        print(
+                            f"Training stopped. Checkpoint saved at epoch {best_epoch + 1} with loss {best_loss:.6e}"
+                        )
+                        print(f"{'='*80}\n")
+                        wandb.log(
+                            {
+                                "training_failed": True,
+                                "failure_epoch": epoch,
+                                "failure_type": "gradient_nan_inf",
+                                "failed_param": name,
+                            }
+                        )
+                        has_nan_grad = True
+                        break
 
-        if has_nan_grad:
-            break
+            if has_nan_grad:
+                break
 
-        optimizer.step()
+            optimizer.step()
 
-        # Log training loss at every step
-        step_log = {"train/loss_step": loss.item(), "epoch": epoch}
+            # Log training loss at every step
+            step_log = {"train/loss_step": loss.item(), "epoch": epoch}
 
-        # Log per-irrep losses if enabled
-        if CONFIG["train_on_irrep_parts"]:
-            for irrep_str, irrep_loss in irrep_losses.items():
-                step_log[f"partial/{irrep_str}"] = irrep_loss.item()
-                # Log mean absolute error and relative error for this irrep
-                step_log[f"partial_abs/{irrep_str}"] = irrep_abs.get(irrep_str, 0.0)
-                step_log[f"partial_rel/{irrep_str}"] = irrep_rel.get(irrep_str, 0.0)
-
-        wandb.log(step_log)
-
-        # Logging
-        if epoch % CONFIG["log_interval"] == 0:
-            # Compute detailed metrics with filtering
-            # First filter both predictions and targets
-            filtered_pred = filter_blocks_by_partial_train(
-                pred_H_matrix, CONFIG["partial_train"]
-            )
-            filtered_target = filter_blocks_by_partial_train(
-                target_H_matrix, CONFIG["partial_train"]
-            )
-            filtered_overlap = filter_blocks_by_partial_train(
-                overlap_e3nn, CONFIG["partial_train"]
-            )
-
-            # Create filtered versions for metrics computation
-            from data.block_matrix import BlockMatrix
-
-            pred_filtered_blocks = {}
-            target_filtered_blocks = {}
-            overlap_filtered_blocks = {}
-
-            for key in target_H_matrix.pair_blocks.keys():
-                if key in pred_H_matrix.pair_blocks:
-                    pred_full, pred_mask = filtered_pred[key]
-                    targ_full, targ_mask = filtered_target[key]
-                    ovlp_full, ovlp_mask = filtered_overlap[key]
-
-                    min_n = min(
-                        pred_full.shape[0], targ_full.shape[0], ovlp_full.shape[0]
-                    )
-                    mask = pred_mask[:min_n] & targ_mask[:min_n] & ovlp_mask[:min_n]
-
-                    if mask.any():
-                        pred_filtered_blocks[key] = pred_full[:min_n][mask]
-                        target_filtered_blocks[key] = targ_full[:min_n][mask]
-                        overlap_filtered_blocks[key] = ovlp_full[:min_n][mask]
-
-            # Create temporary BlockMatrix objects for metrics computation
-            pred_filtered = BlockMatrix(
-                atoms=target_H_matrix.atoms,
-                atom_counts=target_H_matrix.atom_counts,
-                pair_blocks=pred_filtered_blocks,
-                pair_edges={
-                    key: target_H_matrix.pair_edges[key]
-                    for key in pred_filtered_blocks.keys()
-                },
-                lookup=target_H_matrix.lookup,
-                orbital_cfg=target_H_matrix.orbital_cfg,
-                basis=target_H_matrix.basis,
-            )
-            target_filtered = BlockMatrix(
-                atoms=target_H_matrix.atoms,
-                atom_counts=target_H_matrix.atom_counts,
-                pair_blocks=target_filtered_blocks,
-                pair_edges={
-                    key: target_H_matrix.pair_edges[key]
-                    for key in target_filtered_blocks.keys()
-                },
-                lookup=target_H_matrix.lookup,
-                orbital_cfg=target_H_matrix.orbital_cfg,
-                basis=target_H_matrix.basis,
-            )
-            overlap_filtered = BlockMatrix(
-                atoms=overlap_e3nn.atoms,
-                atom_counts=overlap_e3nn.atom_counts,
-                pair_blocks=overlap_filtered_blocks,
-                pair_edges={
-                    key: overlap_e3nn.pair_edges[key]
-                    for key in overlap_filtered_blocks.keys()
-                },
-                lookup=overlap_e3nn.lookup,
-                orbital_cfg=overlap_e3nn.orbital_cfg,
-                basis=overlap_e3nn.basis,
-            )
-
-            detailed_metrics = compute_detailed_metrics(
-                pred_filtered, target_filtered, overlap_filtered
-            )
-
-            # Legacy mae_H for history
-            mae_H = detailed_metrics["mae"]
-
-            history["loss"].append(loss.item())
-            history["mse_H"].append(loss_H.item())
-            history["mae_H"].append(mae_H)
-
-            # Calculate timing
-            current_time = time.time()
-            time_elapsed = current_time - last_log_time
-            epochs_since_last_log = CONFIG["log_interval"] if epoch > 0 else 1
-            avg_epoch_time = time_elapsed / epochs_since_last_log
-            last_log_time = current_time
-
-            # Log to console
-            print(f"\n[METRICS]")
-            print(
-                f"  Avg epoch time:       {avg_epoch_time:.3f}s ({epochs_since_last_log} epochs in {time_elapsed:.1f}s)"
-            )
-            print(f"  Loss (MSE):           {loss.item():.6e}")
-
-            # Print per-irrep loss contributions if enabled
+            # Log per-irrep losses if enabled
             if CONFIG["train_on_irrep_parts"]:
-                print(f"\n  Per-Irrep Loss Contributions:")
-                # Sort irreps by loss (descending) for better readability
-                sorted_irreps = sorted(
-                    irrep_losses.items(), key=lambda x: x[1].item(), reverse=True
+                for irrep_str, irrep_loss in irrep_losses.items():
+                    step_log[f"partial/{irrep_str}"] = irrep_loss.item()
+                    # Log mean absolute error and relative error for this irrep
+                    step_log[f"partial_abs/{irrep_str}"] = irrep_abs.get(irrep_str, 0.0)
+                    step_log[f"partial_rel/{irrep_str}"] = irrep_rel.get(irrep_str, 0.0)
+
+            wandb.log(step_log)
+
+            # Logging
+            if epoch % CONFIG["log_interval"] == 0:
+                # Compute detailed metrics with filtering
+                # First filter both predictions and targets
+                filtered_pred = filter_blocks_by_partial_train(
+                    pred_H_matrix, CONFIG["partial_train"]
                 )
-                total_loss_check = sum(
-                    irrep_loss.item() for _, irrep_loss in sorted_irreps
+                filtered_target = filter_blocks_by_partial_train(
+                    target_H_matrix, CONFIG["partial_train"]
                 )
-                for irrep_str, irrep_loss in sorted_irreps:
-                    percentage = (
-                        (irrep_loss.item() / total_loss_check * 100)
-                        if total_loss_check > 0
-                        else 0
-                    )
-                    rel_val = (
-                        irrep_rel.get(irrep_str, 0.0)
-                        if "irrep_rel" in locals()
-                        else 0.0
-                    )
-                    print(
-                        f"    {irrep_str:4s}: {irrep_loss.item():.6e} ({percentage:5.1f}%)  rel: {rel_val:.3%}"
-                    )
+                filtered_overlap = filter_blocks_by_partial_train(
+                    overlap_e3nn, CONFIG["partial_train"]
+                )
 
-            print(f"  MAE H:                {detailed_metrics['mae']:.6e}")
-            print(f"  MSE H:                {detailed_metrics['mse']:.6e}")
-            print(f"  MAE H (modified):     {detailed_metrics['mae_mod']:.6e}")
-            print(f"  MSE H (modified):     {detailed_metrics['mse_mod']:.6e}")
-            print(f"  mu_H:                 {detailed_metrics['mu_H']:.6e}")
-            print(f"  Correction MAE:       {detailed_metrics['correction_mae']:.6e}")
-            print(f"  Correction MSE:       {detailed_metrics['correction_mse']:.6e}")
+                # Create filtered versions for metrics computation
+                from data.block_matrix import BlockMatrix
 
-            # Log to WandB
-            wandb.log(
-                {
-                    "epoch": epoch,
-                    "loss": loss.item(),
-                    "mse_H": detailed_metrics["mse"],
-                    "mae_H": detailed_metrics["mae"],
-                    "mae_H_mod": detailed_metrics["mae_mod"],
-                    "mse_H_mod": detailed_metrics["mse_mod"],
-                    "mu_H": detailed_metrics["mu_H"],
-                    "correction_mae": detailed_metrics["correction_mae"],
-                    "correction_mse": detailed_metrics["correction_mse"],
-                }
-            )
+                pred_filtered_blocks = {}
+                target_filtered_blocks = {}
+                overlap_filtered_blocks = {}
 
-            # Save best model
-            if loss.item() < best_loss:
-                best_loss = loss.item()
-                best_epoch = epoch
-                best_model_path = run_checkpoint_dir / "best_model.pt"
-                torch.save(
+                for key in target_H_matrix.pair_blocks.keys():
+                    if key in pred_H_matrix.pair_blocks:
+                        pred_full, pred_mask = filtered_pred[key]
+                        targ_full, targ_mask = filtered_target[key]
+                        ovlp_full, ovlp_mask = filtered_overlap[key]
+
+                        min_n = min(
+                            pred_full.shape[0], targ_full.shape[0], ovlp_full.shape[0]
+                        )
+                        mask = pred_mask[:min_n] & targ_mask[:min_n] & ovlp_mask[:min_n]
+
+                        if mask.any():
+                            pred_filtered_blocks[key] = pred_full[:min_n][mask]
+                            target_filtered_blocks[key] = targ_full[:min_n][mask]
+                            overlap_filtered_blocks[key] = ovlp_full[:min_n][mask]
+
+                # Create temporary BlockMatrix objects for metrics computation
+                pred_filtered = BlockMatrix(
+                    atoms=target_H_matrix.atoms,
+                    atom_counts=target_H_matrix.atom_counts,
+                    pair_blocks=pred_filtered_blocks,
+                    pair_edges={
+                        key: target_H_matrix.pair_edges[key]
+                        for key in pred_filtered_blocks.keys()
+                    },
+                    lookup=target_H_matrix.lookup,
+                    orbital_cfg=target_H_matrix.orbital_cfg,
+                    basis=target_H_matrix.basis,
+                )
+                target_filtered = BlockMatrix(
+                    atoms=target_H_matrix.atoms,
+                    atom_counts=target_H_matrix.atom_counts,
+                    pair_blocks=target_filtered_blocks,
+                    pair_edges={
+                        key: target_H_matrix.pair_edges[key]
+                        for key in target_filtered_blocks.keys()
+                    },
+                    lookup=target_H_matrix.lookup,
+                    orbital_cfg=target_H_matrix.orbital_cfg,
+                    basis=target_H_matrix.basis,
+                )
+                overlap_filtered = BlockMatrix(
+                    atoms=overlap_e3nn.atoms,
+                    atom_counts=overlap_e3nn.atom_counts,
+                    pair_blocks=overlap_filtered_blocks,
+                    pair_edges={
+                        key: overlap_e3nn.pair_edges[key]
+                        for key in overlap_filtered_blocks.keys()
+                    },
+                    lookup=overlap_e3nn.lookup,
+                    orbital_cfg=overlap_e3nn.orbital_cfg,
+                    basis=overlap_e3nn.basis,
+                )
+
+                detailed_metrics = compute_detailed_metrics(
+                    pred_filtered, target_filtered, overlap_filtered
+                )
+
+                # Legacy mae_H for history
+                mae_H = detailed_metrics["mae"]
+
+                history["loss"].append(loss.item())
+                history["mse_H"].append(loss_H.item())
+                history["mae_H"].append(mae_H)
+
+                # Calculate timing
+                current_time = time.time()
+                time_elapsed = current_time - last_log_time
+                epochs_since_last_log = CONFIG["log_interval"] if epoch > 0 else 1
+                avg_epoch_time = time_elapsed / epochs_since_last_log
+                last_log_time = current_time
+
+                # Log to console
+                print(f"\n[METRICS]")
+                print(
+                    f"  Avg epoch time:       {avg_epoch_time:.3f}s ({epochs_since_last_log} epochs in {time_elapsed:.1f}s)"
+                )
+                print(f"  Loss (MSE):           {loss.item():.6e}")
+
+                # Print per-irrep loss contributions if enabled
+                if CONFIG["train_on_irrep_parts"]:
+                    print(f"\n  Per-Irrep Loss Contributions:")
+                    # Sort irreps by loss (descending) for better readability
+                    sorted_irreps = sorted(
+                        irrep_losses.items(), key=lambda x: x[1].item(), reverse=True
+                    )
+                    total_loss_check = sum(
+                        irrep_loss.item() for _, irrep_loss in sorted_irreps
+                    )
+                    for irrep_str, irrep_loss in sorted_irreps:
+                        percentage = (
+                            (irrep_loss.item() / total_loss_check * 100)
+                            if total_loss_check > 0
+                            else 0
+                        )
+                        rel_val = (
+                            irrep_rel.get(irrep_str, 0.0)
+                            if "irrep_rel" in locals()
+                            else 0.0
+                        )
+                        print(
+                            f"    {irrep_str:4s}: {irrep_loss.item():.6e} ({percentage:5.1f}%)  rel: {rel_val:.3%}"
+                        )
+
+                print(f"  MAE H:                {detailed_metrics['mae']:.6e}")
+                print(f"  MSE H:                {detailed_metrics['mse']:.6e}")
+                print(f"  MAE H (modified):     {detailed_metrics['mae_mod']:.6e}")
+                print(f"  MSE H (modified):     {detailed_metrics['mse_mod']:.6e}")
+                print(f"  mu_H:                 {detailed_metrics['mu_H']:.6e}")
+                print(
+                    f"  Correction MAE:       {detailed_metrics['correction_mae']:.6e}"
+                )
+                print(
+                    f"  Correction MSE:       {detailed_metrics['correction_mse']:.6e}"
+                )
+
+                # Log to WandB
+                wandb.log(
                     {
                         "epoch": epoch,
-                        "model_state_dict": network.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
                         "loss": loss.item(),
-                        "mae_H": mae_H,
-                        "config": CONFIG,
-                        "metrics": detailed_metrics,
-                    },
-                    best_model_path,
-                )
-                print(
-                    f"  ✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
+                        "mse_H": detailed_metrics["mse"],
+                        "mae_H": detailed_metrics["mae"],
+                        "mae_H_mod": detailed_metrics["mae_mod"],
+                        "mse_H_mod": detailed_metrics["mse_mod"],
+                        "mu_H": detailed_metrics["mu_H"],
+                        "correction_mae": detailed_metrics["correction_mae"],
+                        "correction_mse": detailed_metrics["correction_mse"],
+                    }
                 )
 
-            # Check for convergence
-            if loss.item() < 1e-10:
-                print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
-                break
+                # Save best model
+                if loss.item() < best_loss:
+                    best_loss = loss.item()
+                    best_epoch = epoch
+                    best_model_path = run_checkpoint_dir / "best_model.pt"
+                    torch.save(
+                        {
+                            "epoch": epoch,
+                            "model_state_dict": network.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "loss": loss.item(),
+                            "mae_H": mae_H,
+                            "config": CONFIG,
+                            "metrics": detailed_metrics,
+                        },
+                        best_model_path,
+                    )
+                    print(
+                        f"  ✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
+                    )
+
+                # Check for convergence
+                if loss.item() < 1e-10:
+                    print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
+                    break
+    except KeyboardInterrupt:
+        print(
+            "\n[INFO] Training interrupted by user (Ctrl-C). Proceeding to final evaluation and saving..."
+        )
 
     # =============================================================================
     # FINAL EVALUATION
