@@ -17,35 +17,30 @@ Architecture:
 Verbose logging at every step for educational purposes.
 """
 
+# Standard library imports
 import sys
 import os
 from pathlib import Path
 import argparse
 import time
+from collections import Counter
+
+# Third-party imports
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
 from torch.nn.utils import clip_grad_norm_
-
-from net.common import build_hidden_irreps
-
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
-from e3nn.o3 import Irreps, spherical_harmonics
+from e3nn.o3 import Irreps, spherical_harmonics, Irrep
 from e3nn.math import soft_one_hot_linspace
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
-# Import only low-level data structures
+# Project-specific imports
+from net.common import build_hidden_irreps
 from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
-
-# WandB for logging
+from data.block_matrix import IrrepsBlockData, BlockMatrix
 import wandb
-
-# Import network classes and utilities from common module
 from common import (
     MinimalNetwork,
     compute_detailed_metrics,
@@ -62,13 +57,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data-path",
         type=str,
-        default=str(project_root / "data/small/H2O/original/H2O.matrix"),
+        default=str("data/small/H2O/original/H2O.matrix"),
         help="Path to the matrix file",
     )
     parser.add_argument(
         "--info-path",
         type=str,
-        default=str(project_root / "data/small/H2O/original/H2O.info.out"),
+        default=str("data/small/H2O/original/H2O.info.out"),
         help="Path to the info file",
     )
     parser.add_argument(
@@ -134,7 +129,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint-dir",
         type=str,
-        default=str(project_root / "studies/minimal_overfit_study/checkpoints"),
+        default=str("studies/minimal_overfit_study/checkpoints"),
         help="Directory to save checkpoints",
     )
     parser.add_argument(
@@ -440,8 +435,7 @@ if __name__ == "__main__":
         Returns:
             Filtered IrrepsBlockData with only target_irrep contributions
         """
-        from e3nn.o3 import Irrep
-        from data.block_matrix import IrrepsBlockData
+        # ...existing code...
 
         if isinstance(target_irrep, str):
             target_irrep = Irrep(target_irrep)
@@ -677,8 +671,7 @@ if __name__ == "__main__":
                 sys.stdout = old_stdout
 
             # Wrap predictions into IrrepsBlockData then convert to matrix blocks
-            from collections import Counter
-            from data.block_matrix import IrrepsBlockData
+            # ...existing code...
 
             pair_vec_H = {}
             pair_edges_dict = {}
@@ -913,7 +906,7 @@ if __name__ == "__main__":
                 )
 
                 # Create filtered versions for metrics computation
-                from data.block_matrix import BlockMatrix
+                # ...existing code...
 
                 pred_filtered_blocks = {}
                 target_filtered_blocks = {}
@@ -1138,7 +1131,7 @@ if __name__ == "__main__":
         )
 
         # Create filtered versions for metrics computation
-        from data.block_matrix import BlockMatrix
+        # ...existing code...
 
         pred_filtered_blocks = {}
         target_filtered_blocks = {}
