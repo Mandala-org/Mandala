@@ -1471,3 +1471,35 @@ def get_all_irreps_in_hamiltonian(mapper):
 
     # Sort by l, then by parity
     return sorted(irreps_set, key=lambda ir: (ir.l, ir.p))
+
+
+def permutation_to_matrix(perm_str, device):
+    """
+    Convert permutation string to change of basis matrix.
+
+    Args:
+        perm_str: Permutation string like '120' or '201' (must be a valid permutation of '012')
+        device: Torch device
+
+    Returns:
+        3x3 permutation matrix as torch.Tensor, or identity if permutation is invalid
+    """
+    try:
+        perm = [int(c) for c in perm_str]
+        if (
+            len(perm) != 3
+            or not all(p in [0, 1, 2] for p in perm)
+            or len(set(perm)) != 3
+        ):
+            raise ValueError(
+                f"Invalid permutation: {perm_str}. Must be a 3-digit permutation of 012."
+            )
+        # Create permutation matrix where row i has 1 at column perm[i]
+        matrix = torch.zeros(3, 3, dtype=torch.float32, device=device)
+        for i in range(3):
+            matrix[i, perm[i]] = 1.0
+        return matrix
+    except (ValueError, IndexError) as e:
+        print(f"  Warning: Invalid permutation string: {e}")
+        print(f"  Using identity permutation (no transformation)")
+        return torch.eye(3, dtype=torch.float32, device=device)
