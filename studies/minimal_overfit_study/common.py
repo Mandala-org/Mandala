@@ -15,6 +15,8 @@ import wandb
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import io
+import imageio
 
 
 def check_for_nans(tensor, name, input_tensor=None):
@@ -1022,3 +1024,233 @@ def visualize_hamiltonians(
         plt.close()
 
         print(f"  Saved to {filepath}")
+
+
+def create_hamiltonian_frame_figure(
+    H_pred,
+    H_gt,
+    S,
+    atoms_list,
+    orbital_cfg,
+    sx=0,
+    sy=0,
+    sz=0,
+    dynamic_range=False,
+    partial_train=None,
+    percentile=80.0,
+    figsize=(12, 12),
+    return_buffer=False,
+):
+    """
+    Create a single matplotlib figure showing Hamiltonian comparison for one shift.
+
+    This function creates the 2x2 subplot visualization without saving to disk.
+    Useful for creating video frames or one-off analysis.
+
+    Args:
+        H_pred: Predicted Hamiltonian BlockMatrix
+        H_gt: Ground truth Hamiltonian BlockMatrix
+        S: Overlap BlockMatrix
+        atoms_list: List of atom symbols
+        orbital_cfg: Orbital configuration
+        sx, sy, sz: Cell shift indices (default: [0, 0, 0])
+        dynamic_range: If True, use percentile of abs(H_gt) for color range
+        partial_train: "diag", "offdiag", or None - filters which blocks to show
+        percentile: Percentile value for dynamic color range (default: 80.0)
+        figsize: Figure size (default: (12, 12))
+        return_buffer: If True, return figure as PNG-encoded bytes instead of figure object
+
+    Returns:
+        matplotlib.figure.Figure or bytes: Figure object (or PNG bytes if return_buffer=True)
+    """
+
+    # Extract partial Hamiltonians
+    H_gt_dense, S_dense, dim = extract_partial_hamiltonian(
+        H_gt, S, atoms_list, orbital_cfg, sx, sy, sz, partial_train=partial_train
+    )
+    H_pred_dense, _, _ = extract_partial_hamiltonian(
+        H_pred,
+        None,
+        atoms_list,
+        orbital_cfg,
+        sx,
+        sy,
+        sz,
+        partial_train=partial_train,
+    )
+
+    # Compute differences
+    diff = H_pred_dense - H_gt_dense
+    diff_corrected = (
+        diff - compute_mu_H(H_pred, H_gt, S) * S_dense if S_dense is not None else diff
+    )
+    mu_H = compute_mu_H(H_pred, H_gt, S)
+
+    # Check if there's any data for this shift
+    if np.abs(H_gt_dense).max() < 1e-10 and np.abs(H_pred_dense).max() < 1e-10:
+        raise ValueError(f"No data for shift [{sx}, {sy}, {sz}]")
+
+    # Create figure
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+
+    # Determine color range
+    if dynamic_range:
+        v = np.percentile(np.abs(H_gt_dense), percentile)
+        vmin, vmax = -v, v
+    else:
+        vmin, vmax = -1, 1
+
+    # 1. Ground truth (top-left)
+    im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+    axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
+    axes[0, 0].set_xlabel("Orbital j")
+    axes[0, 0].set_ylabel("Orbital i")
+    plt.colorbar(im0, ax=axes[0, 0])
+
+    # 2. Predicted (top-right)
+    im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+    axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
+    axes[0, 1].set_xlabel("Orbital j")
+    axes[0, 1].set_ylabel("Orbital i")
+    plt.colorbar(im1, ax=axes[0, 1])
+
+    # 3. Difference (bottom-left)
+    im2 = axes[1, 0].imshow(diff, cmap="bwr", vmin=vmin, vmax=vmax)
+    axes[1, 0].set_title(f"Difference (pred - gt)\nMAE: {np.abs(diff).mean():.3e}")
+    axes[1, 0].set_xlabel("Orbital j")
+    axes[1, 0].set_ylabel("Orbital i")
+    plt.colorbar(im2, ax=axes[1, 0])
+
+    # 4. Corrected difference (bottom-right)
+    im3 = axes[1, 1].imshow(diff_corrected, cmap="bwr", vmin=vmin, vmax=vmax)
+    axes[1, 1].set_title(
+        f"Corrected Diff (µ_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
+    )
+    axes[1, 1].set_xlabel("Orbital j")
+    axes[1, 1].set_ylabel("Orbital i")
+    plt.colorbar(im3, ax=axes[1, 1])
+
+    plt.tight_layout()
+
+    if return_buffer:
+        # Convert figure to PNG bytes
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
+        buffer.seek(0)
+        png_bytes = buffer.getvalue()
+        plt.close(fig)
+        return png_bytes
+    else:
+        return fig
+
+
+def save_hamiltonian_frame_to_disk(
+    H_pred,
+    H_gt,
+    S,
+    atoms_list,
+    orbital_cfg,
+    output_dir,
+    epoch,
+    sx=0,
+    sy=0,
+    sz=0,
+    dynamic_range=False,
+    partial_train=None,
+    percentile=80.0,
+):
+    """
+    Save a single Hamiltonian visualization frame to disk for video creation.
+
+    Args:
+        H_pred: Predicted Hamiltonian BlockMatrix
+        H_gt: Ground truth Hamiltonian BlockMatrix
+        S: Overlap BlockMatrix
+        atoms_list: List of atom symbols
+        orbital_cfg: Orbital configuration
+        output_dir: Directory to save frames
+        epoch: Epoch number (used in filename)
+        sx, sy, sz: Cell shift indices (default: [0, 0, 0])
+        dynamic_range: If True, use percentile of abs(H_gt) for color range
+        partial_train: "diag", "offdiag", or None - filters which blocks to show
+        percentile: Percentile value for dynamic color range (default: 80.0)
+
+    Returns:
+        Path to saved PNG file
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create figure
+    fig = create_hamiltonian_frame_figure(
+        H_pred,
+        H_gt,
+        S,
+        atoms_list,
+        orbital_cfg,
+        sx=sx,
+        sy=sy,
+        sz=sz,
+        dynamic_range=dynamic_range,
+        partial_train=partial_train,
+        percentile=percentile,
+    )
+
+    # Save figure
+    filename = f"frame_epoch_{epoch:06d}.png"
+    filepath = output_dir / filename
+    fig.savefig(filepath, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    return filepath
+
+
+def compile_frames_to_video(
+    frame_dir,
+    output_path,
+    fps=5,
+    pattern="frame_epoch_*.png",
+):
+    """
+    Compile PNG frames into an MP4 video using imageio.
+
+    Frames are sorted by filename to ensure correct ordering.
+
+    Args:
+        frame_dir: Directory containing PNG frames
+        output_path: Path to save MP4 file
+        fps: Frames per second for video (default: 5)
+        pattern: Glob pattern for frame files (default: "frame_epoch_*.png")
+
+    Returns:
+        Path to created video file
+
+    Raises:
+        ImportError: If imageio is not installed
+        FileNotFoundError: If no frames found in directory
+    """
+    frame_dir = Path(frame_dir)
+    output_path = Path(output_path)
+
+    # Find all matching frames
+    frames_list = sorted(frame_dir.glob(pattern))
+
+    if not frames_list:
+        raise FileNotFoundError(
+            f"No frames found in {frame_dir} matching pattern {pattern}"
+        )
+
+    print(f"\nCompiling {len(frames_list)} frames into video...")
+    print(f"  First frame: {frames_list[0].name}")
+    print(f"  Last frame: {frames_list[-1].name}")
+    print(f"  FPS: {fps}")
+    print(f"  Output: {output_path}")
+
+    # Read all frames
+    frames = [imageio.imread(str(frame_path)) for frame_path in frames_list]
+
+    # Write video
+    imageio.mimsave(output_path, frames, fps=fps)
+
+    print(f"✓ Video saved to {output_path}")
+    return output_path
