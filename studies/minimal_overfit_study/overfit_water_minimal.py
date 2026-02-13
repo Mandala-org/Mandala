@@ -1404,7 +1404,13 @@ if __name__ == "__main__":
                     format="mp4",
                 )
                 # Log final video to WandB (same key, overwrites previous)
-                wandb.log({"training_video": wandb.Video(str(video_path), fps=5)})
+                wandb.log(
+                    {
+                        "training_video": wandb.Video(
+                            str(video_path), fps=5, format="mp4"
+                        )
+                    }
+                )
                 print(f"✓ Training video logged to WandB")
             else:
                 print(f"⚠️  No frames found for video generation")
