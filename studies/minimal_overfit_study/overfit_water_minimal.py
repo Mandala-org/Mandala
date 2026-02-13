@@ -1130,9 +1130,9 @@ if __name__ == "__main__":
                                     "training_video": wandb.Video(
                                         str(video_path), fps=5
                                     ),
-                                    "epoch": epoch,
                                 }
                             )
+                            wandb.log({"epoch": epoch})
                             print(f"  ✓ Video saved and uploaded (epoch {epoch + 1})")
                     except Exception as e:
                         print(f"  ⚠️  Warning: Could not save video: {e}")
