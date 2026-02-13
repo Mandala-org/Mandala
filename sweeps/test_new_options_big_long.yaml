@@ -1,6 +1,6 @@
 program: studies/minimal_overfit_study/overfit_water_minimal.py
 project: mandala-test-variants
-name: test_variants
+name: test_variants_long_big
 method: grid
 
 parameters:
@@ -20,19 +20,19 @@ parameters:
   l-max:
     value: 4
   hidden-irreps:
-    value: 32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e+8x4o
+    value: 64x0e+64x0o+32x1e+32x1o+32x2e+32x2o+16x3e+16x3o+8x4e+8x4o
   num-layers:
-    value: 1
+    value: 2
   cutoff-radius:
     value: 8.0
   n-radial:
-    value: 64
+    value: 128
 
   # Training parameters
   lr:
     value: 0.001
   num-epochs:
-    value: 10000
+    value: 15000
   log-interval:
     value: 200
   grad-clip:
@@ -40,7 +40,7 @@ parameters:
   lr-factor:
     value: 0.5
   lr-patience:
-    value: 600
+    value: 2000
 
   # Partial training parameters
   partial-train:
