@@ -857,7 +857,7 @@ def extract_partial_hamiltonian(
 
             if int(shift_x) == sx and int(shift_y) == sy and int(shift_z) == sz:
                 # Get block
-                block_H = H_blocks[idx].cpu().numpy()
+                block_H = H_blocks[idx].detach().cpu().numpy()
 
                 # Get atom ranges
                 i_start, i_end = atom_ranges[int(i)]
@@ -868,7 +868,7 @@ def extract_partial_hamiltonian(
 
                 # Fill overlap if available
                 if S_blocks is not None and (s_mask is None or s_mask[idx]):
-                    block_S = S_blocks[idx].cpu().numpy()
+                    block_S = S_blocks[idx].detach().cpu().numpy()
                     S_dense[i_start:i_end, j_start:j_end] = block_S
 
     return H_dense, S_dense, total_dim
