@@ -50,6 +50,7 @@ from common import (
     filter_irreps_block_data_by_irrep,
     compute_irrep_metrics,
     get_all_irreps_in_hamiltonian,
+    permutation_to_matrix,
 )
 
 
@@ -192,6 +193,19 @@ if __name__ == "__main__":
         default=False,
         help="Show detailed forward pass debug prints (shapes, irreps, etc.) (default: False)",
     )
+    parser.add_argument(
+        "--xyz-permutation",
+        type=str,
+        default="012",
+        help="XYZ permutation as 3-digit string (default: '012', can be '120', '201', etc.)",
+    )
+    parser.add_argument(
+        "--change-box",
+        type=str,
+        default="both",
+        choices=["right", "both"],
+        help="How to apply permutation to box: 'right' (M @ box) or 'both' (M @ box @ M) (default: 'both')",
+    )
 
     args = parser.parse_args()
 
@@ -208,6 +222,8 @@ if __name__ == "__main__":
         "data_path": Path(args.data_path),
         "info_path": Path(args.info_path),
         "convention": args.convention,
+        "xyz_permutation": args.xyz_permutation,
+        "change_box": args.change_box,
         # Network architecture
         "hidden_dim": args.hidden_dim,
         "l_max": args.l_max,
@@ -329,6 +345,26 @@ if __name__ == "__main__":
     positions = snapshot.positions.to(device)
     box = snapshot.box.to(device) if snapshot.box is not None else None
     atoms_list = list(snapshot.hamiltonian.atoms)
+
+    # Apply coordinate permutation if specified
+    if CONFIG["xyz_permutation"] != "012":
+        cob_matrix = permutation_to_matrix(CONFIG["xyz_permutation"], device)
+        print(f"\n  Applying xyz permutation: {CONFIG['xyz_permutation']}")
+        print(f"    Matrix:\n{cob_matrix}")
+        # Multiply positions from the right: positions @ cob_matrix.T
+        positions = positions @ cob_matrix.T
+        if CONFIG["change_box"] == "right":
+            # box @ cob_matrix
+            box = box @ cob_matrix
+        elif CONFIG["change_box"] == "left":
+            # cob_matrix.T @ box
+            box = cob_matrix.T @ box
+        elif CONFIG["change_box"] == "both":
+            # cob_matrix.T @ box @ cob_matrix
+            box = cob_matrix.T @ box @ cob_matrix
+        else:
+            raise ValueError(f"Invalid change_box option: {CONFIG['change_box']}")
+        print(f"    Applied to positions and box (change_box={CONFIG['change_box']})")
 
     print(f"\n  Orbital configuration:")
     for elem in orbital_cfg.elements():
