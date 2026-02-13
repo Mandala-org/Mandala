@@ -1254,3 +1254,151 @@ def compile_frames_to_video(
 
     print(f"✓ Video saved to {output_path}")
     return output_path
+
+
+def filter_irreps_block_data_by_irrep(irreps_block_data, target_irrep, mapper):
+    """
+    Filter IrrepsBlockData to only include contributions from a specific irrep.
+    All other irrep components are zeroed out.
+
+    Args:
+        irreps_block_data: IrrepsBlockData object
+        target_irrep: e3nn.o3.Irrep to keep (e.g., Irrep("0e"), Irrep("1o"))
+        mapper: BlockIrrepMapper object
+
+    Returns:
+        Filtered IrrepsBlockData with only target_irrep contributions
+    """
+    from e3nn.o3 import Irrep
+    from data.block_matrix import IrrepsBlockData
+
+    if isinstance(target_irrep, str):
+        target_irrep = Irrep(target_irrep)
+
+    filtered_vectors = {}
+
+    for edge_type, vectors in irreps_block_data.pair_vectors.items():
+        # Get pair irreps for this edge type
+        pair_irreps = mapper.get_pair_irreps(edge_type)
+
+        # Create mask for target irrep
+        filtered_vec = torch.zeros_like(vectors)
+        start_idx = 0
+
+        for mul, irrep in pair_irreps:
+            irrep_dim = irrep.dim * mul
+
+            if irrep == target_irrep:
+                # Keep this irrep's contribution
+                filtered_vec[:, start_idx : start_idx + irrep_dim] = vectors[
+                    :, start_idx : start_idx + irrep_dim
+                ]
+
+            start_idx += irrep_dim
+
+        filtered_vectors[edge_type] = filtered_vec
+
+    return IrrepsBlockData(
+        atoms=irreps_block_data.atoms,
+        atom_counts=irreps_block_data.atom_counts,
+        pair_vectors=filtered_vectors,
+        pair_edges=irreps_block_data.pair_edges,
+        lookup=irreps_block_data.lookup,
+        orbital_cfg=irreps_block_data.orbital_cfg,
+        basis=irreps_block_data.basis,
+    )
+
+
+def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
+    """
+    Compute per-irrep metrics: L1 error (MAE), L2 error (RMSE), relative L1, relative L2.
+
+    Args:
+        pred_H_irreps: Predicted Hamiltonian as IrrepsBlockData
+        target_H_irreps: Target Hamiltonian as IrrepsBlockData
+        all_irreps: List of all irreps in the system
+        mapper: BlockIrrepMapper object
+
+    Returns:
+        Dictionary with keys like "irrep_str_l1", "irrep_str_l2", "irrep_str_rel_l1", "irrep_str_rel_l2"
+    """
+
+    irrep_metrics = {}
+    _REL_EPS = 1e-12
+
+    for irrep in all_irreps:
+        # Filter both prediction and target by this irrep
+        pred_irrep_filtered = filter_irreps_block_data_by_irrep(
+            pred_H_irreps, irrep, mapper
+        )
+        target_irrep_filtered = filter_irreps_block_data_by_irrep(
+            target_H_irreps, irrep, mapper
+        )
+
+        pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
+        target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
+
+        # Collect all errors and targets for this irrep
+        all_errors_l1 = []
+        all_errors_l2 = []
+        all_targets = []
+
+        for key in target_irrep_blocks.pair_blocks.keys():
+            if key in pred_irrep_blocks.pair_blocks:
+                pred_blocks = pred_irrep_blocks.pair_blocks[key]
+                targ_blocks_full = target_irrep_blocks.pair_blocks[key]
+                min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+                if min_n <= 0:
+                    continue
+                pred_sel = pred_blocks[:min_n]
+                targ_sel = targ_blocks_full[:min_n]
+
+                diff = pred_sel - targ_sel
+                all_errors_l1.append(torch.abs(diff))
+                all_errors_l2.append(diff**2)
+                all_targets.append(torch.abs(targ_sel))
+
+        if all_errors_l1:
+            # Concatenate all errors
+            concat_errors_l1 = torch.cat(all_errors_l1, dim=0)
+            concat_errors_l2 = torch.cat(all_errors_l2, dim=0)
+            concat_targets = torch.cat(all_targets, dim=0)
+
+            # Compute metrics
+            mae = torch.mean(concat_errors_l1).item()
+            rmse = torch.sqrt(torch.mean(concat_errors_l2)).item()
+            mean_target = torch.mean(concat_targets).item()
+            frobenius_target = torch.sqrt(torch.sum(concat_targets**2)).item()
+
+            rel_l1 = mae / (mean_target + _REL_EPS)
+            rel_l2 = rmse / (frobenius_target + _REL_EPS)
+
+            irrep_str = str(irrep)
+            irrep_metrics[f"{irrep_str}_l1"] = mae
+            irrep_metrics[f"{irrep_str}_l2"] = rmse
+            irrep_metrics[f"{irrep_str}_rel_l1"] = rel_l1
+            irrep_metrics[f"{irrep_str}_rel_l2"] = rel_l2
+
+    return irrep_metrics
+
+
+def get_all_irreps_in_hamiltonian(mapper):
+    """
+    Get a list of all unique irreps present in the Hamiltonian.
+
+    Args:
+        mapper: BlockIrrepMapper
+
+    Returns:
+        List of unique Irrep objects
+    """
+
+    irreps_set = set()
+    for edge_type in mapper.edge_types:
+        pair_irreps = mapper.get_pair_irreps(edge_type)
+        for mul, irrep in pair_irreps:
+            if mul > 0:  # Only include irreps that are actually present
+                irreps_set.add(irrep)
+
+    # Sort by l, then by parity
+    return sorted(irreps_set, key=lambda ir: (ir.l, ir.p))
