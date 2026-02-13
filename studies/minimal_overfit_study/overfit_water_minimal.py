@@ -1003,25 +1003,49 @@ if __name__ == "__main__":
                     )
 
                 # Compute per-irrep metrics for logging (always, regardless of training mode)
-                print(f"\n  Per-Irrep Metrics (L1 and L2):")
+                print(f"\n  Per-Irrep Metrics (Element, Block, and Full Matrix):")
                 per_irrep_metrics = compute_irrep_metrics(
                     pred_H_irreps, target_H_irreps, all_irreps, mapper
                 )
                 for irrep in sorted(all_irreps, key=str):
                     irrep_str = str(irrep)
-                    l1 = per_irrep_metrics.get(f"{irrep_str}_l1", 0.0)
-                    l2 = per_irrep_metrics.get(f"{irrep_str}_l2", 0.0)
-                    rel_l1 = per_irrep_metrics.get(f"{irrep_str}_rel_l1", 0.0)
-                    rel_l2 = per_irrep_metrics.get(f"{irrep_str}_rel_l2", 0.0)
-                    print(
-                        f"    {irrep_str:4s}: L1(MAE)={l1:.3e} L2(RMSE)={l2:.3e} | rel_L1={rel_l1:.3%} rel_L2={rel_l2:.3%}"
+                    # Element-level metrics
+                    l1_elem = per_irrep_metrics.get(f"{irrep_str}_l1_elem", 0.0)
+                    l2_elem = per_irrep_metrics.get(f"{irrep_str}_l2_elem", 0.0)
+                    # Block-level metrics
+                    l1_block = per_irrep_metrics.get(f"{irrep_str}_l1_block", 0.0)
+                    l1_block_rel = per_irrep_metrics.get(
+                        f"{irrep_str}_l1_block_rel", 0.0
                     )
+                    l2_block = per_irrep_metrics.get(f"{irrep_str}_l2_block", 0.0)
+                    l2_block_rel = per_irrep_metrics.get(
+                        f"{irrep_str}_l2_block_rel", 0.0
+                    )
+                    # Full matrix relative metrics
+                    l1_full_rel = per_irrep_metrics.get(f"{irrep_str}_l1_full_rel", 0.0)
+                    l2_full_rel = per_irrep_metrics.get(f"{irrep_str}_l2_full_rel", 0.0)
+
+                    print(f"    {irrep_str:4s}:")
+                    print(
+                        f"      Element-level: L1(MAE)={l1_elem:.3e} L2(RMSE)={l2_elem:.3e}"
+                    )
+                    print(
+                        f"      Block-level:   L1={l1_block:.3e} (rel={l1_block_rel:.3%}), L2={l2_block:.3e} (rel={l2_block_rel:.3%})"
+                    )
+                    print(
+                        f"      Full-matrix:   L1_rel={l1_full_rel:.3%}, L2_rel={l2_full_rel:.3%}"
+                    )
+
                     wandb.log(
                         {
-                            f"irrep_metrics/{irrep_str}_l1": l1,
-                            f"irrep_metrics/{irrep_str}_l2": l2,
-                            f"irrep_metrics/{irrep_str}_rel_l1": rel_l1,
-                            f"irrep_metrics/{irrep_str}_rel_l2": rel_l2,
+                            f"irrep_metrics/{irrep_str}_l1_elem": l1_elem,
+                            f"irrep_metrics/{irrep_str}_l2_elem": l2_elem,
+                            f"irrep_metrics/{irrep_str}_l1_block": l1_block,
+                            f"irrep_metrics/{irrep_str}_l1_block_rel": l1_block_rel,
+                            f"irrep_metrics/{irrep_str}_l2_block": l2_block,
+                            f"irrep_metrics/{irrep_str}_l2_block_rel": l2_block_rel,
+                            f"irrep_metrics/{irrep_str}_l1_full_rel": l1_full_rel,
+                            f"irrep_metrics/{irrep_str}_l2_full_rel": l2_full_rel,
                             "epoch": epoch,
                         }
                     )
@@ -1239,23 +1263,41 @@ if __name__ == "__main__":
             final_metrics[f"final/{key}_mae"] = block_mae
 
         # Compute final per-irrep metrics (always, regardless of training mode)
-        print("\n  Final Per-Irrep Metrics (L1 and L2):")
+        print("\n  Final Per-Irrep Metrics (Element, Block, and Full Matrix):")
         final_per_irrep_metrics = compute_irrep_metrics(
             pred_H_irreps, target_H_irreps, all_irreps, mapper
         )
         for irrep in sorted(all_irreps, key=str):
             irrep_str = str(irrep)
-            l1 = final_per_irrep_metrics.get(f"{irrep_str}_l1", 0.0)
-            l2 = final_per_irrep_metrics.get(f"{irrep_str}_l2", 0.0)
-            rel_l1 = final_per_irrep_metrics.get(f"{irrep_str}_rel_l1", 0.0)
-            rel_l2 = final_per_irrep_metrics.get(f"{irrep_str}_rel_l2", 0.0)
+            # Element-level metrics
+            l1_elem = final_per_irrep_metrics.get(f"{irrep_str}_l1_elem", 0.0)
+            l2_elem = final_per_irrep_metrics.get(f"{irrep_str}_l2_elem", 0.0)
+            # Block-level metrics
+            l1_block = final_per_irrep_metrics.get(f"{irrep_str}_l1_block", 0.0)
+            l1_block_rel = final_per_irrep_metrics.get(f"{irrep_str}_l1_block_rel", 0.0)
+            l2_block = final_per_irrep_metrics.get(f"{irrep_str}_l2_block", 0.0)
+            l2_block_rel = final_per_irrep_metrics.get(f"{irrep_str}_l2_block_rel", 0.0)
+            # Full matrix relative metrics
+            l1_full_rel = final_per_irrep_metrics.get(f"{irrep_str}_l1_full_rel", 0.0)
+            l2_full_rel = final_per_irrep_metrics.get(f"{irrep_str}_l2_full_rel", 0.0)
+
+            print(f"    {irrep_str:4s}:")
+            print(f"      Element-level: L1(MAE)={l1_elem:.3e} L2(RMSE)={l2_elem:.3e}")
             print(
-                f"    {irrep_str:4s}: L1(MAE)={l1:.3e} L2(RMSE)={l2:.3e} | rel_L1={rel_l1:.3%} rel_L2={rel_l2:.3%}"
+                f"      Block-level:   L1={l1_block:.3e} (rel={l1_block_rel:.3%}), L2={l2_block:.3e} (rel={l2_block_rel:.3%})"
             )
-            final_metrics[f"final_irrep/{irrep_str}_l1"] = l1
-            final_metrics[f"final_irrep/{irrep_str}_l2"] = l2
-            final_metrics[f"final_irrep/{irrep_str}_rel_l1"] = rel_l1
-            final_metrics[f"final_irrep/{irrep_str}_rel_l2"] = rel_l2
+            print(
+                f"      Full-matrix:   L1_rel={l1_full_rel:.3%}, L2_rel={l2_full_rel:.3%}"
+            )
+
+            final_metrics[f"final_irrep/{irrep_str}_l1_elem"] = l1_elem
+            final_metrics[f"final_irrep/{irrep_str}_l2_elem"] = l2_elem
+            final_metrics[f"final_irrep/{irrep_str}_l1_block"] = l1_block
+            final_metrics[f"final_irrep/{irrep_str}_l1_block_rel"] = l1_block_rel
+            final_metrics[f"final_irrep/{irrep_str}_l2_block"] = l2_block
+            final_metrics[f"final_irrep/{irrep_str}_l2_block_rel"] = l2_block_rel
+            final_metrics[f"final_irrep/{irrep_str}_l1_full_rel"] = l1_full_rel
+            final_metrics[f"final_irrep/{irrep_str}_l2_full_rel"] = l2_full_rel
 
         # Log per-irrep training losses if enabled (separate from prediction metrics)
         if CONFIG["train_on_irrep_parts"] and target_H_irreps is not None:

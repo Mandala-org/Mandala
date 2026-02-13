@@ -1311,7 +1311,7 @@ def filter_irreps_block_data_by_irrep(irreps_block_data, target_irrep, mapper):
 
 def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
     """
-    Compute per-irrep metrics: L1 error (MAE), L2 error (RMSE), relative L1, relative L2.
+    Compute per-irrep metrics with detailed element-level, block-level, and full-matrix metrics.
 
     Args:
         pred_H_irreps: Predicted Hamiltonian as IrrepsBlockData
@@ -1320,7 +1320,15 @@ def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
         mapper: BlockIrrepMapper object
 
     Returns:
-        Dictionary with keys like "irrep_str_l1", "irrep_str_l2", "irrep_str_rel_l1", "irrep_str_rel_l2"
+        Dictionary with keys:
+        - {irrep_str}_l1_elem: MAE (averaged over all elements)
+        - {irrep_str}_l2_elem: RMSE (averaged over all elements)
+        - {irrep_str}_l1_block: Sum absolute error per block, averaged over blocks
+        - {irrep_str}_l1_block_rel: L1 norm of error / L1 norm of target (blocks)
+        - {irrep_str}_l2_block: Root of sum of squared elements, averaged over blocks
+        - {irrep_str}_l2_block_rel: L2 norm of error / L2 norm of target (blocks)
+        - {irrep_str}_l1_full_rel: L1 norm of full error matrix / L1 norm of full target matrix
+        - {irrep_str}_l2_full_rel: L2 norm of full error matrix / L2 norm of full target matrix
     """
 
     irrep_metrics = {}
@@ -1338,46 +1346,93 @@ def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
         pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
         target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
 
-        # Collect all errors and targets for this irrep
-        all_errors_l1 = []
-        all_errors_l2 = []
-        all_targets = []
+        # Initialize accumulators
+        sum_l1_elem = 0.0  # Sum of absolute errors (element-level)
+        sum_l2_elem = 0.0  # Sum of squared errors (element-level)
+        total_elements = 0  # Total number of elements
 
+        sum_l1_block = 0.0  # Sum of L1 norms (block-level)
+        sum_l1_target_block = 0.0  # Sum of L1 norms of target blocks
+        sum_l2_block_sq = 0.0  # Sum of L2 norms squared (block-level)
+        sum_l2_target_block_sq = 0.0  # Sum of L2 norms squared of target blocks
+        total_blocks = 0  # Count of blocks
+
+        sum_l1_target_full = 0.0  # L1 norm of full target matrix
+        sum_l2_target_full_sq = 0.0  # L2 norm squared of full target matrix
+
+        # Iterate through each edge type
         for key in target_irrep_blocks.pair_blocks.keys():
             if key in pred_irrep_blocks.pair_blocks:
-                pred_blocks = pred_irrep_blocks.pair_blocks[key]
-                targ_blocks_full = target_irrep_blocks.pair_blocks[key]
+                pred_blocks = pred_irrep_blocks.pair_blocks[
+                    key
+                ]  # (num_edges, dim_i, dim_j)
+                targ_blocks_full = target_irrep_blocks.pair_blocks[
+                    key
+                ]  # (num_edges, dim_i, dim_j)
                 min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
                 if min_n <= 0:
                     continue
+
                 pred_sel = pred_blocks[:min_n]
                 targ_sel = targ_blocks_full[:min_n]
 
-                diff = pred_sel - targ_sel
-                all_errors_l1.append(torch.abs(diff))
-                all_errors_l2.append(diff**2)
-                all_targets.append(torch.abs(targ_sel))
+                # Process each block individually
+                for idx in range(pred_sel.shape[0]):
+                    pred_block = pred_sel[idx]  # (dim_i, dim_j)
+                    targ_block = targ_sel[idx]  # (dim_i, dim_j)
+                    diff = pred_block - targ_block  # (dim_i, dim_j)
 
-        if all_errors_l1:
-            # Concatenate all errors
-            concat_errors_l1 = torch.cat(all_errors_l1, dim=0)
-            concat_errors_l2 = torch.cat(all_errors_l2, dim=0)
-            concat_targets = torch.cat(all_targets, dim=0)
+                    # Block-level norms (scalars)
+                    l1_error_block = torch.sum(torch.abs(diff)).item()
+                    l2_error_block_sq = torch.sum(diff**2).item()
+                    l1_target_block = torch.sum(torch.abs(targ_block)).item()
+                    l2_target_block_sq = torch.sum(targ_block**2).item()
 
-            # Compute metrics
-            mae = torch.mean(concat_errors_l1).item()
-            rmse = torch.sqrt(torch.mean(concat_errors_l2)).item()
-            mean_target = torch.mean(concat_targets).item()
-            frobenius_target = torch.sqrt(torch.sum(concat_targets**2)).item()
+                    # Accumulate element-level metrics
+                    sum_l1_elem += l1_error_block
+                    sum_l2_elem += l2_error_block_sq
+                    total_elements += diff.numel()
 
-            rel_l1 = mae / (mean_target + _REL_EPS)
-            rel_l2 = rmse / (frobenius_target + _REL_EPS)
+                    # Accumulate block-level metrics
+                    sum_l1_block += l1_error_block
+                    sum_l1_target_block += l1_target_block
+                    sum_l2_block_sq += l2_error_block_sq
+                    sum_l2_target_block_sq += l2_target_block_sq
+                    total_blocks += 1
 
+                    # Accumulate full matrix metrics
+                    sum_l1_target_full += l1_target_block
+                    sum_l2_target_full_sq += l2_target_block_sq
+
+        if total_elements > 0:
+            # Compute element-level metrics
+            l1_elem = sum_l1_elem / total_elements
+            l2_elem = (sum_l2_elem / total_elements) ** 0.5
+
+            # Compute block-level metrics
+            l1_block = sum_l1_block / max(total_blocks, 1)
+            l2_block = (sum_l2_block_sq / max(total_blocks, 1)) ** 0.5
+
+            # Compute block-level relative metrics
+            l1_block_rel = sum_l1_block / (sum_l1_target_block + _REL_EPS)
+            l2_block_rel = (sum_l2_block_sq**0.5) / (
+                sum_l2_target_block_sq**0.5 + _REL_EPS
+            )
+
+            # Compute full-matrix relative metrics (using element-level accumulators)
+            l1_full_rel = sum_l1_elem / (sum_l1_target_full + _REL_EPS)
+            l2_full_rel = (sum_l2_elem**0.5) / (sum_l2_target_full_sq**0.5 + _REL_EPS)
+
+            # Store all metrics
             irrep_str = str(irrep)
-            irrep_metrics[f"{irrep_str}_l1"] = mae
-            irrep_metrics[f"{irrep_str}_l2"] = rmse
-            irrep_metrics[f"{irrep_str}_rel_l1"] = rel_l1
-            irrep_metrics[f"{irrep_str}_rel_l2"] = rel_l2
+            irrep_metrics[f"{irrep_str}_l1_elem"] = l1_elem
+            irrep_metrics[f"{irrep_str}_l2_elem"] = l2_elem
+            irrep_metrics[f"{irrep_str}_l1_block"] = l1_block
+            irrep_metrics[f"{irrep_str}_l1_block_rel"] = l1_block_rel
+            irrep_metrics[f"{irrep_str}_l2_block"] = l2_block
+            irrep_metrics[f"{irrep_str}_l2_block_rel"] = l2_block_rel
+            irrep_metrics[f"{irrep_str}_l1_full_rel"] = l1_full_rel
+            irrep_metrics[f"{irrep_str}_l2_full_rel"] = l2_full_rel
 
     return irrep_metrics
 
