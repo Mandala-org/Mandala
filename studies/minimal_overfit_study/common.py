@@ -1376,33 +1376,31 @@ def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
                 pred_sel = pred_blocks[:min_n]
                 targ_sel = targ_blocks_full[:min_n]
 
-                # Process each block individually
-                for idx in range(pred_sel.shape[0]):
-                    pred_block = pred_sel[idx]  # (dim_i, dim_j)
-                    targ_block = targ_sel[idx]  # (dim_i, dim_j)
-                    diff = pred_block - targ_block  # (dim_i, dim_j)
+                # Vectorized computation (all blocks at once)
+                # Shape: (num_blocks, dim_i, dim_j)
+                diff = pred_sel - targ_sel
 
-                    # Block-level norms (scalars)
-                    l1_error_block = torch.sum(torch.abs(diff)).item()
-                    l2_error_block_sq = torch.sum(diff**2).item()
-                    l1_target_block = torch.sum(torch.abs(targ_block)).item()
-                    l2_target_block_sq = torch.sum(targ_block**2).item()
+                # Compute norms per block: shape (num_blocks,)
+                l1_error_blocks = torch.sum(torch.abs(diff), dim=(1, 2))
+                l2_error_blocks_sq = torch.sum(diff**2, dim=(1, 2))
+                l1_target_blocks = torch.sum(torch.abs(targ_sel), dim=(1, 2))
+                l2_target_blocks_sq = torch.sum(targ_sel**2, dim=(1, 2))
 
-                    # Accumulate element-level metrics
-                    sum_l1_elem += l1_error_block
-                    sum_l2_elem += l2_error_block_sq
-                    total_elements += diff.numel()
+                # Accumulate element-level metrics
+                sum_l1_elem += torch.sum(l1_error_blocks).item()
+                sum_l2_elem += torch.sum(l2_error_blocks_sq).item()
+                total_elements += diff.numel()
 
-                    # Accumulate block-level metrics
-                    sum_l1_block += l1_error_block
-                    sum_l1_target_block += l1_target_block
-                    sum_l2_block_sq += l2_error_block_sq
-                    sum_l2_target_block_sq += l2_target_block_sq
-                    total_blocks += 1
+                # Accumulate block-level metrics
+                sum_l1_block += torch.sum(l1_error_blocks).item()
+                sum_l1_target_block += torch.sum(l1_target_blocks).item()
+                sum_l2_block_sq += torch.sum(l2_error_blocks_sq).item()
+                sum_l2_target_block_sq += torch.sum(l2_target_blocks_sq).item()
+                total_blocks += pred_sel.shape[0]
 
-                    # Accumulate full matrix metrics
-                    sum_l1_target_full += l1_target_block
-                    sum_l2_target_full_sq += l2_target_block_sq
+                # Accumulate full matrix metrics
+                sum_l1_target_full += torch.sum(l1_target_blocks).item()
+                sum_l2_target_full_sq += torch.sum(l2_target_blocks_sq).item()
 
         if total_elements > 0:
             # Compute element-level metrics
