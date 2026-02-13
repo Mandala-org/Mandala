@@ -1,4 +1,5 @@
 program: studies/minimal_overfit_study/overfit_water_minimal.py
+project: mandala-test-variants
 method: grid
 
 parameters:
