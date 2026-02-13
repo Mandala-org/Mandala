@@ -1040,6 +1040,7 @@ def create_hamiltonian_frame_figure(
     percentile=80.0,
     figsize=(12, 12),
     return_buffer=False,
+    epoch=None,
 ):
     """
     Create a single matplotlib figure showing Hamiltonian comparison for one shift.
@@ -1059,6 +1060,7 @@ def create_hamiltonian_frame_figure(
         percentile: Percentile value for dynamic color range (default: 80.0)
         figsize: Figure size (default: (12, 12))
         return_buffer: If True, return figure as PNG-encoded bytes instead of figure object
+        epoch: Optional epoch number to display on the figure
 
     Returns:
         matplotlib.figure.Figure or bytes: Figure object (or PNG bytes if return_buffer=True)
@@ -1132,6 +1134,18 @@ def create_hamiltonian_frame_figure(
 
     plt.tight_layout()
 
+    # Add epoch number overlay if provided
+    if epoch is not None:
+        fig.text(
+            0.02,
+            0.98,
+            f"Epoch: {epoch}",
+            transform=fig.transFigure,
+            fontsize=16,
+            verticalalignment="top",
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+        )
+
     if return_buffer:
         # Convert figure to PNG bytes
         buffer = io.BytesIO()
@@ -1194,6 +1208,7 @@ def save_hamiltonian_frame_to_disk(
         dynamic_range=dynamic_range,
         partial_train=partial_train,
         percentile=percentile,
+        epoch=epoch,
     )
 
     # Save figure
@@ -1210,6 +1225,7 @@ def compile_frames_to_video(
     output_path,
     fps=5,
     pattern="frame_epoch_*.png",
+    format="mp4",
 ):
     """
     Compile PNG frames into an MP4 video using imageio.
@@ -1250,7 +1266,7 @@ def compile_frames_to_video(
     frames = [imageio.imread(str(frame_path)) for frame_path in frames_list]
 
     # Write video
-    imageio.mimsave(output_path, frames, fps=fps)
+    imageio.mimsave(output_path, frames, fps=fps, format=format)
 
     print(f"✓ Video saved to {output_path}")
     return output_path
