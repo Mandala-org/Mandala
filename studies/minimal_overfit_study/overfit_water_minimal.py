@@ -30,6 +30,7 @@ import torch
 import torch.nn.functional as F
 from torch.optim import Adam
 from torch.nn.utils import clip_grad_norm_
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from e3nn.o3 import Irreps, spherical_harmonics, Irrep
 from e3nn.math import soft_one_hot_linspace
 from ase import Atoms
@@ -145,6 +146,18 @@ if __name__ == "__main__":
         help="Gradient clipping max norm (default: 1.0, set to 0 to disable)",
     )
     parser.add_argument(
+        "--lr-factor",
+        type=float,
+        default=0.5,
+        help="ReduceLROnPlateau factor (default: 0.5)",
+    )
+    parser.add_argument(
+        "--lr-patience",
+        type=int,
+        default=50,
+        help="ReduceLROnPlateau patience (default: 50)",
+    )
+    parser.add_argument(
         "--partial-train",
         type=str,
         default=None,
@@ -185,6 +198,8 @@ if __name__ == "__main__":
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
         "train_on_irrep_parts": args.train_on_irrep_parts,
+        "lr_factor": args.lr_factor,
+        "lr_patience": args.lr_patience,
         # Device
         "device": args.device,
         # Target
@@ -613,6 +628,19 @@ if __name__ == "__main__":
 
     optimizer = Adam(network.parameters(), lr=CONFIG["lr"])
 
+    # Add ReduceLROnPlateau scheduler
+    scheduler = ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=CONFIG["lr_factor"],
+        patience=CONFIG["lr_patience"],
+        threshold=1e-4,
+        threshold_mode="rel",
+        cooldown=10,
+        min_lr=1e-6,
+        verbose=True,
+    )
+
     # Training history
     history = {
         "loss": [],
@@ -798,6 +826,12 @@ if __name__ == "__main__":
             # Total loss (only Hamiltonian)
             loss = loss_H
 
+            # Step scheduler (ReduceLROnPlateau needs validation loss, so we use training loss here)
+            scheduler.step(loss)
+
+            # Log current learning rate
+            current_lr = optimizer.param_groups[0]["lr"]
+            wandb.log({"lr": current_lr, "epoch": epoch})
             # Check for NaN or Inf in loss before backward pass
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"\n{'='*80}")
@@ -879,7 +913,11 @@ if __name__ == "__main__":
             optimizer.step()
 
             # Log training loss at every step
-            step_log = {"train/loss_step": loss.item(), "epoch": epoch}
+            step_log = {
+                "train/loss_step": loss.item(),
+                "epoch": epoch,
+                "lr": current_lr,
+            }
 
             # Log per-irrep losses if enabled
             if CONFIG["train_on_irrep_parts"]:
