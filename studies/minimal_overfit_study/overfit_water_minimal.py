@@ -186,6 +186,12 @@ if __name__ == "__main__":
         default=False,
         help="Show detailed forward pass debug prints (shapes, irreps, etc.) (default: False)",
     )
+    parser.add_argument(
+        "--save-video-interval",
+        type=int,
+        default=1000,
+        help="Save and upload training video to WandB every N epochs (default: 1000)",
+    )
 
     args = parser.parse_args()
 
@@ -219,6 +225,7 @@ if __name__ == "__main__":
         "lr_patience": args.lr_patience,
         "generate_video": args.generate_video,
         "verbose_forward": args.verbose_forward,
+        "save_video_interval": args.save_video_interval,
         # Device
         "device": args.device,
         # Target
@@ -271,6 +278,10 @@ if __name__ == "__main__":
         print(f"  Video generation: enabled")
     else:
         print(f"  Video generation: disabled")
+    if CONFIG["generate_video"]:
+        print(
+            f"    Save interval: every {CONFIG['save_video_interval']} epochs (+ final)"
+        )
     if CONFIG["verbose_forward"]:
         print(f"  Verbose forward pass: enabled (showing shapes and irreps)")
     else:
@@ -1096,6 +1107,35 @@ if __name__ == "__main__":
                 if loss.item() < 1e-10:
                     print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
                     break
+
+                # Save and upload video at specified intervals
+                if (
+                    CONFIG["generate_video"]
+                    and (epoch + 1) % CONFIG["save_video_interval"] == 0
+                ):
+                    try:
+                        video_path = run_checkpoint_dir / "training_progress.mp4"
+                        frames_list = sorted(frame_output_dir.glob("frame_epoch_*.png"))
+                        if frames_list:
+                            compile_frames_to_video(
+                                frame_output_dir,
+                                video_path,
+                                fps=5,
+                                pattern="frame_epoch_*.png",
+                                format="mp4",
+                            )
+                            # Log video to WandB (same key, overwrites previous)
+                            wandb.log(
+                                {
+                                    "training_video": wandb.Video(
+                                        str(video_path), fps=5
+                                    ),
+                                    "epoch": epoch,
+                                }
+                            )
+                            print(f"  ✓ Video saved and uploaded (epoch {epoch + 1})")
+                    except Exception as e:
+                        print(f"  ⚠️  Warning: Could not save video: {e}")
     except KeyboardInterrupt:
         print(
             "\n[INFO] Training interrupted by user (Ctrl-C). Proceeding to final evaluation and saving..."
@@ -1391,7 +1431,7 @@ if __name__ == "__main__":
     # Compile frames to video and log to WandB
     if CONFIG["generate_video"]:
         print(f"\n{'='*80}")
-        print("VIDEO GENERATION")
+        print("FINAL VIDEO GENERATION")
         print(f"{'='*80}")
         try:
             video_path = run_checkpoint_dir / "training_progress.mp4"
@@ -1403,13 +1443,13 @@ if __name__ == "__main__":
                     pattern="frame_epoch_*.png",
                     format="mp4",
                 )
-                # Log video to WandB
+                # Log final video to WandB (same key, overwrites previous)
                 wandb.log({"training_video": wandb.Video(str(video_path), fps=5)})
                 print(f"✓ Training video logged to WandB")
             else:
                 print(f"⚠️  No frames found for video generation")
         except Exception as e:
-            print(f"⚠️  Warning: Could not generate video: {e}")
+            print(f"⚠️  Warning: Could not generate final video: {e}")
     else:
         print(f"\n{'='*80}")
         print("VIDEO GENERATION SKIPPED (--generate-video not specified)")
