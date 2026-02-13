@@ -706,7 +706,6 @@ if __name__ == "__main__":
                 sys.stdout = old_stdout
 
             # Wrap predictions into IrrepsBlockData then convert to matrix blocks
-            # ...existing code...
 
             pair_vec_H = {}
             pair_edges_dict = {}
@@ -817,7 +816,7 @@ if __name__ == "__main__":
                         targ_blocks_full = target_H_matrix.pair_blocks[key]
                         _, mask = filtered_target[key]
 
-                        # Match sizes (predictions might have more edges due to cutoff)
+                        # Match sizes (predictions might have fewer edges due to cutoff)
                         pred_blocks = pred_H_matrix.pair_blocks[key]
                         min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
 
@@ -951,7 +950,6 @@ if __name__ == "__main__":
                 )
 
                 # Create filtered versions for metrics computation
-                # ...existing code...
 
                 pred_filtered_blocks = {}
                 target_filtered_blocks = {}
@@ -1015,7 +1013,7 @@ if __name__ == "__main__":
                     pred_filtered, target_filtered, overlap_filtered
                 )
 
-                # Legacy mae_H for history
+                # mae_H for history
                 mae_H = detailed_metrics["mae"]
 
                 history["loss"].append(loss.item())
@@ -1124,7 +1122,7 @@ if __name__ == "__main__":
                         sz=0,
                         dynamic_range=False,
                         partial_train=CONFIG["partial_train"],
-                        percentile=80.0,
+                        percentile=99.0,
                     )
                 except Exception as e:
                     print(f"  ⚠️  Warning: Could not save frame for epoch {epoch}: {e}")
