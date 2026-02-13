@@ -174,6 +174,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Decompose loss into per-irrep contributions (log to partial/* in wandb)",
     )
+    parser.add_argument(
+        "--generate-video",
+        action="store_true",
+        default=False,
+        help="Generate video from training frames (default: False)",
+    )
+    parser.add_argument(
+        "--verbose-forward",
+        action="store_true",
+        default=False,
+        help="Show detailed forward pass debug prints (shapes, irreps, etc.) (default: False)",
+    )
 
     args = parser.parse_args()
 
@@ -205,6 +217,8 @@ if __name__ == "__main__":
         "train_on_irrep_parts": args.train_on_irrep_parts,
         "lr_factor": args.lr_factor,
         "lr_patience": args.lr_patience,
+        "generate_video": args.generate_video,
+        "verbose_forward": args.verbose_forward,
         # Device
         "device": args.device,
         # Target
@@ -253,6 +267,14 @@ if __name__ == "__main__":
         print(f"  Train on irrep parts: enabled (decomposed per-irrep loss)")
     else:
         print(f"  Train on irrep parts: disabled (standard loss)")
+    if CONFIG["generate_video"]:
+        print(f"  Video generation: enabled")
+    else:
+        print(f"  Video generation: disabled")
+    if CONFIG["verbose_forward"]:
+        print(f"  Verbose forward pass: enabled (showing shapes and irreps)")
+    else:
+        print(f"  Verbose forward pass: disabled")
 
     device = torch.device(CONFIG["device"])
 
@@ -609,7 +631,7 @@ if __name__ == "__main__":
             # Enable activation logging only during log intervals
             log_activations = epoch % CONFIG["log_interval"] == 0
 
-            if not verbose:
+            if not verbose and not CONFIG["verbose_forward"]:
                 # Silence print by redirecting to nowhere temporarily
                 old_stdout = sys.stdout
                 sys.stdout = open(os.devnull, "w")
@@ -626,7 +648,7 @@ if __name__ == "__main__":
                 log_to_wandb=log_activations,
             )
 
-            if not verbose:
+            if not verbose and not CONFIG["verbose_forward"]:
                 sys.stdout.close()
                 sys.stdout = old_stdout
 
@@ -1367,25 +1389,31 @@ if __name__ == "__main__":
     print("\n✓ Minimal overfit study finished successfully!")
 
     # Compile frames to video and log to WandB
-    print(f"\n{'='*80}")
-    print("VIDEO GENERATION")
-    print(f"{'='*80}")
-    try:
-        video_path = run_checkpoint_dir / "training_progress.mp4"
-        if (frame_output_dir).glob("frame_epoch_*.png"):
-            compile_frames_to_video(
-                frame_output_dir,
-                video_path,
-                fps=5,
-                pattern="frame_epoch_*.png",
-            )
-            # Log video to WandB
-            wandb.log({"training_video": wandb.Video(str(video_path), fps=5)})
-            print(f"✓ Training video logged to WandB")
-        else:
-            print(f"⚠️  No frames found for video generation")
-    except Exception as e:
-        print(f"⚠️  Warning: Could not generate video: {e}")
+    if CONFIG["generate_video"]:
+        print(f"\n{'='*80}")
+        print("VIDEO GENERATION")
+        print(f"{'='*80}")
+        try:
+            video_path = run_checkpoint_dir / "training_progress.mp4"
+            if (frame_output_dir).glob("frame_epoch_*.png"):
+                compile_frames_to_video(
+                    frame_output_dir,
+                    video_path,
+                    fps=5,
+                    pattern="frame_epoch_*.png",
+                    format="mp4",
+                )
+                # Log video to WandB
+                wandb.log({"training_video": wandb.Video(str(video_path), fps=5)})
+                print(f"✓ Training video logged to WandB")
+            else:
+                print(f"⚠️  No frames found for video generation")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not generate video: {e}")
+    else:
+        print(f"\n{'='*80}")
+        print("VIDEO GENERATION SKIPPED (--generate-video not specified)")
+        print(f"{'='*80}")
 
     # Finish WandB run
     wandb.finish()
