@@ -45,6 +45,8 @@ import wandb
 from common import (
     MinimalNetwork,
     compute_detailed_metrics,
+    save_hamiltonian_frame_to_disk,
+    compile_frames_to_video,
 )
 
 
@@ -222,6 +224,11 @@ if __name__ == "__main__":
     run_checkpoint_dir = CONFIG["checkpoint_dir"] / run_name
     run_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     print(f"  Run-specific checkpoint directory: {run_checkpoint_dir}")
+
+    # Create frame output directory for video frames
+    frame_output_dir = run_checkpoint_dir / "frames"
+    frame_output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"  Frame output directory: {frame_output_dir}")
 
     print(f"  Device: {CONFIG['device']}")
     print(f"  Hidden dim: {CONFIG['hidden_dim']}")
@@ -1102,6 +1109,26 @@ if __name__ == "__main__":
                         f"  ✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
+                # Save frame for video at every log interval
+                try:
+                    save_hamiltonian_frame_to_disk(
+                        pred_H_matrix,
+                        target_H_matrix,
+                        overlap_e3nn,
+                        list(snapshot.hamiltonian.atoms),
+                        orbital_cfg,
+                        frame_output_dir,
+                        epoch,
+                        sx=0,
+                        sy=0,
+                        sz=0,
+                        dynamic_range=False,
+                        partial_train=CONFIG["partial_train"],
+                        percentile=80.0,
+                    )
+                except Exception as e:
+                    print(f"  ⚠️  Warning: Could not save frame for epoch {epoch}: {e}")
+
                 # Check for convergence
                 if loss.item() < 1e-10:
                     print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
@@ -1383,6 +1410,27 @@ if __name__ == "__main__":
     print(f"  Best model: {run_checkpoint_dir / 'best_model.pt'}")
     print(f"  Final model: {final_model_path}")
     print("\n✓ Minimal overfit study finished successfully!")
+
+    # Compile frames to video and log to WandB
+    print(f"\n{'='*80}")
+    print("VIDEO GENERATION")
+    print(f"{'='*80}")
+    try:
+        video_path = run_checkpoint_dir / "training_progress.mp4"
+        if (frame_output_dir).glob("frame_epoch_*.png"):
+            compile_frames_to_video(
+                frame_output_dir,
+                video_path,
+                fps=5,
+                pattern="frame_epoch_*.png",
+            )
+            # Log video to WandB
+            wandb.log({"training_video": wandb.Video(str(video_path), fps=5)})
+            print(f"✓ Training video logged to WandB")
+        else:
+            print(f"⚠️  No frames found for video generation")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not generate video: {e}")
 
     # Finish WandB run
     wandb.finish()
