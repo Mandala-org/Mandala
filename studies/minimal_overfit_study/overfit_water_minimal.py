@@ -106,13 +106,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--lr",
         type=float,
-        default=1e-3,
+        default=1e-2,
         help="Learning rate",
     )
     parser.add_argument(
         "--num-epochs",
         type=int,
-        default=1000,
+        default=10000,
         help="Number of training epochs",
     )
     parser.add_argument(
