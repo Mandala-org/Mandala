@@ -73,6 +73,12 @@ if __name__ == "__main__":
         help="Path to the info file",
     )
     parser.add_argument(
+        "--convention",
+        type=str,
+        default="e3nn",
+        help="Basis convention for data loading ('e3nn' or other options) (default: 'e3nn')",
+    )
+    parser.add_argument(
         "--hidden-dim",
         type=int,
         default=32,
@@ -201,6 +207,7 @@ if __name__ == "__main__":
         # Data
         "data_path": Path(args.data_path),
         "info_path": Path(args.info_path),
+        "convention": args.convention,
         # Network architecture
         "hidden_dim": args.hidden_dim,
         "l_max": args.l_max,
@@ -290,7 +297,7 @@ if __name__ == "__main__":
     snapshot = Snapshot.from_openmx(
         matrix_path=CONFIG["data_path"],
         info_path=CONFIG["info_path"],
-        convention="e3nn",  # Automatically converts to e3nn basis
+        convention=CONFIG["convention"],  # Automatically converts to specified basis
         symmetrize_density=True,
         cutoff_radius=None,  # No filtering, we'll use all edges
         dtype=torch.float32,
