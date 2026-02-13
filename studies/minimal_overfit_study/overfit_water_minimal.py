@@ -154,8 +154,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--lr-patience",
         type=int,
-        default=50,
-        help="ReduceLROnPlateau patience (default: 50)",
+        default=20,
+        help="ReduceLROnPlateau patience (default: 20)",
     )
     parser.add_argument(
         "--partial-train",
