@@ -12,6 +12,9 @@ from e3nn.nn import Gate
 from torch_scatter import scatter
 from torch_geometric.utils import degree
 import wandb
+import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 
 def check_for_nans(tensor, name, input_tensor=None):
@@ -727,3 +730,295 @@ def compute_detailed_metrics(H_pred, H_gt, S):
         "correction_mae": correction_mae,
         "correction_mse": correction_mse,
     }
+
+
+# =============================================================================
+# VISUALIZATION FUNCTIONS
+# =============================================================================
+
+
+def get_diagonal_mask(edges_5d):
+    """
+    Get mask for diagonal blocks (self-interactions: sx=sy=sz=0, i=j).
+
+    Args:
+        edges_5d: (5, num_edges) tensor with [sx, sy, sz, i, j]
+
+    Returns:
+        Boolean mask of shape (num_edges,) with True for diagonal blocks
+    """
+    sx, sy, sz, i, j = edges_5d[0], edges_5d[1], edges_5d[2], edges_5d[3], edges_5d[4]
+    is_self_interaction = (sx == 0) & (sy == 0) & (sz == 0)
+    is_same_atom = i == j
+    return is_self_interaction & is_same_atom
+
+
+def filter_blocks_by_partial_train(block_matrix, partial_train):
+    """
+    Filter blocks based on partial_train setting.
+
+    Args:
+        block_matrix: BlockMatrix object
+        partial_train: "diag", "offdiag", or None
+
+    Returns:
+        Dictionary mapping edge_type -> (filtered_blocks, mask)
+    """
+    if partial_train is None:
+        # Return all blocks with full mask
+        return {
+            key: (
+                blocks,
+                torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device),
+            )
+            for key, blocks in block_matrix.pair_blocks.items()
+        }
+
+    filtered_data = {}
+    for key in block_matrix.pair_blocks.keys():
+        blocks = block_matrix.pair_blocks[key]
+        edges = block_matrix.pair_edges[key]  # (5, num_edges)
+
+        diag_mask = get_diagonal_mask(edges)
+
+        if partial_train == "diag":
+            mask = diag_mask
+        elif partial_train == "offdiag":
+            mask = ~diag_mask
+        else:
+            mask = torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device)
+
+        filtered_data[key] = (blocks, mask)
+
+    return filtered_data
+
+
+def extract_partial_hamiltonian(
+    H, S, atoms_list, orbital_cfg, sx, sy, sz, partial_train=None
+):
+    """
+    Extract a partial Hamiltonian matrix for a specific [sx, sy, sz] shift.
+
+    Args:
+        H: Hamiltonian BlockMatrix
+        S: Overlap BlockMatrix
+        atoms_list: List of atom symbols
+        orbital_cfg: Orbital configuration
+        sx, sy, sz: Cell shift indices
+        partial_train: "diag", "offdiag", or None - filters which blocks to extract
+
+    Returns:
+        (H_dense, S_dense, total_dim) where H_dense and S_dense are numpy arrays
+    """
+
+    # Compute total matrix size
+    orbital_dims = [orbital_cfg.element_to_irreps[atom].dim for atom in atoms_list]
+    total_dim = sum(orbital_dims)
+
+    # Create dense matrices
+    H_dense = np.zeros((total_dim, total_dim))
+    S_dense = np.zeros((total_dim, total_dim)) if S is not None else None
+
+    # Build index map: atom_idx -> (start_row, end_row)
+    atom_ranges = []
+    current_idx = 0
+    for dim in orbital_dims:
+        atom_ranges.append((current_idx, current_idx + dim))
+        current_idx += dim
+
+    # Get diagonal mask for filtering if needed
+    filtered_H = filter_blocks_by_partial_train(H, partial_train)
+    filtered_S = (
+        filter_blocks_by_partial_train(S, partial_train) if S is not None else None
+    )
+
+    # Fill in blocks for this specific shift
+    for key in H.pair_blocks.keys():
+        H_blocks = H.pair_blocks[key]
+        H_edges = H.pair_edges[key]
+        _, h_mask = filtered_H[key]
+
+        if S is not None and key in S.pair_blocks:
+            S_blocks = S.pair_blocks[key]
+            _, s_mask = filtered_S[key]
+        else:
+            S_blocks = None
+            s_mask = None
+
+        # Find edges with the specified shift
+        for idx in range(H_edges.shape[1]):
+            # Skip if filtered out by partial_train
+            if not h_mask[idx]:
+                continue
+
+            shift_x, shift_y, shift_z, i, j = H_edges[:, idx].tolist()
+
+            if int(shift_x) == sx and int(shift_y) == sy and int(shift_z) == sz:
+                # Get block
+                block_H = H_blocks[idx].cpu().numpy()
+
+                # Get atom ranges
+                i_start, i_end = atom_ranges[int(i)]
+                j_start, j_end = atom_ranges[int(j)]
+
+                # Fill in matrix
+                H_dense[i_start:i_end, j_start:j_end] = block_H
+
+                # Fill overlap if available
+                if S_blocks is not None and (s_mask is None or s_mask[idx]):
+                    block_S = S_blocks[idx].cpu().numpy()
+                    S_dense[i_start:i_end, j_start:j_end] = block_S
+
+    return H_dense, S_dense, total_dim
+
+
+def visualize_hamiltonians(
+    H_pred,
+    H_gt,
+    S,
+    atoms_list,
+    orbital_cfg,
+    k_range,
+    output_dir,
+    dynamic_range=False,
+    partial_train=None,
+    filename_prefix="hamiltonian",
+    percentile=80.0,
+):
+    """
+    Visualize Hamiltonians for all [sx, sy, sz] combinations in [-k, k]^3.
+
+    For each shift, show:
+    - Ground truth H
+    - Predicted H
+    - Difference (pred - gt)
+    - Difference with mu_H correction
+
+    Args:
+        H_pred: Predicted Hamiltonian BlockMatrix
+        H_gt: Ground truth Hamiltonian BlockMatrix
+        S: Overlap BlockMatrix
+        atoms_list: List of atom symbols
+        orbital_cfg: Orbital configuration
+        k_range: Range for [sx, sy, sz] visualization: [-k, k]
+        output_dir: Directory to save plots
+        dynamic_range: If True, use percentile of abs(H_gt) for color range.
+                      If False, use fixed [-1, 1] range.
+        partial_train: "diag", "offdiag", or None - filters which blocks to visualize
+        filename_prefix: Prefix for the output filename (e.g., "hamiltonian" or "hamiltonian_0e")
+        percentile: Percentile value for dynamic color range (default: 80.0)
+    """
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Compute mu_H
+    mu_H = compute_mu_H(H_pred, H_gt, S)
+
+    print(f"\nVisualizing Hamiltonians for shifts in [{-k_range}, {k_range}]^3")
+    print(f"mu_H correction factor: {mu_H:.6e}")
+    if partial_train is not None:
+        print(
+            f"Partial training mode: {partial_train} (showing {partial_train} blocks only)"
+        )
+    print()
+
+    # Iterate over all shifts
+    shifts_to_plot = []
+    for sx in range(-k_range, k_range + 1):
+        for sy in range(-k_range, k_range + 1):
+            for sz in range(-k_range, k_range + 1):
+                shifts_to_plot.append((sx, sy, sz))
+
+    for sx, sy, sz in shifts_to_plot:
+        print(f"Processing shift [{sx}, {sy}, {sz}]...")
+
+        # Extract partial Hamiltonians
+        H_gt_dense, S_dense, dim = extract_partial_hamiltonian(
+            H_gt, S, atoms_list, orbital_cfg, sx, sy, sz, partial_train=partial_train
+        )
+        H_pred_dense, _, _ = extract_partial_hamiltonian(
+            H_pred,
+            None,
+            atoms_list,
+            orbital_cfg,
+            sx,
+            sy,
+            sz,
+            partial_train=partial_train,
+        )
+
+        # Compute differences
+        diff = H_pred_dense - H_gt_dense
+        diff_corrected = diff - mu_H * S_dense if S_dense is not None else diff
+
+        # Check if there's any data for this shift
+        if np.abs(H_gt_dense).max() < 1e-10 and np.abs(H_pred_dense).max() < 1e-10:
+            print(f"  Skipping (no data for this shift)")
+            continue
+
+        # Create figure with 2x2 subplots (skip overlap)
+        fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+
+        # Build title with irrep information if present
+        if filename_prefix == "hamiltonian":
+            title = f"Hamiltonian Analysis: shift = [{sx}, {sy}, {sz}]"
+        elif filename_prefix == "hamiltonian_rotated":
+            title = f"Hamiltonian Analysis (Rotated): shift = [{sx}, {sy}, {sz}]"
+        else:
+            # Extract irrep from prefix (e.g., "hamiltonian_0e" -> "0e")
+            irrep_name = filename_prefix.replace("hamiltonian_", "")
+            title = (
+                f"Hamiltonian Analysis - Irrep {irrep_name}: shift = [{sx}, {sy}, {sz}]"
+            )
+
+        if partial_train is not None:
+            title += f" ({partial_train} blocks only)"
+        fig.suptitle(title, fontsize=16)
+
+        # Determine color range
+        if dynamic_range:
+            # Use specified percentile of abs(H_gt)
+            v = np.percentile(np.abs(H_gt_dense), percentile)
+            vmin, vmax = -v, v
+        else:
+            vmin, vmax = -1, 1
+
+        # 1. Ground truth (top-left)
+        im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+        axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
+        axes[0, 0].set_xlabel("Orbital j")
+        axes[0, 0].set_ylabel("Orbital i")
+        plt.colorbar(im0, ax=axes[0, 0])
+
+        # 2. Predicted (top-right)
+        im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+        axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
+        axes[0, 1].set_xlabel("Orbital j")
+        axes[0, 1].set_ylabel("Orbital i")
+        plt.colorbar(im1, ax=axes[0, 1])
+
+        # 3. Difference (bottom-left)
+        im2 = axes[1, 0].imshow(diff, cmap="bwr", vmin=vmin, vmax=vmax)
+        axes[1, 0].set_title(f"Difference (pred - gt)\nMAE: {np.abs(diff).mean():.3e}")
+        axes[1, 0].set_xlabel("Orbital j")
+        axes[1, 0].set_ylabel("Orbital i")
+        plt.colorbar(im2, ax=axes[1, 0])
+
+        # 4. Corrected difference (bottom-right)
+        im3 = axes[1, 1].imshow(diff_corrected, cmap="bwr", vmin=vmin, vmax=vmax)
+        axes[1, 1].set_title(
+            f"Corrected Diff (µ_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
+        )
+        axes[1, 1].set_xlabel("Orbital j")
+        axes[1, 1].set_ylabel("Orbital i")
+        plt.colorbar(im3, ax=axes[1, 1])
+
+        # Save figure
+        filename = f"{filename_prefix}_sx{sx:+d}_sy{sy:+d}_sz{sz:+d}.png"
+        filepath = output_dir / filename
+        plt.tight_layout()
+        plt.savefig(filepath, dpi=150, bbox_inches="tight")
+        plt.close()
+
+        print(f"  Saved to {filepath}")
