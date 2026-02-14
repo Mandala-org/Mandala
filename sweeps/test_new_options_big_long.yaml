@@ -42,10 +42,6 @@ parameters:
   lr-patience:
     value: 2000
 
-  # Partial training parameters
-  partial-train:
-    value: null
-
   # Device and checkpointing
   device:
     value: "cuda"
