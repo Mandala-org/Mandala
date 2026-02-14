@@ -203,8 +203,8 @@ if __name__ == "__main__":
         "--change-box",
         type=str,
         default="both",
-        choices=["right", "both"],
-        help="How to apply permutation to box: 'right' (M @ box) or 'both' (M @ box @ M) (default: 'both')",
+        choices=["left", "right", "both"],
+        help="How to apply permutation to box: 'left' (M @ box), 'right' (box @ M), or 'both' (M @ box @ M) (default: 'both')",
     )
 
     args = parser.parse_args()
