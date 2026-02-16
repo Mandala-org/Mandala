@@ -206,6 +206,18 @@ if __name__ == "__main__":
         choices=["left", "right", "both"],
         help="How to apply permutation to box: 'left' (M @ box), 'right' (box @ M), or 'both' (M @ box @ M) (default: 'both')",
     )
+    parser.add_argument(
+        "--normalize-blocks",
+        action="store_true",
+        default=False,
+        help="Normalize blocks by average magnitude (diagonal and off-diagonal separately) before training (default: False)",
+    )
+    parser.add_argument(
+        "--apply-cutoff-to-targets",
+        action="store_true",
+        default=False,
+        help="Apply cutoff filtering to target matrices (H/S/D) before training and metrics. Keeps default behavior unchanged when omitted.",
+    )
 
     args = parser.parse_args()
 
@@ -242,6 +254,8 @@ if __name__ == "__main__":
         "lr_patience": args.lr_patience,
         "generate_video": args.generate_video,
         "verbose_forward": args.verbose_forward,
+        "normalize_blocks": args.normalize_blocks,
+        "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         # Device
         "device": args.device,
         # Target
@@ -298,6 +312,16 @@ if __name__ == "__main__":
         print(f"  Verbose forward pass: enabled (showing shapes and irreps)")
     else:
         print(f"  Verbose forward pass: disabled")
+    if CONFIG["normalize_blocks"]:
+        print(f"  Block normalization: enabled (per-key, per-diagonal-status)")
+    else:
+        print(f"  Block normalization: disabled")
+    if CONFIG["apply_cutoff_to_targets"]:
+        print(
+            f"  Target cutoff filtering: enabled (using cutoff_radius={CONFIG['cutoff_radius']} Å)"
+        )
+    else:
+        print(f"  Target cutoff filtering: disabled")
 
     device = torch.device(CONFIG["device"])
 
@@ -318,6 +342,17 @@ if __name__ == "__main__":
         cutoff_radius=None,  # No filtering, we'll use all edges
         dtype=torch.float32,
     )
+
+    # Optionally filter GT matrices by cutoff so loss/metrics ignore long-range blocks.
+    # Default remains unchanged unless --apply-cutoff-to-targets is explicitly set.
+    if CONFIG["apply_cutoff_to_targets"]:
+        before_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
+        snapshot = snapshot.filter_by_distance(CONFIG["cutoff_radius"])
+        after_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
+        print(
+            f"\n  Applied cutoff to GT matrices: {before_edges} -> {after_edges} Hamiltonian edges "
+            f"(cutoff={CONFIG['cutoff_radius']} Å)"
+        )
 
     print(f"\n  Snapshot loaded:")
     print(f"    Elements: {snapshot.hamiltonian.atoms}")
@@ -534,6 +569,73 @@ if __name__ == "__main__":
         is_same_atom = i == j
         return is_self_interaction & is_same_atom
 
+    def compute_block_normalization_factors(block_matrix):
+        """
+        Compute per-key, per-diagonal-status normalization factors.
+        Diagonal blocks: sx==sy==sz==0 and i==j
+        Off-diagonal: all others
+        Uses L2 norm (Frobenius norm) for magnitude computation.
+
+        Args:
+            block_matrix: BlockMatrix object
+
+        Returns:
+            Dictionary: {key: {"diag": float, "offdiag": float}, ...}
+        """
+        norm_factors = {}
+        for key in block_matrix.pair_blocks.keys():
+            blocks = block_matrix.pair_blocks[key]  # (num_edges, ...)
+            edges = block_matrix.pair_edges[key]  # (5, num_edges)
+
+            # Get mask for diagonal blocks
+            sx, sy, sz, i, j = edges[0], edges[1], edges[2], edges[3], edges[4]
+            diag_mask = (sx == 0) & (sy == 0) & (sz == 0) & (i == j)
+            offdiag_mask = ~diag_mask
+
+            # Compute L2 norm (Frobenius norm) for each block, then average
+            if diag_mask.any():
+                diag_blocks = blocks[diag_mask]
+                # Reshape each block to 1D and compute L2 norm
+                diag_norms = torch.linalg.norm(
+                    diag_blocks.reshape(diag_blocks.shape[0], -1), dim=1
+                )
+                diag_mag = diag_norms.mean().item()
+            else:
+                diag_mag = 1.0
+
+            if offdiag_mask.any():
+                offdiag_blocks = blocks[offdiag_mask]
+                # Reshape each block to 1D and compute L2 norm
+                offdiag_norms = torch.linalg.norm(
+                    offdiag_blocks.reshape(offdiag_blocks.shape[0], -1), dim=1
+                )
+                offdiag_mag = offdiag_norms.mean().item()
+            else:
+                offdiag_mag = 1.0
+
+            # Avoid division by zero
+            diag_mag = max(diag_mag, 1e-8)
+            offdiag_mag = max(offdiag_mag, 1e-8)
+
+            norm_factors[key] = {"diag": diag_mag, "offdiag": offdiag_mag}
+
+        return norm_factors
+
+    def get_block_status(edges_5d, edge_idx):
+        """
+        Determine if a block at edge_idx is diagonal or off-diagonal.
+        Returns "diag" if sx==sy==sz==0 and i==j, else "offdiag"
+        """
+        sx = edges_5d[0, edge_idx].item()
+        sy = edges_5d[1, edge_idx].item()
+        sz = edges_5d[2, edge_idx].item()
+        i = edges_5d[3, edge_idx].item()
+        j = edges_5d[4, edge_idx].item()
+        if sx == 0 and sy == 0 and sz == 0 and i == j:
+            return "diag"
+        else:
+            return "offdiag"
+
     def filter_blocks_by_partial_train(block_matrix, partial_train):
         """
         Filter blocks based on partial_train setting.
@@ -574,6 +676,18 @@ if __name__ == "__main__":
             filtered_data[key] = (blocks, mask)
 
         return filtered_data
+
+    # =============================================================================
+    # COMPUTE BLOCK NORMALIZATION FACTORS (IF ENABLED)
+    # =============================================================================
+    norm_factors = None
+    if CONFIG["normalize_blocks"]:
+        print("\n[NORMALIZATION] Computing block normalization factors...")
+        norm_factors = compute_block_normalization_factors(target_H_matrix)
+        for key, factors in norm_factors.items():
+            print(
+                f"  {key}: diag_mag={factors['diag']:.6e}, offdiag_mag={factors['offdiag']:.6e}"
+            )
 
     # =============================================================================
     # DEFINE MINIMAL NETWORK
@@ -651,6 +765,14 @@ if __name__ == "__main__":
 
     # Track timing
     last_log_time = time.time()
+
+    # Log normalization factors to WandB if enabled
+    if CONFIG["normalize_blocks"] and norm_factors is not None:
+        norm_factors_log = {}
+        for key, factors in norm_factors.items():
+            norm_factors_log[f"normalization/{key}_diag"] = factors["diag"]
+            norm_factors_log[f"normalization/{key}_offdiag"] = factors["offdiag"]
+        wandb.log(norm_factors_log)
 
     print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
     print(f"Training for {CONFIG['num_epochs']} epochs...\n")
@@ -764,6 +886,43 @@ if __name__ == "__main__":
                             if mask.any():
                                 pred_blocks_filtered = pred_blocks[:min_n][mask]
                                 targ_blocks_filtered = targ_blocks_full[:min_n][mask]
+
+                                # Apply block normalization if enabled
+                                if (
+                                    CONFIG["normalize_blocks"]
+                                    and norm_factors is not None
+                                    and key in norm_factors
+                                ):
+                                    # For per-irrep case, we need to use the original target's edges
+                                    # because the irrep-filtered blocks still refer to the same edges
+                                    edges_full = target_H_matrix.pair_edges[
+                                        key
+                                    ]  # (5, num_edges)
+                                    norm_vec = torch.ones(
+                                        min_n, device=pred_blocks.device
+                                    )
+                                    for edge_idx in range(min_n):
+                                        status = get_block_status(edges_full, edge_idx)
+                                        norm_vec[edge_idx] = norm_factors[key][status]
+
+                                    # Select norm factors corresponding to mask
+                                    norm_vec_selected = norm_vec[mask]
+                                    # Reshape for broadcasting: (num_selected,) -> (num_selected, 1, 1, ...)
+                                    while (
+                                        norm_vec_selected.ndim
+                                        < pred_blocks_filtered.ndim
+                                    ):
+                                        norm_vec_selected = norm_vec_selected.unsqueeze(
+                                            -1
+                                        )
+
+                                    pred_blocks_filtered = (
+                                        pred_blocks_filtered / norm_vec_selected
+                                    )
+                                    targ_blocks_filtered = (
+                                        targ_blocks_filtered / norm_vec_selected
+                                    )
+
                                 irrep_loss += F.mse_loss(
                                     pred_blocks_filtered, targ_blocks_filtered
                                 )
@@ -793,6 +952,37 @@ if __name__ == "__main__":
                         if mask.any():
                             pred_blocks_filtered = pred_blocks[:min_n][mask]
                             targ_blocks_filtered = targ_blocks_full[:min_n][mask]
+
+                            # Apply block normalization if enabled
+                            if (
+                                CONFIG["normalize_blocks"]
+                                and norm_factors is not None
+                                and key in norm_factors
+                            ):
+                                # Create normalization factors for each edge
+                                edges_full = target_H_matrix.pair_edges[
+                                    key
+                                ]  # (5, num_edges)
+                                norm_vec = torch.ones(min_n, device=pred_blocks.device)
+                                for edge_idx in range(min_n):
+                                    status = get_block_status(edges_full, edge_idx)
+                                    norm_vec[edge_idx] = norm_factors[key][status]
+
+                                # Select norm factors corresponding to mask
+                                norm_vec_selected = norm_vec[mask]
+                                # Reshape for broadcasting: (num_selected,) -> (num_selected, 1, 1, ...)
+                                while (
+                                    norm_vec_selected.ndim < pred_blocks_filtered.ndim
+                                ):
+                                    norm_vec_selected = norm_vec_selected.unsqueeze(-1)
+
+                                pred_blocks_filtered = (
+                                    pred_blocks_filtered / norm_vec_selected
+                                )
+                                targ_blocks_filtered = (
+                                    targ_blocks_filtered / norm_vec_selected
+                                )
+
                             loss_H += F.mse_loss(
                                 pred_blocks_filtered, targ_blocks_filtered
                             )
