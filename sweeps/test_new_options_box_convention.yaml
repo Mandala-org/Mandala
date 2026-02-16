@@ -56,7 +56,7 @@ command:
   - ${interpreter}
   - ${program}
   - --generate-video
-  - --normalize-blocks \
-  - --generate-video \
-  - --adaptive-log-interval \
+  - --normalize-blocks
+  - --generate-video
+  - --adaptive-log-interval
   - ${args}
