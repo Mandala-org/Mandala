@@ -734,6 +734,246 @@ def compute_detailed_metrics(H_pred, H_gt, S):
     }
 
 
+def compute_distance_error_curve(
+    H_pred,
+    H_gt,
+    positions: torch.Tensor,
+    box: torch.Tensor | None = None,
+    partial_train=None,
+    n_bins: int = 64,
+):
+    """
+    Compute distance-binned Hamiltonian error statistics.
+
+    For each bin, returns:
+      - absolute L1 and L2 (RMSE)
+      - relative L1 and L2 (normalized by GT magnitudes in the same bin)
+      - edge and element counts
+    """
+    filtered_pred = filter_blocks_by_partial_train(H_pred, partial_train)
+    filtered_gt = filter_blocks_by_partial_train(H_gt, partial_train)
+
+    dists = []
+    abs_l1_sum = []
+    abs_l2_sum = []
+    gt_l1_sum = []
+    gt_l2_sum = []
+    elem_count = []
+    edge_count = []
+    edge_l1_abs = []
+    edge_l2_abs = []
+    edge_l1_rel = []
+    edge_l2_rel = []
+
+    if positions is None:
+        raise ValueError("positions must be provided for distance-binned analysis")
+
+    for key in H_gt.pair_blocks.keys():
+        if key not in H_pred.pair_blocks:
+            continue
+
+        pred_blocks_full = H_pred.pair_blocks[key]
+        gt_blocks_full = H_gt.pair_blocks[key]
+        gt_edges_full = H_gt.pair_edges[key]  # (5, E)
+
+        _, pred_mask = filtered_pred[key]
+        _, gt_mask = filtered_gt[key]
+
+        # robust alignment by 5D edge key
+        pred_edge_to_idx = {
+            tuple(map(int, edge.tolist())): idx
+            for idx, edge in enumerate(H_pred.pair_edges[key].t())
+        }
+
+        for gt_idx, edge in enumerate(gt_edges_full.t()):
+            if not bool(gt_mask[gt_idx]):
+                continue
+            edge_key = tuple(map(int, edge.tolist()))
+            pred_idx = pred_edge_to_idx.get(edge_key, None)
+            if pred_idx is None:
+                continue
+            if pred_idx >= pred_blocks_full.shape[0] or gt_idx >= gt_blocks_full.shape[0]:
+                continue
+            if pred_idx < pred_mask.shape[0] and not bool(pred_mask[pred_idx]):
+                continue
+
+            pred_block = pred_blocks_full[pred_idx]
+            gt_block = gt_blocks_full[gt_idx]
+            diff = pred_block - gt_block
+
+            sx, sy, sz, i, j = edge_key
+            shift = torch.tensor([sx, sy, sz], dtype=positions.dtype, device=positions.device)
+            if box is not None:
+                disp = positions[j] - positions[i] + shift @ box
+            else:
+                disp = positions[j] - positions[i]
+            dist = torch.linalg.norm(disp).item()
+
+            dists.append(dist)
+            abs_l1_sum.append(torch.abs(diff).sum().item())
+            abs_l2_sum.append((diff**2).sum().item())
+            gt_l1_sum.append(torch.abs(gt_block).sum().item())
+            gt_l2_sum.append((gt_block**2).sum().item())
+            elem_count.append(diff.numel())
+            edge_count.append(1)
+
+            abs_sum = torch.abs(diff).sum().item()
+            sq_sum = (diff**2).sum().item()
+            gt_abs_sum = torch.abs(gt_block).sum().item()
+            gt_sq_sum = (gt_block**2).sum().item()
+            n_el = diff.numel()
+
+            edge_l1_abs.append(abs_sum / max(n_el, 1))
+            edge_l2_abs.append((sq_sum / max(n_el, 1)) ** 0.5)
+            edge_l1_rel.append(abs_sum / max(gt_abs_sum, 1e-14))
+            edge_l2_rel.append((sq_sum / max(gt_sq_sum, 1e-14)) ** 0.5)
+
+    if len(dists) == 0:
+        return None
+
+    dists_t = torch.tensor(dists, dtype=torch.float64)
+    d_min = float(dists_t.min().item())
+    d_max = float(dists_t.max().item())
+    if abs(d_max - d_min) < 1e-12:
+        d_max = d_min + 1e-6
+
+    bin_edges = torch.linspace(d_min, d_max, n_bins + 1, dtype=torch.float64)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    bin_idx = torch.bucketize(dists_t, bin_edges[1:], right=False).clamp(max=n_bins - 1)
+
+    l1_abs = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_abs = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_rel = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_rel = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_abs_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_abs_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_abs_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_abs_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_rel_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_rel_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_rel_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_rel_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    n_edges_per_bin = torch.zeros((n_bins,), dtype=torch.int64)
+    n_elems_per_bin = torch.zeros((n_bins,), dtype=torch.int64)
+
+    abs_l1_sum_t = torch.tensor(abs_l1_sum, dtype=torch.float64)
+    abs_l2_sum_t = torch.tensor(abs_l2_sum, dtype=torch.float64)
+    gt_l1_sum_t = torch.tensor(gt_l1_sum, dtype=torch.float64)
+    gt_l2_sum_t = torch.tensor(gt_l2_sum, dtype=torch.float64)
+    elem_count_t = torch.tensor(elem_count, dtype=torch.int64)
+    edge_count_t = torch.tensor(edge_count, dtype=torch.int64)
+    edge_l1_abs_t = torch.tensor(edge_l1_abs, dtype=torch.float64)
+    edge_l2_abs_t = torch.tensor(edge_l2_abs, dtype=torch.float64)
+    edge_l1_rel_t = torch.tensor(edge_l1_rel, dtype=torch.float64)
+    edge_l2_rel_t = torch.tensor(edge_l2_rel, dtype=torch.float64)
+
+    for b in range(n_bins):
+        mask = bin_idx == b
+        if not torch.any(mask):
+            continue
+
+        sum_abs_l1 = abs_l1_sum_t[mask].sum()
+        sum_abs_l2 = abs_l2_sum_t[mask].sum()
+        sum_gt_l1 = gt_l1_sum_t[mask].sum()
+        sum_gt_l2 = gt_l2_sum_t[mask].sum()
+        sum_elems = elem_count_t[mask].sum()
+        sum_edges = edge_count_t[mask].sum()
+
+        n_edges_per_bin[b] = sum_edges
+        n_elems_per_bin[b] = sum_elems
+
+        if sum_elems > 0:
+            l1_abs[b] = sum_abs_l1 / sum_elems
+            l2_abs[b] = torch.sqrt(sum_abs_l2 / sum_elems)
+        if sum_gt_l1 > 1e-14:
+            l1_rel[b] = sum_abs_l1 / sum_gt_l1
+        if sum_gt_l2 > 1e-14:
+            l2_rel[b] = torch.sqrt(sum_abs_l2 / sum_gt_l2)
+
+        l1_abs_min[b] = edge_l1_abs_t[mask].min()
+        l1_abs_max[b] = edge_l1_abs_t[mask].max()
+        l2_abs_min[b] = edge_l2_abs_t[mask].min()
+        l2_abs_max[b] = edge_l2_abs_t[mask].max()
+        l1_rel_min[b] = edge_l1_rel_t[mask].min()
+        l1_rel_max[b] = edge_l1_rel_t[mask].max()
+        l2_rel_min[b] = edge_l2_rel_t[mask].min()
+        l2_rel_max[b] = edge_l2_rel_t[mask].max()
+
+    return {
+        "bin_edges": bin_edges.tolist(),
+        "bin_centers": bin_centers.tolist(),
+        "l1_abs": l1_abs.tolist(),
+        "l2_abs": l2_abs.tolist(),
+        "l1_rel": l1_rel.tolist(),
+        "l2_rel": l2_rel.tolist(),
+        "l1_abs_min": l1_abs_min.tolist(),
+        "l1_abs_max": l1_abs_max.tolist(),
+        "l2_abs_min": l2_abs_min.tolist(),
+        "l2_abs_max": l2_abs_max.tolist(),
+        "l1_rel_min": l1_rel_min.tolist(),
+        "l1_rel_max": l1_rel_max.tolist(),
+        "l2_rel_min": l2_rel_min.tolist(),
+        "l2_rel_max": l2_rel_max.tolist(),
+        "n_edges": n_edges_per_bin.tolist(),
+        "n_elements": n_elems_per_bin.tolist(),
+        "d_min": d_min,
+        "d_max": d_max,
+        "n_bins": n_bins,
+    }
+
+
+def save_distance_error_curve_plot(curve_data, output_path: Path | str, title: str = None):
+    """
+    Save a 2x2 plot of distance-binned error curves:
+      abs L1, abs L2, rel L1, rel L2.
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    x = np.array(curve_data["bin_centers"], dtype=float)
+    l1_abs = np.array(curve_data["l1_abs"], dtype=float)
+    l2_abs = np.array(curve_data["l2_abs"], dtype=float)
+    l1_rel = np.array(curve_data["l1_rel"], dtype=float)
+    l2_rel = np.array(curve_data["l2_rel"], dtype=float)
+    l1_abs_min = np.array(curve_data["l1_abs_min"], dtype=float)
+    l1_abs_max = np.array(curve_data["l1_abs_max"], dtype=float)
+    l2_abs_min = np.array(curve_data["l2_abs_min"], dtype=float)
+    l2_abs_max = np.array(curve_data["l2_abs_max"], dtype=float)
+    l1_rel_min = np.array(curve_data["l1_rel_min"], dtype=float)
+    l1_rel_max = np.array(curve_data["l1_rel_max"], dtype=float)
+    l2_rel_min = np.array(curve_data["l2_rel_min"], dtype=float)
+    l2_rel_max = np.array(curve_data["l2_rel_max"], dtype=float)
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+    fig.suptitle(
+        title
+        if title is not None
+        else f"Distance Error Curves ({curve_data['n_bins']} bins)",
+        fontsize=14,
+    )
+
+    panels = [
+        (axes[0, 0], l1_abs, l1_abs_min, l1_abs_max, "Absolute L1"),
+        (axes[0, 1], l2_abs, l2_abs_min, l2_abs_max, "Absolute L2 (RMSE)"),
+        (axes[1, 0], l1_rel, l1_rel_min, l1_rel_max, "Relative L1"),
+        (axes[1, 1], l2_rel, l2_rel_min, l2_rel_max, "Relative L2"),
+    ]
+    for ax, y, y_min, y_max, ttl in panels:
+        ax.plot(x, y, marker="o", linewidth=1.2, markersize=2.2, label="mean")
+        ax.plot(x, y_min, linewidth=0.9, linestyle="--", alpha=0.8, label="min")
+        ax.plot(x, y_max, linewidth=0.9, linestyle="--", alpha=0.8, label="max")
+        ax.fill_between(x, y_min, y_max, alpha=0.15)
+        ax.set_title(ttl)
+        ax.set_xlabel("Distance (A)")
+        ax.set_ylabel("Error")
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+
+
 # =============================================================================
 # VISUALIZATION FUNCTIONS
 # =============================================================================

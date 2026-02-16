@@ -17,6 +17,7 @@ import sys
 import os
 from pathlib import Path
 import argparse
+import json
 import torch
 import numpy as np
 from collections import Counter
@@ -39,8 +40,11 @@ from net.common import build_hidden_irreps
 from common import (
     MinimalNetwork,
     compute_mu_H,
+    compute_distance_error_curve,
+    save_distance_error_curve_plot,
     filter_blocks_by_partial_train,
     visualize_hamiltonians,
+    permutation_to_matrix,
 )
 
 print("=" * 80)
@@ -192,7 +196,15 @@ def compute_metrics(H_pred, H_gt, S, partial_train=None):
     }
 
 
-def build_graph_inputs(snapshot, cutoff_radius, n_radial, l_max, device):
+def build_graph_inputs(
+    snapshot,
+    cutoff_radius,
+    n_radial,
+    l_max,
+    device,
+    xyz_permutation="012",
+    change_box="both",
+):
     """Build graph inputs from a snapshot (same as in training script)."""
 
     positions = snapshot.positions.to(device)
@@ -200,6 +212,20 @@ def build_graph_inputs(snapshot, cutoff_radius, n_radial, l_max, device):
     atoms_list = list(snapshot.hamiltonian.atoms)
     num_atoms = len(atoms_list)
     orbital_cfg = snapshot.hamiltonian.orbital_cfg
+
+    # Match training behavior: optional coordinate permutation on graph geometry only
+    if xyz_permutation != "012":
+        cob_matrix = permutation_to_matrix(xyz_permutation, device)
+        positions = positions @ cob_matrix.T
+        if box is not None:
+            if change_box == "right":
+                box = box @ cob_matrix
+            elif change_box == "left":
+                box = cob_matrix.T @ box
+            elif change_box == "both":
+                box = cob_matrix.T @ box @ cob_matrix
+            else:
+                raise ValueError(f"Invalid change_box option: {change_box}")
 
     # Create ASE atoms for neighbor list
     ase_atoms = Atoms(
@@ -279,6 +305,8 @@ def build_graph_inputs(snapshot, cutoff_radius, n_radial, l_max, device):
         "edge_shift": edge_shift,
         "edge_length_emb": edge_length_emb,
         "edge_sh": edge_sh,
+        "positions_used": positions,
+        "box_used": box,
         "atoms_list": atoms_list,
         "orbital_cfg": orbital_cfg,
         "mapper": mapper,
@@ -487,16 +515,24 @@ def main():
 
     # Load original data
     print(f"\n[DATA] Loading original water snapshot...")
+    matrix_path = config.get("data_path", "data/small/H2O/original/H2O.matrix")
+    info_path = config.get("info_path", "data/small/H2O/original/H2O.info.out")
     snapshot_orig = Snapshot.from_openmx(
-        # matrix_path=config["data_path"],
-        matrix_path="/home/bartek/casus/mandala/data/small/H2O/original/H2O.matrix",
-        # info_path=config["info_path"],
-        info_path="/home/bartek/casus/mandala/data/small/H2O/original/H2O.info.out",
+        matrix_path=matrix_path,
+        info_path=info_path,
         convention="e3nn",
         symmetrize_density=True,
         cutoff_radius=None,
         dtype=torch.float32,
     )
+
+    # Match training behavior: optional target cutoff filtering
+    if bool(config.get("apply_cutoff_to_targets", False)):
+        cutoff_radius_cfg = float(config["cutoff_radius"])
+        snapshot_orig = snapshot_orig.filter_by_distance(cutoff_radius_cfg)
+        print(
+            f"  Applied cutoff to targets in analysis: cutoff_radius={cutoff_radius_cfg} Å"
+        )
 
     print(f"  Atoms: {snapshot_orig.hamiltonian.atoms}")
     print(f"  Positions shape: {snapshot_orig.positions.shape}")
@@ -566,6 +602,8 @@ def main():
         config["n_radial"],
         config["l_max"],
         device,
+        xyz_permutation=config.get("xyz_permutation", "012"),
+        change_box=config.get("change_box", "both"),
     )
     print(f"  Total edges: {graph_inputs_orig['edge_index'].shape[1]}")
 
@@ -577,6 +615,8 @@ def main():
         config["n_radial"],
         config["l_max"],
         device,
+        xyz_permutation=config.get("xyz_permutation", "012"),
+        change_box=config.get("change_box", "both"),
     )
     print(f"  Total edges: {graph_inputs_rot['edge_index'].shape[1]}")
 
@@ -728,6 +768,46 @@ def main():
         f.write(f"MSE:       {metrics_rot['mse']:.6e}\n")
         f.write(f"MAE_mod:   {metrics_rot['mae_mod']:.6e}\n")
         f.write(f"mu_H:      {metrics_rot['mu_H']:.6e}\n")
+
+    # Distance-binned error curves (64 bins) for original and rotated
+    curve_orig = compute_distance_error_curve(
+        H_pred=H_pred_orig,
+        H_gt=H_gt_orig,
+        positions=graph_inputs_orig["positions_used"],
+        box=graph_inputs_orig["box_used"],
+        partial_train=partial_train,
+        n_bins=64,
+    )
+    curve_rot = compute_distance_error_curve(
+        H_pred=H_pred_rot,
+        H_gt=H_gt_rot,
+        positions=graph_inputs_rot["positions_used"],
+        box=graph_inputs_rot["box_used"],
+        partial_train=partial_train,
+        n_bins=64,
+    )
+
+    if curve_orig is not None:
+        curve_orig_json = output_dir / "distance_error_curve_original.json"
+        curve_orig_plot = output_dir / "distance_error_curve_original.png"
+        with open(curve_orig_json, "w") as f:
+            json.dump(curve_orig, f, indent=2)
+        save_distance_error_curve_plot(
+            curve_orig, curve_orig_plot, title="Distance Error Curve (Original, 64 bins)"
+        )
+        print(f"Distance curve saved: {curve_orig_json}")
+        print(f"Distance curve plot saved: {curve_orig_plot}")
+
+    if curve_rot is not None:
+        curve_rot_json = output_dir / "distance_error_curve_rotated.json"
+        curve_rot_plot = output_dir / "distance_error_curve_rotated.png"
+        with open(curve_rot_json, "w") as f:
+            json.dump(curve_rot, f, indent=2)
+        save_distance_error_curve_plot(
+            curve_rot, curve_rot_plot, title="Distance Error Curve (Rotated, 64 bins)"
+        )
+        print(f"Distance curve saved: {curve_rot_json}")
+        print(f"Distance curve plot saved: {curve_rot_plot}")
 
     print(f"\n{'='*80}")
     print("ANALYSIS COMPLETE")
