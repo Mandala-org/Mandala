@@ -11,13 +11,12 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --run-name "${RUN_NAME}" \
   --num-epochs 30000 \
   --log-interval 200 \
-  --lr 3e-3 \
-  --cutoff-radius 4 \
+  --lr 1e-2 \
   --normalize-blocks \
-  --apply-cutoff-to-targets \
   --generate-video \
+  --adaptive-log-interval \
   --grad-clip 1.0 \
   --hidden-dim 64 \
   --l-max 4 \
-  --num-layers 1 \
+  --num-layers 2 \
   --n-radial 128

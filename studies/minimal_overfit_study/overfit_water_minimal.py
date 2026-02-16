@@ -58,10 +58,15 @@ from common import (
 )
 from strict_checks import strict_edge_alignment_check
 from detailed_logging import (
+    build_wandb_detailed_metrics_log,
+    build_wandb_per_irrep_metrics_log,
     log_config,
     log_cutoff_application,
+    log_detailed_training_metrics,
     log_final_metrics,
     log_graph,
+    log_invalid_gradient_failure,
+    log_invalid_loss_failure,
     log_mapper_info,
     log_orbital_config,
     log_per_irrep_metrics,
@@ -155,6 +160,30 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Adaptive logging cadence: epochs 1-10 every epoch, 11-100 every 10 epochs, then use --log-interval (default: False)",
+    )
+    parser.add_argument(
+        "--log-data",
+        action="store_true",
+        default=False,
+        help="Enable detailed data/graph console logging (default: False)",
+    )
+    parser.add_argument(
+        "--log-model",
+        action="store_true",
+        default=False,
+        help="Enable detailed model/setup console logging (default: False)",
+    )
+    parser.add_argument(
+        "--log-forward",
+        action="store_true",
+        default=False,
+        help="Enable periodic forward-pass activation logging to WandB (default: False)",
+    )
+    parser.add_argument(
+        "--log-per-irrep-metrics",
+        action="store_true",
+        default=False,
+        help="Enable periodic per-irrep metric logging (console + WandB) during training (default: False)",
     )
     parser.add_argument(
         "--device",
@@ -270,6 +299,10 @@ if __name__ == "__main__":
         "num_epochs": args.num_epochs,
         "log_interval": args.log_interval,
         "adaptive_log_interval": args.adaptive_log_interval,
+        "log_data": args.log_data,
+        "log_model": args.log_model,
+        "log_forward": args.log_forward,
+        "log_per_irrep_metrics": args.log_per_irrep_metrics,
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
         "train_on_irrep_parts": args.train_on_irrep_parts,
@@ -310,9 +343,10 @@ if __name__ == "__main__":
     # =============================================================================
     # LOAD DATA
     # =============================================================================
-    print("\n[DATA] Loading single water snapshot...")
-    print(f"  Matrix file: {CONFIG['data_path']}")
-    print(f"  Info file: {CONFIG['info_path']}")
+    if CONFIG["log_data"]:
+        print("\n[DATA] Loading single water snapshot...")
+        print(f"  Matrix file: {CONFIG['data_path']}")
+        print(f"  Info file: {CONFIG['info_path']}")
 
     snapshot = Snapshot.from_openmx(
         matrix_path=CONFIG["data_path"],
@@ -329,9 +363,11 @@ if __name__ == "__main__":
         before_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
         snapshot = snapshot.filter_by_distance(CONFIG["cutoff_radius"])
         after_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
-        log_cutoff_application(before_edges, after_edges, CONFIG["cutoff_radius"])
+        if CONFIG["log_data"]:
+            log_cutoff_application(before_edges, after_edges, CONFIG["cutoff_radius"])
 
-    log_snapshot_info(snapshot)
+    if CONFIG["log_data"]:
+        log_snapshot_info(snapshot)
 
     # Extract components
     hamiltonian_e3nn = snapshot.hamiltonian.to(device)
@@ -345,8 +381,9 @@ if __name__ == "__main__":
     # Apply coordinate permutation if specified
     if CONFIG["xyz_permutation"] != "012":
         cob_matrix = permutation_to_matrix(CONFIG["xyz_permutation"], device)
-        print(f"\n  Applying xyz permutation: {CONFIG['xyz_permutation']}")
-        print(f"    Matrix:\n{cob_matrix}")
+        if CONFIG["log_data"]:
+            print(f"\n  Applying xyz permutation: {CONFIG['xyz_permutation']}")
+            print(f"    Matrix:\n{cob_matrix}")
         # Multiply positions from the right: positions @ cob_matrix.T
         positions = positions @ cob_matrix.T
         if CONFIG["change_box"] == "right":
@@ -360,26 +397,33 @@ if __name__ == "__main__":
             box = cob_matrix.T @ box @ cob_matrix
         else:
             raise ValueError(f"Invalid change_box option: {CONFIG['change_box']}")
-        print(f"    Applied to positions and box (change_box={CONFIG['change_box']})")
+        if CONFIG["log_data"]:
+            print(
+                f"    Applied to positions and box (change_box={CONFIG['change_box']})"
+            )
 
-    log_orbital_config(orbital_cfg)
+    if CONFIG["log_model"]:
+        log_orbital_config(orbital_cfg)
 
     # Create BlockIrrepMapper
     mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch.float32)
-    log_mapper_info(mapper)
+    if CONFIG["log_model"]:
+        log_mapper_info(mapper)
 
     # Store target as matrix blocks (train_target = "matrix")
-    print("\n[TARGETS] Storing target as matrix blocks...")
+    if CONFIG["log_model"]:
+        print("\n[TARGETS] Storing target as matrix blocks...")
     target_H_matrix = hamiltonian_e3nn
 
-    print("  Target matrix blocks:")
-    for key in target_H_matrix.pair_blocks.keys():
-        block_shape = target_H_matrix.pair_blocks[key].shape
-        edge_shape = target_H_matrix.pair_edges[key].shape
-        pair_irreps = mapper.get_pair_irreps(key)
-        print(
-            f"    {key}: blocks {block_shape}, edges {edge_shape}, irreps {pair_irreps}"
-        )
+    if CONFIG["log_model"]:
+        print("  Target matrix blocks:")
+        for key in target_H_matrix.pair_blocks.keys():
+            block_shape = target_H_matrix.pair_blocks[key].shape
+            edge_shape = target_H_matrix.pair_edges[key].shape
+            pair_irreps = mapper.get_pair_irreps(key)
+            print(
+                f"    {key}: blocks {block_shape}, edges {edge_shape}, irreps {pair_irreps}"
+            )
 
     num_atoms = len(atoms_list)
 
@@ -442,23 +486,26 @@ if __name__ == "__main__":
 
     edge_dist = torch.linalg.norm(edge_vec, dim=1)
 
-    log_graph(
-        atoms_list=atoms_list,
-        positions=positions,
-        box=box,
-        cutoff_radius=CONFIG["cutoff_radius"],
-        src=src,
-        dst=dst,
-        offsets=offsets,
-        edge_index=edge_index,
-        num_self_edges=num_self_edges,
-        edge_dist=edge_dist,
-    )
+    if CONFIG["log_data"]:
+        log_graph(
+            atoms_list=atoms_list,
+            positions=positions,
+            box=box,
+            cutoff_radius=CONFIG["cutoff_radius"],
+            src=src,
+            dst=dst,
+            offsets=offsets,
+            edge_index=edge_index,
+            num_self_edges=num_self_edges,
+            edge_dist=edge_dist,
+        )
 
     # Compute spherical harmonics
-    print(f"\n  Computing spherical harmonics (l_max={CONFIG['l_max']})...")
+    if CONFIG["log_data"]:
+        print(f"\n  Computing spherical harmonics (l_max={CONFIG['l_max']})...")
     sh_irreps = Irreps.spherical_harmonics(CONFIG["l_max"])
-    print(f"  SH irreps: {sh_irreps}")
+    if CONFIG["log_data"]:
+        print(f"  SH irreps: {sh_irreps}")
 
     # Normalize edge vectors (avoid division by zero for self-edges)
     edge_vec_norm = edge_vec.clone()
@@ -468,10 +515,14 @@ if __name__ == "__main__":
     ].unsqueeze(-1)
 
     edge_sh = spherical_harmonics(sh_irreps, edge_vec_norm, normalize=False)
-    print(f"  Edge SH shape: {edge_sh.shape}")
+    if CONFIG["log_data"]:
+        print(f"  Edge SH shape: {edge_sh.shape}")
 
     # Radial basis functions
-    print(f"\n  Computing radial embeddings ({CONFIG['n_radial']} basis functions)...")
+    if CONFIG["log_data"]:
+        print(
+            f"\n  Computing radial embeddings ({CONFIG['n_radial']} basis functions)..."
+        )
     edge_length_emb = soft_one_hot_linspace(
         edge_dist,
         start=0.0,
@@ -481,12 +532,15 @@ if __name__ == "__main__":
         cutoff=False,
     )
     edge_length_emb = edge_length_emb * CONFIG["n_radial"] ** 0.5  # Normalization
-    print(f"  Edge length embedding shape: {edge_length_emb.shape}")
+    if CONFIG["log_data"]:
+        print(f"  Edge length embedding shape: {edge_length_emb.shape}")
 
     # Edge type indices
-    print("\n  Computing edge type indices...")
+    if CONFIG["log_data"]:
+        print("\n  Computing edge type indices...")
     element_to_idx = {elem: idx for idx, elem in enumerate(orbital_cfg.elements())}
-    print(f"  Element to index: {element_to_idx}")
+    if CONFIG["log_data"]:
+        print(f"  Element to index: {element_to_idx}")
 
     node_type_idx = torch.tensor([element_to_idx[a] for a in atoms_list], device=device)
     src_type = node_type_idx[edge_index[0]]
@@ -501,18 +555,21 @@ if __name__ == "__main__":
         [mapper.edge_type2idx[et] for et in edge_type_strs], device=device
     )
 
-    print(f"  Edge types (first 10): {edge_type_strs[:10]}")
-    print(f"  Edge type indices (first 10): {edge_type_idx[:10].tolist()}")
+    if CONFIG["log_data"]:
+        print(f"  Edge types (first 10): {edge_type_strs[:10]}")
+        print(f"  Edge type indices (first 10): {edge_type_idx[:10].tolist()}")
 
     # Create batch indices (all nodes/edges belong to the same graph)
     batch_node = torch.zeros(num_atoms, dtype=torch.long, device=device)
     batch_edge = torch.zeros(edge_index.shape[1], dtype=torch.long, device=device)
-    print(f"\n  Batch indices: nodes {batch_node.shape}, edges {batch_edge.shape}")
+    if CONFIG["log_data"]:
+        print(f"\n  Batch indices: nodes {batch_node.shape}, edges {batch_edge.shape}")
 
     # =============================================================================
     # STRICT EDGE ALIGNMENT CHECKS
     # =============================================================================
-    print("\n[STRICT CHECKS] Validating graph/target edge alignment...")
+    if CONFIG["log_data"]:
+        print("\n[STRICT CHECKS] Validating graph/target edge alignment...")
     require_exact_edge_match = bool(CONFIG["apply_cutoff_to_targets"])
     strict_edge_alignment_check(
         target_matrix=target_H_matrix,
@@ -544,7 +601,8 @@ if __name__ == "__main__":
         matrix_name="density",
         require_exact=require_exact_edge_match,
     )
-    log_strict_checks_passed()
+    if CONFIG["log_data"]:
+        log_strict_checks_passed()
 
     # =============================================================================
     # HELPER FUNCTIONS FOR PARTIAL TRAINING
@@ -683,32 +741,38 @@ if __name__ == "__main__":
     # =============================================================================
     norm_factors = None
     if CONFIG["normalize_blocks"]:
-        print("\n[NORMALIZATION] Computing block normalization factors...")
+        if CONFIG["log_model"]:
+            print("\n[NORMALIZATION] Computing block normalization factors...")
         norm_factors = compute_block_normalization_factors(target_H_matrix)
-        for key, factors in norm_factors.items():
-            print(
-                f"  {key}: diag_mag={factors['diag']:.6e}, offdiag_mag={factors['offdiag']:.6e}"
-            )
+        if CONFIG["log_model"]:
+            for key, factors in norm_factors.items():
+                print(
+                    f"  {key}: diag_mag={factors['diag']:.6e}, offdiag_mag={factors['offdiag']:.6e}"
+                )
 
     # =============================================================================
     # DEFINE MINIMAL NETWORK
     # =============================================================================
-    print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
+    if CONFIG["log_model"]:
+        print("\n[NETWORK] Defining minimal E(3)-equivariant network...")
 
     # Use provided hidden_irreps or build them automatically
     if CONFIG["hidden_irreps"] is not None:
         hidden_irreps = Irreps(CONFIG["hidden_irreps"])
-        print(f"  Using provided hidden irreps: {hidden_irreps}")
+        if CONFIG["log_model"]:
+            print(f"  Using provided hidden irreps: {hidden_irreps}")
     else:
         hidden_irreps = build_hidden_irreps(
             l_max=CONFIG["l_max"], base_dim=CONFIG["hidden_dim"], use_odd_features=True
         )
-        print(f"  Built hidden irreps: {hidden_irreps}")
+        if CONFIG["log_model"]:
+            print(f"  Built hidden irreps: {hidden_irreps}")
         # Store the constructed irreps in config for checkpoint saving
         CONFIG["hidden_irreps"] = str(hidden_irreps)
 
     # Instantiate network
-    print("\nInstantiating network...")
+    if CONFIG["log_model"]:
+        print("\nInstantiating network...")
     num_elements = len(orbital_cfg.elements())
     num_edge_types = num_elements**2
     network = MinimalNetwork(
@@ -721,15 +785,20 @@ if __name__ == "__main__":
         mapper=mapper,
     ).to(device)
 
-    print("\n✓ Network architecture complete!")
+    if CONFIG["log_model"]:
+        print("\n✓ Network architecture complete!")
 
     # =============================================================================
     # PREPARE TARGET IN IRREPS SPACE
     # =============================================================================
-    print("\n[IRREP DECOMPOSITION] Converting target to irreps space...")
+    if CONFIG["log_model"]:
+        print("\n[IRREP DECOMPOSITION] Converting target to irreps space...")
     target_H_irreps = target_H_matrix.to_vectors(mapper)
     all_irreps = get_all_irreps_in_hamiltonian(mapper)
-    print(f"  Found {len(all_irreps)} unique irreps: {[str(ir) for ir in all_irreps]}")
+    if CONFIG["log_model"]:
+        print(
+            f"  Found {len(all_irreps)} unique irreps: {[str(ir) for ir in all_irreps]}"
+        )
 
     # =============================================================================
     # TRAINING LOOP
@@ -806,10 +875,10 @@ if __name__ == "__main__":
                 print(f"{'=' * 60}")
 
             # Temporarily suppress forward pass logging
-            verbose = should_log_now
+            verbose = should_log_now and CONFIG["log_forward"]
 
             # Enable activation logging only during log intervals
-            log_activations = should_log_now
+            log_activations = should_log_now and CONFIG["log_forward"]
 
             if not verbose and not CONFIG["verbose_forward"]:
                 # Silence print by redirecting to nowhere temporarily
@@ -1013,33 +1082,15 @@ if __name__ == "__main__":
             wandb.log({"lr": current_lr, "epoch": epoch})
             # Check for NaN or Inf in loss before backward pass
             if torch.isnan(loss) or torch.isinf(loss):
-                print("")
-                print(f"\n{'='*80}")
-                print(f"TRAINING FAILED at epoch {epoch + 1}")
-                print(f"{'='*80}")
-                print("❌ Detected invalid loss value.")
-                if torch.isnan(loss):
-                    print(f"Loss is NaN: {loss.item()}")
-                    print("This indicates numerical instability in the forward pass.")
-                else:
-                    print(f"Loss is Inf: {loss.item()}")
-                    print(
-                        "Loss has exploded. Try reducing learning rate or adding regularization."
-                    )
-                print(
-                    f"\nLast valid loss (epoch {epoch}): {history['loss'][-1] if history['loss'] else 'N/A'}"
+                failure_payload = log_invalid_loss_failure(
+                    epoch_zero_based=epoch,
+                    loss_value=loss.item(),
+                    is_nan=bool(torch.isnan(loss)),
+                    last_valid_loss=history["loss"][-1] if history["loss"] else "N/A",
+                    best_epoch_zero_based=best_epoch,
+                    best_loss=best_loss,
                 )
-                print(
-                    f"\nTraining stopped. Checkpoint saved at epoch {best_epoch + 1} with loss {best_loss:.6e}"
-                )
-                print(f"{'='*80}\n")
-                wandb.log(
-                    {
-                        "training_failed": True,
-                        "failure_epoch": epoch,
-                        "failure_type": "NaN" if torch.isnan(loss) else "Inf",
-                    }
-                )
+                wandb.log(failure_payload)
                 break
 
             # Backward
@@ -1057,36 +1108,18 @@ if __name__ == "__main__":
             for name, param in network.named_parameters():
                 if param.grad is not None:
                     if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
-                        print("")
-                        print(f"\n{'='*80}")
-                        print(f"TRAINING FAILED at epoch {epoch + 1}")
-                        print(f"{'='*80}")
-                        print("❌ Detected invalid gradient values.")
-                        print(f"Gradient contains NaN or Inf in parameter: {name}")
-                        print(
-                            f"This indicates numerical instability in the backward pass."
+                        failure_payload = log_invalid_gradient_failure(
+                            epoch_zero_based=epoch,
+                            param_name=name,
+                            lr=CONFIG["lr"],
+                            grad_clip=CONFIG["grad_clip"],
+                            last_valid_loss=(
+                                history["loss"][-1] if history["loss"] else "N/A"
+                            ),
+                            best_epoch_zero_based=best_epoch,
+                            best_loss=best_loss,
                         )
-                        print(f"\nSuggestions:")
-                        print(f"  - Reduce learning rate (current: {CONFIG['lr']})")
-                        print(
-                            f"  - Increase gradient clipping (current: {CONFIG['grad_clip']})"
-                        )
-                        print(f"  - Check if irreps contain invalid combinations")
-                        print(
-                            f"\nLast valid loss (epoch {epoch}): {history['loss'][-1] if history['loss'] else 'N/A'}"
-                        )
-                        print(
-                            f"Training stopped. Checkpoint saved at epoch {best_epoch + 1} with loss {best_loss:.6e}"
-                        )
-                        print(f"{'='*80}\n")
-                        wandb.log(
-                            {
-                                "training_failed": True,
-                                "failure_epoch": epoch,
-                                "failure_type": "gradient_nan_inf",
-                                "failed_param": name,
-                            }
-                        )
+                        wandb.log(failure_payload)
                         has_nan_grad = True
                         break
 
@@ -1206,58 +1239,24 @@ if __name__ == "__main__":
                 last_log_time = current_time
                 last_logged_epoch = epoch
 
-                # Log to console
-                print(f"\n[METRICS]")
-                print(
-                    f"  Avg epoch time:       {avg_epoch_time:.3f}s ({epochs_since_last_log} epochs in {time_elapsed:.1f}s)"
-                )
-                print(f"  Loss (MSE):           {loss.item():.6e}")
-
-                # Print per-irrep loss contributions if enabled
-                if CONFIG["train_on_irrep_parts"]:
-                    print(f"\n  Per-Irrep Loss Contributions:")
-                    # Sort irreps by loss (descending) for better readability
-                    sorted_irreps = sorted(
-                        irrep_losses.items(), key=lambda x: x[1].item(), reverse=True
-                    )
-                    total_loss_check = sum(
-                        irrep_loss.item() for _, irrep_loss in sorted_irreps
-                    )
-                    for irrep_str, irrep_loss in sorted_irreps:
-                        percentage = (
-                            (irrep_loss.item() / total_loss_check * 100)
-                            if total_loss_check > 0
-                            else 0
-                        )
-                        print(
-                            f"    {irrep_str:4s}: {irrep_loss.item():.6e} ({percentage:5.1f}%)"
-                        )
-
-                print(f"  MAE H:                {detailed_metrics['mae']:.6e}")
-                print(f"  MSE H:                {detailed_metrics['mse']:.6e}")
-                print(f"  MAE H (modified):     {detailed_metrics['mae_mod']:.6e}")
-                print(f"  MSE H (modified):     {detailed_metrics['mse_mod']:.6e}")
-                print(f"  mu_H:                 {detailed_metrics['mu_H']:.6e}")
-                print(
-                    f"  Correction MAE:       {detailed_metrics['correction_mae']:.6e}"
-                )
-                print(
-                    f"  Correction MSE:       {detailed_metrics['correction_mse']:.6e}"
+                log_detailed_training_metrics(
+                    avg_epoch_time=avg_epoch_time,
+                    epochs_since_last_log=epochs_since_last_log,
+                    time_elapsed=time_elapsed,
+                    loss_value=loss.item(),
+                    detailed_metrics=detailed_metrics,
+                    irrep_losses=(
+                        irrep_losses if CONFIG["train_on_irrep_parts"] else None
+                    ),
                 )
 
                 # Log to WandB
                 wandb.log(
-                    {
-                        "epoch": epoch,
-                        "loss": loss.item(),
-                        "mse_H": detailed_metrics["mse"],
-                        "mae_H": detailed_metrics["mae"],
-                        "mae_H_mod": detailed_metrics["mae_mod"],
-                        "mse_H_mod": detailed_metrics["mse_mod"],
-                        "mu_H": detailed_metrics["mu_H"],
-                        "correction_mae": detailed_metrics["correction_mae"],
-                        "correction_mse": detailed_metrics["correction_mse"],
-                    }
+                    build_wandb_detailed_metrics_log(
+                        epoch_zero_based=epoch,
+                        loss_value=loss.item(),
+                        detailed_metrics=detailed_metrics,
+                    )
                 )
 
                 # Save best model
@@ -1281,46 +1280,21 @@ if __name__ == "__main__":
                         f"✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
-                # Compute per-irrep metrics for logging (always, regardless of training mode)
-                per_irrep_metrics = compute_irrep_metrics(
-                    pred_H_irreps, target_H_irreps, all_irreps, mapper
-                )
-                log_per_irrep_metrics(
-                    "Per-Irrep Metrics (Element, Block, and Full Matrix):",
-                    all_irreps,
-                    per_irrep_metrics,
-                )
-
-                for irrep in sorted(all_irreps, key=str):
-                    irrep_str = str(irrep)
+                if CONFIG["log_per_irrep_metrics"]:
+                    per_irrep_metrics = compute_irrep_metrics(
+                        pred_H_irreps, target_H_irreps, all_irreps, mapper
+                    )
+                    log_per_irrep_metrics(
+                        "Per-Irrep Metrics (Element, Block, and Full Matrix):",
+                        all_irreps,
+                        per_irrep_metrics,
+                    )
                     wandb.log(
-                        {
-                            f"irrep_metrics/{irrep_str}_l1_elem": per_irrep_metrics.get(
-                                f"{irrep_str}_l1_elem", 0.0
-                            ),
-                            f"irrep_metrics/{irrep_str}_l2_elem": per_irrep_metrics.get(
-                                f"{irrep_str}_l2_elem", 0.0
-                            ),
-                            f"irrep_metrics/{irrep_str}_l1_block": per_irrep_metrics.get(
-                                f"{irrep_str}_l1_block", 0.0
-                            ),
-                            f"irrep_metrics/{irrep_str}_l1_block_rel": per_irrep_metrics.get(
-                                f"{irrep_str}_l1_block_rel", 0.0
-                            ),
-                            f"irrep_metrics/{irrep_str}_l2_block": per_irrep_metrics.get(
-                                f"{irrep_str}_l2_block", 0.0
-                            ),
-                            f"irrep_metrics/{irrep_str}_l2_block_rel": per_irrep_metrics.get(
-                                f"{irrep_str}_l2_block_rel", 0.0
-                            ),
-                            f"irrep_metrics/{irrep_str}_l1_full_rel": per_irrep_metrics.get(
-                                f"{irrep_str}_l1_full_rel", 0.0
-                            ),
-                            f"irrep_metrics/{irrep_str}_l2_full_rel": per_irrep_metrics.get(
-                                f"{irrep_str}_l2_full_rel", 0.0
-                            ),
-                            "epoch": epoch,
-                        }
+                        build_wandb_per_irrep_metrics_log(
+                            epoch_zero_based=epoch,
+                            all_irreps=all_irreps,
+                            per_irrep_metrics=per_irrep_metrics,
+                        )
                     )
 
                 # Save frame for video at every log interval
@@ -1524,78 +1498,6 @@ if __name__ == "__main__":
 
             final_metrics[f"final/{key}_mse"] = block_mse
             final_metrics[f"final/{key}_mae"] = block_mae
-
-        # Compute final per-irrep metrics (always, regardless of training mode)
-        final_per_irrep_metrics = compute_irrep_metrics(
-            pred_H_irreps, target_H_irreps, all_irreps, mapper
-        )
-        log_per_irrep_metrics(
-            "Final Per-Irrep Metrics (Element, Block, and Full Matrix):",
-            all_irreps,
-            final_per_irrep_metrics,
-        )
-        for irrep in sorted(all_irreps, key=str):
-            irrep_str = str(irrep)
-            final_metrics[f"final_irrep/{irrep_str}_l1_elem"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l1_elem", 0.0)
-            )
-            final_metrics[f"final_irrep/{irrep_str}_l2_elem"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l2_elem", 0.0)
-            )
-            final_metrics[f"final_irrep/{irrep_str}_l1_block"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l1_block", 0.0)
-            )
-            final_metrics[f"final_irrep/{irrep_str}_l1_block_rel"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l1_block_rel", 0.0)
-            )
-            final_metrics[f"final_irrep/{irrep_str}_l2_block"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l2_block", 0.0)
-            )
-            final_metrics[f"final_irrep/{irrep_str}_l2_block_rel"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l2_block_rel", 0.0)
-            )
-            final_metrics[f"final_irrep/{irrep_str}_l1_full_rel"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l1_full_rel", 0.0)
-            )
-            final_metrics[f"final_irrep/{irrep_str}_l2_full_rel"] = (
-                final_per_irrep_metrics.get(f"{irrep_str}_l2_full_rel", 0.0)
-            )
-
-        # Log per-irrep training losses if enabled (separate from prediction metrics)
-        if CONFIG["train_on_irrep_parts"] and target_H_irreps is not None:
-            print("\n  Training Loss Per-Irrep (from irrep-decomposed training):")
-            for irrep in all_irreps:
-                # Filter both prediction and target by this irrep
-                pred_irrep_filtered = filter_irreps_block_data_by_irrep(
-                    pred_H_irreps, irrep, mapper
-                )
-                target_irrep_filtered = filter_irreps_block_data_by_irrep(
-                    target_H_irreps, irrep, mapper
-                )
-
-                pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
-                target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
-
-                block_losses = []
-
-                for key in target_irrep_blocks.pair_blocks.keys():
-                    if key in pred_irrep_blocks.pair_blocks:
-                        pred_blocks = pred_irrep_blocks.pair_blocks[key]
-                        targ_blocks_full = target_irrep_blocks.pair_blocks[key]
-                        min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
-                        if min_n <= 0:
-                            continue
-                        pred_sel = pred_blocks[:min_n]
-                        targ_sel = targ_blocks_full[:min_n]
-                        block_loss = F.mse_loss(pred_sel, targ_sel).item()
-                        block_losses.append(block_loss)
-
-                irrep_str = str(irrep)
-                mean_loss = (
-                    sum(block_losses) / len(block_losses) if block_losses else 0.0
-                )
-                print(f"    {irrep_str:4s}: MSE Loss={mean_loss:.6e}")
-                final_metrics[f"final_irrep_loss/{irrep_str}"] = mean_loss
 
         # Log final metrics to WandB
         wandb.log(final_metrics)
