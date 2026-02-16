@@ -481,12 +481,20 @@ class MinimalHead(nn.Module):
         super().__init__()
         self.mapper = mapper
 
-        # One linear projection per edge type
-        self.projections = nn.ModuleDict()
+        # Separate linear projections per edge type and diagonal status
+        self.diag_projections = nn.ModuleDict()
+        self.offdiag_projections = nn.ModuleDict()
+        self.output_dims = {}
         for edge_type in mapper.edge_types:
             pair_irreps = mapper.get_pair_irreps(edge_type)
-            self.projections[edge_type] = Linear(hidden_irreps, pair_irreps)
-            print(f"    [Head] {edge_type}: {hidden_irreps} -> {pair_irreps}")
+            self.diag_projections[edge_type] = Linear(hidden_irreps, pair_irreps)
+            self.offdiag_projections[edge_type] = Linear(hidden_irreps, pair_irreps)
+            self.output_dims[edge_type] = Irreps(pair_irreps).dim
+            print(
+                f"    [Head] {edge_type}: "
+                f"diag {hidden_irreps} -> {pair_irreps}, "
+                f"offdiag {hidden_irreps} -> {pair_irreps}"
+            )
 
             # Check if Linear can produce all requested output irreps
             input_irreps = Irreps(hidden_irreps)
@@ -507,22 +515,54 @@ class MinimalHead(nn.Module):
         """
         outputs = {}
 
-        for type_str, proj in self.projections.items():
+        for type_str in self.diag_projections.keys():
             type_idx = self.mapper.edge_type2idx[type_str]
             mask = edge_type_idx == type_idx
 
             if mask.any():
                 selected_feat = edge_feat[mask]
-                pred_vectors = proj(selected_feat)
-                check_for_nans(
-                    pred_vectors, f"Head.{type_str}_projection", selected_feat
+                selected_edge_index = edge_index[:, mask]
+                selected_edge_shift = edge_shift[:, mask]
+
+                # Diagonal edge: zero shift and same source/destination atom.
+                is_diag = (selected_edge_shift == 0).all(dim=0) & (
+                    selected_edge_index[0] == selected_edge_index[1]
                 )
+                is_offdiag = ~is_diag
+
+                pred_vectors = torch.empty(
+                    (selected_feat.shape[0], self.output_dims[type_str]),
+                    device=selected_feat.device,
+                    dtype=selected_feat.dtype,
+                )
+
+                if is_diag.any():
+                    diag_vectors = self.diag_projections[type_str](
+                        selected_feat[is_diag]
+                    )
+                    check_for_nans(
+                        diag_vectors,
+                        f"Head.{type_str}_diag_projection",
+                        selected_feat[is_diag],
+                    )
+                    pred_vectors[is_diag] = diag_vectors
+
+                if is_offdiag.any():
+                    offdiag_vectors = self.offdiag_projections[type_str](
+                        selected_feat[is_offdiag]
+                    )
+                    check_for_nans(
+                        offdiag_vectors,
+                        f"Head.{type_str}_offdiag_projection",
+                        selected_feat[is_offdiag],
+                    )
+                    pred_vectors[is_offdiag] = offdiag_vectors
 
                 # Build 5D edge tensor (sx, sy, sz, i, j)
                 selected_edges = torch.cat(
                     [
-                        edge_shift[:, mask],  # (3, E')
-                        edge_index[:, mask],  # (2, E')
+                        selected_edge_shift,  # (3, E')
+                        selected_edge_index,  # (2, E')
                     ],
                     dim=0,
                 )  # (5, E')
@@ -532,7 +572,9 @@ class MinimalHead(nn.Module):
                     "edges": selected_edges,
                 }
                 print(
-                    f"      [Head.forward] {type_str}: {mask.sum().item()} edges -> vectors {pred_vectors.shape}"
+                    f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
+                    f"({int(is_diag.sum().item())} diag, {int(is_offdiag.sum().item())} offdiag) "
+                    f"-> vectors {pred_vectors.shape}"
                 )
 
         return outputs
