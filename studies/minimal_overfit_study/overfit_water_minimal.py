@@ -45,6 +45,7 @@ from data.block_matrix import IrrepsBlockData, BlockMatrix
 import wandb
 from common import (
     MinimalNetwork,
+    canonicalize_edge_order,
     compute_detailed_metrics,
     compute_distance_error_curve,
     save_distance_error_curve_plot,
@@ -473,7 +474,28 @@ if __name__ == "__main__":
     edge_index = torch.stack([all_src, all_dst], dim=0)  # (2, E)
     edge_shift = all_offsets.T  # (3, E)
 
-    num_self_edges = num_atoms
+    # Canonicalize edge order to match the main data pipeline.
+    # Self-edges first (sorted by src), then off-diagonals sorted by
+    # (distance, sx, sy, sz, src, dst).
+    edge_index, edge_shift, _ = canonicalize_edge_order(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        positions=positions,
+        box=box,
+    )
+
+    src_sorted = edge_index[0]
+    dst_sorted = edge_index[1]
+    num_self_edges = int(
+        (
+            (src_sorted == dst_sorted)
+            & (edge_shift[0] == 0)
+            & (edge_shift[1] == 0)
+            & (edge_shift[2] == 0)
+        )
+        .sum()
+        .item()
+    )
     print(
         f"  Total edges: {edge_index.shape[1]} ({num_self_edges} self + {edge_index.shape[1] - num_self_edges} off-diagonal)"
     )

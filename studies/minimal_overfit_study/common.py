@@ -792,7 +792,10 @@ def compute_distance_error_curve(
             pred_idx = pred_edge_to_idx.get(edge_key, None)
             if pred_idx is None:
                 continue
-            if pred_idx >= pred_blocks_full.shape[0] or gt_idx >= gt_blocks_full.shape[0]:
+            if (
+                pred_idx >= pred_blocks_full.shape[0]
+                or gt_idx >= gt_blocks_full.shape[0]
+            ):
                 continue
             if pred_idx < pred_mask.shape[0] and not bool(pred_mask[pred_idx]):
                 continue
@@ -802,7 +805,9 @@ def compute_distance_error_curve(
             diff = pred_block - gt_block
 
             sx, sy, sz, i, j = edge_key
-            shift = torch.tensor([sx, sy, sz], dtype=positions.dtype, device=positions.device)
+            shift = torch.tensor(
+                [sx, sy, sz], dtype=positions.dtype, device=positions.device
+            )
             if box is not None:
                 disp = positions[j] - positions[i] + shift @ box
             else:
@@ -922,7 +927,9 @@ def compute_distance_error_curve(
     }
 
 
-def save_distance_error_curve_plot(curve_data, output_path: Path | str, title: str = None):
+def save_distance_error_curve_plot(
+    curve_data, output_path: Path | str, title: str = None
+):
     """
     Save a 2x2 plot of distance-binned error curves:
       abs L1, abs L2, rel L1, rel L2.
@@ -946,9 +953,11 @@ def save_distance_error_curve_plot(curve_data, output_path: Path | str, title: s
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 9))
     fig.suptitle(
-        title
-        if title is not None
-        else f"Distance Error Curves ({curve_data['n_bins']} bins)",
+        (
+            title
+            if title is not None
+            else f"Distance Error Curves ({curve_data['n_bins']} bins)"
+        ),
         fontsize=14,
     )
 
@@ -993,6 +1002,103 @@ def get_diagonal_mask(edges_5d):
     is_self_interaction = (sx == 0) & (sy == 0) & (sz == 0)
     is_same_atom = i == j
     return is_self_interaction & is_same_atom
+
+
+def canonicalize_edge_order(
+    edge_index: torch.Tensor,
+    edge_shift: torch.Tensor,
+    positions: torch.Tensor,
+    box: torch.Tensor | None = None,
+):
+    """
+    Canonicalize edge order to match the main pipeline convention:
+    1) all self-edges first, sorted by source index
+    2) all off-diagonal edges sorted by (distance, sx, sy, sz, src, dst)
+
+    Args:
+        edge_index: (2, E) with [src, dst]
+        edge_shift: (3, E) with [sx, sy, sz]
+        positions: (N, 3)
+        box: (3, 3) or None
+
+    Returns:
+        edge_index_sorted, edge_shift_sorted, permutation_indices
+    """
+    if edge_index.shape[0] != 2:
+        raise ValueError("edge_index must have shape (2, E)")
+    if edge_shift.shape[0] != 3:
+        raise ValueError("edge_shift must have shape (3, E)")
+    if edge_index.shape[1] != edge_shift.shape[1]:
+        raise ValueError(
+            "edge_index and edge_shift must contain the same number of edges"
+        )
+
+    src = edge_index[0]
+    dst = edge_index[1]
+    sx = edge_shift[0]
+    sy = edge_shift[1]
+    sz = edge_shift[2]
+    indices = torch.arange(edge_index.shape[1], device=edge_index.device)
+
+    is_self = (src == dst) & (sx == 0) & (sy == 0) & (sz == 0)
+    diag_indices = indices[is_self]
+    offdiag_indices = indices[~is_self]
+
+    # Self-edges first, sorted by atom index for deterministic ordering.
+    diag_src = src[diag_indices]
+    perm_diag = torch.argsort(diag_src)
+    sorted_diag_indices = diag_indices[perm_diag]
+
+    # Off-diagonal edges sorted by distance, then by shift/src/dst tie-breakers.
+    if offdiag_indices.numel() > 0:
+        shift_float = edge_shift[:, offdiag_indices].T.to(
+            dtype=positions.dtype, device=positions.device
+        )
+        src_od = src[offdiag_indices]
+        dst_od = dst[offdiag_indices]
+
+        if box is not None:
+            disp = (
+                positions[dst_od]
+                - positions[src_od]
+                + shift_float @ box.to(positions.device)
+            )
+        else:
+            disp = positions[dst_od] - positions[src_od]
+        distances = torch.linalg.norm(disp, dim=-1)
+
+        d_cpu = distances.cpu().tolist()
+        sx_cpu = sx[offdiag_indices].cpu().tolist()
+        sy_cpu = sy[offdiag_indices].cpu().tolist()
+        sz_cpu = sz[offdiag_indices].cpu().tolist()
+        src_cpu = src_od.cpu().tolist()
+        dst_cpu = dst_od.cpu().tolist()
+        idx_cpu = offdiag_indices.cpu().tolist()
+
+        sortable = []
+        for i in range(len(idx_cpu)):
+            sortable.append(
+                (
+                    d_cpu[i],
+                    sx_cpu[i],
+                    sy_cpu[i],
+                    sz_cpu[i],
+                    src_cpu[i],
+                    dst_cpu[i],
+                    idx_cpu[i],
+                )
+            )
+        sortable.sort()
+        sorted_offdiag_indices = torch.tensor(
+            [row[-1] for row in sortable],
+            dtype=torch.long,
+            device=edge_index.device,
+        )
+    else:
+        sorted_offdiag_indices = offdiag_indices
+
+    final_indices = torch.cat([sorted_diag_indices, sorted_offdiag_indices], dim=0)
+    return edge_index[:, final_indices], edge_shift[:, final_indices], final_indices
 
 
 def filter_blocks_by_partial_train(block_matrix, partial_train):
