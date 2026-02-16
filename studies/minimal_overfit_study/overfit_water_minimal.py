@@ -177,13 +177,13 @@ if __name__ == "__main__":
         "--log-forward",
         action="store_true",
         default=False,
-        help="Enable periodic forward-pass activation logging to WandB (default: False)",
+        help="Enable periodic forward-pass console logging (default: False).",
     )
     parser.add_argument(
         "--log-per-irrep-metrics",
         action="store_true",
         default=False,
-        help="Enable periodic per-irrep metric logging (console + WandB) during training (default: False)",
+        help="Enable periodic per-irrep metric console logging during training (default: False).",
     )
     parser.add_argument(
         "--device",
@@ -877,8 +877,7 @@ if __name__ == "__main__":
             # Temporarily suppress forward pass logging
             verbose = should_log_now and CONFIG["log_forward"]
 
-            # Enable activation logging only during log intervals
-            log_activations = should_log_now and CONFIG["log_forward"]
+            log_activations = should_log_now
 
             if not verbose and not CONFIG["verbose_forward"]:
                 # Silence print by redirecting to nowhere temporarily
@@ -1280,22 +1279,22 @@ if __name__ == "__main__":
                         f"✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
+                per_irrep_metrics = compute_irrep_metrics(
+                    pred_H_irreps, target_H_irreps, all_irreps, mapper
+                )
                 if CONFIG["log_per_irrep_metrics"]:
-                    per_irrep_metrics = compute_irrep_metrics(
-                        pred_H_irreps, target_H_irreps, all_irreps, mapper
-                    )
                     log_per_irrep_metrics(
                         "Per-Irrep Metrics (Element, Block, and Full Matrix):",
                         all_irreps,
                         per_irrep_metrics,
                     )
-                    wandb.log(
-                        build_wandb_per_irrep_metrics_log(
-                            epoch_zero_based=epoch,
-                            all_irreps=all_irreps,
-                            per_irrep_metrics=per_irrep_metrics,
-                        )
+                wandb.log(
+                    build_wandb_per_irrep_metrics_log(
+                        epoch_zero_based=epoch,
+                        all_irreps=all_irreps,
+                        per_irrep_metrics=per_irrep_metrics,
                     )
+                )
 
                 # Save frame for video at every log interval
                 try:
@@ -1542,9 +1541,6 @@ if __name__ == "__main__":
             wandb.log(
                 {
                     "distance_curve/plot": wandb.Image(str(curve_plot_path)),
-                    "distance_curve/d_min": distance_curve["d_min"],
-                    "distance_curve/d_max": distance_curve["d_max"],
-                    "distance_curve/n_bins": distance_curve["n_bins"],
                 }
             )
             print(f"    Saved: {curve_json_path}")
