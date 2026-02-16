@@ -39,6 +39,7 @@ from net.common import build_hidden_irreps
 # Import network classes and utilities from common module
 from common import (
     MinimalNetwork,
+    canonicalize_edge_order,
     compute_mu_H,
     compute_distance_error_curve,
     save_distance_error_curve_plot,
@@ -252,6 +253,14 @@ def build_graph_inputs(
 
     edge_index = torch.stack([all_src, all_dst], dim=0)
     edge_shift = all_offsets.T
+
+    # Canonicalize edge order exactly as in training script.
+    edge_index, edge_shift, _ = canonicalize_edge_order(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        positions=positions,
+        box=box,
+    )
 
     # Compute edge vectors and distances
     if box is not None:
@@ -793,7 +802,9 @@ def main():
         with open(curve_orig_json, "w") as f:
             json.dump(curve_orig, f, indent=2)
         save_distance_error_curve_plot(
-            curve_orig, curve_orig_plot, title="Distance Error Curve (Original, 64 bins)"
+            curve_orig,
+            curve_orig_plot,
+            title="Distance Error Curve (Original, 64 bins)",
         )
         print(f"Distance curve saved: {curve_orig_json}")
         print(f"Distance curve plot saved: {curve_orig_plot}")

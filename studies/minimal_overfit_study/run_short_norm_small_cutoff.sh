@@ -5,12 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
-RUN_NAME="long-norm-small-cutoff-$(date +%Y%m%d-%H%M%S)"
+RUN_NAME="short-norm-small-cutoff-$(date +%Y%m%d-%H%M%S)"
 
 python studies/minimal_overfit_study/overfit_water_minimal.py \
   --run-name "${RUN_NAME}" \
-  --num-epochs 30000 \
-  --log-interval 200 \
+  --num-epochs 100 \
+  --log-interval 1 \
   --lr 3e-3 \
   --cutoff-radius 4 \
   --normalize-blocks \
