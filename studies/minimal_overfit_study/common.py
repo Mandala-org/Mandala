@@ -937,6 +937,18 @@ def save_distance_error_curve_plot(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def _interp_nans(x_vals: np.ndarray, y_vals: np.ndarray) -> np.ndarray:
+        """Linearly interpolate NaNs so empty bins do not break plotted lines."""
+        y = y_vals.astype(float).copy()
+        valid = ~np.isnan(y)
+        if valid.sum() == 0:
+            return y
+        if valid.sum() == 1:
+            y[~valid] = y[valid][0]
+            return y
+        y[~valid] = np.interp(x_vals[~valid], x_vals[valid], y[valid])
+        return y
+
     x = np.array(curve_data["bin_centers"], dtype=float)
     l1_abs = np.array(curve_data["l1_abs"], dtype=float)
     l2_abs = np.array(curve_data["l2_abs"], dtype=float)
@@ -951,6 +963,20 @@ def save_distance_error_curve_plot(
     l2_rel_min = np.array(curve_data["l2_rel_min"], dtype=float)
     l2_rel_max = np.array(curve_data["l2_rel_max"], dtype=float)
 
+    # Interpolate empty-bin NaNs for plotting only (raw metrics stay unchanged).
+    l1_abs_i = _interp_nans(x, l1_abs)
+    l2_abs_i = _interp_nans(x, l2_abs)
+    l1_rel_i = _interp_nans(x, l1_rel)
+    l2_rel_i = _interp_nans(x, l2_rel)
+    l1_abs_min_i = _interp_nans(x, l1_abs_min)
+    l1_abs_max_i = _interp_nans(x, l1_abs_max)
+    l2_abs_min_i = _interp_nans(x, l2_abs_min)
+    l2_abs_max_i = _interp_nans(x, l2_abs_max)
+    l1_rel_min_i = _interp_nans(x, l1_rel_min)
+    l1_rel_max_i = _interp_nans(x, l1_rel_max)
+    l2_rel_min_i = _interp_nans(x, l2_rel_min)
+    l2_rel_max_i = _interp_nans(x, l2_rel_max)
+
     fig, axes = plt.subplots(2, 2, figsize=(12, 9))
     fig.suptitle(
         (
@@ -962,10 +988,10 @@ def save_distance_error_curve_plot(
     )
 
     panels = [
-        (axes[0, 0], l1_abs, l1_abs_min, l1_abs_max, "Absolute L1"),
-        (axes[0, 1], l2_abs, l2_abs_min, l2_abs_max, "Absolute L2 (RMSE)"),
-        (axes[1, 0], l1_rel, l1_rel_min, l1_rel_max, "Relative L1"),
-        (axes[1, 1], l2_rel, l2_rel_min, l2_rel_max, "Relative L2"),
+        (axes[0, 0], l1_abs_i, l1_abs_min_i, l1_abs_max_i, "Absolute L1"),
+        (axes[0, 1], l2_abs_i, l2_abs_min_i, l2_abs_max_i, "Absolute L2 (RMSE)"),
+        (axes[1, 0], l1_rel_i, l1_rel_min_i, l1_rel_max_i, "Relative L1"),
+        (axes[1, 1], l2_rel_i, l2_rel_min_i, l2_rel_max_i, "Relative L2"),
     ]
     for ax, y, y_min, y_max, ttl in panels:
         ax.plot(x, y, marker="o", linewidth=1.2, markersize=2.2, label="mean")
