@@ -601,7 +601,6 @@ class MinimalNetwork(nn.Module):
         from e3nn.o3 import Irrep
 
         scalar_dim = sum(mul for mul, ir in hidden_irreps if ir == Irrep("0e"))
-
         self.node_enc = MinimalNodeEncoder(num_elements, scalar_dim)
         self.edge_enc = MinimalEdgeEncoder(
             n_radial, num_edge_types, hidden_irreps, sh_irreps

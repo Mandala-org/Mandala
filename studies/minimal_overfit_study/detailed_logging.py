@@ -8,6 +8,7 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
     print(f"  Run-specific checkpoint directory: {run_checkpoint_dir}")
     print(f"  Frame output directory: {frame_output_dir}")
     print(f"  Device: {config['device']}")
+    print(f"  Box convention: {config.get('box_convention', 'rows')}")
     print(f"  Hidden dim: {config['hidden_dim']}")
     print(f"  L_max: {config['l_max']}")
     print(f"  Num layers: {config['num_layers']}")
