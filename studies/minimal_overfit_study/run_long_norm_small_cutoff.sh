@@ -15,6 +15,7 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --cutoff-radius 4 \
   --normalize-blocks \
   --apply-cutoff-to-targets \
+  --generate-video \
   --grad-clip 1.0 \
   --hidden-dim 64 \
   --l-max 4 \
