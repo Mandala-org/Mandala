@@ -57,6 +57,18 @@ from common import (
     permutation_to_matrix,
 )
 from strict_checks import strict_edge_alignment_check
+from detailed_logging import (
+    log_config,
+    log_cutoff_application,
+    log_final_metrics,
+    log_graph,
+    log_mapper_info,
+    log_orbital_config,
+    log_per_irrep_metrics,
+    log_snapshot_info,
+    log_strict_checks_passed,
+    log_study_complete,
+)
 
 
 if __name__ == "__main__":
@@ -232,7 +244,6 @@ if __name__ == "__main__":
     print("=" * 80)
     print("MINIMAL WATER OVERFIT STUDY - EXPLICIT IMPLEMENTATION")
     print("=" * 80)
-    print("\n[CONFIG] Setting up hyperparameters...")
 
     CONFIG = {
         # Data
@@ -282,51 +293,10 @@ if __name__ == "__main__":
     run_name = wandb.run.name
     run_checkpoint_dir = CONFIG["checkpoint_dir"] / run_name
     run_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    print(f"  Run-specific checkpoint directory: {run_checkpoint_dir}")
-
     # Create frame output directory for video frames
     frame_output_dir = run_checkpoint_dir / "frames"
     frame_output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"  Frame output directory: {frame_output_dir}")
-
-    print(f"  Device: {CONFIG['device']}")
-    print(f"  Hidden dim: {CONFIG['hidden_dim']}")
-    print(f"  L_max: {CONFIG['l_max']}")
-    print(f"  Num layers: {CONFIG['num_layers']}")
-    print(f"  Cutoff radius: {CONFIG['cutoff_radius']} Å")
-    print(f"  Learning rate: {CONFIG['lr']}")
-    print(f"  Epochs: {CONFIG['num_epochs']}")
-    print(f"  Checkpoint directory: {CONFIG['checkpoint_dir']}")
-    if CONFIG["grad_clip"] > 0:
-        print(f"  Gradient clipping: {CONFIG['grad_clip']}")
-    else:
-        print(f"  Gradient clipping: disabled")
-    if CONFIG["partial_train"] is not None:
-        print(f"  Partial training: {CONFIG['partial_train']} blocks only")
-    else:
-        print(f"  Partial training: disabled (training on all blocks)")
-    if CONFIG["train_on_irrep_parts"]:
-        print(f"  Train on irrep parts: enabled (decomposed per-irrep loss)")
-    else:
-        print(f"  Train on irrep parts: disabled (standard loss)")
-    if CONFIG["generate_video"]:
-        print(f"  Video generation: enabled")
-    else:
-        print(f"  Video generation: disabled")
-    if CONFIG["verbose_forward"]:
-        print(f"  Verbose forward pass: enabled (showing shapes and irreps)")
-    else:
-        print(f"  Verbose forward pass: disabled")
-    if CONFIG["normalize_blocks"]:
-        print(f"  Block normalization: enabled (per-key, per-diagonal-status)")
-    else:
-        print(f"  Block normalization: disabled")
-    if CONFIG["apply_cutoff_to_targets"]:
-        print(
-            f"  Target cutoff filtering: enabled (using cutoff_radius={CONFIG['cutoff_radius']} Å)"
-        )
-    else:
-        print(f"  Target cutoff filtering: disabled")
+    log_config(CONFIG, run_checkpoint_dir, frame_output_dir)
 
     device = torch.device(CONFIG["device"])
 
@@ -334,8 +304,6 @@ if __name__ == "__main__":
     # LOAD DATA
     # =============================================================================
     print("\n[DATA] Loading single water snapshot...")
-
-    # Load snapshot using Snapshot.from_openmx
     print(f"  Matrix file: {CONFIG['data_path']}")
     print(f"  Info file: {CONFIG['info_path']}")
 
@@ -354,28 +322,9 @@ if __name__ == "__main__":
         before_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
         snapshot = snapshot.filter_by_distance(CONFIG["cutoff_radius"])
         after_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
-        print(
-            f"\n  Applied cutoff to GT matrices: {before_edges} -> {after_edges} Hamiltonian edges "
-            f"(cutoff={CONFIG['cutoff_radius']} Å)"
-        )
+        log_cutoff_application(before_edges, after_edges, CONFIG["cutoff_radius"])
 
-    print(f"\n  Snapshot loaded:")
-    print(f"    Elements: {snapshot.hamiltonian.atoms}")
-    print(f"    Num atoms: {len(snapshot.hamiltonian.atoms)}")
-    print(f"    Positions shape: {snapshot.positions.shape}")
-    print(f"    Box shape: {snapshot.box.shape if snapshot.box is not None else None}")
-    print(f"    Basis: {snapshot.hamiltonian.basis}")
-
-    print(f"\n  Matrices:")
-    print(f"    Hamiltonian keys: {list(snapshot.hamiltonian.pair_blocks.keys())}")
-    print(f"    Overlap keys: {list(snapshot.overlap.pair_blocks.keys())}")
-    print(f"    Density keys: {list(snapshot.density.pair_blocks.keys())}")
-
-    print(f"\n  Hamiltonian blocks:")
-    for key, blocks in snapshot.hamiltonian.pair_blocks.items():
-        print(
-            f"    {key}: shape {blocks.shape}, edges {snapshot.hamiltonian.pair_edges[key].shape}"
-        )
+    log_snapshot_info(snapshot)
 
     # Extract components
     hamiltonian_e3nn = snapshot.hamiltonian.to(device)
@@ -406,16 +355,11 @@ if __name__ == "__main__":
             raise ValueError(f"Invalid change_box option: {CONFIG['change_box']}")
         print(f"    Applied to positions and box (change_box={CONFIG['change_box']})")
 
-    print(f"\n  Orbital configuration:")
-    for elem in orbital_cfg.elements():
-        irreps = orbital_cfg.element_to_irreps[elem]
-        print(f"    {elem}: {irreps} (dim={irreps.dim})")
+    log_orbital_config(orbital_cfg)
 
     # Create BlockIrrepMapper
-    print("\n[MAPPER] Creating BlockIrrepMapper...")
     mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch.float32)
-    print(f"  Mapper edge types: {mapper.edge_types}")
-    print(f"  Mapper edge_type2idx: {mapper.edge_type2idx}")
+    log_mapper_info(mapper)
 
     # Store target as matrix blocks (train_target = "matrix")
     print("\n[TARGETS] Storing target as matrix blocks...")
@@ -430,17 +374,7 @@ if __name__ == "__main__":
             f"    {key}: blocks {block_shape}, edges {edge_shape}, irreps {pair_irreps}"
         )
 
-    # =============================================================================
-    # BUILD GRAPH
-    # =============================================================================
-    print("\n[GRAPH] Constructing molecular graph...")
-
     num_atoms = len(atoms_list)
-
-    print(f"  Atoms: {atoms_list}")
-    print(f"  Positions (e3nn frame):\n{positions}")
-    if box is not None:
-        print(f"  Box (e3nn frame):\n{box}")
 
     # Create ASE atoms object for neighbor list
     ase_atoms = Atoms(
@@ -451,15 +385,9 @@ if __name__ == "__main__":
     )
 
     # Find neighbors using ASE
-    print(f"\n  Finding neighbors within {CONFIG['cutoff_radius']} Å...")
     src, dst, offsets = neighbor_list(
         "ijS", ase_atoms, CONFIG["cutoff_radius"], self_interaction=False
     )
-
-    print(f"  Found {len(src)} off-diagonal edges")
-    print(f"  Edge list (first 10):")
-    for i in range(min(10, len(src))):
-        print(f"    {src[i]} -> {dst[i]} (offset: {offsets[i]})")
 
     # Add self-edges
     self_src = torch.arange(num_atoms, dtype=torch.long, device=device)
@@ -496,12 +424,7 @@ if __name__ == "__main__":
         .sum()
         .item()
     )
-    print(
-        f"  Total edges: {edge_index.shape[1]} ({num_self_edges} self + {edge_index.shape[1] - num_self_edges} off-diagonal)"
-    )
-
     # Compute edge vectors and distances
-    print("\n  Computing edge displacements and distances...")
     if box is not None:
         shift_float = edge_shift.T.float()
         edge_vec = (
@@ -512,10 +435,18 @@ if __name__ == "__main__":
 
     edge_dist = torch.linalg.norm(edge_vec, dim=1)
 
-    print(
-        f"  Edge distances (Å): min={edge_dist.min().item():.3f}, max={edge_dist.max().item():.3f}, mean={edge_dist.mean().item():.3f}"
+    log_graph(
+        atoms_list=atoms_list,
+        positions=positions,
+        box=box,
+        cutoff_radius=CONFIG["cutoff_radius"],
+        src=src,
+        dst=dst,
+        offsets=offsets,
+        edge_index=edge_index,
+        num_self_edges=num_self_edges,
+        edge_dist=edge_dist,
     )
-    print(f"  Self-edge distances: {edge_dist[:num_self_edges]}")
 
     # Compute spherical harmonics
     print(f"\n  Computing spherical harmonics (l_max={CONFIG['l_max']})...")
@@ -606,7 +537,7 @@ if __name__ == "__main__":
         matrix_name="density",
         require_exact=require_exact_edge_match,
     )
-    print("  ✓ Edge alignment checks passed.")
+    log_strict_checks_passed()
 
     # =============================================================================
     # HELPER FUNCTIONS FOR PARTIAL TRAINING
@@ -796,7 +727,8 @@ if __name__ == "__main__":
     # =============================================================================
     # TRAINING LOOP
     # =============================================================================
-    print("\n" + "=" * 80)
+    print("")
+    print("=" * 80)
     print("TRAINING TO OVERFIT")
     print("=" * 80)
 
@@ -1061,9 +993,11 @@ if __name__ == "__main__":
             wandb.log({"lr": current_lr, "epoch": epoch})
             # Check for NaN or Inf in loss before backward pass
             if torch.isnan(loss) or torch.isinf(loss):
+                print("")
                 print(f"\n{'='*80}")
-                print(f"❌ TRAINING FAILED at epoch {epoch + 1}")
+                print(f"TRAINING FAILED at epoch {epoch + 1}")
                 print(f"{'='*80}")
+                print("❌ Detected invalid loss value.")
                 if torch.isnan(loss):
                     print(f"Loss is NaN: {loss.item()}")
                     print("This indicates numerical instability in the forward pass.")
@@ -1103,9 +1037,11 @@ if __name__ == "__main__":
             for name, param in network.named_parameters():
                 if param.grad is not None:
                     if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
+                        print("")
                         print(f"\n{'='*80}")
-                        print(f"❌ TRAINING FAILED at epoch {epoch + 1}")
+                        print(f"TRAINING FAILED at epoch {epoch + 1}")
                         print(f"{'='*80}")
+                        print("❌ Detected invalid gradient values.")
                         print(f"Gradient contains NaN or Inf in parameter: {name}")
                         print(
                             f"This indicates numerical instability in the backward pass."
@@ -1317,53 +1253,47 @@ if __name__ == "__main__":
                         best_model_path,
                     )
                     print(
-                        f"  ✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
+                        f"✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
                 # Compute per-irrep metrics for logging (always, regardless of training mode)
-                print(f"\n  Per-Irrep Metrics (Element, Block, and Full Matrix):")
                 per_irrep_metrics = compute_irrep_metrics(
                     pred_H_irreps, target_H_irreps, all_irreps, mapper
                 )
+                log_per_irrep_metrics(
+                    "Per-Irrep Metrics (Element, Block, and Full Matrix):",
+                    all_irreps,
+                    per_irrep_metrics,
+                )
+
                 for irrep in sorted(all_irreps, key=str):
                     irrep_str = str(irrep)
-                    # Element-level metrics
-                    l1_elem = per_irrep_metrics.get(f"{irrep_str}_l1_elem", 0.0)
-                    l2_elem = per_irrep_metrics.get(f"{irrep_str}_l2_elem", 0.0)
-                    # Block-level metrics
-                    l1_block = per_irrep_metrics.get(f"{irrep_str}_l1_block", 0.0)
-                    l1_block_rel = per_irrep_metrics.get(
-                        f"{irrep_str}_l1_block_rel", 0.0
-                    )
-                    l2_block = per_irrep_metrics.get(f"{irrep_str}_l2_block", 0.0)
-                    l2_block_rel = per_irrep_metrics.get(
-                        f"{irrep_str}_l2_block_rel", 0.0
-                    )
-                    # Full matrix relative metrics
-                    l1_full_rel = per_irrep_metrics.get(f"{irrep_str}_l1_full_rel", 0.0)
-                    l2_full_rel = per_irrep_metrics.get(f"{irrep_str}_l2_full_rel", 0.0)
-
-                    print(f"    {irrep_str:4s}:")
-                    print(
-                        f"      Element-level: L1(MAE)={l1_elem:.3e} L2(RMSE)={l2_elem:.3e}"
-                    )
-                    print(
-                        f"      Block-level:   L1={l1_block:.3e} (rel={l1_block_rel:.3%}), L2={l2_block:.3e} (rel={l2_block_rel:.3%})"
-                    )
-                    print(
-                        f"      Full-matrix:   L1_rel={l1_full_rel:.3%}, L2_rel={l2_full_rel:.3%}"
-                    )
-
                     wandb.log(
                         {
-                            f"irrep_metrics/{irrep_str}_l1_elem": l1_elem,
-                            f"irrep_metrics/{irrep_str}_l2_elem": l2_elem,
-                            f"irrep_metrics/{irrep_str}_l1_block": l1_block,
-                            f"irrep_metrics/{irrep_str}_l1_block_rel": l1_block_rel,
-                            f"irrep_metrics/{irrep_str}_l2_block": l2_block,
-                            f"irrep_metrics/{irrep_str}_l2_block_rel": l2_block_rel,
-                            f"irrep_metrics/{irrep_str}_l1_full_rel": l1_full_rel,
-                            f"irrep_metrics/{irrep_str}_l2_full_rel": l2_full_rel,
+                            f"irrep_metrics/{irrep_str}_l1_elem": per_irrep_metrics.get(
+                                f"{irrep_str}_l1_elem", 0.0
+                            ),
+                            f"irrep_metrics/{irrep_str}_l2_elem": per_irrep_metrics.get(
+                                f"{irrep_str}_l2_elem", 0.0
+                            ),
+                            f"irrep_metrics/{irrep_str}_l1_block": per_irrep_metrics.get(
+                                f"{irrep_str}_l1_block", 0.0
+                            ),
+                            f"irrep_metrics/{irrep_str}_l1_block_rel": per_irrep_metrics.get(
+                                f"{irrep_str}_l1_block_rel", 0.0
+                            ),
+                            f"irrep_metrics/{irrep_str}_l2_block": per_irrep_metrics.get(
+                                f"{irrep_str}_l2_block", 0.0
+                            ),
+                            f"irrep_metrics/{irrep_str}_l2_block_rel": per_irrep_metrics.get(
+                                f"{irrep_str}_l2_block_rel", 0.0
+                            ),
+                            f"irrep_metrics/{irrep_str}_l1_full_rel": per_irrep_metrics.get(
+                                f"{irrep_str}_l1_full_rel", 0.0
+                            ),
+                            f"irrep_metrics/{irrep_str}_l2_full_rel": per_irrep_metrics.get(
+                                f"{irrep_str}_l2_full_rel", 0.0
+                            ),
                             "epoch": epoch,
                         }
                     )
@@ -1386,11 +1316,12 @@ if __name__ == "__main__":
                         percentile=99.0,
                     )
                 except Exception as e:
-                    print(f"  ⚠️  Warning: Could not save frame for epoch {epoch}: {e}")
+                    print(f"⚠️  Warning: Could not save frame for epoch {epoch}: {e}")
 
                 # Check for convergence
                 if loss.item() < 1e-10:
-                    print(f"\n✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
+                    print("")
+                    print(f"✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
                     break
     except KeyboardInterrupt:
         print(
@@ -1400,7 +1331,8 @@ if __name__ == "__main__":
     # =============================================================================
     # FINAL EVALUATION
     # =============================================================================
-    print("\n" + "=" * 80)
+    print("")
+    print("=" * 80)
     print("FINAL EVALUATION")
     print("=" * 80)
 
@@ -1518,19 +1450,7 @@ if __name__ == "__main__":
             pred_filtered, target_filtered, overlap_filtered
         )
 
-        print("\n[FINAL PREDICTIONS - Hamiltonian]")
-        print(f"\n  Overall Metrics:")
-        print(f"    MAE H:                {final_detailed_metrics['mae']:.6e}")
-        print(f"    MSE H:                {final_detailed_metrics['mse']:.6e}")
-        print(f"    MAE H (modified):     {final_detailed_metrics['mae_mod']:.6e}")
-        print(f"    MSE H (modified):     {final_detailed_metrics['mse_mod']:.6e}")
-        print(f"    mu_H:                 {final_detailed_metrics['mu_H']:.6e}")
-        print(
-            f"    Correction MAE:       {final_detailed_metrics['correction_mae']:.6e}"
-        )
-        print(
-            f"    Correction MSE:       {final_detailed_metrics['correction_mse']:.6e}"
-        )
+        log_final_metrics(final_detailed_metrics)
 
         final_metrics = {
             "final/mae_H": final_detailed_metrics["mae"],
@@ -1581,41 +1501,40 @@ if __name__ == "__main__":
             final_metrics[f"final/{key}_mae"] = block_mae
 
         # Compute final per-irrep metrics (always, regardless of training mode)
-        print("\n  Final Per-Irrep Metrics (Element, Block, and Full Matrix):")
         final_per_irrep_metrics = compute_irrep_metrics(
             pred_H_irreps, target_H_irreps, all_irreps, mapper
         )
+        log_per_irrep_metrics(
+            "Final Per-Irrep Metrics (Element, Block, and Full Matrix):",
+            all_irreps,
+            final_per_irrep_metrics,
+        )
         for irrep in sorted(all_irreps, key=str):
             irrep_str = str(irrep)
-            # Element-level metrics
-            l1_elem = final_per_irrep_metrics.get(f"{irrep_str}_l1_elem", 0.0)
-            l2_elem = final_per_irrep_metrics.get(f"{irrep_str}_l2_elem", 0.0)
-            # Block-level metrics
-            l1_block = final_per_irrep_metrics.get(f"{irrep_str}_l1_block", 0.0)
-            l1_block_rel = final_per_irrep_metrics.get(f"{irrep_str}_l1_block_rel", 0.0)
-            l2_block = final_per_irrep_metrics.get(f"{irrep_str}_l2_block", 0.0)
-            l2_block_rel = final_per_irrep_metrics.get(f"{irrep_str}_l2_block_rel", 0.0)
-            # Full matrix relative metrics
-            l1_full_rel = final_per_irrep_metrics.get(f"{irrep_str}_l1_full_rel", 0.0)
-            l2_full_rel = final_per_irrep_metrics.get(f"{irrep_str}_l2_full_rel", 0.0)
-
-            print(f"    {irrep_str:4s}:")
-            print(f"      Element-level: L1(MAE)={l1_elem:.3e} L2(RMSE)={l2_elem:.3e}")
-            print(
-                f"      Block-level:   L1={l1_block:.3e} (rel={l1_block_rel:.3%}), L2={l2_block:.3e} (rel={l2_block_rel:.3%})"
+            final_metrics[f"final_irrep/{irrep_str}_l1_elem"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l1_elem", 0.0)
             )
-            print(
-                f"      Full-matrix:   L1_rel={l1_full_rel:.3%}, L2_rel={l2_full_rel:.3%}"
+            final_metrics[f"final_irrep/{irrep_str}_l2_elem"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l2_elem", 0.0)
             )
-
-            final_metrics[f"final_irrep/{irrep_str}_l1_elem"] = l1_elem
-            final_metrics[f"final_irrep/{irrep_str}_l2_elem"] = l2_elem
-            final_metrics[f"final_irrep/{irrep_str}_l1_block"] = l1_block
-            final_metrics[f"final_irrep/{irrep_str}_l1_block_rel"] = l1_block_rel
-            final_metrics[f"final_irrep/{irrep_str}_l2_block"] = l2_block
-            final_metrics[f"final_irrep/{irrep_str}_l2_block_rel"] = l2_block_rel
-            final_metrics[f"final_irrep/{irrep_str}_l1_full_rel"] = l1_full_rel
-            final_metrics[f"final_irrep/{irrep_str}_l2_full_rel"] = l2_full_rel
+            final_metrics[f"final_irrep/{irrep_str}_l1_block"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l1_block", 0.0)
+            )
+            final_metrics[f"final_irrep/{irrep_str}_l1_block_rel"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l1_block_rel", 0.0)
+            )
+            final_metrics[f"final_irrep/{irrep_str}_l2_block"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l2_block", 0.0)
+            )
+            final_metrics[f"final_irrep/{irrep_str}_l2_block_rel"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l2_block_rel", 0.0)
+            )
+            final_metrics[f"final_irrep/{irrep_str}_l1_full_rel"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l1_full_rel", 0.0)
+            )
+            final_metrics[f"final_irrep/{irrep_str}_l2_full_rel"] = (
+                final_per_irrep_metrics.get(f"{irrep_str}_l2_full_rel", 0.0)
+            )
 
         # Log per-irrep training losses if enabled (separate from prediction metrics)
         if CONFIG["train_on_irrep_parts"] and target_H_irreps is not None:
@@ -1722,23 +1641,22 @@ if __name__ == "__main__":
         final_model_path,
     )
 
-    print("\n" + "=" * 80)
-    print("STUDY COMPLETE")
-    print("=" * 80)
-    print(f"\nRun name: {run_name}")
-    print(f"Total training epochs: {epoch + 1}")
-    print(f"Final loss: {history['loss'][-1]:.6e}")
-    print(f"Best loss: {min(history['loss']):.6e} (epoch {best_epoch + 1})")
-    print(f"\nCheckpoints saved to: {run_checkpoint_dir}")
-    print(f"  Best model: {run_checkpoint_dir / 'best_model.pt'}")
-    print(f"  Final model: {final_model_path}")
-    print("\n✓ Minimal overfit study finished successfully!")
+    log_study_complete(
+        run_name=run_name,
+        total_training_epochs=epoch + 1,
+        final_loss=history["loss"][-1],
+        best_loss=min(history["loss"]),
+        best_epoch=best_epoch + 1,
+        run_checkpoint_dir=run_checkpoint_dir,
+        final_model_path=final_model_path,
+    )
 
     # Compile frames to video and log to WandB
     if CONFIG["generate_video"]:
-        print(f"\n{'='*80}")
+        print("")
+        print("=" * 80)
         print("FINAL VIDEO GENERATION")
-        print(f"{'='*80}")
+        print("=" * 80)
         try:
             video_path = run_checkpoint_dir / "training_progress.mp4"
             if (frame_output_dir).glob("frame_epoch_*.png"):
@@ -1757,15 +1675,16 @@ if __name__ == "__main__":
                         )
                     }
                 )
-                print(f"✓ Training video logged to WandB")
+                print("✓ Training video logged to WandB")
             else:
-                print(f"⚠️  No frames found for video generation")
+                print("⚠️  No frames found for video generation")
         except Exception as e:
             print(f"⚠️  Warning: Could not generate final video: {e}")
     else:
-        print(f"\n{'='*80}")
+        print("")
+        print("=" * 80)
         print("VIDEO GENERATION SKIPPED (--generate-video not specified)")
-        print(f"{'='*80}")
+        print("=" * 80)
 
     # Finish WandB run
     wandb.finish()
