@@ -424,6 +424,31 @@ if __name__ == "__main__":
     if CONFIG["log_model"]:
         log_mapper_info(mapper)
 
+    def canonicalize_block_matrix_edges(block_matrix, positions, box):
+        """
+        Canonicalize per-key edge order in BlockMatrix using the same rule as graph
+        canonicalization (self-edges first, then off-diagonals sorted by
+        distance/shift/src/dst).
+        """
+        order_dict = {}
+        for key, edges_5d in block_matrix.pair_edges.items():
+            edge_shift_local = edges_5d[:3]  # (3, E)
+            edge_index_local = edges_5d[3:]  # (2, E)
+            _, _, perm_local = canonicalize_edge_order(
+                edge_index=edge_index_local,
+                edge_shift=edge_shift_local,
+                positions=positions,
+                box=box,
+            )
+            order_dict[key] = perm_local
+        return block_matrix.reorder_edges(order_dict)
+
+    # Canonicalize target edges after all coordinate/box transforms so target edge
+    # ordering uses exactly the same geometric convention as graph canonicalization.
+    hamiltonian_e3nn = canonicalize_block_matrix_edges(hamiltonian_e3nn, positions, box)
+    overlap_e3nn = canonicalize_block_matrix_edges(overlap_e3nn, positions, box)
+    density_e3nn = canonicalize_block_matrix_edges(density_e3nn, positions, box)
+
     # Store target as matrix blocks (train_target = "matrix")
     if CONFIG["log_model"]:
         print("\n[TARGETS] Storing target as matrix blocks...")
