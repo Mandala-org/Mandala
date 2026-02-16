@@ -59,10 +59,10 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
     print(f"  Log data: {'enabled' if config.get('log_data', False) else 'disabled'}")
     print(f"  Log model: {'enabled' if config.get('log_model', False) else 'disabled'}")
     print(
-        f"  Log forward (WandB activations): {'enabled' if config.get('log_forward', False) else 'disabled'}"
+        f"  Log forward console details: {'enabled' if config.get('log_forward', False) else 'disabled'}"
     )
     print(
-        f"  Log per-irrep metrics: {'enabled' if config.get('log_per_irrep_metrics', False) else 'disabled'}"
+        f"  Log per-irrep metrics console details: {'enabled' if config.get('log_per_irrep_metrics', False) else 'disabled'}"
     )
 
 
