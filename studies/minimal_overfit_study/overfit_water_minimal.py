@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 import argparse
 import time
+import json
 from collections import Counter
 
 # Third-party imports
@@ -45,6 +46,8 @@ import wandb
 from common import (
     MinimalNetwork,
     compute_detailed_metrics,
+    compute_distance_error_curve,
+    save_distance_error_curve_plot,
     save_hamiltonian_frame_to_disk,
     compile_frames_to_video,
     filter_irreps_block_data_by_irrep,
@@ -52,6 +55,7 @@ from common import (
     get_all_irreps_in_hamiltonian,
     permutation_to_matrix,
 )
+from strict_checks import strict_edge_alignment_check
 
 
 if __name__ == "__main__":
@@ -544,6 +548,43 @@ if __name__ == "__main__":
     batch_node = torch.zeros(num_atoms, dtype=torch.long, device=device)
     batch_edge = torch.zeros(edge_index.shape[1], dtype=torch.long, device=device)
     print(f"\n  Batch indices: nodes {batch_node.shape}, edges {batch_edge.shape}")
+
+    # =============================================================================
+    # STRICT EDGE ALIGNMENT CHECKS
+    # =============================================================================
+    print("\n[STRICT CHECKS] Validating graph/target edge alignment...")
+    require_exact_edge_match = bool(CONFIG["apply_cutoff_to_targets"])
+    strict_edge_alignment_check(
+        target_matrix=target_H_matrix,
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms_list=atoms_list,
+        edge_types=mapper.edge_types,
+        matrix_name="hamiltonian",
+        require_exact=require_exact_edge_match,
+    )
+    strict_edge_alignment_check(
+        target_matrix=overlap_e3nn,
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms_list=atoms_list,
+        edge_types=mapper.edge_types,
+        matrix_name="overlap",
+        require_exact=require_exact_edge_match,
+    )
+    strict_edge_alignment_check(
+        target_matrix=density_e3nn,
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms_list=atoms_list,
+        edge_types=mapper.edge_types,
+        matrix_name="density",
+        require_exact=require_exact_edge_match,
+    )
+    print("  ✓ Edge alignment checks passed.")
 
     # =============================================================================
     # HELPER FUNCTIONS FOR PARTIAL TRAINING
@@ -1592,6 +1633,56 @@ if __name__ == "__main__":
 
         # Log final metrics to WandB
         wandb.log(final_metrics)
+
+        # Distance-binned error curves (64 bins)
+        print("\n  Distance-binned error curves (64 bins):")
+        distance_curve = compute_distance_error_curve(
+            H_pred=pred_H_matrix,
+            H_gt=target_H_matrix,
+            positions=positions,
+            box=box,
+            partial_train=CONFIG["partial_train"],
+            n_bins=64,
+        )
+        if distance_curve is not None:
+            curve_json_path = run_checkpoint_dir / "distance_error_curve.json"
+            with open(curve_json_path, "w") as f:
+                json.dump(distance_curve, f, indent=2)
+
+            curve_plot_path = run_checkpoint_dir / "distance_error_curve.png"
+            save_distance_error_curve_plot(
+                distance_curve,
+                curve_plot_path,
+                title="Distance Error Curves (Final, 64 bins)",
+            )
+
+            # Print a concise summary
+            l1_abs = [x for x in distance_curve["l1_abs"] if x == x]
+            l2_abs = [x for x in distance_curve["l2_abs"] if x == x]
+            l1_rel = [x for x in distance_curve["l1_rel"] if x == x]
+            l2_rel = [x for x in distance_curve["l2_rel"] if x == x]
+            if l1_abs and l2_abs and l1_rel and l2_rel:
+                print(
+                    f"    L1 abs range: {min(l1_abs):.3e} .. {max(l1_abs):.3e}, "
+                    f"L2 abs range: {min(l2_abs):.3e} .. {max(l2_abs):.3e}"
+                )
+                print(
+                    f"    L1 rel range: {min(l1_rel):.3e} .. {max(l1_rel):.3e}, "
+                    f"L2 rel range: {min(l2_rel):.3e} .. {max(l2_rel):.3e}"
+                )
+
+            wandb.log(
+                {
+                    "distance_curve/plot": wandb.Image(str(curve_plot_path)),
+                    "distance_curve/d_min": distance_curve["d_min"],
+                    "distance_curve/d_max": distance_curve["d_max"],
+                    "distance_curve/n_bins": distance_curve["n_bins"],
+                }
+            )
+            print(f"    Saved: {curve_json_path}")
+            print(f"    Saved: {curve_plot_path}")
+        else:
+            print("    No matched edges found for distance-curve computation.")
 
     # Save final model
     final_model_path = run_checkpoint_dir / "final_model.pt"
