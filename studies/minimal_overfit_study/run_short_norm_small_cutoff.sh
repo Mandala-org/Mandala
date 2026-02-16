@@ -9,7 +9,7 @@ RUN_NAME="short-norm-small-cutoff-$(date +%Y%m%d-%H%M%S)"
 
 python studies/minimal_overfit_study/overfit_water_minimal.py \
   --run-name "${RUN_NAME}" \
-  --num-epochs 200 \
+  --num-epochs 400 \
   --log-interval 1 \
   --lr 3e-3 \
   --cutoff-radius 4 \
@@ -19,5 +19,5 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --grad-clip 1.0 \
   --hidden-dim 64 \
   --l-max 4 \
-  --num-layers 1 \
+  --num-layers 2 \
   --n-radial 128
