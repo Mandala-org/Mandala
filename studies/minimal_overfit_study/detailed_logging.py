@@ -56,6 +56,14 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         )
     else:
         print(f"  Adaptive logging: disabled (every {config['log_interval']} epochs)")
+    print(f"  Log data: {'enabled' if config.get('log_data', False) else 'disabled'}")
+    print(f"  Log model: {'enabled' if config.get('log_model', False) else 'disabled'}")
+    print(
+        f"  Log forward (WandB activations): {'enabled' if config.get('log_forward', False) else 'disabled'}"
+    )
+    print(
+        f"  Log per-irrep metrics: {'enabled' if config.get('log_per_irrep_metrics', False) else 'disabled'}"
+    )
 
 
 def log_snapshot_info(snapshot) -> None:
@@ -164,6 +172,162 @@ def log_final_metrics(final_detailed_metrics: dict) -> None:
     print(f"    mu_H:                 {final_detailed_metrics['mu_H']:.6e}")
     print(f"    Correction MAE:       {final_detailed_metrics['correction_mae']:.6e}")
     print(f"    Correction MSE:       {final_detailed_metrics['correction_mse']:.6e}")
+
+
+def log_training_failed_banner(epoch_one_based: int) -> None:
+    print("")
+    print(f"\n{'='*80}")
+    print(f"TRAINING FAILED at epoch {epoch_one_based}")
+    print(f"{'='*80}")
+
+
+def log_invalid_loss_failure(
+    epoch_zero_based: int,
+    loss_value: float,
+    is_nan: bool,
+    last_valid_loss,
+    best_epoch_zero_based: int,
+    best_loss: float,
+) -> dict:
+    log_training_failed_banner(epoch_zero_based + 1)
+    print("❌ Detected invalid loss value.")
+    if is_nan:
+        print(f"Loss is NaN: {loss_value}")
+        print("This indicates numerical instability in the forward pass.")
+        failure_type = "NaN"
+    else:
+        print(f"Loss is Inf: {loss_value}")
+        print("Loss has exploded. Try reducing learning rate or adding regularization.")
+        failure_type = "Inf"
+    print(f"\nLast valid loss (epoch {epoch_zero_based}): {last_valid_loss}")
+    print(
+        f"\nTraining stopped. Checkpoint saved at epoch {best_epoch_zero_based + 1} "
+        f"with loss {best_loss:.6e}"
+    )
+    print(f"{'='*80}\n")
+    return {
+        "training_failed": True,
+        "failure_epoch": epoch_zero_based,
+        "failure_type": failure_type,
+    }
+
+
+def log_invalid_gradient_failure(
+    epoch_zero_based: int,
+    param_name: str,
+    lr: float,
+    grad_clip: float,
+    last_valid_loss,
+    best_epoch_zero_based: int,
+    best_loss: float,
+) -> dict:
+    log_training_failed_banner(epoch_zero_based + 1)
+    print("❌ Detected invalid gradient values.")
+    print(f"Gradient contains NaN or Inf in parameter: {param_name}")
+    print("This indicates numerical instability in the backward pass.")
+    print("\nSuggestions:")
+    print(f"  - Reduce learning rate (current: {lr})")
+    print(f"  - Increase gradient clipping (current: {grad_clip})")
+    print("  - Check if irreps contain invalid combinations")
+    print(f"\nLast valid loss (epoch {epoch_zero_based}): {last_valid_loss}")
+    print(
+        f"Training stopped. Checkpoint saved at epoch {best_epoch_zero_based + 1} "
+        f"with loss {best_loss:.6e}"
+    )
+    print(f"{'='*80}\n")
+    return {
+        "training_failed": True,
+        "failure_epoch": epoch_zero_based,
+        "failure_type": "gradient_nan_inf",
+        "failed_param": param_name,
+    }
+
+
+def log_detailed_training_metrics(
+    avg_epoch_time: float,
+    epochs_since_last_log: int,
+    time_elapsed: float,
+    loss_value: float,
+    detailed_metrics: dict,
+    irrep_losses: dict | None = None,
+) -> None:
+    print("\n[METRICS]")
+    print(
+        f"  Avg epoch time:       {avg_epoch_time:.3f}s "
+        f"({epochs_since_last_log} epochs in {time_elapsed:.1f}s)"
+    )
+    print(f"  Loss (MSE):           {loss_value:.6e}")
+
+    if irrep_losses:
+        print("\n  Per-Irrep Loss Contributions:")
+        sorted_irreps = sorted(
+            irrep_losses.items(), key=lambda x: x[1].item(), reverse=True
+        )
+        total_loss_check = sum(irrep_loss.item() for _, irrep_loss in sorted_irreps)
+        for irrep_str, irrep_loss in sorted_irreps:
+            percentage = (
+                (irrep_loss.item() / total_loss_check * 100)
+                if total_loss_check > 0
+                else 0
+            )
+            print(f"    {irrep_str:4s}: {irrep_loss.item():.6e} ({percentage:5.1f}%)")
+
+    print(f"  MAE H:                {detailed_metrics['mae']:.6e}")
+    print(f"  MSE H:                {detailed_metrics['mse']:.6e}")
+    print(f"  MAE H (modified):     {detailed_metrics['mae_mod']:.6e}")
+    print(f"  MSE H (modified):     {detailed_metrics['mse_mod']:.6e}")
+    print(f"  mu_H:                 {detailed_metrics['mu_H']:.6e}")
+    print(f"  Correction MAE:       {detailed_metrics['correction_mae']:.6e}")
+    print(f"  Correction MSE:       {detailed_metrics['correction_mse']:.6e}")
+
+
+def build_wandb_detailed_metrics_log(
+    epoch_zero_based: int, loss_value: float, detailed_metrics: dict
+) -> dict:
+    return {
+        "epoch": epoch_zero_based,
+        "loss": loss_value,
+        "mse_H": detailed_metrics["mse"],
+        "mae_H": detailed_metrics["mae"],
+        "mae_H_mod": detailed_metrics["mae_mod"],
+        "mse_H_mod": detailed_metrics["mse_mod"],
+        "mu_H": detailed_metrics["mu_H"],
+        "correction_mae": detailed_metrics["correction_mae"],
+        "correction_mse": detailed_metrics["correction_mse"],
+    }
+
+
+def build_wandb_per_irrep_metrics_log(
+    epoch_zero_based: int, all_irreps, per_irrep_metrics: dict
+) -> dict:
+    payload = {"epoch": epoch_zero_based}
+    for irrep in sorted(all_irreps, key=str):
+        irrep_str = str(irrep)
+        payload[f"irrep_metrics/{irrep_str}_l1_elem"] = per_irrep_metrics.get(
+            f"{irrep_str}_l1_elem", 0.0
+        )
+        payload[f"irrep_metrics/{irrep_str}_l2_elem"] = per_irrep_metrics.get(
+            f"{irrep_str}_l2_elem", 0.0
+        )
+        payload[f"irrep_metrics/{irrep_str}_l1_block"] = per_irrep_metrics.get(
+            f"{irrep_str}_l1_block", 0.0
+        )
+        payload[f"irrep_metrics/{irrep_str}_l1_block_rel"] = per_irrep_metrics.get(
+            f"{irrep_str}_l1_block_rel", 0.0
+        )
+        payload[f"irrep_metrics/{irrep_str}_l2_block"] = per_irrep_metrics.get(
+            f"{irrep_str}_l2_block", 0.0
+        )
+        payload[f"irrep_metrics/{irrep_str}_l2_block_rel"] = per_irrep_metrics.get(
+            f"{irrep_str}_l2_block_rel", 0.0
+        )
+        payload[f"irrep_metrics/{irrep_str}_l1_full_rel"] = per_irrep_metrics.get(
+            f"{irrep_str}_l1_full_rel", 0.0
+        )
+        payload[f"irrep_metrics/{irrep_str}_l2_full_rel"] = per_irrep_metrics.get(
+            f"{irrep_str}_l2_full_rel", 0.0
+        )
+    return payload
 
 
 def log_study_complete(
