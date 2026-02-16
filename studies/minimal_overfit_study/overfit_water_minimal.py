@@ -259,6 +259,13 @@ if __name__ == "__main__":
         help="How to apply permutation to box: 'left' (M @ box), 'right' (box @ M), or 'both' (M @ box @ M) (default: 'both')",
     )
     parser.add_argument(
+        "--box-convention",
+        type=str,
+        choices=["rows", "cols"],
+        default="rows",
+        help="Interpretation convention for loaded box matrix; use 'cols' to transpose after loading (default: 'rows')",
+    )
+    parser.add_argument(
         "--normalize-blocks",
         action="store_true",
         default=False,
@@ -287,6 +294,7 @@ if __name__ == "__main__":
         "convention": args.convention,
         "xyz_permutation": args.xyz_permutation,
         "change_box": args.change_box,
+        "box_convention": args.box_convention,
         # Network architecture
         "hidden_dim": args.hidden_dim,
         "l_max": args.l_max,
@@ -376,6 +384,12 @@ if __name__ == "__main__":
     orbital_cfg = snapshot.hamiltonian.orbital_cfg
     positions = snapshot.positions.to(device)
     box = snapshot.box.to(device) if snapshot.box is not None else None
+    if box is not None and CONFIG["box_convention"] == "cols":
+        box = box.T
+        if CONFIG["log_data"]:
+            print(
+                "  Applied box convention 'cols': transposed loaded box (box = box.T)"
+            )
     atoms_list = list(snapshot.hamiltonian.atoms)
 
     # Apply coordinate permutation if specified
@@ -775,6 +789,9 @@ if __name__ == "__main__":
         print("\nInstantiating network...")
     num_elements = len(orbital_cfg.elements())
     num_edge_types = num_elements**2
+    if not CONFIG["log_model"]:
+        old_stdout = sys.stdout
+        sys.stdout = open(os.devnull, "w")
     network = MinimalNetwork(
         num_elements=num_elements,
         n_radial=CONFIG["n_radial"],
@@ -784,6 +801,9 @@ if __name__ == "__main__":
         num_layers=CONFIG["num_layers"],
         mapper=mapper,
     ).to(device)
+    if not CONFIG["log_model"]:
+        sys.stdout.close()
+        sys.stdout = old_stdout
 
     if CONFIG["log_model"]:
         print("\n✓ Network architecture complete!")
