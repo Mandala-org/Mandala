@@ -50,6 +50,12 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         if config["apply_cutoff_to_targets"]
         else "  Target cutoff filtering: disabled"
     )
+    if config.get("adaptive_log_interval", False):
+        print(
+            f"  Adaptive logging: enabled (1-10: every epoch, 11-100: every 10, >100: every {config['log_interval']})"
+        )
+    else:
+        print(f"  Adaptive logging: disabled (every {config['log_interval']} epochs)")
 
 
 def log_snapshot_info(snapshot) -> None:

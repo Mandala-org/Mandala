@@ -151,6 +151,12 @@ if __name__ == "__main__":
         help="Interval for logging",
     )
     parser.add_argument(
+        "--adaptive-log-interval",
+        action="store_true",
+        default=False,
+        help="Adaptive logging cadence: epochs 1-10 every epoch, 11-100 every 10 epochs, then use --log-interval (default: False)",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -263,6 +269,7 @@ if __name__ == "__main__":
         "lr": args.lr,
         "num_epochs": args.num_epochs,
         "log_interval": args.log_interval,
+        "adaptive_log_interval": args.adaptive_log_interval,
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
         "train_on_irrep_parts": args.train_on_irrep_parts,
@@ -760,6 +767,19 @@ if __name__ == "__main__":
 
     # Track timing
     last_log_time = time.time()
+    last_logged_epoch = -1
+
+    def should_log_epoch(epoch_zero_based: int) -> bool:
+        """Return True when this epoch should emit periodic logs and save frames."""
+        if not CONFIG.get("adaptive_log_interval", False):
+            return epoch_zero_based % CONFIG["log_interval"] == 0
+
+        epoch_one_based = epoch_zero_based + 1
+        if epoch_one_based <= 10:
+            return True
+        if epoch_one_based <= 100:
+            return epoch_one_based % 10 == 0
+        return epoch_zero_based % CONFIG["log_interval"] == 0
 
     # Log normalization factors to WandB if enabled
     if CONFIG["normalize_blocks"] and norm_factors is not None:
@@ -777,19 +797,19 @@ if __name__ == "__main__":
             network.train()
             optimizer.zero_grad()
 
+            should_log_now = should_log_epoch(epoch)
+
             # Forward pass (suppress detailed logging during training)
-            if epoch % CONFIG["log_interval"] == 0:
+            if should_log_now:
                 print(f"\n{'=' * 60}")
                 print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}")
                 print(f"{'=' * 60}")
 
             # Temporarily suppress forward pass logging
-            verbose = (epoch % CONFIG["log_interval"] == 0) and (
-                epoch < 10 or epoch % (CONFIG["log_interval"]) == 0
-            )
+            verbose = should_log_now
 
             # Enable activation logging only during log intervals
-            log_activations = epoch % CONFIG["log_interval"] == 0
+            log_activations = should_log_now
 
             if not verbose and not CONFIG["verbose_forward"]:
                 # Silence print by redirecting to nowhere temporarily
@@ -1029,7 +1049,7 @@ if __name__ == "__main__":
             if CONFIG["grad_clip"] > 0:
                 grad_norm = clip_grad_norm_(network.parameters(), CONFIG["grad_clip"])
                 # Log gradient norm periodically
-                if epoch % CONFIG["log_interval"] == 0:
+                if should_log_now:
                     wandb.log({"grad_norm": grad_norm.item(), "epoch": epoch})
 
             # Check for NaN/Inf in gradients
@@ -1090,7 +1110,7 @@ if __name__ == "__main__":
             wandb.log(step_log)
 
             # Logging
-            if epoch % CONFIG["log_interval"] == 0:
+            if should_log_now:
                 # Compute detailed metrics with filtering
                 # First filter both predictions and targets
                 filtered_pred = filter_blocks_by_partial_train(
@@ -1177,9 +1197,14 @@ if __name__ == "__main__":
                 # Calculate timing
                 current_time = time.time()
                 time_elapsed = current_time - last_log_time
-                epochs_since_last_log = CONFIG["log_interval"] if epoch > 0 else 1
+                epochs_since_last_log = (
+                    (epoch - last_logged_epoch)
+                    if last_logged_epoch >= 0
+                    else (epoch + 1)
+                )
                 avg_epoch_time = time_elapsed / epochs_since_last_log
                 last_log_time = current_time
+                last_logged_epoch = epoch
 
                 # Log to console
                 print(f"\n[METRICS]")
