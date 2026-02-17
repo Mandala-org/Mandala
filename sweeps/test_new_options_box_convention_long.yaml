@@ -1,6 +1,6 @@
 program: studies/minimal_overfit_study/overfit_water_minimal.py
 project: mandala-test-variants
-name: test_variants_box_convention_long
+name: test_variants_box_convention_long_fixed
 method: grid
 
 parameters:
@@ -12,7 +12,7 @@ parameters:
   convention:
     values: ["e3nn", "openmx"]
   xyz-permutation:
-    values: ["012", "102", "201"]
+    values: ["012", "120", "201"]
   change-box:
     values: ["left", "right", "both"]
   box-convention:
@@ -42,7 +42,7 @@ parameters:
   lr-factor:
     value: 0.5
   lr-patience:
-    value: 600
+    value: 1000
 
   # Device and checkpointing
   device:
