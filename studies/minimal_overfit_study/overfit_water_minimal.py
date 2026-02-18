@@ -1367,6 +1367,7 @@ if __name__ == "__main__":
                         sy=0,
                         sz=0,
                         dynamic_range=False,
+                        diff_dynamic_range=True,
                         partial_train=CONFIG["partial_train"],
                         percentile=99.0,
                     )

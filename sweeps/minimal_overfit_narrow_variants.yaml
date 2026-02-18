@@ -13,10 +13,6 @@ parameters:
     values: ["e3nn", "openmx"]
   xyz-permutation:
     values: ["012", "120", "201"]
-  change-box:
-    values: ["left", "right", "both"]
-  box-convention:
-    values: ["rows", "cols"]
 
   # Network architecture parameters
   l-max:
@@ -25,8 +21,8 @@ parameters:
     value: 32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e
   num-layers:
     value: 2
-  # cutoff-radius:
-  #   value: 7.0
+  cutoff-radius:
+    value: 7.0
   n-radial:
     value: 64
 

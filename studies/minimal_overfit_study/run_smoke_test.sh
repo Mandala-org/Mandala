@@ -9,8 +9,8 @@ RUN_NAME="smoke-test-$(date +%Y%m%d-%H%M%S)"
 
 python studies/minimal_overfit_study/overfit_water_minimal.py \
   --run-name "${RUN_NAME}" \
-  --num-epochs 100 \
-  --log-interval 1 \
+  --num-epochs 1000 \
+  --log-interval 100 \
   --lr 1e-2 \
   --cutoff-radius 4.0 \
   --normalize-blocks \
