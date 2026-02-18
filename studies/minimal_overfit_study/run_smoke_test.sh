@@ -12,7 +12,7 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --num-epochs 100 \
   --log-interval 1 \
   --lr 1e-2 \
-  --cutoff-radius 7.0 \
+  --cutoff-radius 4.0 \
   --normalize-blocks \
   --apply-cutoff-to-targets \
   --require-exact-edge-match \
