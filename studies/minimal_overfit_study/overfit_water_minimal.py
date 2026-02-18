@@ -1377,7 +1377,7 @@ if __name__ == "__main__":
                 # Check for convergence
                 if loss.item() < 1e-10:
                     print("")
-                    print(f"✓ Converged! Loss below 1e-8 at epoch {epoch + 1}")
+                    print(f"✓ Converged! Loss below 1e-10 at epoch {epoch + 1}")
                     break
     except KeyboardInterrupt:
         print(
