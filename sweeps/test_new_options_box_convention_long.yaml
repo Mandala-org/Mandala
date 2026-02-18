@@ -22,11 +22,11 @@ parameters:
   l-max:
     value: 4
   hidden-irreps:
-    value: 32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e+8x4o
+    value: 32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e
   num-layers:
     value: 2
-  cutoff-radius:
-    value: 7.0
+  # cutoff-radius:
+  #   value: 7.0
   n-radial:
     value: 64
 
@@ -55,8 +55,10 @@ command:
   - ${env}
   - ${interpreter}
   - ${program}
+  - --log-data
+  - --log-model
   - --generate-video
   - --normalize-blocks
-  - --generate-video
   - --adaptive-log-interval
+  - --train-on-irrep-parts
   - ${args}
