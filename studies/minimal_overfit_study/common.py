@@ -1296,6 +1296,7 @@ def visualize_hamiltonians(
     k_range,
     output_dir,
     dynamic_range=False,
+    diff_dynamic_range=False,
     partial_train=None,
     filename_prefix="hamiltonian",
     percentile=80.0,
@@ -1319,6 +1320,9 @@ def visualize_hamiltonians(
         output_dir: Directory to save plots
         dynamic_range: If True, use percentile of abs(H_gt) for color range.
                       If False, use fixed [-1, 1] range.
+        diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
+                            and abs(diff_corrected). Defaults to False (use
+                            same range as ground truth/prediction).
         partial_train: "diag", "offdiag", or None - filters which blocks to visualize
         filename_prefix: Prefix for the output filename (e.g., "hamiltonian" or "hamiltonian_0e")
         percentile: Percentile value for dynamic color range (default: 80.0)
@@ -1391,37 +1395,54 @@ def visualize_hamiltonians(
             title += f" ({partial_train} blocks only)"
         fig.suptitle(title, fontsize=16)
 
-        # Determine color range
+        # Determine color range for ground truth/pred
         if dynamic_range:
             # Use specified percentile of abs(H_gt)
             v = np.percentile(np.abs(H_gt_dense), percentile)
-            vmin, vmax = -v, v
+            vmin_main, vmax_main = -v, v
         else:
-            vmin, vmax = -1, 1
+            vmin_main, vmax_main = -1, 1
+
+        # Determine color range for diff panels
+        if diff_dynamic_range:
+            v_diff = np.percentile(np.abs(diff), percentile)
+            vmin_diff, vmax_diff = -v_diff, v_diff
+            v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+            vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
+        else:
+            vmin_diff, vmax_diff = vmin_main, vmax_main
+            vmin_diff_corr, vmax_diff_corr = vmin_main, vmax_main
 
         # 1. Ground truth (top-left)
-        im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+        im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main)
         axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
         axes[0, 0].set_xlabel("Orbital j")
         axes[0, 0].set_ylabel("Orbital i")
         plt.colorbar(im0, ax=axes[0, 0])
 
         # 2. Predicted (top-right)
-        im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+        im1 = axes[0, 1].imshow(
+            H_pred_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main
+        )
         axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
         axes[0, 1].set_xlabel("Orbital j")
         axes[0, 1].set_ylabel("Orbital i")
         plt.colorbar(im1, ax=axes[0, 1])
 
         # 3. Difference (bottom-left)
-        im2 = axes[1, 0].imshow(diff, cmap="bwr", vmin=vmin, vmax=vmax)
+        im2 = axes[1, 0].imshow(diff, cmap="bwr", vmin=vmin_diff, vmax=vmax_diff)
         axes[1, 0].set_title(f"Difference (pred - gt)\nMAE: {np.abs(diff).mean():.3e}")
         axes[1, 0].set_xlabel("Orbital j")
         axes[1, 0].set_ylabel("Orbital i")
         plt.colorbar(im2, ax=axes[1, 0])
 
         # 4. Corrected difference (bottom-right)
-        im3 = axes[1, 1].imshow(diff_corrected, cmap="bwr", vmin=vmin, vmax=vmax)
+        im3 = axes[1, 1].imshow(
+            diff_corrected,
+            cmap="bwr",
+            vmin=vmin_diff_corr,
+            vmax=vmax_diff_corr,
+        )
         axes[1, 1].set_title(
             f"Corrected Diff (µ_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
         )
@@ -1449,6 +1470,7 @@ def create_hamiltonian_frame_figure(
     sy=0,
     sz=0,
     dynamic_range=False,
+    diff_dynamic_range=False,
     partial_train=None,
     percentile=80.0,
     figsize=(12, 12),
@@ -1469,6 +1491,9 @@ def create_hamiltonian_frame_figure(
         orbital_cfg: Orbital configuration
         sx, sy, sz: Cell shift indices (default: [0, 0, 0])
         dynamic_range: If True, use percentile of abs(H_gt) for color range
+        diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
+                            and abs(diff_corrected). Defaults to False (use
+                            same range as ground truth/prediction).
         partial_train: "diag", "offdiag", or None - filters which blocks to show
         percentile: Percentile value for dynamic color range (default: 80.0)
         figsize: Figure size (default: (12, 12))
@@ -1508,36 +1533,51 @@ def create_hamiltonian_frame_figure(
     # Create figure
     fig, axes = plt.subplots(2, 2, figsize=figsize)
 
-    # Determine color range
+    # Determine color range for ground truth/pred
     if dynamic_range:
         v = np.percentile(np.abs(H_gt_dense), percentile)
-        vmin, vmax = -v, v
+        vmin_main, vmax_main = -v, v
     else:
-        vmin, vmax = -1, 1
+        vmin_main, vmax_main = -1, 1
+
+    # Determine color range for diff panels
+    if diff_dynamic_range:
+        v_diff = np.percentile(np.abs(diff), percentile)
+        vmin_diff, vmax_diff = -v_diff, v_diff
+        v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+        vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
+    else:
+        vmin_diff, vmax_diff = vmin_main, vmax_main
+        vmin_diff_corr, vmax_diff_corr = vmin_main, vmax_main
 
     # 1. Ground truth (top-left)
-    im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+    im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main)
     axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
     axes[0, 0].set_xlabel("Orbital j")
     axes[0, 0].set_ylabel("Orbital i")
     plt.colorbar(im0, ax=axes[0, 0])
 
     # 2. Predicted (top-right)
-    im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin, vmax=vmax)
+    im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main)
     axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
     axes[0, 1].set_xlabel("Orbital j")
     axes[0, 1].set_ylabel("Orbital i")
     plt.colorbar(im1, ax=axes[0, 1])
 
     # 3. Difference (bottom-left)
-    im2 = axes[1, 0].imshow(diff, cmap="bwr", vmin=vmin, vmax=vmax)
+    im2 = axes[1, 0].imshow(diff, cmap="bwr", vmin=vmin_diff, vmax=vmax_diff)
     axes[1, 0].set_title(f"Difference (pred - gt)\nMAE: {np.abs(diff).mean():.3e}")
     axes[1, 0].set_xlabel("Orbital j")
     axes[1, 0].set_ylabel("Orbital i")
     plt.colorbar(im2, ax=axes[1, 0])
 
     # 4. Corrected difference (bottom-right)
-    im3 = axes[1, 1].imshow(diff_corrected, cmap="bwr", vmin=vmin, vmax=vmax)
+    im3 = axes[1, 1].imshow(
+        diff_corrected,
+        cmap="bwr",
+        vmin=vmin_diff_corr,
+        vmax=vmax_diff_corr,
+    )
     axes[1, 1].set_title(
         f"Corrected Diff (µ_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
     )
@@ -1583,6 +1623,7 @@ def save_hamiltonian_frame_to_disk(
     sy=0,
     sz=0,
     dynamic_range=False,
+    diff_dynamic_range=False,
     partial_train=None,
     percentile=80.0,
 ):
@@ -1599,6 +1640,9 @@ def save_hamiltonian_frame_to_disk(
         epoch: Epoch number (used in filename)
         sx, sy, sz: Cell shift indices (default: [0, 0, 0])
         dynamic_range: If True, use percentile of abs(H_gt) for color range
+        diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
+                            and abs(diff_corrected). Defaults to False (use
+                            same range as ground truth/prediction).
         partial_train: "diag", "offdiag", or None - filters which blocks to show
         percentile: Percentile value for dynamic color range (default: 80.0)
 
@@ -1619,6 +1663,7 @@ def save_hamiltonian_frame_to_disk(
         sy=sy,
         sz=sz,
         dynamic_range=dynamic_range,
+        diff_dynamic_range=diff_dynamic_range,
         partial_train=partial_train,
         percentile=percentile,
         epoch=epoch,
