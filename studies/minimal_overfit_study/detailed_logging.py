@@ -51,6 +51,9 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         if config["apply_cutoff_to_targets"]
         else "  Target cutoff filtering: disabled"
     )
+    print(
+        f"  Require exact edge match: {'enabled' if config.get('require_exact_edge_match', False) else 'disabled'}"
+    )
     if config.get("adaptive_log_interval", False):
         print(
             f"  Adaptive logging: enabled (1-10: every epoch, 11-100: every 10, >100: every {config['log_interval']})"

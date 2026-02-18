@@ -277,6 +277,12 @@ if __name__ == "__main__":
         default=False,
         help="Apply cutoff filtering to target matrices (H/S/D) before training and metrics. Keeps default behavior unchanged when omitted.",
     )
+    parser.add_argument(
+        "--require-exact-edge-match",
+        action="store_true",
+        default=False,
+        help="Require exact edge counts and key sets in strict edge alignment checks (default: False).",
+    )
 
     args = parser.parse_args()
 
@@ -286,6 +292,11 @@ if __name__ == "__main__":
     print("=" * 80)
     print("MINIMAL WATER OVERFIT STUDY - EXPLICIT IMPLEMENTATION")
     print("=" * 80)
+    print("Convention sweep settings:")
+    print("  convention: [e3nn, openmx]")
+    print("  xyz-permutation: [012, 102, 201]")
+    print("  change-box: [left, right, both]")
+    print("  box-convention: [rows, cols]")
 
     CONFIG = {
         # Data
@@ -320,6 +331,7 @@ if __name__ == "__main__":
         "verbose_forward": args.verbose_forward,
         "normalize_blocks": args.normalize_blocks,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
+        "require_exact_edge_match": args.require_exact_edge_match,
         # Device
         "device": args.device,
         # Target
@@ -609,7 +621,7 @@ if __name__ == "__main__":
     # =============================================================================
     if CONFIG["log_data"]:
         print("\n[STRICT CHECKS] Validating graph/target edge alignment...")
-    require_exact_edge_match = bool(CONFIG["apply_cutoff_to_targets"])
+    require_exact_edge_match = bool(CONFIG["require_exact_edge_match"])
     strict_edge_alignment_check(
         target_matrix=target_H_matrix,
         edge_index=edge_index,
