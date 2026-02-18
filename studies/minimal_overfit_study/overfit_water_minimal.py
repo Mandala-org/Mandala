@@ -254,9 +254,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--change-box",
         type=str,
-        default="both",
+        default="right",
         choices=["left", "right", "both"],
-        help="How to apply permutation to box: 'left' (M @ box), 'right' (box @ M), or 'both' (M @ box @ M) (default: 'both')",
+        help="How to apply permutation to box: 'left' (M @ box), 'right' (box @ M), or 'both' (M @ box @ M) (default: 'right')",
     )
     parser.add_argument(
         "--box-convention",
@@ -294,7 +294,7 @@ if __name__ == "__main__":
     print("=" * 80)
     print("Convention sweep settings:")
     print("  convention: [e3nn, openmx]")
-    print("  xyz-permutation: [012, 102, 201]")
+    print("  xyz-permutation: [012, 120, 201]")
     print("  change-box: [left, right, both]")
     print("  box-convention: [rows, cols]")
 
@@ -413,14 +413,14 @@ if __name__ == "__main__":
         # Multiply positions from the right: positions @ cob_matrix.T
         positions = positions @ cob_matrix.T
         if CONFIG["change_box"] == "right":
-            # box @ cob_matrix
-            box = box @ cob_matrix
+            # box @ cob_matrix.T
+            box = box @ cob_matrix.T
         elif CONFIG["change_box"] == "left":
-            # cob_matrix.T @ box
-            box = cob_matrix.T @ box
+            # cob_matrix @ box
+            box = cob_matrix @ box
         elif CONFIG["change_box"] == "both":
-            # cob_matrix.T @ box @ cob_matrix
-            box = cob_matrix.T @ box @ cob_matrix
+            # cob_matrix @ box @ cob_matrix.T
+            box = cob_matrix @ box @ cob_matrix.T
         else:
             raise ValueError(f"Invalid change_box option: {CONFIG['change_box']}")
         if CONFIG["log_data"]:
