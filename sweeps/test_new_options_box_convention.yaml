@@ -12,7 +12,7 @@ parameters:
   convention:
     values: ["e3nn", "openmx"]
   xyz-permutation:
-    values: ["012", "102", "201"]
+    values: ["012", "120", "201"]
   change-box:
     values: ["left", "right", "both"]
   box-convention:
@@ -57,6 +57,5 @@ command:
   - ${program}
   - --generate-video
   - --normalize-blocks
-  - --generate-video
   - --adaptive-log-interval
   - ${args}
