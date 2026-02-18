@@ -204,7 +204,7 @@ def build_graph_inputs(
     l_max,
     device,
     xyz_permutation="012",
-    change_box="both",
+    change_box="right",
 ):
     """Build graph inputs from a snapshot (same as in training script)."""
 
@@ -220,11 +220,11 @@ def build_graph_inputs(
         positions = positions @ cob_matrix.T
         if box is not None:
             if change_box == "right":
-                box = box @ cob_matrix
+                box = box @ cob_matrix.T
             elif change_box == "left":
-                box = cob_matrix.T @ box
+                box = cob_matrix @ box
             elif change_box == "both":
-                box = cob_matrix.T @ box @ cob_matrix
+                box = cob_matrix @ box @ cob_matrix.T
             else:
                 raise ValueError(f"Invalid change_box option: {change_box}")
 
@@ -612,7 +612,7 @@ def main():
         config["l_max"],
         device,
         xyz_permutation=config.get("xyz_permutation", "012"),
-        change_box=config.get("change_box", "both"),
+        change_box=config.get("change_box", "right"),
     )
     print(f"  Total edges: {graph_inputs_orig['edge_index'].shape[1]}")
 
@@ -625,7 +625,7 @@ def main():
         config["l_max"],
         device,
         xyz_permutation=config.get("xyz_permutation", "012"),
-        change_box=config.get("change_box", "both"),
+        change_box=config.get("change_box", "right"),
     )
     print(f"  Total edges: {graph_inputs_rot['edge_index'].shape[1]}")
 
