@@ -44,6 +44,7 @@ from common import (
     compute_distance_error_curve,
     save_distance_error_curve_plot,
     filter_blocks_by_partial_train,
+    split_hamiltonian_by_irrep,
     visualize_hamiltonians,
     permutation_to_matrix,
 )
@@ -322,53 +323,6 @@ def build_graph_inputs(
     }
 
 
-def filter_irreps_block_data_by_irrep(irreps_block_data, target_irrep_str, mapper):
-    """
-    Filter IrrepsBlockData to keep only contributions from a specific irrep.
-
-    Args:
-        irreps_block_data: IrrepsBlockData object
-        target_irrep_str: String like "0e", "1o", "2e", etc.
-        mapper: BlockIrrepMapper
-
-    Returns:
-        IrrepsBlockData with only the target irrep's contributions
-    """
-    from e3nn.o3 import Irrep
-
-    target_irrep = Irrep(target_irrep_str)
-    filtered_pair_vectors = {}
-
-    for edge_type, vectors in irreps_block_data.pair_vectors.items():
-        # Get the irreps for this edge type
-        pair_irreps = mapper.get_pair_irreps(edge_type)
-
-        # Create a mask for the target irrep
-        filtered_vectors = torch.zeros_like(vectors)
-
-        start_idx = 0
-        for mul, irrep in pair_irreps:
-            end_idx = start_idx + mul * irrep.dim
-
-            # If this irrep matches the target, keep it
-            if irrep == target_irrep:
-                filtered_vectors[:, start_idx:end_idx] = vectors[:, start_idx:end_idx]
-
-            start_idx = end_idx
-
-        filtered_pair_vectors[edge_type] = filtered_vectors
-
-    # Create new IrrepsBlockData with filtered vectors
-    return IrrepsBlockData(
-        atoms=irreps_block_data.atoms,
-        atom_counts=irreps_block_data.atom_counts,
-        pair_vectors=filtered_pair_vectors,
-        pair_edges=irreps_block_data.pair_edges,
-        lookup=irreps_block_data.lookup,
-        orbital_cfg=irreps_block_data.orbital_cfg,
-    )
-
-
 def get_all_irreps_in_hamiltonian(mapper):
     """
     Get a list of all unique irreps present in the Hamiltonian.
@@ -446,30 +400,6 @@ def predict_hamiltonian(network, graph_inputs, device):
     pred_H_matrix = pred_H_irreps.to_blocks(graph_inputs["mapper"])
 
     return pred_H_matrix
-
-
-def split_hamiltonian_by_irrep(H_matrix, mapper, target_irrep_str):
-    """
-    Split a BlockMatrix Hamiltonian to keep only one irrep's contribution.
-
-    Args:
-        H_matrix: BlockMatrix Hamiltonian
-        mapper: BlockIrrepMapper
-        target_irrep_str: String like "0e", "1o", "2e", etc.
-
-    Returns:
-        BlockMatrix with only the target irrep's contribution
-    """
-    # Convert to IrrepsBlockData
-    irreps_data = H_matrix.to_vectors(mapper)
-
-    # Filter by irrep
-    filtered_irreps = filter_irreps_block_data_by_irrep(
-        irreps_data, target_irrep_str, mapper
-    )
-
-    # Convert back to BlockMatrix
-    return filtered_irreps.to_blocks(mapper)
 
 
 def main():
