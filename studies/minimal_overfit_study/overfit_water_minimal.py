@@ -54,6 +54,8 @@ from common import (
     filter_irreps_block_data_by_irrep,
     compute_irrep_metrics,
     get_all_irreps_in_hamiltonian,
+    split_hamiltonian_by_irrep,
+    visualize_hamiltonians,
     permutation_to_matrix,
 )
 from strict_checks import strict_edge_alignment_check
@@ -184,6 +186,12 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Enable periodic per-irrep metric console logging during training (default: False).",
+    )
+    parser.add_argument(
+        "--log-per-irrep-images",
+        action="store_true",
+        default=False,
+        help="Generate per-irrep visualization images (k-range=0) and log to WandB (default: False).",
     )
     parser.add_argument(
         "--device",
@@ -322,6 +330,7 @@ if __name__ == "__main__":
         "log_model": args.log_model,
         "log_forward": args.log_forward,
         "log_per_irrep_metrics": args.log_per_irrep_metrics,
+        "log_per_irrep_images": args.log_per_irrep_images,
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
         "train_on_irrep_parts": args.train_on_irrep_parts,
@@ -1605,6 +1614,52 @@ if __name__ == "__main__":
             print(f"    Saved: {curve_plot_path}")
         else:
             print("    No matched edges found for distance-curve computation.")
+
+        # Per-irrep visualizations (k-range=0)
+        if CONFIG["log_per_irrep_images"]:
+            irrep_output_dir = run_checkpoint_dir / "per_irrep_images"
+            irrep_output_dir.mkdir(parents=True, exist_ok=True)
+            print("\n  Per-irrep visualizations (k-range=0, percentile=99):")
+
+            for irrep in all_irreps:
+                irrep_str = str(irrep)
+                try:
+                    pred_irrep = split_hamiltonian_by_irrep(
+                        pred_H_matrix, mapper, irrep_str
+                    )
+                    target_irrep = split_hamiltonian_by_irrep(
+                        target_H_matrix, mapper, irrep_str
+                    )
+
+                    visualize_hamiltonians(
+                        pred_irrep,
+                        target_irrep,
+                        overlap_e3nn,
+                        list(snapshot.hamiltonian.atoms),
+                        orbital_cfg,
+                        k_range=0,
+                        output_dir=irrep_output_dir,
+                        dynamic_range=True,
+                        diff_dynamic_range=True,
+                        per_panel_dynamic_range=True,
+                        partial_train=CONFIG["partial_train"],
+                        filename_prefix=f"hamiltonian_{irrep_str}",
+                        percentile=99.0,
+                    )
+
+                    image_path = (
+                        irrep_output_dir / f"hamiltonian_{irrep_str}_sx+0_sy+0_sz+0.png"
+                    )
+                    if image_path.exists():
+                        wandb.log(
+                            {f"irrep_images/{irrep_str}": wandb.Image(str(image_path))}
+                        )
+                    else:
+                        print(
+                            f"    ⚠️  Missing image for irrep {irrep_str}: {image_path.name}"
+                        )
+                except Exception as e:
+                    print(f"    ⚠️  Irrep {irrep_str} visualization failed: {e}")
 
     # Save final model
     final_model_path = run_checkpoint_dir / "final_model.pt"

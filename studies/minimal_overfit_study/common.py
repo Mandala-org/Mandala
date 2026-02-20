@@ -1297,6 +1297,7 @@ def visualize_hamiltonians(
     output_dir,
     dynamic_range=False,
     diff_dynamic_range=False,
+    per_panel_dynamic_range=False,
     partial_train=None,
     filename_prefix="hamiltonian",
     percentile=80.0,
@@ -1323,6 +1324,10 @@ def visualize_hamiltonians(
         diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
                             and abs(diff_corrected). Defaults to False (use
                             same range as ground truth/prediction).
+        per_panel_dynamic_range: If True and dynamic_range is enabled, compute
+                                 the dynamic range separately for each panel
+                                 (gt, pred, diff, diff_corrected). Defaults to
+                                 False (old behavior).
         partial_train: "diag", "offdiag", or None - filters which blocks to visualize
         filename_prefix: Prefix for the output filename (e.g., "hamiltonian" or "hamiltonian_0e")
         percentile: Percentile value for dynamic color range (default: 80.0)
@@ -1395,26 +1400,40 @@ def visualize_hamiltonians(
             title += f" ({partial_train} blocks only)"
         fig.suptitle(title, fontsize=16)
 
-        # Determine color range for ground truth/pred
-        if dynamic_range:
-            # Use specified percentile of abs(H_gt)
-            v = np.percentile(np.abs(H_gt_dense), percentile)
-            vmin_main, vmax_main = -v, v
-        else:
-            vmin_main, vmax_main = -1, 1
-
-        # Determine color range for diff panels
-        if diff_dynamic_range:
+        # Determine color ranges
+        if per_panel_dynamic_range and dynamic_range:
+            v_gt = np.percentile(np.abs(H_gt_dense), percentile)
+            v_pred = np.percentile(np.abs(H_pred_dense), percentile)
             v_diff = np.percentile(np.abs(diff), percentile)
-            vmin_diff, vmax_diff = -v_diff, v_diff
             v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+
+            vmin_gt, vmax_gt = -v_gt, v_gt
+            vmin_pred, vmax_pred = -v_pred, v_pred
+            vmin_diff, vmax_diff = -v_diff, v_diff
             vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
         else:
-            vmin_diff, vmax_diff = vmin_main, vmax_main
-            vmin_diff_corr, vmax_diff_corr = vmin_main, vmax_main
+            # Determine color range for ground truth/pred
+            if dynamic_range:
+                v = np.percentile(np.abs(H_gt_dense), percentile)
+                vmin_main, vmax_main = -v, v
+            else:
+                vmin_main, vmax_main = -1, 1
+
+            # Determine color range for diff panels
+            if diff_dynamic_range:
+                v_diff = np.percentile(np.abs(diff), percentile)
+                vmin_diff, vmax_diff = -v_diff, v_diff
+                v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+                vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
+            else:
+                vmin_diff, vmax_diff = vmin_main, vmax_main
+                vmin_diff_corr, vmax_diff_corr = vmin_main, vmax_main
+
+            vmin_gt, vmax_gt = vmin_main, vmax_main
+            vmin_pred, vmax_pred = vmin_main, vmax_main
 
         # 1. Ground truth (top-left)
-        im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main)
+        im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_gt, vmax=vmax_gt)
         axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
         axes[0, 0].set_xlabel("Orbital j")
         axes[0, 0].set_ylabel("Orbital i")
@@ -1422,7 +1441,7 @@ def visualize_hamiltonians(
 
         # 2. Predicted (top-right)
         im1 = axes[0, 1].imshow(
-            H_pred_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main
+            H_pred_dense, cmap="bwr", vmin=vmin_pred, vmax=vmax_pred
         )
         axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
         axes[0, 1].set_xlabel("Orbital j")
@@ -1471,6 +1490,7 @@ def create_hamiltonian_frame_figure(
     sz=0,
     dynamic_range=False,
     diff_dynamic_range=False,
+    per_panel_dynamic_range=False,
     partial_train=None,
     percentile=80.0,
     figsize=(12, 12),
@@ -1494,6 +1514,10 @@ def create_hamiltonian_frame_figure(
         diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
                             and abs(diff_corrected). Defaults to False (use
                             same range as ground truth/prediction).
+        per_panel_dynamic_range: If True and dynamic_range is enabled, compute
+                                 the dynamic range separately for each panel
+                                 (gt, pred, diff, diff_corrected). Defaults to
+                                 False (old behavior).
         partial_train: "diag", "offdiag", or None - filters which blocks to show
         percentile: Percentile value for dynamic color range (default: 80.0)
         figsize: Figure size (default: (12, 12))
@@ -1533,32 +1557,47 @@ def create_hamiltonian_frame_figure(
     # Create figure
     fig, axes = plt.subplots(2, 2, figsize=figsize)
 
-    # Determine color range for ground truth/pred
-    if dynamic_range:
-        v = np.percentile(np.abs(H_gt_dense), percentile)
-        vmin_main, vmax_main = -v, v
-    else:
-        vmin_main, vmax_main = -1, 1
-
-    # Determine color range for diff panels
-    if diff_dynamic_range:
+    # Determine color ranges
+    if per_panel_dynamic_range and dynamic_range:
+        v_gt = np.percentile(np.abs(H_gt_dense), percentile)
+        v_pred = np.percentile(np.abs(H_pred_dense), percentile)
         v_diff = np.percentile(np.abs(diff), percentile)
-        vmin_diff, vmax_diff = -v_diff, v_diff
         v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+
+        vmin_gt, vmax_gt = -v_gt, v_gt
+        vmin_pred, vmax_pred = -v_pred, v_pred
+        vmin_diff, vmax_diff = -v_diff, v_diff
         vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
     else:
-        vmin_diff, vmax_diff = vmin_main, vmax_main
-        vmin_diff_corr, vmax_diff_corr = vmin_main, vmax_main
+        # Determine color range for ground truth/pred
+        if dynamic_range:
+            v = np.percentile(np.abs(H_gt_dense), percentile)
+            vmin_main, vmax_main = -v, v
+        else:
+            vmin_main, vmax_main = -1, 1
+
+        # Determine color range for diff panels
+        if diff_dynamic_range:
+            v_diff = np.percentile(np.abs(diff), percentile)
+            vmin_diff, vmax_diff = -v_diff, v_diff
+            v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+            vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
+        else:
+            vmin_diff, vmax_diff = vmin_main, vmax_main
+            vmin_diff_corr, vmax_diff_corr = vmin_main, vmax_main
+
+        vmin_gt, vmax_gt = vmin_main, vmax_main
+        vmin_pred, vmax_pred = vmin_main, vmax_main
 
     # 1. Ground truth (top-left)
-    im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main)
+    im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_gt, vmax=vmax_gt)
     axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
     axes[0, 0].set_xlabel("Orbital j")
     axes[0, 0].set_ylabel("Orbital i")
     plt.colorbar(im0, ax=axes[0, 0])
 
     # 2. Predicted (top-right)
-    im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin_main, vmax=vmax_main)
+    im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin_pred, vmax=vmax_pred)
     axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
     axes[0, 1].set_xlabel("Orbital j")
     axes[0, 1].set_ylabel("Orbital i")
@@ -1624,6 +1663,7 @@ def save_hamiltonian_frame_to_disk(
     sz=0,
     dynamic_range=False,
     diff_dynamic_range=False,
+    per_panel_dynamic_range=False,
     partial_train=None,
     percentile=80.0,
 ):
@@ -1643,6 +1683,10 @@ def save_hamiltonian_frame_to_disk(
         diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
                             and abs(diff_corrected). Defaults to False (use
                             same range as ground truth/prediction).
+        per_panel_dynamic_range: If True and dynamic_range is enabled, compute
+                                 the dynamic range separately for each panel
+                                 (gt, pred, diff, diff_corrected). Defaults to
+                                 False (old behavior).
         partial_train: "diag", "offdiag", or None - filters which blocks to show
         percentile: Percentile value for dynamic color range (default: 80.0)
 
@@ -1664,6 +1708,7 @@ def save_hamiltonian_frame_to_disk(
         sz=sz,
         dynamic_range=dynamic_range,
         diff_dynamic_range=diff_dynamic_range,
+        per_panel_dynamic_range=per_panel_dynamic_range,
         partial_train=partial_train,
         percentile=percentile,
         epoch=epoch,
@@ -1781,6 +1826,25 @@ def filter_irreps_block_data_by_irrep(irreps_block_data, target_irrep, mapper):
         orbital_cfg=irreps_block_data.orbital_cfg,
         basis=irreps_block_data.basis,
     )
+
+
+def split_hamiltonian_by_irrep(H_matrix, mapper, target_irrep):
+    """
+    Split a BlockMatrix Hamiltonian to keep only one irrep's contribution.
+
+    Args:
+        H_matrix: BlockMatrix Hamiltonian
+        mapper: BlockIrrepMapper
+        target_irrep: e3nn.o3.Irrep or string like "0e", "1o", "2e"
+
+    Returns:
+        BlockMatrix with only the target irrep's contribution
+    """
+    irreps_data = H_matrix.to_vectors(mapper)
+    filtered_irreps = filter_irreps_block_data_by_irrep(
+        irreps_data, target_irrep, mapper
+    )
+    return filtered_irreps.to_blocks(mapper)
 
 
 def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
