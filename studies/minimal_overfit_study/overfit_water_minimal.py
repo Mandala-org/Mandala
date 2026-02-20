@@ -300,11 +300,6 @@ if __name__ == "__main__":
     print("=" * 80)
     print("MINIMAL WATER OVERFIT STUDY - EXPLICIT IMPLEMENTATION")
     print("=" * 80)
-    print("Convention sweep settings:")
-    print("  convention: [e3nn, openmx]")
-    print("  xyz-permutation: [012, 120, 201]")
-    print("  change-box: [left, right, both]")
-    print("  box-convention: [rows, cols]")
 
     CONFIG = {
         # Data
