@@ -40,7 +40,7 @@ def _as_irreps(irreps: Irreps | str) -> Irreps:
     return irreps if isinstance(irreps, Irreps) else Irreps(irreps)
 
 
-def _callable_activation(name: str, negative_slope: float = 0.01) -> Callable:
+def _callable_activation(name: str) -> Callable:
     name = name.lower()
     if name == "silu":
         return F.silu
@@ -55,7 +55,7 @@ def _callable_activation(name: str, negative_slope: float = 0.01) -> Callable:
     if name == "softplus":
         return F.softplus
     if name == "leakyrelu":
-        return lambda x: F.leaky_relu(x, negative_slope=negative_slope)
+        return F.leaky_relu
     raise ValueError(f"Unsupported callable activation '{name}'")
 
 
@@ -262,19 +262,14 @@ class _GateActivationBlock(nn.Module):
         gate_activation_name: str = "sigmoid",
         gate_irrep: str = "0e",
         linear_biases: bool = False,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         irreps_out = irreps_out.simplify()
         scalars, gates, gated, gate_input = _make_gate_irreps(irreps_out, gate_irrep)
 
         self.linear = Linear(irreps_in, gate_input, biases=linear_biases)
-        scalar_fn = _callable_activation(
-            scalar_activation_name, negative_slope=leakyrelu_slope
-        )
-        gate_fn = _callable_activation(
-            gate_activation_name, negative_slope=leakyrelu_slope
-        )
+        scalar_fn = _callable_activation(scalar_activation_name)
+        gate_fn = _callable_activation(gate_activation_name)
         self.gate = Gate(
             scalars,
             [scalar_fn for _ in scalars],
@@ -307,7 +302,6 @@ def _make_hidden_map(
     linear_biases: bool = False,
     norm_bias: bool = False,
     norm_epsilon: float | None = None,
-    leakyrelu_slope: float = 0.01,
 ) -> nn.Module:
     if kind == "normact":
         return _LinearThenActivation(
@@ -315,9 +309,7 @@ def _make_hidden_map(
             irreps_out,
             NormActivation(
                 irreps_out,
-                scalar_nonlinearity=_callable_activation(
-                    scalar_activation_name, leakyrelu_slope
-                ),
+                scalar_nonlinearity=_callable_activation(scalar_activation_name),
                 normalize=True,
                 epsilon=norm_epsilon,
                 bias=norm_bias,
@@ -332,7 +324,6 @@ def _make_hidden_map(
             gate_activation_name=gate_activation_name,
             gate_irrep=gate_irrep,
             linear_biases=linear_biases,
-            leakyrelu_slope=leakyrelu_slope,
         )
     if kind == "gate_scalars_mlp":
         return _LinearThenActivation(
@@ -373,7 +364,6 @@ class NormActE3MLP(nn.Module):
         linear_biases: bool = False,
         norm_bias: bool = False,
         norm_epsilon: float | None = None,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         if num_layers < 1:
@@ -402,7 +392,6 @@ class NormActE3MLP(nn.Module):
                     linear_biases=linear_biases,
                     norm_bias=norm_bias,
                     norm_epsilon=norm_epsilon,
-                    leakyrelu_slope=leakyrelu_slope,
                 )
                 for i in range(num_layers - 1)
             ]
@@ -433,7 +422,6 @@ class GateE3MLP(nn.Module):
         gate_activation_name: str = "sigmoid",
         gate_irrep: str = "0e",
         linear_biases: bool = False,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         if num_layers < 1:
@@ -462,7 +450,6 @@ class GateE3MLP(nn.Module):
                     gate_activation_name=gate_activation_name,
                     gate_irrep=gate_irrep,
                     linear_biases=linear_biases,
-                    leakyrelu_slope=leakyrelu_slope,
                 )
                 for i in range(num_layers - 1)
             ]
@@ -604,7 +591,6 @@ class _ResidualBlock(nn.Module):
         linear_biases: bool = False,
         norm_bias: bool = False,
         norm_epsilon: float | None = None,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         self.f = _make_hidden_map(
@@ -617,7 +603,6 @@ class _ResidualBlock(nn.Module):
             linear_biases=linear_biases,
             norm_bias=norm_bias,
             norm_epsilon=norm_epsilon,
-            leakyrelu_slope=leakyrelu_slope,
         )
         self.residual_scale = residual_scale
 
@@ -644,7 +629,6 @@ class ResidualE3MLP(nn.Module):
         linear_biases: bool = False,
         norm_bias: bool = False,
         norm_epsilon: float | None = None,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         if num_layers < 1:
@@ -681,7 +665,6 @@ class ResidualE3MLP(nn.Module):
                     linear_biases=linear_biases,
                     norm_bias=norm_bias,
                     norm_epsilon=norm_epsilon,
-                    leakyrelu_slope=leakyrelu_slope,
                 )
                 for _ in range(num_residual_blocks)
             ]
@@ -714,7 +697,6 @@ class _BilinearSelfTPBlock(nn.Module):
         linear_biases: bool = False,
         norm_bias: bool = False,
         norm_epsilon: float | None = None,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         self.lin_a = Linear(irreps_hidden, irreps_hidden, biases=linear_biases)
@@ -746,7 +728,6 @@ class _BilinearSelfTPBlock(nn.Module):
             linear_biases=linear_biases,
             norm_bias=norm_bias,
             norm_epsilon=norm_epsilon,
-            leakyrelu_slope=leakyrelu_slope,
         )
         self.lin_out = Linear(self.tp_irreps, irreps_hidden, biases=linear_biases)
         self.residual_scale = residual_scale
@@ -780,7 +761,6 @@ class BilinearSelfTPE3MLP(nn.Module):
         linear_biases: bool = False,
         norm_bias: bool = False,
         norm_epsilon: float | None = None,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         if num_layers < 1:
@@ -821,7 +801,6 @@ class BilinearSelfTPE3MLP(nn.Module):
                     linear_biases=linear_biases,
                     norm_bias=norm_bias,
                     norm_epsilon=norm_epsilon,
-                    leakyrelu_slope=leakyrelu_slope,
                 )
                 for _ in range(num_bilinear_blocks)
             ]
@@ -1057,7 +1036,6 @@ class InvariantMoEE3MLP(nn.Module):
         linear_biases: bool = False,
         norm_bias: bool = False,
         norm_epsilon: float | None = None,
-        leakyrelu_slope: float = 0.01,
     ):
         super().__init__()
         if num_layers < 1:
@@ -1097,7 +1075,6 @@ class InvariantMoEE3MLP(nn.Module):
                     linear_biases=linear_biases,
                     norm_bias=norm_bias,
                     norm_epsilon=norm_epsilon,
-                    leakyrelu_slope=leakyrelu_slope,
                 )
                 for _ in range(num_experts)
             ]
@@ -1155,7 +1132,6 @@ def _make_moe_expert(
     linear_biases: bool,
     norm_bias: bool,
     norm_epsilon: float | None,
-    leakyrelu_slope: float,
 ) -> nn.Module:
     if kind == "normact":
         return NormActE3MLP(
@@ -1167,7 +1143,6 @@ def _make_moe_expert(
             linear_biases=linear_biases,
             norm_bias=norm_bias,
             norm_epsilon=norm_epsilon,
-            leakyrelu_slope=leakyrelu_slope,
         )
     if kind == "gate":
         return GateE3MLP(
@@ -1179,7 +1154,6 @@ def _make_moe_expert(
             gate_activation_name=gate_activation_name,
             gate_irrep=gate_irrep,
             linear_biases=linear_biases,
-            leakyrelu_slope=leakyrelu_slope,
         )
     if kind == "gate_scalars_mlp":
         return GateScalarsMLPE3MLP(
