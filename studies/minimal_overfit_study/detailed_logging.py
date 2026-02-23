@@ -68,6 +68,9 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
     print(
         f"  Log per-irrep metrics console details: {'enabled' if config.get('log_per_irrep_metrics', False) else 'disabled'}"
     )
+    print(
+        f"  Benchmark timing: {'enabled' if config.get('benchmark', False) else 'disabled'}"
+    )
 
 
 def log_snapshot_info(snapshot) -> None:

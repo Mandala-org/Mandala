@@ -195,6 +195,12 @@ if __name__ == "__main__":
         help="Generate per-irrep visualization images (k-range=0) and log to WandB (default: False).",
     )
     parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        default=False,
+        help="Enable per-stage timing benchmark reporting after [METRICS] (default: False)",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -344,6 +350,7 @@ if __name__ == "__main__":
         "log_forward": args.log_forward,
         "log_per_irrep_metrics": args.log_per_irrep_metrics,
         "log_per_irrep_images": args.log_per_irrep_images,
+        "benchmark": args.benchmark,
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
         "train_on_irrep_parts": args.train_on_irrep_parts,
@@ -932,20 +939,6 @@ if __name__ == "__main__":
                 print(
                     f"  {key}: norm min={stats['min']:.6e}, mean={stats['mean']:.6e}, max={stats['max']:.6e}"
                 )
-        wandb.log(
-            {
-                f"magnitude_targets/{key}_norm_min": stats["min"]
-                for key, stats in norm_stats.items()
-            }
-            | {
-                f"magnitude_targets/{key}_norm_mean": stats["mean"]
-                for key, stats in norm_stats.items()
-            }
-            | {
-                f"magnitude_targets/{key}_norm_max": stats["max"]
-                for key, stats in norm_stats.items()
-            }
-        )
 
     # =============================================================================
     # DEFINE MINIMAL NETWORK
@@ -1055,6 +1048,45 @@ if __name__ == "__main__":
     last_log_time = time.time()
     last_logged_epoch = -1
 
+    benchmark_order = [
+        "epoch_total",
+        "forward_total",
+        "forward_node_encoder",
+        "forward_edge_encoder",
+        "pred_pack_raw_outputs",
+        "pred_to_blocks_norm",
+        "loss_block_total",
+        "loss_block_irrep_filter_and_to_blocks",
+        "loss_block_norm_scaling_overhead",
+        "backward_total",
+        "optimizer_step",
+        "step_wandb_log",
+    ]
+    benchmark_accum = {k: 0.0 for k in benchmark_order}
+    benchmark_epochs_accum = 0
+
+    def benchmark_add(name: str, dt_seconds: float) -> None:
+        if CONFIG["benchmark"] and name in benchmark_accum:
+            benchmark_accum[name] += max(float(dt_seconds), 0.0)
+
+    def print_benchmark_report() -> None:
+        if not CONFIG["benchmark"] or benchmark_epochs_accum <= 0:
+            return
+        epoch_ms = (
+            benchmark_accum["epoch_total"] / benchmark_epochs_accum
+            if benchmark_epochs_accum > 0
+            else 0.0
+        ) * 1000.0
+        print("\n[BENCHMARK]")
+        print(
+            f"  Averaged over {benchmark_epochs_accum} epoch(s): "
+            f"{epoch_ms:.3f} ms/epoch total"
+        )
+        for name in benchmark_order:
+            avg_ms = (benchmark_accum[name] / benchmark_epochs_accum) * 1000.0
+            pct = 100.0 * avg_ms / max(epoch_ms, 1e-12)
+            print(f"  {name:38s} {avg_ms:10.3f} ms/epoch  ({pct:6.2f}%)")
+
     def should_log_epoch(epoch_zero_based: int) -> bool:
         """Return True when this epoch should emit periodic logs and save frames."""
         if not CONFIG.get("adaptive_log_interval", False):
@@ -1067,21 +1099,18 @@ if __name__ == "__main__":
             return epoch_one_based % 10 == 0
         return epoch_zero_based % CONFIG["log_interval"] == 0
 
-    # Log normalization factors to WandB if enabled
-    if CONFIG["normalize_blocks"] and norm_factors is not None:
-        norm_factors_log = {}
-        for key, factors in norm_factors.items():
-            norm_factors_log[f"normalization/{key}_diag"] = factors["diag"]
-            norm_factors_log[f"normalization/{key}_offdiag"] = factors["offdiag"]
-        wandb.log(norm_factors_log)
-
     print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
     print(f"Training for {CONFIG['num_epochs']} epochs...\n")
 
     try:
         for epoch in range(CONFIG["num_epochs"]):
+            epoch_core_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             network.train()
             optimizer.zero_grad()
+            mag_log10_abs_sum_total = 0.0
+            mag_log10_count_total = 0
+            mag_log10_abs_sum_per_key = {}
+            mag_log10_count_per_key = {}
 
             should_log_now = should_log_epoch(epoch)
 
@@ -1101,6 +1130,8 @@ if __name__ == "__main__":
                 old_stdout = sys.stdout
                 sys.stdout = open(os.devnull, "w")
 
+            forward_benchmark = {} if CONFIG["benchmark"] else None
+            t_forward_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             pred_raw = network(
                 node_type_idx,
                 edge_type_idx,
@@ -1111,7 +1142,18 @@ if __name__ == "__main__":
                 batch_node,
                 batch_edge,
                 log_to_wandb=log_activations,
+                benchmark_times=forward_benchmark,
             )
+            if CONFIG["benchmark"]:
+                benchmark_add("forward_total", time.perf_counter() - t_forward_start)
+                benchmark_add(
+                    "forward_node_encoder",
+                    forward_benchmark.get("forward_node_encoder", 0.0),
+                )
+                benchmark_add(
+                    "forward_edge_encoder",
+                    forward_benchmark.get("forward_edge_encoder", 0.0),
+                )
 
             if not verbose and not CONFIG["verbose_forward"]:
                 sys.stdout.close()
@@ -1119,6 +1161,7 @@ if __name__ == "__main__":
 
             # Wrap predictions into IrrepsBlockData then convert to matrix blocks
 
+            t_pack_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             pair_vec_H = {}
             pair_edges_dict = {}
             lookup_dict = {}
@@ -1133,6 +1176,10 @@ if __name__ == "__main__":
                         key,
                         idx,
                     )
+            if CONFIG["benchmark"]:
+                benchmark_add(
+                    "pred_pack_raw_outputs", time.perf_counter() - t_pack_start
+                )
 
             pred_H_irreps = IrrepsBlockData(
                 atoms=tuple(atoms_list),
@@ -1145,7 +1192,12 @@ if __name__ == "__main__":
             )
 
             # Convert to matrix blocks (train_target = "matrix")
+            t_to_blocks_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
+            if CONFIG["benchmark"]:
+                benchmark_add(
+                    "pred_to_blocks_norm", time.perf_counter() - t_to_blocks_start
+                )
             if CONFIG["magnitude_factorization"]:
                 pred_H_matrix_actual = reconstruct_actual_prediction_from_magnitudes(
                     pred_H_matrix_norm,
@@ -1161,12 +1213,18 @@ if __name__ == "__main__":
             ) * 0.5
 
             # Compute loss - either standard or per-irrep decomposed
+            t_loss_block_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
+            loss_block_irrep_filter_to_blocks_time = 0.0
+            loss_block_norm_scaling_time = 0.0
             if CONFIG["train_on_irrep_parts"]:
                 # Per-irrep decomposed loss
                 loss_block = torch.tensor(0.0, device=device)
                 irrep_losses = {}
 
                 for irrep in all_irreps:
+                    t_irrep_ftb_start = (
+                        time.perf_counter() if CONFIG["benchmark"] else 0.0
+                    )
                     # Filter both prediction and target by this irrep
                     pred_irrep_filtered = filter_irreps_block_data_by_irrep(
                         pred_H_irreps, irrep, mapper
@@ -1178,6 +1236,10 @@ if __name__ == "__main__":
                     # Convert to matrix blocks
                     pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
                     target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
+                    if CONFIG["benchmark"]:
+                        loss_block_irrep_filter_to_blocks_time += (
+                            time.perf_counter() - t_irrep_ftb_start
+                        )
 
                     # Apply partial_train filtering
                     filtered_target_irrep = filter_blocks_by_partial_train(
@@ -1206,6 +1268,11 @@ if __name__ == "__main__":
                                     and norm_factors is not None
                                     and key in norm_factors
                                 ):
+                                    t_norm_scale_start = (
+                                        time.perf_counter()
+                                        if CONFIG["benchmark"]
+                                        else 0.0
+                                    )
                                     # For per-irrep case, we need to use the original target's edges
                                     # because the irrep-filtered blocks still refer to the same edges
                                     edges_full = target_H_matrix.pair_edges[
@@ -1235,6 +1302,10 @@ if __name__ == "__main__":
                                     targ_blocks_filtered = (
                                         targ_blocks_filtered / norm_vec_selected
                                     )
+                                    if CONFIG["benchmark"]:
+                                        loss_block_norm_scaling_time += (
+                                            time.perf_counter() - t_norm_scale_start
+                                        )
 
                                 irrep_loss += F.mse_loss(
                                     pred_blocks_filtered, targ_blocks_filtered
@@ -1274,6 +1345,9 @@ if __name__ == "__main__":
                                 and norm_factors is not None
                                 and key in norm_factors
                             ):
+                                t_norm_scale_start = (
+                                    time.perf_counter() if CONFIG["benchmark"] else 0.0
+                                )
                                 # Create normalization factors for each edge
                                 edges_full = target_H_matrix.pair_edges[
                                     key
@@ -1297,10 +1371,26 @@ if __name__ == "__main__":
                                 targ_blocks_filtered = (
                                     targ_blocks_filtered / norm_vec_selected
                                 )
+                                if CONFIG["benchmark"]:
+                                    loss_block_norm_scaling_time += (
+                                        time.perf_counter() - t_norm_scale_start
+                                    )
 
                             loss_block += F.mse_loss(
                                 pred_blocks_filtered, targ_blocks_filtered
                             )
+            if CONFIG["benchmark"]:
+                benchmark_add(
+                    "loss_block_total", time.perf_counter() - t_loss_block_start
+                )
+                benchmark_add(
+                    "loss_block_irrep_filter_and_to_blocks",
+                    loss_block_irrep_filter_to_blocks_time,
+                )
+                benchmark_add(
+                    "loss_block_norm_scaling_overhead",
+                    loss_block_norm_scaling_time,
+                )
 
             loss_magnitude = torch.tensor(0.0, device=device)
             if CONFIG["magnitude_factorization"]:
@@ -1328,9 +1418,23 @@ if __name__ == "__main__":
                     )
                     mask = mask[:min_n]
                     if mask.any():
-                        loss_magnitude += F.mse_loss(
-                            pred_magnitudes[:min_n][mask],
-                            target_magnitudes[:min_n][mask],
+                        pred_sel = pred_magnitudes[:min_n][mask]
+                        target_sel = target_magnitudes[:min_n][mask]
+                        loss_magnitude += F.mse_loss(pred_sel, target_sel)
+
+                        log10_diff = torch.abs(
+                            torch.log10(torch.clamp(pred_sel, min=1e-12))
+                            - torch.log10(torch.clamp(target_sel, min=1e-12))
+                        )
+                        log10_abs_sum = float(log10_diff.sum().item())
+                        log10_count = int(log10_diff.numel())
+                        mag_log10_abs_sum_total += log10_abs_sum
+                        mag_log10_count_total += log10_count
+                        mag_log10_abs_sum_per_key[key] = (
+                            mag_log10_abs_sum_per_key.get(key, 0.0) + log10_abs_sum
+                        )
+                        mag_log10_count_per_key[key] = (
+                            mag_log10_count_per_key.get(key, 0) + log10_count
                         )
 
             # Keep Hamiltonian block loss tracking consistent with previous history key.
@@ -1360,7 +1464,10 @@ if __name__ == "__main__":
                 break
 
             # Backward
+            t_backward_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             loss.backward()
+            if CONFIG["benchmark"]:
+                benchmark_add("backward_total", time.perf_counter() - t_backward_start)
 
             # Gradient clipping to prevent exploding gradients
             if CONFIG["grad_clip"] > 0:
@@ -1392,7 +1499,10 @@ if __name__ == "__main__":
             if has_nan_grad:
                 break
 
+            t_optimizer_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             optimizer.step()
+            if CONFIG["benchmark"]:
+                benchmark_add("optimizer_step", time.perf_counter() - t_optimizer_start)
 
             # Log training loss at every step
             step_log = {
@@ -1403,14 +1513,28 @@ if __name__ == "__main__":
             }
             if CONFIG["magnitude_factorization"]:
                 step_log["train/loss_block_norm"] = loss_block.item()
-                step_log["train/loss_magnitude"] = loss_magnitude.item()
+                step_log["train/loss_magnitude_weighted"] = (
+                    CONFIG["magnitude_lambda"] * loss_magnitude.item()
+                )
+                step_log["train/loss_magnitude_raw"] = loss_magnitude.item()
+                if mag_log10_count_total > 0:
+                    step_log["train/magnitude_log10_mae"] = (
+                        mag_log10_abs_sum_total / mag_log10_count_total
+                    )
 
             # Log per-irrep losses if enabled
             if CONFIG["train_on_irrep_parts"]:
                 for irrep_str, irrep_loss in irrep_losses.items():
                     step_log[f"partial/{irrep_str}"] = irrep_loss.item()
 
+            t_step_wandb_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             wandb.log(step_log)
+            if CONFIG["benchmark"]:
+                benchmark_add(
+                    "step_wandb_log", time.perf_counter() - t_step_wandb_start
+                )
+                benchmark_add("epoch_total", time.perf_counter() - epoch_core_start)
+                benchmark_epochs_accum += 1
 
             # Logging
             if should_log_now:
@@ -1519,6 +1643,41 @@ if __name__ == "__main__":
                         irrep_losses if CONFIG["train_on_irrep_parts"] else None
                     ),
                 )
+                if CONFIG["magnitude_factorization"]:
+                    loss_block_val = float(loss_block.item())
+                    loss_mag_weighted_val = float(
+                        CONFIG["magnitude_lambda"] * loss_magnitude.item()
+                    )
+                    total_loss_val = max(float(loss.item()), 1e-12)
+                    block_pct = 100.0 * loss_block_val / total_loss_val
+                    mag_pct = 100.0 * loss_mag_weighted_val / total_loss_val
+
+                    print("\n  Factorization Loss Breakdown:")
+                    print(
+                        f"    Block loss (normalized blocks): {loss_block_val:.6e} ({block_pct:.2f}%)"
+                    )
+                    print(
+                        f"    Magnitude loss (weighted):      {loss_mag_weighted_val:.6e} ({mag_pct:.2f}%)"
+                    )
+                    if mag_log10_count_total > 0:
+                        total_log10_mae = mag_log10_abs_sum_total / max(
+                            mag_log10_count_total, 1
+                        )
+                        print(
+                            f"    log10 magnitude MAE (total):    {total_log10_mae:.6e}"
+                        )
+                        print("    log10 magnitude MAE (per key):")
+                        for key in sorted(mag_log10_abs_sum_per_key.keys()):
+                            key_count = max(mag_log10_count_per_key.get(key, 0), 1)
+                            key_mae = mag_log10_abs_sum_per_key[key] / key_count
+                            print(f"      {key}: {key_mae:.6e}")
+                    else:
+                        print("    log10 magnitude MAE: N/A (no selected blocks)")
+
+                if CONFIG["benchmark"]:
+                    print_benchmark_report()
+                    benchmark_accum = {k: 0.0 for k in benchmark_order}
+                    benchmark_epochs_accum = 0
 
                 # Log to WandB
                 wandb.log(
