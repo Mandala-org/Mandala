@@ -619,14 +619,37 @@ class Snapshot:
             The computed density of states for each energy bin.
         """
         H = self.hamiltonian.to_dense().detach()
+        S = self.overlap.to_dense().detach()
 
-        eigenvalues, eigenvectors = torch.linalg.eigh(H)
+        # Generalized eigensolve for H x = lambda S x via Cholesky reduction.
+        # Symmetrization improves numerical robustness.
+        H = 0.5 * (H + H.T)
+        S = 0.5 * (S + S.T)
+        L = torch.linalg.cholesky(S)
+        tmp = torch.linalg.solve(L, H)
+        A = torch.linalg.solve(L, tmp.T).T  # A = L^{-1} H L^{-T}
+        A = 0.5 * (A + A.T)
+
+        eigenvalues = torch.linalg.eigvalsh(A)
         ### setting up the energy bins
-        grid = torch.arange(E_min, E_max + bin_width, bin_width)
+        grid = torch.arange(
+            E_min,
+            E_max + bin_width,
+            bin_width,
+            dtype=eigenvalues.dtype,
+            device=eigenvalues.device,
+        )
         dos = torch.sum(
             torch.exp(-((grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma**2)),
             axis=1,
-        ) / (torch.sqrt(torch.tensor(2 * torch.pi)) * sigma)
+        ) / (
+            torch.sqrt(
+                torch.tensor(
+                    2 * torch.pi, dtype=eigenvalues.dtype, device=eigenvalues.device
+                )
+            )
+            * sigma
+        )
 
         return grid, dos
 
