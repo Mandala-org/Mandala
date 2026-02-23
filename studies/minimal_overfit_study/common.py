@@ -484,13 +484,21 @@ class MinimalHead(nn.Module):
         n_radial,
         magnitude_factorization=False,
         head_mlp_for_scalars=False,
+        head_use_tensor_square=False,
     ):
         super().__init__()
+        hidden_irreps = Irreps(hidden_irreps)
         self.mapper = mapper
         self.magnitude_factorization = bool(magnitude_factorization)
         self.head_mlp_for_scalars = bool(head_mlp_for_scalars)
+        self.head_use_tensor_square = bool(head_use_tensor_square)
         self.n_radial = int(n_radial)
         self.edge_types = list(mapper.edge_types)
+        self.need_tensor_square = bool(
+            self.head_use_tensor_square
+            or self.magnitude_factorization
+            or self.head_mlp_for_scalars
+        )
 
         # Separate linear projections per edge type and diagonal status.
         # If head_mlp_for_scalars=True, these projections predict only non-scalars.
@@ -502,18 +510,24 @@ class MinimalHead(nn.Module):
         self.term_dims = {}
         self.term_is_scalar = {}
 
+        if self.need_tensor_square:
+            self.edge_tensor_square = TensorSquare(hidden_irreps)
+            ts_out_irreps = self.edge_tensor_square.irreps_out
+        else:
+            ts_out_irreps = None
+
         if self.magnitude_factorization:
-            self.magnitude_tensor_square = TensorSquare(Irreps(hidden_irreps))
-            ts_out_irreps = self.magnitude_tensor_square.irreps_out
             self.magnitude_linears = nn.ModuleDict()
             self.magnitude_mlps = nn.ModuleDict()
         elif self.head_mlp_for_scalars:
-            self.scalar_aux_tensor_square = TensorSquare(Irreps(hidden_irreps))
-            ts_out_irreps = self.scalar_aux_tensor_square.irreps_out
             self.scalar_aux_linears = nn.ModuleDict()
 
         if self.head_mlp_for_scalars:
             self.scalar_mlps = nn.ModuleDict()
+
+        head_input_irreps = (
+            ts_out_irreps if self.head_use_tensor_square else hidden_irreps
+        )
 
         for edge_type in self.edge_types:
             pair_irreps = Irreps(mapper.get_pair_irreps(edge_type))
@@ -536,10 +550,10 @@ class MinimalHead(nn.Module):
             )
             if projection_irreps.dim > 0:
                 self.diag_projections[edge_type] = Linear(
-                    hidden_irreps, projection_irreps
+                    head_input_irreps, projection_irreps
                 )
                 self.offdiag_projections[edge_type] = Linear(
-                    hidden_irreps, projection_irreps
+                    head_input_irreps, projection_irreps
                 )
 
             if self.head_mlp_for_scalars and scalar_irreps.dim > 0:
@@ -569,9 +583,13 @@ class MinimalHead(nn.Module):
 
             print(
                 f"    [Head] {edge_type}: "
-                f"diag {hidden_irreps} -> {projection_irreps}, "
-                f"offdiag {hidden_irreps} -> {projection_irreps}"
+                f"diag {head_input_irreps} -> {projection_irreps}, "
+                f"offdiag {head_input_irreps} -> {projection_irreps}"
             )
+            if self.head_use_tensor_square:
+                print(
+                    f"            head input pre-transform: TensorSquare({hidden_irreps}) -> {ts_out_irreps}"
+                )
             if self.head_mlp_for_scalars:
                 print(
                     f"            scalar branch: TensorSquare({hidden_irreps}) "
@@ -584,7 +602,7 @@ class MinimalHead(nn.Module):
                 )
 
             # Check if Linear can produce all requested output irreps
-            input_irreps = Irreps(hidden_irreps)
+            input_irreps = head_input_irreps
             output_irreps = projection_irreps
             missing_irreps = []
             for mul_out, ir_out in output_irreps:
@@ -637,6 +655,14 @@ class MinimalHead(nn.Module):
                 selected_edge_index = edge_index[:, mask]
                 selected_edge_shift = edge_shift[:, mask]
                 selected_edge_length_emb = edge_length_emb[mask]
+                if self.need_tensor_square:
+                    ts_feat = self.edge_tensor_square(selected_feat)
+                    check_for_nans(
+                        ts_feat, f"Head.{type_str}_tensor_square", selected_feat
+                    )
+                else:
+                    ts_feat = None
+                head_feat = ts_feat if self.head_use_tensor_square else selected_feat
 
                 # Diagonal edge: zero shift and same source/destination atom.
                 is_diag = (selected_edge_shift == 0).all(dim=0) & (
@@ -657,36 +683,28 @@ class MinimalHead(nn.Module):
                 else:
                     if is_diag.any():
                         diag_vectors = self.diag_projections[type_str](
-                            selected_feat[is_diag]
+                            head_feat[is_diag]
                         )
                         check_for_nans(
                             diag_vectors,
                             f"Head.{type_str}_diag_projection",
-                            selected_feat[is_diag],
+                            head_feat[is_diag],
                         )
                         pred_non_scalar[is_diag] = diag_vectors
 
                     if is_offdiag.any():
                         offdiag_vectors = self.offdiag_projections[type_str](
-                            selected_feat[is_offdiag]
+                            head_feat[is_offdiag]
                         )
                         check_for_nans(
                             offdiag_vectors,
                             f"Head.{type_str}_offdiag_projection",
-                            selected_feat[is_offdiag],
+                            head_feat[is_offdiag],
                         )
                         pred_non_scalar[is_offdiag] = offdiag_vectors
 
                 aux_mlp_in = None
                 if self.magnitude_factorization or self.head_mlp_for_scalars:
-                    if self.magnitude_factorization:
-                        ts_feat = self.magnitude_tensor_square(selected_feat)
-                    else:
-                        ts_feat = self.scalar_aux_tensor_square(selected_feat)
-                    check_for_nans(
-                        ts_feat, f"Head.{type_str}_aux_tensor_square", selected_feat
-                    )
-
                     if self.magnitude_factorization:
                         aux_scalar_feat = self.magnitude_linears[type_str](ts_feat)
                     else:
@@ -774,6 +792,7 @@ class MinimalNetwork(nn.Module):
         mapper,
         magnitude_factorization=False,
         head_mlp_for_scalars=False,
+        head_use_tensor_square=False,
         verbose=True,  # Default True for backward compatibility
     ):
         super().__init__()
@@ -809,6 +828,7 @@ class MinimalNetwork(nn.Module):
             n_radial=n_radial,
             magnitude_factorization=magnitude_factorization,
             head_mlp_for_scalars=head_mlp_for_scalars,
+            head_use_tensor_square=head_use_tensor_square,
         )
 
         print(f"  Total parameters: {sum(p.numel() for p in self.parameters()):,}")

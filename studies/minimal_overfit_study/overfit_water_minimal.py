@@ -307,6 +307,14 @@ if __name__ == "__main__":
         help="Predict scalar irrep parts with a dedicated MLP head from magnitude-branch input (default: False)",
     )
     parser.add_argument(
+        "--head-use-tensor-square",
+        "--head_use_tensor_square",
+        dest="head_use_tensor_square",
+        action="store_true",
+        default=False,
+        help="Use TensorSquare(edge embeddings) as input to the main head projections (default: False)",
+    )
+    parser.add_argument(
         "--magnitude-lambda",
         type=float,
         default=1.0,
@@ -376,6 +384,7 @@ if __name__ == "__main__":
         "normalize_blocks": args.normalize_blocks,
         "magnitude_factorization": args.magnitude_factorization,
         "head_mlp_for_scalars": args.head_mlp_for_scalars,
+        "head_use_tensor_square": args.head_use_tensor_square,
         "magnitude_lambda": args.magnitude_lambda,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         "require_exact_edge_match": args.require_exact_edge_match,
@@ -994,6 +1003,7 @@ if __name__ == "__main__":
         mapper=mapper,
         magnitude_factorization=CONFIG["magnitude_factorization"],
         head_mlp_for_scalars=CONFIG["head_mlp_for_scalars"],
+        head_use_tensor_square=CONFIG["head_use_tensor_square"],
     ).to(device)
     if not CONFIG["log_model"]:
         sys.stdout.close()
