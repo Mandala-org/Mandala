@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
-RUN_NAME="run_medium_test_magnitude_factor_small_net"
+RUN_NAME="run_medium_test_magnitude_factor_small_net_adv_heads"
 
 python studies/minimal_overfit_study/overfit_water_minimal.py \
   --run-name "${RUN_NAME}" \
