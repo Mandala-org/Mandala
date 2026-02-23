@@ -16,8 +16,8 @@ Key features
   helpful for compression / batching.
 * Implements
 
-    * ``get_number_of_electrons()``  →  Tr(D·S)
-    * ``get_energy()``               →  Tr(D·H)
+    * ``get_number_of_electrons()``  ->  Tr(D·S)
+    * ``get_energy()``               ->  Tr(D·H)
 
   using the highly-optimised
   :func:`core.sparse_math.trace_matmul_sparse_snap_vectorized`.
@@ -349,7 +349,16 @@ class Snapshot:
             den = conv.matrix_to_e3nn(self.density)
 
             change_of_basis = torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            pos = pos @ change_of_basis if pos is not None else None
+            forces = forces @ change_of_basis if forces is not None else None
+            box = box @ change_of_basis if box is not None else None
+        elif self.density.basis == "e3nn" and target == "openmx":
+            conv = OpenMXE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_openmx(self.hamiltonian)
+            ovl = conv.matrix_to_openmx(self.overlap)
+            den = conv.matrix_to_openmx(self.density)
 
+            change_of_basis = torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
             pos = pos @ change_of_basis if pos is not None else None
             forces = forces @ change_of_basis if forces is not None else None
             box = box @ change_of_basis if box is not None else None
@@ -358,28 +367,6 @@ class Snapshot:
             ham = conv.matrix_to_e3nn(self.hamiltonian)
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
-        elif self.density.basis == "e3nn" and target == "openmx":
-            conv = OpenMXE3NNConverter(cfg, device=device)
-            ham = conv.matrix_to_openmx(self.hamiltonian)
-            ovl = conv.matrix_to_openmx(self.overlap)
-            den = conv.matrix_to_openmx(self.density)
-
-            change_of_basis = torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-
-            pos = pos @ change_of_basis if pos is not None else None
-            forces = forces @ change_of_basis if forces is not None else None
-            box = box @ change_of_basis if box is not None else None
-        elif self.density.basis == "e3nn" and target == "fhi-aims":
-            conv = FHIaimsE3NNConverter(cfg, device=device)
-            ham = conv.matrix_to_fhiaims(self.hamiltonian)
-            ovl = conv.matrix_to_fhiaims(self.overlap)
-            den = conv.matrix_to_fhiaims(self.density)
-            box = (
-                box @ torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
-                if box is not None
-                else None
-            )
-            print("Warning!: wrong formula")
         elif self.density.basis == "e3nn" and target == "fhi-aims":
             conv = FHIaimsE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_fhiaims(self.hamiltonian)
@@ -451,7 +438,7 @@ class Snapshot:
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
         """
-        Return dict ``key → (E,3)`` of minimal-image displacement vectors.
+        Return dict ``key -> (E,3)`` of minimal-image displacement vectors.
         """
         if self.positions is None or self.box is None:
             raise RuntimeError("Snapshot has no position/box information")
@@ -481,7 +468,7 @@ class Snapshot:
     def _edge_distances(
         self, mat: BlockMatrix | None = None
     ) -> Dict[str, torch.Tensor]:
-        """Return dict ``key → (E,)`` with minimal-image distances."""
+        """Return dict ``key -> (E,)`` with minimal-image distances."""
         disp = self._edge_displacements(mat)
         return {k: torch.linalg.norm(v, dim=-1) for k, v in disp.items()}
 

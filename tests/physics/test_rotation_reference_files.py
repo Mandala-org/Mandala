@@ -17,14 +17,8 @@ import math
 
 import torch
 
-from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.snapshot import Snapshot
 from net.common import Config
-
-
-# ------------------------------------------------------------------ helpers
-_ATOMS = list("HHHHOO")  # global index order used in the test files
-_CFG = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
 
 
 def _rotation_matrix() -> torch.Tensor:

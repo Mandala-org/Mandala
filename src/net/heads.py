@@ -20,7 +20,7 @@ from net.common import Config, E3MLP
 
 class DeepHead(nn.Module):
     """
-    Shared trunk + per-pair final Linear → irrep vectors.
+    Shared trunk + per-pair final Linear -> irrep vectors.
     """
 
     def __init__(

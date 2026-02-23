@@ -71,7 +71,7 @@ class _IrrepToMatrix:
     # ------------------------- mapping helpers ------------------------------ #
     def blocks_to_vectors(self, blocks: torch.Tensor, q: torch.Tensor) -> torch.Tensor:
         """
-        Map ``(..., d_i, d_j)`` blocks → ``(..., n_vec)`` irrep vectors.
+        Map ``(..., d_i, d_j)`` blocks -> ``(..., n_vec)`` irrep vectors.
         """
         flat = blocks.flatten(-2)  # (..., d_i*d_j)
         return flat @ q.T
@@ -171,7 +171,7 @@ class BlockIrrepMapper(nn.Module):
         vectors: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Inverse mapping vector → block.
+        Inverse mapping vector -> block.
         """
         key = self._canonical_pair(pair)
         itm = self._maps[key]
