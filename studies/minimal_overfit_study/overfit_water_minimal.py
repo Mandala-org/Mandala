@@ -49,6 +49,7 @@ from common import (
     compute_detailed_metrics,
     compute_distance_error_curve,
     save_distance_error_curve_plot,
+    save_dos_comparison_plot,
     save_hamiltonian_frame_to_disk,
     compile_frames_to_video,
     filter_irreps_block_data_by_irrep,
@@ -1002,6 +1003,8 @@ if __name__ == "__main__":
 
             # Convert to matrix blocks (train_target = "matrix")
             pred_H_matrix = pred_H_irreps.to_blocks(mapper)
+            # Use symmetrized prediction for all metrics/reporting.
+            pred_H_matrix_metrics = (pred_H_matrix + pred_H_matrix.transpose()) * 0.5
 
             # Compute loss - either standard or per-irrep decomposed
             if CONFIG["train_on_irrep_parts"]:
@@ -1219,7 +1222,7 @@ if __name__ == "__main__":
                 # Compute detailed metrics with filtering
                 # First filter both predictions and targets
                 filtered_pred = filter_blocks_by_partial_train(
-                    pred_H_matrix, CONFIG["partial_train"]
+                    pred_H_matrix_metrics, CONFIG["partial_train"]
                 )
                 filtered_target = filter_blocks_by_partial_train(
                     target_H_matrix, CONFIG["partial_train"]
@@ -1235,7 +1238,7 @@ if __name__ == "__main__":
                 overlap_filtered_blocks = {}
 
                 for key in target_H_matrix.pair_blocks.keys():
-                    if key in pred_H_matrix.pair_blocks:
+                    if key in pred_H_matrix_metrics.pair_blocks:
                         pred_full, pred_mask = filtered_pred[key]
                         targ_full, targ_mask = filtered_target[key]
                         ovlp_full, ovlp_mask = filtered_overlap[key]
@@ -1352,8 +1355,9 @@ if __name__ == "__main__":
                         f"✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
+                pred_H_irreps_metrics = pred_H_matrix_metrics.to_vectors(mapper)
                 per_irrep_metrics = compute_irrep_metrics(
-                    pred_H_irreps, target_H_irreps, all_irreps, mapper
+                    pred_H_irreps_metrics, target_H_irreps, all_irreps, mapper
                 )
                 if CONFIG["log_per_irrep_metrics"]:
                     log_per_irrep_metrics(
@@ -1372,7 +1376,7 @@ if __name__ == "__main__":
                 # Save frame for video at every log interval
                 try:
                     save_hamiltonian_frame_to_disk(
-                        pred_H_matrix,
+                        pred_H_matrix_metrics,
                         target_H_matrix,
                         overlap_e3nn,
                         list(snapshot.hamiltonian.atoms),
@@ -1446,10 +1450,12 @@ if __name__ == "__main__":
 
         # Convert to blocks
         pred_H_matrix = pred_H_irreps.to_blocks(mapper)
+        # Use symmetrized prediction for final metrics/reporting.
+        pred_H_matrix_metrics = (pred_H_matrix + pred_H_matrix.transpose()) * 0.5
 
         # Filter for partial training if needed
         filtered_pred = filter_blocks_by_partial_train(
-            pred_H_matrix, CONFIG["partial_train"]
+            pred_H_matrix_metrics, CONFIG["partial_train"]
         )
         filtered_target = filter_blocks_by_partial_train(
             target_H_matrix, CONFIG["partial_train"]
@@ -1466,7 +1472,7 @@ if __name__ == "__main__":
         overlap_filtered_blocks = {}
 
         for key in target_H_matrix.pair_blocks.keys():
-            if key in pred_H_matrix.pair_blocks:
+            if key in pred_H_matrix_metrics.pair_blocks:
                 pred_full, pred_mask = filtered_pred[key]
                 targ_full, targ_mask = filtered_target[key]
                 ovlp_full, ovlp_mask = filtered_overlap[key]
@@ -1534,6 +1540,37 @@ if __name__ == "__main__":
             "final/correction_mse": final_detailed_metrics["correction_mse"],
         }
 
+        # DOS comparison
+        dos_plot_path = run_checkpoint_dir / "dos_comparison_final.png"
+        try:
+            dos_metrics = save_dos_comparison_plot(
+                H_pred=pred_H_matrix_metrics,
+                H_gt=target_H_matrix,
+                S=overlap_e3nn,
+                output_path=dos_plot_path,
+                sigma=0.2,
+                bin_width=0.1,
+                title="DOS Comparison",
+            )
+            final_metrics.update(
+                {
+                    "final/eig_abs_mean": dos_metrics["eig_abs_mean"],
+                    "final/eig_abs_max": dos_metrics["eig_abs_max"],
+                    "final/eig_rel_mean": dos_metrics["eig_rel_mean"],
+                    "final/eig_rel_max": dos_metrics["eig_rel_max"],
+                    "final/dos_mae": dos_metrics["dos_mae"],
+                    "final/dos_mse": dos_metrics["dos_mse"],
+                    "final/dos_max_abs": dos_metrics["dos_max_abs"],
+                }
+            )
+            wandb.log({"final/dos_comparison_plot": wandb.Image(str(dos_plot_path))})
+            print(
+                f"  DOS plot saved: {dos_plot_path} "
+                f"(dos_mae={dos_metrics['dos_mae']:.6e})"
+            )
+        except Exception as e:
+            print(f"⚠️  Warning: Could not generate DOS comparison plot: {e}")
+
         print("\n  Per-block Metrics:")
         for key in pred_filtered_blocks.keys():
             pred_block = pred_filtered_blocks[key]
@@ -1547,13 +1584,13 @@ if __name__ == "__main__":
             # Get mask info for reporting
             _, mask = filtered_pred[key]
             num_selected = (
-                mask[: pred_H_matrix.pair_blocks[key].shape[0]].sum().item()
-                if key in pred_H_matrix.pair_blocks
+                mask[: pred_H_matrix_metrics.pair_blocks[key].shape[0]].sum().item()
+                if key in pred_H_matrix_metrics.pair_blocks
                 else 0
             )
             num_total = (
-                pred_H_matrix.pair_blocks[key].shape[0]
-                if key in pred_H_matrix.pair_blocks
+                pred_H_matrix_metrics.pair_blocks[key].shape[0]
+                if key in pred_H_matrix_metrics.pair_blocks
                 else 0
             )
 
@@ -1578,7 +1615,7 @@ if __name__ == "__main__":
         # Distance-binned error curves (64 bins)
         print("\n  Distance-binned error curves (64 bins):")
         distance_curve = compute_distance_error_curve(
-            H_pred=pred_H_matrix,
+            H_pred=pred_H_matrix_metrics,
             H_gt=target_H_matrix,
             positions=positions,
             box=box,
@@ -1632,7 +1669,7 @@ if __name__ == "__main__":
                 irrep_str = str(irrep)
                 try:
                     pred_irrep = split_hamiltonian_by_irrep(
-                        pred_H_matrix, mapper, irrep_str
+                        pred_H_matrix_metrics, mapper, irrep_str
                     )
                     target_irrep = split_hamiltonian_by_irrep(
                         target_H_matrix, mapper, irrep_str
