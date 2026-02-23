@@ -20,6 +20,7 @@ import argparse
 import json
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 from collections import Counter
 
 # Add project root to path
@@ -98,8 +99,8 @@ def parse_args():
     parser.add_argument(
         "--percentile",
         type=float,
-        default=80.0,
-        help="Percentile for dynamic color range (default: 80.0)",
+        default=99.0,
+        help="Percentile for dynamic color range (default: 99.0)",
     )
     parser.add_argument(
         "--split-by-irrep",
@@ -195,6 +196,141 @@ def compute_metrics(H_pred, H_gt, S, partial_train=None):
         "mse": mse,
         "mae_mod": mae_mod,
         "mu_H": mu_H,
+    }
+
+
+def compute_generalized_eigenvalues(H, S):
+    """
+    Compute generalized eigenvalues for H x = lambda S x using Cholesky reduction.
+
+    Args:
+        H: BlockMatrix Hamiltonian
+        S: BlockMatrix overlap
+
+    Returns:
+        1D torch.Tensor of sorted eigenvalues
+    """
+    H_dense = H.to_dense().detach()
+    S_dense = S.to_dense().detach()
+
+    # Symmetrize to improve numerical robustness
+    H_dense = 0.5 * (H_dense + H_dense.T)
+    S_dense = 0.5 * (S_dense + S_dense.T)
+
+    L = torch.linalg.cholesky(S_dense)
+    tmp = torch.linalg.solve(L, H_dense)
+    A = torch.linalg.solve(L, tmp.T).T  # A = L^{-1} H L^{-T}
+    A = 0.5 * (A + A.T)
+    return torch.linalg.eigvalsh(A)
+
+
+def compute_dos_from_eigenvalues(eigenvalues, sigma, bin_width, E_min, E_max):
+    """
+    Compute DOS from eigenvalues via Gaussian broadening.
+    """
+    grid = torch.arange(
+        E_min,
+        E_max + bin_width,
+        bin_width,
+        dtype=eigenvalues.dtype,
+        device=eigenvalues.device,
+    )
+    dos = torch.sum(
+        torch.exp(-((grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma**2)),
+        dim=1,
+    ) / (
+        torch.sqrt(
+            torch.tensor(2 * torch.pi, dtype=eigenvalues.dtype, device=grid.device)
+        )
+        * sigma
+    )
+    return grid, dos
+
+
+def evaluate_eigen_and_dos(H_pred, H_gt, S, output_dir, prefix):
+    """
+    Evaluate generalized-eigenvalue and DOS errors, and save DOS comparison plot.
+
+    Returns:
+        Dict with eigen and DOS metrics.
+    """
+    eig_pred = compute_generalized_eigenvalues(H_pred, S)
+    eig_gt = compute_generalized_eigenvalues(H_gt, S)
+
+    abs_err = torch.abs(eig_pred - eig_gt)
+    rel_err = abs_err / (torch.abs(eig_gt) + 1e-12)
+
+    eig_metrics = {
+        "eig_abs_mean": float(abs_err.mean().item()),
+        "eig_abs_max": float(abs_err.max().item()),
+        "eig_rel_mean": float(rel_err.mean().item()),
+        "eig_rel_max": float(rel_err.max().item()),
+    }
+
+    # Build a common DOS grid spanning both spectra with a small margin.
+    eig_min = float(torch.min(torch.min(eig_pred), torch.min(eig_gt)).item())
+    eig_max = float(torch.max(torch.max(eig_pred), torch.max(eig_gt)).item())
+    span = max(eig_max - eig_min, 1e-6)
+    margin = 0.1 * span + 0.05
+    E_min = eig_min - margin
+    E_max = eig_max + margin
+    sigma = 0.2
+    bin_width = 0.1
+
+    grid, dos_pred = compute_dos_from_eigenvalues(
+        eig_pred,
+        sigma=sigma,
+        bin_width=bin_width,
+        E_min=E_min,
+        E_max=E_max,
+    )
+    _, dos_gt = compute_dos_from_eigenvalues(
+        eig_gt,
+        sigma=sigma,
+        bin_width=bin_width,
+        E_min=E_min,
+        E_max=E_max,
+    )
+
+    dos_diff = dos_pred - dos_gt
+    dos_metrics = {
+        "dos_mae": float(torch.mean(torch.abs(dos_diff)).item()),
+        "dos_mse": float(torch.mean(dos_diff**2).item()),
+        "dos_max_abs": float(torch.max(torch.abs(dos_diff)).item()),
+        "dos_grid_min": float(grid[0].item()),
+        "dos_grid_max": float(grid[-1].item()),
+        "dos_grid_points": int(grid.shape[0]),
+    }
+
+    # Save DOS comparison plot
+    dos_plot_path = output_dir / f"dos_comparison_{prefix}.png"
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    ax.plot(
+        grid.detach().cpu().numpy(),
+        dos_gt.detach().cpu().numpy(),
+        label="DOS GT",
+        linewidth=2.0,
+    )
+    ax.plot(
+        grid.detach().cpu().numpy(),
+        dos_pred.detach().cpu().numpy(),
+        label="DOS Pred",
+        linewidth=2.0,
+        linestyle="--",
+    )
+    ax.set_xlabel("Energy")
+    ax.set_ylabel("DOS")
+    ax.set_title(f"DOS Comparison ({prefix})")
+    ax.grid(alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(dos_plot_path, dpi=150)
+    plt.close(fig)
+
+    return {
+        **eig_metrics,
+        **dos_metrics,
+        "dos_plot_path": str(dos_plot_path),
     }
 
 
@@ -431,6 +567,7 @@ def main():
             output_dir = project_root / output_dir
     else:
         output_dir = output_dir_default
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"\n[CONFIG]")
     print(f"  Checkpoint: {model_path}")
@@ -564,12 +701,16 @@ def main():
     H_pred_orig = predict_hamiltonian(network, graph_inputs_orig, device)
     H_gt_orig = snapshot_orig.hamiltonian.to(device)
     S_orig = snapshot_orig.overlap.to(device)
+    H_pred_orig = (H_pred_orig + H_pred_orig.transpose()) * 0.5
+    print("  Symmetrized original prediction: H <- 0.5 * (H + H^T)")
 
     # Predict on rotated
     print(f"\n[PREDICTION] Running inference on rotated structure...")
     H_pred_rot = predict_hamiltonian(network, graph_inputs_rot, device)
     H_gt_rot = snapshot_rot.hamiltonian.to(device)
     S_rot = snapshot_rot.overlap.to(device)
+    H_pred_rot = (H_pred_rot + H_pred_rot.transpose()) * 0.5
+    print("  Symmetrized rotated prediction: H <- 0.5 * (H + H^T)")
 
     # Compute metrics for original
     print(f"\n{'='*80}")
@@ -598,6 +739,37 @@ def main():
     print(f"  MSE:       {metrics_rot['mse']:.6e}")
     print(f"  MAE_mod:   {metrics_rot['mae_mod']:.6e}")
     print(f"  mu_H:      {metrics_rot['mu_H']:.6e}")
+
+    # Evaluate eigenvalue and DOS errors
+    print(f"\n{'='*80}")
+    print("EIGENVALUE & DOS METRICS (ORIGINAL)")
+    print(f"{'='*80}")
+    eig_dos_orig = evaluate_eigen_and_dos(
+        H_pred_orig, H_gt_orig, S_orig, output_dir=output_dir, prefix="original"
+    )
+    print(f"  eig abs mean: {eig_dos_orig['eig_abs_mean']:.6e}")
+    print(f"  eig abs max:  {eig_dos_orig['eig_abs_max']:.6e}")
+    print(f"  eig rel mean: {eig_dos_orig['eig_rel_mean']:.6e}")
+    print(f"  eig rel max:  {eig_dos_orig['eig_rel_max']:.6e}")
+    print(f"  dos MAE:      {eig_dos_orig['dos_mae']:.6e}")
+    print(f"  dos MSE:      {eig_dos_orig['dos_mse']:.6e}")
+    print(f"  dos max abs:  {eig_dos_orig['dos_max_abs']:.6e}")
+    print(f"  DOS plot:     {eig_dos_orig['dos_plot_path']}")
+
+    print(f"\n{'='*80}")
+    print("EIGENVALUE & DOS METRICS (ROTATED)")
+    print(f"{'='*80}")
+    eig_dos_rot = evaluate_eigen_and_dos(
+        H_pred_rot, H_gt_rot, S_rot, output_dir=output_dir, prefix="rotated"
+    )
+    print(f"  eig abs mean: {eig_dos_rot['eig_abs_mean']:.6e}")
+    print(f"  eig abs max:  {eig_dos_rot['eig_abs_max']:.6e}")
+    print(f"  eig rel mean: {eig_dos_rot['eig_rel_mean']:.6e}")
+    print(f"  eig rel max:  {eig_dos_rot['eig_rel_max']:.6e}")
+    print(f"  dos MAE:      {eig_dos_rot['dos_mae']:.6e}")
+    print(f"  dos MSE:      {eig_dos_rot['dos_mse']:.6e}")
+    print(f"  dos max abs:  {eig_dos_rot['dos_max_abs']:.6e}")
+    print(f"  DOS plot:     {eig_dos_rot['dos_plot_path']}")
 
     # Visualize original
     print(f"\n{'='*80}")
@@ -707,6 +879,28 @@ def main():
         f.write(f"MSE:       {metrics_rot['mse']:.6e}\n")
         f.write(f"MAE_mod:   {metrics_rot['mae_mod']:.6e}\n")
         f.write(f"mu_H:      {metrics_rot['mu_H']:.6e}\n")
+        f.write("\n")
+        f.write("ORIGINAL EIGENVALUE & DOS METRICS\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"eig_abs_mean: {eig_dos_orig['eig_abs_mean']:.6e}\n")
+        f.write(f"eig_abs_max:  {eig_dos_orig['eig_abs_max']:.6e}\n")
+        f.write(f"eig_rel_mean: {eig_dos_orig['eig_rel_mean']:.6e}\n")
+        f.write(f"eig_rel_max:  {eig_dos_orig['eig_rel_max']:.6e}\n")
+        f.write(f"dos_mae:      {eig_dos_orig['dos_mae']:.6e}\n")
+        f.write(f"dos_mse:      {eig_dos_orig['dos_mse']:.6e}\n")
+        f.write(f"dos_max_abs:  {eig_dos_orig['dos_max_abs']:.6e}\n")
+        f.write(f"dos_plot:     {eig_dos_orig['dos_plot_path']}\n")
+        f.write("\n")
+        f.write("ROTATED EIGENVALUE & DOS METRICS\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"eig_abs_mean: {eig_dos_rot['eig_abs_mean']:.6e}\n")
+        f.write(f"eig_abs_max:  {eig_dos_rot['eig_abs_max']:.6e}\n")
+        f.write(f"eig_rel_mean: {eig_dos_rot['eig_rel_mean']:.6e}\n")
+        f.write(f"eig_rel_max:  {eig_dos_rot['eig_rel_max']:.6e}\n")
+        f.write(f"dos_mae:      {eig_dos_rot['dos_mae']:.6e}\n")
+        f.write(f"dos_mse:      {eig_dos_rot['dos_mse']:.6e}\n")
+        f.write(f"dos_max_abs:  {eig_dos_rot['dos_max_abs']:.6e}\n")
+        f.write(f"dos_plot:     {eig_dos_rot['dos_plot_path']}\n")
 
     # Distance-binned error curves (64 bins) for original and rotated
     curve_orig = compute_distance_error_curve(
