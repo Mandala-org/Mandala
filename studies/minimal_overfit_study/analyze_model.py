@@ -481,7 +481,7 @@ def get_all_irreps_in_hamiltonian(mapper):
     return sorted(irreps_set, key=lambda ir: (ir.l, ir.p))
 
 
-def predict_hamiltonian(network, graph_inputs, device):
+def predict_hamiltonian(network, graph_inputs, device, magnitude_factorization=False):
     """Run model forward pass and convert to BlockMatrix."""
 
     network.eval()
@@ -534,6 +534,27 @@ def predict_hamiltonian(network, graph_inputs, device):
 
     # Convert to matrix blocks
     pred_H_matrix = pred_H_irreps.to_blocks(graph_inputs["mapper"])
+    if magnitude_factorization:
+        reconstructed = {}
+        for key, blocks in pred_H_matrix.pair_blocks.items():
+            if key not in pred_raw or "magnitudes" not in pred_raw[key]:
+                raise RuntimeError(
+                    f"Missing predicted magnitudes for key '{key}' in magnitude-factorization mode."
+                )
+            mags = pred_raw[key]["magnitudes"]
+            if mags.shape[0] != blocks.shape[0]:
+                raise RuntimeError(
+                    f"Magnitude/prediction edge-count mismatch for key '{key}': "
+                    f"{mags.shape[0]} vs {blocks.shape[0]}"
+                )
+            scale = mags
+            while scale.ndim < blocks.ndim:
+                scale = scale.unsqueeze(-1)
+            reconstructed[key] = blocks * scale
+
+        pred_H_matrix = pred_H_matrix._replace_pair_blocks(
+            reconstructed, basis=pred_H_matrix.basis
+        )
 
     return pred_H_matrix
 
@@ -662,6 +683,7 @@ def main():
         sh_irreps=sh_irreps,
         num_layers=config["num_layers"],
         mapper=mapper,
+        magnitude_factorization=config.get("magnitude_factorization", False),
         verbose=False,  # Disable verbose output during analysis
     ).to(device)
 
@@ -698,7 +720,12 @@ def main():
 
     # Predict on original
     print(f"\n[PREDICTION] Running inference on original structure...")
-    H_pred_orig = predict_hamiltonian(network, graph_inputs_orig, device)
+    H_pred_orig = predict_hamiltonian(
+        network,
+        graph_inputs_orig,
+        device,
+        magnitude_factorization=config.get("magnitude_factorization", False),
+    )
     H_gt_orig = snapshot_orig.hamiltonian.to(device)
     S_orig = snapshot_orig.overlap.to(device)
     H_pred_orig = (H_pred_orig + H_pred_orig.transpose()) * 0.5
@@ -706,7 +733,12 @@ def main():
 
     # Predict on rotated
     print(f"\n[PREDICTION] Running inference on rotated structure...")
-    H_pred_rot = predict_hamiltonian(network, graph_inputs_rot, device)
+    H_pred_rot = predict_hamiltonian(
+        network,
+        graph_inputs_rot,
+        device,
+        magnitude_factorization=config.get("magnitude_factorization", False),
+    )
     H_gt_rot = snapshot_rot.hamiltonian.to(device)
     S_rot = snapshot_rot.overlap.to(device)
     H_pred_rot = (H_pred_rot + H_pred_rot.transpose()) * 0.5

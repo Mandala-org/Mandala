@@ -7,7 +7,7 @@ Shared between training and analysis scripts.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from e3nn.o3 import Irreps, Linear, FullyConnectedTensorProduct
+from e3nn.o3 import Irreps, Linear, FullyConnectedTensorProduct, TensorSquare
 from e3nn.nn import Gate
 from torch_scatter import scatter
 from torch_geometric.utils import degree
@@ -477,24 +477,53 @@ class MinimalMessageBlock(nn.Module):
 class MinimalHead(nn.Module):
     """Predict irrep vectors for each edge type."""
 
-    def __init__(self, hidden_irreps, mapper):
+    def __init__(
+        self,
+        hidden_irreps,
+        mapper,
+        n_radial,
+        magnitude_factorization=False,
+    ):
         super().__init__()
         self.mapper = mapper
+        self.magnitude_factorization = bool(magnitude_factorization)
+        self.n_radial = int(n_radial)
 
         # Separate linear projections per edge type and diagonal status
         self.diag_projections = nn.ModuleDict()
         self.offdiag_projections = nn.ModuleDict()
         self.output_dims = {}
+        if self.magnitude_factorization:
+            self.magnitude_tensor_square = TensorSquare(Irreps(hidden_irreps))
+            ts_out_irreps = self.magnitude_tensor_square.irreps_out
+            self.magnitude_linears = nn.ModuleDict()
+            self.magnitude_mlps = nn.ModuleDict()
         for edge_type in mapper.edge_types:
             pair_irreps = mapper.get_pair_irreps(edge_type)
             self.diag_projections[edge_type] = Linear(hidden_irreps, pair_irreps)
             self.offdiag_projections[edge_type] = Linear(hidden_irreps, pair_irreps)
             self.output_dims[edge_type] = Irreps(pair_irreps).dim
+            if self.magnitude_factorization:
+                self.magnitude_linears[edge_type] = Linear(
+                    ts_out_irreps, Irreps("64x0e")
+                )
+                self.magnitude_mlps[edge_type] = nn.Sequential(
+                    nn.Linear(64 + self.n_radial, 128),
+                    nn.SiLU(),
+                    nn.Linear(128, 64),
+                    nn.SiLU(),
+                    nn.Linear(64, 1),
+                )
             print(
                 f"    [Head] {edge_type}: "
                 f"diag {hidden_irreps} -> {pair_irreps}, "
                 f"offdiag {hidden_irreps} -> {pair_irreps}"
             )
+            if self.magnitude_factorization:
+                print(
+                    f"            magnitude branch: TensorSquare({hidden_irreps}) "
+                    f"-> Linear({ts_out_irreps} -> 64x0e) -> MLP(64+{self.n_radial} -> 1) -> exp"
+                )
 
             # Check if Linear can produce all requested output irreps
             input_irreps = Irreps(hidden_irreps)
@@ -509,7 +538,9 @@ class MinimalHead(nn.Module):
                     f"    ⚠️  WARNING [{edge_type}]: Cannot produce irreps {', '.join(set(missing_irreps))} from {hidden_irreps}"
                 )
 
-    def forward(self, edge_feat, edge_type_idx, edge_index, edge_shift):
+    def forward(
+        self, edge_feat, edge_type_idx, edge_index, edge_shift, edge_length_emb
+    ):
         """
         Returns: dict[pair_key] -> {"vectors": tensor, "edges": tensor}
         """
@@ -523,6 +554,7 @@ class MinimalHead(nn.Module):
                 selected_feat = edge_feat[mask]
                 selected_edge_index = edge_index[:, mask]
                 selected_edge_shift = edge_shift[:, mask]
+                selected_edge_length_emb = edge_length_emb[mask]
 
                 # Diagonal edge: zero shift and same source/destination atom.
                 is_diag = (selected_edge_shift == 0).all(dim=0) & (
@@ -567,15 +599,51 @@ class MinimalHead(nn.Module):
                     dim=0,
                 )  # (5, E')
 
+                if self.magnitude_factorization:
+                    ts_feat = self.magnitude_tensor_square(selected_feat)
+                    check_for_nans(
+                        ts_feat,
+                        f"Head.{type_str}_magnitude_tensor_square",
+                        selected_feat,
+                    )
+                    mag_scalar_feat = self.magnitude_linears[type_str](ts_feat)
+                    check_for_nans(
+                        mag_scalar_feat,
+                        f"Head.{type_str}_magnitude_linear",
+                        ts_feat,
+                    )
+                    mag_mlp_in = torch.cat(
+                        [mag_scalar_feat, selected_edge_length_emb], dim=-1
+                    )
+                    mag_raw = self.magnitude_mlps[type_str](mag_mlp_in).squeeze(-1)
+                    check_for_nans(
+                        mag_raw,
+                        f"Head.{type_str}_magnitude_mlp",
+                        mag_mlp_in,
+                    )
+                    pred_magnitudes = torch.exp(mag_raw)
+                    check_for_nans(
+                        pred_magnitudes,
+                        f"Head.{type_str}_magnitude_exp",
+                        mag_raw,
+                    )
+
                 outputs[type_str] = {
                     "vectors": pred_vectors,
                     "edges": selected_edges,
                 }
+                if self.magnitude_factorization:
+                    outputs[type_str]["magnitudes"] = pred_magnitudes
                 print(
                     f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
                     f"({int(is_diag.sum().item())} diag, {int(is_offdiag.sum().item())} offdiag) "
                     f"-> vectors {pred_vectors.shape}"
                 )
+                if self.magnitude_factorization:
+                    print(
+                        f"                    magnitude -> {pred_magnitudes.shape} "
+                        f"(min={pred_magnitudes.min().item():.3e}, max={pred_magnitudes.max().item():.3e})"
+                    )
 
         return outputs
 
@@ -592,6 +660,7 @@ class MinimalNetwork(nn.Module):
         sh_irreps,
         num_layers,
         mapper,
+        magnitude_factorization=False,
         verbose=True,  # Default True for backward compatibility
     ):
         super().__init__()
@@ -621,7 +690,12 @@ class MinimalNetwork(nn.Module):
                 )
             )
 
-        self.head = MinimalHead(hidden_irreps, mapper)
+        self.head = MinimalHead(
+            hidden_irreps,
+            mapper,
+            n_radial=n_radial,
+            magnitude_factorization=magnitude_factorization,
+        )
 
         print(f"  Total parameters: {sum(p.numel() for p in self.parameters()):,}")
 
@@ -663,7 +737,13 @@ class MinimalNetwork(nn.Module):
 
         # Head
         print(f"    [Forward] Applying head...")
-        outputs = self.head(head_feat, edge_type_idx, edge_index, edge_shift)
+        outputs = self.head(
+            head_feat,
+            edge_type_idx,
+            edge_index,
+            edge_shift,
+            edge_length_emb,
+        )
 
         return outputs
 
