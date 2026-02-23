@@ -299,6 +299,14 @@ if __name__ == "__main__":
         help="Predict normalized blocks and separate per-edge magnitudes (default: False)",
     )
     parser.add_argument(
+        "--head-mlp-for-scalars",
+        "--head_mlp_for_scalars",
+        dest="head_mlp_for_scalars",
+        action="store_true",
+        default=False,
+        help="Predict scalar irrep parts with a dedicated MLP head from magnitude-branch input (default: False)",
+    )
+    parser.add_argument(
         "--magnitude-lambda",
         type=float,
         default=1.0,
@@ -367,6 +375,7 @@ if __name__ == "__main__":
         "verbose_forward": args.verbose_forward,
         "normalize_blocks": args.normalize_blocks,
         "magnitude_factorization": args.magnitude_factorization,
+        "head_mlp_for_scalars": args.head_mlp_for_scalars,
         "magnitude_lambda": args.magnitude_lambda,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         "require_exact_edge_match": args.require_exact_edge_match,
@@ -984,6 +993,7 @@ if __name__ == "__main__":
         num_layers=CONFIG["num_layers"],
         mapper=mapper,
         magnitude_factorization=CONFIG["magnitude_factorization"],
+        head_mlp_for_scalars=CONFIG["head_mlp_for_scalars"],
     ).to(device)
     if not CONFIG["log_model"]:
         sys.stdout.close()

@@ -684,6 +684,7 @@ def main():
         num_layers=config["num_layers"],
         mapper=mapper,
         magnitude_factorization=config.get("magnitude_factorization", False),
+        head_mlp_for_scalars=config.get("head_mlp_for_scalars", False),
         verbose=False,  # Disable verbose output during analysis
     ).to(device)
 
