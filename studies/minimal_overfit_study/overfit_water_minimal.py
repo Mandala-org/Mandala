@@ -465,6 +465,13 @@ if __name__ == "__main__":
     overlap_e3nn = canonicalize_block_matrix_edges(overlap_e3nn, positions, box)
     density_e3nn = canonicalize_block_matrix_edges(density_e3nn, positions, box)
 
+    hamiltonian_e3nn = (hamiltonian_e3nn + hamiltonian_e3nn.transpose()) * 0.5
+    if CONFIG["log_data"]:
+        print(
+            "  Pre-symmetrized Hamiltonian target via "
+            "0.5 * (H + H.transpose()) in BlockMatrix form."
+        )
+
     # Store target as matrix blocks (train_target = "matrix")
     if CONFIG["log_model"]:
         print("\n[TARGETS] Storing target as matrix blocks...")

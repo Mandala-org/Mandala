@@ -1717,7 +1717,7 @@ def save_hamiltonian_frame_to_disk(
     # Save figure
     filename = f"frame_epoch_{epoch:06d}.png"
     filepath = output_dir / filename
-    fig.savefig(filepath, dpi=150, bbox_inches="tight")
+    fig.savefig(filepath, dpi=150)
     plt.close(fig)
 
     return filepath
