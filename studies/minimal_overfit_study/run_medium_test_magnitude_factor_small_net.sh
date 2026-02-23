@@ -29,4 +29,5 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --lr-patience 400 \
   --magnitude-factorization \
   --magnitude-lambda 1.0 \
-  --head-mlp-for-scalars
+  --head-mlp-for-scalars \
+  --head-use-tensor-square

@@ -685,6 +685,7 @@ def main():
         mapper=mapper,
         magnitude_factorization=config.get("magnitude_factorization", False),
         head_mlp_for_scalars=config.get("head_mlp_for_scalars", False),
+        head_use_tensor_square=config.get("head_use_tensor_square", False),
         verbose=False,  # Disable verbose output during analysis
     ).to(device)
 

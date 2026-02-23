@@ -187,7 +187,7 @@ def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# 2.  Hidden irreps auto-builder  (cached – deterministic)
+# 2.  Hidden irreps auto-builder
 # ════════════════════════════════════════════════════════════════════════
 @lru_cache(maxsize=None)
 def build_hidden_irreps(
