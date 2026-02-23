@@ -11,7 +11,7 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --run-name "${RUN_NAME}" \
   --num-epochs 10000 \
   --log-interval 200 \
-  --lr 1e-2 \
+  --lr 1e-1 \
   --cutoff-radius 7.0 \
   --normalize-blocks \
   --apply-cutoff-to-targets \
