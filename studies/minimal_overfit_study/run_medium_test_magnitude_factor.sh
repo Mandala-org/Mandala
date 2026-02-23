@@ -28,4 +28,5 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --n-radial 128 \
   --lr-patience 200 \
   --magnitude-factorization \
-  --magnitude-lambda 1.0
+  --magnitude-lambda 1.0 \
+  --benchmark

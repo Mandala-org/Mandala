@@ -1051,8 +1051,6 @@ if __name__ == "__main__":
     benchmark_order = [
         "epoch_total",
         "forward_total",
-        "forward_node_encoder",
-        "forward_edge_encoder",
         "pred_pack_raw_outputs",
         "pred_to_blocks_norm",
         "loss_block_total",
@@ -1130,7 +1128,6 @@ if __name__ == "__main__":
                 old_stdout = sys.stdout
                 sys.stdout = open(os.devnull, "w")
 
-            forward_benchmark = {} if CONFIG["benchmark"] else None
             t_forward_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             pred_raw = network(
                 node_type_idx,
@@ -1142,18 +1139,9 @@ if __name__ == "__main__":
                 batch_node,
                 batch_edge,
                 log_to_wandb=log_activations,
-                benchmark_times=forward_benchmark,
             )
             if CONFIG["benchmark"]:
                 benchmark_add("forward_total", time.perf_counter() - t_forward_start)
-                benchmark_add(
-                    "forward_node_encoder",
-                    forward_benchmark.get("forward_node_encoder", 0.0),
-                )
-                benchmark_add(
-                    "forward_edge_encoder",
-                    forward_benchmark.get("forward_edge_encoder", 0.0),
-                )
 
             if not verbose and not CONFIG["verbose_forward"]:
                 sys.stdout.close()
