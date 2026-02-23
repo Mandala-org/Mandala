@@ -195,6 +195,12 @@ if __name__ == "__main__":
         help="Generate per-irrep visualization images (k-range=0) and log to WandB (default: False).",
     )
     parser.add_argument(
+        "--log-activations-wandb",
+        action="store_true",
+        default=False,
+        help="Enable logging activation magnitudes to WandB (default: False).",
+    )
+    parser.add_argument(
         "--benchmark",
         action="store_true",
         default=False,
@@ -350,6 +356,7 @@ if __name__ == "__main__":
         "log_forward": args.log_forward,
         "log_per_irrep_metrics": args.log_per_irrep_metrics,
         "log_per_irrep_images": args.log_per_irrep_images,
+        "log_activations_wandb": args.log_activations_wandb,
         "benchmark": args.benchmark,
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
@@ -1121,7 +1128,9 @@ if __name__ == "__main__":
             # Temporarily suppress forward pass logging
             verbose = should_log_now and CONFIG["log_forward"]
 
-            log_activations = should_log_now
+            log_activations = should_log_now and CONFIG.get(
+                "log_activations_wandb", False
+            )
 
             if not verbose and not CONFIG["verbose_forward"]:
                 # Silence print by redirecting to nowhere temporarily
