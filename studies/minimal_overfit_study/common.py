@@ -7,7 +7,6 @@ Shared between training and analysis scripts.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import time
 from e3nn.o3 import Irreps, Linear, FullyConnectedTensorProduct, TensorSquare
 from e3nn.nn import Gate
 from torch_scatter import scatter
@@ -711,30 +710,14 @@ class MinimalNetwork(nn.Module):
         batch_node,
         batch_edge,
         log_to_wandb=False,
-        benchmark_times=None,
     ):
         print("    [Forward] Starting forward pass...")
 
         # Encode
-        if benchmark_times is not None:
-            t0 = time.perf_counter()
-            node_feat = self.node_enc(node_type_idx)
-            benchmark_times["forward_node_encoder"] = benchmark_times.get(
-                "forward_node_encoder", 0.0
-            ) + (time.perf_counter() - t0)
-
-            t0 = time.perf_counter()
-            edge_feat = self.edge_enc(
-                edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb
-            )
-            benchmark_times["forward_edge_encoder"] = benchmark_times.get(
-                "forward_edge_encoder", 0.0
-            ) + (time.perf_counter() - t0)
-        else:
-            node_feat = self.node_enc(node_type_idx)
-            edge_feat = self.edge_enc(
-                edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb
-            )
+        node_feat = self.node_enc(node_type_idx)
+        edge_feat = self.edge_enc(
+            edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb
+        )
 
         # Message passing (both nodes and edges get updated)
         for i, mp_layer in enumerate(self.mp_layers):
