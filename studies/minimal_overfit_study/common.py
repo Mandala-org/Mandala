@@ -1051,6 +1051,149 @@ def save_distance_error_curve_plot(
 
 
 # =============================================================================
+# EIGENVALUE / DOS UTILITIES
+# =============================================================================
+
+
+def compute_generalized_eigenvalues(H, S):
+    """
+    Compute generalized eigenvalues for H x = lambda S x using Cholesky reduction.
+    """
+    H_dense = H.to_dense().detach().to(torch.float64)
+    S_dense = S.to_dense().detach().to(torch.float64)
+
+    # Symmetrize for numerical robustness.
+    H_dense = 0.5 * (H_dense + H_dense.T)
+    S_dense = 0.5 * (S_dense + S_dense.T)
+
+    L = torch.linalg.cholesky(S_dense)
+    tmp = torch.linalg.solve(L, H_dense)
+    A = torch.linalg.solve(L, tmp.T).T  # A = L^{-1} H L^{-T}
+    A = 0.5 * (A + A.T)
+    return torch.linalg.eigvalsh(A)
+
+
+def compute_dos_from_eigenvalues(
+    eigenvalues,
+    sigma=0.2,
+    bin_width=0.1,
+    e_min=None,
+    e_max=None,
+):
+    """
+    Compute DOS from eigenvalues via Gaussian broadening.
+    """
+    if e_min is None or e_max is None:
+        eig_min = float(torch.min(eigenvalues).item())
+        eig_max = float(torch.max(eigenvalues).item())
+        span = max(eig_max - eig_min, 1e-6)
+        margin = 0.1 * span + 0.05
+        e_min = eig_min - margin
+        e_max = eig_max + margin
+
+    grid = torch.arange(
+        e_min,
+        e_max + bin_width,
+        bin_width,
+        dtype=eigenvalues.dtype,
+        device=eigenvalues.device,
+    )
+    dos = torch.sum(
+        torch.exp(-((grid[:, None] - eigenvalues[None, :]) ** 2) / (2 * sigma**2)),
+        dim=1,
+    ) / (
+        torch.sqrt(
+            torch.tensor(2 * torch.pi, dtype=eigenvalues.dtype, device=grid.device)
+        )
+        * sigma
+    )
+    return grid, dos
+
+
+def save_dos_comparison_plot(
+    H_pred,
+    H_gt,
+    S,
+    output_path: Path | str,
+    *,
+    sigma: float = 0.2,
+    bin_width: float = 0.1,
+    title: str = "DOS Comparison",
+):
+    """
+    Compute eigen/DOS metrics and save a DOS comparison plot.
+
+    Returns:
+        Dict with eigen and DOS summary metrics.
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    eig_pred = compute_generalized_eigenvalues(H_pred, S)
+    eig_gt = compute_generalized_eigenvalues(H_gt, S)
+
+    abs_err = torch.abs(eig_pred - eig_gt)
+    rel_err = abs_err / (torch.abs(eig_gt) + 1e-12)
+
+    eig_min = float(torch.min(torch.min(eig_pred), torch.min(eig_gt)).item())
+    eig_max = float(torch.max(torch.max(eig_pred), torch.max(eig_gt)).item())
+    span = max(eig_max - eig_min, 1e-6)
+    margin = 0.1 * span + 0.05
+    e_min = eig_min - margin
+    e_max = eig_max + margin
+
+    grid, dos_pred = compute_dos_from_eigenvalues(
+        eig_pred,
+        sigma=sigma,
+        bin_width=bin_width,
+        e_min=e_min,
+        e_max=e_max,
+    )
+    _, dos_gt = compute_dos_from_eigenvalues(
+        eig_gt,
+        sigma=sigma,
+        bin_width=bin_width,
+        e_min=e_min,
+        e_max=e_max,
+    )
+
+    dos_diff = dos_pred - dos_gt
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    x = grid.detach().cpu().numpy()
+    ax.plot(x, dos_gt.detach().cpu().numpy(), label="DOS GT", linewidth=2.0)
+    ax.plot(
+        x,
+        dos_pred.detach().cpu().numpy(),
+        label="DOS Pred",
+        linewidth=2.0,
+        linestyle="--",
+    )
+    ax.set_xlabel("Energy")
+    ax.set_ylabel("DOS")
+    ax.set_title(title)
+    ax.grid(alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+
+    return {
+        "eig_abs_mean": float(abs_err.mean().item()),
+        "eig_abs_max": float(abs_err.max().item()),
+        "eig_rel_mean": float(rel_err.mean().item()),
+        "eig_rel_max": float(rel_err.max().item()),
+        "dos_mae": float(torch.mean(torch.abs(dos_diff)).item()),
+        "dos_mse": float(torch.mean(dos_diff**2).item()),
+        "dos_max_abs": float(torch.max(torch.abs(dos_diff)).item()),
+        "dos_grid_min": float(grid[0].item()),
+        "dos_grid_max": float(grid[-1].item()),
+        "dos_grid_points": int(grid.shape[0]),
+        "dos_plot_path": str(output_path),
+    }
+
+
+# =============================================================================
 # VISUALIZATION FUNCTIONS
 # =============================================================================
 
