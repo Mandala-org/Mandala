@@ -8,7 +8,7 @@ blocks.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Dict, List, Tuple
 
 import torch
@@ -104,3 +104,49 @@ def strict_edge_alignment_check(
                 f"Missing in graph={missing_in_graph}, missing in target={missing_in_target}"
             )
 
+
+def strict_reverse_edge_check(
+    edge_index: torch.Tensor,
+    edge_shift: torch.Tensor,
+    *,
+    edge_set_name: str = "graph",
+) -> None:
+    """
+    Strictly validate reverse-edge presence for the provided edge set.
+
+    For every edge (sx, sy, sz, i, j), the reverse
+    (-sx, -sy, -sz, j, i) must be present with the same multiplicity.
+    """
+    counts: Counter[Edge5D] = Counter()
+    n_edges = edge_index.shape[1]
+    for e in range(n_edges):
+        edge = (
+            int(edge_shift[0, e].item()),
+            int(edge_shift[1, e].item()),
+            int(edge_shift[2, e].item()),
+            int(edge_index[0, e].item()),
+            int(edge_index[1, e].item()),
+        )
+        counts[edge] += 1
+
+    mismatches = []
+    for edge, count in counts.items():
+        sx, sy, sz, i, j = edge
+        reverse = (-sx, -sy, -sz, j, i)
+        reverse_count = counts.get(reverse, 0)
+        if reverse_count != count:
+            mismatches.append((edge, count, reverse, reverse_count))
+            if len(mismatches) >= 10:
+                break
+
+    if mismatches:
+        details = "; ".join(
+            [
+                f"edge={edge} count={count} reverse={reverse} reverse_count={reverse_count}"
+                for edge, count, reverse, reverse_count in mismatches
+            ]
+        )
+        raise RuntimeError(
+            f"[{edge_set_name}] reverse-edge check failed. "
+            f"Found {len(mismatches)} mismatches (showing up to 10): {details}"
+        )
