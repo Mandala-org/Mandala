@@ -1297,7 +1297,7 @@ def visualize_hamiltonians(
     output_dir,
     dynamic_range=False,
     diff_dynamic_range=False,
-    per_panel_dynamic_range=False,
+    per_panel_dynamic_range=True,
     partial_train=None,
     filename_prefix="hamiltonian",
     percentile=80.0,
@@ -1324,10 +1324,10 @@ def visualize_hamiltonians(
         diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
                             and abs(diff_corrected). Defaults to False (use
                             same range as ground truth/prediction).
-        per_panel_dynamic_range: If True and dynamic_range is enabled, compute
-                                 the dynamic range separately for each panel
-                                 (gt, pred, diff, diff_corrected). Defaults to
-                                 False (old behavior).
+        per_panel_dynamic_range: If True and dynamic_range is enabled, use one
+                                 shared dynamic range for (gt, pred) and a second
+                                 shared range for (diff, diff_corrected). Defaults
+                                 to False (old behavior).
         partial_train: "diag", "offdiag", or None - filters which blocks to visualize
         filename_prefix: Prefix for the output filename (e.g., "hamiltonian" or "hamiltonian_0e")
         percentile: Percentile value for dynamic color range (default: 80.0)
@@ -1402,15 +1402,23 @@ def visualize_hamiltonians(
 
         # Determine color ranges
         if per_panel_dynamic_range and dynamic_range:
-            v_gt = np.percentile(np.abs(H_gt_dense), percentile)
-            v_pred = np.percentile(np.abs(H_pred_dense), percentile)
-            v_diff = np.percentile(np.abs(diff), percentile)
-            v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+            main_abs = np.concatenate(
+                [np.abs(H_gt_dense).ravel(), np.abs(H_pred_dense).ravel()]
+            )
+            v_main = max(float(np.percentile(main_abs, percentile)), 1e-12)
+            vmin_gt, vmax_gt = -v_main, v_main
+            vmin_pred, vmax_pred = -v_main, v_main
 
-            vmin_gt, vmax_gt = -v_gt, v_gt
-            vmin_pred, vmax_pred = -v_pred, v_pred
-            vmin_diff, vmax_diff = -v_diff, v_diff
-            vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
+            if diff_dynamic_range:
+                diff_abs = np.concatenate(
+                    [np.abs(diff).ravel(), np.abs(diff_corrected).ravel()]
+                )
+                v_diff_shared = max(float(np.percentile(diff_abs, percentile)), 1e-12)
+            else:
+                v_diff_shared = v_main
+
+            vmin_diff, vmax_diff = -v_diff_shared, v_diff_shared
+            vmin_diff_corr, vmax_diff_corr = -v_diff_shared, v_diff_shared
         else:
             # Determine color range for ground truth/pred
             if dynamic_range:
@@ -1514,10 +1522,10 @@ def create_hamiltonian_frame_figure(
         diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
                             and abs(diff_corrected). Defaults to False (use
                             same range as ground truth/prediction).
-        per_panel_dynamic_range: If True and dynamic_range is enabled, compute
-                                 the dynamic range separately for each panel
-                                 (gt, pred, diff, diff_corrected). Defaults to
-                                 False (old behavior).
+        per_panel_dynamic_range: If True and dynamic_range is enabled, use one
+                                 shared dynamic range for (gt, pred) and a second
+                                 shared range for (diff, diff_corrected). Defaults
+                                 to False (old behavior).
         partial_train: "diag", "offdiag", or None - filters which blocks to show
         percentile: Percentile value for dynamic color range (default: 80.0)
         figsize: Figure size (default: (12, 12))
@@ -1559,15 +1567,23 @@ def create_hamiltonian_frame_figure(
 
     # Determine color ranges
     if per_panel_dynamic_range and dynamic_range:
-        v_gt = np.percentile(np.abs(H_gt_dense), percentile)
-        v_pred = np.percentile(np.abs(H_pred_dense), percentile)
-        v_diff = np.percentile(np.abs(diff), percentile)
-        v_diff_corr = np.percentile(np.abs(diff_corrected), percentile)
+        main_abs = np.concatenate(
+            [np.abs(H_gt_dense).ravel(), np.abs(H_pred_dense).ravel()]
+        )
+        v_main = max(float(np.percentile(main_abs, percentile)), 1e-12)
+        vmin_gt, vmax_gt = -v_main, v_main
+        vmin_pred, vmax_pred = -v_main, v_main
 
-        vmin_gt, vmax_gt = -v_gt, v_gt
-        vmin_pred, vmax_pred = -v_pred, v_pred
-        vmin_diff, vmax_diff = -v_diff, v_diff
-        vmin_diff_corr, vmax_diff_corr = -v_diff_corr, v_diff_corr
+        if diff_dynamic_range:
+            diff_abs = np.concatenate(
+                [np.abs(diff).ravel(), np.abs(diff_corrected).ravel()]
+            )
+            v_diff_shared = max(float(np.percentile(diff_abs, percentile)), 1e-12)
+        else:
+            v_diff_shared = v_main
+
+        vmin_diff, vmax_diff = -v_diff_shared, v_diff_shared
+        vmin_diff_corr, vmax_diff_corr = -v_diff_shared, v_diff_shared
     else:
         # Determine color range for ground truth/pred
         if dynamic_range:
@@ -1683,10 +1699,10 @@ def save_hamiltonian_frame_to_disk(
         diff_dynamic_range: If True, scale diff plots by percentile of abs(diff)
                             and abs(diff_corrected). Defaults to False (use
                             same range as ground truth/prediction).
-        per_panel_dynamic_range: If True and dynamic_range is enabled, compute
-                                 the dynamic range separately for each panel
-                                 (gt, pred, diff, diff_corrected). Defaults to
-                                 False (old behavior).
+        per_panel_dynamic_range: If True and dynamic_range is enabled, use one
+                                 shared dynamic range for (gt, pred) and a second
+                                 shared range for (diff, diff_corrected). Defaults
+                                 to False (old behavior).
         partial_train: "diag", "offdiag", or None - filters which blocks to show
         percentile: Percentile value for dynamic color range (default: 80.0)
 

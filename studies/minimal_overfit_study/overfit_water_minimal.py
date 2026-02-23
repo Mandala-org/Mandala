@@ -58,7 +58,7 @@ from common import (
     visualize_hamiltonians,
     permutation_to_matrix,
 )
-from strict_checks import strict_edge_alignment_check
+from strict_checks import strict_edge_alignment_check, strict_reverse_edge_check
 from detailed_logging import (
     build_wandb_detailed_metrics_log,
     build_wandb_per_irrep_metrics_log,
@@ -632,6 +632,11 @@ if __name__ == "__main__":
     # =============================================================================
     if CONFIG["log_data"]:
         print("\n[STRICT CHECKS] Validating graph/target edge alignment...")
+    strict_reverse_edge_check(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_set_name="graph",
+    )
     require_exact_edge_match = bool(CONFIG["require_exact_edge_match"])
     strict_edge_alignment_check(
         target_matrix=target_H_matrix,
