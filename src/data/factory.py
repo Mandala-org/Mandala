@@ -34,7 +34,7 @@ Purpose = Literal["train", "val"]
 
 # ════════════════════════════════════════════════════════════════════════
 class DatasetFactory:
-    """Collects snapshot paths → builds datasets + **shared** mapper."""
+    """Collects snapshot paths -> builds datasets + **shared** mapper."""
 
     # ------------------------------------------------------------------ init
     def __init__(

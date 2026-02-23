@@ -2,10 +2,10 @@
 E3GNN – PyTorch-Lightning implementation
 ----------------------------------------
 
-*  encoders.py         → NodeEncoder / EdgeEncoder
-*  layers.py           → MessageBlock (small & large graphs)
-*  heads.py            → DeepHead (H, S, D)
-*  sparse_math.trace_* → Energy / electron count losses
+*  encoders.py         -> NodeEncoder / EdgeEncoder
+*  layers.py           -> MessageBlock (small & large graphs)
+*  heads.py            -> DeepHead (H, S, D)
+*  sparse_math.trace_* -> Energy / electron count losses
 """
 
 from __future__ import annotations
@@ -153,7 +153,7 @@ class E3GNN(pl.LightningModule):
         atoms: Tuple[str, ...],
     ) -> IrrepsBlockData:
         """
-        Convert DeepHead raw dict → IrrepsBlockData with mapper.
+        Convert DeepHead raw dict -> IrrepsBlockData with mapper.
         """
         from collections import Counter
 
@@ -654,7 +654,7 @@ class E3GNN(pl.LightningModule):
         # 3. compute stress tensor σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
         # stress = (1/Ω) * box^T @ grad_box
         stress = torch.matmul(box.t(), grad_box) / volume
-        # 4. optionally symmetrize: σ → (σ+σ^T)/2
+        # 4. optionally symmetrize: σ -> (σ+σ^T)/2
         if symmetrize:
             stress = 0.5 * (stress + stress.transpose(-1, -2))
         return stress

@@ -110,12 +110,12 @@ def test_equiconv_initialization(tp_type):
     cfg = Config(tp_type=tp_type, n_radial=64)
 
     # Use irreps that are compatible with the TP
-    # in1 ⊗ in2 should produce paths to out
+    # in1 (x) in2 should produce paths to out
     irreps_in1 = Irreps("16x0e + 8x1e")  # Changed to 1e (even parity)
     irreps_in2 = Irreps("1x0e + 1x1o")  # sh irreps
     irreps_out = Irreps(
         "16x0e + 8x1o"
-    )  # 0e ⊗ 1o = 1o, 1e ⊗ 1o = 0e+1e+2e (includes 0e and 1o via gates)
+    )  # 0e (x) 1o = 1o, 1e (x) 1o = 0e+1e+2e (includes 0e and 1o via gates)
 
     conv = EquiConv(
         n_radial=cfg.n_radial,

@@ -1,0 +1,69 @@
+program: studies/minimal_overfit_study/overfit_water_minimal.py
+method: bayes
+metric:
+  name: final/mae_H
+  goal: minimize
+
+parameters:
+  # Learning rate
+  lr:
+    distribution: log_uniform_values
+    min: 1e-4
+    max: 1e-2
+
+  # Architecture - hidden dimension
+  hidden-irreps:
+    values:
+      - "64x0e + 64x1o + 32x1e + 32x2o + 64x2e + 32x3o + 16x3e + 8x4e"
+      - "64x0e + 64x0o + 32x1e + 32x1o + 16x2e + 16x2o + 8x3e + 8x3o + 4x4e + 4x4o"
+      # - "32x0e + 32x0o + 16x1e + 16x1o + 8x2e + 8x2o + 4x3e + 4x3o + 2x4e + 2x4o"
+      # - "16x0e + 16x0e + 8x1e + 8x1o + 4x2e + 4x2o + 2x3e + 2x3o + 1x4e + 1x4o"
+      # - "64x0e + 32x1e + 16x2e + 8x3e + 4x4e"
+      # - "32x0e + 16x1e + 8x2e + 4x3e + 2x4e"
+      # - "64x0e + 32x1o + 16x2e + 8x3o + 4x4e"
+      # - "32x0e + 16x1o + 8x2e + 4x3o + 2x4e"
+      # - "16x0e + 8x1o + 4x2e + 2x3o + 1x4e"
+
+
+  # Architecture - maximum angular momentum
+  l-max:
+    values: [2, 3, 4, 5]
+
+  # Architecture - number of message passing layers
+  num-layers:
+    values: [1, 2, 3]
+
+  # Radial basis functions
+  n-radial:
+    values: [32, 64, 128]
+
+  # Graph construction - cutoff radius
+  cutoff-radius:
+    value: 8.0
+
+  # Gradient clipping
+  grad-clip:
+    value: 1.0
+
+  # Training
+  num-epochs:
+    value: 15000
+
+  log-interval:
+    value: 200
+
+  device:
+    value: cuda
+
+# Early termination
+early_terminate:
+  type: hyperband
+  min_iter: 4000
+  eta: 3
+  s: 2
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args}

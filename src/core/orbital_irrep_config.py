@@ -83,12 +83,12 @@ class OrbitalIrrepConfig:
            *orbital* is one of ``s p d f g h i k l m`` (case-insensitive).
            Example::
 
-               {"Si": "3s2p2d1f"}     # → 3x0e + 2x1o + 2x2e + 1x3o
+               {"Si": "3s2p2d1f"}     # -> 3x0e + 2x1o + 2x2e + 1x3o
         """
         if not isinstance(dct, dict):
             raise OrbitalIrrepConfigError("Input must be a dict[element -> irreps]")
 
-        # map orbital letter → ℓ
+        # map orbital letter -> ℓ
         _orbital_to_l = {
             "s": 0,
             "p": 1,

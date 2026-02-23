@@ -1,0 +1,58 @@
+program: studies/minimal_overfit_study/overfit_water_minimal.py
+project: mandala-test-variants
+name: test_variants_long_big
+method: grid
+
+parameters:
+  # Data parameters
+  data-path:
+    value: "data/small/H2O/original/H2O.matrix"
+  info-path:
+    value: "data/small/H2O/original/H2O.info.out"
+  convention:
+    values: ["e3nn", "openmx"]
+  xyz-permutation:
+    values: ["012", "120", "201"]
+  change-box:
+    values: ["left", "right", "both"]
+
+  # Network architecture parameters
+  l-max:
+    value: 4
+  hidden-irreps:
+    value: 64x0e+64x0o+32x1e+32x1o+32x2e+32x2o+16x3e+16x3o+8x4e+8x4o
+  num-layers:
+    value: 2
+  cutoff-radius:
+    value: 8.0
+  n-radial:
+    value: 128
+
+  # Training parameters
+  lr:
+    value: 0.001
+  num-epochs:
+    value: 15000
+  log-interval:
+    value: 200
+  grad-clip:
+    value: 1.0
+  lr-factor:
+    value: 0.5
+  lr-patience:
+    value: 2000
+
+  # Device and checkpointing
+  device:
+    value: "cuda"
+  checkpoint-dir:
+    value: "studies/minimal_overfit_study/checkpoints"
+
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - --train-on-irrep-parts
+  - --generate-video
+  - ${args}

@@ -6,8 +6,8 @@
 #    python scripts/train.py --config-name debug_cpu
 #
 #  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
-#  Sweeps:    tune: 'wandb' → WandB Sweep Agent
-#             tune: 'ray'   → Ray Tune HPO
+#  Sweeps:    tune: 'wandb' -> WandB Sweep Agent
+#             tune: 'ray'   -> Ray Tune HPO
 # ---------------------------------------------------------------------
 
 from __future__ import annotations

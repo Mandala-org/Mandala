@@ -9,8 +9,8 @@ In-memory containers for a *single* snapshot:
 
 Both dataclasses keep:
     * `atoms`          : list[str]  (global order)
-    * `pair_edges`     : dict[key] → (2,E_ab)  long tensor with global indices
-    * `lookup`         : dict[(i,j)] → (key, local_idx)  for O(1) access
+    * `pair_edges`     : dict[key] -> (2,E_ab)  long tensor with global indices
+    * `lookup`         : dict[(i,j)] -> (key, local_idx)  for O(1) access
     * reference to the shared `BlockIrrepMapper`
 
 Conversion between the two is a one-liner via `.to_vectors()` / `.to_blocks()`.
@@ -93,7 +93,7 @@ class BlockMatrix:
     # ─────────────────────────────────────────────────────────────────────────
     def diag(self) -> Dict[PairKey, torch.Tensor]:
         """
-        Return a **dict** ``key → tensor`` that contains *only the blocks whose
+        Return a **dict** ``key -> tensor`` that contains *only the blocks whose
         global source/target atom are identical* (self-edges).
 
         Off-diagonal blocks are omitted; keys that would become empty disappear.
@@ -370,7 +370,7 @@ class BlockMatrix:
 
     # ------------------ serialisation ------------------------------------
     def _to_payload(self) -> dict:
-        """Plain python types + **CPU** tensors → ready for torch.save."""
+        """Plain python types + **CPU** tensors -> ready for torch.save."""
         blocks_cpu = {k: v.detach().cpu() for k, v in self.pair_blocks.items()}
         edges_cpu = {k: v.detach().cpu() for k, v in self.pair_edges.items()}
         return {
@@ -628,7 +628,7 @@ class BlockMatrix:
         new_lookup: Dict[Tuple[int, int], Tuple[PairKey, int]] = {}
 
         for key, blk in self.pair_blocks.items():
-            # (E, d_i, d_j) → (E,)
+            # (E, d_i, d_j) -> (E,)
             rms = blk.pow(2).mean(dim=(-2, -1)).sqrt()
             keep = rms > thr
 

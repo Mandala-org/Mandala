@@ -218,7 +218,7 @@ def parse_info_out(
                 parts = ln.split()
                 if len(parts) >= 5 and parts[0].isdigit():
                     frac_list.append([float(v) for v in parts[2:5]])
-                else:  # header-like row → stop
+                else:  # header-like row -> stop
                     break
                 i += 1
             break

@@ -7,10 +7,10 @@ layers for arbitrary Irreps.
 
 Supported kinds
 ---------------
-• "gate"      →  e3nn.nn.Gate
-• "normact"   →  e3nn.nn.NormActivation
-• "s2act"     →  e3nn.nn.S2Activation
-• "id"        →  identity (no non-linearity)
+• "gate"      ->  e3nn.nn.Gate
+• "normact"   ->  e3nn.nn.NormActivation
+• "s2act"     ->  e3nn.nn.S2Activation
+• "id"        ->  identity (no non-linearity)
 
 The choice is controlled by ``cfg.nonlin_kind`` (see Config).
 Batch-Norm (equivariant) can be toggled independently through
@@ -239,7 +239,7 @@ def make_nonlinearity(
     Returns
     -------
     torch.nn.Module
-        Callable that maps (..., irreps.dim) → (..., irreps.dim)
+        Callable that maps (..., irreps.dim) -> (..., irreps.dim)
     """
     kind = cfg.nonlin_kind.lower()
 

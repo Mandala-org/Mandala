@@ -21,7 +21,7 @@ def _make_small_matrix() -> BlockMatrix:
     atoms = ("H", "O")
     atom_counts = Counter(atoms)
 
-    # single 1×1 scalar blocks → easy numerics
+    # single 1×1 scalar blocks -> easy numerics
     pair_blocks = {
         "H-H": torch.randn(1, 1, 1),
         "H-O": torch.randn(1, 1, 1),
@@ -59,7 +59,7 @@ def test_blockmatrix_rotation_invariance():
     R = _rot_y(math.pi / 3.0)
     mat_rot = mat.rotate(R)
 
-    # All blocks are scalars → rotation acts as identity;
+    # All blocks are scalars -> rotation acts as identity;
     # check exact equality as a sanity test.
     for key in mat.keys():
         assert torch.allclose(mat[key], mat_rot[key], atol=1e-7)
