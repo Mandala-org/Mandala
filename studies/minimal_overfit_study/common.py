@@ -33,7 +33,7 @@ def check_for_nans(tensor, name, input_tensor=None):
         total_count = tensor.numel()
 
         print(f"\n{'='*80}")
-        print(f"❌ NaN DETECTED in {name}")
+        print(f"[ERROR] NaN DETECTED in {name}")
         print(f"{'='*80}")
         print(
             f"NaN count: {nan_count}/{total_count} elements ({100*nan_count/total_count:.2f}%)"
@@ -54,7 +54,7 @@ def check_for_nans(tensor, name, input_tensor=None):
         if input_tensor is not None:
             print(f"\nInput shape: {input_tensor.shape}")
             if torch.isnan(input_tensor).any():
-                print(f"⚠️  Input already contains NaNs!")
+                print(f"[WARN] Input already contains NaNs!")
             else:
                 print(
                     f"Input stats: min={input_tensor.min().item():.6e}, max={input_tensor.max().item():.6e}, mean={input_tensor.mean().item():.6e}"
@@ -362,7 +362,7 @@ class MinimalMessageBlock(nn.Module):
             can_produce = any(ir_in == ir_out for _, ir_in in input_irreps)
             if not can_produce:
                 print(
-                    f"    ⚠️  WARNING: Linear layer cannot produce {ir_out} from input {input_irreps}"
+                    f"    [WARN] Linear layer cannot produce {ir_out} from input {input_irreps}"
                 )
 
         self.node_gate = Gate(
@@ -611,7 +611,7 @@ class MinimalHead(nn.Module):
                     missing_irreps.append(str(ir_out))
             if missing_irreps:
                 print(
-                    f"    ⚠️  WARNING [{edge_type}]: Cannot produce irreps {', '.join(set(missing_irreps))} from {hidden_irreps}"
+                    f"    [WARN] [{edge_type}] Cannot produce irreps {', '.join(set(missing_irreps))} from {hidden_irreps}"
                 )
 
     def _merge_scalar_and_non_scalar(
@@ -1828,7 +1828,7 @@ def visualize_hamiltonians(
             vmax=vmax_diff_corr,
         )
         axes[1, 1].set_title(
-            f"Corrected Diff (µ_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
+            f"Corrected Diff (mu_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
         )
         axes[1, 1].set_xlabel("Orbital j")
         axes[1, 1].set_ylabel("Orbital i")
@@ -1991,7 +1991,7 @@ def create_hamiltonian_frame_figure(
         vmax=vmax_diff_corr,
     )
     axes[1, 1].set_title(
-        f"Corrected Diff (µ_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
+        f"Corrected Diff (mu_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
     )
     axes[1, 1].set_xlabel("Orbital j")
     axes[1, 1].set_ylabel("Orbital i")
@@ -2144,7 +2144,7 @@ def compile_frames_to_video(
     # Write video
     imageio.mimsave(output_path, frames, fps=fps, format=format)
 
-    print(f"✓ Video saved to {output_path}")
+    print(f"[OK] Video saved to {output_path}")
     return output_path
 
 

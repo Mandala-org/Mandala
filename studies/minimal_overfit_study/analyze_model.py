@@ -628,7 +628,7 @@ def main():
         cutoff_radius_cfg = float(config["cutoff_radius"])
         snapshot_orig = snapshot_orig.filter_by_distance(cutoff_radius_cfg)
         print(
-            f"  Applied cutoff to targets in analysis: cutoff_radius={cutoff_radius_cfg} Å"
+            f"  Applied cutoff to targets in analysis: cutoff_radius={cutoff_radius_cfg} A"
         )
 
     print(f"  Atoms: {snapshot_orig.hamiltonian.atoms}")
@@ -983,7 +983,7 @@ def main():
     print(f"{'='*80}")
     print(f"\nMetrics saved to: {metrics_file}")
     print(f"Visualizations saved to: {output_dir}")
-    print("\n✓ Analysis finished successfully!")
+    print("\n[OK] Analysis finished successfully!")
 
 
 if __name__ == "__main__":

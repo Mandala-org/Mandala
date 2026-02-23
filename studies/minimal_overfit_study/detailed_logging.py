@@ -111,7 +111,7 @@ def log_orbital_config(orbital_cfg) -> None:
 
 
 def log_strict_checks_passed() -> None:
-    print("  ✓ Edge alignment checks passed.")
+    print("  [OK] Edge alignment checks passed.")
 
 
 def log_graph(
@@ -200,7 +200,7 @@ def log_invalid_loss_failure(
     best_loss: float,
 ) -> dict:
     log_training_failed_banner(epoch_zero_based + 1)
-    print("❌ Detected invalid loss value.")
+    print("[ERROR] Detected invalid loss value.")
     if is_nan:
         print(f"Loss is NaN: {loss_value}")
         print("This indicates numerical instability in the forward pass.")
@@ -232,7 +232,7 @@ def log_invalid_gradient_failure(
     best_loss: float,
 ) -> dict:
     log_training_failed_banner(epoch_zero_based + 1)
-    print("❌ Detected invalid gradient values.")
+    print("[ERROR] Detected invalid gradient values.")
     print(f"Gradient contains NaN or Inf in parameter: {param_name}")
     print("This indicates numerical instability in the backward pass.")
     print("\nSuggestions:")
@@ -360,4 +360,4 @@ def log_study_complete(
     print(f"\nCheckpoints saved to: {run_checkpoint_dir}")
     print(f"  Best model: {run_checkpoint_dir / 'best_model.pt'}")
     print(f"  Final model: {final_model_path}")
-    print("\n✓ Minimal overfit study finished successfully!")
+    print("\n[OK] Minimal overfit study finished successfully!")

@@ -1010,7 +1010,7 @@ if __name__ == "__main__":
         sys.stdout = old_stdout
 
     if CONFIG["log_model"]:
-        print("\n✓ Network architecture complete!")
+        print("\n[OK] Network architecture complete!")
 
     # =============================================================================
     # PREPARE TARGET IN IRREPS SPACE
@@ -1723,7 +1723,7 @@ if __name__ == "__main__":
                         best_model_path,
                     )
                     print(
-                        f"✓ Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
+                        f"[OK] Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
                 pred_H_irreps_metrics = pred_H_matrix_metrics.to_vectors(mapper)
@@ -1763,12 +1763,12 @@ if __name__ == "__main__":
                         percentile=99.0,
                     )
                 except Exception as e:
-                    print(f"⚠️  Warning: Could not save frame for epoch {epoch}: {e}")
+                    print(f"[WARN] Could not save frame for epoch {epoch}: {e}")
 
                 # Check for convergence
                 if loss.item() < 1e-10:
                     print("")
-                    print(f"✓ Converged! Loss below 1e-10 at epoch {epoch + 1}")
+                    print(f"[OK] Converged! Loss below 1e-10 at epoch {epoch + 1}")
                     break
     except KeyboardInterrupt:
         print(
@@ -1951,7 +1951,7 @@ if __name__ == "__main__":
                 f"(dos_mae={dos_metrics['dos_mae']:.6e})"
             )
         except Exception as e:
-            print(f"⚠️  Warning: Could not generate DOS comparison plot: {e}")
+            print(f"[WARN] Could not generate DOS comparison plot: {e}")
 
         print("\n  Per-block Metrics:")
         for key in pred_filtered_blocks.keys():
@@ -2082,10 +2082,10 @@ if __name__ == "__main__":
                         )
                     else:
                         print(
-                            f"    ⚠️  Missing image for irrep {irrep_str}: {image_path.name}"
+                            f"    [WARN] Missing image for irrep {irrep_str}: {image_path.name}"
                         )
                 except Exception as e:
-                    print(f"    ⚠️  Irrep {irrep_str} visualization failed: {e}")
+                    print(f"    [WARN] Irrep {irrep_str} visualization failed: {e}")
 
     # Save final model
     final_model_path = run_checkpoint_dir / "final_model.pt"
@@ -2137,11 +2137,11 @@ if __name__ == "__main__":
                         )
                     }
                 )
-                print("✓ Training video logged to WandB")
+                print("[OK] Training video logged to WandB")
             else:
-                print("⚠️  No frames found for video generation")
+                print("[WARN] No frames found for video generation")
         except Exception as e:
-            print(f"⚠️  Warning: Could not generate final video: {e}")
+            print(f"[WARN] Could not generate final video: {e}")
     else:
         print("")
         print("=" * 80)
