@@ -281,6 +281,18 @@ if __name__ == "__main__":
         help="Normalize blocks by average magnitude (diagonal and off-diagonal separately) before training (default: False)",
     )
     parser.add_argument(
+        "--magnitude-factorization",
+        action="store_true",
+        default=False,
+        help="Predict normalized blocks and separate per-edge magnitudes (default: False)",
+    )
+    parser.add_argument(
+        "--magnitude-lambda",
+        type=float,
+        default=1.0,
+        help="Weight of magnitude loss contribution when --magnitude-factorization is enabled (default: 1.0)",
+    )
+    parser.add_argument(
         "--apply-cutoff-to-targets",
         action="store_true",
         default=False,
@@ -294,6 +306,11 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    if args.normalize_blocks and args.magnitude_factorization:
+        raise ValueError(
+            "--normalize-blocks and --magnitude-factorization are mutually exclusive. "
+            "Disable one of them."
+        )
 
     # =============================================================================
     # CONFIGURATION
@@ -335,6 +352,8 @@ if __name__ == "__main__":
         "generate_video": args.generate_video,
         "verbose_forward": args.verbose_forward,
         "normalize_blocks": args.normalize_blocks,
+        "magnitude_factorization": args.magnitude_factorization,
+        "magnitude_lambda": args.magnitude_lambda,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         "require_exact_edge_match": args.require_exact_edge_match,
         # Device
@@ -748,6 +767,83 @@ if __name__ == "__main__":
 
         return norm_factors
 
+    def compute_block_norm_targets_and_normalized_matrix(block_matrix, eps=1e-12):
+        """
+        Build per-edge Frobenius norm targets and a unit-norm normalized BlockMatrix.
+
+        Returns:
+            norm_targets: dict[key] -> (E_key,) tensor of per-edge norms (clamped by eps)
+            normalized_matrix: BlockMatrix with each block divided by its own norm
+            norm_stats: dict[key] -> {"min", "mean", "max"}
+        """
+        norm_targets = {}
+        norm_stats = {}
+        normalized_blocks = {}
+
+        for key, blocks in block_matrix.pair_blocks.items():
+            flat = blocks.reshape(blocks.shape[0], -1)
+            norms = torch.linalg.norm(flat, dim=1)
+            norms_safe = torch.clamp(norms, min=eps)
+            scale = norms_safe
+            while scale.ndim < blocks.ndim:
+                scale = scale.unsqueeze(-1)
+            normalized_blocks[key] = blocks / scale
+            norm_targets[key] = norms_safe
+            norm_stats[key] = {
+                "min": float(norms_safe.min().item()),
+                "mean": float(norms_safe.mean().item()),
+                "max": float(norms_safe.max().item()),
+            }
+
+        normalized_matrix = BlockMatrix(
+            atoms=block_matrix.atoms,
+            atom_counts=block_matrix.atom_counts,
+            pair_blocks=normalized_blocks,
+            pair_edges=block_matrix.pair_edges,
+            lookup=block_matrix.lookup,
+            orbital_cfg=block_matrix.orbital_cfg,
+            basis=block_matrix.basis,
+        )
+        return norm_targets, normalized_matrix, norm_stats
+
+    def reconstruct_actual_prediction_from_magnitudes(
+        pred_matrix_normalized, pred_raw_outputs, require_magnitudes=False
+    ):
+        """
+        Reconstruct actual predicted blocks: B_pred = m_pred * B_pred_normalized.
+        """
+        reconstructed_blocks = {}
+        for key, blocks in pred_matrix_normalized.pair_blocks.items():
+            if key not in pred_raw_outputs or "magnitudes" not in pred_raw_outputs[key]:
+                if require_magnitudes:
+                    raise RuntimeError(
+                        f"Missing predicted magnitudes for key '{key}' in magnitude-factorization mode."
+                    )
+                reconstructed_blocks[key] = blocks
+                continue
+
+            magnitudes = pred_raw_outputs[key]["magnitudes"]
+            if magnitudes.shape[0] != blocks.shape[0]:
+                raise RuntimeError(
+                    f"Magnitude/prediction edge-count mismatch for key '{key}': "
+                    f"{magnitudes.shape[0]} vs {blocks.shape[0]}"
+                )
+
+            scale = magnitudes
+            while scale.ndim < blocks.ndim:
+                scale = scale.unsqueeze(-1)
+            reconstructed_blocks[key] = blocks * scale
+
+        return BlockMatrix(
+            atoms=pred_matrix_normalized.atoms,
+            atom_counts=pred_matrix_normalized.atom_counts,
+            pair_blocks=reconstructed_blocks,
+            pair_edges=pred_matrix_normalized.pair_edges,
+            lookup=pred_matrix_normalized.lookup,
+            orbital_cfg=pred_matrix_normalized.orbital_cfg,
+            basis=pred_matrix_normalized.basis,
+        )
+
     def get_block_status(edges_5d, edge_idx):
         """
         Determine if a block at edge_idx is diagonal or off-diagonal.
@@ -818,6 +914,39 @@ if __name__ == "__main__":
                     f"  {key}: diag_mag={factors['diag']:.6e}, offdiag_mag={factors['offdiag']:.6e}"
                 )
 
+    # Magnitude-factorization targets (if enabled): per-block Frobenius norms and
+    # normalized target blocks.
+    target_block_norms = None
+    target_H_matrix_normalized = None
+    target_H_irreps_normalized = None
+    if CONFIG["magnitude_factorization"]:
+        if CONFIG["log_model"]:
+            print(
+                "\n[MAGNITUDE FACTORIZATION] Precomputing per-block norms and normalized targets..."
+            )
+        target_block_norms, target_H_matrix_normalized, norm_stats = (
+            compute_block_norm_targets_and_normalized_matrix(target_H_matrix, eps=1e-12)
+        )
+        if CONFIG["log_model"]:
+            for key, stats in norm_stats.items():
+                print(
+                    f"  {key}: norm min={stats['min']:.6e}, mean={stats['mean']:.6e}, max={stats['max']:.6e}"
+                )
+        wandb.log(
+            {
+                f"magnitude_targets/{key}_norm_min": stats["min"]
+                for key, stats in norm_stats.items()
+            }
+            | {
+                f"magnitude_targets/{key}_norm_mean": stats["mean"]
+                for key, stats in norm_stats.items()
+            }
+            | {
+                f"magnitude_targets/{key}_norm_max": stats["max"]
+                for key, stats in norm_stats.items()
+            }
+        )
+
     # =============================================================================
     # DEFINE MINIMAL NETWORK
     # =============================================================================
@@ -854,6 +983,7 @@ if __name__ == "__main__":
         sh_irreps=sh_irreps,
         num_layers=CONFIG["num_layers"],
         mapper=mapper,
+        magnitude_factorization=CONFIG["magnitude_factorization"],
     ).to(device)
     if not CONFIG["log_model"]:
         sys.stdout.close()
@@ -868,6 +998,19 @@ if __name__ == "__main__":
     if CONFIG["log_model"]:
         print("\n[IRREP DECOMPOSITION] Converting target to irreps space...")
     target_H_irreps = target_H_matrix.to_vectors(mapper)
+    if CONFIG["magnitude_factorization"]:
+        target_H_irreps_normalized = target_H_matrix_normalized.to_vectors(mapper)
+
+    target_H_matrix_for_block_loss = (
+        target_H_matrix_normalized
+        if CONFIG["magnitude_factorization"]
+        else target_H_matrix
+    )
+    target_H_irreps_for_block_loss = (
+        target_H_irreps_normalized
+        if CONFIG["magnitude_factorization"]
+        else target_H_irreps
+    )
     all_irreps = get_all_irreps_in_hamiltonian(mapper)
     if CONFIG["log_model"]:
         print(
@@ -1002,14 +1145,25 @@ if __name__ == "__main__":
             )
 
             # Convert to matrix blocks (train_target = "matrix")
-            pred_H_matrix = pred_H_irreps.to_blocks(mapper)
+            pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
+            if CONFIG["magnitude_factorization"]:
+                pred_H_matrix_actual = reconstruct_actual_prediction_from_magnitudes(
+                    pred_H_matrix_norm,
+                    pred_raw,
+                    require_magnitudes=True,
+                )
+            else:
+                pred_H_matrix_actual = pred_H_matrix_norm
+
             # Use symmetrized prediction for all metrics/reporting.
-            pred_H_matrix_metrics = (pred_H_matrix + pred_H_matrix.transpose()) * 0.5
+            pred_H_matrix_metrics = (
+                pred_H_matrix_actual + pred_H_matrix_actual.transpose()
+            ) * 0.5
 
             # Compute loss - either standard or per-irrep decomposed
             if CONFIG["train_on_irrep_parts"]:
                 # Per-irrep decomposed loss
-                loss_H = 0.0
+                loss_block = torch.tensor(0.0, device=device)
                 irrep_losses = {}
 
                 for irrep in all_irreps:
@@ -1018,7 +1172,7 @@ if __name__ == "__main__":
                         pred_H_irreps, irrep, mapper
                     )
                     target_irrep_filtered = filter_irreps_block_data_by_irrep(
-                        target_H_irreps, irrep, mapper
+                        target_H_irreps_for_block_loss, irrep, mapper
                     )
 
                     # Convert to matrix blocks
@@ -1031,7 +1185,7 @@ if __name__ == "__main__":
                     )
 
                     # Compute loss for this irrep
-                    irrep_loss = 0.0
+                    irrep_loss = torch.tensor(0.0, device=device)
 
                     for key in target_irrep_blocks.pair_blocks.keys():
                         if key in pred_irrep_blocks.pair_blocks:
@@ -1088,22 +1242,24 @@ if __name__ == "__main__":
 
                     irrep_str = str(irrep)
                     irrep_losses[irrep_str] = irrep_loss
-                    loss_H += irrep_loss
+                    loss_block += irrep_loss
             else:
                 # Standard loss computation
-                loss_H = 0.0
+                loss_block = torch.tensor(0.0, device=device)
                 filtered_target = filter_blocks_by_partial_train(
-                    target_H_matrix, CONFIG["partial_train"]
+                    target_H_matrix_for_block_loss, CONFIG["partial_train"]
                 )
 
-                for key in target_H_matrix.pair_blocks.keys():
-                    if key in pred_H_matrix.pair_blocks:
+                for key in target_H_matrix_for_block_loss.pair_blocks.keys():
+                    if key in pred_H_matrix_norm.pair_blocks:
                         # Get filtered target blocks and mask
-                        targ_blocks_full = target_H_matrix.pair_blocks[key]
+                        targ_blocks_full = target_H_matrix_for_block_loss.pair_blocks[
+                            key
+                        ]
                         _, mask = filtered_target[key]
 
                         # Match sizes (predictions might have fewer edges due to cutoff)
-                        pred_blocks = pred_H_matrix.pair_blocks[key]
+                        pred_blocks = pred_H_matrix_norm.pair_blocks[key]
                         min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
 
                         # Apply mask to select only relevant blocks
@@ -1142,12 +1298,47 @@ if __name__ == "__main__":
                                     targ_blocks_filtered / norm_vec_selected
                                 )
 
-                            loss_H += F.mse_loss(
+                            loss_block += F.mse_loss(
                                 pred_blocks_filtered, targ_blocks_filtered
                             )
 
-            # Total loss (only Hamiltonian)
-            loss = loss_H
+            loss_magnitude = torch.tensor(0.0, device=device)
+            if CONFIG["magnitude_factorization"]:
+                filtered_target_for_magnitude = filter_blocks_by_partial_train(
+                    target_H_matrix, CONFIG["partial_train"]
+                )
+                for key in target_H_matrix.pair_blocks.keys():
+                    if key not in pred_raw:
+                        continue
+                    if "magnitudes" not in pred_raw[key]:
+                        raise RuntimeError(
+                            f"Missing predicted magnitudes for key '{key}' in magnitude-factorization mode."
+                        )
+                    if target_block_norms is None or key not in target_block_norms:
+                        continue
+
+                    pred_magnitudes = pred_raw[key]["magnitudes"]
+                    target_magnitudes = target_block_norms[key]
+                    _, mask = filtered_target_for_magnitude[key]
+
+                    min_n = min(
+                        pred_magnitudes.shape[0],
+                        target_magnitudes.shape[0],
+                        mask.shape[0],
+                    )
+                    mask = mask[:min_n]
+                    if mask.any():
+                        loss_magnitude += F.mse_loss(
+                            pred_magnitudes[:min_n][mask],
+                            target_magnitudes[:min_n][mask],
+                        )
+
+            # Keep Hamiltonian block loss tracking consistent with previous history key.
+            loss_H = loss_block
+            if CONFIG["magnitude_factorization"]:
+                loss = loss_block + CONFIG["magnitude_lambda"] * loss_magnitude
+            else:
+                loss = loss_block
 
             # Step scheduler (ReduceLROnPlateau needs validation loss, so we use training loss here)
             scheduler.step(loss)
@@ -1206,9 +1397,13 @@ if __name__ == "__main__":
             # Log training loss at every step
             step_log = {
                 "train/loss_step": loss.item(),
+                "train/loss_total": loss.item(),
                 "epoch": epoch,
                 "lr": current_lr,
             }
+            if CONFIG["magnitude_factorization"]:
+                step_log["train/loss_block_norm"] = loss_block.item()
+                step_log["train/loss_magnitude"] = loss_magnitude.item()
 
             # Log per-irrep losses if enabled
             if CONFIG["train_on_irrep_parts"]:
@@ -1448,10 +1643,21 @@ if __name__ == "__main__":
             basis=target_H_matrix.basis,
         )
 
-        # Convert to blocks
-        pred_H_matrix = pred_H_irreps.to_blocks(mapper)
+        # Convert to blocks (normalized block prediction in magnitude-factorization mode)
+        pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
+        if CONFIG["magnitude_factorization"]:
+            pred_H_matrix_actual = reconstruct_actual_prediction_from_magnitudes(
+                pred_H_matrix_norm,
+                pred_raw,
+                require_magnitudes=True,
+            )
+        else:
+            pred_H_matrix_actual = pred_H_matrix_norm
+
         # Use symmetrized prediction for final metrics/reporting.
-        pred_H_matrix_metrics = (pred_H_matrix + pred_H_matrix.transpose()) * 0.5
+        pred_H_matrix_metrics = (
+            pred_H_matrix_actual + pred_H_matrix_actual.transpose()
+        ) * 0.5
 
         # Filter for partial training if needed
         filtered_pred = filter_blocks_by_partial_train(
