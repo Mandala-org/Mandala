@@ -631,7 +631,7 @@ class Snapshot:
         A = 0.5 * (A + A.T)
 
         eigenvalues = torch.linalg.eigvalsh(A)
-        ### setting up the energy bins
+        # Energy bins
         grid = torch.arange(
             E_min,
             E_max + bin_width,
