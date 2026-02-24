@@ -28,5 +28,4 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --n-radial 128 \
   --lr-patience 400 \
   --normalize-blocks \
-  --magnitude-lambda 1.0 \
   --head-mlp-for-scalars
