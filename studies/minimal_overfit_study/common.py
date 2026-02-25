@@ -1183,7 +1183,10 @@ def compute_distance_error_curve(
 
 
 def save_distance_error_curve_plot(
-    curve_data, output_path: Path | str, title: str = None
+    curve_data,
+    output_path: Path | str,
+    title: str = None,
+    relative_log_scale: bool = True,
 ):
     """
     Save a 2x2 plot of distance-binned error curves:
@@ -1204,6 +1207,39 @@ def save_distance_error_curve_plot(
         y[~valid] = np.interp(x_vals[~valid], x_vals[valid], y[valid])
         return y
 
+    def _interp_nans_log(
+        x_vals: np.ndarray, y_vals: np.ndarray, eps: float = 1e-16
+    ) -> np.ndarray:
+        """
+        Interpolate NaNs in log-space (geometric interpolation).
+        Only strictly positive finite values are used as anchors.
+        """
+        y = y_vals.astype(float).copy()
+        valid = np.isfinite(y) & (y > 0.0)
+        if valid.sum() == 0:
+            return y
+        if valid.sum() == 1:
+            y[~np.isfinite(y)] = y[valid][0]
+            return y
+
+        y_log = np.log10(y[valid])
+        missing = ~np.isfinite(y)
+        y_interp_log = np.interp(x_vals[missing], x_vals[valid], y_log)
+        y[missing] = np.power(10.0, y_interp_log)
+        y[(~np.isfinite(y)) | (y <= 0.0)] = eps
+        return y
+
+    def _make_log_safe(y_vals: np.ndarray, eps: float = 1e-16) -> np.ndarray:
+        """
+        Ensure values are strictly positive for log-scale plotting.
+        NaNs are preserved.
+        """
+        y = y_vals.astype(float).copy()
+        finite = np.isfinite(y)
+        nonpos = finite & (y <= 0.0)
+        y[nonpos] = eps
+        return y
+
     x = np.array(curve_data["bin_centers"], dtype=float)
     l1_abs = np.array(curve_data["l1_abs"], dtype=float)
     l2_abs = np.array(curve_data["l2_abs"], dtype=float)
@@ -1221,16 +1257,23 @@ def save_distance_error_curve_plot(
     # Interpolate empty-bin NaNs for plotting only (raw metrics stay unchanged).
     l1_abs_i = _interp_nans(x, l1_abs)
     l2_abs_i = _interp_nans(x, l2_abs)
-    l1_rel_i = _interp_nans(x, l1_rel)
-    l2_rel_i = _interp_nans(x, l2_rel)
+    l1_rel_i = _interp_nans_log(x, l1_rel)
+    l2_rel_i = _interp_nans_log(x, l2_rel)
     l1_abs_min_i = _interp_nans(x, l1_abs_min)
     l1_abs_max_i = _interp_nans(x, l1_abs_max)
     l2_abs_min_i = _interp_nans(x, l2_abs_min)
     l2_abs_max_i = _interp_nans(x, l2_abs_max)
-    l1_rel_min_i = _interp_nans(x, l1_rel_min)
-    l1_rel_max_i = _interp_nans(x, l1_rel_max)
-    l2_rel_min_i = _interp_nans(x, l2_rel_min)
-    l2_rel_max_i = _interp_nans(x, l2_rel_max)
+    l1_rel_min_i = _interp_nans_log(x, l1_rel_min)
+    l1_rel_max_i = _interp_nans_log(x, l1_rel_max)
+    l2_rel_min_i = _interp_nans_log(x, l2_rel_min)
+    l2_rel_max_i = _interp_nans_log(x, l2_rel_max)
+    if relative_log_scale:
+        l1_rel_i = _make_log_safe(l1_rel_i)
+        l2_rel_i = _make_log_safe(l2_rel_i)
+        l1_rel_min_i = _make_log_safe(l1_rel_min_i)
+        l1_rel_max_i = _make_log_safe(l1_rel_max_i)
+        l2_rel_min_i = _make_log_safe(l2_rel_min_i)
+        l2_rel_max_i = _make_log_safe(l2_rel_max_i)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 9))
     fig.suptitle(
@@ -1258,6 +1301,10 @@ def save_distance_error_curve_plot(
         ax.set_ylabel("Error")
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
+
+    if relative_log_scale:
+        axes[1, 0].set_yscale("log")
+        axes[1, 1].set_yscale("log")
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=160, bbox_inches="tight")
