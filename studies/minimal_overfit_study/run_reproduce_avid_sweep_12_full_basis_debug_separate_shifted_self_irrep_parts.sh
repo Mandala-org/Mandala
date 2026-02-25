@@ -31,7 +31,7 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --box-convention "rows" \
   --hidden-dim 32 \
   --l-max 4 \
-  --hidden-irreps "32x0e+16x1e+16x1o+16x2e" \
+  --hidden-irreps "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e+8x4o" \
   --num-layers 2 \
   --cutoff-radius 7 \
   --n-radial 64 \
