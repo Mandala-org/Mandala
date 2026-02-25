@@ -37,7 +37,7 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --n-radial 64 \
   --lr 0.01 \
   --num-epochs 40000 \
-  --log-interval 200 \
+  --log-interval 100 \
   --adaptive-log-interval \
   --log-data \
   --log-model \
