@@ -16,7 +16,7 @@ fi
 # with additional orbital reduction and expanded debug logging.
 #
 # Defaults avoid overwriting existing downloaded weights directory.
-RUN_NAME="${RUN_NAME:-avid-sweep-12-1s1p-debug-simple}"
+RUN_NAME="${RUN_NAME:-avid-sweep-12-1s1p-debug-simple-separate-shifted-self}"
 DEVICE="${DEVICE:-cuda}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/minimal_overfit_study/checkpoints}"
 
@@ -50,5 +50,6 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --lr-patience 1000 \
   --normalize-blocks \
   --generate-video \
+  --separate-shifted-self \
   --device "${DEVICE}" \
   --checkpoint-dir "${CHECKPOINT_DIR}"

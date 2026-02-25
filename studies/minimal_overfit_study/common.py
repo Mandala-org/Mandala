@@ -485,6 +485,7 @@ class MinimalHead(nn.Module):
         magnitude_factorization=False,
         head_mlp_for_scalars=False,
         head_use_tensor_square=False,
+        separate_shifted_self=False,
     ):
         super().__init__()
         hidden_irreps = Irreps(hidden_irreps)
@@ -492,6 +493,7 @@ class MinimalHead(nn.Module):
         self.magnitude_factorization = bool(magnitude_factorization)
         self.head_mlp_for_scalars = bool(head_mlp_for_scalars)
         self.head_use_tensor_square = bool(head_use_tensor_square)
+        self.separate_shifted_self = bool(separate_shifted_self)
         self.n_radial = int(n_radial)
         self.edge_types = list(mapper.edge_types)
         self.need_tensor_square = bool(
@@ -503,6 +505,7 @@ class MinimalHead(nn.Module):
         # Separate linear projections per edge type and diagonal status.
         # If head_mlp_for_scalars=True, these projections predict only non-scalars.
         self.diag_projections = nn.ModuleDict()
+        self.shifted_self_projections = nn.ModuleDict()
         self.offdiag_projections = nn.ModuleDict()
         self.output_dims = {}
         self.scalar_output_dims = {}
@@ -552,6 +555,10 @@ class MinimalHead(nn.Module):
                 self.diag_projections[edge_type] = Linear(
                     head_input_irreps, projection_irreps
                 )
+                if self.separate_shifted_self:
+                    self.shifted_self_projections[edge_type] = Linear(
+                        head_input_irreps, projection_irreps
+                    )
                 self.offdiag_projections[edge_type] = Linear(
                     head_input_irreps, projection_irreps
                 )
@@ -581,11 +588,19 @@ class MinimalHead(nn.Module):
                     ts_out_irreps, Irreps("64x0e")
                 )
 
-            print(
-                f"    [Head] {edge_type}: "
-                f"diag {head_input_irreps} -> {projection_irreps}, "
-                f"offdiag {head_input_irreps} -> {projection_irreps}"
-            )
+            if self.separate_shifted_self:
+                print(
+                    f"    [Head] {edge_type}: "
+                    f"diag {head_input_irreps} -> {projection_irreps}, "
+                    f"shifted_self {head_input_irreps} -> {projection_irreps}, "
+                    f"offdiag {head_input_irreps} -> {projection_irreps}"
+                )
+            else:
+                print(
+                    f"    [Head] {edge_type}: "
+                    f"diag {head_input_irreps} -> {projection_irreps}, "
+                    f"offdiag {head_input_irreps} -> {projection_irreps}"
+                )
             if self.head_use_tensor_square:
                 print(
                     f"            head input pre-transform: TensorSquare({hidden_irreps}) -> {ts_out_irreps}"
@@ -664,11 +679,19 @@ class MinimalHead(nn.Module):
                     ts_feat = None
                 head_feat = ts_feat if self.head_use_tensor_square else selected_feat
 
-                # Diagonal edge: zero shift and same source/destination atom.
-                is_diag = (selected_edge_shift == 0).all(dim=0) & (
-                    selected_edge_index[0] == selected_edge_index[1]
-                )
-                is_offdiag = ~is_diag
+                # Edge classes:
+                # - diag: i == j and zero shift
+                # - shifted_self: i == j and non-zero shift (optional separate head)
+                # - offdiag: i != j
+                is_same_atom = selected_edge_index[0] == selected_edge_index[1]
+                is_zero_shift = (selected_edge_shift == 0).all(dim=0)
+                is_diag = is_same_atom & is_zero_shift
+                if self.separate_shifted_self:
+                    is_shifted_self = is_same_atom & (~is_zero_shift)
+                    is_offdiag = ~is_same_atom
+                else:
+                    is_shifted_self = torch.zeros_like(is_diag, dtype=torch.bool)
+                    is_offdiag = ~is_diag
 
                 pred_non_scalar = torch.empty(
                     (selected_feat.shape[0], self.non_scalar_output_dims[type_str]),
@@ -691,6 +714,17 @@ class MinimalHead(nn.Module):
                             head_feat[is_diag],
                         )
                         pred_non_scalar[is_diag] = diag_vectors
+
+                    if is_shifted_self.any():
+                        shifted_self_vectors = self.shifted_self_projections[type_str](
+                            head_feat[is_shifted_self]
+                        )
+                        check_for_nans(
+                            shifted_self_vectors,
+                            f"Head.{type_str}_shifted_self_projection",
+                            head_feat[is_shifted_self],
+                        )
+                        pred_non_scalar[is_shifted_self] = shifted_self_vectors
 
                     if is_offdiag.any():
                         offdiag_vectors = self.offdiag_projections[type_str](
@@ -764,11 +798,20 @@ class MinimalHead(nn.Module):
                 }
                 if self.magnitude_factorization:
                     outputs[type_str]["magnitudes"] = pred_magnitudes
-                print(
-                    f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
-                    f"({int(is_diag.sum().item())} diag, {int(is_offdiag.sum().item())} offdiag) "
-                    f"-> vectors {pred_vectors.shape}"
-                )
+                if self.separate_shifted_self:
+                    print(
+                        f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
+                        f"({int(is_diag.sum().item())} diag, "
+                        f"{int(is_shifted_self.sum().item())} shifted_self, "
+                        f"{int(is_offdiag.sum().item())} offdiag) "
+                        f"-> vectors {pred_vectors.shape}"
+                    )
+                else:
+                    print(
+                        f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
+                        f"({int(is_diag.sum().item())} diag, {int(is_offdiag.sum().item())} offdiag) "
+                        f"-> vectors {pred_vectors.shape}"
+                    )
                 if self.magnitude_factorization:
                     print(
                         f"                    magnitude -> {pred_magnitudes.shape} "
@@ -793,6 +836,7 @@ class MinimalNetwork(nn.Module):
         magnitude_factorization=False,
         head_mlp_for_scalars=False,
         head_use_tensor_square=False,
+        separate_shifted_self=False,
         verbose=True,  # Default True for backward compatibility
     ):
         super().__init__()
@@ -829,6 +873,7 @@ class MinimalNetwork(nn.Module):
             magnitude_factorization=magnitude_factorization,
             head_mlp_for_scalars=head_mlp_for_scalars,
             head_use_tensor_square=head_use_tensor_square,
+            separate_shifted_self=separate_shifted_self,
         )
 
         print(f"  Total parameters: {sum(p.numel() for p in self.parameters()):,}")
@@ -1572,13 +1617,17 @@ def canonicalize_edge_order(
     return edge_index[:, final_indices], edge_shift[:, final_indices], final_indices
 
 
-def filter_blocks_by_partial_train(block_matrix, partial_train):
+def filter_blocks_by_partial_train(
+    block_matrix, partial_train, separate_shifted_self: bool = False
+):
     """
     Filter blocks based on partial_train setting.
 
     Args:
         block_matrix: BlockMatrix object
-        partial_train: "diag", "offdiag", or None
+        partial_train: "diag", "offdiag", "shifted_self", or None
+        separate_shifted_self: if True, "offdiag" means only i!=j.
+            If False, "offdiag" keeps legacy behavior (all non-diagonal blocks).
 
     Returns:
         Dictionary mapping edge_type -> (filtered_blocks, mask)
@@ -1600,10 +1649,18 @@ def filter_blocks_by_partial_train(block_matrix, partial_train):
 
         diag_mask = get_diagonal_mask(edges)
 
+        sx, sy, sz, i, j = edges[0], edges[1], edges[2], edges[3], edges[4]
+        shifted_self_mask = (i == j) & ((sx != 0) | (sy != 0) | (sz != 0))
+
         if partial_train == "diag":
             mask = diag_mask
+        elif partial_train == "shifted_self":
+            mask = shifted_self_mask
         elif partial_train == "offdiag":
-            mask = ~diag_mask
+            if separate_shifted_self:
+                mask = i != j
+            else:
+                mask = ~diag_mask
         else:
             mask = torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device)
 

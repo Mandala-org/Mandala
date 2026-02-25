@@ -686,6 +686,7 @@ def main():
         magnitude_factorization=config.get("magnitude_factorization", False),
         head_mlp_for_scalars=config.get("head_mlp_for_scalars", False),
         head_use_tensor_square=config.get("head_use_tensor_square", False),
+        separate_shifted_self=config.get("separate_shifted_self", False),
         verbose=False,  # Disable verbose output during analysis
     ).to(device)
 

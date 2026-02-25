@@ -255,8 +255,14 @@ if __name__ == "__main__":
         "--partial-train",
         type=str,
         default=None,
-        choices=["diag", "offdiag", None],
-        help="Train on partial data: 'diag' (diagonal blocks only), 'offdiag' (off-diagonal only), or None (all blocks)",
+        choices=["diag", "offdiag", "shifted_self", None],
+        help="Train on partial data: 'diag' (i==j, zero shift), 'shifted_self' (i==j, non-zero shift), 'offdiag' (i!=j), or None (all blocks)",
+    )
+    parser.add_argument(
+        "--separate-shifted-self",
+        action="store_true",
+        default=False,
+        help="Use a separate prediction head and normalization bucket for shifted-self edges (i==j with non-zero shift). Keeps previous 2-way behavior when disabled.",
     )
     parser.add_argument(
         "--train-on-irrep-parts",
@@ -299,7 +305,7 @@ if __name__ == "__main__":
         "--normalize-blocks",
         action="store_true",
         default=False,
-        help="Normalize blocks by average magnitude (diagonal and off-diagonal separately) before training (default: False)",
+        help="Normalize blocks by average magnitude per edge class before training (diag/offdiag by default; diag/shifted_self/offdiag with --separate-shifted-self) (default: False)",
     )
     parser.add_argument(
         "--magnitude-factorization",
@@ -386,6 +392,7 @@ if __name__ == "__main__":
         "benchmark": args.benchmark,
         "grad_clip": args.grad_clip,
         "partial_train": args.partial_train,
+        "separate_shifted_self": args.separate_shifted_self,
         "train_on_irrep_parts": args.train_on_irrep_parts,
         "lr_factor": args.lr_factor,
         "lr_patience": args.lr_patience,
@@ -784,30 +791,38 @@ if __name__ == "__main__":
     def compute_block_normalization_factors(block_matrix):
         """
         Compute per-key, per-diagonal-status normalization factors.
-        Diagonal blocks: sx==sy==sz==0 and i==j
-        Off-diagonal: all others
+        - Diagonal blocks: sx==sy==sz==0 and i==j
+        - Shifted-self blocks: i==j and (sx,sy,sz)!=(0,0,0) [optional separate bucket]
+        - Off-diagonal blocks: i!=j
         Uses L2 norm (Frobenius norm) for magnitude computation.
 
         Args:
             block_matrix: BlockMatrix object
 
         Returns:
-            Dictionary: {key: {"diag": float, "offdiag": float}, ...}
+            Dictionary:
+              - default mode: {key: {"diag": float, "offdiag": float}, ...}
+              - separate-shifted-self mode:
+                  {key: {"diag": float, "shifted_self": float, "offdiag": float}, ...}
         """
         norm_factors = {}
         for key in block_matrix.pair_blocks.keys():
             blocks = block_matrix.pair_blocks[key]  # (num_edges, ...)
             edges = block_matrix.pair_edges[key]  # (5, num_edges)
 
-            # Get mask for diagonal blocks
             sx, sy, sz, i, j = edges[0], edges[1], edges[2], edges[3], edges[4]
-            diag_mask = (sx == 0) & (sy == 0) & (sz == 0) & (i == j)
-            offdiag_mask = ~diag_mask
+            is_same_atom = i == j
+            is_zero_shift = (sx == 0) & (sy == 0) & (sz == 0)
+            diag_mask = is_same_atom & is_zero_shift
+            shifted_self_mask = is_same_atom & (~is_zero_shift)
+            if CONFIG["separate_shifted_self"]:
+                offdiag_mask = ~is_same_atom
+            else:
+                # Backward-compatible behavior: shifted-self shares offdiag bucket.
+                offdiag_mask = ~diag_mask
 
-            # Compute L2 norm (Frobenius norm) for each block, then average
             if diag_mask.any():
                 diag_blocks = blocks[diag_mask]
-                # Reshape each block to 1D and compute L2 norm
                 diag_norms = torch.linalg.norm(
                     diag_blocks.reshape(diag_blocks.shape[0], -1), dim=1
                 )
@@ -815,9 +830,17 @@ if __name__ == "__main__":
             else:
                 diag_mag = 1.0
 
+            if shifted_self_mask.any():
+                shifted_self_blocks = blocks[shifted_self_mask]
+                shifted_self_norms = torch.linalg.norm(
+                    shifted_self_blocks.reshape(shifted_self_blocks.shape[0], -1), dim=1
+                )
+                shifted_self_mag = shifted_self_norms.mean().item()
+            else:
+                shifted_self_mag = 1.0
+
             if offdiag_mask.any():
                 offdiag_blocks = blocks[offdiag_mask]
-                # Reshape each block to 1D and compute L2 norm
                 offdiag_norms = torch.linalg.norm(
                     offdiag_blocks.reshape(offdiag_blocks.shape[0], -1), dim=1
                 )
@@ -825,11 +848,18 @@ if __name__ == "__main__":
             else:
                 offdiag_mag = 1.0
 
-            # Avoid division by zero
             diag_mag = max(diag_mag, 1e-8)
+            shifted_self_mag = max(shifted_self_mag, 1e-8)
             offdiag_mag = max(offdiag_mag, 1e-8)
 
-            norm_factors[key] = {"diag": diag_mag, "offdiag": offdiag_mag}
+            if CONFIG["separate_shifted_self"]:
+                norm_factors[key] = {
+                    "diag": diag_mag,
+                    "shifted_self": shifted_self_mag,
+                    "offdiag": offdiag_mag,
+                }
+            else:
+                norm_factors[key] = {"diag": diag_mag, "offdiag": offdiag_mag}
 
         return norm_factors
 
@@ -912,18 +942,21 @@ if __name__ == "__main__":
 
     def get_block_status(edges_5d, edge_idx):
         """
-        Determine if a block at edge_idx is diagonal or off-diagonal.
-        Returns "diag" if sx==sy==sz==0 and i==j, else "offdiag"
+        Determine class for a block at edge_idx:
+        - "diag": i==j and zero shift
+        - "shifted_self": i==j and non-zero shift (only when enabled)
+        - "offdiag": i!=j, or all non-diag edges when separate mode is disabled
         """
         sx = edges_5d[0, edge_idx].item()
         sy = edges_5d[1, edge_idx].item()
         sz = edges_5d[2, edge_idx].item()
         i = edges_5d[3, edge_idx].item()
         j = edges_5d[4, edge_idx].item()
-        if sx == 0 and sy == 0 and sz == 0 and i == j:
+        if i == j and sx == 0 and sy == 0 and sz == 0:
             return "diag"
-        else:
-            return "offdiag"
+        if i == j and CONFIG["separate_shifted_self"]:
+            return "shifted_self"
+        return "offdiag"
 
     def filter_blocks_by_partial_train(block_matrix, partial_train):
         """
@@ -931,7 +964,7 @@ if __name__ == "__main__":
 
         Args:
             block_matrix: BlockMatrix object
-            partial_train: "diag", "offdiag", or None
+            partial_train: "diag", "offdiag", "shifted_self", or None
 
         Returns:
             Dictionary mapping edge_type -> (filtered_blocks, mask)
@@ -952,11 +985,18 @@ if __name__ == "__main__":
             edges = block_matrix.pair_edges[key]  # (5, num_edges)
 
             diag_mask = get_diagonal_mask(edges)
+            sx, sy, sz, i, j = edges[0], edges[1], edges[2], edges[3], edges[4]
+            shifted_self_mask = (i == j) & ((sx != 0) | (sy != 0) | (sz != 0))
 
             if partial_train == "diag":
                 mask = diag_mask
+            elif partial_train == "shifted_self":
+                mask = shifted_self_mask
             elif partial_train == "offdiag":
-                mask = ~diag_mask
+                if CONFIG["separate_shifted_self"]:
+                    mask = i != j
+                else:
+                    mask = ~diag_mask
             else:
                 mask = torch.ones(
                     blocks.shape[0], dtype=torch.bool, device=blocks.device
@@ -976,9 +1016,16 @@ if __name__ == "__main__":
         norm_factors = compute_block_normalization_factors(target_H_matrix)
         if CONFIG["log_model"]:
             for key, factors in norm_factors.items():
-                print(
-                    f"  {key}: diag_mag={factors['diag']:.6e}, offdiag_mag={factors['offdiag']:.6e}"
-                )
+                if CONFIG["separate_shifted_self"]:
+                    print(
+                        f"  {key}: diag_mag={factors['diag']:.6e}, "
+                        f"shifted_self_mag={factors['shifted_self']:.6e}, "
+                        f"offdiag_mag={factors['offdiag']:.6e}"
+                    )
+                else:
+                    print(
+                        f"  {key}: diag_mag={factors['diag']:.6e}, offdiag_mag={factors['offdiag']:.6e}"
+                    )
 
     # Magnitude-factorization targets (if enabled): per-block Frobenius norms and
     # normalized target blocks.
@@ -1038,6 +1085,7 @@ if __name__ == "__main__":
         magnitude_factorization=CONFIG["magnitude_factorization"],
         head_mlp_for_scalars=CONFIG["head_mlp_for_scalars"],
         head_use_tensor_square=CONFIG["head_use_tensor_square"],
+        separate_shifted_self=CONFIG["separate_shifted_self"],
     ).to(device)
     if not CONFIG["log_model"]:
         sys.stdout.close()
@@ -1172,11 +1220,12 @@ if __name__ == "__main__":
             mag_log10_count_per_key = {}
 
             should_log_now = should_log_epoch(epoch)
+            epoch_lr = optimizer.param_groups[0]["lr"]
 
             # Forward pass (suppress detailed logging during training)
             if should_log_now:
                 print(f"\n{'=' * 60}")
-                print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}")
+                print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}  |  lr={epoch_lr:.6e}")
                 print(f"{'=' * 60}")
 
             # Temporarily suppress forward pass logging

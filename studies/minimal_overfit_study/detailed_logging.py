@@ -47,6 +47,9 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         else "  Block normalization: disabled"
     )
     print(
+        f"  Separate shifted-self head: {'enabled' if config.get('separate_shifted_self', False) else 'disabled'}"
+    )
+    print(
         f"  Target cutoff filtering: enabled (using cutoff_radius={config['cutoff_radius']} A)"
         if config["apply_cutoff_to_targets"]
         else "  Target cutoff filtering: disabled"
