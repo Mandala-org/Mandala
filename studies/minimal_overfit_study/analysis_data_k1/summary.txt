@@ -1,0 +1,19 @@
+Raw Hamiltonian transpose-pair analysis
+k-range=1
+saved_plots=14
+skipped_empty=0
+
+s=(-1,-1,-1)  -s=(+1,+1,+1)  mae=1.368905e-20  max_abs=6.938894e-18  main_vmax=6.629084e-02  diff_vmax=1.000000e-12
+s=(-1,-1,+0)  -s=(+1,+1,+0)  mae=1.602410e-19  max_abs=8.881784e-16  main_vmax=6.803552e-02  diff_vmax=1.000000e-12
+s=(-1,-1,+1)  -s=(+1,+1,-1)  mae=3.666503e-20  max_abs=2.220446e-16  main_vmax=2.551960e-02  diff_vmax=1.000000e-12
+s=(-1,+0,-1)  -s=(+1,+0,+1)  mae=6.938894e-20  max_abs=4.440892e-16  main_vmax=9.223398e-02  diff_vmax=1.000000e-12
+s=(-1,+0,+0)  -s=(+1,+0,+0)  mae=0.000000e+00  max_abs=0.000000e+00  main_vmax=1.068976e-01  diff_vmax=1.000000e-12
+s=(-1,+0,+1)  -s=(+1,+0,-1)  mae=0.000000e+00  max_abs=0.000000e+00  main_vmax=4.751461e-02  diff_vmax=1.000000e-12
+s=(-1,+1,-1)  -s=(+1,-1,+1)  mae=1.114695e-20  max_abs=2.775558e-17  main_vmax=4.141366e-02  diff_vmax=1.000000e-12
+s=(-1,+1,+0)  -s=(+1,-1,+0)  mae=0.000000e+00  max_abs=0.000000e+00  main_vmax=5.472533e-02  diff_vmax=1.000000e-12
+s=(-1,+1,+1)  -s=(+1,-1,-1)  mae=2.080313e-20  max_abs=5.551115e-17  main_vmax=4.141366e-02  diff_vmax=1.000000e-12
+s=(+0,-1,-1)  -s=(+0,+1,+1)  mae=2.168404e-21  max_abs=1.387779e-17  main_vmax=9.223398e-02  diff_vmax=1.000000e-12
+s=(+0,-1,+0)  -s=(+0,+1,+0)  mae=0.000000e+00  max_abs=0.000000e+00  main_vmax=1.068976e-01  diff_vmax=1.000000e-12
+s=(+0,-1,+1)  -s=(+0,+1,-1)  mae=0.000000e+00  max_abs=0.000000e+00  main_vmax=4.751461e-02  diff_vmax=1.000000e-12
+s=(+0,+0,-1)  -s=(+0,+0,+1)  mae=3.668579e-20  max_abs=1.734723e-17  main_vmax=1.067125e-01  diff_vmax=1.000000e-12
+s=(+0,+0,+0)  -s=(+0,+0,+0)  mae=1.722953e-06  max_abs=5.513420e-03  main_vmax=5.412888e-01  diff_vmax=3.258279e-10
