@@ -315,7 +315,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--head-mlp-for-scalars",
-        "--head_mlp_for_scalars",
         dest="head_mlp_for_scalars",
         action="store_true",
         default=False,
@@ -323,7 +322,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--head-use-tensor-square",
-        "--head_use_tensor_square",
         dest="head_use_tensor_square",
         action="store_true",
         default=False,
