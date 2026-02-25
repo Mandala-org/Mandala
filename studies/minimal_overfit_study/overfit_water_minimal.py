@@ -105,6 +105,15 @@ if __name__ == "__main__":
         help="Basis convention for data loading ('e3nn' or other options) (default: 'e3nn')",
     )
     parser.add_argument(
+        "--orbital-selection",
+        type=str,
+        default=None,
+        help=(
+            "Optional orbital reduction spec applied via Snapshot.reduce_orbitals(). "
+            'Examples: \'1s1p\' (global) or \'{"O":"2s3p","H":"1s"}\' (per-element JSON).'
+        ),
+    )
+    parser.add_argument(
         "--hidden-dim",
         type=int,
         default=32,
@@ -352,6 +361,7 @@ if __name__ == "__main__":
         "data_path": Path(args.data_path),
         "info_path": Path(args.info_path),
         "convention": args.convention,
+        "orbital_selection": args.orbital_selection,
         "xyz_permutation": args.xyz_permutation,
         "change_box": args.change_box,
         "box_convention": args.box_convention,
@@ -441,6 +451,30 @@ if __name__ == "__main__":
         after_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
         if CONFIG["log_data"]:
             log_cutoff_application(before_edges, after_edges, CONFIG["cutoff_radius"])
+
+    # Optional orbital reduction for GT matrices/targets.
+    # String specs are applied globally (e.g., "1s1p"), while JSON object strings
+    # can provide per-element specs (e.g., {"O":"2s3p","H":"1s"}).
+    if CONFIG["orbital_selection"] is not None:
+        orbital_selection = CONFIG["orbital_selection"]
+        selection_obj = orbital_selection
+        orbital_selection_stripped = orbital_selection.strip()
+        if orbital_selection_stripped.startswith("{"):
+            try:
+                selection_obj = json.loads(orbital_selection_stripped)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    "Invalid JSON for --orbital-selection. Example: "
+                    '\'{"O":"2s3p","H":"1s"}\''
+                ) from exc
+        snapshot = snapshot.reduce_orbitals(selection_obj)
+        if CONFIG["log_data"]:
+            print("\n  Applied orbital reduction:")
+            print(f"    Spec: {orbital_selection}")
+            print(
+                f"    Reduced orbital config: "
+                f"{snapshot.hamiltonian.orbital_cfg.to_dict()}"
+            )
 
     if CONFIG["log_data"]:
         log_snapshot_info(snapshot)
