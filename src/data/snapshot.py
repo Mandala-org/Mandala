@@ -29,11 +29,13 @@ from __future__ import annotations
 
 import os
 import json
+import re
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Mapping
 import torch
 import h5py
 from ase import Atoms
+from e3nn.o3 import Irreps
 
 from core.sparse_math import (
     trace_matmul_sparse_block_matrix,
@@ -48,6 +50,19 @@ __all__ = ["Snapshot"]
 
 class Snapshot:
     """Bundle H, S, D for one configuration and provide physics helpers."""
+
+    _ORBITAL_TO_L = {
+        "s": 0,
+        "p": 1,
+        "d": 2,
+        "f": 3,
+        "g": 4,
+        "h": 5,
+        "i": 6,
+        "k": 7,
+        "l": 8,
+        "m": 9,
+    }
 
     # --------------------------------------------------------------------- init
     def __init__(
@@ -504,6 +519,164 @@ class Snapshot:
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=cutoff,
+            cfg=self.cfg,
+            info=self.info,
+        )
+
+    @classmethod
+    def _parse_orbital_selection(cls, spec: str) -> Dict[int, int]:
+        """
+        Parse strings like "1s1p", "2s3p", "1s+1p" into counts by l.
+        """
+        if not isinstance(spec, str):
+            raise TypeError(f"Selection spec must be str, got {type(spec)}")
+
+        cleaned = (
+            spec.strip().lower().replace(" ", "").replace("+", "").replace(",", "")
+        )
+        if not cleaned:
+            raise ValueError("Empty orbital selection spec")
+
+        counts: Dict[int, int] = {}
+        pos = 0
+        for match in re.finditer(r"(\d+)([spdfghiklm])", cleaned):
+            if match.start() != pos:
+                raise ValueError(f"Invalid orbital selection spec: '{spec}'")
+            n = int(match.group(1))
+            l = cls._ORBITAL_TO_L[match.group(2)]
+            counts[l] = counts.get(l, 0) + n
+            pos = match.end()
+        if pos != len(cleaned):
+            raise ValueError(f"Invalid orbital selection spec: '{spec}'")
+        return counts
+
+    def reduce_orbitals(
+        self,
+        selection: str | Mapping[str, str] | None = None,
+        *,
+        strict: bool = True,
+        keep_unspecified: bool = True,
+    ) -> "Snapshot":
+        """
+        Return a new Snapshot with reduced orbital basis per element.
+
+        Selection examples:
+        - "1s1p": apply to all elements
+        - {"O": "2s3p", "H": "1s"}: per-element selection
+
+        Selection is prefix/in-order per orbital type: if an element has multiple
+        sets of a given l, the first n sets are kept.
+        """
+        if selection is None:
+            return self
+
+        full_cfg = self.hamiltonian.orbital_cfg
+        elements = full_cfg.elements()
+
+        if isinstance(selection, str):
+            selection_map = {el: selection for el in elements}
+        elif isinstance(selection, Mapping):
+            selection_map = dict(selection)
+        else:
+            raise TypeError(
+                "selection must be None, a string like '1s1p', or mapping {element: spec}"
+            )
+
+        unknown_elements = set(selection_map.keys()) - set(elements)
+        if unknown_elements:
+            raise ValueError(
+                f"Selection provided for unknown elements: {sorted(unknown_elements)}"
+            )
+
+        elem_keep_indices: Dict[str, torch.Tensor] = {}
+        reduced_irreps: Dict[str, Irreps] = {}
+
+        for el in elements:
+            irreps_el = full_cfg.element_to_irreps[el]
+
+            if el in selection_map:
+                request_by_l = self._parse_orbital_selection(selection_map[el])
+            else:
+                request_by_l = None if keep_unspecified else {}
+
+            remaining = None if request_by_l is None else dict(request_by_l)
+
+            keep_indices: list[int] = []
+            new_terms: list[tuple[int, object]] = []
+            offset = 0
+
+            for mul, ir in irreps_el:
+                l = ir.l
+                dim = ir.dim
+                keep_mul = 0
+
+                for _ in range(mul):
+                    keep_this = False
+                    if remaining is None:
+                        keep_this = True
+                    else:
+                        want = remaining.get(l, 0)
+                        if want > 0:
+                            keep_this = True
+                            remaining[l] = want - 1
+
+                    if keep_this:
+                        keep_indices.extend(range(offset, offset + dim))
+                        keep_mul += 1
+                    offset += dim
+
+                if keep_mul > 0:
+                    new_terms.append((keep_mul, ir))
+
+            if remaining is not None and strict:
+                missing = {l: cnt for l, cnt in remaining.items() if cnt > 0}
+                if missing:
+                    missing_str = ", ".join(
+                        [f"l={l}:{cnt}" for l, cnt in sorted(missing.items())]
+                    )
+                    raise ValueError(
+                        f"Element '{el}' does not have enough requested orbitals ({missing_str})"
+                    )
+
+            if not keep_indices:
+                raise ValueError(
+                    f"Orbital reduction removed all orbitals for element '{el}'"
+                )
+
+            elem_keep_indices[el] = torch.tensor(keep_indices, dtype=torch.long)
+            reduced_irreps[el] = Irreps(new_terms)
+
+        reduced_cfg = OrbitalIrrepConfig(reduced_irreps)
+
+        def _reduce_matrix(mat: BlockMatrix) -> BlockMatrix:
+            new_pair_blocks: Dict[str, torch.Tensor] = {}
+            for key, blocks in mat.pair_blocks.items():
+                el_i, el_j = key.split("-")
+                idx_i = elem_keep_indices[el_i].to(device=blocks.device)
+                idx_j = elem_keep_indices[el_j].to(device=blocks.device)
+                reduced = blocks.index_select(1, idx_i).index_select(2, idx_j)
+                new_pair_blocks[key] = reduced
+            return BlockMatrix(
+                atoms=mat.atoms,
+                atom_counts=mat.atom_counts,
+                pair_blocks=new_pair_blocks,
+                pair_edges=mat.pair_edges,
+                lookup=mat.lookup,
+                orbital_cfg=reduced_cfg,
+                basis=mat.basis,
+            )
+
+        return Snapshot(
+            _reduce_matrix(self.hamiltonian),
+            _reduce_matrix(self.overlap),
+            _reduce_matrix(self.density),
+            positions=self.positions,
+            forces=self.forces,
+            box=self.box,
+            stress=self.stress,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=self.cutoff_radius,
             cfg=self.cfg,
             info=self.info,
         )

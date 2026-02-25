@@ -55,3 +55,8 @@ data/deeph_e3/silicon_reproduced/*
 # models
 models/
 saved_models/
+
+# images
+*.png
+*.jpg
+*.jpeg
