@@ -870,6 +870,10 @@ def main() -> None:
         "checkpoint_dir": args.checkpoint_dir,
         "run_name": args.run_name,
         "seed": args.seed,
+        # Logger-compat keys expected by detailed_logging.log_config from minimal_overfit_study.
+        "partial_train": None,
+        "box_convention": "rows",
+        "log_activations_wandb": False,
     }
 
     wandb_kwargs = {"project": "mandala-minimal-silicon-study", "config": config}
