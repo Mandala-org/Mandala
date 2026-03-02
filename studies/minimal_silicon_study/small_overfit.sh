@@ -22,4 +22,4 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --separate-shifted-self \
   --num-layers 2 \
   --train-on-irrep-parts \
-  --run-name silicon_test
+  --run-name small_overfit
