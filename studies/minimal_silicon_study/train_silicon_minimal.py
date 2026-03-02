@@ -990,6 +990,7 @@ def main() -> None:
 
     if args.log_data:
         print("[DATA] preprocessing val samples...")
+    val_iterable = val_ds if val_ds is not None else []
     val_samples = [
         preprocess_sample(
             x=x,
@@ -1004,7 +1005,7 @@ def main() -> None:
             require_exact_edge_match=args.require_exact_edge_match,
             device=device,
         )
-        for (x, y) in val_ds
+        for (x, y) in val_iterable
     ]
 
     if args.hidden_irreps is not None:
