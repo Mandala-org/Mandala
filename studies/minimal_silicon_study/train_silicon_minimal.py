@@ -19,6 +19,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
@@ -69,6 +70,10 @@ from detailed_logging import (
     log_per_irrep_metrics,
     log_study_complete,
 )
+
+DISTANCE_NORM_POWER = 4
+DISTANCE_NORM_MIN_ARG = 1e-12
+DISTANCE_NORM_MAG_EPS = 1e-300
 
 
 def parse_args() -> argparse.Namespace:
@@ -150,6 +155,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", action="store_true", default=False)
     parser.add_argument("--separate-shifted-self", action="store_true", default=False)
     parser.add_argument("--normalize-blocks", action="store_true", default=False)
+    parser.add_argument(
+        "--distance-magnitude-normalization",
+        action="store_true",
+        default=False,
+        help=(
+            "Pre-normalize off-diagonal block magnitudes using a distance model "
+            "(fixed power=4), train in normalized space, and evaluate on de-normalized predictions."
+        ),
+    )
     parser.add_argument("--head-mlp-for-scalars", action="store_true", default=False)
     parser.add_argument("--train-on-irrep-parts", action="store_true", default=False)
     parser.add_argument("--apply-cutoff-to-targets", action="store_true", default=False)
@@ -333,6 +347,248 @@ def compute_block_normalization_factors(
     return norm_factors
 
 
+def compute_edge_distances_by_key(
+    block_matrix: BlockMatrix,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+) -> dict[str, torch.Tensor]:
+    """
+    Compute PBC-aware edge distances for every key in a BlockMatrix.
+    """
+    out: dict[str, torch.Tensor] = {}
+    for key, edges in block_matrix.pair_edges.items():
+        sx, sy, sz = edges[0], edges[1], edges[2]
+        src, dst = edges[3], edges[4]
+        shift = torch.stack([sx, sy, sz], dim=1).to(positions.dtype)
+        if box is not None:
+            disp = positions[dst] - positions[src] + shift @ box
+        else:
+            disp = positions[dst] - positions[src]
+        out[key] = torch.linalg.norm(disp, dim=1)
+    return out
+
+
+def fit_distance_normalization_coeffs(
+    samples: list[dict],
+) -> dict[str, dict[str, float | int | bool]]:
+    """
+    Fit per-key coefficients for:
+        z = (log_offset - log(m))^(1/4) - (a*r + b)
+    on off-diagonal edges of training data only.
+    """
+    dist_acc: dict[str, list[np.ndarray]] = {}
+    mag_acc: dict[str, list[np.ndarray]] = {}
+
+    for sample in samples:
+        H_raw: BlockMatrix = sample["target_H_matrix_raw"]
+        dists_by_key: dict[str, torch.Tensor] = sample["edge_distances_by_key"]
+        for key, blocks in H_raw.pair_blocks.items():
+            if key not in dists_by_key:
+                continue
+            edges = H_raw.pair_edges[key]
+            mask = ~get_diagonal_mask(edges)
+            if not mask.any():
+                continue
+
+            mags = torch.linalg.norm(blocks[mask].reshape(mask.sum().item(), -1), dim=1)
+            d = dists_by_key[key][mask]
+            valid = torch.isfinite(d) & torch.isfinite(mags) & (d > 0) & (mags > 0)
+            if not valid.any():
+                continue
+
+            d_np = d[valid].detach().cpu().numpy()
+            m_np = mags[valid].detach().cpu().numpy()
+            dist_acc.setdefault(key, []).append(d_np)
+            mag_acc.setdefault(key, []).append(m_np)
+
+    coeffs: dict[str, dict[str, float | int | bool]] = {}
+    keys = sorted(set(list(dist_acc.keys()) + list(mag_acc.keys())))
+    for key in keys:
+        d_list = dist_acc.get(key, [])
+        m_list = mag_acc.get(key, [])
+        if len(d_list) == 0 or len(m_list) == 0:
+            coeffs[key] = {
+                "identity": True,
+                "a": 0.0,
+                "b": 0.0,
+                "log_offset": 0.0,
+                "power": DISTANCE_NORM_POWER,
+                "min_arg": DISTANCE_NORM_MIN_ARG,
+                "num_points": 0,
+            }
+            continue
+
+        d = np.concatenate(d_list)
+        m = np.concatenate(m_list)
+        n = int(d.shape[0])
+        if n < 2:
+            coeffs[key] = {
+                "identity": True,
+                "a": 0.0,
+                "b": 0.0,
+                "log_offset": 0.0,
+                "power": DISTANCE_NORM_POWER,
+                "min_arg": DISTANCE_NORM_MIN_ARG,
+                "num_points": n,
+            }
+            continue
+
+        log_m = np.log(np.clip(m, DISTANCE_NORM_MAG_EPS, None))
+        log_offset = max(0.0, float(np.max(log_m)) + DISTANCE_NORM_MIN_ARG)
+        arg = np.maximum(log_offset - log_m, DISTANCE_NORM_MIN_ARG)
+        y = np.power(arg, 1.0 / DISTANCE_NORM_POWER)
+
+        if float(np.ptp(d)) <= 1e-12:
+            a = 0.0
+            b = float(np.mean(y))
+        else:
+            a, b = np.polyfit(d, y, deg=1)
+            a = float(a)
+            b = float(b)
+
+        coeffs[key] = {
+            "identity": False,
+            "a": a,
+            "b": b,
+            "log_offset": float(log_offset),
+            "power": DISTANCE_NORM_POWER,
+            "min_arg": DISTANCE_NORM_MIN_ARG,
+            "num_points": n,
+        }
+
+    return coeffs
+
+
+def apply_distance_normalization_to_samples(
+    samples: list[dict],
+    mapper: BlockIrrepMapper,
+    separate_shifted_self: bool,
+    coeffs_by_key: dict[str, dict[str, float | int | bool]],
+) -> None:
+    """
+    In-place: replace training targets with distance-normalized versions.
+    Raw targets stay available in target_H_matrix_raw / target_H_irreps_raw.
+    """
+    for sample in samples:
+        H_raw: BlockMatrix = sample["target_H_matrix_raw"]
+        H_norm = normalize_block_matrix_with_distance_model(
+            H_raw,
+            sample["edge_distances_by_key"],
+            coeffs_by_key,
+        )
+        sample["target_H_matrix"] = H_norm
+        sample["target_H_irreps"] = H_norm.to_vectors(mapper)
+        sample["norm_factors"] = compute_block_normalization_factors(
+            H_norm, separate_shifted_self
+        )
+
+
+def normalize_block_matrix_with_distance_model(
+    block_matrix: BlockMatrix,
+    edge_distances_by_key: dict[str, torch.Tensor],
+    coeffs_by_key: dict[str, dict[str, float | int | bool]],
+) -> BlockMatrix:
+    """
+    Apply pre-training normalization to off-diagonal block magnitudes.
+    """
+    new_blocks: dict[str, torch.Tensor] = {}
+
+    for key, blocks in block_matrix.pair_blocks.items():
+        edges = block_matrix.pair_edges[key]
+        dists = edge_distances_by_key[key].to(blocks.device, blocks.dtype)
+        coeffs = coeffs_by_key.get(key, {"identity": True})
+        identity = bool(coeffs.get("identity", True))
+        offdiag_mask = ~get_diagonal_mask(edges)
+
+        if identity or not offdiag_mask.any():
+            new_blocks[key] = blocks
+            continue
+
+        a = float(coeffs["a"])
+        b = float(coeffs["b"])
+        log_offset = float(coeffs["log_offset"])
+
+        out = blocks.clone()
+        blk = blocks[offdiag_mask]
+        dist = dists[offdiag_mask]
+
+        mags = torch.linalg.norm(blk.reshape(blk.shape[0], -1), dim=1)
+        mags_safe = torch.clamp(mags, min=DISTANCE_NORM_MAG_EPS)
+
+        log_m = torch.log(mags_safe)
+        arg = torch.clamp(log_offset - log_m, min=DISTANCE_NORM_MIN_ARG)
+        y = torch.pow(arg, 1.0 / DISTANCE_NORM_POWER)
+        z = y - (a * dist + b)
+        mags_norm = torch.exp(z)
+
+        scale = mags_safe
+        while scale.ndim < blk.ndim:
+            scale = scale.unsqueeze(-1)
+        unit = blk / scale
+
+        scale_norm = mags_norm
+        while scale_norm.ndim < blk.ndim:
+            scale_norm = scale_norm.unsqueeze(-1)
+        out[offdiag_mask] = unit * scale_norm
+
+        new_blocks[key] = out
+
+    return block_matrix._replace_pair_blocks(new_blocks, basis=block_matrix.basis)
+
+
+def denormalize_block_matrix_with_distance_model(
+    block_matrix: BlockMatrix,
+    edge_distances_by_key: dict[str, torch.Tensor],
+    coeffs_by_key: dict[str, dict[str, float | int | bool]],
+) -> BlockMatrix:
+    """
+    Invert distance-based normalization on off-diagonal block magnitudes.
+    """
+    new_blocks: dict[str, torch.Tensor] = {}
+
+    for key, blocks in block_matrix.pair_blocks.items():
+        edges = block_matrix.pair_edges[key]
+        dists = edge_distances_by_key[key].to(blocks.device, blocks.dtype)
+        coeffs = coeffs_by_key.get(key, {"identity": True})
+        identity = bool(coeffs.get("identity", True))
+        offdiag_mask = ~get_diagonal_mask(edges)
+
+        if identity or not offdiag_mask.any():
+            new_blocks[key] = blocks
+            continue
+
+        a = float(coeffs["a"])
+        b = float(coeffs["b"])
+        log_offset = float(coeffs["log_offset"])
+
+        out = blocks.clone()
+        blk = blocks[offdiag_mask]
+        dist = dists[offdiag_mask]
+
+        mags_norm = torch.linalg.norm(blk.reshape(blk.shape[0], -1), dim=1)
+        mags_norm_safe = torch.clamp(mags_norm, min=DISTANCE_NORM_MAG_EPS)
+
+        z = torch.log(mags_norm_safe)
+        y = z + (a * dist + b)
+        arg = torch.pow(y, DISTANCE_NORM_POWER)
+        log_m = log_offset - arg
+        mags = torch.exp(log_m)
+
+        scale = mags_norm_safe
+        while scale.ndim < blk.ndim:
+            scale = scale.unsqueeze(-1)
+        unit = blk / scale
+
+        scale_raw = mags
+        while scale_raw.ndim < blk.ndim:
+            scale_raw = scale_raw.unsqueeze(-1)
+        out[offdiag_mask] = unit * scale_raw
+
+        new_blocks[key] = out
+
+    return block_matrix._replace_pair_blocks(new_blocks, basis=block_matrix.basis)
+
+
 def canonicalize_block_matrix_edges(
     block_matrix: BlockMatrix,
     positions: torch.Tensor,
@@ -445,6 +701,7 @@ def preprocess_sample(
     D = canonicalize_block_matrix_edges(D, positions, box)
 
     H = (H + H.transpose()) * 0.5
+    edge_distances_by_key = compute_edge_distances_by_key(H, positions, box)
 
     (
         edge_index,
@@ -525,6 +782,9 @@ def preprocess_sample(
         "positions": positions,
         "box": box,
         "atoms_list": atoms_list,
+        "edge_distances_by_key": edge_distances_by_key,
+        "target_H_matrix_raw": H,
+        "target_H_irreps_raw": H.to_vectors(mapper),
         "target_H_matrix": H,
         "target_overlap": S,
         "target_density": D,
@@ -669,6 +929,8 @@ def evaluate_split(
     train_on_irrep_parts: bool,
     normalize_blocks: bool,
     separate_shifted_self: bool,
+    distance_magnitude_normalization: bool,
+    distance_norm_coeffs: dict[str, dict[str, float | int | bool]] | None,
 ) -> dict:
     empty_detailed = {
         "mae": 0.0,
@@ -712,21 +974,38 @@ def evaluate_split(
             )
             total_loss += float(loss_t.item())
 
+            if distance_magnitude_normalization:
+                if distance_norm_coeffs is None:
+                    raise RuntimeError(
+                        "distance_magnitude_normalization is enabled but coefficients are missing."
+                    )
+                pred_eval = denormalize_block_matrix_with_distance_model(
+                    pred_metrics,
+                    sample["edge_distances_by_key"],
+                    distance_norm_coeffs,
+                )
+                target_eval_matrix = sample["target_H_matrix_raw"]
+                target_eval_irreps = sample["target_H_irreps_raw"]
+            else:
+                pred_eval = pred_metrics
+                target_eval_matrix = sample["target_H_matrix"]
+                target_eval_irreps = sample["target_H_irreps"]
+
             detailed = compute_detailed_metrics(
-                pred_metrics, sample["target_H_matrix"], sample["target_overlap"]
+                pred_eval, target_eval_matrix, sample["target_overlap"]
             )
             for k, v in detailed.items():
                 detailed_sum[k] = detailed_sum.get(k, 0.0) + float(v)
 
-            pred_ir_metrics = pred_metrics.to_vectors(mapper)
+            pred_ir_metrics = pred_eval.to_vectors(mapper)
             per_irrep = compute_irrep_metrics(
-                pred_ir_metrics, sample["target_H_irreps"], all_irreps, mapper
+                pred_ir_metrics, target_eval_irreps, all_irreps, mapper
             )
             for k, v in per_irrep.items():
                 per_irrep_sum[k] = per_irrep_sum.get(k, 0.0) + float(v)
 
             if idx == 0:
-                first_pred_metrics = pred_metrics
+                first_pred_metrics = pred_eval
                 first_sample = sample
 
     n = float(len(samples))
@@ -883,6 +1162,7 @@ def main() -> None:
         "benchmark": args.benchmark,
         "separate_shifted_self": args.separate_shifted_self,
         "normalize_blocks": args.normalize_blocks,
+        "distance_magnitude_normalization": args.distance_magnitude_normalization,
         "head_mlp_for_scalars": args.head_mlp_for_scalars,
         "train_on_irrep_parts": args.train_on_irrep_parts,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
@@ -1007,6 +1287,32 @@ def main() -> None:
         )
         for (x, y) in val_iterable
     ]
+
+    distance_norm_coeffs: dict[str, dict[str, float | int | bool]] | None = None
+    if args.distance_magnitude_normalization:
+        distance_norm_coeffs = fit_distance_normalization_coeffs(train_samples)
+        apply_distance_normalization_to_samples(
+            train_samples,
+            mapper,
+            args.separate_shifted_self,
+            distance_norm_coeffs,
+        )
+        apply_distance_normalization_to_samples(
+            val_samples,
+            mapper,
+            args.separate_shifted_self,
+            distance_norm_coeffs,
+        )
+        if args.log_data:
+            non_identity = sum(
+                1
+                for c in distance_norm_coeffs.values()
+                if not bool(c.get("identity", True))
+            )
+            print(
+                "[DATA] distance normalization enabled: "
+                f"{len(distance_norm_coeffs)} key(s), {non_identity} fitted"
+            )
 
     if args.hidden_irreps is not None:
         hidden_irreps = Irreps(args.hidden_irreps)
@@ -1181,6 +1487,8 @@ def main() -> None:
                     train_on_irrep_parts=args.train_on_irrep_parts,
                     normalize_blocks=args.normalize_blocks,
                     separate_shifted_self=args.separate_shifted_self,
+                    distance_magnitude_normalization=args.distance_magnitude_normalization,
+                    distance_norm_coeffs=distance_norm_coeffs,
                 )
                 benchmark_add(
                     "eval_total",
@@ -1264,10 +1572,15 @@ def main() -> None:
                     and val_eval["first_sample"] is not None
                 ):
                     fs = val_eval["first_sample"]
+                    target_for_eval = (
+                        fs["target_H_matrix_raw"]
+                        if args.distance_magnitude_normalization
+                        else fs["target_H_matrix"]
+                    )
                     try:
                         save_hamiltonian_frame_to_disk(
                             val_eval["first_pred_metrics"],
-                            fs["target_H_matrix"],
+                            target_for_eval,
                             fs["target_overlap"],
                             fs["atoms_list"],
                             mapper.orbital_cfg,
@@ -1338,6 +1651,8 @@ def main() -> None:
         train_on_irrep_parts=args.train_on_irrep_parts,
         normalize_blocks=args.normalize_blocks,
         separate_shifted_self=args.separate_shifted_self,
+        distance_magnitude_normalization=args.distance_magnitude_normalization,
+        distance_norm_coeffs=distance_norm_coeffs,
     )
 
     final_detailed_metrics = (
@@ -1364,13 +1679,18 @@ def main() -> None:
     ):
         fs = final_eval["first_sample"]
         pred_metrics = final_eval["first_pred_metrics"]
+        target_for_eval = (
+            fs["target_H_matrix_raw"]
+            if args.distance_magnitude_normalization
+            else fs["target_H_matrix"]
+        )
 
         # DOS/eigen diagnostics.
         dos_plot_path = run_checkpoint_dir / "dos_comparison_final.png"
         try:
             dos_metrics = save_dos_comparison_plot(
                 H_pred=pred_metrics,
-                H_gt=fs["target_H_matrix"],
+                H_gt=target_for_eval,
                 S=fs["target_overlap"],
                 output_path=dos_plot_path,
                 sigma=0.2,
@@ -1388,7 +1708,7 @@ def main() -> None:
         # Distance curve.
         dist_curve = compute_distance_error_curve(
             H_pred=pred_metrics,
-            H_gt=fs["target_H_matrix"],
+            H_gt=target_for_eval,
             positions=fs["positions"],
             box=fs["box"],
             partial_train=None,
@@ -1416,7 +1736,7 @@ def main() -> None:
                 try:
                     pred_ir = split_hamiltonian_by_irrep(pred_metrics, mapper, ir_str)
                     targ_ir = split_hamiltonian_by_irrep(
-                        fs["target_H_matrix"], mapper, ir_str
+                        target_for_eval, mapper, ir_str
                     )
                     visualize_hamiltonians(
                         pred_ir,
