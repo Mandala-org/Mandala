@@ -11,7 +11,6 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --log-data \
   --log-model \
   --log-forward \
-  --verbose-forward \
   --log-per-irrep-metrics \
   --log-per-irrep-images \
   --generate-video \
