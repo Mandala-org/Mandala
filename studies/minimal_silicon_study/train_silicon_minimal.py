@@ -1065,6 +1065,8 @@ def main() -> None:
     best_score = float("inf")
     best_epoch = -1
     best_model_path = run_checkpoint_dir / "best_model.pt"
+    last_log_time = time.time()
+    last_logged_epoch = -1
 
     benchmark_order = [
         "epoch_total",
@@ -1220,13 +1222,24 @@ def main() -> None:
                 )
 
             if do_log:
+                current_time = time.time()
+                time_elapsed = current_time - last_log_time
+                epochs_since_last_log = (
+                    (epoch - last_logged_epoch)
+                    if last_logged_epoch >= 0
+                    else (epoch + 1)
+                )
+                avg_epoch_time = time_elapsed / max(epochs_since_last_log, 1)
+                last_log_time = current_time
+                last_logged_epoch = epoch
+
                 print(f"\n{'=' * 60}")
                 print(f"EPOCH {epoch + 1}/{args.num_epochs}  |  lr={current_lr:.6e}")
                 print(f"{'=' * 60}")
                 log_detailed_training_metrics(
-                    avg_epoch_time=0.0,
-                    epochs_since_last_log=1,
-                    time_elapsed=0.0,
+                    avg_epoch_time=avg_epoch_time,
+                    epochs_since_last_log=epochs_since_last_log,
+                    time_elapsed=time_elapsed,
                     loss_value=train_loss,
                     detailed_metrics=val_eval["detailed"],
                     irrep_losses=(
