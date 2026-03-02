@@ -18,7 +18,7 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --lr 0.01 \
   --num-epochs 20000 \
   --l-max 4 \
-  --hidden-irreps 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e
+  --hidden-irreps 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e \
   --separate-shifted-self \
   --num-layers 2 \
   --train-on-irrep-parts \
