@@ -1,0 +1,25 @@
+source mandala-venv/bin/activate
+python studies/minimal_silicon_study/train_silicon_minimal.py \
+  --data-path /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A \
+  --val-temp 2700 \
+  --train-temps 2700 \
+  --n-snapshots-per-temp 1 \
+  --val-n-snapshots 0 \
+  --log-interval 100 \
+  --adaptive-log-interval \
+  --benchmark \
+  --log-data \
+  --log-model \
+  --log-forward \
+  --verbose-forward \
+  --log-per-irrep-metrics \
+  --log-per-irrep-images \
+  --generate-video \
+  --lr 0.01 \
+  --num-epochs 20000 \
+  --l-max 4 \
+  --hidden-irreps 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e
+  --separate-shifted-self \
+  --num-layers 2 \
+  --train-on-irrep-parts \
+  --run-name silicon_test

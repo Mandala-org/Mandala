@@ -86,7 +86,7 @@ def parse_args() -> argparse.Namespace:
         "--num-val",
         type=int,
         default=None,
-        help="Global split mode: number of val pairs from discovered list",
+        help="Global split mode: number of val pairs from discovered list (can be 0)",
     )
     parser.add_argument(
         "--train-temps",
@@ -117,7 +117,10 @@ def parse_args() -> argparse.Namespace:
         "--val-n-snapshots",
         type=int,
         default=None,
-        help="Temperature split mode: validation snapshots at --val-temp (defaults to --n-snapshots-per-temp)",
+        help=(
+            "Temperature split mode: validation snapshots at --val-temp "
+            "(defaults to --n-snapshots-per-temp, can be 0)"
+        ),
     )
 
     # Selected features.
@@ -132,7 +135,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--hidden-dim", type=int, default=32)
-    parser.add_argument("--l-max", type=int, default=2)
+    parser.add_argument("--l-max", type=int, default=4)
     parser.add_argument("--hidden-irreps", type=str, default=None)
     parser.add_argument("--num-layers", type=int, default=2)
     parser.add_argument("--cutoff-radius", type=float, default=8.0)
@@ -142,7 +145,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--lr-factor", type=float, default=0.5)
     parser.add_argument("--lr-patience", type=int, default=200)
-    parser.add_argument("--log-interval", type=int, default=100)
+    parser.add_argument("--log-interval", type=int, default=10)
     parser.add_argument("--adaptive-log-interval", action="store_true", default=False)
     parser.add_argument("--benchmark", action="store_true", default=False)
     parser.add_argument("--separate-shifted-self", action="store_true", default=False)
@@ -774,8 +777,8 @@ def main() -> None:
             )
         if args.n_snapshots_per_temp <= 0:
             raise ValueError("--n-snapshots-per-temp must be > 0")
-        if args.val_n_snapshots is not None and args.val_n_snapshots <= 0:
-            raise ValueError("--val-n-snapshots must be > 0 when provided")
+        if args.val_n_snapshots is not None and args.val_n_snapshots < 0:
+            raise ValueError("--val-n-snapshots must be >= 0 when provided")
 
         requested_train_temps = parse_temperature_list(args.train_temps)
         if requested_train_temps is None:
@@ -800,26 +803,31 @@ def main() -> None:
             train_pairs_by_temp[temp] = picked
             train_pairs.extend(picked)
 
-        val_temp_pairs = discover_snapshot_pairs_for_temp(data_root, args.val_temp)
-        if len(val_temp_pairs) == 0:
-            raise ValueError(
-                f"No snapshot pairs found for validation temperature {args.val_temp}K"
-            )
-        if args.val_temp in train_pairs_by_temp:
-            train_set_this_temp = set(train_pairs_by_temp[args.val_temp])
-            val_temp_pairs = [p for p in val_temp_pairs if p not in train_set_this_temp]
-            if len(val_temp_pairs) == 0:
-                raise ValueError(
-                    "No disjoint validation snapshots available at "
-                    f"{args.val_temp}K after removing training snapshots."
-                )
         val_n = (
             args.val_n_snapshots
             if args.val_n_snapshots is not None
             else args.n_snapshots_per_temp
         )
-        val_n = max(int(val_n), 1)
-        val_pairs = random.sample(val_temp_pairs, min(len(val_temp_pairs), val_n))
+        val_n = max(int(val_n), 0)
+        if val_n == 0:
+            val_pairs = []
+        else:
+            val_temp_pairs = discover_snapshot_pairs_for_temp(data_root, args.val_temp)
+            if len(val_temp_pairs) == 0:
+                raise ValueError(
+                    f"No snapshot pairs found for validation temperature {args.val_temp}K"
+                )
+            if args.val_temp in train_pairs_by_temp:
+                train_set_this_temp = set(train_pairs_by_temp[args.val_temp])
+                val_temp_pairs = [
+                    p for p in val_temp_pairs if p not in train_set_this_temp
+                ]
+                if len(val_temp_pairs) == 0:
+                    raise ValueError(
+                        "No disjoint validation snapshots available at "
+                        f"{args.val_temp}K after removing training snapshots."
+                    )
+            val_pairs = random.sample(val_temp_pairs, min(len(val_temp_pairs), val_n))
         split_mode = "temperature"
     else:
         if args.num_train is None or args.num_val is None:
@@ -830,8 +838,8 @@ def main() -> None:
             )
         if args.num_train <= 0:
             raise ValueError("--num-train must be > 0")
-        if args.num_val <= 0:
-            raise ValueError("--num-val must be > 0")
+        if args.num_val < 0:
+            raise ValueError("--num-val must be >= 0")
         all_pairs = discover_snapshot_pairs(data_root)
         if len(all_pairs) < args.num_train + args.num_val:
             raise ValueError(
@@ -843,8 +851,6 @@ def main() -> None:
 
     if len(train_pairs) == 0:
         raise ValueError("Resolved training snapshot list is empty.")
-    if len(val_pairs) == 0:
-        raise ValueError("Resolved validation snapshot list is empty.")
 
     device = torch.device(args.device)
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
@@ -930,11 +936,6 @@ def main() -> None:
     if len(train_ds) == 0:
         raise ValueError(
             "DatasetFactory created an empty train dataset. "
-            "Check file integrity (Si_DM/info.dat) and convention/orbital settings."
-        )
-    if len(val_ds) == 0:
-        raise ValueError(
-            "DatasetFactory created an empty val dataset. "
             "Check file integrity (Si_DM/info.dat) and convention/orbital settings."
         )
 
@@ -1362,9 +1363,9 @@ def main() -> None:
                 bin_width=0.1,
                 title="DOS Comparison (Representative)",
             )
-            final_metrics.update(
-                {f"final/{k}": float(v) for k, v in dos_metrics.items()}
-            )
+            for k, v in dos_metrics.items():
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    final_metrics[f"final/{k}"] = float(v)
             wandb.log({"final/dos_comparison_plot": wandb.Image(str(dos_plot_path))})
             print(f"  DOS plot saved: {dos_plot_path}")
         except Exception as exc:
