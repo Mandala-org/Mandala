@@ -667,10 +667,19 @@ def evaluate_split(
     normalize_blocks: bool,
     separate_shifted_self: bool,
 ) -> dict:
+    empty_detailed = {
+        "mae": 0.0,
+        "mse": 0.0,
+        "mae_mod": 0.0,
+        "mse_mod": 0.0,
+        "mu_H": 0.0,
+        "correction_mae": 0.0,
+        "correction_mse": 0.0,
+    }
     if not samples:
         return {
             "loss": 0.0,
-            "detailed": {},
+            "detailed": empty_detailed,
             "per_irrep": {},
             "first_pred_metrics": None,
             "first_sample": None,
@@ -763,6 +772,10 @@ def main() -> None:
             raise ValueError(
                 "Temperature split mode requires --n-snapshots-per-temp to be specified."
             )
+        if args.n_snapshots_per_temp <= 0:
+            raise ValueError("--n-snapshots-per-temp must be > 0")
+        if args.val_n_snapshots is not None and args.val_n_snapshots <= 0:
+            raise ValueError("--val-n-snapshots must be > 0 when provided")
 
         requested_train_temps = parse_temperature_list(args.train_temps)
         if requested_train_temps is None:
@@ -815,6 +828,10 @@ def main() -> None:
                 "(--train-temps/--val-temp/--n-snapshots-per-temp) "
                 "or global split args (--num-train and --num-val)."
             )
+        if args.num_train <= 0:
+            raise ValueError("--num-train must be > 0")
+        if args.num_val <= 0:
+            raise ValueError("--num-val must be > 0")
         all_pairs = discover_snapshot_pairs(data_root)
         if len(all_pairs) < args.num_train + args.num_val:
             raise ValueError(
@@ -823,6 +840,11 @@ def main() -> None:
         train_pairs = all_pairs[: args.num_train]
         val_pairs = all_pairs[args.num_train : args.num_train + args.num_val]
         split_mode = "global"
+
+    if len(train_pairs) == 0:
+        raise ValueError("Resolved training snapshot list is empty.")
+    if len(val_pairs) == 0:
+        raise ValueError("Resolved validation snapshot list is empty.")
 
     device = torch.device(args.device)
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
@@ -904,6 +926,17 @@ def main() -> None:
     for m, i in val_pairs:
         fac.add_snapshot(m, i, purpose="val")
     train_ds, val_ds, _mapper_full = fac.create()
+
+    if len(train_ds) == 0:
+        raise ValueError(
+            "DatasetFactory created an empty train dataset. "
+            "Check file integrity (Si_DM/info.dat) and convention/orbital settings."
+        )
+    if len(val_ds) == 0:
+        raise ValueError(
+            "DatasetFactory created an empty val dataset. "
+            "Check file integrity (Si_DM/info.dat) and convention/orbital settings."
+        )
 
     if args.log_data:
         if all_pairs is not None:
