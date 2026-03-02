@@ -15,5 +15,11 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --log-per-irrep-metrics \
   --log-per-irrep-images \
   --generate-video \
-  --num-epochs 2000 \
-  --run-name silicon_test
+  --lr 0.01 \
+  --num-epochs 20000 \
+  --l-max 4 \
+  --hidden-irreps 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e \
+  --separate-shifted-self \
+  --num-layers 2 \
+  --train-on-irrep-parts \
+  --run-name first_train
