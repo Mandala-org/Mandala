@@ -410,14 +410,14 @@ def build_graph_inputs(
 
     edge_dist = torch.linalg.norm(edge_vec, dim=1)
 
-    # Spherical harmonics
+    # Spherical harmonics (match src/DeepH-compatible training convention)
     sh_irreps = Irreps.spherical_harmonics(l_max)
-    edge_vec_norm = edge_vec.clone()
-    non_zero_mask = edge_dist > 1e-6
-    edge_vec_norm[non_zero_mask] = edge_vec[non_zero_mask] / edge_dist[
-        non_zero_mask
-    ].unsqueeze(-1)
-    edge_sh = spherical_harmonics(sh_irreps, edge_vec_norm, normalize=False)
+    edge_sh = spherical_harmonics(
+        sh_irreps,
+        edge_vec,
+        normalize=True,
+        normalization="component",
+    )
 
     # Radial basis
     edge_length_emb = soft_one_hot_linspace(
@@ -428,7 +428,7 @@ def build_graph_inputs(
         basis="gaussian",
         cutoff=False,
     )
-    edge_length_emb = edge_length_emb * n_radial**0.5
+    # Keep radial embedding unscaled to match training.
 
     # Edge type indices
     element_to_idx = {elem: idx for idx, elem in enumerate(orbital_cfg.elements())}

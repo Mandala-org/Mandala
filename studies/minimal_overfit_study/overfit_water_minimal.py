@@ -252,6 +252,38 @@ if __name__ == "__main__":
         help="ReduceLROnPlateau patience (default: 600)",
     )
     parser.add_argument(
+        "--loss-aggregation",
+        type=str,
+        default="per_key",
+        choices=["per_key", "global"],
+        help=(
+            "Block-loss aggregation mode: "
+            "'per_key' sums MSE equally across keys (current behavior), "
+            "'global' uses one MSE over all selected matrix elements."
+        ),
+    )
+    parser.add_argument(
+        "--sh-mode",
+        type=str,
+        default="aligned",
+        choices=["aligned", "legacy"],
+        help=(
+            "Spherical-harmonics feature convention: "
+            "'aligned' uses raw edge vectors with normalize=True, component normalization "
+            "(src/DeepH-style); 'legacy' uses normalized edge vectors with normalize=False."
+        ),
+    )
+    parser.add_argument(
+        "--radial-embedding-scale",
+        type=str,
+        default="none",
+        choices=["none", "sqrt_n_radial"],
+        help=(
+            "Optional extra scaling for radial embeddings. "
+            "'none' matches src/DeepH-style; 'sqrt_n_radial' reproduces legacy minimal behavior."
+        ),
+    )
+    parser.add_argument(
         "--partial-train",
         type=str,
         default=None,
@@ -394,6 +426,9 @@ if __name__ == "__main__":
         "train_on_irrep_parts": args.train_on_irrep_parts,
         "lr_factor": args.lr_factor,
         "lr_patience": args.lr_patience,
+        "loss_aggregation": args.loss_aggregation,
+        "sh_mode": args.sh_mode,
+        "radial_embedding_scale": args.radial_embedding_scale,
         "generate_video": args.generate_video,
         "verbose_forward": args.verbose_forward,
         "normalize_blocks": args.normalize_blocks,
@@ -660,15 +695,25 @@ if __name__ == "__main__":
     if CONFIG["log_data"]:
         print(f"  SH irreps: {sh_irreps}")
 
-    # Normalize edge vectors (avoid division by zero for self-edges)
-    edge_vec_norm = edge_vec.clone()
-    non_zero_mask = edge_dist > 1e-6
-    edge_vec_norm[non_zero_mask] = edge_vec[non_zero_mask] / edge_dist[
-        non_zero_mask
-    ].unsqueeze(-1)
-
-    edge_sh = spherical_harmonics(sh_irreps, edge_vec_norm, normalize=False)
+    if CONFIG["sh_mode"] == "legacy":
+        # Legacy minimal-study behavior.
+        edge_vec_norm = edge_vec.clone()
+        non_zero_mask = edge_dist > 1e-6
+        edge_vec_norm[non_zero_mask] = edge_vec[non_zero_mask] / edge_dist[
+            non_zero_mask
+        ].unsqueeze(-1)
+        edge_sh = spherical_harmonics(sh_irreps, edge_vec_norm, normalize=False)
+    else:
+        # src/DeepH-style SH convention: raw displacement vectors with
+        # normalize=True and component normalization.
+        edge_sh = spherical_harmonics(
+            sh_irreps,
+            edge_vec,
+            normalize=True,
+            normalization="component",
+        )
     if CONFIG["log_data"]:
+        print(f"  SH mode: {CONFIG['sh_mode']}")
         print(f"  Edge SH shape: {edge_sh.shape}")
 
     # Radial basis functions
@@ -684,8 +729,10 @@ if __name__ == "__main__":
         basis="gaussian",
         cutoff=False,
     )
-    edge_length_emb = edge_length_emb * CONFIG["n_radial"] ** 0.5  # Normalization
+    if CONFIG["radial_embedding_scale"] == "sqrt_n_radial":
+        edge_length_emb = edge_length_emb * CONFIG["n_radial"] ** 0.5
     if CONFIG["log_data"]:
+        print(f"  Radial embedding scale: {CONFIG['radial_embedding_scale']}")
         print(f"  Edge length embedding shape: {edge_length_emb.shape}")
 
     # Edge type indices
@@ -1004,6 +1051,30 @@ if __name__ == "__main__":
 
         return filtered_data
 
+    def init_block_loss_accumulator():
+        return {
+            "loss_sum": torch.tensor(0.0, device=device),
+            "sq_sum": torch.tensor(0.0, device=device),
+            "count": 0,
+        }
+
+    def accumulate_block_loss(acc, pred_blocks_filtered, targ_blocks_filtered):
+        if CONFIG["loss_aggregation"] == "global":
+            diff = pred_blocks_filtered - targ_blocks_filtered
+            acc["sq_sum"] = acc["sq_sum"] + (diff**2).sum()
+            acc["count"] += int(diff.numel())
+        else:
+            acc["loss_sum"] = acc["loss_sum"] + F.mse_loss(
+                pred_blocks_filtered, targ_blocks_filtered
+            )
+
+    def finalize_block_loss(acc):
+        if CONFIG["loss_aggregation"] == "global":
+            if acc["count"] <= 0:
+                return torch.tensor(0.0, device=device)
+            return acc["sq_sum"] / acc["count"]
+        return acc["loss_sum"]
+
     # =============================================================================
     # COMPUTE BLOCK NORMALIZATION FACTORS (IF ENABLED)
     # =============================================================================
@@ -1316,7 +1387,7 @@ if __name__ == "__main__":
             loss_block_norm_scaling_time = 0.0
             if CONFIG["train_on_irrep_parts"]:
                 # Per-irrep decomposed loss
-                loss_block = torch.tensor(0.0, device=device)
+                loss_block_acc = init_block_loss_accumulator()
                 irrep_losses = {}
 
                 for irrep in all_irreps:
@@ -1345,7 +1416,7 @@ if __name__ == "__main__":
                     )
 
                     # Compute loss for this irrep
-                    irrep_loss = torch.tensor(0.0, device=device)
+                    irrep_loss_acc = init_block_loss_accumulator()
 
                     for key in target_irrep_blocks.pair_blocks.keys():
                         if key in pred_irrep_blocks.pair_blocks:
@@ -1405,16 +1476,24 @@ if __name__ == "__main__":
                                             time.perf_counter() - t_norm_scale_start
                                         )
 
-                                irrep_loss += F.mse_loss(
-                                    pred_blocks_filtered, targ_blocks_filtered
+                                accumulate_block_loss(
+                                    irrep_loss_acc,
+                                    pred_blocks_filtered,
+                                    targ_blocks_filtered,
+                                )
+                                accumulate_block_loss(
+                                    loss_block_acc,
+                                    pred_blocks_filtered,
+                                    targ_blocks_filtered,
                                 )
 
                     irrep_str = str(irrep)
+                    irrep_loss = finalize_block_loss(irrep_loss_acc)
                     irrep_losses[irrep_str] = irrep_loss
-                    loss_block += irrep_loss
+                loss_block = finalize_block_loss(loss_block_acc)
             else:
                 # Standard loss computation
-                loss_block = torch.tensor(0.0, device=device)
+                loss_block_acc = init_block_loss_accumulator()
                 filtered_target = filter_blocks_by_partial_train(
                     target_H_matrix_for_block_loss, CONFIG["partial_train"]
                 )
@@ -1474,9 +1553,12 @@ if __name__ == "__main__":
                                         time.perf_counter() - t_norm_scale_start
                                     )
 
-                            loss_block += F.mse_loss(
-                                pred_blocks_filtered, targ_blocks_filtered
+                            accumulate_block_loss(
+                                loss_block_acc,
+                                pred_blocks_filtered,
+                                targ_blocks_filtered,
                             )
+                loss_block = finalize_block_loss(loss_block_acc)
             if CONFIG["benchmark"]:
                 benchmark_add(
                     "loss_block_total", time.perf_counter() - t_loss_block_start
