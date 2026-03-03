@@ -1,0 +1,127 @@
+check: priority_2_loss_parity
+inputs:
+  data_path: data/small/H2O/original/H2O.matrix
+  info_path: data/small/H2O/original/H2O.info.out
+  cutoff_radius: 7.0
+  n_radial: 32
+  l_max: 4
+  hidden_dim: 32
+  num_layers: 2
+  seed: 0
+  use_aligned_sh: false
+objective_values_on_fixed_prediction:
+  loss_per_key_sum_mse: 4.161839485168457
+  loss_global_element_mse: 1.0313743352890015
+  global_over_per_key_ratio: 0.24781694223540074
+gradient_comparison:
+  grad_norm_per_key_sum_mse: 101.166748046875
+  grad_norm_global_element_mse: 25.141950607299805
+  global_over_per_key_grad_norm_ratio: 0.24851990493606094
+  gradient_cosine_similarity: 0.9785981774330139
+  num_grad_elements: 122052
+  largest_param_norm_ratio_diffs:
+  - name: head.diag_projections.H-H.weight
+    grad_norm_per_key: 0.00031560900970362127
+    grad_norm_global: 6.915268750162795e-05
+    global_over_per_key_ratio: 0.21910872432497133
+  - name: head.offdiag_projections.H-H.weight
+    grad_norm_per_key: 0.21591229736804962
+    grad_norm_global: 0.04730826988816261
+    global_over_per_key_ratio: 0.21910873287369884
+  - name: mp_layers.1.edge_norm.bias
+    grad_norm_per_key: 0.11356625705957413
+    grad_norm_global: 0.02644558623433113
+    global_over_per_key_ratio: 0.23286482199072928
+  - name: mp_layers.1.node_norm.bias
+    grad_norm_per_key: 0.06798801571130753
+    grad_norm_global: 0.016102265566587448
+    global_over_per_key_ratio: 0.23683976356893993
+  - name: mp_layers.1.edge_update_tp.weight
+    grad_norm_per_key: 0.25821173191070557
+    grad_norm_global: 0.062269795686006546
+    global_over_per_key_ratio: 0.24115788707672123
+  - name: mp_layers.0.node_norm.bias
+    grad_norm_per_key: 0.17687837779521942
+    grad_norm_global: 0.04272232577204704
+    global_over_per_key_ratio: 0.24153503839518886
+  - name: edge_enc.radial_proj.bias
+    grad_norm_per_key: 1.4389293193817139
+    grad_norm_global: 0.35053718090057373
+    global_over_per_key_ratio: 0.2436097285523338
+  - name: node_enc.embedding.weight
+    grad_norm_per_key: 0.41856786608695984
+    grad_norm_global: 0.1024426594376564
+    global_over_per_key_ratio: 0.2447456380141073
+  - name: mp_layers.1.edge_norm.weight
+    grad_norm_per_key: 1.312938928604126
+    grad_norm_global: 0.3256092369556427
+    global_over_per_key_ratio: 0.24800029145439376
+  - name: edge_enc.norm.bias
+    grad_norm_per_key: 101.0251235961914
+    grad_norm_global: 25.105079650878906
+    global_over_per_key_ratio: 0.2485033302332466
+  - name: mp_layers.0.node_norm.weight
+    grad_norm_per_key: 0.5722464323043823
+    grad_norm_global: 0.1438254863023758
+    global_over_per_key_ratio: 0.25133487634550056
+  - name: head.offdiag_projections.O-H.weight
+    grad_norm_per_key: 0.13570237159729004
+    grad_norm_global: 0.034477390348911285
+    global_over_per_key_ratio: 0.25406623291173047
+  - name: head.offdiag_projections.H-O.weight
+    grad_norm_per_key: 0.1370101124048233
+    grad_norm_global: 0.034809645265340805
+    global_over_per_key_ratio: 0.2540662485006133
+  - name: mp_layers.0.node_update_lin.weight
+    grad_norm_per_key: 0.4858713746070862
+    grad_norm_global: 0.12369866669178009
+    global_over_per_key_ratio: 0.2545913860264202
+  - name: edge_enc.radial_proj.weight
+    grad_norm_per_key: 4.46420431137085
+    grad_norm_global: 1.138155221939087
+    global_over_per_key_ratio: 0.25495141856300635
+per_key_weighting_breakdown:
+  keys:
+    H-H:
+      num_edges: 624
+      numel: 50544
+      mse: 1.234049677848816
+      sum_sq: 62373.80859375
+      global_weight: 0.2191087220391885
+      per_key_weight: 1.0
+      global_contribution: 0.27039104784632634
+      per_key_contribution: 1.234049677848816
+    H-O:
+      num_edges: 296
+      numel: 58608
+      mse: 1.0234781503677368
+      sum_sq: 59984.0078125
+      global_weight: 0.25406623894572566
+      per_key_weight: 1.0
+      global_contribution: 0.26003124430705876
+      per_key_contribution: 1.0234781503677368
+    O-O:
+      num_edges: 130
+      numel: 62920
+      mse: 0.9164575338363647
+      sum_sq: 57663.5078125
+      global_weight: 0.27275880006936015
+      per_key_weight: 1.0
+      global_contribution: 0.2499718572437319
+      per_key_contribution: 0.9164575338363647
+    O-H:
+      num_edges: 296
+      numel: 58608
+      mse: 0.9878537654876709
+      sum_sq: 57896.1328125
+      global_weight: 0.25406623894572566
+      per_key_weight: 1.0
+      global_contribution: 0.25098029082582546
+      per_key_contribution: 0.9878537654876709
+  total_numel: 230680
+  total_sum_sq: 237917.45703125
+conclusion:
+  summary: 'Objectives are not equivalent: per-key sum gives each key equal weight,
+    while global element MSE weights by number of elements.'
+  same_scalar_loss: false
+  same_gradient_direction: false

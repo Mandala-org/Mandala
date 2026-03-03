@@ -1,0 +1,46 @@
+check: priority_3_scheduler_order_ab
+inputs:
+  data_path: data/small/H2O/original/H2O.matrix
+  info_path: data/small/H2O/original/H2O.info.out
+  cutoff_radius: 7.0
+  n_radial: 32
+  l_max: 4
+  hidden_dim: 32
+  num_layers: 2
+  seed: 0
+  epochs: 120
+  lr: 0.001
+  lr_factor: 0.5
+  lr_patience: 10
+  lr_cooldown: 5
+  min_lr: 1.0e-06
+  use_aligned_sh: false
+variant_before_optimizer:
+  best_loss: 0.5094878673553467
+  best_epoch: 119
+  final_loss: 0.5094878673553467
+  improvement_from_start: 3.6523516178131104
+  relative_improvement_from_start: 0.8775810866394516
+  first_lr_drop_epoch: null
+  lr_drop_count: 0
+  final_lr: 0.001
+  avg_epoch_ms: 1265.0330163249776
+variant_after_optimizer:
+  best_loss: 0.5094878673553467
+  best_epoch: 119
+  final_loss: 0.5094878673553467
+  improvement_from_start: 3.6523516178131104
+  relative_improvement_from_start: 0.8775810866394516
+  first_lr_drop_epoch: null
+  lr_drop_count: 0
+  final_lr: 0.001
+  avg_epoch_ms: 1240.1016479916511
+deltas:
+  delta_final_loss_after_minus_before: 0.0
+  delta_best_loss_after_minus_before: 0.0
+  delta_final_lr_after_minus_before: 0.0
+  delta_avg_epoch_ms_after_minus_before: -24.931368333326418
+conclusion:
+  summary: Compare final/best loss and LR traces to quantify impact of calling scheduler.step()
+    before vs after optimizer.step().
+  recommended_order: after_optimizer

@@ -1,0 +1,67 @@
+check: priority_1_sh_parity
+inputs:
+  data_path: data/small/H2O/original/H2O.matrix
+  info_path: data/small/H2O/original/H2O.info.out
+  cutoff_radius: 7.0
+  n_radial: 32
+  l_max: 4
+  seed: 0
+  tolerance: 1.0e-06
+shape_summary:
+  num_atoms: 6
+  num_edges_minimal: 1346
+  num_edges_src: 1346
+  num_self_edges_src: 6
+  edge_sh_shape_minimal:
+  - 1346
+  - 25
+  edge_sh_shape_src:
+  - 1346
+  - 25
+  edge_length_emb_shape_minimal:
+  - 1346
+  - 32
+  edge_length_emb_shape_src:
+  - 1346
+  - 32
+edge_set_parity:
+  exact_match: true
+  edge_type_idx_match: true
+  first_mismatches: []
+feature_parity:
+  sh_current_vs_src:
+    max_abs: 2.1537156105041504
+    mean_abs: 0.5808637142181396
+    rmse: 0.7163674831390381
+    max_rel: 2.544908046722412
+    mean_rel: 2.4994442462921143
+  sh_aligned_vs_src:
+    max_abs: 0.0
+    mean_abs: 0.0
+    rmse: 0.0
+    max_rel: 0.0
+    mean_rel: 0.0
+  radial_scaled_vs_src:
+    max_abs: 4.157905578613281
+    mean_abs: 0.2295999974012375
+    rmse: 0.8227993845939636
+    max_rel: 0.823223352432251
+    mean_rel: 0.2609274387359619
+  radial_unscaled_vs_src:
+    max_abs: 5.960464477539063e-08
+    mean_abs: 7.335868579261273e-10
+    rmse: 6.163492827226946e-09
+    max_rel: 8.42871230588571e-08
+    mean_rel: 3.3804510302104518e-09
+  edge_distance_stats:
+    max_abs: 0.0
+    mean_abs: 0.0
+    rmse: 0.0
+    max_rel: 0.0
+    mean_rel: 0.0
+conclusion:
+  pass_aligned_sh_parity: true
+  pass_unscaled_radial_parity: true
+  current_sh_is_different_from_src: true
+  overall_pass: true
+  summary: Minimal aligned SH path and unscaled radial embedding match src path.
