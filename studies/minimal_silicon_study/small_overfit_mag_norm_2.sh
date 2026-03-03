@@ -15,7 +15,7 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --log-per-irrep-images \
   --generate-video \
   --cutoff-radius 7.0 \
-  --apply-cutoff-to-targets
+  --apply-cutoff-to-targets \
   --require-exact-edge-match \
   --lr 0.01 \
   --num-epochs 20000 \
