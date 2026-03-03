@@ -178,6 +178,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log-per-irrep-metrics", action="store_true", default=False)
     parser.add_argument("--log-per-irrep-images", action="store_true", default=False)
     parser.add_argument("--generate-video", action="store_true", default=False)
+    parser.add_argument(
+        "--video-max-atoms",
+        type=int,
+        default=6,
+        help=(
+            "For training-video frame plots, keep only first N atoms in the displayed "
+            "matrix. Set <=0 to disable cropping."
+        ),
+    )
 
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
@@ -1174,6 +1183,7 @@ def main() -> None:
         "log_per_irrep_metrics": args.log_per_irrep_metrics,
         "log_per_irrep_images": args.log_per_irrep_images,
         "generate_video": args.generate_video,
+        "video_max_atoms": args.video_max_atoms,
         "device": args.device,
         "checkpoint_dir": args.checkpoint_dir,
         "run_name": args.run_name,
@@ -1593,6 +1603,12 @@ def main() -> None:
                             diff_dynamic_range=True,
                             partial_train=None,
                             percentile=99.0,
+                            max_atoms=(
+                                args.video_max_atoms
+                                if args.video_max_atoms is not None
+                                and args.video_max_atoms > 0
+                                else None
+                            ),
                         )
                     except Exception as exc:
                         print(f"[WARN] Could not save frame for epoch {epoch}: {exc}")
