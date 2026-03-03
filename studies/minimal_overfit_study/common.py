@@ -1965,6 +1965,7 @@ def create_hamiltonian_frame_figure(
     figsize=(12, 12),
     return_buffer=False,
     epoch=None,
+    max_atoms=None,
 ):
     """
     Create a single matplotlib figure showing Hamiltonian comparison for one shift.
@@ -1992,6 +1993,8 @@ def create_hamiltonian_frame_figure(
         figsize: Figure size (default: (12, 12))
         return_buffer: If True, return figure as PNG-encoded bytes instead of figure object
         epoch: Optional epoch number to display on the figure
+        max_atoms: Optional int. If set to >0, display only the top-left
+                  submatrix corresponding to the first `max_atoms` atoms.
 
     Returns:
         matplotlib.figure.Figure or bytes: Figure object (or PNG bytes if return_buffer=True)
@@ -2011,6 +2014,15 @@ def create_hamiltonian_frame_figure(
         sz,
         partial_train=partial_train,
     )
+
+    if max_atoms is not None and int(max_atoms) > 0:
+        atom_count = min(int(max_atoms), len(atoms_list))
+        orbital_dims = [orbital_cfg.element_to_irreps[a].dim for a in atoms_list]
+        cut_dim = int(sum(orbital_dims[:atom_count]))
+        H_gt_dense = H_gt_dense[:cut_dim, :cut_dim]
+        H_pred_dense = H_pred_dense[:cut_dim, :cut_dim]
+        if S_dense is not None:
+            S_dense = S_dense[:cut_dim, :cut_dim]
 
     # Compute differences
     diff = H_pred_dense - H_gt_dense
@@ -2143,6 +2155,7 @@ def save_hamiltonian_frame_to_disk(
     per_panel_dynamic_range=False,
     partial_train=None,
     percentile=80.0,
+    max_atoms=None,
 ):
     """
     Save a single Hamiltonian visualization frame to disk for video creation.
@@ -2166,6 +2179,8 @@ def save_hamiltonian_frame_to_disk(
                                  to False (old behavior).
         partial_train: "diag", "offdiag", or None - filters which blocks to show
         percentile: Percentile value for dynamic color range (default: 80.0)
+        max_atoms: Optional int. If set to >0, display only the top-left
+                  submatrix corresponding to the first `max_atoms` atoms.
 
     Returns:
         Path to saved PNG file
@@ -2189,6 +2204,7 @@ def save_hamiltonian_frame_to_disk(
         partial_train=partial_train,
         percentile=percentile,
         epoch=epoch,
+        max_atoms=max_atoms,
     )
 
     # Save figure
