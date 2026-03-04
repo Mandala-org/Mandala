@@ -401,7 +401,7 @@ def build_graph_inputs(
 
     # Compute edge vectors and distances
     if box is not None:
-        shift_float = edge_shift.T.float()
+        shift_float = edge_shift.T.to(dtype=positions.dtype)
         edge_vec = (
             positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
         )

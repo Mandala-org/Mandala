@@ -258,9 +258,9 @@ class MinimalEdgeEncoder(nn.Module):
         self, edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb=False
     ):
         # Create edge type one-hot
-        edge_type_onehot = F.one_hot(
-            edge_type_idx, num_classes=self.num_edge_types
-        ).float()
+        edge_type_onehot = F.one_hot(edge_type_idx, num_classes=self.num_edge_types).to(
+            dtype=edge_length_emb.dtype
+        )
 
         # Concatenate radial and edge type features
         combined = torch.cat([edge_length_emb, edge_type_onehot], dim=-1)
@@ -2488,7 +2488,7 @@ def get_all_irreps_in_hamiltonian(mapper):
     return sorted(irreps_set, key=lambda ir: (ir.l, ir.p))
 
 
-def permutation_to_matrix(perm_str, device):
+def permutation_to_matrix(perm_str, device, dtype=torch.float32):
     """
     Convert permutation string to change of basis matrix.
 
@@ -2510,11 +2510,11 @@ def permutation_to_matrix(perm_str, device):
                 f"Invalid permutation: {perm_str}. Must be a 3-digit permutation of 012."
             )
         # Create permutation matrix where row i has 1 at column perm[i]
-        matrix = torch.zeros(3, 3, dtype=torch.float32, device=device)
+        matrix = torch.zeros(3, 3, dtype=dtype, device=device)
         for i in range(3):
             matrix[i, perm[i]] = 1.0
         return matrix
     except (ValueError, IndexError) as e:
         print(f"  Warning: Invalid permutation string: {e}")
         print(f"  Using identity permutation (no transformation)")
-        return torch.eye(3, dtype=torch.float32, device=device)
+        return torch.eye(3, dtype=dtype, device=device)

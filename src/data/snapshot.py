@@ -363,7 +363,10 @@ class Snapshot:
             ovl = conv.matrix_to_e3nn(self.overlap)
             den = conv.matrix_to_e3nn(self.density)
 
-            change_of_basis = torch.eye(3, dtype=torch.float32)[[2, 0, 1]]
+            cob_dtype = (
+                pos.dtype if pos is not None else any_block.dtype
+            )  # keep basis change in tensor dtype
+            change_of_basis = torch.eye(3, dtype=cob_dtype, device=device)[[2, 0, 1]]
             pos = pos @ change_of_basis if pos is not None else None
             forces = forces @ change_of_basis if forces is not None else None
             box = box @ change_of_basis if box is not None else None
@@ -373,7 +376,10 @@ class Snapshot:
             ovl = conv.matrix_to_openmx(self.overlap)
             den = conv.matrix_to_openmx(self.density)
 
-            change_of_basis = torch.eye(3, dtype=torch.float32)[[1, 2, 0]]
+            cob_dtype = (
+                pos.dtype if pos is not None else any_block.dtype
+            )  # keep basis change in tensor dtype
+            change_of_basis = torch.eye(3, dtype=cob_dtype, device=device)[[1, 2, 0]]
             pos = pos @ change_of_basis if pos is not None else None
             forces = forces @ change_of_basis if forces is not None else None
             box = box @ change_of_basis if box is not None else None

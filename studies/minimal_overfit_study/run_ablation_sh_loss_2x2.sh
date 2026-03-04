@@ -10,6 +10,7 @@ RUN_PREFIX="${RUN_PREFIX:-ablation-sh-loss-2x2-${STAMP}}"
 
 # Tunables (override with env vars on HPC launcher).
 DEVICE="${DEVICE:-cuda}"
+DTYPE="${DTYPE:-float64}"
 EPOCHS="${EPOCHS:-3000}"
 LR="${LR:-1e-2}"
 LOG_INTERVAL="${LOG_INTERVAL:-200}"
@@ -21,6 +22,7 @@ N_RADIAL="${N_RADIAL:-128}"
 
 COMMON_ARGS=(
   --device "${DEVICE}"
+  --dtype "${DTYPE}"
   --num-epochs "${EPOCHS}"
   --lr "${LR}"
   --log-interval "${LOG_INTERVAL}"
