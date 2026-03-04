@@ -149,9 +149,12 @@ class e3LayerNorm(nn.Module):
 
 
 def log_activation_magnitudes(
-    features, irreps, name="", wandb_prefix="", log_to_wandb=False
+    features, irreps, name="", wandb_prefix="", log_to_wandb=False, verbose=True
 ):
     """Log per-irrep activation magnitudes."""
+    if not verbose and not (log_to_wandb and wandb_prefix):
+        return
+
     stats = []
     ix = 0
     for mul, ir in irreps:
@@ -172,7 +175,8 @@ def log_activation_magnitudes(
 
         ix += mul * ir.dim
 
-    print(f"      [{name}] Magnitudes per irrep: {', '.join(stats)}")
+    if verbose:
+        print(f"      [{name}] Magnitudes per irrep: {', '.join(stats)}")
 
 
 class MinimalNodeEncoder(nn.Module):
@@ -186,12 +190,13 @@ class MinimalNodeEncoder(nn.Module):
             f"    [NodeEncoder] Input: {num_elements} elements -> Output: {self.irreps_out}"
         )
 
-    def forward(self, node_type_idx):
+    def forward(self, node_type_idx, verbose=True):
         out = self.embedding(node_type_idx)
         check_for_nans(out, "NodeEncoder.embedding")
-        print(
-            f"      [NodeEncoder.forward] Input shape: {node_type_idx.shape} -> Output: {out.shape} (irreps: {self.irreps_out})"
-        )
+        if verbose:
+            print(
+                f"      [NodeEncoder.forward] Input shape: {node_type_idx.shape} -> Output: {out.shape} (irreps: {self.irreps_out})"
+            )
         return out
 
 
@@ -255,7 +260,13 @@ class MinimalEdgeEncoder(nn.Module):
         print(f"                  Norm: {self.irreps_out}")
 
     def forward(
-        self, edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb=False
+        self,
+        edge_length_emb,
+        edge_type_idx,
+        edge_sh,
+        batch_edge,
+        log_to_wandb=False,
+        verbose=True,
     ):
         # Create edge type one-hot
         edge_type_onehot = F.one_hot(edge_type_idx, num_classes=self.num_edge_types).to(
@@ -281,27 +292,29 @@ class MinimalEdgeEncoder(nn.Module):
         edge_feat = self.norm(edge_feat, batch_edge)
         check_for_nans(edge_feat, "EdgeEncoder.norm", edge_feat)
 
-        print(
-            f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} -> Combined: {combined.shape}"
-        )
-        print(
-            f"                            -> Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
-        )
-        print(
-            f"                            (x) SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
-        )
-        print(
-            f"                            -> TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
-        )
-        print(
-            f"                            -> Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
-        )
+        if verbose:
+            print(
+                f"      [EdgeEncoder.forward] Radial: {edge_length_emb.shape}, EdgeType: {edge_type_onehot.shape} -> Combined: {combined.shape}"
+            )
+            print(
+                f"                            -> Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
+            )
+            print(
+                f"                            (x) SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
+            )
+            print(
+                f"                            -> TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
+            )
+            print(
+                f"                            -> Gate out: {edge_feat.shape} (irreps: {self.irreps_out})"
+            )
         log_activation_magnitudes(
             edge_feat,
             self.irreps_out,
             "EdgeEncoder activations",
             "EdgeEncoder",
             log_to_wandb,
+            verbose=verbose,
         )
         return edge_feat
 
@@ -393,12 +406,14 @@ class MinimalMessageBlock(nn.Module):
         batch_node,
         batch_edge,
         log_to_wandb=False,
+        verbose=True,
     ):
         N = node_feat.shape[0]
 
-        print(
-            f"      [MessageBlock.forward] Input: nodes {node_feat.shape} (irreps: {self.node_irreps}), edges {edge_feat.shape} (irreps: {self.edge_irreps})"
-        )
+        if verbose:
+            print(
+                f"      [MessageBlock.forward] Input: nodes {node_feat.shape} (irreps: {self.node_irreps}), edges {edge_feat.shape} (irreps: {self.edge_irreps})"
+            )
 
         src_idx = edge_index[0]
         dst_idx = edge_index[1]
@@ -409,7 +424,8 @@ class MinimalMessageBlock(nn.Module):
         check_for_nans(
             messages, f"MessageBlock[{self.layer_idx}].messages_aggregate", edge_feat
         )
-        print(f"                            Messages aggregated: {messages.shape}")
+        if verbose:
+            print(f"                            Messages aggregated: {messages.shape}")
 
         # Concatenate with self-connection
         node_concat = torch.cat([messages, node_feat], dim=-1)
@@ -424,18 +440,20 @@ class MinimalMessageBlock(nn.Module):
         node_feat_new = self.node_norm(node_feat_new, batch_node)
         check_for_nans(node_feat_new, f"MessageBlock[{self.layer_idx}].node_norm")
 
-        print(
-            f"                            Node Linear: {node_concat.shape} -> {node_linear.shape}"
-        )
-        print(
-            f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
-        )
+        if verbose:
+            print(
+                f"                            Node Linear: {node_concat.shape} -> {node_linear.shape}"
+            )
+            print(
+                f"                            Node Gate+Norm: {node_feat_new.shape} (irreps: {self.node_gate.irreps_out})"
+            )
         log_activation_magnitudes(
             node_feat_new,
             self.node_gate.irreps_out,
             "Node activations",
             f"Layer{self.layer_idx+1}_Node",
             log_to_wandb,
+            verbose=verbose,
         )
 
         # Edge update second: use updated nodes
@@ -443,9 +461,10 @@ class MinimalMessageBlock(nn.Module):
         dst_node = node_feat_new[dst_idx]
 
         edge_concat = torch.cat([src_node, dst_node, edge_feat], dim=-1)
-        print(
-            f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} -> {edge_concat.shape}"
-        )
+        if verbose:
+            print(
+                f"                            Edge concat: src {src_node.shape} + dst {dst_node.shape} + edge {edge_feat.shape} -> {edge_concat.shape}"
+            )
 
         # Apply TP with spherical harmonics
         edge_tp = self.edge_update_tp(edge_concat, edge_sh)
@@ -457,18 +476,20 @@ class MinimalMessageBlock(nn.Module):
         edge_feat_new = self.edge_norm(edge_feat_new, batch_edge)
         check_for_nans(edge_feat_new, f"MessageBlock[{self.layer_idx}].edge_norm")
 
-        print(
-            f"                            Edge TP: {edge_concat.shape} (x) {edge_sh.shape} -> {edge_tp.shape}"
-        )
-        print(
-            f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
-        )
+        if verbose:
+            print(
+                f"                            Edge TP: {edge_concat.shape} (x) {edge_sh.shape} -> {edge_tp.shape}"
+            )
+            print(
+                f"                            Edge Gate+Norm: {edge_feat_new.shape} (irreps: {self.edge_gate.irreps_out})"
+            )
         log_activation_magnitudes(
             edge_feat_new,
             self.edge_gate.irreps_out,
             "Edge activations",
             f"Layer{self.layer_idx+1}_Edge",
             log_to_wandb,
+            verbose=verbose,
         )
 
         return node_feat_new, edge_feat_new
@@ -654,7 +675,13 @@ class MinimalHead(nn.Module):
         return torch.cat(parts, dim=-1)
 
     def forward(
-        self, edge_feat, edge_type_idx, edge_index, edge_shift, edge_length_emb
+        self,
+        edge_feat,
+        edge_type_idx,
+        edge_index,
+        edge_shift,
+        edge_length_emb,
+        verbose=True,
     ):
         """
         Returns: dict[pair_key] -> {"vectors": tensor, "edges": tensor}
@@ -799,24 +826,27 @@ class MinimalHead(nn.Module):
                 if self.magnitude_factorization:
                     outputs[type_str]["magnitudes"] = pred_magnitudes
                 if self.separate_shifted_self:
-                    print(
-                        f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
-                        f"({int(is_diag.sum().item())} diag, "
-                        f"{int(is_shifted_self.sum().item())} shifted_self, "
-                        f"{int(is_offdiag.sum().item())} offdiag) "
-                        f"-> vectors {pred_vectors.shape}"
-                    )
+                    if verbose:
+                        print(
+                            f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
+                            f"({int(is_diag.sum().item())} diag, "
+                            f"{int(is_shifted_self.sum().item())} shifted_self, "
+                            f"{int(is_offdiag.sum().item())} offdiag) "
+                            f"-> vectors {pred_vectors.shape}"
+                        )
                 else:
-                    print(
-                        f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
-                        f"({int(is_diag.sum().item())} diag, {int(is_offdiag.sum().item())} offdiag) "
-                        f"-> vectors {pred_vectors.shape}"
-                    )
+                    if verbose:
+                        print(
+                            f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
+                            f"({int(is_diag.sum().item())} diag, {int(is_offdiag.sum().item())} offdiag) "
+                            f"-> vectors {pred_vectors.shape}"
+                        )
                 if self.magnitude_factorization:
-                    print(
-                        f"                    magnitude -> {pred_magnitudes.shape} "
-                        f"(min={pred_magnitudes.min().item():.3e}, max={pred_magnitudes.max().item():.3e})"
-                    )
+                    if verbose:
+                        print(
+                            f"                    magnitude -> {pred_magnitudes.shape} "
+                            f"(min={pred_magnitudes.min().item():.3e}, max={pred_magnitudes.max().item():.3e})"
+                        )
 
         return outputs
 
@@ -889,18 +919,31 @@ class MinimalNetwork(nn.Module):
         batch_node,
         batch_edge,
         log_to_wandb=False,
+        verbose=None,
     ):
-        print("    [Forward] Starting forward pass...")
+        if verbose is None:
+            verbose = self.verbose
+
+        if verbose:
+            print("    [Forward] Starting forward pass...")
 
         # Encode
-        node_feat = self.node_enc(node_type_idx)
+        node_feat = self.node_enc(node_type_idx, verbose=verbose)
         edge_feat = self.edge_enc(
-            edge_length_emb, edge_type_idx, edge_sh, batch_edge, log_to_wandb
+            edge_length_emb,
+            edge_type_idx,
+            edge_sh,
+            batch_edge,
+            log_to_wandb,
+            verbose=verbose,
         )
 
         # Message passing (both nodes and edges get updated)
         for i, mp_layer in enumerate(self.mp_layers):
-            print(f"    [Forward] Message passing layer {i + 1}/{len(self.mp_layers)}")
+            if verbose:
+                print(
+                    f"    [Forward] Message passing layer {i + 1}/{len(self.mp_layers)}"
+                )
             node_feat, edge_feat = mp_layer(
                 node_feat,
                 edge_feat,
@@ -909,19 +952,22 @@ class MinimalNetwork(nn.Module):
                 batch_node,
                 batch_edge,
                 log_to_wandb,
+                verbose=verbose,
             )
 
         # Use edge features for head
         head_feat = edge_feat
 
         # Head
-        print(f"    [Forward] Applying head...")
+        if verbose:
+            print(f"    [Forward] Applying head...")
         outputs = self.head(
             head_feat,
             edge_type_idx,
             edge_index,
             edge_shift,
             edge_length_emb,
+            verbose=verbose,
         )
 
         return outputs
