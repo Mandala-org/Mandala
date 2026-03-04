@@ -457,8 +457,9 @@ if __name__ == "__main__":
     }
 
     # Initialize WandB
+    wandb_project = os.environ.get("WANDB_PROJECT", "mandala-minimal-overfit-study")
     wandb_kwargs = {
-        "project": "mandala-minimal-overfit-study",
+        "project": wandb_project,
         "config": CONFIG,
     }
     if args.run_name is not None:
