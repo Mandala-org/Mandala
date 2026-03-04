@@ -73,6 +73,8 @@ class _IrrepToMatrix:
         """
         Map ``(..., d_i, d_j)`` blocks -> ``(..., n_vec)`` irrep vectors.
         """
+        if blocks.dtype != q.dtype:
+            blocks = blocks.to(dtype=q.dtype)
         flat = blocks.flatten(-2)  # (..., d_i*d_j)
         return flat @ q.T
 
@@ -80,6 +82,8 @@ class _IrrepToMatrix:
         """
         Inverse of :meth:`blocks_to_vectors`.
         """
+        if vectors.dtype != q.dtype:
+            vectors = vectors.to(dtype=q.dtype)
         flat = vectors @ q  # (..., d_i*d_j)
         return flat.view(*vectors.shape[:-1], self.dim_i, self.dim_j)
 

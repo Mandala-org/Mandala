@@ -222,6 +222,13 @@ if __name__ == "__main__":
         help="Device to use (cuda or cpu)",
     )
     parser.add_argument(
+        "--dtype",
+        type=str,
+        default="float32",
+        choices=["float32", "float64"],
+        help="Floating-point dtype for data and model parameters (default: float32)",
+    )
+    parser.add_argument(
         "--checkpoint-dir",
         type=str,
         default=str("studies/minimal_overfit_study/checkpoints"),
@@ -384,6 +391,8 @@ if __name__ == "__main__":
             "--normalize-blocks and --magnitude-factorization are mutually exclusive. "
             "Disable one of them."
         )
+    torch_dtype = getattr(torch, args.dtype)
+    torch.set_default_dtype(torch_dtype)
 
     # =============================================================================
     # CONFIGURATION
@@ -440,6 +449,7 @@ if __name__ == "__main__":
         "require_exact_edge_match": args.require_exact_edge_match,
         # Device
         "device": args.device,
+        "dtype": args.dtype,
         # Target
         "train_target": "matrix",
         # Checkpointing
@@ -480,7 +490,7 @@ if __name__ == "__main__":
         convention=CONFIG["convention"],  # Automatically converts to specified basis
         symmetrize_density=True,
         cutoff_radius=None,  # No filtering, we'll use all edges
-        dtype=torch.float32,
+        dtype=torch_dtype,
     )
 
     # Optionally filter GT matrices by cutoff so loss/metrics ignore long-range blocks.
@@ -524,8 +534,12 @@ if __name__ == "__main__":
     overlap_e3nn = snapshot.overlap.to(device)
     density_e3nn = snapshot.density.to(device)
     orbital_cfg = snapshot.hamiltonian.orbital_cfg
-    positions = snapshot.positions.to(device)
-    box = snapshot.box.to(device) if snapshot.box is not None else None
+    positions = snapshot.positions.to(device=device, dtype=torch_dtype)
+    box = (
+        snapshot.box.to(device=device, dtype=torch_dtype)
+        if snapshot.box is not None
+        else None
+    )
     if box is not None and CONFIG["box_convention"] == "cols":
         box = box.T
         if CONFIG["log_data"]:
@@ -536,7 +550,9 @@ if __name__ == "__main__":
 
     # Apply coordinate permutation if specified
     if CONFIG["xyz_permutation"] != "012":
-        cob_matrix = permutation_to_matrix(CONFIG["xyz_permutation"], device)
+        cob_matrix = permutation_to_matrix(
+            CONFIG["xyz_permutation"], device, dtype=torch_dtype
+        )
         if CONFIG["log_data"]:
             print(f"\n  Applying xyz permutation: {CONFIG['xyz_permutation']}")
             print(f"    Matrix:\n{cob_matrix}")
@@ -562,7 +578,7 @@ if __name__ == "__main__":
         log_orbital_config(orbital_cfg)
 
     # Create BlockIrrepMapper
-    mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch.float32)
+    mapper = BlockIrrepMapper(orbital_cfg, device=device, dtype=torch_dtype)
     if CONFIG["log_model"]:
         log_mapper_info(mapper)
 
@@ -665,7 +681,7 @@ if __name__ == "__main__":
     )
     # Compute edge vectors and distances
     if box is not None:
-        shift_float = edge_shift.T.float()
+        shift_float = edge_shift.T.to(dtype=positions.dtype)
         edge_vec = (
             positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
         )
@@ -1059,6 +1075,8 @@ if __name__ == "__main__":
         }
 
     def accumulate_block_loss(acc, pred_blocks_filtered, targ_blocks_filtered):
+        if targ_blocks_filtered.dtype != pred_blocks_filtered.dtype:
+            targ_blocks_filtered = targ_blocks_filtered.to(pred_blocks_filtered.dtype)
         if CONFIG["loss_aggregation"] == "global":
             diff = pred_blocks_filtered - targ_blocks_filtered
             acc["sq_sum"] = acc["sq_sum"] + (diff**2).sum()
@@ -1155,7 +1173,7 @@ if __name__ == "__main__":
         head_mlp_for_scalars=CONFIG["head_mlp_for_scalars"],
         head_use_tensor_square=CONFIG["head_use_tensor_square"],
         separate_shifted_self=CONFIG["separate_shifted_self"],
-    ).to(device)
+    ).to(device=device, dtype=torch_dtype)
     if not CONFIG["log_model"]:
         sys.stdout.close()
         sys.stdout = old_stdout
@@ -1600,6 +1618,8 @@ if __name__ == "__main__":
                     if mask.any():
                         pred_sel = pred_magnitudes[:min_n][mask]
                         target_sel = target_magnitudes[:min_n][mask]
+                        if target_sel.dtype != pred_sel.dtype:
+                            target_sel = target_sel.to(pred_sel.dtype)
                         loss_magnitude += F.mse_loss(pred_sel, target_sel)
 
                         log10_diff = torch.abs(
@@ -2121,7 +2141,14 @@ if __name__ == "__main__":
             pred_block = pred_filtered_blocks[key]
             true_block = target_filtered_blocks[key]
 
-            block_mse = F.mse_loss(pred_block, true_block).item()
+            block_mse = F.mse_loss(
+                pred_block,
+                (
+                    true_block.to(pred_block.dtype)
+                    if true_block.dtype != pred_block.dtype
+                    else true_block
+                ),
+            ).item()
             block_mae = torch.mean(torch.abs(pred_block - true_block)).item()
 
             pair_irreps = mapper.get_pair_irreps(key)
