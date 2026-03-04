@@ -1206,6 +1206,50 @@ if __name__ == "__main__":
             f"  Found {len(all_irreps)} unique irreps: {[str(ir) for ir in all_irreps]}"
         )
 
+    # Precompute static target-side filters and normalization vectors to avoid
+    # rebuilding identical masks/factors every epoch.
+    filtered_target_block_loss_static = filter_blocks_by_partial_train(
+        target_H_matrix_for_block_loss, CONFIG["partial_train"]
+    )
+    filtered_target_for_magnitude_static = (
+        filter_blocks_by_partial_train(target_H_matrix, CONFIG["partial_train"])
+        if CONFIG["magnitude_factorization"]
+        else None
+    )
+    filtered_target_for_metrics_static = filter_blocks_by_partial_train(
+        target_H_matrix, CONFIG["partial_train"]
+    )
+    filtered_overlap_for_metrics_static = filter_blocks_by_partial_train(
+        overlap_e3nn, CONFIG["partial_train"]
+    )
+
+    norm_vec_full_by_key = None
+    if CONFIG["normalize_blocks"] and norm_factors is not None:
+        norm_vec_full_by_key = {}
+        for key, edges_full in target_H_matrix.pair_edges.items():
+            n_edges = edges_full.shape[1]
+            norm_vec = torch.ones(n_edges, device=device, dtype=torch_dtype)
+            for edge_idx in range(n_edges):
+                status = get_block_status(edges_full, edge_idx)
+                norm_vec[edge_idx] = norm_factors[key][status]
+            norm_vec_full_by_key[key] = norm_vec
+
+    target_irrep_cache = {}
+    if CONFIG["train_on_irrep_parts"]:
+        for irrep in all_irreps:
+            irrep_str = str(irrep)
+            target_irrep_filtered = filter_irreps_block_data_by_irrep(
+                target_H_irreps_for_block_loss, irrep, mapper
+            )
+            target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
+            target_irrep_filtered_masks = filter_blocks_by_partial_train(
+                target_irrep_blocks, CONFIG["partial_train"]
+            )
+            target_irrep_cache[irrep_str] = (
+                target_irrep_blocks,
+                target_irrep_filtered_masks,
+            )
+
     # =============================================================================
     # TRAINING LOOP
     # =============================================================================
@@ -1300,7 +1344,7 @@ if __name__ == "__main__":
         for epoch in range(CONFIG["num_epochs"]):
             epoch_core_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             network.train()
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             mag_log10_abs_sum_total = 0.0
             mag_log10_count_total = 0
             mag_log10_abs_sum_per_key = {}
@@ -1315,17 +1359,15 @@ if __name__ == "__main__":
                 print(f"EPOCH {epoch + 1}/{CONFIG['num_epochs']}  |  lr={epoch_lr:.6e}")
                 print(f"{'=' * 60}")
 
-            # Temporarily suppress forward pass logging
-            verbose = should_log_now and CONFIG["log_forward"]
+            # Detailed forward logging is enabled either always (--verbose-forward)
+            # or periodically (--log-forward at logging epochs).
+            verbose = CONFIG["verbose_forward"] or (
+                should_log_now and CONFIG["log_forward"]
+            )
 
             log_activations = should_log_now and CONFIG.get(
                 "log_activations_wandb", False
             )
-
-            if not verbose and not CONFIG["verbose_forward"]:
-                # Silence print by redirecting to nowhere temporarily
-                old_stdout = sys.stdout
-                sys.stdout = open(os.devnull, "w")
 
             t_forward_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             pred_raw = network(
@@ -1338,13 +1380,10 @@ if __name__ == "__main__":
                 batch_node,
                 batch_edge,
                 log_to_wandb=log_activations,
+                verbose=verbose,
             )
             if CONFIG["benchmark"]:
                 benchmark_add("forward_total", time.perf_counter() - t_forward_start)
-
-            if not verbose and not CONFIG["verbose_forward"]:
-                sys.stdout.close()
-                sys.stdout = old_stdout
 
             # Wrap predictions into IrrepsBlockData then convert to matrix blocks
 
@@ -1357,12 +1396,13 @@ if __name__ == "__main__":
                 pair_vec_H[key] = payload["vectors"]
                 pair_edges_dict[key] = payload["edges"]
 
-                for idx, edge_5d in enumerate(payload["edges"].t()):
-                    sx, sy, sz, i, j = edge_5d.tolist()
-                    lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
-                        key,
-                        idx,
-                    )
+                if should_log_now:
+                    for idx, edge_5d in enumerate(payload["edges"].t()):
+                        sx, sy, sz, i, j = edge_5d.tolist()
+                        lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
+                            key,
+                            idx,
+                        )
             if CONFIG["benchmark"]:
                 benchmark_add(
                     "pred_pack_raw_outputs", time.perf_counter() - t_pack_start
@@ -1378,26 +1418,16 @@ if __name__ == "__main__":
                 basis=target_H_matrix.basis,
             )
 
-            # Convert to matrix blocks (train_target = "matrix")
-            t_to_blocks_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
-            pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
-            if CONFIG["benchmark"]:
-                benchmark_add(
-                    "pred_to_blocks_norm", time.perf_counter() - t_to_blocks_start
-                )
-            if CONFIG["magnitude_factorization"]:
-                pred_H_matrix_actual = reconstruct_actual_prediction_from_magnitudes(
-                    pred_H_matrix_norm,
-                    pred_raw,
-                    require_magnitudes=True,
-                )
-            else:
-                pred_H_matrix_actual = pred_H_matrix_norm
-
-            # Use symmetrized prediction for all metrics/reporting.
-            pred_H_matrix_metrics = (
-                pred_H_matrix_actual + pred_H_matrix_actual.transpose()
-            ) * 0.5
+            # Convert to matrix blocks only when required by the active loss path.
+            pred_H_matrix_norm = None
+            if not CONFIG["train_on_irrep_parts"]:
+                t_to_blocks_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
+                pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
+                if CONFIG["benchmark"]:
+                    benchmark_add(
+                        "pred_to_blocks_norm", time.perf_counter() - t_to_blocks_start
+                    )
+            pred_H_matrix_metrics = None
 
             # Compute loss - either standard or per-irrep decomposed
             t_loss_block_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
@@ -1416,22 +1446,15 @@ if __name__ == "__main__":
                     pred_irrep_filtered = filter_irreps_block_data_by_irrep(
                         pred_H_irreps, irrep, mapper
                     )
-                    target_irrep_filtered = filter_irreps_block_data_by_irrep(
-                        target_H_irreps_for_block_loss, irrep, mapper
-                    )
-
-                    # Convert to matrix blocks
+                    # Convert prediction to matrix blocks
                     pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
-                    target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
+                    target_irrep_blocks, filtered_target_irrep = target_irrep_cache[
+                        str(irrep)
+                    ]
                     if CONFIG["benchmark"]:
                         loss_block_irrep_filter_to_blocks_time += (
                             time.perf_counter() - t_irrep_ftb_start
                         )
-
-                    # Apply partial_train filtering
-                    filtered_target_irrep = filter_blocks_by_partial_train(
-                        target_irrep_blocks, CONFIG["partial_train"]
-                    )
 
                     # Compute loss for this irrep
                     irrep_loss_acc = init_block_loss_accumulator()
@@ -1460,17 +1483,7 @@ if __name__ == "__main__":
                                         if CONFIG["benchmark"]
                                         else 0.0
                                     )
-                                    # For per-irrep case, we need to use the original target's edges
-                                    # because the irrep-filtered blocks still refer to the same edges
-                                    edges_full = target_H_matrix.pair_edges[
-                                        key
-                                    ]  # (5, num_edges)
-                                    norm_vec = torch.ones(
-                                        min_n, device=pred_blocks.device
-                                    )
-                                    for edge_idx in range(min_n):
-                                        status = get_block_status(edges_full, edge_idx)
-                                        norm_vec[edge_idx] = norm_factors[key][status]
+                                    norm_vec = norm_vec_full_by_key[key][:min_n]
 
                                     # Select norm factors corresponding to mask
                                     norm_vec_selected = norm_vec[mask]
@@ -1512,9 +1525,7 @@ if __name__ == "__main__":
             else:
                 # Standard loss computation
                 loss_block_acc = init_block_loss_accumulator()
-                filtered_target = filter_blocks_by_partial_train(
-                    target_H_matrix_for_block_loss, CONFIG["partial_train"]
-                )
+                filtered_target = filtered_target_block_loss_static
 
                 for key in target_H_matrix_for_block_loss.pair_blocks.keys():
                     if key in pred_H_matrix_norm.pair_blocks:
@@ -1543,14 +1554,7 @@ if __name__ == "__main__":
                                 t_norm_scale_start = (
                                     time.perf_counter() if CONFIG["benchmark"] else 0.0
                                 )
-                                # Create normalization factors for each edge
-                                edges_full = target_H_matrix.pair_edges[
-                                    key
-                                ]  # (5, num_edges)
-                                norm_vec = torch.ones(min_n, device=pred_blocks.device)
-                                for edge_idx in range(min_n):
-                                    status = get_block_status(edges_full, edge_idx)
-                                    norm_vec[edge_idx] = norm_factors[key][status]
+                                norm_vec = norm_vec_full_by_key[key][:min_n]
 
                                 # Select norm factors corresponding to mask
                                 norm_vec_selected = norm_vec[mask]
@@ -1592,9 +1596,7 @@ if __name__ == "__main__":
 
             loss_magnitude = torch.tensor(0.0, device=device)
             if CONFIG["magnitude_factorization"]:
-                filtered_target_for_magnitude = filter_blocks_by_partial_train(
-                    target_H_matrix, CONFIG["partial_train"]
-                )
+                filtered_target_for_magnitude = filtered_target_for_magnitude_static
                 for key in target_H_matrix.pair_blocks.keys():
                     if key not in pred_raw:
                         continue
@@ -1645,7 +1647,7 @@ if __name__ == "__main__":
                 loss = loss_block
 
             # Step scheduler (ReduceLROnPlateau needs validation loss, so we use training loss here)
-            scheduler.step(loss)
+            scheduler.step(float(loss.item()))
 
             # Log current learning rate
             current_lr = optimizer.param_groups[0]["lr"]
@@ -1738,17 +1740,40 @@ if __name__ == "__main__":
 
             # Logging
             if should_log_now:
+                with torch.inference_mode():
+                    if pred_H_matrix_norm is None:
+                        t_to_blocks_start = (
+                            time.perf_counter() if CONFIG["benchmark"] else 0.0
+                        )
+                        pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
+                        if CONFIG["benchmark"]:
+                            benchmark_add(
+                                "pred_to_blocks_norm",
+                                time.perf_counter() - t_to_blocks_start,
+                            )
+
+                    if CONFIG["magnitude_factorization"]:
+                        pred_H_matrix_actual_metrics = (
+                            reconstruct_actual_prediction_from_magnitudes(
+                                pred_H_matrix_norm,
+                                pred_raw,
+                                require_magnitudes=True,
+                            )
+                        )
+                    else:
+                        pred_H_matrix_actual_metrics = pred_H_matrix_norm
+                    pred_H_matrix_metrics = (
+                        pred_H_matrix_actual_metrics
+                        + pred_H_matrix_actual_metrics.transpose()
+                    ) * 0.5
+
                 # Compute detailed metrics with filtering
                 # First filter both predictions and targets
                 filtered_pred = filter_blocks_by_partial_train(
                     pred_H_matrix_metrics, CONFIG["partial_train"]
                 )
-                filtered_target = filter_blocks_by_partial_train(
-                    target_H_matrix, CONFIG["partial_train"]
-                )
-                filtered_overlap = filter_blocks_by_partial_train(
-                    overlap_e3nn, CONFIG["partial_train"]
-                )
+                filtered_target = filtered_target_for_metrics_static
+                filtered_overlap = filtered_overlap_for_metrics_static
 
                 # Create filtered versions for metrics computation
 
@@ -1967,7 +1992,7 @@ if __name__ == "__main__":
     print("=" * 80)
 
     network.eval()
-    with torch.no_grad():
+    with torch.inference_mode():
         pred_raw = network(
             node_type_idx,
             edge_type_idx,
@@ -1977,6 +2002,7 @@ if __name__ == "__main__":
             edge_sh,
             batch_node,
             batch_edge,
+            verbose=CONFIG["verbose_forward"],
         )
 
         # Reconstruct full predictions
