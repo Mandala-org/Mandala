@@ -63,8 +63,8 @@ run_case() {
   printf -v submit_cmd '%q ' "${run_cmd[@]}"
   submit_cmd="cd ${REPO_ROOT} && export WANDB_PROJECT=${WANDB_PROJECT_NAME} && ${submit_cmd}"
 
-  echo "runh1 ${submit_cmd}"
-  runh1 "${submit_cmd}"
+  echo "~/scripts/hpc/hpc.py run --gpu h100 --gpus 1 ${submit_cmd}"
+  ~/scripts/hpc/hpc.py run --gpu h100 --gpus 1 "${submit_cmd}"
 }
 
 # 2x2: {legacy features, aligned features} x {per_key, global loss}
