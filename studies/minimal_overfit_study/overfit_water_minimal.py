@@ -1001,6 +1001,61 @@ if __name__ == "__main__":
             basis=pred_matrix_normalized.basis,
         )
 
+    def build_irrep_projection_cache(irreps_data, all_irreps_list):
+        """
+        Precompute lightweight projectors to map only one irrep component from
+        full irrep vectors directly to matrix blocks.
+
+        Returns:
+            dict[irrep_str][key] = (idx, q_subset, dim_i, dim_j)
+            where:
+              - idx: indices in full irrep vector belonging to irrep_str
+              - q_subset: corresponding rows of mapper q matrix
+              - dim_i, dim_j: block dimensions for reshape
+        """
+        cache = {str(ir): {} for ir in all_irreps_list}
+        all_irrep_strs = set(cache.keys())
+
+        for key in irreps_data.pair_vectors.keys():
+            pair_irreps = mapper.get_pair_irreps(key)
+            el_a, el_b = key.split("-", 1)
+            map_key = (el_a, el_b)
+            itm = mapper._lookup(map_key)
+            q_full = mapper._get_q(map_key)
+
+            start = 0
+            idx_parts_by_irrep = {}
+            for mul, ir in pair_irreps:
+                term_dim = mul * ir.dim
+                ir_str = str(ir)
+                if term_dim > 0 and ir_str in all_irrep_strs:
+                    part_idx = torch.arange(
+                        start,
+                        start + term_dim,
+                        device=q_full.device,
+                        dtype=torch.long,
+                    )
+                    idx_parts_by_irrep.setdefault(ir_str, []).append(part_idx)
+                start += term_dim
+
+            for ir_str, idx_parts in idx_parts_by_irrep.items():
+                idx = (
+                    idx_parts[0] if len(idx_parts) == 1 else torch.cat(idx_parts, dim=0)
+                )
+                q_subset = q_full.index_select(0, idx)
+                cache[ir_str][key] = (idx, q_subset, itm.dim_i, itm.dim_j)
+
+        return cache
+
+    def project_irrep_vectors_to_blocks(vectors_full, projector):
+        """Project selected irrep vector components to block space."""
+        idx, q_subset, dim_i, dim_j = projector
+        vec_sel = vectors_full.index_select(1, idx)
+        if vec_sel.dtype != q_subset.dtype:
+            vec_sel = vec_sel.to(dtype=q_subset.dtype)
+        block_flat = vec_sel @ q_subset
+        return block_flat.view(vec_sel.shape[0], dim_i, dim_j)
+
     def get_block_status(edges_5d, edge_idx):
         """
         Determine class for a block at edge_idx:
@@ -1235,7 +1290,11 @@ if __name__ == "__main__":
             norm_vec_full_by_key[key] = norm_vec
 
     target_irrep_cache = {}
+    irrep_projection_cache = {}
     if CONFIG["train_on_irrep_parts"]:
+        irrep_projection_cache = build_irrep_projection_cache(
+            target_H_irreps_for_block_loss, all_irreps
+        )
         for irrep in all_irreps:
             irrep_str = str(irrep)
             target_irrep_filtered = filter_irreps_block_data_by_irrep(
@@ -1408,20 +1467,26 @@ if __name__ == "__main__":
                     "pred_pack_raw_outputs", time.perf_counter() - t_pack_start
                 )
 
-            pred_H_irreps = IrrepsBlockData(
-                atoms=tuple(atoms_list),
-                atom_counts=Counter(atoms_list),
-                pair_vectors=pair_vec_H,
-                pair_edges=pair_edges_dict,
-                lookup=lookup_dict,
-                orbital_cfg=orbital_cfg,
-                basis=target_H_matrix.basis,
-            )
+            need_pred_irreps_object = (
+                not CONFIG["train_on_irrep_parts"]
+            ) or should_log_now
+            pred_H_irreps = None
+            if need_pred_irreps_object:
+                pred_H_irreps = IrrepsBlockData(
+                    atoms=tuple(atoms_list),
+                    atom_counts=Counter(atoms_list),
+                    pair_vectors=pair_vec_H,
+                    pair_edges=pair_edges_dict,
+                    lookup=lookup_dict,
+                    orbital_cfg=orbital_cfg,
+                    basis=target_H_matrix.basis,
+                )
 
             # Convert to matrix blocks only when required by the active loss path.
             pred_H_matrix_norm = None
             if not CONFIG["train_on_irrep_parts"]:
                 t_to_blocks_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
+                assert pred_H_irreps is not None
                 pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
                 if CONFIG["benchmark"]:
                     benchmark_add(
@@ -1439,18 +1504,14 @@ if __name__ == "__main__":
                 irrep_losses = {}
 
                 for irrep in all_irreps:
+                    irrep_str = str(irrep)
                     t_irrep_ftb_start = (
                         time.perf_counter() if CONFIG["benchmark"] else 0.0
                     )
-                    # Filter both prediction and target by this irrep
-                    pred_irrep_filtered = filter_irreps_block_data_by_irrep(
-                        pred_H_irreps, irrep, mapper
-                    )
-                    # Convert prediction to matrix blocks
-                    pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
                     target_irrep_blocks, filtered_target_irrep = target_irrep_cache[
-                        str(irrep)
+                        irrep_str
                     ]
+                    irrep_projectors = irrep_projection_cache[irrep_str]
                     if CONFIG["benchmark"]:
                         loss_block_irrep_filter_to_blocks_time += (
                             time.perf_counter() - t_irrep_ftb_start
@@ -1460,65 +1521,62 @@ if __name__ == "__main__":
                     irrep_loss_acc = init_block_loss_accumulator()
 
                     for key in target_irrep_blocks.pair_blocks.keys():
-                        if key in pred_irrep_blocks.pair_blocks:
-                            targ_blocks_full = target_irrep_blocks.pair_blocks[key]
-                            _, mask = filtered_target_irrep[key]
+                        if key not in pair_vec_H or key not in irrep_projectors:
+                            continue
 
-                            pred_blocks = pred_irrep_blocks.pair_blocks[key]
-                            min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+                        pred_blocks = project_irrep_vectors_to_blocks(
+                            pair_vec_H[key], irrep_projectors[key]
+                        )
+                        targ_blocks_full = target_irrep_blocks.pair_blocks[key]
+                        _, mask = filtered_target_irrep[key]
+                        min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
 
-                            mask = mask[:min_n]
-                            if mask.any():
-                                pred_blocks_filtered = pred_blocks[:min_n][mask]
-                                targ_blocks_filtered = targ_blocks_full[:min_n][mask]
+                        mask = mask[:min_n]
+                        if mask.any():
+                            pred_blocks_filtered = pred_blocks[:min_n][mask]
+                            targ_blocks_filtered = targ_blocks_full[:min_n][mask]
 
-                                # Apply block normalization if enabled
-                                if (
-                                    CONFIG["normalize_blocks"]
-                                    and norm_factors is not None
-                                    and key in norm_factors
+                            # Apply block normalization if enabled
+                            if (
+                                CONFIG["normalize_blocks"]
+                                and norm_factors is not None
+                                and key in norm_factors
+                            ):
+                                t_norm_scale_start = (
+                                    time.perf_counter() if CONFIG["benchmark"] else 0.0
+                                )
+                                norm_vec = norm_vec_full_by_key[key][:min_n]
+
+                                # Select norm factors corresponding to mask
+                                norm_vec_selected = norm_vec[mask]
+                                # Reshape for broadcasting: (num_selected,) -> (num_selected, 1, 1, ...)
+                                while (
+                                    norm_vec_selected.ndim < pred_blocks_filtered.ndim
                                 ):
-                                    t_norm_scale_start = (
-                                        time.perf_counter()
-                                        if CONFIG["benchmark"]
-                                        else 0.0
-                                    )
-                                    norm_vec = norm_vec_full_by_key[key][:min_n]
+                                    norm_vec_selected = norm_vec_selected.unsqueeze(-1)
 
-                                    # Select norm factors corresponding to mask
-                                    norm_vec_selected = norm_vec[mask]
-                                    # Reshape for broadcasting: (num_selected,) -> (num_selected, 1, 1, ...)
-                                    while (
-                                        norm_vec_selected.ndim
-                                        < pred_blocks_filtered.ndim
-                                    ):
-                                        norm_vec_selected = norm_vec_selected.unsqueeze(
-                                            -1
-                                        )
-
-                                    pred_blocks_filtered = (
-                                        pred_blocks_filtered / norm_vec_selected
-                                    )
-                                    targ_blocks_filtered = (
-                                        targ_blocks_filtered / norm_vec_selected
-                                    )
-                                    if CONFIG["benchmark"]:
-                                        loss_block_norm_scaling_time += (
-                                            time.perf_counter() - t_norm_scale_start
-                                        )
-
-                                accumulate_block_loss(
-                                    irrep_loss_acc,
-                                    pred_blocks_filtered,
-                                    targ_blocks_filtered,
+                                pred_blocks_filtered = (
+                                    pred_blocks_filtered / norm_vec_selected
                                 )
-                                accumulate_block_loss(
-                                    loss_block_acc,
-                                    pred_blocks_filtered,
-                                    targ_blocks_filtered,
+                                targ_blocks_filtered = (
+                                    targ_blocks_filtered / norm_vec_selected
                                 )
+                                if CONFIG["benchmark"]:
+                                    loss_block_norm_scaling_time += (
+                                        time.perf_counter() - t_norm_scale_start
+                                    )
 
-                    irrep_str = str(irrep)
+                            accumulate_block_loss(
+                                irrep_loss_acc,
+                                pred_blocks_filtered,
+                                targ_blocks_filtered,
+                            )
+                            accumulate_block_loss(
+                                loss_block_acc,
+                                pred_blocks_filtered,
+                                targ_blocks_filtered,
+                            )
+
                     irrep_loss = finalize_block_loss(irrep_loss_acc)
                     irrep_losses[irrep_str] = irrep_loss
                 loss_block = finalize_block_loss(loss_block_acc)
@@ -1745,6 +1803,7 @@ if __name__ == "__main__":
                         t_to_blocks_start = (
                             time.perf_counter() if CONFIG["benchmark"] else 0.0
                         )
+                        assert pred_H_irreps is not None
                         pred_H_matrix_norm = pred_H_irreps.to_blocks(mapper)
                         if CONFIG["benchmark"]:
                             benchmark_add(
