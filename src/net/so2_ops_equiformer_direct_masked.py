@@ -6,9 +6,13 @@ import torch
 import torch.nn as nn
 from e3nn.o3 import Irreps
 
-from net.equiformer_v2.so3 import SO3_Embedding, CoefficientMappingModule, SO3_Rotation
-from net.equiformer_v2.so2_ops import SO2_Convolution
-from net.equiformer_v2.edge_rot_mat import init_edge_rot_mat
+from external.equiformer_v2.so3 import (
+    CoefficientMappingModule,
+    SO3_Embedding,
+    SO3_Rotation,
+)
+from external.equiformer_v2.so2_ops import SO2_Convolution
+from external.equiformer_v2.edge_rot_mat import init_edge_rot_mat
 
 
 class SO2OpsEquiformerDirectMasked(nn.Module):

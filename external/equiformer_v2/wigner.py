@@ -1,18 +1,11 @@
 import os
+
 import torch
 
 
-# Borrowed from e3nn @ 0.4.0:
-# https://github.com/e3nn/e3nn/blob/0.4.0/e3nn/o3/_wigner.py#L10
-# _Jd is a list of tensors of shape (2l+1, 2l+1)
 _Jd = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
 
 
-# Borrowed from e3nn @ 0.4.0:
-# https://github.com/e3nn/e3nn/blob/0.4.0/e3nn/o3/_wigner.py#L37
-#
-# In 0.5.0, e3nn shifted to torch.matrix_exp which is significantly slower:
-# https://github.com/e3nn/e3nn/blob/0.5.0/e3nn/o3/_wigner.py#L92
 def wigner_D(l, alpha, beta, gamma):
     if not l < len(_Jd):
         raise NotImplementedError(
@@ -29,10 +22,10 @@ def wigner_D(l, alpha, beta, gamma):
 
 def _z_rot_mat(angle, l):
     shape, device, dtype = angle.shape, angle.device, angle.dtype
-    M = angle.new_zeros((*shape, 2 * l + 1, 2 * l + 1))
+    mat = angle.new_zeros((*shape, 2 * l + 1, 2 * l + 1))
     inds = torch.arange(0, 2 * l + 1, 1, device=device)
     reversed_inds = torch.arange(2 * l, -1, -1, device=device)
     frequencies = torch.arange(l, -l - 1, -1, dtype=dtype, device=device)
-    M[..., inds, reversed_inds] = torch.sin(frequencies * angle[..., None])
-    M[..., inds, inds] = torch.cos(frequencies * angle[..., None])
-    return M
+    mat[..., inds, reversed_inds] = torch.sin(frequencies * angle[..., None])
+    mat[..., inds, inds] = torch.cos(frequencies * angle[..., None])
+    return mat
