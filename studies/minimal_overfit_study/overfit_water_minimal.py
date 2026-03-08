@@ -78,6 +78,8 @@ from detailed_logging import (
     log_study_complete,
 )
 
+HARTREE_TO_EV = 27.2113845
+
 
 if __name__ == "__main__":
     # =============================================================================
@@ -406,6 +408,8 @@ if __name__ == "__main__":
         "data_path": Path(args.data_path),
         "info_path": Path(args.info_path),
         "convention": args.convention,
+        "hamiltonian_unit": "eV",
+        "hamiltonian_scale_from_hartree": HARTREE_TO_EV,
         "orbital_selection": args.orbital_selection,
         "xyz_permutation": args.xyz_permutation,
         "change_box": args.change_box,
@@ -531,9 +535,11 @@ if __name__ == "__main__":
         log_snapshot_info(snapshot)
 
     # Extract components
-    hamiltonian_e3nn = snapshot.hamiltonian.to(device)
+    hamiltonian_e3nn = snapshot.hamiltonian.to(device) * HARTREE_TO_EV
     overlap_e3nn = snapshot.overlap.to(device)
     density_e3nn = snapshot.density.to(device)
+    if CONFIG["log_data"]:
+        print(f"  Converted Hamiltonian units: Hartree -> eV (x{HARTREE_TO_EV:.7f})")
     orbital_cfg = snapshot.hamiltonian.orbital_cfg
     positions = snapshot.positions.to(device=device, dtype=torch_dtype)
     box = (

@@ -11,13 +11,9 @@ if [[ -f "${REPO_ROOT}/mandala-venv/bin/activate" ]]; then
   source "${REPO_ROOT}/mandala-venv/bin/activate"
 fi
 
-# Based on WandB run:
-#   b-brzoza/mandala-test-variants/raoblm2i  (name: avid-sweep-12)
-# with full orbital basis (no --orbital-selection), separate shifted-self head,
-# and per-irrep training.
-#
 # Defaults avoid overwriting existing downloaded weights directory.
-RUN_NAME="${RUN_NAME:-avid-sweep-12-full-basis-debug-simple-separate-shifted-self-irrep-parts}"
+WANDB_PROJECT="${WANDB_PROJECT:-eV-train}" \
+RUN_NAME="${RUN_NAME:-eV_train}"
 DEVICE="${DEVICE:-cuda}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/minimal_overfit_study/checkpoints}"
 
@@ -26,14 +22,11 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --data-path "data/small/H2O/original/H2O.matrix" \
   --info-path "data/small/H2O/original/H2O.info.out" \
   --convention "e3nn" \
-  --xyz-permutation "012" \
-  --change-box "left" \
-  --box-convention "rows" \
   --hidden-dim 32 \
   --l-max 4 \
-  --hidden-irreps "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e+8x4o" \
+  --hidden-irreps "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e" \
   --num-layers 2 \
-  --cutoff-radius 7 \
+  --cutoff-radius 7.5 \
   --n-radial 64 \
   --lr 0.01 \
   --num-epochs 40000 \
@@ -43,14 +36,10 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --log-model \
   --log-per-irrep-metrics \
   --log-per-irrep-images \
-  --log-activations-wandb \
   --benchmark \
   --grad-clip 1 \
   --lr-factor 0.5 \
   --lr-patience 1000 \
-  --normalize-blocks \
   --generate-video \
-  --separate-shifted-self \
-  --train-on-irrep-parts \
   --device "${DEVICE}" \
   --checkpoint-dir "${CHECKPOINT_DIR}"
