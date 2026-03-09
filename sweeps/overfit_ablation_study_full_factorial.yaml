@@ -1,0 +1,79 @@
+program: studies/overfit_ablation_study/overfit_water_ablation.py
+project: mandala-overfit-ablation-study
+name: overfit-ablation-full-factorial
+method: grid
+metric:
+  name: final_post_lbfgs/mae_H
+  goal: minimize
+
+parameters:
+  data-path:
+    value: "data/small/H2O/original/H2O.matrix"
+  info-path:
+    value: "data/small/H2O/original/H2O.info.out"
+
+  hidden-dim:
+    value: 32
+  l-max:
+    value: 4
+  hidden-irreps:
+    values:
+      - "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e"
+      - "64x0e+64x0o+32x1e+32x1o+32x2e+32x2o+16x3e+16x3o+16x4e"
+  num-layers:
+    values: [1, 2]
+  n-radial:
+    value: 64
+
+  lr:
+    value: 1e-3
+  num-epochs:
+    value: 10000
+  log-interval:
+    value: 200
+  grad-clip:
+    values: [1.0, 0.0]
+  lr-factor:
+    value: 0.5
+  lr-patience:
+    value: 600
+
+  loss-aggregation:
+    value: global
+  sh-mode:
+    value: aligned
+
+  e3layernorm:
+    values: ["true", "false"]
+  delta-learning:
+    values: ["true", "false"]
+  norm-kind:
+    values: [component, norm, none]
+  skip-connections:
+    values: ["true", "false"]
+
+  dtype:
+    values: [float64, float32]
+  device:
+    value: cuda
+  checkpoint-dir:
+    value: "studies/overfit_ablation_study/checkpoints"
+
+  lbfgs-steps:
+    value: 20
+  seed:
+    values: [0, 1, 2, 3, 4]
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - --adaptive-log-interval
+  - --log-data
+  - --log-model
+  - --log-per-irrep-metrics
+  - --log-per-irrep-images
+  - --benchmark
+  - --train-on-irrep-parts
+  - --generate-video
+  - ${args}
