@@ -26,19 +26,19 @@ python -u studies/overfit_ablation_study/overfit_water_ablation.py \
   --hidden-irreps "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e" \
   --num-layers 2 \
   --n-radial 64 \
-  --lr 1e-3 \
-  --num-epochs 10000 \
-  --log-interval 200 \
+  --lr 1e-2 \
+  --num-epochs 20000 \
+  --log-interval 100 \
   --grad-clip 0.0 \
   --lr-factor 0.5 \
-  --lr-patience 600 \
+  --lr-patience 1000 \
   --loss-aggregation global \
   --sh-mode aligned \
   --e3layernorm false \
   --delta-learning false \
   --norm-kind component \
   --skip-connections true \
-  --dtype float64 \
+  --dtype float32 \
   --device "${DEVICE}" \
   --checkpoint-dir "${CHECKPOINT_DIR}" \
   --lbfgs-steps 20 \
