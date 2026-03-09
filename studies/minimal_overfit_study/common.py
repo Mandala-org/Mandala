@@ -1086,7 +1086,7 @@ def compute_distance_error_curve(
     positions: torch.Tensor,
     box: torch.Tensor | None = None,
     partial_train=None,
-    n_bins: int = 64,
+    n_bins: int = 16,
 ):
     """
     Compute distance-binned Hamiltonian error statistics.
