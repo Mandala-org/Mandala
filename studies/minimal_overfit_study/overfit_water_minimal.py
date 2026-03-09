@@ -83,11 +83,13 @@ UNIT_SCALE_FROM_HARTREE = {
     "hartree": 1.0,
     "ev": HARTREE_TO_EV,
     "mev": HARTREE_TO_EV * 1000.0,
+    "100mev": HARTREE_TO_EV * 10.0,
 }
 UNIT_DISPLAY_NAME = {
     "hartree": "Hartree",
     "ev": "eV",
     "mev": "meV",
+    "100mev": "100meV",
 }
 
 
@@ -118,9 +120,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--training-unit",
-        type=str,
+        type=str.lower,
         default="ev",
-        choices=["hartree", "ev", "mev"],
+        choices=["hartree", "ev", "mev", "100mev"],
         help=(
             "Unit used for Hamiltonian training targets and metrics. "
             "Raw OpenMX Hamiltonian is interpreted as Hartree and scaled to this unit."
@@ -2302,15 +2304,15 @@ if __name__ == "__main__":
         # Log final metrics to WandB
         wandb.log(final_metrics)
 
-        # Distance-binned error curves (64 bins)
-        print("\n  Distance-binned error curves (64 bins):")
+        # Distance-binned error curves (16 bins)
+        print("\n  Distance-binned error curves (16 bins):")
         distance_curve = compute_distance_error_curve(
             H_pred=pred_H_matrix_metrics,
             H_gt=target_H_matrix,
             positions=positions,
             box=box,
             partial_train=CONFIG["partial_train"],
-            n_bins=64,
+            n_bins=16,
         )
         if distance_curve is not None:
             curve_json_path = run_checkpoint_dir / "distance_error_curve.json"
@@ -2321,7 +2323,7 @@ if __name__ == "__main__":
             save_distance_error_curve_plot(
                 distance_curve,
                 curve_plot_path,
-                title="Distance Error Curves (Final, 64 bins)",
+                title="Distance Error Curves (Final, 16 bins)",
             )
 
             # Print a concise summary

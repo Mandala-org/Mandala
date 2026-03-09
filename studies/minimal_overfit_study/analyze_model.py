@@ -937,14 +937,14 @@ def main():
         f.write(f"dos_max_abs:  {eig_dos_rot['dos_max_abs']:.6e}\n")
         f.write(f"dos_plot:     {eig_dos_rot['dos_plot_path']}\n")
 
-    # Distance-binned error curves (64 bins) for original and rotated
+    # Distance-binned error curves (16 bins) for original and rotated
     curve_orig = compute_distance_error_curve(
         H_pred=H_pred_orig,
         H_gt=H_gt_orig,
         positions=graph_inputs_orig["positions_used"],
         box=graph_inputs_orig["box_used"],
         partial_train=partial_train,
-        n_bins=64,
+        n_bins=16,
     )
     curve_rot = compute_distance_error_curve(
         H_pred=H_pred_rot,
@@ -952,7 +952,7 @@ def main():
         positions=graph_inputs_rot["positions_used"],
         box=graph_inputs_rot["box_used"],
         partial_train=partial_train,
-        n_bins=64,
+        n_bins=16,
     )
 
     if curve_orig is not None:
@@ -963,7 +963,7 @@ def main():
         save_distance_error_curve_plot(
             curve_orig,
             curve_orig_plot,
-            title="Distance Error Curve (Original, 64 bins)",
+            title="Distance Error Curve (Original, 16 bins)",
         )
         print(f"Distance curve saved: {curve_orig_json}")
         print(f"Distance curve plot saved: {curve_orig_plot}")
@@ -974,7 +974,7 @@ def main():
         with open(curve_rot_json, "w") as f:
             json.dump(curve_rot, f, indent=2)
         save_distance_error_curve_plot(
-            curve_rot, curve_rot_plot, title="Distance Error Curve (Rotated, 64 bins)"
+            curve_rot, curve_rot_plot, title="Distance Error Curve (Rotated, 16 bins)"
         )
         print(f"Distance curve saved: {curve_rot_json}")
         print(f"Distance curve plot saved: {curve_rot_plot}")
