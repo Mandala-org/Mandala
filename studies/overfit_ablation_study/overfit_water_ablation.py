@@ -8,7 +8,6 @@ does not import code from studies/minimal_overfit_study.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import random
 import time
@@ -26,7 +25,6 @@ from torch.optim import AdamW, LBFGS
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from core.block_irrep_mapper import BlockIrrepMapper
-from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.block_matrix import BlockMatrix, IrrepsBlockData
 from data.pyscf_baseline_parser import load_pyscf_snapshot
 from data.snapshot import Snapshot
@@ -51,9 +49,17 @@ from strict_checks import strict_edge_alignment_check, strict_reverse_edge_check
 
 HARTREE_TO_EV = 27.2113845
 DEFAULT_CUTOFF_RADIUS = 7.5
-DEFAULT_BASELINE_NPZ = (
-    "data/pyscf_baseline/results/h2o_original_rhf_openmx_like.npz"
-)
+UNIT_SCALE_FROM_HARTREE = {
+    "hartree": 1.0,
+    "ev": HARTREE_TO_EV,
+    "mev": HARTREE_TO_EV * 1000.0,
+}
+UNIT_DISPLAY_NAME = {
+    "hartree": "Hartree",
+    "ev": "eV",
+    "mev": "meV",
+}
+DEFAULT_BASELINE_NPZ = "data/pyscf_baseline/results/h2o_original_rhf_openmx_like.npz"
 
 
 def parse_bool(value: str | bool) -> bool:
@@ -157,103 +163,6 @@ def cast_block_matrix_dtype(matrix: BlockMatrix, dtype: torch.dtype) -> BlockMat
         orbital_cfg=matrix.orbital_cfg,
         basis=matrix.basis,
     )
-
-
-def load_baseline_snapshot_with_fallback(
-    npz_path: str,
-    json_path: str | None,
-    dtype: torch.dtype,
-    device: torch.device,
-    fallback_atoms: tuple[str, ...],
-    fallback_orbital_cfg: OrbitalIrrepConfig,
-) -> Snapshot:
-    """
-    Load PySCF baseline snapshot via parser; if the parser rejects non-shifted NPZ
-    payloads, fall back to dense AO loading for legacy/non-PBC artifacts.
-    """
-    try:
-        return load_pyscf_snapshot(
-            npz_path=npz_path,
-            json_path=json_path,
-            dtype=dtype,
-            device=device,
-            basis="openmx",
-        )
-    except ValueError as exc:
-        msg = str(exc)
-        if "requires `shifts`" not in msg:
-            raise
-
-        npz_path_obj = Path(npz_path)
-        json_path_obj = Path(json_path) if json_path is not None else npz_path_obj.with_suffix(".json")
-        metadata: dict = {}
-        if json_path_obj.exists():
-            metadata = json.loads(json_path_obj.read_text())
-
-        atoms: tuple[str, ...]
-        rows = metadata.get("snapshot", {}).get("atoms")
-        if rows:
-            atoms = tuple(str(row["element"]) for row in rows)
-        else:
-            atoms = fallback_atoms
-
-        orbital_set = metadata.get("settings", {}).get("orbital_set")
-        if orbital_set is None:
-            orbital_set = metadata.get("openmx_reference", {}).get("orbital_set")
-        orbital_cfg = (
-            OrbitalIrrepConfig.from_dict(orbital_set)
-            if orbital_set is not None
-            else fallback_orbital_cfg
-        )
-
-        with np.load(npz_path_obj, allow_pickle=False) as payload:
-            if "hamiltonian_ao" in payload:
-                ham_arr = np.asarray(payload["hamiltonian_ao"], dtype=np.float32)
-            elif "fock_ao" in payload:
-                ham_arr = np.asarray(payload["fock_ao"], dtype=np.float32)
-            elif "hcore_ao" in payload:
-                ham_arr = np.asarray(payload["hcore_ao"], dtype=np.float32)
-            else:
-                raise KeyError(
-                    "Missing Hamiltonian in baseline NPZ (expected hamiltonian_ao/fock_ao/hcore_ao)."
-                )
-            if "overlap_ao" not in payload or "dm_ao" not in payload:
-                raise KeyError("Baseline NPZ must include overlap_ao and dm_ao")
-            overlap_arr = np.asarray(payload["overlap_ao"], dtype=np.float32)
-            density_arr = np.asarray(payload["dm_ao"], dtype=np.float32)
-            positions_arr = (
-                np.asarray(payload["positions_angstrom"], dtype=np.float32)
-                if "positions_angstrom" in payload
-                else None
-            )
-
-        ham_t = torch.as_tensor(ham_arr, dtype=dtype, device=device)
-        overlap_t = torch.as_tensor(overlap_arr, dtype=dtype, device=device)
-        density_t = torch.as_tensor(density_arr, dtype=dtype, device=device)
-
-        ham = BlockMatrix.from_dense(
-            ham_t, orbital_cfg=orbital_cfg, atoms=atoms, basis="openmx"
-        )
-        ovl = BlockMatrix.from_dense(
-            overlap_t, orbital_cfg=orbital_cfg, atoms=atoms, basis="openmx"
-        )
-        den = BlockMatrix.from_dense(
-            density_t, orbital_cfg=orbital_cfg, atoms=atoms, basis="openmx"
-        )
-
-        positions = (
-            torch.as_tensor(positions_arr, dtype=dtype, device=device)
-            if positions_arr is not None
-            else None
-        )
-
-        return Snapshot(
-            hamiltonian=ham,
-            overlap=ovl,
-            density=den,
-            positions=positions,
-            info=metadata,
-        )
 
 
 def get_diagonal_mask(edges_5d: torch.Tensor) -> torch.Tensor:
@@ -479,7 +388,9 @@ def build_graph_inputs(
 
     if box is not None:
         shift_float = edge_shift.T.to(dtype=positions.dtype)
-        edge_vec = positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
+        edge_vec = (
+            positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
+        )
     else:
         edge_vec = positions[edge_index[1]] - positions[edge_index[0]]
 
@@ -575,7 +486,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--l-max", type=int, default=4)
     parser.add_argument("--hidden-irreps", type=str, default=None)
     parser.add_argument("--num-layers", type=int, default=2)
+    parser.add_argument("--cutoff-radius", type=float, default=DEFAULT_CUTOFF_RADIUS)
     parser.add_argument("--n-radial", type=int, default=64)
+    parser.add_argument(
+        "--training-unit",
+        type=str.lower,
+        choices=["hartree", "ev", "mev"],
+        default="ev",
+    )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--num-epochs", type=int, default=10000)
     parser.add_argument("--log-interval", type=int, default=200)
@@ -650,13 +568,13 @@ def main() -> None:
     config = {
         "data_path": args.data_path,
         "info_path": args.info_path,
-        "training_unit": "ev",
-        "hamiltonian_scale_from_hartree": HARTREE_TO_EV,
+        "training_unit": args.training_unit,
+        "hamiltonian_scale_from_hartree": UNIT_SCALE_FROM_HARTREE[args.training_unit],
         "hidden_dim": args.hidden_dim,
         "l_max": args.l_max,
         "hidden_irreps": args.hidden_irreps,
         "num_layers": args.num_layers,
-        "cutoff_radius": DEFAULT_CUTOFF_RADIUS,
+        "cutoff_radius": args.cutoff_radius,
         "n_radial": args.n_radial,
         "lr": args.lr,
         "num_epochs": args.num_epochs,
@@ -702,8 +620,7 @@ def main() -> None:
         wandb.init(**wandb_kwargs)
     except Exception as exc:
         print(
-            "[WARN] wandb.init failed; falling back to disabled mode. "
-            f"Reason: {exc}"
+            "[WARN] wandb.init failed; falling back to disabled mode. " f"Reason: {exc}"
         )
         wandb.init(**wandb_kwargs, mode="disabled")
 
@@ -718,7 +635,12 @@ def main() -> None:
     print("=" * 80)
     print(f"run_name={run_name}")
     print(f"device={device}, dtype={torch_dtype}")
-    print(f"cutoff_radius={DEFAULT_CUTOFF_RADIUS} A")
+    print(f"cutoff_radius={args.cutoff_radius} A")
+    print(
+        "training unit: "
+        f"{UNIT_DISPLAY_NAME[args.training_unit]} "
+        f"(x{config['hamiltonian_scale_from_hartree']:.7g} from Hartree)"
+    )
     print(
         f"hardcoded: apply_cutoff_to_targets={config['apply_cutoff_to_targets']}, "
         f"require_exact_edge_match={config['require_exact_edge_match']}"
@@ -734,22 +656,30 @@ def main() -> None:
     )
 
     before_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
-    snapshot = snapshot.filter_by_distance(DEFAULT_CUTOFF_RADIUS)
+    snapshot = snapshot.filter_by_distance(args.cutoff_radius)
     after_edges = sum(v.shape[1] for v in snapshot.hamiltonian.pair_edges.values())
     if args.log_data:
         print(
             f"[DATA] cutoff filtering applied to targets: {before_edges} -> {after_edges} edges"
         )
 
-    hamiltonian_e3nn = snapshot.hamiltonian.to(device) * HARTREE_TO_EV
+    hamiltonian_e3nn = (
+        snapshot.hamiltonian.to(device) * config["hamiltonian_scale_from_hartree"]
+    )
     overlap_e3nn = snapshot.overlap.to(device)
     density_e3nn = snapshot.density.to(device)
 
     positions = snapshot.positions.to(device=device, dtype=torch_dtype)
-    box = snapshot.box.to(device=device, dtype=torch_dtype) if snapshot.box is not None else None
+    box = (
+        snapshot.box.to(device=device, dtype=torch_dtype)
+        if snapshot.box is not None
+        else None
+    )
     atoms_list = list(snapshot.hamiltonian.atoms)
 
-    mapper = BlockIrrepMapper(snapshot.hamiltonian.orbital_cfg, device=device, dtype=torch_dtype)
+    mapper = BlockIrrepMapper(
+        snapshot.hamiltonian.orbital_cfg, device=device, dtype=torch_dtype
+    )
 
     hamiltonian_e3nn = canonicalize_block_matrix_edges(hamiltonian_e3nn, positions, box)
     overlap_e3nn = canonicalize_block_matrix_edges(overlap_e3nn, positions, box)
@@ -758,19 +688,21 @@ def main() -> None:
 
     baseline_hamiltonian: BlockMatrix | None = None
     if args.delta_learning:
-        baseline_snapshot = load_baseline_snapshot_with_fallback(
+        baseline_snapshot = load_pyscf_snapshot(
             npz_path=args.baseline_npz_path,
             json_path=args.baseline_json_path,
             # Keep parser/converter in float32 for basis-conversion robustness,
             # then cast to requested training dtype below.
             dtype=torch.float32,
             device=device,
-            fallback_atoms=tuple(atoms_list),
-            fallback_orbital_cfg=snapshot.hamiltonian.orbital_cfg,
+            basis="openmx",
         ).to_e3nn()
-        baseline_hamiltonian_raw = cast_block_matrix_dtype(
-            baseline_snapshot.hamiltonian.to(device), torch_dtype
-        ) * HARTREE_TO_EV
+        baseline_hamiltonian_raw = (
+            cast_block_matrix_dtype(
+                baseline_snapshot.hamiltonian.to(device), torch_dtype
+            )
+            * config["hamiltonian_scale_from_hartree"]
+        )
         baseline_hamiltonian_raw = canonicalize_block_matrix_edges(
             baseline_hamiltonian_raw, positions, box
         )
@@ -786,7 +718,9 @@ def main() -> None:
 
     target_H_full = hamiltonian_e3nn
     target_H_train = (
-        target_H_full - baseline_hamiltonian if baseline_hamiltonian is not None else target_H_full
+        target_H_full - baseline_hamiltonian
+        if baseline_hamiltonian is not None
+        else target_H_full
     )
 
     (
@@ -805,7 +739,7 @@ def main() -> None:
         positions=positions,
         box=box,
         mapper=mapper,
-        cutoff_radius=DEFAULT_CUTOFF_RADIUS,
+        cutoff_radius=args.cutoff_radius,
         n_radial=args.n_radial,
         l_max=args.l_max,
         sh_mode=args.sh_mode,
@@ -814,7 +748,9 @@ def main() -> None:
         log_data=args.log_data,
     )
 
-    strict_reverse_edge_check(edge_index=edge_index, edge_shift=edge_shift, edge_set_name="graph")
+    strict_reverse_edge_check(
+        edge_index=edge_index, edge_shift=edge_shift, edge_set_name="graph"
+    )
     strict_edge_alignment_check(
         target_matrix=target_H_full,
         edge_index=edge_index,
@@ -884,7 +820,9 @@ def main() -> None:
     if args.train_on_irrep_parts:
         for irrep in all_irreps:
             irrep_str = str(irrep)
-            target_ir = filter_irreps_block_data_by_irrep(target_H_train_irreps, irrep, mapper)
+            target_ir = filter_irreps_block_data_by_irrep(
+                target_H_train_irreps, irrep, mapper
+            )
             target_irrep_cache[irrep_str] = target_ir.to_blocks(mapper)
 
     optimizer = AdamW(network.parameters(), lr=args.lr, weight_decay=0.0)
@@ -1011,7 +949,9 @@ def main() -> None:
         loss, irrep_losses = compute_training_loss()
 
         if torch.isnan(loss) or torch.isinf(loss):
-            raise RuntimeError(f"Invalid loss at epoch {epoch + 1}: {float(loss.item())}")
+            raise RuntimeError(
+                f"Invalid loss at epoch {epoch + 1}: {float(loss.item())}"
+            )
 
         loss.backward()
         if args.grad_clip > 0:
@@ -1036,7 +976,9 @@ def main() -> None:
         )
 
         if args.train_on_irrep_parts and len(irrep_losses) > 0:
-            wandb.log({f"partial/{k}": float(v.item()) for k, v in irrep_losses.items()})
+            wandb.log(
+                {f"partial/{k}": float(v.item()) for k, v in irrep_losses.items()}
+            )
 
         if float(loss.item()) < best_loss:
             best_loss = float(loss.item())
@@ -1077,7 +1019,9 @@ def main() -> None:
                     f"mse={detailed['mse']:.6e} dt={dt:.2f}s"
                 )
                 if args.benchmark:
-                    print(f"[BENCHMARK] epoch_time={time.perf_counter() - t_epoch:.4f}s")
+                    print(
+                        f"[BENCHMARK] epoch_time={time.perf_counter() - t_epoch:.4f}s"
+                    )
 
                 wandb_payload = {
                     "epoch": epoch,
@@ -1090,7 +1034,9 @@ def main() -> None:
                     "correction_mae": float(detailed["correction_mae"]),
                     "correction_mse": float(detailed["correction_mse"]),
                 }
-                wandb_payload.update({f"train_extra/{k}": float(v) for k, v in extra.items()})
+                wandb_payload.update(
+                    {f"train_extra/{k}": float(v) for k, v in extra.items()}
+                )
                 wandb.log(wandb_payload)
 
                 pred_irreps_metrics = pred_post_sym.to_vectors(mapper)
@@ -1185,7 +1131,13 @@ def main() -> None:
                     for k, v in dos_metrics.items():
                         if isinstance(v, (int, float)) and not isinstance(v, bool):
                             payload[f"{prefix}/{k}"] = float(v)
-                    wandb.log({f"{prefix}/dos_comparison_plot": wandb.Image(str(dos_plot_path))})
+                    wandb.log(
+                        {
+                            f"{prefix}/dos_comparison_plot": wandb.Image(
+                                str(dos_plot_path)
+                            )
+                        }
+                    )
                 except Exception as exc:
                     print(f"[WARN] DOS plot failed: {exc}")
 
@@ -1209,7 +1161,13 @@ def main() -> None:
                         curve_plot_path,
                         title="Distance Error Curves (Final, 16 bins)",
                     )
-                    wandb.log({f"{prefix}/distance_curve_plot": wandb.Image(str(curve_plot_path))})
+                    wandb.log(
+                        {
+                            f"{prefix}/distance_curve_plot": wandb.Image(
+                                str(curve_plot_path)
+                            )
+                        }
+                    )
 
                 if args.log_per_irrep_images:
                     irrep_output_dir = run_checkpoint_dir / "per_irrep_images"
@@ -1251,11 +1209,15 @@ def main() -> None:
                                     }
                                 )
                         except Exception as exc:
-                            print(f"[WARN] per-irrep image failed for {irrep_str}: {exc}")
+                            print(
+                                f"[WARN] per-irrep image failed for {irrep_str}: {exc}"
+                            )
 
             wandb.log(payload)
 
-            print(f"[{prefix}] mae_H={payload[f'{prefix}/mae_H']:.6e} mse_H={payload[f'{prefix}/mse_H']:.6e}")
+            print(
+                f"[{prefix}] mae_H={payload[f'{prefix}/mae_H']:.6e} mse_H={payload[f'{prefix}/mse_H']:.6e}"
+            )
             print(
                 f"[{prefix}] max_abs={payload[f'{prefix}/max_abs_element_error']:.6e} "
                 f"diag_rmse={payload[f'{prefix}/diag_rmse']:.6e} "
@@ -1324,7 +1286,9 @@ def main() -> None:
                 pattern="frame_epoch_*.png",
                 format="mp4",
             )
-            wandb.log({"training_video": wandb.Video(str(video_path), fps=5, format="mp4")})
+            wandb.log(
+                {"training_video": wandb.Video(str(video_path), fps=5, format="mp4")}
+            )
             print(f"[VIDEO] saved: {video_path}")
         except Exception as exc:
             print(f"[WARN] final video generation failed: {exc}")
