@@ -3,7 +3,7 @@ project: mandala-overfit-ablation-study
 name: overfit-ablation-full-factorial
 method: grid
 metric:
-  name: final_post_lbfgs/mae_H
+  name: mae_H
   goal: minimize
 
 parameters:

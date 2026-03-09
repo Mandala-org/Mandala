@@ -602,7 +602,7 @@ def main() -> None:
         "delta_learning": args.delta_learning,
         "baseline_npz_path": args.baseline_npz_path,
         "baseline_json_path": args.baseline_json_path,
-        "lbfgs_steps": args.lbfgs_steps,
+        "refine_steps": args.lbfgs_steps,
         "seed": args.seed,
         "apply_cutoff_to_targets": True,
         "require_exact_edge_match": True,
@@ -1093,7 +1093,7 @@ def main() -> None:
                     print(f"[WARN] frame save failed at epoch {epoch}: {exc}")
 
     # Final evaluation helper
-    def evaluate_and_log(prefix: str) -> dict[str, float]:
+    def evaluate_and_log(stage_label: str, log_artifacts: bool) -> dict[str, float]:
         network.eval()
         with torch.inference_mode():
             pred_pre_sym, pred_post_sym = predict_full_matrices()
@@ -1105,19 +1105,19 @@ def main() -> None:
             )
 
             payload: dict[str, float] = {}
-            payload[f"{prefix}/mae_H"] = float(detailed["mae"])
-            payload[f"{prefix}/mse_H"] = float(detailed["mse"])
-            payload[f"{prefix}/mae_H_mod"] = float(detailed["mae_mod"])
-            payload[f"{prefix}/mse_H_mod"] = float(detailed["mse_mod"])
-            payload[f"{prefix}/mu_H"] = float(detailed["mu_H"])
-            payload[f"{prefix}/correction_mae"] = float(detailed["correction_mae"])
-            payload[f"{prefix}/correction_mse"] = float(detailed["correction_mse"])
+            payload["mae_H"] = float(detailed["mae"])
+            payload["mse_H"] = float(detailed["mse"])
+            payload["mae_H_mod"] = float(detailed["mae_mod"])
+            payload["mse_H_mod"] = float(detailed["mse_mod"])
+            payload["mu_H"] = float(detailed["mu_H"])
+            payload["correction_mae"] = float(detailed["correction_mae"])
+            payload["correction_mse"] = float(detailed["correction_mse"])
             for k, v in extra.items():
-                payload[f"{prefix}/{k}"] = float(v)
+                payload[k] = float(v)
 
-            # distance curve and DOS diagnostics for post-LBFGS only
-            if prefix == "final_post_lbfgs":
-                dos_plot_path = run_checkpoint_dir / "dos_comparison_final.png"
+            # distance curve and DOS diagnostics only after refinement
+            if log_artifacts:
+                dos_plot_path = run_checkpoint_dir / "dos_comparison_post_refine.png"
                 try:
                     dos_metrics = save_dos_comparison_plot(
                         H_pred=pred_post_sym,
@@ -1130,14 +1130,8 @@ def main() -> None:
                     )
                     for k, v in dos_metrics.items():
                         if isinstance(v, (int, float)) and not isinstance(v, bool):
-                            payload[f"{prefix}/{k}"] = float(v)
-                    wandb.log(
-                        {
-                            f"{prefix}/dos_comparison_plot": wandb.Image(
-                                str(dos_plot_path)
-                            )
-                        }
-                    )
+                            payload[f"dos/{k}"] = float(v)
+                    wandb.log({"dos/comparison_plot": wandb.Image(str(dos_plot_path))})
                 except Exception as exc:
                     print(f"[WARN] DOS plot failed: {exc}")
 
@@ -1162,11 +1156,7 @@ def main() -> None:
                         title="Distance Error Curves (Final, 16 bins)",
                     )
                     wandb.log(
-                        {
-                            f"{prefix}/distance_curve_plot": wandb.Image(
-                                str(curve_plot_path)
-                            )
-                        }
+                        {"distance_curve/plot": wandb.Image(str(curve_plot_path))}
                     )
 
                 if args.log_per_irrep_images:
@@ -1203,7 +1193,7 @@ def main() -> None:
                             if image_path.exists():
                                 wandb.log(
                                     {
-                                        f"{prefix}/irrep_images/{irrep_str}": wandb.Image(
+                                        f"irrep_images/{irrep_str}": wandb.Image(
                                             str(image_path)
                                         )
                                     }
@@ -1216,23 +1206,23 @@ def main() -> None:
             wandb.log(payload)
 
             print(
-                f"[{prefix}] mae_H={payload[f'{prefix}/mae_H']:.6e} mse_H={payload[f'{prefix}/mse_H']:.6e}"
+                f"[{stage_label}] mae_H={payload['mae_H']:.6e} mse_H={payload['mse_H']:.6e}"
             )
             print(
-                f"[{prefix}] max_abs={payload[f'{prefix}/max_abs_element_error']:.6e} "
-                f"diag_rmse={payload[f'{prefix}/diag_rmse']:.6e} "
-                f"offdiag_rmse={payload[f'{prefix}/offdiag_rmse']:.6e}"
+                f"[{stage_label}] max_abs={payload['max_abs_element_error']:.6e} "
+                f"diag_rmse={payload['diag_rmse']:.6e} "
+                f"offdiag_rmse={payload['offdiag_rmse']:.6e}"
             )
             print(
-                f"[{prefix}] symmetry_pre_rmse={payload[f'{prefix}/symmetry_violation_pre_rmse']:.6e} "
-                f"symmetry_post_rmse={payload[f'{prefix}/symmetry_violation_post_rmse']:.6e}"
+                f"[{stage_label}] symmetry_pre_rmse={payload['symmetry_violation_pre_rmse']:.6e} "
+                f"symmetry_post_rmse={payload['symmetry_violation_post_rmse']:.6e}"
             )
             return payload
 
     print("=" * 80)
     print("PRE-LBFGS EVALUATION")
     print("=" * 80)
-    pre_lbfgs_metrics = evaluate_and_log("final_pre_lbfgs")
+    metrics_before_refine = evaluate_and_log("pre_refine", log_artifacts=False)
 
     print("=" * 80)
     print("LBFGS STAGE")
@@ -1254,12 +1244,12 @@ def main() -> None:
         return loss
 
     lbfgs_loss = lbfgs.step(lbfgs_closure)
-    wandb.log({"lbfgs/final_objective": float(lbfgs_loss.item())})
+    wandb.log({"loss": float(lbfgs_loss.item())})
 
     print("=" * 80)
     print("POST-LBFGS EVALUATION")
     print("=" * 80)
-    post_lbfgs_metrics = evaluate_and_log("final_post_lbfgs")
+    metrics = evaluate_and_log("post_refine", log_artifacts=True)
 
     final_model_path = run_checkpoint_dir / "final_model.pt"
     torch.save(
@@ -1270,8 +1260,7 @@ def main() -> None:
             "history": history,
             "best_loss": best_loss,
             "best_epoch": best_epoch,
-            "pre_lbfgs_metrics": pre_lbfgs_metrics,
-            "post_lbfgs_metrics": post_lbfgs_metrics,
+            "metrics": metrics,
         },
         final_model_path,
     )
@@ -1298,8 +1287,8 @@ def main() -> None:
     print("=" * 80)
     print(f"checkpoint_dir={run_checkpoint_dir}")
     print(f"best_loss={best_loss:.6e} at epoch={best_epoch + 1}")
-    print(f"pre_lbfgs_mae={pre_lbfgs_metrics['final_pre_lbfgs/mae_H']:.6e}")
-    print(f"post_lbfgs_mae={post_lbfgs_metrics['final_post_lbfgs/mae_H']:.6e}")
+    print(f"mae_before_refine={metrics_before_refine['mae_H']:.6e}")
+    print(f"mae_after_refine={metrics['mae_H']:.6e}")
 
     wandb.finish()
 
