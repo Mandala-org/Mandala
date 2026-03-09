@@ -12,8 +12,8 @@ if [[ -f "${REPO_ROOT}/mandala-venv/bin/activate" ]]; then
 fi
 
 # Defaults avoid overwriting existing downloaded weights directory.
-# WANDB_PROJECT="${WANDB_PROJECT:-eV-train}"
-RUN_NAME="${RUN_NAME:-eV_train}"
+# WANDB_PROJECT="${WANDB_PROJECT:-meV-train}"
+RUN_NAME="${RUN_NAME:-meV_train}"
 DEVICE="${DEVICE:-cuda}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/minimal_overfit_study/checkpoints}"
 
@@ -22,6 +22,7 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --data-path "data/small/H2O/original/H2O.matrix" \
   --info-path "data/small/H2O/original/H2O.info.out" \
   --convention "e3nn" \
+  --training-unit "mev" \
   --hidden-dim 32 \
   --l-max 4 \
   --hidden-irreps "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e" \

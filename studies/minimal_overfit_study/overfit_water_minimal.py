@@ -79,6 +79,16 @@ from detailed_logging import (
 )
 
 HARTREE_TO_EV = 27.2113845
+UNIT_SCALE_FROM_HARTREE = {
+    "hartree": 1.0,
+    "ev": HARTREE_TO_EV,
+    "mev": HARTREE_TO_EV * 1000.0,
+}
+UNIT_DISPLAY_NAME = {
+    "hartree": "Hartree",
+    "ev": "eV",
+    "mev": "meV",
+}
 
 
 if __name__ == "__main__":
@@ -105,6 +115,16 @@ if __name__ == "__main__":
         type=str,
         default="e3nn",
         help="Basis convention for data loading ('e3nn' or other options) (default: 'e3nn')",
+    )
+    parser.add_argument(
+        "--training-unit",
+        type=str,
+        default="ev",
+        choices=["hartree", "ev", "mev"],
+        help=(
+            "Unit used for Hamiltonian training targets and metrics. "
+            "Raw OpenMX Hamiltonian is interpreted as Hartree and scaled to this unit."
+        ),
     )
     parser.add_argument(
         "--orbital-selection",
@@ -408,8 +428,8 @@ if __name__ == "__main__":
         "data_path": Path(args.data_path),
         "info_path": Path(args.info_path),
         "convention": args.convention,
-        "hamiltonian_unit": "eV",
-        "hamiltonian_scale_from_hartree": HARTREE_TO_EV,
+        "training_unit": args.training_unit,
+        "hamiltonian_scale_from_hartree": UNIT_SCALE_FROM_HARTREE[args.training_unit],
         "orbital_selection": args.orbital_selection,
         "xyz_permutation": args.xyz_permutation,
         "change_box": args.change_box,
@@ -535,11 +555,17 @@ if __name__ == "__main__":
         log_snapshot_info(snapshot)
 
     # Extract components
-    hamiltonian_e3nn = snapshot.hamiltonian.to(device) * HARTREE_TO_EV
+    hamiltonian_e3nn = (
+        snapshot.hamiltonian.to(device) * CONFIG["hamiltonian_scale_from_hartree"]
+    )
     overlap_e3nn = snapshot.overlap.to(device)
     density_e3nn = snapshot.density.to(device)
     if CONFIG["log_data"]:
-        print(f"  Converted Hamiltonian units: Hartree -> eV (x{HARTREE_TO_EV:.7f})")
+        print(
+            "  Converted Hamiltonian units: "
+            f"Hartree -> {UNIT_DISPLAY_NAME[CONFIG['training_unit']]} "
+            f"(x{CONFIG['hamiltonian_scale_from_hartree']:.7f})"
+        )
     orbital_cfg = snapshot.hamiltonian.orbital_cfg
     positions = snapshot.positions.to(device=device, dtype=torch_dtype)
     box = (
