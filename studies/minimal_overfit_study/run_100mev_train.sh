@@ -13,7 +13,7 @@ fi
 
 # Defaults avoid overwriting existing downloaded weights directory.
 # WANDB_PROJECT="${WANDB_PROJECT:-100meV-train}"
-# RUN_NAME="${RUN_NAME:-100meV_train}"
+RUN_NAME="${RUN_NAME:-100meV_train}"
 DEVICE="${DEVICE:-cuda}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/minimal_overfit_study/checkpoints}"
 

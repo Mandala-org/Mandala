@@ -13,6 +13,9 @@ fi
 RUN_NAME="${RUN_NAME:-overfit-ablation-faster-single}"
 DEVICE="${DEVICE:-cuda}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/overfit_ablation_study/checkpoints}"
+WANDB_PROJECT="${WANDB_PROJECT:-ablation-study}"
+
+export WANDB_PROJECT
 
 python -u studies/overfit_ablation_study/overfit_water_ablation.py \
   --run-name "${RUN_NAME}" \
@@ -46,5 +49,4 @@ python -u studies/overfit_ablation_study/overfit_water_ablation.py \
   --log-per-irrep-metrics \
   --log-per-irrep-images \
   --benchmark \
-  --train-on-irrep-parts \
   --generate-video
