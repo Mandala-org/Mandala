@@ -1050,27 +1050,51 @@ def main() -> None:
                     print("[PER-IRREP]")
                     for ir in sorted(all_irreps, key=str):
                         irs = str(ir)
+                        l1_block = per_irrep_metrics.get(f"{irs}_l1_block", 0.0)
+                        l1_block_rel = per_irrep_metrics.get(f"{irs}_l1_block_rel", 0.0)
+                        l2_block = per_irrep_metrics.get(f"{irs}_l2_block", 0.0)
+                        l2_block_rel = per_irrep_metrics.get(f"{irs}_l2_block_rel", 0.0)
+                        l1_full_rel = per_irrep_metrics.get(f"{irs}_l1_full_rel", 0.0)
+                        l2_full_rel = per_irrep_metrics.get(f"{irs}_l2_full_rel", 0.0)
                         print(
                             f"  {irs}: "
                             f"l1_elem={per_irrep_metrics.get(f'{irs}_l1_elem', 0.0):.3e}, "
-                            f"l2_elem={per_irrep_metrics.get(f'{irs}_l2_elem', 0.0):.3e}"
+                            f"l2_elem={per_irrep_metrics.get(f'{irs}_l2_elem', 0.0):.3e}, "
+                            f"l1_block={l1_block:.3e}, "
+                            f"l1_block_rel={l1_block_rel:.3%}, "
+                            f"l2_block={l2_block:.3e}, "
+                            f"l2_block_rel={l2_block_rel:.3%}, "
+                            f"l1_full_rel={l1_full_rel:.3%}, "
+                            f"l2_full_rel={l2_full_rel:.3%}"
                         )
-                wandb.log(
-                    {
-                        f"irrep_metrics/{str(ir)}_l1_elem": float(
-                            per_irrep_metrics.get(f"{str(ir)}_l1_elem", 0.0)
-                        )
-                        for ir in sorted(all_irreps, key=str)
-                    }
-                )
-                wandb.log(
-                    {
-                        f"irrep_metrics/{str(ir)}_l2_elem": float(
-                            per_irrep_metrics.get(f"{str(ir)}_l2_elem", 0.0)
-                        )
-                        for ir in sorted(all_irreps, key=str)
-                    }
-                )
+                per_irrep_wandb_payload: dict[str, float] = {}
+                for ir in sorted(all_irreps, key=str):
+                    irs = str(ir)
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l1_elem"] = float(
+                        per_irrep_metrics.get(f"{irs}_l1_elem", 0.0)
+                    )
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l2_elem"] = float(
+                        per_irrep_metrics.get(f"{irs}_l2_elem", 0.0)
+                    )
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l1_block"] = float(
+                        per_irrep_metrics.get(f"{irs}_l1_block", 0.0)
+                    )
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l1_block_rel"] = (
+                        float(per_irrep_metrics.get(f"{irs}_l1_block_rel", 0.0))
+                    )
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l2_block"] = float(
+                        per_irrep_metrics.get(f"{irs}_l2_block", 0.0)
+                    )
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l2_block_rel"] = (
+                        float(per_irrep_metrics.get(f"{irs}_l2_block_rel", 0.0))
+                    )
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l1_full_rel"] = float(
+                        per_irrep_metrics.get(f"{irs}_l1_full_rel", 0.0)
+                    )
+                    per_irrep_wandb_payload[f"irrep_metrics/{irs}_l2_full_rel"] = float(
+                        per_irrep_metrics.get(f"{irs}_l2_full_rel", 0.0)
+                    )
+                wandb.log(per_irrep_wandb_payload)
 
                 try:
                     save_hamiltonian_frame_to_disk(
