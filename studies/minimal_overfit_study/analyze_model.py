@@ -683,6 +683,9 @@ def main():
         sh_irreps=sh_irreps,
         num_layers=config["num_layers"],
         mapper=mapper,
+        edge_encoder_use_sh_tensor_square=config.get(
+            "edge_encoder_use_sh_tensor_square", False
+        ),
         magnitude_factorization=config.get("magnitude_factorization", False),
         head_mlp_for_scalars=config.get("head_mlp_for_scalars", False),
         head_use_tensor_square=config.get("head_use_tensor_square", False),

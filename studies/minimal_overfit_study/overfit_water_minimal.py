@@ -305,6 +305,15 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
+        "--edge-encoder-use-sh-tensor-square",
+        action="store_true",
+        default=False,
+        help=(
+            "Use TensorSquare(spherical harmonics) before the edge encoder tensor product "
+            "(default: False)."
+        ),
+    )
+    parser.add_argument(
         "--radial-embedding-scale",
         type=str,
         default="none",
@@ -463,6 +472,7 @@ if __name__ == "__main__":
         "lr_patience": args.lr_patience,
         "loss_aggregation": args.loss_aggregation,
         "sh_mode": args.sh_mode,
+        "edge_encoder_use_sh_tensor_square": args.edge_encoder_use_sh_tensor_square,
         "radial_embedding_scale": args.radial_embedding_scale,
         "generate_video": args.generate_video,
         "verbose_forward": args.verbose_forward,
@@ -1259,6 +1269,7 @@ if __name__ == "__main__":
         sh_irreps=sh_irreps,
         num_layers=CONFIG["num_layers"],
         mapper=mapper,
+        edge_encoder_use_sh_tensor_square=CONFIG["edge_encoder_use_sh_tensor_square"],
         magnitude_factorization=CONFIG["magnitude_factorization"],
         head_mlp_for_scalars=CONFIG["head_mlp_for_scalars"],
         head_use_tensor_square=CONFIG["head_use_tensor_square"],
