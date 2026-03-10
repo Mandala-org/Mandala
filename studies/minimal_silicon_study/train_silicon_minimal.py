@@ -74,6 +74,19 @@ from detailed_logging import (
 DISTANCE_NORM_POWER = 4
 DISTANCE_NORM_MIN_ARG = 1e-12
 DISTANCE_NORM_MAG_EPS = 1e-300
+HARTREE_TO_EV = 27.2113845
+UNIT_SCALE_FROM_HARTREE = {
+    "hartree": 1.0,
+    "ev": HARTREE_TO_EV,
+    "mev": HARTREE_TO_EV * 1000.0,
+    "100mev": HARTREE_TO_EV * 10.0,
+}
+UNIT_DISPLAY_NAME = {
+    "hartree": "Hartree",
+    "ev": "eV",
+    "mev": "meV",
+    "100mev": "100meV",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,6 +94,16 @@ def parse_args() -> argparse.Namespace:
 
     # Data split arguments.
     parser.add_argument("--data-path", type=str, required=True)
+    parser.add_argument(
+        "--training-unit",
+        type=str.lower,
+        default="hartree",
+        choices=["hartree", "ev", "mev", "100mev"],
+        help=(
+            "Unit used for Hamiltonian training targets and metrics. "
+            "Raw OpenMX Hamiltonian is interpreted as Hartree and scaled to this unit."
+        ),
+    )
     parser.add_argument(
         "--num-train",
         type=int,
@@ -683,6 +706,7 @@ def preprocess_sample(
     mapper: BlockIrrepMapper,
     cfg_graph: NetConfig,
     sh_irreps: Irreps,
+    hamiltonian_scale_from_hartree: float,
     cutoff_radius: float,
     apply_cutoff_to_targets: bool,
     orbital_selection: Any,
@@ -705,7 +729,7 @@ def preprocess_sample(
     box = snap.box.to(device) if snap.box is not None else None
     atoms_list = list(snap.hamiltonian.atoms)
 
-    H = snap.hamiltonian.to(device)
+    H = snap.hamiltonian.to(device) * float(hamiltonian_scale_from_hartree)
     S = snap.overlap.to(device)
     D = snap.density.to(device)
 
@@ -1154,6 +1178,8 @@ def main() -> None:
 
     config = {
         "data_path": str(data_root),
+        "training_unit": args.training_unit,
+        "hamiltonian_scale_from_hartree": UNIT_SCALE_FROM_HARTREE[args.training_unit],
         "split_mode": split_mode,
         "num_train": args.num_train,
         "num_val": args.num_val,
@@ -1214,6 +1240,11 @@ def main() -> None:
     run_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     frame_output_dir = run_checkpoint_dir / "frames"
     frame_output_dir.mkdir(parents=True, exist_ok=True)
+    print(
+        "training unit: "
+        f"{UNIT_DISPLAY_NAME[args.training_unit]} "
+        f"(x{config['hamiltonian_scale_from_hartree']:.7g} from Hartree)"
+    )
     log_config(config, run_checkpoint_dir, frame_output_dir)
 
     # Build datasets via DatasetFactory (requested).
@@ -1278,6 +1309,7 @@ def main() -> None:
             mapper=mapper,
             cfg_graph=cfg_graph,
             sh_irreps=sh_irreps,
+            hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
             cutoff_radius=args.cutoff_radius,
             apply_cutoff_to_targets=args.apply_cutoff_to_targets,
             orbital_selection=orbital_selection_obj,
@@ -1298,6 +1330,7 @@ def main() -> None:
             mapper=mapper,
             cfg_graph=cfg_graph,
             sh_irreps=sh_irreps,
+            hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
             cutoff_radius=args.cutoff_radius,
             apply_cutoff_to_targets=args.apply_cutoff_to_targets,
             orbital_selection=orbital_selection_obj,
