@@ -93,6 +93,17 @@ UNIT_DISPLAY_NAME = {
 }
 
 
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    value_norm = str(value).strip().lower()
+    if value_norm in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if value_norm in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Cannot interpret boolean value: {value}")
+
+
 if __name__ == "__main__":
     # =============================================================================
     # PARSE ARGUMENTS
@@ -305,6 +316,12 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
+        "--e3layernorm",
+        type=parse_bool,
+        default=True,
+        help="Enable e3LayerNorm in edge encoder and message-passing blocks (default: True)",
+    )
+    parser.add_argument(
         "--edge-encoder-use-sh-tensor-square",
         action="store_true",
         default=False,
@@ -472,6 +489,7 @@ if __name__ == "__main__":
         "lr_patience": args.lr_patience,
         "loss_aggregation": args.loss_aggregation,
         "sh_mode": args.sh_mode,
+        "e3layernorm": args.e3layernorm,
         "edge_encoder_use_sh_tensor_square": args.edge_encoder_use_sh_tensor_square,
         "radial_embedding_scale": args.radial_embedding_scale,
         "generate_video": args.generate_video,
@@ -1270,6 +1288,7 @@ if __name__ == "__main__":
         num_layers=CONFIG["num_layers"],
         mapper=mapper,
         edge_encoder_use_sh_tensor_square=CONFIG["edge_encoder_use_sh_tensor_square"],
+        use_e3layernorm=CONFIG["e3layernorm"],
         magnitude_factorization=CONFIG["magnitude_factorization"],
         head_mlp_for_scalars=CONFIG["head_mlp_for_scalars"],
         head_use_tensor_square=CONFIG["head_use_tensor_square"],

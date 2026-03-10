@@ -683,6 +683,7 @@ def main():
         sh_irreps=sh_irreps,
         num_layers=config["num_layers"],
         mapper=mapper,
+        use_e3layernorm=config.get("e3layernorm", True),
         edge_encoder_use_sh_tensor_square=config.get(
             "edge_encoder_use_sh_tensor_square", False
         ),

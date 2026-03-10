@@ -210,10 +210,12 @@ class MinimalEdgeEncoder(nn.Module):
         hidden_irreps,
         sh_irreps,
         use_sh_tensor_square=False,
+        use_e3layernorm=True,
     ):
         super().__init__()
         self.num_edge_types = num_edge_types
         self.use_sh_tensor_square = bool(use_sh_tensor_square)
+        self.use_e3layernorm = bool(use_e3layernorm)
 
         # Linear projection from radial basis + edge type one-hot to scalars
         from e3nn.o3 import Irrep
@@ -261,8 +263,11 @@ class MinimalEdgeEncoder(nn.Module):
         )
         self.irreps_out = self.gate.irreps_out
 
-        # Layer norm (verbose=False to avoid duplicate prints)
-        self.norm = e3LayerNorm(self.irreps_out, verbose=False)
+        # Optional layer norm (verbose=False to avoid duplicate prints)
+        if self.use_e3layernorm:
+            self.norm = e3LayerNorm(self.irreps_out, verbose=False)
+        else:
+            self.norm = nn.Identity()
 
         print(
             f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) -> scalars({scalar_dim}x0e)"
@@ -278,7 +283,14 @@ class MinimalEdgeEncoder(nn.Module):
             f"                  Note: TP creates separate scalar groups for each L, combined by Gate"
         )
         print(f"                  Gate: {irreps_tp_out} -> {self.irreps_out}")
-        print(f"                  Norm: {self.irreps_out}")
+        print(
+            "                  Norm: "
+            + (
+                f"e3LayerNorm({self.irreps_out})"
+                if self.use_e3layernorm
+                else "disabled"
+            )
+        )
 
     def forward(
         self,
@@ -315,8 +327,9 @@ class MinimalEdgeEncoder(nn.Module):
         edge_feat = self.gate(tp_out)
         check_for_nans(edge_feat, "EdgeEncoder.gate", tp_out)
 
-        # Layer norm
-        edge_feat = self.norm(edge_feat, batch_edge)
+        # Optional layer norm
+        if self.use_e3layernorm:
+            edge_feat = self.norm(edge_feat, batch_edge)
         check_for_nans(edge_feat, "EdgeEncoder.norm", edge_feat)
 
         if verbose:
@@ -349,12 +362,21 @@ class MinimalEdgeEncoder(nn.Module):
 class MinimalMessageBlock(nn.Module):
     """Message passing layer with edge update + node update with Gate and LayerNorm."""
 
-    def __init__(self, node_irreps, edge_irreps, hidden_irreps, sh_irreps, layer_idx=0):
+    def __init__(
+        self,
+        node_irreps,
+        edge_irreps,
+        hidden_irreps,
+        sh_irreps,
+        layer_idx=0,
+        use_e3layernorm=True,
+    ):
         super().__init__()
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
         self.hidden_irreps = hidden_irreps
         self.layer_idx = layer_idx
+        self.use_e3layernorm = bool(use_e3layernorm)
 
         # Gate setup for both updates
         irreps_scalars = Irreps([(mul, ir) for mul, ir in hidden_irreps if ir.l == 0])
@@ -389,7 +411,10 @@ class MinimalMessageBlock(nn.Module):
             [act_gate[ir.p] for _, ir in irreps_gates],
             irreps_gated,
         )
-        self.edge_norm = e3LayerNorm(self.edge_gate.irreps_out, verbose=False)
+        if self.use_e3layernorm:
+            self.edge_norm = e3LayerNorm(self.edge_gate.irreps_out, verbose=False)
+        else:
+            self.edge_norm = nn.Identity()
 
         # Node update: aggregate messages + self-connection -> Linear (not TP)
         irreps_node_tp_out = irreps_scalars + irreps_gates + irreps_gated
@@ -412,7 +437,10 @@ class MinimalMessageBlock(nn.Module):
             [act_gate[ir.p] for _, ir in irreps_gates],
             irreps_gated,
         )
-        self.node_norm = e3LayerNorm(self.node_gate.irreps_out, verbose=False)
+        if self.use_e3layernorm:
+            self.node_norm = e3LayerNorm(self.node_gate.irreps_out, verbose=False)
+        else:
+            self.node_norm = nn.Identity()
 
         print(f"    [MessageBlock] Irreps:")
         print(f"      Node update: concat(messages {edge_irreps}, self {node_irreps})")
@@ -423,6 +451,14 @@ class MinimalMessageBlock(nn.Module):
         )
         print(f"                   -> TP: {irreps_tp_out}")
         print(f"                   -> Gate: {self.edge_gate.irreps_out}")
+        print(
+            "                   -> Norm: "
+            + (
+                f"e3LayerNorm({self.edge_gate.irreps_out})"
+                if self.use_e3layernorm
+                else "disabled"
+            )
+        )
 
     def forward(
         self,
@@ -464,7 +500,8 @@ class MinimalMessageBlock(nn.Module):
         check_for_nans(
             node_feat_new, f"MessageBlock[{self.layer_idx}].node_gate", node_linear
         )
-        node_feat_new = self.node_norm(node_feat_new, batch_node)
+        if self.use_e3layernorm:
+            node_feat_new = self.node_norm(node_feat_new, batch_node)
         check_for_nans(node_feat_new, f"MessageBlock[{self.layer_idx}].node_norm")
 
         if verbose:
@@ -500,7 +537,8 @@ class MinimalMessageBlock(nn.Module):
         check_for_nans(
             edge_feat_new, f"MessageBlock[{self.layer_idx}].edge_gate", edge_tp
         )
-        edge_feat_new = self.edge_norm(edge_feat_new, batch_edge)
+        if self.use_e3layernorm:
+            edge_feat_new = self.edge_norm(edge_feat_new, batch_edge)
         check_for_nans(edge_feat_new, f"MessageBlock[{self.layer_idx}].edge_norm")
 
         if verbose:
@@ -895,6 +933,7 @@ class MinimalNetwork(nn.Module):
         head_mlp_for_scalars=False,
         head_use_tensor_square=False,
         separate_shifted_self=False,
+        use_e3layernorm=True,
         verbose=True,  # Default True for backward compatibility
     ):
         super().__init__()
@@ -911,6 +950,7 @@ class MinimalNetwork(nn.Module):
             hidden_irreps,
             sh_irreps,
             use_sh_tensor_square=edge_encoder_use_sh_tensor_square,
+            use_e3layernorm=use_e3layernorm,
         )
 
         # Message passing layers
@@ -925,6 +965,7 @@ class MinimalNetwork(nn.Module):
                     hidden_irreps,
                     sh_irreps,
                     layer_idx=i,
+                    use_e3layernorm=use_e3layernorm,
                 )
             )
 
