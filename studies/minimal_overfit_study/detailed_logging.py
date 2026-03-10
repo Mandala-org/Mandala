@@ -12,6 +12,11 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
     print(f"  Hidden dim: {config['hidden_dim']}")
     print(f"  L_max: {config['l_max']}")
     print(f"  Num layers: {config['num_layers']}")
+    print(
+        "  Edge encoder SH TensorSquare: enabled"
+        if config.get("edge_encoder_use_sh_tensor_square", False)
+        else "  Edge encoder SH TensorSquare: disabled"
+    )
     print(f"  Cutoff radius: {config['cutoff_radius']} A")
     print(f"  Learning rate: {config['lr']}")
     print(f"  Epochs: {config['num_epochs']}")

@@ -203,9 +203,17 @@ class MinimalNodeEncoder(nn.Module):
 class MinimalEdgeEncoder(nn.Module):
     """Encode edge distance + edge type + spherical harmonics with Gate nonlinearity."""
 
-    def __init__(self, n_radial, num_edge_types, hidden_irreps, sh_irreps):
+    def __init__(
+        self,
+        n_radial,
+        num_edge_types,
+        hidden_irreps,
+        sh_irreps,
+        use_sh_tensor_square=False,
+    ):
         super().__init__()
         self.num_edge_types = num_edge_types
+        self.use_sh_tensor_square = bool(use_sh_tensor_square)
 
         # Linear projection from radial basis + edge type one-hot to scalars
         from e3nn.o3 import Irrep
@@ -221,10 +229,19 @@ class MinimalEdgeEncoder(nn.Module):
         # TP output must produce both scalars, gates, and gated features
         irreps_tp_out = irreps_scalars + irreps_gates + irreps_gated
 
+        if self.use_sh_tensor_square:
+            self.sh_tensor_square = TensorSquare(
+                sh_irreps, irreps_out=Irreps(hidden_irreps)
+            )
+            tp_irreps_in2 = self.sh_tensor_square.irreps_out
+        else:
+            self.sh_tensor_square = None
+            tp_irreps_in2 = sh_irreps
+
         # Tensor product: scalars (x) SH -> TP output
         self.tp = FullyConnectedTensorProduct(
             Irreps(f"{scalar_dim}x0e"),
-            sh_irreps,
+            tp_irreps_in2,
             irreps_tp_out,
             internal_weights=True,
             shared_weights=True,
@@ -251,8 +268,12 @@ class MinimalEdgeEncoder(nn.Module):
             f"    [EdgeEncoder] Irreps in: radial({n_radial}) + edge_type({num_edge_types}) -> scalars({scalar_dim}x0e)"
         )
         print(
-            f"                  TP: {scalar_dim}x0e (x) {sh_irreps} -> {irreps_tp_out}"
+            f"                  TP: {scalar_dim}x0e (x) {tp_irreps_in2} -> {irreps_tp_out}"
         )
+        if self.use_sh_tensor_square:
+            print(
+                f"                  SH preprocessing: TensorSquare({sh_irreps}) -> {tp_irreps_in2}"
+            )
         print(
             f"                  Note: TP creates separate scalar groups for each L, combined by Gate"
         )
@@ -280,8 +301,14 @@ class MinimalEdgeEncoder(nn.Module):
         radial_feat = self.radial_proj(combined)  # (E, scalar_dim)
         check_for_nans(radial_feat, "EdgeEncoder.radial_proj", combined)
 
+        if self.sh_tensor_square is not None:
+            edge_sh_tp = self.sh_tensor_square(edge_sh)
+            check_for_nans(edge_sh_tp, "EdgeEncoder.sh_tensor_square", edge_sh)
+        else:
+            edge_sh_tp = edge_sh
+
         # Tensor product with spherical harmonics
-        tp_out = self.tp(radial_feat, edge_sh)
+        tp_out = self.tp(radial_feat, edge_sh_tp)
         check_for_nans(tp_out, "EdgeEncoder.tp", radial_feat)
 
         # Gate nonlinearity
@@ -300,7 +327,7 @@ class MinimalEdgeEncoder(nn.Module):
                 f"                            -> Scalars: {radial_feat.shape} (irreps: {self.tp.irreps_in1})"
             )
             print(
-                f"                            (x) SH: {edge_sh.shape} (irreps: {self.tp.irreps_in2})"
+                f"                            (x) SH features: {edge_sh_tp.shape} (irreps: {self.tp.irreps_in2})"
             )
             print(
                 f"                            -> TP out: {tp_out.shape} (irreps: {self.tp.irreps_out})"
@@ -863,6 +890,7 @@ class MinimalNetwork(nn.Module):
         sh_irreps,
         num_layers,
         mapper,
+        edge_encoder_use_sh_tensor_square=False,
         magnitude_factorization=False,
         head_mlp_for_scalars=False,
         head_use_tensor_square=False,
@@ -878,7 +906,11 @@ class MinimalNetwork(nn.Module):
         scalar_dim = sum(mul for mul, ir in hidden_irreps if ir == Irrep("0e"))
         self.node_enc = MinimalNodeEncoder(num_elements, scalar_dim)
         self.edge_enc = MinimalEdgeEncoder(
-            n_radial, num_edge_types, hidden_irreps, sh_irreps
+            n_radial,
+            num_edge_types,
+            hidden_irreps,
+            sh_irreps,
+            use_sh_tensor_square=edge_encoder_use_sh_tensor_square,
         )
 
         # Message passing layers
