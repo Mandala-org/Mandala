@@ -164,6 +164,15 @@ def parse_args() -> argparse.Namespace:
             "(fixed power=4), train in normalized space, and evaluate on de-normalized predictions."
         ),
     )
+    parser.add_argument(
+        "--edge-encoder-use-sh-tensor-square",
+        action="store_true",
+        default=False,
+        help=(
+            "Use TensorSquare(spherical harmonics) before the edge encoder tensor product "
+            "(default: False)."
+        ),
+    )
     parser.add_argument("--head-mlp-for-scalars", action="store_true", default=False)
     parser.add_argument("--train-on-irrep-parts", action="store_true", default=False)
     parser.add_argument("--apply-cutoff-to-targets", action="store_true", default=False)
@@ -1172,6 +1181,7 @@ def main() -> None:
         "separate_shifted_self": args.separate_shifted_self,
         "normalize_blocks": args.normalize_blocks,
         "distance_magnitude_normalization": args.distance_magnitude_normalization,
+        "edge_encoder_use_sh_tensor_square": args.edge_encoder_use_sh_tensor_square,
         "head_mlp_for_scalars": args.head_mlp_for_scalars,
         "train_on_irrep_parts": args.train_on_irrep_parts,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
@@ -1346,6 +1356,7 @@ def main() -> None:
         sh_irreps=sh_irreps,
         num_layers=args.num_layers,
         mapper=mapper,
+        edge_encoder_use_sh_tensor_square=args.edge_encoder_use_sh_tensor_square,
         magnitude_factorization=False,
         head_mlp_for_scalars=args.head_mlp_for_scalars,
         head_use_tensor_square=False,
