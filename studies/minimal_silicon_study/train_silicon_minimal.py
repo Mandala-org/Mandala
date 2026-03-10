@@ -97,7 +97,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--training-unit",
         type=str.lower,
-        default="hartree",
+        default="ev",
         choices=["hartree", "ev", "mev", "100mev"],
         help=(
             "Unit used for Hamiltonian training targets and metrics. "
