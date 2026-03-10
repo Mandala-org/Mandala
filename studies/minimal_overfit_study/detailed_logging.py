@@ -13,6 +13,11 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
     print(f"  L_max: {config['l_max']}")
     print(f"  Num layers: {config['num_layers']}")
     print(
+        "  e3LayerNorm: enabled"
+        if config.get("e3layernorm", True)
+        else "  e3LayerNorm: disabled"
+    )
+    print(
         "  Edge encoder SH TensorSquare: enabled"
         if config.get("edge_encoder_use_sh_tensor_square", False)
         else "  Edge encoder SH TensorSquare: disabled"
