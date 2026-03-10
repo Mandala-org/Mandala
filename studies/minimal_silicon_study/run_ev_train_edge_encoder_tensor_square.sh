@@ -5,32 +5,33 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
-# Prefer project venv when present.
 if [[ -f "${REPO_ROOT}/mandala-venv/bin/activate" ]]; then
   # shellcheck disable=SC1091
   source "${REPO_ROOT}/mandala-venv/bin/activate"
 fi
 
-# Defaults avoid overwriting existing downloaded weights directory.
-# WANDB_PROJECT="${WANDB_PROJECT:-eV-train}"
-RUN_NAME="${RUN_NAME:-eV_train_edge_encoder_tensor_square}"
+RUN_NAME="${RUN_NAME:-eV_train_edge_encoder_tensor_square_silicon}"
 DEVICE="${DEVICE:-cuda}"
-CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/minimal_overfit_study/checkpoints}"
+DATA_PATH="${DATA_PATH:-/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A}"
+CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/minimal_silicon_study/checkpoints}"
 
-python studies/minimal_overfit_study/overfit_water_minimal.py \
+python studies/minimal_silicon_study/train_silicon_minimal.py \
   --run-name "${RUN_NAME}" \
-  --data-path "data/small/H2O/original/H2O.matrix" \
-  --info-path "data/small/H2O/original/H2O.info.out" \
+  --data-path "${DATA_PATH}" \
+  --val-temp 2700 \
+  --train-temps 2700 \
+  --n-snapshots-per-temp 100 \
+  --val-n-snapshots 10 \
   --convention "e3nn" \
   --hidden-dim 32 \
   --l-max 4 \
   --hidden-irreps "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e" \
-  --edge-encoder-use-sh-tensor-square \
   --num-layers 2 \
   --cutoff-radius 7.5 \
   --n-radial 64 \
+  --edge-encoder-use-sh-tensor-square \
   --lr 0.01 \
-  --num-epochs 40000 \
+  --num-epochs 4000 \
   --log-interval 100 \
   --adaptive-log-interval \
   --log-data \
@@ -40,7 +41,7 @@ python studies/minimal_overfit_study/overfit_water_minimal.py \
   --benchmark \
   --grad-clip 1 \
   --lr-factor 0.5 \
-  --lr-patience 1000 \
+  --lr-patience 400 \
   --generate-video \
   --device "${DEVICE}" \
   --checkpoint-dir "${CHECKPOINT_DIR}"
