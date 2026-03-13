@@ -36,7 +36,7 @@ parameters:
   cutoff-radius:
     value: 7.5
   n-radial:
-    value: [64, 128]
+    values: [64, 128]
   edge-encoder-use-sh-tensor-square:
     values: [true, false]
   train-on-irrep-parts:
