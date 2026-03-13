@@ -1,0 +1,76 @@
+program: studies/minimal_silicon_study/train_silicon_minimal.py
+project: mandala-minimal-silicon-study
+name: minimal-silicon-edge-encoder-tensorsquare-ev
+method: bayes
+metric:
+  name: mae_H
+  goal: minimize
+
+parameters:
+  run-name:
+    value: "eV_train_edge_encoder_tensor_square_silicon_sweep"
+  data-path:
+    value: "/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A"
+  training-unit:
+    value: ev
+
+  val-temp:
+    value: 2700
+  train-temps:
+    value: "2700"
+  n-snapshots-per-temp:
+    value: 20
+  val-n-snapshots:
+    value: 2
+
+  convention:
+    value: e3nn
+  hidden-dim:
+    value: 32
+  l-max:
+    value: 4
+  hidden-irreps:
+    value: "32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e"
+  num-layers:
+    value: 2
+  cutoff-radius:
+    value: 7.5
+  n-radial:
+    value: [64, 128]
+  edge-encoder-use-sh-tensor-square:
+    values: [true, false]
+  train-on-irrep-parts:
+    values: [true, false]
+
+  lr:
+    values: [0.01, 0.001]
+  num-epochs:
+    value: 5000
+  log-interval:
+    value: 100
+  grad-clip:
+    values: [1.0, 0.0]
+  lr-factor:
+    value: 0.5
+  lr-patience:
+    value: 400
+
+  device:
+    value: cuda
+  checkpoint-dir:
+    value: "studies/minimal_silicon_study/checkpoints"
+  seed:
+    value: 42
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - --adaptive-log-interval
+  - --log-data
+  - --log-model
+  - --log-per-irrep-metrics
+  - --log-per-irrep-images
+  - --benchmark
+  - --generate-video
+  - ${args_no_boolean_flags}

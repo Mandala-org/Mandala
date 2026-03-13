@@ -87,6 +87,39 @@ UNIT_DISPLAY_NAME = {
     "mev": "meV",
     "100mev": "100meV",
 }
+STORE_TRUE_ARG_NAMES = [
+    "adaptive_log_interval",
+    "benchmark",
+    "separate_shifted_self",
+    "normalize_blocks",
+    "distance_magnitude_normalization",
+    "edge_encoder_use_sh_tensor_square",
+    "head_mlp_for_scalars",
+    "train_on_irrep_parts",
+    "apply_cutoff_to_targets",
+    "require_exact_edge_match",
+    "log_data",
+    "log_model",
+    "log_forward",
+    "verbose_forward",
+    "log_per_irrep_metrics",
+    "log_per_irrep_images",
+    "generate_video",
+]
+
+
+def _coerce_wandb_bool(name: str, value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, np.integer)):
+        return bool(value)
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"1", "true", "t", "yes", "y", "on"}:
+            return True
+        if v in {"0", "false", "f", "no", "n", "off"}:
+            return False
+    raise ValueError(f"Cannot coerce wandb.config['{name}']={value!r} to bool")
 
 
 def parse_args() -> argparse.Namespace:
@@ -1176,6 +1209,15 @@ def main() -> None:
     device = torch.device(args.device)
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
 
+    wandb_kwargs = {"project": "mandala-minimal-silicon-study", "config": vars(args)}
+    if args.run_name is not None:
+        wandb_kwargs["name"] = args.run_name
+    wandb.init(**wandb_kwargs)
+
+    for name in STORE_TRUE_ARG_NAMES:
+        if name in wandb.config:
+            setattr(args, name, _coerce_wandb_bool(name, wandb.config[name]))
+
     config = {
         "data_path": str(data_root),
         "training_unit": args.training_unit,
@@ -1230,10 +1272,7 @@ def main() -> None:
         "log_activations_wandb": False,
     }
 
-    wandb_kwargs = {"project": "mandala-minimal-silicon-study", "config": config}
-    if args.run_name is not None:
-        wandb_kwargs["name"] = args.run_name
-    wandb.init(**wandb_kwargs)
+    wandb.config.update(config, allow_val_change=True)
 
     run_name = wandb.run.name
     run_checkpoint_dir = Path(args.checkpoint_dir) / run_name
