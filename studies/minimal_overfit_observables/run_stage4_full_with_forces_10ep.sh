@@ -34,8 +34,7 @@ python studies/minimal_overfit_observables/overfit_observables_minimal.py \
   --enable-forces true \
   --train-on-forces true \
   --loss-coef-forces 1e-5 \
-  --hidden-dim 32 \
-  --l-max 2 \
+  --hidden-irreps "32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e" \
   --num-layers 2 \
   --n-radial 16 \
   --cutoff-radius "${CUTOFF_RADIUS}" \
