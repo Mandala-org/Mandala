@@ -32,8 +32,8 @@ python studies/minimal_overfit_observables/overfit_observables_minimal.py \
   --train-on-num-electrons true \
   --loss-coef-observables 1e-5 \
   --enable-forces true \
-  --train-on-forces true \
-  --loss-coef-forces 1e-5 \
+  --train-on-forces false \
+  --loss-coef-forces 0.0 \
   --hidden-irreps "32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e" \
   --num-layers 2 \
   --n-radial 16 \
@@ -44,9 +44,6 @@ python studies/minimal_overfit_observables/overfit_observables_minimal.py \
   --adaptive-log-interval \
   --separate-shifted-self \
   --edge-encoder-use-sh-tensor-square \
-  --magnitude-factorization \
-  --magnitude-lambda 1.0 \
-  --head-mlp-for-scalars \
   --head-use-tensor-square \
   --log-data \
   --log-model \
