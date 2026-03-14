@@ -198,6 +198,23 @@ if __name__ == "__main__":
         help="Loss coefficient for force term (default: 0.0).",
     )
     parser.add_argument(
+        "--symmetrize-preds",
+        type=parse_bool,
+        default=True,
+        help=(
+            "Symmetrize predicted H/S/D matrices as (M + M^T) / 2 before "
+            "metrics/observables/forces (default: True)."
+        ),
+    )
+    parser.add_argument(
+        "--debug-force-grad-flow",
+        action="store_true",
+        help=(
+            "Debug force-gradient flow by printing gradient stats for intermediate "
+            "tensors (edge_sh, edge_length_emb, predicted blocks, positions)."
+        ),
+    )
+    parser.add_argument(
         "--orbital-selection",
         type=str,
         default=None,
@@ -510,6 +527,18 @@ if __name__ == "__main__":
             "abs_std": float(abs_t.std().item()) if numel > 1 else 0.0,
         }
 
+    def format_grad_stats(name: str, grad: torch.Tensor | None) -> str:
+        if grad is None:
+            return f"{name}: grad=None"
+        stats = summarize_zero_stats(grad)
+        return (
+            f"{name}: "
+            f"exact_nonzero={stats['exact_nonzero']}/{stats['numel']} "
+            f"all_exact_zero={stats['all_exact_zero']} "
+            f"|g|mean={stats['abs_mean']:.6e} "
+            f"|g|max={stats['abs_max']:.6e}"
+        )
+
     # =============================================================================
     # CONFIGURATION
     # =============================================================================
@@ -534,6 +563,8 @@ if __name__ == "__main__":
         "enable_forces": args.enable_forces,
         "train_on_forces": args.train_on_forces,
         "loss_coef_forces": args.loss_coef_forces,
+        "symmetrize_preds": args.symmetrize_preds,
+        "debug_force_grad_flow": args.debug_force_grad_flow,
         "orbital_selection": args.orbital_selection,
         "xyz_permutation": "012",
         "change_box": "right",
@@ -1465,15 +1496,19 @@ if __name__ == "__main__":
                     loss_block_irrep_filter_to_blocks_time,
                 )
 
-            # Symmetrized predictions for reporting and observable/force computations.
-            pred_matrix_metrics_by_name = {
-                matrix_name: (
-                    pred_matrix_norm_by_name[matrix_name]
-                    + pred_matrix_norm_by_name[matrix_name].transpose()
-                )
-                * 0.5
-                for matrix_name in CONFIG["matrix_targets"]
-            }
+            # Optionally symmetrize predictions for reporting and
+            # observable/force computations.
+            if CONFIG["symmetrize_preds"]:
+                pred_matrix_metrics_by_name = {
+                    matrix_name: (
+                        pred_matrix_norm_by_name[matrix_name]
+                        + pred_matrix_norm_by_name[matrix_name].transpose()
+                    )
+                    * 0.5
+                    for matrix_name in CONFIG["matrix_targets"]
+                }
+            else:
+                pred_matrix_metrics_by_name = dict(pred_matrix_norm_by_name)
 
             # Observable losses from predicted matrices.
             loss_energy_weighted = torch.tensor(0.0, device=device)
@@ -1525,6 +1560,159 @@ if __name__ == "__main__":
                     pred_matrix_metrics_by_name["hamiltonian"],
                     pred_matrix_metrics_by_name["density"],
                 )
+                if CONFIG["debug_force_grad_flow"] and should_log_now:
+                    print(
+                        f"  [FORCES GRAD DEBUG][epoch {epoch + 1}] "
+                        f"energy_sym={float(energy_for_forces.item()):.8e} "
+                        f"requires_grad={energy_for_forces.requires_grad} "
+                        f"positions_requires_grad={positions_for_forces.requires_grad}"
+                    )
+                    print(
+                        "    tensors: "
+                        f"edge_sh.requires_grad={edge_sh_epoch.requires_grad}, "
+                        f"edge_length_emb.requires_grad={edge_length_emb_epoch.requires_grad}"
+                    )
+
+                    grad_edge_sh = torch.autograd.grad(
+                        energy_for_forces,
+                        edge_sh_epoch,
+                        retain_graph=True,
+                        allow_unused=True,
+                    )[0]
+                    grad_edge_len = torch.autograd.grad(
+                        energy_for_forces,
+                        edge_length_emb_epoch,
+                        retain_graph=True,
+                        allow_unused=True,
+                    )[0]
+                    is_self_edge = (edge_index[0] == edge_index[1]) & (
+                        edge_shift == 0
+                    ).all(dim=0)
+                    is_offdiag_edge = ~is_self_edge
+
+                    # Probe gradients at matrix-block level.
+                    sample_h_key = next(
+                        iter(
+                            pred_matrix_metrics_by_name[
+                                "hamiltonian"
+                            ].pair_blocks.keys()
+                        )
+                    )
+                    sample_d_key = next(
+                        iter(pred_matrix_metrics_by_name["density"].pair_blocks.keys())
+                    )
+                    sample_h_block = pred_matrix_metrics_by_name[
+                        "hamiltonian"
+                    ].pair_blocks[sample_h_key]
+                    sample_d_block = pred_matrix_metrics_by_name["density"].pair_blocks[
+                        sample_d_key
+                    ]
+                    grad_h_block = torch.autograd.grad(
+                        energy_for_forces,
+                        sample_h_block,
+                        retain_graph=True,
+                        allow_unused=True,
+                    )[0]
+                    grad_d_block = torch.autograd.grad(
+                        energy_for_forces,
+                        sample_d_block,
+                        retain_graph=True,
+                        allow_unused=True,
+                    )[0]
+
+                    # Compare against unsymmetrized energy to isolate potential
+                    # cancellation introduced by matrix symmetrization.
+                    energy_for_forces_unsym = trace_matmul_sparse_block_matrix(
+                        pred_matrix_norm_by_name["hamiltonian"],
+                        pred_matrix_norm_by_name["density"],
+                    )
+                    grad_pos_unsym = torch.autograd.grad(
+                        energy_for_forces_unsym,
+                        positions_for_forces,
+                        retain_graph=True,
+                        allow_unused=True,
+                    )[0]
+
+                    print("    " + format_grad_stats("dE/d(edge_sh)", grad_edge_sh))
+                    print(
+                        "    "
+                        + format_grad_stats("dE/d(edge_length_emb)", grad_edge_len)
+                    )
+                    if grad_edge_sh is not None:
+                        if is_self_edge.any():
+                            print(
+                                "    "
+                                + format_grad_stats(
+                                    "dE/d(edge_sh)[self]",
+                                    grad_edge_sh[is_self_edge],
+                                )
+                            )
+                        if is_offdiag_edge.any():
+                            print(
+                                "    "
+                                + format_grad_stats(
+                                    "dE/d(edge_sh)[offdiag]",
+                                    grad_edge_sh[is_offdiag_edge],
+                                )
+                            )
+                    if grad_edge_len is not None:
+                        if is_self_edge.any():
+                            print(
+                                "    "
+                                + format_grad_stats(
+                                    "dE/d(edge_length_emb)[self]",
+                                    grad_edge_len[is_self_edge],
+                                )
+                            )
+                        if is_offdiag_edge.any():
+                            print(
+                                "    "
+                                + format_grad_stats(
+                                    "dE/d(edge_length_emb)[offdiag]",
+                                    grad_edge_len[is_offdiag_edge],
+                                )
+                            )
+                    print(
+                        "    " + format_grad_stats("dE/d(H_block_sample)", grad_h_block)
+                    )
+                    print(
+                        "    " + format_grad_stats("dE/d(D_block_sample)", grad_d_block)
+                    )
+                    print(
+                        "    "
+                        + format_grad_stats("dE_unsym/d(positions)", grad_pos_unsym)
+                    )
+                    if is_offdiag_edge.any():
+                        offdiag_idx = int(torch.where(is_offdiag_edge)[0][0].item())
+                        sh_comp_idx = 1 if edge_sh_epoch.shape[1] > 1 else 0
+                        probe_sh_scalar = edge_sh_epoch[offdiag_idx, sh_comp_idx]
+                        probe_sh_grad = torch.autograd.grad(
+                            probe_sh_scalar,
+                            positions_for_forces,
+                            retain_graph=True,
+                            allow_unused=True,
+                        )[0]
+                        probe_len_scalar = edge_length_emb_epoch[offdiag_idx, 0]
+                        probe_len_grad = torch.autograd.grad(
+                            probe_len_scalar,
+                            positions_for_forces,
+                            retain_graph=True,
+                            allow_unused=True,
+                        )[0]
+                        print(
+                            "    "
+                            + format_grad_stats(
+                                "d(edge_sh_offdiag_probe)/d(positions)",
+                                probe_sh_grad,
+                            )
+                        )
+                        print(
+                            "    "
+                            + format_grad_stats(
+                                "d(edge_len_offdiag_probe)/d(positions)",
+                                probe_len_grad,
+                            )
+                        )
                 grad_pos = torch.autograd.grad(
                     energy_for_forces,
                     positions_for_forces,
@@ -1950,10 +2138,15 @@ if __name__ == "__main__":
         pred_matrix_norm_by_name[matrix_name] = pred_irreps_by_name[
             matrix_name
         ].to_blocks(mapper)
-        pred_matrix_metrics_by_name[matrix_name] = (
-            pred_matrix_norm_by_name[matrix_name]
-            + pred_matrix_norm_by_name[matrix_name].transpose()
-        ) * 0.5
+        if CONFIG["symmetrize_preds"]:
+            pred_matrix_metrics_by_name[matrix_name] = (
+                pred_matrix_norm_by_name[matrix_name]
+                + pred_matrix_norm_by_name[matrix_name].transpose()
+            ) * 0.5
+        else:
+            pred_matrix_metrics_by_name[matrix_name] = pred_matrix_norm_by_name[
+                matrix_name
+            ]
 
     pred_H_matrix_metrics = pred_matrix_metrics_by_name["hamiltonian"]
 
