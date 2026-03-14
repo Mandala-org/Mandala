@@ -31,12 +31,6 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         if config["grad_clip"] > 0
         else "  Gradient clipping: disabled"
     )
-    partial_train = config.get("partial_train", None)
-    print(
-        f"  Partial training: {partial_train} blocks only"
-        if partial_train is not None
-        else "  Partial training: disabled (training on all blocks)"
-    )
     print(
         "  Train on irrep parts: enabled (decomposed per-irrep loss)"
         if config["train_on_irrep_parts"]
@@ -51,11 +45,6 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         "  Verbose forward pass: enabled (showing shapes and irreps)"
         if config["verbose_forward"]
         else "  Verbose forward pass: disabled"
-    )
-    print(
-        "  Block normalization: enabled (per-key, per-diagonal-status)"
-        if config.get("normalize_blocks", False)
-        else "  Block normalization: disabled"
     )
     print(
         f"  Separate shifted-self head: {'enabled' if config.get('separate_shifted_self', False) else 'disabled'}"
