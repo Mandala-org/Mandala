@@ -215,7 +215,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--l-max",
         type=int,
-        default=2,
+        default=4,
         help="Maximum angular momentum (used if --hidden-irreps not provided)",
     )
     parser.add_argument(

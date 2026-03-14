@@ -232,9 +232,10 @@ class MinimalEdgeEncoder(nn.Module):
         irreps_tp_out = irreps_scalars + irreps_gates + irreps_gated
 
         if self.use_sh_tensor_square:
-            self.sh_tensor_square = TensorSquare(
-                sh_irreps, irreps_out=Irreps(hidden_irreps)
-            )
+            # Keep SH TensorSquare bounded to hidden_irreps to avoid
+            # high-l blow-up in the edge encoder preprocessing path.
+            sh_ts_out_irreps = Irreps(hidden_irreps)
+            self.sh_tensor_square = TensorSquare(sh_irreps, irreps_out=sh_ts_out_irreps)
             tp_irreps_in2 = self.sh_tensor_square.irreps_out
         else:
             self.sh_tensor_square = None
@@ -660,7 +661,11 @@ class MinimalHead(nn.Module):
         self.output_dims = {}
 
         if self.need_tensor_square:
-            self.edge_tensor_square = TensorSquare(hidden_irreps)
+            # Keep head TensorSquare bounded to hidden_irreps to avoid
+            # unnecessary high-l expansion (e.g., up to l=8 for l_max=4 inputs).
+            self.edge_tensor_square = TensorSquare(
+                hidden_irreps, irreps_out=hidden_irreps
+            )
             ts_out_irreps = self.edge_tensor_square.irreps_out
         else:
             ts_out_irreps = None
