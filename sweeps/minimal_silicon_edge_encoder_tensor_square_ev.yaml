@@ -36,7 +36,7 @@ parameters:
   cutoff-radius:
     value: 7.5
   n-radial:
-    values: [64, 128]
+    values: [16, 32, 64]
   edge-encoder-use-sh-tensor-square:
     values: [true, false]
   train-on-irrep-parts:
@@ -51,9 +51,9 @@ parameters:
   grad-clip:
     values: [1.0, 0.0]
   lr-factor:
-    value: 0.5
+    value: 0.2
   lr-patience:
-    value: 400
+    value: 200
 
   device:
     value: cuda
