@@ -122,6 +122,16 @@ def _coerce_wandb_bool(name: str, value: object) -> bool:
     raise ValueError(f"Cannot coerce wandb.config['{name}']={value!r} to bool")
 
 
+def _get_wandb_config_value(name: str):
+    """Read config by canonical underscore key or sweep-style hyphen key."""
+    if name in wandb.config:
+        return wandb.config[name]
+    alias = name.replace("_", "-")
+    if alias in wandb.config:
+        return wandb.config[alias]
+    return None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Minimal silicon multi-snapshot study")
 
@@ -1209,14 +1219,19 @@ def main() -> None:
     device = torch.device(args.device)
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
 
-    wandb_kwargs = {"project": "mandala-minimal-silicon-study", "config": vars(args)}
+    is_sweep_run = bool(os.environ.get("WANDB_SWEEP_ID"))
+    wandb_kwargs = {"project": "mandala-minimal-silicon-study"}
+    if not is_sweep_run:
+        # For non-sweep runs, log full argparse namespace directly.
+        wandb_kwargs["config"] = vars(args)
     if args.run_name is not None:
         wandb_kwargs["name"] = args.run_name
     wandb.init(**wandb_kwargs)
 
     for name in STORE_TRUE_ARG_NAMES:
-        if name in wandb.config:
-            setattr(args, name, _coerce_wandb_bool(name, wandb.config[name]))
+        cfg_val = _get_wandb_config_value(name)
+        if cfg_val is not None:
+            setattr(args, name, _coerce_wandb_bool(name, cfg_val))
 
     config = {
         "data_path": str(data_root),
@@ -1271,8 +1286,6 @@ def main() -> None:
         "box_convention": "rows",
         "log_activations_wandb": False,
     }
-
-    wandb.config.update(config, allow_val_change=True)
 
     run_name = wandb.run.name
     run_checkpoint_dir = Path(args.checkpoint_dir) / run_name
