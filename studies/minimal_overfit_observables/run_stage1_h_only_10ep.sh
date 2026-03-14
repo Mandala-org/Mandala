@@ -35,7 +35,7 @@ python studies/minimal_overfit_observables/overfit_observables_minimal.py \
   --l-max 2 \
   --num-layers 2 \
   --n-radial 16 \
-  --cutoff-radius 7.5 \
+  --cutoff-radius 7 \
   --lr 0.01 \
   --num-epochs 10 \
   --log-interval 1 \
