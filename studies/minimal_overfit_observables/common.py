@@ -634,8 +634,14 @@ class MinimalHead(nn.Module):
         super().__init__()
         hidden_irreps = Irreps(hidden_irreps)
         self.mapper = mapper
-        self.magnitude_factorization = bool(magnitude_factorization)
-        self.head_mlp_for_scalars = bool(head_mlp_for_scalars)
+        if magnitude_factorization:
+            raise ValueError(
+                "magnitude_factorization is not supported in minimal_overfit_observables."
+            )
+        if head_mlp_for_scalars:
+            raise ValueError(
+                "head_mlp_for_scalars is not supported in minimal_overfit_observables."
+            )
         self.head_use_tensor_square = bool(head_use_tensor_square)
         self.separate_shifted_self = bool(separate_shifted_self)
         self.n_radial = int(n_radial)
@@ -645,22 +651,13 @@ class MinimalHead(nn.Module):
                 f"head_e3mlp_layers must be >= 1, got {self.head_e3mlp_layers}"
             )
         self.edge_types = list(mapper.edge_types)
-        self.need_tensor_square = bool(
-            self.head_use_tensor_square
-            or self.magnitude_factorization
-            or self.head_mlp_for_scalars
-        )
+        self.need_tensor_square = bool(self.head_use_tensor_square)
 
-        # Separate linear projections per edge type and diagonal status.
-        # If head_mlp_for_scalars=True, these projections predict only non-scalars.
+        # Separate projections per edge type and diagonal status.
         self.diag_projections = nn.ModuleDict()
         self.shifted_self_projections = nn.ModuleDict()
         self.offdiag_projections = nn.ModuleDict()
         self.output_dims = {}
-        self.scalar_output_dims = {}
-        self.non_scalar_output_dims = {}
-        self.term_dims = {}
-        self.term_is_scalar = {}
 
         if self.need_tensor_square:
             self.edge_tensor_square = TensorSquare(hidden_irreps)
@@ -668,38 +665,14 @@ class MinimalHead(nn.Module):
         else:
             ts_out_irreps = None
 
-        if self.magnitude_factorization:
-            self.magnitude_linears = nn.ModuleDict()
-            self.magnitude_mlps = nn.ModuleDict()
-        elif self.head_mlp_for_scalars:
-            self.scalar_aux_linears = nn.ModuleDict()
-
-        if self.head_mlp_for_scalars:
-            self.scalar_mlps = nn.ModuleDict()
-
         head_input_irreps = (
             ts_out_irreps if self.head_use_tensor_square else hidden_irreps
         )
 
         for edge_type in self.edge_types:
             pair_irreps = Irreps(mapper.get_pair_irreps(edge_type))
-            scalar_irreps = Irreps([(mul, ir) for mul, ir in pair_irreps if ir.l == 0])
-            non_scalar_irreps = Irreps(
-                [(mul, ir) for mul, ir in pair_irreps if ir.l > 0]
-            )
             self.output_dims[edge_type] = pair_irreps.dim
-            if self.head_mlp_for_scalars:
-                self.scalar_output_dims[edge_type] = scalar_irreps.dim
-                self.non_scalar_output_dims[edge_type] = non_scalar_irreps.dim
-            else:
-                self.scalar_output_dims[edge_type] = 0
-                self.non_scalar_output_dims[edge_type] = pair_irreps.dim
-            self.term_dims[edge_type] = [mul * ir.dim for mul, ir in pair_irreps]
-            self.term_is_scalar[edge_type] = [ir.l == 0 for _, ir in pair_irreps]
-
-            projection_irreps = (
-                non_scalar_irreps if self.head_mlp_for_scalars else pair_irreps
-            )
+            projection_irreps = pair_irreps
             if projection_irreps.dim > 0:
                 self.diag_projections[edge_type] = E3GateMLP(
                     head_input_irreps,
@@ -719,31 +692,6 @@ class MinimalHead(nn.Module):
                     projection_irreps,
                     num_layers=self.head_e3mlp_layers,
                     hidden_irreps=head_input_irreps,
-                )
-
-            if self.head_mlp_for_scalars and scalar_irreps.dim > 0:
-                self.scalar_mlps[edge_type] = nn.Sequential(
-                    nn.Linear(64 + self.n_radial, 128),
-                    nn.SiLU(),
-                    nn.Linear(128, 64),
-                    nn.SiLU(),
-                    nn.Linear(64, scalar_irreps.dim),
-                )
-
-            if self.magnitude_factorization:
-                self.magnitude_linears[edge_type] = Linear(
-                    ts_out_irreps, Irreps("64x0e")
-                )
-                self.magnitude_mlps[edge_type] = nn.Sequential(
-                    nn.Linear(64 + self.n_radial, 128),
-                    nn.SiLU(),
-                    nn.Linear(128, 64),
-                    nn.SiLU(),
-                    nn.Linear(64, 1),
-                )
-            elif self.head_mlp_for_scalars:
-                self.scalar_aux_linears[edge_type] = Linear(
-                    ts_out_irreps, Irreps("64x0e")
                 )
 
             if self.separate_shifted_self:
@@ -766,16 +714,6 @@ class MinimalHead(nn.Module):
                 print(
                     f"            head input pre-transform: TensorSquare({hidden_irreps}) -> {ts_out_irreps}"
                 )
-            if self.head_mlp_for_scalars:
-                print(
-                    f"            scalar branch: TensorSquare({hidden_irreps}) "
-                    f"-> Linear({ts_out_irreps} -> 64x0e) -> MLP(64+{self.n_radial} -> {scalar_irreps.dim})"
-                )
-            if self.magnitude_factorization:
-                print(
-                    f"            magnitude branch: TensorSquare({hidden_irreps}) "
-                    f"-> Linear({ts_out_irreps} -> 64x0e) -> MLP(64+{self.n_radial} -> 1) -> exp"
-                )
 
             # Check if Linear can produce all requested output irreps
             input_irreps = head_input_irreps
@@ -789,30 +727,6 @@ class MinimalHead(nn.Module):
                 print(
                     f"    [WARN] [{edge_type}] Cannot produce irreps {', '.join(set(missing_irreps))} from {hidden_irreps}"
                 )
-
-    def _merge_scalar_and_non_scalar(
-        self, type_str, scalar_vectors, non_scalar_vectors
-    ):
-        parts = []
-        scalar_offset = 0
-        non_scalar_offset = 0
-
-        for dim, is_scalar in zip(
-            self.term_dims[type_str], self.term_is_scalar[type_str]
-        ):
-            if is_scalar:
-                part = scalar_vectors[:, scalar_offset : scalar_offset + dim]
-                scalar_offset += dim
-            else:
-                part = non_scalar_vectors[
-                    :, non_scalar_offset : non_scalar_offset + dim
-                ]
-                non_scalar_offset += dim
-            parts.append(part)
-
-        if len(parts) == 0:
-            return scalar_vectors.new_zeros((scalar_vectors.shape[0], 0))
-        return torch.cat(parts, dim=-1)
 
     def forward(
         self,
@@ -836,7 +750,6 @@ class MinimalHead(nn.Module):
                 selected_feat = edge_feat[mask]
                 selected_edge_index = edge_index[:, mask]
                 selected_edge_shift = edge_shift[:, mask]
-                selected_edge_length_emb = edge_length_emb[mask]
                 if self.need_tensor_square:
                     ts_feat = self.edge_tensor_square(selected_feat)
                     check_for_nans(
@@ -848,8 +761,8 @@ class MinimalHead(nn.Module):
 
                 # Edge classes:
                 # - diag: i == j and zero shift
-                # - shifted_self: i == j and non-zero shift (optional separate head)
-                # - offdiag: i != j
+                # - shifted_self: i == j and non-zero shift (if separate head enabled)
+                # - offdiag: all remaining edges
                 is_same_atom = selected_edge_index[0] == selected_edge_index[1]
                 is_zero_shift = (selected_edge_shift == 0).all(dim=0)
                 is_diag = is_same_atom & is_zero_shift
@@ -860,16 +773,14 @@ class MinimalHead(nn.Module):
                     is_shifted_self = torch.zeros_like(is_diag, dtype=torch.bool)
                     is_offdiag = ~is_diag
 
-                pred_non_scalar = torch.empty(
-                    (selected_feat.shape[0], self.non_scalar_output_dims[type_str]),
+                pred_vectors = torch.empty(
+                    (selected_feat.shape[0], self.output_dims[type_str]),
                     device=selected_feat.device,
                     dtype=selected_feat.dtype,
                 )
 
-                if self.non_scalar_output_dims[type_str] == 0:
-                    pred_non_scalar = selected_feat.new_zeros(
-                        (selected_feat.shape[0], 0)
-                    )
+                if self.output_dims[type_str] == 0:
+                    pred_vectors = selected_feat.new_zeros((selected_feat.shape[0], 0))
                 else:
                     if is_diag.any():
                         diag_vectors = self.diag_projections[type_str](
@@ -880,7 +791,7 @@ class MinimalHead(nn.Module):
                             f"Head.{type_str}_diag_projection",
                             head_feat[is_diag],
                         )
-                        pred_non_scalar[is_diag] = diag_vectors
+                        pred_vectors[is_diag] = diag_vectors
 
                     if is_shifted_self.any():
                         shifted_self_vectors = self.shifted_self_projections[type_str](
@@ -891,7 +802,7 @@ class MinimalHead(nn.Module):
                             f"Head.{type_str}_shifted_self_projection",
                             head_feat[is_shifted_self],
                         )
-                        pred_non_scalar[is_shifted_self] = shifted_self_vectors
+                        pred_vectors[is_shifted_self] = shifted_self_vectors
 
                     if is_offdiag.any():
                         offdiag_vectors = self.offdiag_projections[type_str](
@@ -902,39 +813,7 @@ class MinimalHead(nn.Module):
                             f"Head.{type_str}_offdiag_projection",
                             head_feat[is_offdiag],
                         )
-                        pred_non_scalar[is_offdiag] = offdiag_vectors
-
-                aux_mlp_in = None
-                if self.magnitude_factorization or self.head_mlp_for_scalars:
-                    if self.magnitude_factorization:
-                        aux_scalar_feat = self.magnitude_linears[type_str](ts_feat)
-                    else:
-                        aux_scalar_feat = self.scalar_aux_linears[type_str](ts_feat)
-                    check_for_nans(
-                        aux_scalar_feat, f"Head.{type_str}_aux_linear", ts_feat
-                    )
-
-                    aux_mlp_in = torch.cat(
-                        [aux_scalar_feat, selected_edge_length_emb], dim=-1
-                    )
-
-                if self.head_mlp_for_scalars:
-                    if self.scalar_output_dims[type_str] > 0:
-                        pred_scalar = self.scalar_mlps[type_str](aux_mlp_in)
-                        check_for_nans(
-                            pred_scalar,
-                            f"Head.{type_str}_scalar_mlp",
-                            aux_mlp_in,
-                        )
-                    else:
-                        pred_scalar = selected_feat.new_zeros(
-                            (selected_feat.shape[0], 0)
-                        )
-                    pred_vectors = self._merge_scalar_and_non_scalar(
-                        type_str, pred_scalar, pred_non_scalar
-                    )
-                else:
-                    pred_vectors = pred_non_scalar
+                        pred_vectors[is_offdiag] = offdiag_vectors
 
                 # Build 5D edge tensor (sx, sy, sz, i, j)
                 selected_edges = torch.cat(
@@ -945,26 +824,10 @@ class MinimalHead(nn.Module):
                     dim=0,
                 )  # (5, E')
 
-                if self.magnitude_factorization:
-                    mag_raw = self.magnitude_mlps[type_str](aux_mlp_in).squeeze(-1)
-                    check_for_nans(
-                        mag_raw,
-                        f"Head.{type_str}_magnitude_mlp",
-                        aux_mlp_in,
-                    )
-                    pred_magnitudes = torch.exp(mag_raw)
-                    check_for_nans(
-                        pred_magnitudes,
-                        f"Head.{type_str}_magnitude_exp",
-                        mag_raw,
-                    )
-
                 outputs[type_str] = {
                     "vectors": pred_vectors,
                     "edges": selected_edges,
                 }
-                if self.magnitude_factorization:
-                    outputs[type_str]["magnitudes"] = pred_magnitudes
                 if self.separate_shifted_self:
                     if verbose:
                         print(
@@ -980,12 +843,6 @@ class MinimalHead(nn.Module):
                             f"      [Head.forward] {type_str}: {mask.sum().item()} edges "
                             f"({int(is_diag.sum().item())} diag, {int(is_offdiag.sum().item())} offdiag) "
                             f"-> vectors {pred_vectors.shape}"
-                        )
-                if self.magnitude_factorization:
-                    if verbose:
-                        print(
-                            f"                    magnitude -> {pred_magnitudes.shape} "
-                            f"(min={pred_magnitudes.min().item():.3e}, max={pred_magnitudes.max().item():.3e})"
                         )
 
         return outputs
@@ -1011,9 +868,17 @@ class MinimalNetwork(nn.Module):
         head_use_tensor_square=False,
         separate_shifted_self=False,
         use_e3layernorm=True,
-        verbose=True,  # Default True for backward compatibility
+        verbose=True,
     ):
         super().__init__()
+        if magnitude_factorization:
+            raise ValueError(
+                "magnitude_factorization is not supported in minimal_overfit_observables."
+            )
+        if head_mlp_for_scalars:
+            raise ValueError(
+                "head_mlp_for_scalars is not supported in minimal_overfit_observables."
+            )
         self.verbose = verbose
         self.matrix_targets = (
             list(matrix_targets) if matrix_targets is not None else ["hamiltonian"]
@@ -1869,8 +1734,7 @@ def filter_blocks_by_partial_train(
     Args:
         block_matrix: BlockMatrix object
         partial_train: "diag", "offdiag", "shifted_self", or None
-        separate_shifted_self: if True, "offdiag" means only i!=j.
-            If False, "offdiag" keeps legacy behavior (all non-diagonal blocks).
+        separate_shifted_self: retained for compatibility; not used.
 
     Returns:
         Dictionary mapping edge_type -> (filtered_blocks, mask)
@@ -1900,10 +1764,7 @@ def filter_blocks_by_partial_train(
         elif partial_train == "shifted_self":
             mask = shifted_self_mask
         elif partial_train == "offdiag":
-            if separate_shifted_self:
-                mask = i != j
-            else:
-                mask = ~diag_mask
+            mask = i != j
         else:
             mask = torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device)
 

@@ -2183,7 +2183,8 @@ if __name__ == "__main__":
             "mae_H": history["mae_H"][-1],
             "config": CONFIG,
             "history": history,
-            "final_metrics": final_detailed_metrics,
+            "final_metrics": final_metrics,
+            "final_metrics_hamiltonian_detailed": final_detailed_metrics,
         },
         final_model_path,
     )
