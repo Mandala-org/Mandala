@@ -47,6 +47,7 @@ import wandb
 from common import (
     MinimalNetwork,
     canonicalize_edge_order,
+    compute_basic_matrix_metrics,
     compute_detailed_metrics,
     compute_distance_error_curve,
     save_distance_error_curve_plot,
@@ -620,6 +621,13 @@ if __name__ == "__main__":
     # Create frame output directory for video frames
     frame_output_dir = run_checkpoint_dir / "frames"
     frame_output_dir.mkdir(parents=True, exist_ok=True)
+    matrix_frame_output_dirs = {
+        "hamiltonian": run_checkpoint_dir / "frames_hamiltonian",
+        "overlap": run_checkpoint_dir / "frames_overlap",
+        "density": run_checkpoint_dir / "frames_density",
+    }
+    for d in matrix_frame_output_dirs.values():
+        d.mkdir(parents=True, exist_ok=True)
     log_config(CONFIG, run_checkpoint_dir, frame_output_dir)
 
     device = torch.device(CONFIG["device"])
@@ -1343,7 +1351,11 @@ if __name__ == "__main__":
     # =============================================================================
     if CONFIG["log_model"]:
         print("\n[IRREP DECOMPOSITION] Converting target to irreps space...")
-    target_H_irreps = target_H_matrix.to_vectors(mapper)
+    target_irreps_by_name = {
+        matrix_name: target_matrices[matrix_name].to_vectors(mapper)
+        for matrix_name in CONFIG["matrix_targets"]
+    }
+    target_H_irreps = target_irreps_by_name["hamiltonian"]
     if CONFIG["magnitude_factorization"]:
         target_H_irreps_normalized = target_H_matrix_normalized.to_vectors(mapper)
     else:
@@ -2128,6 +2140,13 @@ if __name__ == "__main__":
                 detailed_metrics = compute_detailed_metrics(
                     pred_filtered, target_filtered, overlap_filtered
                 )
+                matrix_basic_metrics = {
+                    matrix_name: compute_basic_matrix_metrics(
+                        pred_matrix_metrics_by_name[matrix_name],
+                        target_matrices[matrix_name],
+                    )
+                    for matrix_name in CONFIG["matrix_targets"]
+                }
 
                 # mae_H for history
                 mae_H = detailed_metrics["mae"]
@@ -2195,13 +2214,34 @@ if __name__ == "__main__":
                     benchmark_epochs_accum = 0
 
                 # Log to WandB
-                wandb.log(
-                    build_wandb_detailed_metrics_log(
-                        epoch_zero_based=epoch,
-                        loss_value=loss.item(),
-                        detailed_metrics=detailed_metrics,
-                    )
+                periodic_metrics_payload = build_wandb_detailed_metrics_log(
+                    epoch_zero_based=epoch,
+                    loss_value=loss.item(),
+                    detailed_metrics=detailed_metrics,
                 )
+                # Replicate basic matrix metrics for all trained targets.
+                if "hamiltonian" in matrix_basic_metrics:
+                    periodic_metrics_payload["mae_H"] = matrix_basic_metrics[
+                        "hamiltonian"
+                    ]["mae"]
+                    periodic_metrics_payload["mse_H"] = matrix_basic_metrics[
+                        "hamiltonian"
+                    ]["mse"]
+                if "overlap" in matrix_basic_metrics:
+                    periodic_metrics_payload["mae_S"] = matrix_basic_metrics["overlap"][
+                        "mae"
+                    ]
+                    periodic_metrics_payload["mse_S"] = matrix_basic_metrics["overlap"][
+                        "mse"
+                    ]
+                if "density" in matrix_basic_metrics:
+                    periodic_metrics_payload["mae_D"] = matrix_basic_metrics["density"][
+                        "mae"
+                    ]
+                    periodic_metrics_payload["mse_D"] = matrix_basic_metrics["density"][
+                        "mse"
+                    ]
+                wandb.log(periodic_metrics_payload)
 
                 # Save best model
                 if loss.item() < best_loss:
@@ -2224,44 +2264,72 @@ if __name__ == "__main__":
                         f"[OK] Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
-                pred_H_irreps_metrics = pred_H_matrix_metrics.to_vectors(mapper)
-                per_irrep_metrics = compute_irrep_metrics(
-                    pred_H_irreps_metrics, target_H_irreps, all_irreps, mapper
-                )
-                if CONFIG["log_per_irrep_metrics"]:
-                    log_per_irrep_metrics(
-                        "Per-Irrep Metrics (Element, Block, and Full Matrix):",
+                irrep_prefix_by_matrix = {
+                    "hamiltonian": "H_",
+                    "overlap": "S_",
+                    "density": "D_",
+                }
+                for matrix_name in CONFIG["matrix_targets"]:
+                    pred_irreps_metrics = pred_matrix_metrics_by_name[
+                        matrix_name
+                    ].to_vectors(mapper)
+                    per_irrep_metrics = compute_irrep_metrics(
+                        pred_irreps_metrics,
+                        target_irreps_by_name[matrix_name],
                         all_irreps,
-                        per_irrep_metrics,
+                        mapper,
                     )
-                wandb.log(
-                    build_wandb_per_irrep_metrics_log(
-                        epoch_zero_based=epoch,
-                        all_irreps=all_irreps,
-                        per_irrep_metrics=per_irrep_metrics,
+                    metric_prefix = irrep_prefix_by_matrix.get(matrix_name, "")
+                    if CONFIG["log_per_irrep_metrics"]:
+                        log_per_irrep_metrics(
+                            f"Per-Irrep Metrics ({matrix_name}, block only):",
+                            all_irreps,
+                            per_irrep_metrics,
+                            metric_prefix=metric_prefix,
+                        )
+                    wandb.log(
+                        build_wandb_per_irrep_metrics_log(
+                            epoch_zero_based=epoch,
+                            all_irreps=all_irreps,
+                            per_irrep_metrics=per_irrep_metrics,
+                            metric_prefix=metric_prefix,
+                        )
                     )
-                )
 
                 # Save frame for video at every log interval
-                try:
-                    save_hamiltonian_frame_to_disk(
-                        pred_H_matrix_metrics,
-                        target_H_matrix,
-                        overlap_e3nn,
-                        list(snapshot.hamiltonian.atoms),
-                        orbital_cfg,
-                        frame_output_dir,
-                        epoch,
-                        sx=0,
-                        sy=0,
-                        sz=0,
-                        dynamic_range=False,
-                        diff_dynamic_range=True,
-                        partial_train=None,
-                        percentile=99.0,
-                    )
-                except Exception as e:
-                    print(f"[WARN] Could not save frame for epoch {epoch}: {e}")
+                for matrix_name in CONFIG["matrix_targets"]:
+                    try:
+                        pred_matrix_curr = pred_matrix_metrics_by_name[matrix_name]
+                        target_matrix_curr = target_matrices[matrix_name]
+                        correction_overlap = (
+                            overlap_e3nn if matrix_name == "hamiltonian" else None
+                        )
+                        label = (
+                            "H"
+                            if matrix_name == "hamiltonian"
+                            else ("S" if matrix_name == "overlap" else "D")
+                        )
+                        save_hamiltonian_frame_to_disk(
+                            pred_matrix_curr,
+                            target_matrix_curr,
+                            correction_overlap,
+                            list(snapshot.hamiltonian.atoms),
+                            orbital_cfg,
+                            matrix_frame_output_dirs[matrix_name],
+                            epoch,
+                            sx=0,
+                            sy=0,
+                            sz=0,
+                            dynamic_range=False,
+                            diff_dynamic_range=True,
+                            partial_train=None,
+                            percentile=99.0,
+                            matrix_label=label,
+                        )
+                    except Exception as e:
+                        print(
+                            f"[WARN] Could not save {matrix_name} frame for epoch {epoch}: {e}"
+                        )
 
                 # Check for convergence
                 if loss.item() < 1e-10:
@@ -2433,6 +2501,13 @@ if __name__ == "__main__":
         final_detailed_metrics = compute_detailed_metrics(
             pred_filtered, target_filtered, overlap_filtered
         )
+        final_basic_metrics_by_name = {
+            matrix_name: compute_basic_matrix_metrics(
+                pred_matrix_metrics_by_name[matrix_name],
+                target_matrices[matrix_name],
+            )
+            for matrix_name in CONFIG["matrix_targets"]
+        }
 
         log_final_metrics(final_detailed_metrics)
 
@@ -2445,6 +2520,12 @@ if __name__ == "__main__":
             "final/correction_mae": final_detailed_metrics["correction_mae"],
             "final/correction_mse": final_detailed_metrics["correction_mse"],
         }
+        if "overlap" in final_basic_metrics_by_name:
+            final_metrics["final/mae_S"] = final_basic_metrics_by_name["overlap"]["mae"]
+            final_metrics["final/mse_S"] = final_basic_metrics_by_name["overlap"]["mse"]
+        if "density" in final_basic_metrics_by_name:
+            final_metrics["final/mae_D"] = final_basic_metrics_by_name["density"]["mae"]
+            final_metrics["final/mse_D"] = final_basic_metrics_by_name["density"]["mse"]
 
         if (
             CONFIG["enable_energy"]
@@ -2565,26 +2646,36 @@ if __name__ == "__main__":
         # Log final metrics to WandB
         wandb.log(final_metrics)
 
-        # Distance-binned error curves (16 bins)
+        # Distance-binned error curves (16 bins) for all targets
         print("\n  Distance-binned error curves (16 bins):")
-        distance_curve = compute_distance_error_curve(
-            H_pred=pred_H_matrix_metrics,
-            H_gt=target_H_matrix,
-            positions=positions,
-            box=box,
-            partial_train=None,
-            n_bins=16,
-        )
-        if distance_curve is not None:
-            curve_json_path = run_checkpoint_dir / "distance_error_curve.json"
+        matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+        for matrix_name in CONFIG["matrix_targets"]:
+            print(f"    [{matrix_name}]")
+            distance_curve = compute_distance_error_curve(
+                H_pred=pred_matrix_metrics_by_name[matrix_name],
+                H_gt=target_matrices[matrix_name],
+                positions=positions,
+                box=box,
+                partial_train=None,
+                n_bins=16,
+            )
+            if distance_curve is None:
+                print("      No matched edges found for distance-curve computation.")
+                continue
+
+            curve_json_path = (
+                run_checkpoint_dir / f"distance_error_curve_{matrix_name}.json"
+            )
             with open(curve_json_path, "w") as f:
                 json.dump(distance_curve, f, indent=2)
 
-            curve_plot_path = run_checkpoint_dir / "distance_error_curve.png"
+            curve_plot_path = (
+                run_checkpoint_dir / f"distance_error_curve_{matrix_name}.png"
+            )
             save_distance_error_curve_plot(
                 distance_curve,
                 curve_plot_path,
-                title="Distance Error Curves (Final, 16 bins)",
+                title=f"Distance Error Curves ({matrix_name}, Final, 16 bins)",
             )
 
             # Print a concise summary
@@ -2594,23 +2685,22 @@ if __name__ == "__main__":
             l2_rel = [x for x in distance_curve["l2_rel"] if x == x]
             if l1_abs and l2_abs and l1_rel and l2_rel:
                 print(
-                    f"    L1 abs range: {min(l1_abs):.3e} .. {max(l1_abs):.3e}, "
+                    f"      L1 abs range: {min(l1_abs):.3e} .. {max(l1_abs):.3e}, "
                     f"L2 abs range: {min(l2_abs):.3e} .. {max(l2_abs):.3e}"
                 )
                 print(
-                    f"    L1 rel range: {min(l1_rel):.3e} .. {max(l1_rel):.3e}, "
+                    f"      L1 rel range: {min(l1_rel):.3e} .. {max(l1_rel):.3e}, "
                     f"L2 rel range: {min(l2_rel):.3e} .. {max(l2_rel):.3e}"
                 )
 
+            alias = matrix_alias.get(matrix_name, matrix_name)
             wandb.log(
                 {
-                    "distance_curve/plot": wandb.Image(str(curve_plot_path)),
+                    f"distance_curve/{alias}_plot": wandb.Image(str(curve_plot_path)),
                 }
             )
-            print(f"    Saved: {curve_json_path}")
-            print(f"    Saved: {curve_plot_path}")
-        else:
-            print("    No matched edges found for distance-curve computation.")
+            print(f"      Saved: {curve_json_path}")
+            print(f"      Saved: {curve_plot_path}")
 
         # Per-irrep visualizations (k-range=0)
         if CONFIG["log_per_irrep_images"]:
@@ -2690,29 +2780,35 @@ if __name__ == "__main__":
         print("=" * 80)
         print("FINAL VIDEO GENERATION")
         print("=" * 80)
-        try:
-            video_path = run_checkpoint_dir / "training_progress.mp4"
-            if (frame_output_dir).glob("frame_epoch_*.png"):
+        matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+        for matrix_name in CONFIG["matrix_targets"]:
+            try:
+                frame_dir = matrix_frame_output_dirs[matrix_name]
+                if not any(frame_dir.glob("frame_epoch_*.png")):
+                    print(
+                        f"[WARN] No frames found for {matrix_name} video generation in {frame_dir}"
+                    )
+                    continue
+
+                video_path = run_checkpoint_dir / f"training_progress_{matrix_name}.mp4"
                 compile_frames_to_video(
-                    frame_output_dir,
+                    frame_dir,
                     video_path,
                     fps=5,
                     pattern="frame_epoch_*.png",
                     format="mp4",
                 )
-                # Log final video to WandB (same key, overwrites previous)
+                alias = matrix_alias.get(matrix_name, matrix_name)
                 wandb.log(
                     {
-                        "training_video": wandb.Video(
+                        f"training_video_{alias}": wandb.Video(
                             str(video_path), fps=5, format="mp4"
                         )
                     }
                 )
-                print("[OK] Training video logged to WandB")
-            else:
-                print("[WARN] No frames found for video generation")
-        except Exception as e:
-            print(f"[WARN] Could not generate final video: {e}")
+                print(f"[OK] {matrix_name} training video logged to WandB")
+            except Exception as e:
+                print(f"[WARN] Could not generate final video for {matrix_name}: {e}")
     else:
         print("")
         print("=" * 80)

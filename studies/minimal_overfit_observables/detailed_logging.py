@@ -161,27 +161,21 @@ def log_graph(
     print(f"  Self-edge distances: {edge_dist[:num_self_edges]}")
 
 
-def log_per_irrep_metrics(title: str, all_irreps, per_irrep_metrics: dict) -> None:
+def log_per_irrep_metrics(
+    title: str, all_irreps, per_irrep_metrics: dict, metric_prefix: str = ""
+) -> None:
     print(f"\n  {title}")
     for irrep in sorted(all_irreps, key=str):
         irrep_str = str(irrep)
-        l1_elem = per_irrep_metrics.get(f"{irrep_str}_l1_elem", 0.0)
-        l2_elem = per_irrep_metrics.get(f"{irrep_str}_l2_elem", 0.0)
-        l1_block = per_irrep_metrics.get(f"{irrep_str}_l1_block", 0.0)
+        l1_block = per_irrep_metrics.get(f"{irrep_str}_l1_block_abs", 0.0)
         l1_block_rel = per_irrep_metrics.get(f"{irrep_str}_l1_block_rel", 0.0)
-        l2_block = per_irrep_metrics.get(f"{irrep_str}_l2_block", 0.0)
+        l2_block = per_irrep_metrics.get(f"{irrep_str}_l2_block_abs", 0.0)
         l2_block_rel = per_irrep_metrics.get(f"{irrep_str}_l2_block_rel", 0.0)
-        l1_full_rel = per_irrep_metrics.get(f"{irrep_str}_l1_full_rel", 0.0)
-        l2_full_rel = per_irrep_metrics.get(f"{irrep_str}_l2_full_rel", 0.0)
 
-        print(f"    {irrep_str:4s}:")
-        print(f"      Element-level: L1(MAE)={l1_elem:.3e} L2(RMSE)={l2_elem:.3e}")
+        print(f"    {metric_prefix}{irrep_str:4s}:")
         print(
-            f"      Block-level:   L1={l1_block:.3e} (rel={l1_block_rel:.3%}), "
-            f"L2={l2_block:.3e} (rel={l2_block_rel:.3%})"
-        )
-        print(
-            f"      Full-matrix:   L1_rel={l1_full_rel:.3%}, L2_rel={l2_full_rel:.3%}"
+            f"      Block-level:   L1_abs={l1_block:.3e} (rel={l1_block_rel:.3%}), "
+            f"L2_abs={l2_block:.3e} (rel={l2_block_rel:.3%})"
         )
 
 
@@ -321,34 +315,26 @@ def build_wandb_detailed_metrics_log(
 
 
 def build_wandb_per_irrep_metrics_log(
-    epoch_zero_based: int, all_irreps, per_irrep_metrics: dict
+    epoch_zero_based: int,
+    all_irreps,
+    per_irrep_metrics: dict,
+    metric_prefix: str = "",
 ) -> dict:
     payload = {"epoch": epoch_zero_based}
     for irrep in sorted(all_irreps, key=str):
         irrep_str = str(irrep)
-        payload[f"irrep_metrics/{irrep_str}_l1_elem"] = per_irrep_metrics.get(
-            f"{irrep_str}_l1_elem", 0.0
+        prefix_ir = f"{metric_prefix}{irrep_str}"
+        payload[f"irrep_metrics/{prefix_ir}_l1_block_abs"] = per_irrep_metrics.get(
+            f"{irrep_str}_l1_block_abs", 0.0
         )
-        payload[f"irrep_metrics/{irrep_str}_l2_elem"] = per_irrep_metrics.get(
-            f"{irrep_str}_l2_elem", 0.0
-        )
-        payload[f"irrep_metrics/{irrep_str}_l1_block"] = per_irrep_metrics.get(
-            f"{irrep_str}_l1_block", 0.0
-        )
-        payload[f"irrep_metrics/{irrep_str}_l1_block_rel"] = per_irrep_metrics.get(
+        payload[f"irrep_metrics/{prefix_ir}_l1_block_rel"] = per_irrep_metrics.get(
             f"{irrep_str}_l1_block_rel", 0.0
         )
-        payload[f"irrep_metrics/{irrep_str}_l2_block"] = per_irrep_metrics.get(
-            f"{irrep_str}_l2_block", 0.0
+        payload[f"irrep_metrics/{prefix_ir}_l2_block_abs"] = per_irrep_metrics.get(
+            f"{irrep_str}_l2_block_abs", 0.0
         )
-        payload[f"irrep_metrics/{irrep_str}_l2_block_rel"] = per_irrep_metrics.get(
+        payload[f"irrep_metrics/{prefix_ir}_l2_block_rel"] = per_irrep_metrics.get(
             f"{irrep_str}_l2_block_rel", 0.0
-        )
-        payload[f"irrep_metrics/{irrep_str}_l1_full_rel"] = per_irrep_metrics.get(
-            f"{irrep_str}_l1_full_rel", 0.0
-        )
-        payload[f"irrep_metrics/{irrep_str}_l2_full_rel"] = per_irrep_metrics.get(
-            f"{irrep_str}_l2_full_rel", 0.0
         )
     return payload
 
