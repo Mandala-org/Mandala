@@ -492,6 +492,24 @@ if __name__ == "__main__":
     torch_dtype = getattr(torch, args.dtype)
     torch.set_default_dtype(torch_dtype)
 
+    def summarize_zero_stats(tensor: torch.Tensor, zero_tol: float = 1e-12) -> dict:
+        t = tensor.detach()
+        abs_t = torch.abs(t)
+        numel = int(t.numel())
+        exact_nonzero = int(torch.count_nonzero(t).item())
+        tol_nonzero = int((abs_t > zero_tol).sum().item())
+        return {
+            "numel": numel,
+            "exact_nonzero": exact_nonzero,
+            "tol_nonzero": tol_nonzero,
+            "all_exact_zero": exact_nonzero == 0,
+            "all_tol_zero": tol_nonzero == 0,
+            "abs_min": float(abs_t.min().item()) if numel > 0 else 0.0,
+            "abs_max": float(abs_t.max().item()) if numel > 0 else 0.0,
+            "abs_mean": float(abs_t.mean().item()) if numel > 0 else 0.0,
+            "abs_std": float(abs_t.std().item()) if numel > 1 else 0.0,
+        }
+
     # =============================================================================
     # CONFIGURATION
     # =============================================================================
@@ -768,6 +786,19 @@ if __name__ == "__main__":
         force_scale = CONFIG["hamiltonian_scale_from_hartree"] / BOHR_TO_ANGSTROM
         forces_target = (
             snapshot.forces.to(device=device, dtype=torch_dtype) * force_scale
+        )
+        target_force_stats = summarize_zero_stats(forces_target)
+        print(
+            "[FORCES TARGET] "
+            f"numel={target_force_stats['numel']} "
+            f"exact_nonzero={target_force_stats['exact_nonzero']} "
+            f"tol_nonzero(>{1e-12:.0e})={target_force_stats['tol_nonzero']} "
+            f"all_exact_zero={target_force_stats['all_exact_zero']} "
+            f"all_tol_zero={target_force_stats['all_tol_zero']} "
+            f"|F|min={target_force_stats['abs_min']:.6e} "
+            f"|F|max={target_force_stats['abs_max']:.6e} "
+            f"|F|mean={target_force_stats['abs_mean']:.6e} "
+            f"|F|std={target_force_stats['abs_std']:.6e}"
         )
     if CONFIG["log_model"]:
         print("  Target matrix blocks:")
@@ -1221,6 +1252,8 @@ if __name__ == "__main__":
 
     print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
     print(f"Training for {CONFIG['num_epochs']} epochs...\n")
+    last_logged_forces_mae = None
+    last_logged_forces_mse = None
 
     try:
         for epoch in range(CONFIG["num_epochs"]):
@@ -1299,14 +1332,12 @@ if __name__ == "__main__":
                 for key, payload in raw_matrix.items():
                     pair_vec[key] = payload["vectors"]
                     pair_edges_dict[key] = payload["edges"]
-
-                    if should_log_now:
-                        for idx, edge_5d in enumerate(payload["edges"].t()):
-                            sx, sy, sz, i, j = edge_5d.tolist()
-                            lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
-                                key,
-                                idx,
-                            )
+                    for idx, edge_5d in enumerate(payload["edges"].t()):
+                        sx, sy, sz, i, j = edge_5d.tolist()
+                        lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
+                            key,
+                            idx,
+                        )
 
                 pair_vectors_by_name[matrix_name] = pair_vec
                 pred_irreps_by_name[matrix_name] = IrrepsBlockData(
@@ -1504,6 +1535,42 @@ if __name__ == "__main__":
                 forces_err = forces_pred - forces_target
                 forces_mae = torch.mean(torch.abs(forces_err))
                 forces_mse = torch.mean(forces_err**2)
+                if should_log_now:
+                    pred_force_stats = summarize_zero_stats(forces_pred)
+                    target_force_stats = summarize_zero_stats(forces_target)
+                    mae_curr = float(forces_mae.item())
+                    mse_curr = float(forces_mse.item())
+                    mae_delta = (
+                        float("nan")
+                        if last_logged_forces_mae is None
+                        else mae_curr - last_logged_forces_mae
+                    )
+                    mse_delta = (
+                        float("nan")
+                        if last_logged_forces_mse is None
+                        else mse_curr - last_logged_forces_mse
+                    )
+                    print(
+                        f"  [FORCES DEBUG][epoch {epoch + 1}] "
+                        f"mae_F={mae_curr:.6e} (delta={mae_delta:+.3e}) "
+                        f"mse_F={mse_curr:.6e} (delta={mse_delta:+.3e})"
+                    )
+                    print(
+                        "    target: "
+                        f"exact_nonzero={target_force_stats['exact_nonzero']}/{target_force_stats['numel']} "
+                        f"all_exact_zero={target_force_stats['all_exact_zero']} "
+                        f"|F|mean={target_force_stats['abs_mean']:.6e} "
+                        f"|F|max={target_force_stats['abs_max']:.6e}"
+                    )
+                    print(
+                        "    pred:   "
+                        f"exact_nonzero={pred_force_stats['exact_nonzero']}/{pred_force_stats['numel']} "
+                        f"all_exact_zero={pred_force_stats['all_exact_zero']} "
+                        f"|F|mean={pred_force_stats['abs_mean']:.6e} "
+                        f"|F|max={pred_force_stats['abs_max']:.6e}"
+                    )
+                    last_logged_forces_mae = mae_curr
+                    last_logged_forces_mse = mse_curr
                 if CONFIG["train_on_forces"]:
                     loss_forces_weighted = CONFIG["loss_coef_forces"] * forces_mse
 
@@ -1981,12 +2048,28 @@ if __name__ == "__main__":
         forces_err_eval = forces_pred_eval - forces_target
         forces_mae_eval = torch.mean(torch.abs(forces_err_eval))
         forces_mse_eval = torch.mean(forces_err_eval**2)
+        pred_force_stats_eval = summarize_zero_stats(forces_pred_eval)
+        target_force_stats_eval = summarize_zero_stats(forces_target)
         final_metrics["final/mae_F"] = float(forces_mae_eval.item())
         final_metrics["final/mse_F"] = float(forces_mse_eval.item())
         print(
             "  Forces: "
             f"mae={float(forces_mae_eval.item()):.8e}, "
             f"mse={float(forces_mse_eval.item()):.8e}"
+        )
+        print(
+            "    [FORCES DEBUG][final target] "
+            f"exact_nonzero={target_force_stats_eval['exact_nonzero']}/{target_force_stats_eval['numel']} "
+            f"all_exact_zero={target_force_stats_eval['all_exact_zero']} "
+            f"|F|mean={target_force_stats_eval['abs_mean']:.6e} "
+            f"|F|max={target_force_stats_eval['abs_max']:.6e}"
+        )
+        print(
+            "    [FORCES DEBUG][final pred]   "
+            f"exact_nonzero={pred_force_stats_eval['exact_nonzero']}/{pred_force_stats_eval['numel']} "
+            f"all_exact_zero={pred_force_stats_eval['all_exact_zero']} "
+            f"|F|mean={pred_force_stats_eval['abs_mean']:.6e} "
+            f"|F|max={pred_force_stats_eval['abs_max']:.6e}"
         )
 
     # DOS comparison
