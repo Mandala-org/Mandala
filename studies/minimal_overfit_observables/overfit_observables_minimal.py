@@ -753,6 +753,52 @@ if __name__ == "__main__":
     target_overlap_matrix = target_matrices_all["overlap"]
     target_density_matrix = target_matrices_all["density"]
 
+    def compute_block_matrix_max_distance(block_matrix) -> float:
+        max_dist = 0.0
+        for edges_5d in block_matrix.pair_edges.values():
+            if edges_5d.shape[1] == 0:
+                continue
+            src = edges_5d[3].long()
+            dst = edges_5d[4].long()
+            if box is not None:
+                shift_float = edges_5d[:3].T.to(dtype=positions.dtype)
+                edge_vec_local = positions[dst] - positions[src] + shift_float @ box
+            else:
+                edge_vec_local = positions[dst] - positions[src]
+            edge_dist_local = torch.linalg.norm(edge_vec_local, dim=1)
+            if edge_dist_local.numel() > 0:
+                max_dist = max(max_dist, float(edge_dist_local.max().item()))
+        return max_dist
+
+    # With strict exact edge checks enabled, graph cutoff cannot exceed what is
+    # present in target matrices; otherwise graph contains extra edges by design.
+    target_max_by_matrix = {
+        "hamiltonian": compute_block_matrix_max_distance(target_H_matrix),
+        "overlap": compute_block_matrix_max_distance(overlap_e3nn),
+        "density": compute_block_matrix_max_distance(density_e3nn),
+    }
+    if CONFIG["log_data"]:
+        print("\n  Target max edge distance by matrix:")
+        for name, max_dist in target_max_by_matrix.items():
+            print(f"    {name}: {max_dist:.6f} A")
+    if CONFIG["require_exact_edge_match"]:
+        violating = {
+            name: max_dist
+            for name, max_dist in target_max_by_matrix.items()
+            if CONFIG["cutoff_radius"] > max_dist + 1e-8
+        }
+        if len(violating) > 0:
+            violating_desc = ", ".join(
+                [f"{name}={max_dist:.6f}A" for name, max_dist in violating.items()]
+            )
+            raise RuntimeError(
+                "Strict edge match cannot pass with current cutoff. "
+                f"Graph cutoff is {CONFIG['cutoff_radius']:.6f}A, but target matrices "
+                f"only contain edges up to {violating_desc}. "
+                "Use a smaller cutoff (<= target max), or disable exact matching "
+                "via --no-require-exact-edge-match."
+            )
+
     # Scalar observable targets are derived from the (possibly unit-scaled) matrices.
     energy_target = trace_matmul_sparse_block_matrix(
         target_H_matrix, target_density_matrix
