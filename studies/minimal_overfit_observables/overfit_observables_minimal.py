@@ -42,7 +42,7 @@ from net.common import build_hidden_irreps
 from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_block_matrix
-from data.block_matrix import IrrepsBlockData, BlockMatrix
+from data.block_matrix import IrrepsBlockData
 import wandb
 from common import (
     MinimalNetwork,
@@ -183,13 +183,13 @@ if __name__ == "__main__":
         "--enable-forces",
         type=parse_bool,
         default=False,
-        help="Enable force-related data/paths (Phase 1: validation-only flag).",
+        help="Enable force-related data/paths.",
     )
     parser.add_argument(
         "--train-on-forces",
         type=parse_bool,
         default=False,
-        help="Enable force loss term (Phase 1: config wiring/validation only).",
+        help="Enable force loss term.",
     )
     parser.add_argument(
         "--loss-coef-forces",
@@ -400,25 +400,6 @@ if __name__ == "__main__":
         help="Show detailed forward pass debug prints (shapes, irreps, etc.) (default: False)",
     )
     parser.add_argument(
-        "--normalize-blocks",
-        action="store_true",
-        default=False,
-        help="Normalize blocks by average magnitude per edge class before training (diag/offdiag by default; diag/shifted_self/offdiag with --separate-shifted-self) (default: False)",
-    )
-    parser.add_argument(
-        "--magnitude-factorization",
-        action="store_true",
-        default=False,
-        help="Predict normalized blocks and separate per-edge magnitudes (default: False)",
-    )
-    parser.add_argument(
-        "--head-mlp-for-scalars",
-        dest="head_mlp_for_scalars",
-        action="store_true",
-        default=False,
-        help="Predict scalar irrep parts with a dedicated MLP head from magnitude-branch input (default: False)",
-    )
-    parser.add_argument(
         "--head-use-tensor-square",
         dest="head_use_tensor_square",
         action="store_true",
@@ -430,12 +411,6 @@ if __name__ == "__main__":
         type=int,
         default=3,
         help="Number of e3nn Linear layers in each head projection E3MLP; Gate is used between layers (default: 3).",
-    )
-    parser.add_argument(
-        "--magnitude-lambda",
-        type=float,
-        default=1.0,
-        help="Weight of magnitude loss contribution when --magnitude-factorization is enabled (default: 1.0)",
     )
     parser.add_argument(
         "--apply-cutoff-to-targets",
@@ -465,11 +440,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    if args.normalize_blocks and args.magnitude_factorization:
-        raise ValueError(
-            "--normalize-blocks and --magnitude-factorization are mutually exclusive. "
-            "Disable one of them."
-        )
     valid_matrix_targets = {"hamiltonian", "overlap", "density"}
     matrix_targets = list(dict.fromkeys(args.matrix_targets))
     invalid_targets = sorted(set(matrix_targets) - valid_matrix_targets)
@@ -518,11 +488,6 @@ if __name__ == "__main__":
         raise ValueError(
             "--train-on-forces requires --matrix-targets to include both "
             "'hamiltonian' and 'density'."
-        )
-    if args.train_on_irrep_parts and set(matrix_targets) != {"hamiltonian"}:
-        raise ValueError(
-            "--train-on-irrep-parts currently supports only "
-            "--matrix-targets hamiltonian."
         )
     torch_dtype = getattr(torch, args.dtype)
     torch.set_default_dtype(torch_dtype)
@@ -575,7 +540,6 @@ if __name__ == "__main__":
         "log_activations_wandb": args.log_activations_wandb,
         "benchmark": args.benchmark,
         "grad_clip": args.grad_clip,
-        "partial_train": None,
         "separate_shifted_self": args.separate_shifted_self,
         "train_on_irrep_parts": args.train_on_irrep_parts,
         "lr_factor": args.lr_factor,
@@ -587,12 +551,8 @@ if __name__ == "__main__":
         "radial_embedding_scale": args.radial_embedding_scale,
         "generate_video": args.generate_video,
         "verbose_forward": args.verbose_forward,
-        "normalize_blocks": args.normalize_blocks,
-        "magnitude_factorization": args.magnitude_factorization,
-        "head_mlp_for_scalars": args.head_mlp_for_scalars,
         "head_use_tensor_square": args.head_use_tensor_square,
         "head_e3mlp_layers": args.head_e3mlp_layers,
-        "magnitude_lambda": args.magnitude_lambda,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         "require_exact_edge_match": args.require_exact_edge_match,
         # Device
@@ -797,6 +757,18 @@ if __name__ == "__main__":
     num_electrons_target = trace_matmul_sparse_block_matrix(
         target_density_matrix, target_overlap_matrix
     )
+    BOHR_TO_ANGSTROM = 0.529177210903
+    forces_target = None
+    if CONFIG["enable_forces"]:
+        if snapshot.forces is None:
+            raise RuntimeError(
+                "--enable-forces was set, but snapshot does not contain force targets."
+            )
+        # OpenMX forces are parsed in Hartree/Bohr; convert to selected energy-unit/Angstrom.
+        force_scale = CONFIG["hamiltonian_scale_from_hartree"] / BOHR_TO_ANGSTROM
+        forces_target = (
+            snapshot.forces.to(device=device, dtype=torch_dtype) * force_scale
+        )
     if CONFIG["log_model"]:
         print("  Target matrix blocks:")
         for matrix_name, target_matrix in target_matrices.items():
@@ -813,6 +785,8 @@ if __name__ == "__main__":
             "  Target num_electrons scalar: "
             f"{float(num_electrons_target.item()):.8e}"
         )
+        if forces_target is not None:
+            print(f"  Target forces shape: {tuple(forces_target.shape)}")
 
     num_atoms = len(atoms_list)
 
@@ -864,16 +838,45 @@ if __name__ == "__main__":
         .sum()
         .item()
     )
-    # Compute edge vectors and distances
-    if box is not None:
-        shift_float = edge_shift.T.to(dtype=positions.dtype)
-        edge_vec = (
-            positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
-        )
-    else:
-        edge_vec = positions[edge_index[1]] - positions[edge_index[0]]
+    # Compute spherical harmonics
+    if CONFIG["log_data"]:
+        print(f"\n  Computing spherical harmonics (l_max={CONFIG['l_max']})...")
+    sh_irreps = Irreps.spherical_harmonics(CONFIG["l_max"])
+    if CONFIG["log_data"]:
+        print(f"  SH irreps: {sh_irreps}")
 
-    edge_dist = torch.linalg.norm(edge_vec, dim=1)
+    def compute_edge_features(curr_positions: torch.Tensor):
+        if box is not None:
+            shift_float_local = edge_shift.T.to(dtype=curr_positions.dtype)
+            edge_vec_local = (
+                curr_positions[edge_index[1]]
+                - curr_positions[edge_index[0]]
+                + shift_float_local @ box
+            )
+        else:
+            edge_vec_local = (
+                curr_positions[edge_index[1]] - curr_positions[edge_index[0]]
+            )
+        edge_dist_local = torch.linalg.norm(edge_vec_local, dim=1)
+        edge_sh_local = spherical_harmonics(
+            sh_irreps,
+            edge_vec_local,
+            normalize=True,
+            normalization="component",
+        )
+        edge_length_emb_local = soft_one_hot_linspace(
+            edge_dist_local,
+            start=0.0,
+            end=CONFIG["cutoff_radius"],
+            number=CONFIG["n_radial"],
+            basis="gaussian",
+            cutoff=False,
+        )
+        if CONFIG["radial_embedding_scale"] == "sqrt_n_radial":
+            edge_length_emb_local = edge_length_emb_local * CONFIG["n_radial"] ** 0.5
+        return edge_vec_local, edge_dist_local, edge_sh_local, edge_length_emb_local
+
+    edge_vec, edge_dist, edge_sh, edge_length_emb = compute_edge_features(positions)
 
     if CONFIG["log_data"]:
         log_graph(
@@ -888,40 +891,10 @@ if __name__ == "__main__":
             num_self_edges=num_self_edges,
             edge_dist=edge_dist,
         )
-
-    # Compute spherical harmonics
-    if CONFIG["log_data"]:
-        print(f"\n  Computing spherical harmonics (l_max={CONFIG['l_max']})...")
-    sh_irreps = Irreps.spherical_harmonics(CONFIG["l_max"])
-    if CONFIG["log_data"]:
-        print(f"  SH irreps: {sh_irreps}")
-
-    # Fixed SH mode: aligned/src-style convention.
-    edge_sh = spherical_harmonics(
-        sh_irreps,
-        edge_vec,
-        normalize=True,
-        normalization="component",
-    )
-    if CONFIG["log_data"]:
         print(f"  Edge SH shape: {edge_sh.shape}")
-
-    # Radial basis functions
-    if CONFIG["log_data"]:
         print(
             f"\n  Computing radial embeddings ({CONFIG['n_radial']} basis functions)..."
         )
-    edge_length_emb = soft_one_hot_linspace(
-        edge_dist,
-        start=0.0,
-        end=CONFIG["cutoff_radius"],
-        number=CONFIG["n_radial"],
-        basis="gaussian",
-        cutoff=False,
-    )
-    if CONFIG["radial_embedding_scale"] == "sqrt_n_radial":
-        edge_length_emb = edge_length_emb * CONFIG["n_radial"] ** 0.5
-    if CONFIG["log_data"]:
         print(f"  Radial embedding scale: {CONFIG['radial_embedding_scale']}")
         print(f"  Edge length embedding shape: {edge_length_emb.shape}")
 
@@ -1000,160 +973,8 @@ if __name__ == "__main__":
         log_strict_checks_passed()
 
     # =============================================================================
-    # HELPER FUNCTIONS FOR BLOCK FILTERING / LOSS
+    # HELPER FUNCTIONS FOR LOSS / IRREP PROJECTION
     # =============================================================================
-    def compute_block_normalization_factors(block_matrix):
-        """
-        Compute per-key, per-diagonal-status normalization factors.
-        - Diagonal blocks: sx==sy==sz==0 and i==j
-        - Shifted-self blocks: i==j and (sx,sy,sz)!=(0,0,0) [optional separate bucket]
-        - Off-diagonal blocks: i!=j
-        Uses L2 norm (Frobenius norm) for magnitude computation.
-
-        Args:
-            block_matrix: BlockMatrix object
-
-        Returns:
-            Dictionary:
-              - default mode: {key: {"diag": float, "offdiag": float}, ...}
-              - separate-shifted-self mode:
-                  {key: {"diag": float, "shifted_self": float, "offdiag": float}, ...}
-        """
-        norm_factors = {}
-        for key in block_matrix.pair_blocks.keys():
-            blocks = block_matrix.pair_blocks[key]  # (num_edges, ...)
-            edges = block_matrix.pair_edges[key]  # (5, num_edges)
-
-            sx, sy, sz, i, j = edges[0], edges[1], edges[2], edges[3], edges[4]
-            is_same_atom = i == j
-            is_zero_shift = (sx == 0) & (sy == 0) & (sz == 0)
-            diag_mask = is_same_atom & is_zero_shift
-            shifted_self_mask = is_same_atom & (~is_zero_shift)
-            if CONFIG["separate_shifted_self"]:
-                offdiag_mask = ~is_same_atom
-            else:
-                # Backward-compatible behavior: shifted-self shares offdiag bucket.
-                offdiag_mask = ~diag_mask
-
-            if diag_mask.any():
-                diag_blocks = blocks[diag_mask]
-                diag_norms = torch.linalg.norm(
-                    diag_blocks.reshape(diag_blocks.shape[0], -1), dim=1
-                )
-                diag_mag = diag_norms.mean().item()
-            else:
-                diag_mag = 1.0
-
-            if shifted_self_mask.any():
-                shifted_self_blocks = blocks[shifted_self_mask]
-                shifted_self_norms = torch.linalg.norm(
-                    shifted_self_blocks.reshape(shifted_self_blocks.shape[0], -1), dim=1
-                )
-                shifted_self_mag = shifted_self_norms.mean().item()
-            else:
-                shifted_self_mag = 1.0
-
-            if offdiag_mask.any():
-                offdiag_blocks = blocks[offdiag_mask]
-                offdiag_norms = torch.linalg.norm(
-                    offdiag_blocks.reshape(offdiag_blocks.shape[0], -1), dim=1
-                )
-                offdiag_mag = offdiag_norms.mean().item()
-            else:
-                offdiag_mag = 1.0
-
-            diag_mag = max(diag_mag, 1e-8)
-            shifted_self_mag = max(shifted_self_mag, 1e-8)
-            offdiag_mag = max(offdiag_mag, 1e-8)
-
-            if CONFIG["separate_shifted_self"]:
-                norm_factors[key] = {
-                    "diag": diag_mag,
-                    "shifted_self": shifted_self_mag,
-                    "offdiag": offdiag_mag,
-                }
-            else:
-                norm_factors[key] = {"diag": diag_mag, "offdiag": offdiag_mag}
-
-        return norm_factors
-
-    def compute_block_norm_targets_and_normalized_matrix(block_matrix, eps=1e-12):
-        """
-        Build per-edge Frobenius norm targets and a unit-norm normalized BlockMatrix.
-
-        Returns:
-            norm_targets: dict[key] -> (E_key,) tensor of per-edge norms (clamped by eps)
-            normalized_matrix: BlockMatrix with each block divided by its own norm
-            norm_stats: dict[key] -> {"min", "mean", "max"}
-        """
-        norm_targets = {}
-        norm_stats = {}
-        normalized_blocks = {}
-
-        for key, blocks in block_matrix.pair_blocks.items():
-            flat = blocks.reshape(blocks.shape[0], -1)
-            norms = torch.linalg.norm(flat, dim=1)
-            norms_safe = torch.clamp(norms, min=eps)
-            scale = norms_safe
-            while scale.ndim < blocks.ndim:
-                scale = scale.unsqueeze(-1)
-            normalized_blocks[key] = blocks / scale
-            norm_targets[key] = norms_safe
-            norm_stats[key] = {
-                "min": float(norms_safe.min().item()),
-                "mean": float(norms_safe.mean().item()),
-                "max": float(norms_safe.max().item()),
-            }
-
-        normalized_matrix = BlockMatrix(
-            atoms=block_matrix.atoms,
-            atom_counts=block_matrix.atom_counts,
-            pair_blocks=normalized_blocks,
-            pair_edges=block_matrix.pair_edges,
-            lookup=block_matrix.lookup,
-            orbital_cfg=block_matrix.orbital_cfg,
-            basis=block_matrix.basis,
-        )
-        return norm_targets, normalized_matrix, norm_stats
-
-    def reconstruct_actual_prediction_from_magnitudes(
-        pred_matrix_normalized, pred_raw_outputs, require_magnitudes=False
-    ):
-        """
-        Reconstruct actual predicted blocks: B_pred = m_pred * B_pred_normalized.
-        """
-        reconstructed_blocks = {}
-        for key, blocks in pred_matrix_normalized.pair_blocks.items():
-            if key not in pred_raw_outputs or "magnitudes" not in pred_raw_outputs[key]:
-                if require_magnitudes:
-                    raise RuntimeError(
-                        f"Missing predicted magnitudes for key '{key}' in magnitude-factorization mode."
-                    )
-                reconstructed_blocks[key] = blocks
-                continue
-
-            magnitudes = pred_raw_outputs[key]["magnitudes"]
-            if magnitudes.shape[0] != blocks.shape[0]:
-                raise RuntimeError(
-                    f"Magnitude/prediction edge-count mismatch for key '{key}': "
-                    f"{magnitudes.shape[0]} vs {blocks.shape[0]}"
-                )
-
-            scale = magnitudes
-            while scale.ndim < blocks.ndim:
-                scale = scale.unsqueeze(-1)
-            reconstructed_blocks[key] = blocks * scale
-
-        return BlockMatrix(
-            atoms=pred_matrix_normalized.atoms,
-            atom_counts=pred_matrix_normalized.atom_counts,
-            pair_blocks=reconstructed_blocks,
-            pair_edges=pred_matrix_normalized.pair_edges,
-            lookup=pred_matrix_normalized.lookup,
-            orbital_cfg=pred_matrix_normalized.orbital_cfg,
-            basis=pred_matrix_normalized.basis,
-        )
-
     def build_irrep_projection_cache(irreps_data, all_irreps_list):
         """
         Precompute lightweight projectors to map only one irrep component from
@@ -1209,34 +1030,6 @@ if __name__ == "__main__":
         block_flat = vec_sel @ q_subset
         return block_flat.view(vec_sel.shape[0], dim_i, dim_j)
 
-    def get_block_status(edges_5d, edge_idx):
-        """
-        Determine class for a block at edge_idx:
-        - "diag": i==j and zero shift
-        - "shifted_self": i==j and non-zero shift (only when enabled)
-        - "offdiag": i!=j, or all non-diag edges when separate mode is disabled
-        """
-        sx = edges_5d[0, edge_idx].item()
-        sy = edges_5d[1, edge_idx].item()
-        sz = edges_5d[2, edge_idx].item()
-        i = edges_5d[3, edge_idx].item()
-        j = edges_5d[4, edge_idx].item()
-        if i == j and sx == 0 and sy == 0 and sz == 0:
-            return "diag"
-        if i == j and CONFIG["separate_shifted_self"]:
-            return "shifted_self"
-        return "offdiag"
-
-    def filter_blocks_by_partial_train(block_matrix):
-        """Keep all blocks; partial training modes are disabled in this study."""
-        return {
-            key: (
-                blocks,
-                torch.ones(blocks.shape[0], dtype=torch.bool, device=blocks.device),
-            )
-            for key, blocks in block_matrix.pair_blocks.items()
-        }
-
     def init_block_loss_accumulator():
         return {
             "loss_sum": torch.tensor(0.0, device=device),
@@ -1253,46 +1046,6 @@ if __name__ == "__main__":
 
     def finalize_block_loss(acc):
         return acc["loss_sum"]
-
-    # =============================================================================
-    # COMPUTE BLOCK NORMALIZATION FACTORS (IF ENABLED)
-    # =============================================================================
-    norm_factors = None
-    if CONFIG["normalize_blocks"]:
-        if CONFIG["log_model"]:
-            print("\n[NORMALIZATION] Computing block normalization factors...")
-        norm_factors = compute_block_normalization_factors(target_H_matrix)
-        if CONFIG["log_model"]:
-            for key, factors in norm_factors.items():
-                if CONFIG["separate_shifted_self"]:
-                    print(
-                        f"  {key}: diag_mag={factors['diag']:.6e}, "
-                        f"shifted_self_mag={factors['shifted_self']:.6e}, "
-                        f"offdiag_mag={factors['offdiag']:.6e}"
-                    )
-                else:
-                    print(
-                        f"  {key}: diag_mag={factors['diag']:.6e}, offdiag_mag={factors['offdiag']:.6e}"
-                    )
-
-    # Magnitude-factorization targets (if enabled): per-block Frobenius norms and
-    # normalized target blocks.
-    target_block_norms = None
-    target_H_matrix_normalized = None
-    target_H_irreps_normalized = None
-    if CONFIG["magnitude_factorization"]:
-        if CONFIG["log_model"]:
-            print(
-                "\n[MAGNITUDE FACTORIZATION] Precomputing per-block norms and normalized targets..."
-            )
-        target_block_norms, target_H_matrix_normalized, norm_stats = (
-            compute_block_norm_targets_and_normalized_matrix(target_H_matrix, eps=1e-12)
-        )
-        if CONFIG["log_model"]:
-            for key, stats in norm_stats.items():
-                print(
-                    f"  {key}: norm min={stats['min']:.6e}, mean={stats['mean']:.6e}, max={stats['max']:.6e}"
-                )
 
     # =============================================================================
     # DEFINE MINIMAL NETWORK
@@ -1334,8 +1087,6 @@ if __name__ == "__main__":
         head_e3mlp_layers=CONFIG["head_e3mlp_layers"],
         edge_encoder_use_sh_tensor_square=CONFIG["edge_encoder_use_sh_tensor_square"],
         use_e3layernorm=CONFIG["e3layernorm"],
-        magnitude_factorization=CONFIG["magnitude_factorization"],
-        head_mlp_for_scalars=CONFIG["head_mlp_for_scalars"],
         head_use_tensor_square=CONFIG["head_use_tensor_square"],
         separate_shifted_self=CONFIG["separate_shifted_self"],
     ).to(device=device, dtype=torch_dtype)
@@ -1356,79 +1107,31 @@ if __name__ == "__main__":
         for matrix_name in CONFIG["matrix_targets"]
     }
     target_H_irreps = target_irreps_by_name["hamiltonian"]
-    if CONFIG["magnitude_factorization"]:
-        target_H_irreps_normalized = target_H_matrix_normalized.to_vectors(mapper)
-    else:
-        target_H_irreps_normalized = None
-
-    target_H_matrix_for_block_loss = (
-        target_H_matrix_normalized
-        if CONFIG["magnitude_factorization"]
-        else target_H_matrix
-    )
-    target_H_irreps_for_block_loss = (
-        target_H_irreps_normalized
-        if CONFIG["magnitude_factorization"]
-        else target_H_irreps
-    )
     all_irreps = get_all_irreps_in_hamiltonian(mapper)
     if CONFIG["log_model"]:
         print(
             f"  Found {len(all_irreps)} unique irreps: {[str(ir) for ir in all_irreps]}"
         )
 
-    # Precompute static target-side filters and normalization vectors to avoid
-    # rebuilding identical masks/factors every epoch.
-    target_matrix_for_block_loss_by_name = {}
-    filtered_target_block_loss_static_by_name = {}
-    for matrix_name in CONFIG["matrix_targets"]:
-        if matrix_name == "hamiltonian":
-            target_for_loss = target_H_matrix_for_block_loss
-        else:
-            target_for_loss = target_matrices[matrix_name]
-        target_matrix_for_block_loss_by_name[matrix_name] = target_for_loss
-        filtered_target_block_loss_static_by_name[matrix_name] = (
-            filter_blocks_by_partial_train(target_for_loss)
-        )
+    # In this study variant we always train against unnormalized, full target blocks.
+    target_matrix_for_block_loss_by_name = dict(target_matrices)
 
-    filtered_target_for_magnitude_static = (
-        filter_blocks_by_partial_train(target_H_matrix)
-        if CONFIG["magnitude_factorization"]
-        else None
-    )
-    filtered_target_for_metrics_static = filter_blocks_by_partial_train(target_H_matrix)
-    filtered_overlap_for_metrics_static = filter_blocks_by_partial_train(overlap_e3nn)
-
-    norm_vec_full_by_key = None
-    if CONFIG["normalize_blocks"] and norm_factors is not None:
-        norm_vec_full_by_key = {}
-        for key, edges_full in target_H_matrix.pair_edges.items():
-            n_edges = edges_full.shape[1]
-            norm_vec = torch.ones(n_edges, device=device, dtype=torch_dtype)
-            for edge_idx in range(n_edges):
-                status = get_block_status(edges_full, edge_idx)
-                norm_vec[edge_idx] = norm_factors[key][status]
-            norm_vec_full_by_key[key] = norm_vec
-
-    target_irrep_cache = {}
+    target_irrep_blocks_cache_by_matrix = {}
     irrep_projection_cache = {}
     if CONFIG["train_on_irrep_parts"]:
         irrep_projection_cache = build_irrep_projection_cache(
-            target_H_irreps_for_block_loss, all_irreps
+            target_H_irreps, all_irreps
         )
-        for irrep in all_irreps:
-            irrep_str = str(irrep)
-            target_irrep_filtered = filter_irreps_block_data_by_irrep(
-                target_H_irreps_for_block_loss, irrep, mapper
-            )
-            target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
-            target_irrep_filtered_masks = filter_blocks_by_partial_train(
-                target_irrep_blocks
-            )
-            target_irrep_cache[irrep_str] = (
-                target_irrep_blocks,
-                target_irrep_filtered_masks,
-            )
+        for matrix_name in CONFIG["matrix_targets"]:
+            cache_for_matrix = {}
+            target_irreps = target_irreps_by_name[matrix_name]
+            for irrep in all_irreps:
+                irrep_str = str(irrep)
+                target_irrep_filtered = filter_irreps_block_data_by_irrep(
+                    target_irreps, irrep, mapper
+                )
+                cache_for_matrix[irrep_str] = target_irrep_filtered.to_blocks(mapper)
+            target_irrep_blocks_cache_by_matrix[matrix_name] = cache_for_matrix
 
     # =============================================================================
     # TRAINING LOOP
@@ -1475,7 +1178,6 @@ if __name__ == "__main__":
         "pred_to_blocks_norm",
         "loss_block_total",
         "loss_block_irrep_filter_and_to_blocks",
-        "loss_block_norm_scaling_overhead",
         "backward_total",
         "optimizer_step",
         "step_wandb_log",
@@ -1525,10 +1227,6 @@ if __name__ == "__main__":
             epoch_core_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             network.train()
             optimizer.zero_grad(set_to_none=True)
-            mag_log10_abs_sum_total = 0.0
-            mag_log10_count_total = 0
-            mag_log10_abs_sum_per_key = {}
-            mag_log10_count_per_key = {}
 
             should_log_now = should_log_epoch(epoch)
             epoch_lr = optimizer.param_groups[0]["lr"]
@@ -1550,13 +1248,23 @@ if __name__ == "__main__":
             )
 
             t_forward_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
+            if CONFIG["enable_forces"]:
+                positions_for_forces = positions.detach().clone().requires_grad_(True)
+                _, _, edge_sh_epoch, edge_length_emb_epoch = compute_edge_features(
+                    positions_for_forces
+                )
+            else:
+                positions_for_forces = None
+                edge_sh_epoch = edge_sh
+                edge_length_emb_epoch = edge_length_emb
+
             pred_raw_out = network(
                 node_type_idx,
                 edge_type_idx,
                 edge_index,
                 edge_shift,
-                edge_length_emb,
-                edge_sh,
+                edge_length_emb_epoch,
+                edge_sh_epoch,
                 batch_node,
                 batch_edge,
                 log_to_wandb=log_activations,
@@ -1565,21 +1273,7 @@ if __name__ == "__main__":
             if CONFIG["benchmark"]:
                 benchmark_add("forward_total", time.perf_counter() - t_forward_start)
 
-            # Network can return either:
-            # - dict[target_name -> dict[pair_key -> payload]] (multi-target mode)
-            # - dict[pair_key -> payload] (single-target backward compatibility)
-            if (
-                len(CONFIG["matrix_targets"]) == 1
-                and isinstance(pred_raw_out, dict)
-                and len(pred_raw_out) > 0
-            ):
-                first_val = next(iter(pred_raw_out.values()))
-                if isinstance(first_val, dict) and "vectors" in first_val:
-                    pred_raw_by_matrix = {CONFIG["matrix_targets"][0]: pred_raw_out}
-                else:
-                    pred_raw_by_matrix = pred_raw_out
-            else:
-                pred_raw_by_matrix = pred_raw_out
+            pred_raw_by_matrix = pred_raw_out
 
             missing_targets = [
                 name
@@ -1630,200 +1324,107 @@ if __name__ == "__main__":
                     "pred_pack_raw_outputs", time.perf_counter() - t_pack_start
                 )
 
-            pred_H_irreps = pred_irreps_by_name["hamiltonian"]
-            pred_raw_H = pred_raw_by_matrix["hamiltonian"]
-            pair_vec_H = pair_vectors_by_name["hamiltonian"]
-
-            # Convert to matrix blocks only when required by the active loss path.
+            # Convert to matrix blocks for all active targets.
             pred_matrix_norm_by_name = {}
-            if not CONFIG["train_on_irrep_parts"]:
-                t_to_blocks_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
-                for matrix_name in CONFIG["matrix_targets"]:
-                    pred_matrix_norm_by_name[matrix_name] = pred_irreps_by_name[
-                        matrix_name
-                    ].to_blocks(mapper)
-                if CONFIG["benchmark"]:
-                    benchmark_add(
-                        "pred_to_blocks_norm", time.perf_counter() - t_to_blocks_start
-                    )
-            if (
-                "hamiltonian" in CONFIG["matrix_targets"]
-                and "hamiltonian" not in pred_matrix_norm_by_name
-            ):
-                # train_on_irrep_parts keeps loss in irreps space; still build block
-                # representation for metrics/reporting paths.
-                t_to_blocks_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
-                pred_matrix_norm_by_name["hamiltonian"] = pred_irreps_by_name[
-                    "hamiltonian"
+            t_to_blocks_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
+            for matrix_name in CONFIG["matrix_targets"]:
+                pred_matrix_norm_by_name[matrix_name] = pred_irreps_by_name[
+                    matrix_name
                 ].to_blocks(mapper)
-                if CONFIG["benchmark"]:
-                    benchmark_add(
-                        "pred_to_blocks_norm", time.perf_counter() - t_to_blocks_start
-                    )
+            if CONFIG["benchmark"]:
+                benchmark_add(
+                    "pred_to_blocks_norm", time.perf_counter() - t_to_blocks_start
+                )
 
-            pred_H_matrix_norm = pred_matrix_norm_by_name.get("hamiltonian")
-            pred_H_matrix_metrics = None
-
-            # Compute loss - either standard or per-irrep decomposed
+            # Compute matrix block losses (optionally decomposed per irrep).
             t_loss_block_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             loss_block_irrep_filter_to_blocks_time = 0.0
-            loss_block_norm_scaling_time = 0.0
             matrix_block_losses = {}
+            irrep_losses_by_matrix = {}
             if CONFIG["train_on_irrep_parts"]:
-                # Per-irrep decomposed loss
-                loss_block_acc = init_block_loss_accumulator()
-                irrep_losses = {}
-
-                for irrep in all_irreps:
-                    irrep_str = str(irrep)
-                    t_irrep_ftb_start = (
-                        time.perf_counter() if CONFIG["benchmark"] else 0.0
-                    )
-                    target_irrep_blocks, filtered_target_irrep = target_irrep_cache[
-                        irrep_str
+                for matrix_name in CONFIG["matrix_targets"]:
+                    loss_block_acc = init_block_loss_accumulator()
+                    irrep_losses_curr = {}
+                    pair_vec_curr = pair_vectors_by_name[matrix_name]
+                    target_irrep_blocks_cache = target_irrep_blocks_cache_by_matrix[
+                        matrix_name
                     ]
-                    irrep_projectors = irrep_projection_cache[irrep_str]
-                    if CONFIG["benchmark"]:
-                        loss_block_irrep_filter_to_blocks_time += (
-                            time.perf_counter() - t_irrep_ftb_start
+
+                    for irrep in all_irreps:
+                        irrep_str = str(irrep)
+                        t_irrep_ftb_start = (
+                            time.perf_counter() if CONFIG["benchmark"] else 0.0
                         )
+                        target_irrep_blocks = target_irrep_blocks_cache[irrep_str]
+                        irrep_projectors = irrep_projection_cache[irrep_str]
+                        if CONFIG["benchmark"]:
+                            loss_block_irrep_filter_to_blocks_time += (
+                                time.perf_counter() - t_irrep_ftb_start
+                            )
 
-                    # Compute loss for this irrep
-                    irrep_loss_acc = init_block_loss_accumulator()
+                        irrep_loss_acc = init_block_loss_accumulator()
+                        for key in target_irrep_blocks.pair_blocks.keys():
+                            if key not in pair_vec_curr or key not in irrep_projectors:
+                                continue
 
-                    for key in target_irrep_blocks.pair_blocks.keys():
-                        if key not in pair_vec_H or key not in irrep_projectors:
-                            continue
+                            pred_blocks = project_irrep_vectors_to_blocks(
+                                pair_vec_curr[key], irrep_projectors[key]
+                            )
+                            targ_blocks_full = target_irrep_blocks.pair_blocks[key]
+                            min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+                            if min_n <= 0:
+                                continue
 
-                        pred_blocks = project_irrep_vectors_to_blocks(
-                            pair_vec_H[key], irrep_projectors[key]
-                        )
-                        targ_blocks_full = target_irrep_blocks.pair_blocks[key]
-                        _, mask = filtered_target_irrep[key]
-                        min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
-
-                        mask = mask[:min_n]
-                        if mask.any():
-                            pred_blocks_filtered = pred_blocks[:min_n][mask]
-                            targ_blocks_filtered = targ_blocks_full[:min_n][mask]
-
-                            # Apply block normalization if enabled
-                            if (
-                                CONFIG["normalize_blocks"]
-                                and norm_factors is not None
-                                and key in norm_factors
-                            ):
-                                t_norm_scale_start = (
-                                    time.perf_counter() if CONFIG["benchmark"] else 0.0
-                                )
-                                norm_vec = norm_vec_full_by_key[key][:min_n]
-
-                                # Select norm factors corresponding to mask
-                                norm_vec_selected = norm_vec[mask]
-                                # Reshape for broadcasting: (num_selected,) -> (num_selected, 1, 1, ...)
-                                while (
-                                    norm_vec_selected.ndim < pred_blocks_filtered.ndim
-                                ):
-                                    norm_vec_selected = norm_vec_selected.unsqueeze(-1)
-
-                                pred_blocks_filtered = (
-                                    pred_blocks_filtered / norm_vec_selected
-                                )
-                                targ_blocks_filtered = (
-                                    targ_blocks_filtered / norm_vec_selected
-                                )
-                                if CONFIG["benchmark"]:
-                                    loss_block_norm_scaling_time += (
-                                        time.perf_counter() - t_norm_scale_start
-                                    )
-
+                            pred_blocks_sel = pred_blocks[:min_n]
+                            targ_blocks_sel = targ_blocks_full[:min_n]
                             accumulate_block_loss(
                                 irrep_loss_acc,
-                                pred_blocks_filtered,
-                                targ_blocks_filtered,
+                                pred_blocks_sel,
+                                targ_blocks_sel,
                             )
                             accumulate_block_loss(
                                 loss_block_acc,
-                                pred_blocks_filtered,
-                                targ_blocks_filtered,
+                                pred_blocks_sel,
+                                targ_blocks_sel,
                             )
 
-                    irrep_loss = finalize_block_loss(irrep_loss_acc)
-                    irrep_losses[irrep_str] = irrep_loss
-                loss_block = finalize_block_loss(loss_block_acc)
-                matrix_block_losses["hamiltonian"] = loss_block
+                        irrep_losses_curr[irrep_str] = finalize_block_loss(
+                            irrep_loss_acc
+                        )
+
+                    matrix_block_losses[matrix_name] = finalize_block_loss(
+                        loss_block_acc
+                    )
+                    irrep_losses_by_matrix[matrix_name] = irrep_losses_curr
             else:
-                # Standard loss computation
                 for matrix_name in CONFIG["matrix_targets"]:
                     loss_block_acc = init_block_loss_accumulator()
-                    filtered_target = filtered_target_block_loss_static_by_name[
-                        matrix_name
-                    ]
                     target_matrix_for_loss = target_matrix_for_block_loss_by_name[
                         matrix_name
                     ]
                     pred_matrix_norm = pred_matrix_norm_by_name[matrix_name]
-
                     for key in target_matrix_for_loss.pair_blocks.keys():
-                        if key in pred_matrix_norm.pair_blocks:
-                            # Get filtered target blocks and mask
-                            targ_blocks_full = target_matrix_for_loss.pair_blocks[key]
-                            _, mask = filtered_target[key]
-
-                            # Match sizes (predictions might have fewer edges due to cutoff)
-                            pred_blocks = pred_matrix_norm.pair_blocks[key]
-                            min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
-
-                            # Apply mask to select only relevant blocks
-                            mask = mask[:min_n]
-                            if mask.any():
-                                pred_blocks_filtered = pred_blocks[:min_n][mask]
-                                targ_blocks_filtered = targ_blocks_full[:min_n][mask]
-
-                                # Optional block normalization currently applies to Hamiltonian only.
-                                if (
-                                    matrix_name == "hamiltonian"
-                                    and CONFIG["normalize_blocks"]
-                                    and norm_factors is not None
-                                    and key in norm_factors
-                                ):
-                                    t_norm_scale_start = (
-                                        time.perf_counter()
-                                        if CONFIG["benchmark"]
-                                        else 0.0
-                                    )
-                                    norm_vec = norm_vec_full_by_key[key][:min_n]
-
-                                    # Select norm factors corresponding to mask
-                                    norm_vec_selected = norm_vec[mask]
-                                    while (
-                                        norm_vec_selected.ndim
-                                        < pred_blocks_filtered.ndim
-                                    ):
-                                        norm_vec_selected = norm_vec_selected.unsqueeze(
-                                            -1
-                                        )
-
-                                    pred_blocks_filtered = (
-                                        pred_blocks_filtered / norm_vec_selected
-                                    )
-                                    targ_blocks_filtered = (
-                                        targ_blocks_filtered / norm_vec_selected
-                                    )
-                                    if CONFIG["benchmark"]:
-                                        loss_block_norm_scaling_time += (
-                                            time.perf_counter() - t_norm_scale_start
-                                        )
-
-                                accumulate_block_loss(
-                                    loss_block_acc,
-                                    pred_blocks_filtered,
-                                    targ_blocks_filtered,
-                                )
+                        if key not in pred_matrix_norm.pair_blocks:
+                            continue
+                        targ_blocks_full = target_matrix_for_loss.pair_blocks[key]
+                        pred_blocks = pred_matrix_norm.pair_blocks[key]
+                        min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
+                        if min_n <= 0:
+                            continue
+                        accumulate_block_loss(
+                            loss_block_acc,
+                            pred_blocks[:min_n],
+                            targ_blocks_full[:min_n],
+                        )
                     matrix_block_losses[matrix_name] = finalize_block_loss(
                         loss_block_acc
                     )
-                loss_block = sum(matrix_block_losses.values())
+
+            loss_block = (
+                sum(matrix_block_losses.values())
+                if matrix_block_losses
+                else torch.tensor(0.0, device=device)
+            )
             if CONFIG["benchmark"]:
                 benchmark_add(
                     "loss_block_total", time.perf_counter() - t_loss_block_start
@@ -1832,88 +1433,25 @@ if __name__ == "__main__":
                     "loss_block_irrep_filter_and_to_blocks",
                     loss_block_irrep_filter_to_blocks_time,
                 )
-                benchmark_add(
-                    "loss_block_norm_scaling_overhead",
-                    loss_block_norm_scaling_time,
+
+            # Symmetrized predictions for reporting and observable/force computations.
+            pred_matrix_metrics_by_name = {
+                matrix_name: (
+                    pred_matrix_norm_by_name[matrix_name]
+                    + pred_matrix_norm_by_name[matrix_name].transpose()
                 )
-
-            loss_magnitude = torch.tensor(0.0, device=device)
-            if CONFIG["magnitude_factorization"]:
-                filtered_target_for_magnitude = filtered_target_for_magnitude_static
-                for key in target_H_matrix.pair_blocks.keys():
-                    if key not in pred_raw_H:
-                        continue
-                    if "magnitudes" not in pred_raw_H[key]:
-                        raise RuntimeError(
-                            f"Missing predicted magnitudes for key '{key}' in magnitude-factorization mode."
-                        )
-                    if target_block_norms is None or key not in target_block_norms:
-                        continue
-
-                    pred_magnitudes = pred_raw_H[key]["magnitudes"]
-                    target_magnitudes = target_block_norms[key]
-                    _, mask = filtered_target_for_magnitude[key]
-
-                    min_n = min(
-                        pred_magnitudes.shape[0],
-                        target_magnitudes.shape[0],
-                        mask.shape[0],
-                    )
-                    mask = mask[:min_n]
-                    if mask.any():
-                        pred_sel = pred_magnitudes[:min_n][mask]
-                        target_sel = target_magnitudes[:min_n][mask]
-                        if target_sel.dtype != pred_sel.dtype:
-                            target_sel = target_sel.to(pred_sel.dtype)
-                        loss_magnitude += F.mse_loss(pred_sel, target_sel)
-
-                        log10_diff = torch.abs(
-                            torch.log10(torch.clamp(pred_sel, min=1e-12))
-                            - torch.log10(torch.clamp(target_sel, min=1e-12))
-                        )
-                        log10_abs_sum = float(log10_diff.sum().item())
-                        log10_count = int(log10_diff.numel())
-                        mag_log10_abs_sum_total += log10_abs_sum
-                        mag_log10_count_total += log10_count
-                        mag_log10_abs_sum_per_key[key] = (
-                            mag_log10_abs_sum_per_key.get(key, 0.0) + log10_abs_sum
-                        )
-                        mag_log10_count_per_key[key] = (
-                            mag_log10_count_per_key.get(key, 0) + log10_count
-                        )
+                * 0.5
+                for matrix_name in CONFIG["matrix_targets"]
+            }
 
             # Observable losses from predicted matrices.
             loss_energy_weighted = torch.tensor(0.0, device=device)
             loss_num_electrons_weighted = torch.tensor(0.0, device=device)
+            loss_forces_weighted = torch.tensor(0.0, device=device)
             energy_mae = None
             num_electrons_mae = None
-
-            pred_matrix_metrics_by_name = {}
-            for matrix_name in CONFIG["matrix_targets"]:
-                if matrix_name not in pred_matrix_norm_by_name:
-                    t_to_blocks_start = (
-                        time.perf_counter() if CONFIG["benchmark"] else 0.0
-                    )
-                    pred_matrix_norm_by_name[matrix_name] = pred_irreps_by_name[
-                        matrix_name
-                    ].to_blocks(mapper)
-                    if CONFIG["benchmark"]:
-                        benchmark_add(
-                            "pred_to_blocks_norm",
-                            time.perf_counter() - t_to_blocks_start,
-                        )
-                pred_matrix_norm = pred_matrix_norm_by_name[matrix_name]
-                if matrix_name == "hamiltonian" and CONFIG["magnitude_factorization"]:
-                    pred_matrix_actual = reconstruct_actual_prediction_from_magnitudes(
-                        pred_matrix_norm,
-                        pred_raw_H,
-                        require_magnitudes=True,
-                    )
-                else:
-                    pred_matrix_actual = pred_matrix_norm
-                pred_matrix_metrics_by_name[matrix_name] = (
-                    pred_matrix_actual + pred_matrix_actual.transpose()
-                ) * 0.5
+            forces_mae = None
+            forces_mse = None
 
             if (
                 CONFIG["enable_energy"]
@@ -1945,19 +1483,40 @@ if __name__ == "__main__":
                         "loss_coef_observables"
                     ] * F.mse_loss(num_electrons_pred, num_electrons_target)
 
+            if (
+                CONFIG["enable_forces"]
+                and positions_for_forces is not None
+                and forces_target is not None
+                and "hamiltonian" in pred_matrix_metrics_by_name
+                and "density" in pred_matrix_metrics_by_name
+            ):
+                energy_for_forces = trace_matmul_sparse_block_matrix(
+                    pred_matrix_metrics_by_name["hamiltonian"],
+                    pred_matrix_metrics_by_name["density"],
+                )
+                grad_pos = torch.autograd.grad(
+                    energy_for_forces,
+                    positions_for_forces,
+                    create_graph=CONFIG["train_on_forces"],
+                    retain_graph=True,
+                )[0]
+                forces_pred = -grad_pos
+                forces_err = forces_pred - forces_target
+                forces_mae = torch.mean(torch.abs(forces_err))
+                forces_mse = torch.mean(forces_err**2)
+                if CONFIG["train_on_forces"]:
+                    loss_forces_weighted = CONFIG["loss_coef_forces"] * forces_mse
+
             # Keep Hamiltonian block loss tracking consistent with previous history key.
             loss_H = matrix_block_losses.get(
                 "hamiltonian", torch.tensor(0.0, device=device)
             )
-            if CONFIG["magnitude_factorization"]:
-                loss = (
-                    loss_block
-                    + CONFIG["magnitude_lambda"] * loss_magnitude
-                    + loss_energy_weighted
-                    + loss_num_electrons_weighted
-                )
-            else:
-                loss = loss_block + loss_energy_weighted + loss_num_electrons_weighted
+            loss = (
+                loss_block
+                + loss_energy_weighted
+                + loss_num_electrons_weighted
+                + loss_forces_weighted
+            )
 
             # Step scheduler (ReduceLROnPlateau needs validation loss, so we use training loss here)
             scheduler.step(float(loss.item()))
@@ -2030,16 +1589,6 @@ if __name__ == "__main__":
             for matrix_name, matrix_loss in matrix_block_losses.items():
                 step_log[f"train/loss_block_{matrix_name}"] = float(matrix_loss.item())
 
-            if CONFIG["magnitude_factorization"]:
-                step_log["train/loss_block_norm"] = loss_block.item()
-                step_log["train/loss_magnitude_weighted"] = (
-                    CONFIG["magnitude_lambda"] * loss_magnitude.item()
-                )
-                step_log["train/loss_magnitude_raw"] = loss_magnitude.item()
-                if mag_log10_count_total > 0:
-                    step_log["train/magnitude_log10_mae"] = (
-                        mag_log10_abs_sum_total / mag_log10_count_total
-                    )
             if CONFIG["train_on_energy"]:
                 step_log["train/loss_energy_weighted"] = float(
                     loss_energy_weighted.item()
@@ -2048,15 +1597,27 @@ if __name__ == "__main__":
                 step_log["train/loss_num_electrons_weighted"] = float(
                     loss_num_electrons_weighted.item()
                 )
+            if CONFIG["train_on_forces"]:
+                step_log["train/loss_forces_weighted"] = float(
+                    loss_forces_weighted.item()
+                )
             if energy_mae is not None:
                 step_log["train/energy_mae"] = float(energy_mae.item())
             if num_electrons_mae is not None:
                 step_log["train/num_electrons_mae"] = float(num_electrons_mae.item())
+            if forces_mae is not None and forces_mse is not None:
+                step_log["train/forces_mae"] = float(forces_mae.item())
+                step_log["train/forces_mse"] = float(forces_mse.item())
 
             # Log per-irrep losses if enabled
             if CONFIG["train_on_irrep_parts"]:
-                for irrep_str, irrep_loss in irrep_losses.items():
-                    step_log[f"partial/{irrep_str}"] = irrep_loss.item()
+                matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+                for matrix_name, irrep_losses in irrep_losses_by_matrix.items():
+                    prefix = matrix_alias.get(matrix_name, matrix_name)
+                    for irrep_str, irrep_loss in irrep_losses.items():
+                        step_log[f"partial/{prefix}_{irrep_str}"] = float(
+                            irrep_loss.item()
+                        )
 
             t_step_wandb_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             wandb.log(step_log)
@@ -2071,74 +1632,8 @@ if __name__ == "__main__":
             if should_log_now:
                 pred_H_matrix_metrics = pred_matrix_metrics_by_name["hamiltonian"]
 
-                # Compute detailed metrics with filtering
-                # First filter both predictions and targets
-                filtered_pred = filter_blocks_by_partial_train(pred_H_matrix_metrics)
-                filtered_target = filtered_target_for_metrics_static
-                filtered_overlap = filtered_overlap_for_metrics_static
-
-                # Create filtered versions for metrics computation
-
-                pred_filtered_blocks = {}
-                target_filtered_blocks = {}
-                overlap_filtered_blocks = {}
-
-                for key in target_H_matrix.pair_blocks.keys():
-                    if key in pred_H_matrix_metrics.pair_blocks:
-                        pred_full, pred_mask = filtered_pred[key]
-                        targ_full, targ_mask = filtered_target[key]
-                        ovlp_full, ovlp_mask = filtered_overlap[key]
-
-                        min_n = min(
-                            pred_full.shape[0], targ_full.shape[0], ovlp_full.shape[0]
-                        )
-                        mask = pred_mask[:min_n] & targ_mask[:min_n] & ovlp_mask[:min_n]
-
-                        if mask.any():
-                            pred_filtered_blocks[key] = pred_full[:min_n][mask]
-                            target_filtered_blocks[key] = targ_full[:min_n][mask]
-                            overlap_filtered_blocks[key] = ovlp_full[:min_n][mask]
-
-                # Create temporary BlockMatrix objects for metrics computation
-                pred_filtered = BlockMatrix(
-                    atoms=target_H_matrix.atoms,
-                    atom_counts=target_H_matrix.atom_counts,
-                    pair_blocks=pred_filtered_blocks,
-                    pair_edges={
-                        key: target_H_matrix.pair_edges[key]
-                        for key in pred_filtered_blocks.keys()
-                    },
-                    lookup=target_H_matrix.lookup,
-                    orbital_cfg=target_H_matrix.orbital_cfg,
-                    basis=target_H_matrix.basis,
-                )
-                target_filtered = BlockMatrix(
-                    atoms=target_H_matrix.atoms,
-                    atom_counts=target_H_matrix.atom_counts,
-                    pair_blocks=target_filtered_blocks,
-                    pair_edges={
-                        key: target_H_matrix.pair_edges[key]
-                        for key in target_filtered_blocks.keys()
-                    },
-                    lookup=target_H_matrix.lookup,
-                    orbital_cfg=target_H_matrix.orbital_cfg,
-                    basis=target_H_matrix.basis,
-                )
-                overlap_filtered = BlockMatrix(
-                    atoms=overlap_e3nn.atoms,
-                    atom_counts=overlap_e3nn.atom_counts,
-                    pair_blocks=overlap_filtered_blocks,
-                    pair_edges={
-                        key: overlap_e3nn.pair_edges[key]
-                        for key in overlap_filtered_blocks.keys()
-                    },
-                    lookup=overlap_e3nn.lookup,
-                    orbital_cfg=overlap_e3nn.orbital_cfg,
-                    basis=overlap_e3nn.basis,
-                )
-
                 detailed_metrics = compute_detailed_metrics(
-                    pred_filtered, target_filtered, overlap_filtered
+                    pred_H_matrix_metrics, target_H_matrix, overlap_e3nn
                 )
                 matrix_basic_metrics = {
                     matrix_name: compute_basic_matrix_metrics(
@@ -2167,46 +1662,23 @@ if __name__ == "__main__":
                 last_log_time = current_time
                 last_logged_epoch = epoch
 
+                irrep_losses_for_print = None
+                if CONFIG["train_on_irrep_parts"]:
+                    matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+                    irrep_losses_for_print = {}
+                    for matrix_name, irrep_losses in irrep_losses_by_matrix.items():
+                        prefix = matrix_alias.get(matrix_name, matrix_name)
+                        for irrep_str, irrep_loss in irrep_losses.items():
+                            irrep_losses_for_print[f"{prefix}_{irrep_str}"] = irrep_loss
+
                 log_detailed_training_metrics(
                     avg_epoch_time=avg_epoch_time,
                     epochs_since_last_log=epochs_since_last_log,
                     time_elapsed=time_elapsed,
                     loss_value=loss.item(),
                     detailed_metrics=detailed_metrics,
-                    irrep_losses=(
-                        irrep_losses if CONFIG["train_on_irrep_parts"] else None
-                    ),
+                    irrep_losses=irrep_losses_for_print,
                 )
-                if CONFIG["magnitude_factorization"]:
-                    loss_block_val = float(loss_block.item())
-                    loss_mag_weighted_val = float(
-                        CONFIG["magnitude_lambda"] * loss_magnitude.item()
-                    )
-                    total_loss_val = max(float(loss.item()), 1e-12)
-                    block_pct = 100.0 * loss_block_val / total_loss_val
-                    mag_pct = 100.0 * loss_mag_weighted_val / total_loss_val
-
-                    print("\n  Factorization Loss Breakdown:")
-                    print(
-                        f"    Block loss (normalized blocks): {loss_block_val:.6e} ({block_pct:.2f}%)"
-                    )
-                    print(
-                        f"    Magnitude loss (weighted):      {loss_mag_weighted_val:.6e} ({mag_pct:.2f}%)"
-                    )
-                    if mag_log10_count_total > 0:
-                        total_log10_mae = mag_log10_abs_sum_total / max(
-                            mag_log10_count_total, 1
-                        )
-                        print(
-                            f"    log10 magnitude MAE (total):    {total_log10_mae:.6e}"
-                        )
-                        print("    log10 magnitude MAE (per key):")
-                        for key in sorted(mag_log10_abs_sum_per_key.keys()):
-                            key_count = max(mag_log10_count_per_key.get(key, 0), 1)
-                            key_mae = mag_log10_abs_sum_per_key[key] / key_count
-                            print(f"      {key}: {key_mae:.6e}")
-                    else:
-                        print("    log10 magnitude MAE: N/A (no selected blocks)")
 
                 if CONFIG["benchmark"]:
                     print_benchmark_report()
@@ -2241,6 +1713,9 @@ if __name__ == "__main__":
                     periodic_metrics_payload["mse_D"] = matrix_basic_metrics["density"][
                         "mse"
                     ]
+                if forces_mae is not None and forces_mse is not None:
+                    periodic_metrics_payload["mae_F"] = float(forces_mae.item())
+                    periodic_metrics_payload["mse_F"] = float(forces_mse.item())
                 wandb.log(periodic_metrics_payload)
 
                 # Save best model
@@ -2282,7 +1757,7 @@ if __name__ == "__main__":
                     metric_prefix = irrep_prefix_by_matrix.get(matrix_name, "")
                     if CONFIG["log_per_irrep_metrics"]:
                         log_per_irrep_metrics(
-                            f"Per-Irrep Metrics ({matrix_name}, block only):",
+                            f"Per-Irrep Metrics ({matrix_name}):",
                             all_irreps,
                             per_irrep_metrics,
                             metric_prefix=metric_prefix,
@@ -2322,7 +1797,6 @@ if __name__ == "__main__":
                             sz=0,
                             dynamic_range=False,
                             diff_dynamic_range=True,
-                            partial_train=None,
                             percentile=99.0,
                             matrix_label=label,
                         )
@@ -2350,418 +1824,353 @@ if __name__ == "__main__":
     print("=" * 80)
 
     network.eval()
-    with torch.inference_mode():
-        pred_raw_out = network(
-            node_type_idx,
-            edge_type_idx,
-            edge_index,
-            edge_shift,
-            edge_length_emb,
-            edge_sh,
-            batch_node,
-            batch_edge,
-            verbose=CONFIG["verbose_forward"],
+    if CONFIG["enable_forces"]:
+        positions_eval = positions.detach().clone().requires_grad_(True)
+        _, _, edge_sh_eval, edge_length_emb_eval = compute_edge_features(positions_eval)
+    else:
+        positions_eval = None
+        edge_sh_eval = edge_sh
+        edge_length_emb_eval = edge_length_emb
+
+    pred_raw_by_matrix = network(
+        node_type_idx,
+        edge_type_idx,
+        edge_index,
+        edge_shift,
+        edge_length_emb_eval,
+        edge_sh_eval,
+        batch_node,
+        batch_edge,
+        verbose=CONFIG["verbose_forward"],
+    )
+
+    missing_targets = [
+        name for name in CONFIG["matrix_targets"] if name not in pred_raw_by_matrix
+    ]
+    if len(missing_targets) > 0:
+        raise RuntimeError(
+            f"Network output is missing targets: {missing_targets}. "
+            f"Got: {sorted(list(pred_raw_by_matrix.keys()))}"
         )
 
-        # Network can return either:
-        # - dict[target_name -> dict[pair_key -> payload]] (multi-target mode)
-        # - dict[pair_key -> payload] (single-target backward compatibility)
-        if (
-            len(CONFIG["matrix_targets"]) == 1
-            and isinstance(pred_raw_out, dict)
-            and len(pred_raw_out) > 0
-        ):
-            first_val = next(iter(pred_raw_out.values()))
-            if isinstance(first_val, dict) and "vectors" in first_val:
-                pred_raw_by_matrix = {CONFIG["matrix_targets"][0]: pred_raw_out}
-            else:
-                pred_raw_by_matrix = pred_raw_out
-        else:
-            pred_raw_by_matrix = pred_raw_out
-
-        missing_targets = [
-            name for name in CONFIG["matrix_targets"] if name not in pred_raw_by_matrix
-        ]
-        if len(missing_targets) > 0:
-            raise RuntimeError(
-                f"Network output is missing targets: {missing_targets}. "
-                f"Got: {sorted(list(pred_raw_by_matrix.keys()))}"
-            )
-
-        pred_irreps_by_name = {}
-        pred_matrix_norm_by_name = {}
-        pred_matrix_metrics_by_name = {}
-        for matrix_name in CONFIG["matrix_targets"]:
-            raw_matrix = pred_raw_by_matrix[matrix_name]
-            pair_vec = {}
-            pair_edges_dict = {}
-            lookup_dict = {}
-            for key, payload in raw_matrix.items():
-                pair_vec[key] = payload["vectors"]
-                pair_edges_dict[key] = payload["edges"]
-                for idx, edge_5d in enumerate(payload["edges"].t()):
-                    sx, sy, sz, i, j = edge_5d.tolist()
-                    lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
-                        key,
-                        idx,
-                    )
-
-            pred_irreps_by_name[matrix_name] = IrrepsBlockData(
-                atoms=tuple(atoms_list),
-                atom_counts=Counter(atoms_list),
-                pair_vectors=pair_vec,
-                pair_edges=pair_edges_dict,
-                lookup=lookup_dict,
-                orbital_cfg=orbital_cfg,
-                basis=target_matrices[matrix_name].basis,
-            )
-            pred_matrix_norm_by_name[matrix_name] = pred_irreps_by_name[
-                matrix_name
-            ].to_blocks(mapper)
-
-            if matrix_name == "hamiltonian" and CONFIG["magnitude_factorization"]:
-                pred_matrix_actual = reconstruct_actual_prediction_from_magnitudes(
-                    pred_matrix_norm_by_name[matrix_name],
-                    pred_raw_by_matrix["hamiltonian"],
-                    require_magnitudes=True,
+    pred_irreps_by_name = {}
+    pred_matrix_norm_by_name = {}
+    pred_matrix_metrics_by_name = {}
+    for matrix_name in CONFIG["matrix_targets"]:
+        raw_matrix = pred_raw_by_matrix[matrix_name]
+        pair_vec = {}
+        pair_edges_dict = {}
+        lookup_dict = {}
+        for key, payload in raw_matrix.items():
+            pair_vec[key] = payload["vectors"]
+            pair_edges_dict[key] = payload["edges"]
+            for idx, edge_5d in enumerate(payload["edges"].t()):
+                sx, sy, sz, i, j = edge_5d.tolist()
+                lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
+                    key,
+                    idx,
                 )
-            else:
-                pred_matrix_actual = pred_matrix_norm_by_name[matrix_name]
-            pred_matrix_metrics_by_name[matrix_name] = (
-                pred_matrix_actual + pred_matrix_actual.transpose()
-            ) * 0.5
 
-        pred_H_matrix_metrics = pred_matrix_metrics_by_name["hamiltonian"]
-
-        # Filter for partial training if needed
-        filtered_pred = filter_blocks_by_partial_train(pred_H_matrix_metrics)
-        filtered_target = filter_blocks_by_partial_train(target_H_matrix)
-        filtered_overlap = filter_blocks_by_partial_train(overlap_e3nn)
-
-        # Create filtered versions for metrics computation
-        # ...existing code...
-
-        pred_filtered_blocks = {}
-        target_filtered_blocks = {}
-        overlap_filtered_blocks = {}
-
-        for key in target_H_matrix.pair_blocks.keys():
-            if key in pred_H_matrix_metrics.pair_blocks:
-                pred_full, pred_mask = filtered_pred[key]
-                targ_full, targ_mask = filtered_target[key]
-                ovlp_full, ovlp_mask = filtered_overlap[key]
-
-                min_n = min(pred_full.shape[0], targ_full.shape[0], ovlp_full.shape[0])
-                mask = pred_mask[:min_n] & targ_mask[:min_n] & ovlp_mask[:min_n]
-
-                if mask.any():
-                    pred_filtered_blocks[key] = pred_full[:min_n][mask]
-                    target_filtered_blocks[key] = targ_full[:min_n][mask]
-                    overlap_filtered_blocks[key] = ovlp_full[:min_n][mask]
-
-        # Create temporary BlockMatrix objects for metrics computation
-        pred_filtered = BlockMatrix(
-            atoms=target_H_matrix.atoms,
-            atom_counts=target_H_matrix.atom_counts,
-            pair_blocks=pred_filtered_blocks,
-            pair_edges={
-                key: target_H_matrix.pair_edges[key]
-                for key in pred_filtered_blocks.keys()
-            },
-            lookup=target_H_matrix.lookup,
-            orbital_cfg=target_H_matrix.orbital_cfg,
-            basis=target_H_matrix.basis,
+        pred_irreps_by_name[matrix_name] = IrrepsBlockData(
+            atoms=tuple(atoms_list),
+            atom_counts=Counter(atoms_list),
+            pair_vectors=pair_vec,
+            pair_edges=pair_edges_dict,
+            lookup=lookup_dict,
+            orbital_cfg=orbital_cfg,
+            basis=target_matrices[matrix_name].basis,
         )
-        target_filtered = BlockMatrix(
-            atoms=target_H_matrix.atoms,
-            atom_counts=target_H_matrix.atom_counts,
-            pair_blocks=target_filtered_blocks,
-            pair_edges={
-                key: target_H_matrix.pair_edges[key]
-                for key in target_filtered_blocks.keys()
-            },
-            lookup=target_H_matrix.lookup,
-            orbital_cfg=target_H_matrix.orbital_cfg,
-            basis=target_H_matrix.basis,
+        pred_matrix_norm_by_name[matrix_name] = pred_irreps_by_name[
+            matrix_name
+        ].to_blocks(mapper)
+        pred_matrix_metrics_by_name[matrix_name] = (
+            pred_matrix_norm_by_name[matrix_name]
+            + pred_matrix_norm_by_name[matrix_name].transpose()
+        ) * 0.5
+
+    pred_H_matrix_metrics = pred_matrix_metrics_by_name["hamiltonian"]
+
+    # Compute detailed metrics for final evaluation (Hamiltonian + overlap gauge correction).
+    final_detailed_metrics = compute_detailed_metrics(
+        pred_H_matrix_metrics, target_H_matrix, overlap_e3nn
+    )
+    final_basic_metrics_by_name = {
+        matrix_name: compute_basic_matrix_metrics(
+            pred_matrix_metrics_by_name[matrix_name],
+            target_matrices[matrix_name],
         )
-        overlap_filtered = BlockMatrix(
-            atoms=overlap_e3nn.atoms,
-            atom_counts=overlap_e3nn.atom_counts,
-            pair_blocks=overlap_filtered_blocks,
-            pair_edges={
-                key: overlap_e3nn.pair_edges[key]
-                for key in overlap_filtered_blocks.keys()
-            },
-            lookup=overlap_e3nn.lookup,
-            orbital_cfg=overlap_e3nn.orbital_cfg,
-            basis=overlap_e3nn.basis,
+        for matrix_name in CONFIG["matrix_targets"]
+    }
+
+    log_final_metrics(final_detailed_metrics)
+
+    final_metrics = {
+        "final/mae_H": final_detailed_metrics["mae"],
+        "final/mse_H": final_detailed_metrics["mse"],
+        "final/mae_H_mod": final_detailed_metrics["mae_mod"],
+        "final/mse_H_mod": final_detailed_metrics["mse_mod"],
+        "final/mu_H": final_detailed_metrics["mu_H"],
+        "final/correction_mae": final_detailed_metrics["correction_mae"],
+        "final/correction_mse": final_detailed_metrics["correction_mse"],
+    }
+    if "overlap" in final_basic_metrics_by_name:
+        final_metrics["final/mae_S"] = final_basic_metrics_by_name["overlap"]["mae"]
+        final_metrics["final/mse_S"] = final_basic_metrics_by_name["overlap"]["mse"]
+    if "density" in final_basic_metrics_by_name:
+        final_metrics["final/mae_D"] = final_basic_metrics_by_name["density"]["mae"]
+        final_metrics["final/mse_D"] = final_basic_metrics_by_name["density"]["mse"]
+
+    if (
+        CONFIG["enable_energy"]
+        and "hamiltonian" in pred_matrix_metrics_by_name
+        and "density" in pred_matrix_metrics_by_name
+    ):
+        energy_pred = trace_matmul_sparse_block_matrix(
+            pred_matrix_metrics_by_name["hamiltonian"],
+            pred_matrix_metrics_by_name["density"],
+        )
+        energy_abs_err = torch.abs(energy_pred - energy_target)
+        final_metrics["final/energy_pred"] = float(energy_pred.item())
+        final_metrics["final/energy_target"] = float(energy_target.item())
+        final_metrics["final/energy_mae"] = float(energy_abs_err.item())
+        print(
+            "  Energy: "
+            f"pred={float(energy_pred.item()):.8e}, "
+            f"target={float(energy_target.item()):.8e}, "
+            f"|err|={float(energy_abs_err.item()):.8e}"
         )
 
-        # Compute detailed metrics for final evaluation
-        final_detailed_metrics = compute_detailed_metrics(
-            pred_filtered, target_filtered, overlap_filtered
+    if (
+        CONFIG["enable_num_electrons"]
+        and "overlap" in pred_matrix_metrics_by_name
+        and "density" in pred_matrix_metrics_by_name
+    ):
+        num_electrons_pred = trace_matmul_sparse_block_matrix(
+            pred_matrix_metrics_by_name["density"],
+            pred_matrix_metrics_by_name["overlap"],
         )
-        final_basic_metrics_by_name = {
-            matrix_name: compute_basic_matrix_metrics(
-                pred_matrix_metrics_by_name[matrix_name],
-                target_matrices[matrix_name],
-            )
-            for matrix_name in CONFIG["matrix_targets"]
-        }
+        num_electrons_abs_err = torch.abs(num_electrons_pred - num_electrons_target)
+        final_metrics["final/num_electrons_pred"] = float(num_electrons_pred.item())
+        final_metrics["final/num_electrons_target"] = float(num_electrons_target.item())
+        final_metrics["final/num_electrons_mae"] = float(num_electrons_abs_err.item())
+        print(
+            "  Num electrons: "
+            f"pred={float(num_electrons_pred.item()):.8e}, "
+            f"target={float(num_electrons_target.item()):.8e}, "
+            f"|err|={float(num_electrons_abs_err.item()):.8e}"
+        )
 
-        log_final_metrics(final_detailed_metrics)
+    if (
+        CONFIG["enable_forces"]
+        and positions_eval is not None
+        and forces_target is not None
+        and "hamiltonian" in pred_matrix_metrics_by_name
+        and "density" in pred_matrix_metrics_by_name
+    ):
+        energy_for_forces = trace_matmul_sparse_block_matrix(
+            pred_matrix_metrics_by_name["hamiltonian"],
+            pred_matrix_metrics_by_name["density"],
+        )
+        grad_pos_eval = torch.autograd.grad(
+            energy_for_forces,
+            positions_eval,
+            create_graph=False,
+            retain_graph=False,
+        )[0]
+        forces_pred_eval = -grad_pos_eval
+        forces_err_eval = forces_pred_eval - forces_target
+        forces_mae_eval = torch.mean(torch.abs(forces_err_eval))
+        forces_mse_eval = torch.mean(forces_err_eval**2)
+        final_metrics["final/mae_F"] = float(forces_mae_eval.item())
+        final_metrics["final/mse_F"] = float(forces_mse_eval.item())
+        print(
+            "  Forces: "
+            f"mae={float(forces_mae_eval.item()):.8e}, "
+            f"mse={float(forces_mse_eval.item()):.8e}"
+        )
 
-        final_metrics = {
-            "final/mae_H": final_detailed_metrics["mae"],
-            "final/mse_H": final_detailed_metrics["mse"],
-            "final/mae_H_mod": final_detailed_metrics["mae_mod"],
-            "final/mse_H_mod": final_detailed_metrics["mse_mod"],
-            "final/mu_H": final_detailed_metrics["mu_H"],
-            "final/correction_mae": final_detailed_metrics["correction_mae"],
-            "final/correction_mse": final_detailed_metrics["correction_mse"],
-        }
-        if "overlap" in final_basic_metrics_by_name:
-            final_metrics["final/mae_S"] = final_basic_metrics_by_name["overlap"]["mae"]
-            final_metrics["final/mse_S"] = final_basic_metrics_by_name["overlap"]["mse"]
-        if "density" in final_basic_metrics_by_name:
-            final_metrics["final/mae_D"] = final_basic_metrics_by_name["density"]["mae"]
-            final_metrics["final/mse_D"] = final_basic_metrics_by_name["density"]["mse"]
+    # DOS comparison
+    dos_plot_path = run_checkpoint_dir / "dos_comparison_final.png"
+    try:
+        dos_metrics = save_dos_comparison_plot(
+            H_pred=pred_H_matrix_metrics,
+            H_gt=target_H_matrix,
+            S=overlap_e3nn,
+            output_path=dos_plot_path,
+            sigma=0.2,
+            bin_width=0.1,
+            title="DOS Comparison",
+        )
+        final_metrics.update(
+            {
+                "final/eig_abs_mean": dos_metrics["eig_abs_mean"],
+                "final/eig_abs_max": dos_metrics["eig_abs_max"],
+                "final/eig_rel_mean": dos_metrics["eig_rel_mean"],
+                "final/eig_rel_max": dos_metrics["eig_rel_max"],
+                "final/dos_mae": dos_metrics["dos_mae"],
+                "final/dos_mse": dos_metrics["dos_mse"],
+                "final/dos_max_abs": dos_metrics["dos_max_abs"],
+            }
+        )
+        wandb.log({"final/dos_comparison_plot": wandb.Image(str(dos_plot_path))})
+        print(
+            f"  DOS plot saved: {dos_plot_path} "
+            f"(dos_mae={dos_metrics['dos_mae']:.6e})"
+        )
+    except Exception as e:
+        print(f"[WARN] Could not generate DOS comparison plot: {e}")
 
-        if (
-            CONFIG["enable_energy"]
-            and "hamiltonian" in pred_matrix_metrics_by_name
-            and "density" in pred_matrix_metrics_by_name
-        ):
-            energy_pred = trace_matmul_sparse_block_matrix(
-                pred_matrix_metrics_by_name["hamiltonian"],
-                pred_matrix_metrics_by_name["density"],
-            )
-            energy_abs_err = torch.abs(energy_pred - energy_target)
-            final_metrics["final/energy_pred"] = float(energy_pred.item())
-            final_metrics["final/energy_target"] = float(energy_target.item())
-            final_metrics["final/energy_mae"] = float(energy_abs_err.item())
+    print("\n  Per-block Metrics:")
+    for key in target_H_matrix.pair_blocks.keys():
+        if key not in pred_H_matrix_metrics.pair_blocks:
+            continue
+        pred_block_full = pred_H_matrix_metrics.pair_blocks[key]
+        true_block_full = target_H_matrix.pair_blocks[key]
+        min_n = min(pred_block_full.shape[0], true_block_full.shape[0])
+        if min_n <= 0:
+            continue
+
+        pred_block = pred_block_full[:min_n]
+        true_block = true_block_full[:min_n]
+
+        block_mse = F.mse_loss(
+            pred_block,
+            (
+                true_block.to(pred_block.dtype)
+                if true_block.dtype != pred_block.dtype
+                else true_block
+            ),
+        ).item()
+        block_mae = torch.mean(torch.abs(pred_block - true_block)).item()
+
+        pair_irreps = mapper.get_pair_irreps(key)
+
+        num_selected = min_n
+        num_total = min_n
+
+        print(f"\n  {key}:")
+        print(f"    Block shape: {pred_block.shape}, Irreps: {pair_irreps}")
+        print(f"    MSE: {block_mse:.6e}")
+        print(f"    MAE: {block_mae:.6e}")
+        print(f"    Edges used: {num_selected}/{num_total}")
+        print(
+            f"    Relative error: {block_mae / (torch.abs(true_block).mean().item() + 1e-10):.6%}"
+        )
+
+        final_metrics[f"final/{key}_mse"] = block_mse
+        final_metrics[f"final/{key}_mae"] = block_mae
+
+    # Log final metrics to WandB
+    wandb.log(final_metrics)
+
+    # Distance-binned error curves (16 bins) for all targets
+    print("\n  Distance-binned error curves (16 bins):")
+    matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+    for matrix_name in CONFIG["matrix_targets"]:
+        print(f"    [{matrix_name}]")
+        distance_curve = compute_distance_error_curve(
+            H_pred=pred_matrix_metrics_by_name[matrix_name],
+            H_gt=target_matrices[matrix_name],
+            positions=positions,
+            box=box,
+            n_bins=16,
+        )
+        if distance_curve is None:
+            print("      No matched edges found for distance-curve computation.")
+            continue
+
+        curve_json_path = (
+            run_checkpoint_dir / f"distance_error_curve_{matrix_name}.json"
+        )
+        with open(curve_json_path, "w") as f:
+            json.dump(distance_curve, f, indent=2)
+
+        curve_plot_path = run_checkpoint_dir / f"distance_error_curve_{matrix_name}.png"
+        save_distance_error_curve_plot(
+            distance_curve,
+            curve_plot_path,
+            title=f"Distance Error Curves ({matrix_name}, Final, 16 bins)",
+        )
+
+        # Print a concise summary
+        l1_abs = [x for x in distance_curve["l1_abs"] if x == x]
+        l2_abs = [x for x in distance_curve["l2_abs"] if x == x]
+        l1_rel = [x for x in distance_curve["l1_rel"] if x == x]
+        l2_rel = [x for x in distance_curve["l2_rel"] if x == x]
+        if l1_abs and l2_abs and l1_rel and l2_rel:
             print(
-                "  Energy: "
-                f"pred={float(energy_pred.item()):.8e}, "
-                f"target={float(energy_target.item()):.8e}, "
-                f"|err|={float(energy_abs_err.item()):.8e}"
-            )
-
-        if (
-            CONFIG["enable_num_electrons"]
-            and "overlap" in pred_matrix_metrics_by_name
-            and "density" in pred_matrix_metrics_by_name
-        ):
-            num_electrons_pred = trace_matmul_sparse_block_matrix(
-                pred_matrix_metrics_by_name["density"],
-                pred_matrix_metrics_by_name["overlap"],
-            )
-            num_electrons_abs_err = torch.abs(num_electrons_pred - num_electrons_target)
-            final_metrics["final/num_electrons_pred"] = float(num_electrons_pred.item())
-            final_metrics["final/num_electrons_target"] = float(
-                num_electrons_target.item()
-            )
-            final_metrics["final/num_electrons_mae"] = float(
-                num_electrons_abs_err.item()
+                f"      L1 abs range: {min(l1_abs):.3e} .. {max(l1_abs):.3e}, "
+                f"L2 abs range: {min(l2_abs):.3e} .. {max(l2_abs):.3e}"
             )
             print(
-                "  Num electrons: "
-                f"pred={float(num_electrons_pred.item()):.8e}, "
-                f"target={float(num_electrons_target.item()):.8e}, "
-                f"|err|={float(num_electrons_abs_err.item()):.8e}"
+                f"      L1 rel range: {min(l1_rel):.3e} .. {max(l1_rel):.3e}, "
+                f"L2 rel range: {min(l2_rel):.3e} .. {max(l2_rel):.3e}"
             )
 
-        # DOS comparison
-        dos_plot_path = run_checkpoint_dir / "dos_comparison_final.png"
-        try:
-            dos_metrics = save_dos_comparison_plot(
-                H_pred=pred_H_matrix_metrics,
-                H_gt=target_H_matrix,
-                S=overlap_e3nn,
-                output_path=dos_plot_path,
-                sigma=0.2,
-                bin_width=0.1,
-                title="DOS Comparison",
-            )
-            final_metrics.update(
-                {
-                    "final/eig_abs_mean": dos_metrics["eig_abs_mean"],
-                    "final/eig_abs_max": dos_metrics["eig_abs_max"],
-                    "final/eig_rel_mean": dos_metrics["eig_rel_mean"],
-                    "final/eig_rel_max": dos_metrics["eig_rel_max"],
-                    "final/dos_mae": dos_metrics["dos_mae"],
-                    "final/dos_mse": dos_metrics["dos_mse"],
-                    "final/dos_max_abs": dos_metrics["dos_max_abs"],
-                }
-            )
-            wandb.log({"final/dos_comparison_plot": wandb.Image(str(dos_plot_path))})
-            print(
-                f"  DOS plot saved: {dos_plot_path} "
-                f"(dos_mae={dos_metrics['dos_mae']:.6e})"
-            )
-        except Exception as e:
-            print(f"[WARN] Could not generate DOS comparison plot: {e}")
+        alias = matrix_alias.get(matrix_name, matrix_name)
+        wandb.log(
+            {
+                f"distance_curve/{alias}_plot": wandb.Image(str(curve_plot_path)),
+            }
+        )
+        print(f"      Saved: {curve_json_path}")
+        print(f"      Saved: {curve_plot_path}")
 
-        print("\n  Per-block Metrics:")
-        for key in pred_filtered_blocks.keys():
-            pred_block = pred_filtered_blocks[key]
-            true_block = target_filtered_blocks[key]
-
-            block_mse = F.mse_loss(
-                pred_block,
-                (
-                    true_block.to(pred_block.dtype)
-                    if true_block.dtype != pred_block.dtype
-                    else true_block
-                ),
-            ).item()
-            block_mae = torch.mean(torch.abs(pred_block - true_block)).item()
-
-            pair_irreps = mapper.get_pair_irreps(key)
-
-            # Get mask info for reporting
-            _, mask = filtered_pred[key]
-            num_selected = (
-                mask[: pred_H_matrix_metrics.pair_blocks[key].shape[0]].sum().item()
-                if key in pred_H_matrix_metrics.pair_blocks
-                else 0
-            )
-            num_total = (
-                pred_H_matrix_metrics.pair_blocks[key].shape[0]
-                if key in pred_H_matrix_metrics.pair_blocks
-                else 0
-            )
-
-            print(f"\n  {key}:")
-            print(f"    Block shape: {pred_block.shape}, Irreps: {pair_irreps}")
-            print(f"    MSE: {block_mse:.6e}")
-            print(f"    MAE: {block_mae:.6e}")
-            print(
-                f"    Relative error: {block_mae / (torch.abs(true_block).mean().item() + 1e-10):.6%}"
-            )
-
-            final_metrics[f"final/{key}_mse"] = block_mse
-            final_metrics[f"final/{key}_mae"] = block_mae
-
-        # Log final metrics to WandB
-        wandb.log(final_metrics)
-
-        # Distance-binned error curves (16 bins) for all targets
-        print("\n  Distance-binned error curves (16 bins):")
+    # Per-irrep visualizations (k-range=0), separated by matrix target.
+    if CONFIG["log_per_irrep_images"]:
+        irrep_output_dir = run_checkpoint_dir / "per_irrep_images"
+        irrep_output_dir.mkdir(parents=True, exist_ok=True)
+        print("\n  Per-irrep visualizations (k-range=0, percentile=99):")
         matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
         for matrix_name in CONFIG["matrix_targets"]:
-            print(f"    [{matrix_name}]")
-            distance_curve = compute_distance_error_curve(
-                H_pred=pred_matrix_metrics_by_name[matrix_name],
-                H_gt=target_matrices[matrix_name],
-                positions=positions,
-                box=box,
-                partial_train=None,
-                n_bins=16,
-            )
-            if distance_curve is None:
-                print("      No matched edges found for distance-curve computation.")
-                continue
-
-            curve_json_path = (
-                run_checkpoint_dir / f"distance_error_curve_{matrix_name}.json"
-            )
-            with open(curve_json_path, "w") as f:
-                json.dump(distance_curve, f, indent=2)
-
-            curve_plot_path = (
-                run_checkpoint_dir / f"distance_error_curve_{matrix_name}.png"
-            )
-            save_distance_error_curve_plot(
-                distance_curve,
-                curve_plot_path,
-                title=f"Distance Error Curves ({matrix_name}, Final, 16 bins)",
-            )
-
-            # Print a concise summary
-            l1_abs = [x for x in distance_curve["l1_abs"] if x == x]
-            l2_abs = [x for x in distance_curve["l2_abs"] if x == x]
-            l1_rel = [x for x in distance_curve["l1_rel"] if x == x]
-            l2_rel = [x for x in distance_curve["l2_rel"] if x == x]
-            if l1_abs and l2_abs and l1_rel and l2_rel:
-                print(
-                    f"      L1 abs range: {min(l1_abs):.3e} .. {max(l1_abs):.3e}, "
-                    f"L2 abs range: {min(l2_abs):.3e} .. {max(l2_abs):.3e}"
-                )
-                print(
-                    f"      L1 rel range: {min(l1_rel):.3e} .. {max(l1_rel):.3e}, "
-                    f"L2 rel range: {min(l2_rel):.3e} .. {max(l2_rel):.3e}"
-                )
-
             alias = matrix_alias.get(matrix_name, matrix_name)
-            wandb.log(
-                {
-                    f"distance_curve/{alias}_plot": wandb.Image(str(curve_plot_path)),
-                }
-            )
-            print(f"      Saved: {curve_json_path}")
-            print(f"      Saved: {curve_plot_path}")
+            pred_matrix_full = pred_matrix_metrics_by_name[matrix_name]
+            target_matrix_full = target_matrices[matrix_name]
+            correction_overlap = overlap_e3nn if matrix_name == "hamiltonian" else None
+            print(f"    [{matrix_name}]")
+            for irrep in all_irreps:
+                irrep_str = str(irrep)
+                try:
+                    pred_irrep = split_hamiltonian_by_irrep(
+                        pred_matrix_full, mapper, irrep_str
+                    )
+                    target_irrep = split_hamiltonian_by_irrep(
+                        target_matrix_full, mapper, irrep_str
+                    )
 
-        # Per-irrep visualizations (k-range=0), separated by matrix target.
-        if CONFIG["log_per_irrep_images"]:
-            irrep_output_dir = run_checkpoint_dir / "per_irrep_images"
-            irrep_output_dir.mkdir(parents=True, exist_ok=True)
-            print("\n  Per-irrep visualizations (k-range=0, percentile=99):")
-            matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
-            for matrix_name in CONFIG["matrix_targets"]:
-                alias = matrix_alias.get(matrix_name, matrix_name)
-                pred_matrix_full = pred_matrix_metrics_by_name[matrix_name]
-                target_matrix_full = target_matrices[matrix_name]
-                correction_overlap = (
-                    overlap_e3nn if matrix_name == "hamiltonian" else None
-                )
-                print(f"    [{matrix_name}]")
-                for irrep in all_irreps:
-                    irrep_str = str(irrep)
-                    try:
-                        pred_irrep = split_hamiltonian_by_irrep(
-                            pred_matrix_full, mapper, irrep_str
-                        )
-                        target_irrep = split_hamiltonian_by_irrep(
-                            target_matrix_full, mapper, irrep_str
-                        )
+                    filename_prefix = f"{matrix_name}_{irrep_str}"
+                    visualize_hamiltonians(
+                        pred_irrep,
+                        target_irrep,
+                        correction_overlap,
+                        list(snapshot.hamiltonian.atoms),
+                        orbital_cfg,
+                        k_range=0,
+                        output_dir=irrep_output_dir,
+                        dynamic_range=True,
+                        diff_dynamic_range=True,
+                        per_panel_dynamic_range=True,
+                        filename_prefix=filename_prefix,
+                        percentile=99.0,
+                    )
 
-                        filename_prefix = f"{matrix_name}_{irrep_str}"
-                        visualize_hamiltonians(
-                            pred_irrep,
-                            target_irrep,
-                            correction_overlap,
-                            list(snapshot.hamiltonian.atoms),
-                            orbital_cfg,
-                            k_range=0,
-                            output_dir=irrep_output_dir,
-                            dynamic_range=True,
-                            diff_dynamic_range=True,
-                            per_panel_dynamic_range=True,
-                            partial_train=None,
-                            filename_prefix=filename_prefix,
-                            percentile=99.0,
+                    image_path = (
+                        irrep_output_dir / f"{filename_prefix}_sx+0_sy+0_sz+0.png"
+                    )
+                    if image_path.exists():
+                        wandb.log(
+                            {
+                                f"irrep_images/{alias}/{irrep_str}": wandb.Image(
+                                    str(image_path)
+                                )
+                            }
                         )
-
-                        image_path = (
-                            irrep_output_dir / f"{filename_prefix}_sx+0_sy+0_sz+0.png"
-                        )
-                        if image_path.exists():
-                            wandb.log(
-                                {
-                                    f"irrep_images/{alias}/{irrep_str}": wandb.Image(
-                                        str(image_path)
-                                    )
-                                }
-                            )
-                        else:
-                            print(
-                                f"      [WARN] Missing image for irrep {irrep_str}: {image_path.name}"
-                            )
-                    except Exception as e:
+                    else:
                         print(
-                            f"      [WARN] Irrep {irrep_str} visualization failed: {e}"
+                            f"      [WARN] Missing image for irrep {irrep_str}: {image_path.name}"
                         )
+                except Exception as e:
+                    print(f"      [WARN] Irrep {irrep_str} visualization failed: {e}")
 
     # Save final model
     final_model_path = run_checkpoint_dir / "final_model.pt"

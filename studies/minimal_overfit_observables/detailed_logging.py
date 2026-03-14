@@ -31,9 +31,10 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         if config["grad_clip"] > 0
         else "  Gradient clipping: disabled"
     )
+    partial_train = config.get("partial_train", None)
     print(
-        f"  Partial training: {config['partial_train']} blocks only"
-        if config["partial_train"] is not None
+        f"  Partial training: {partial_train} blocks only"
+        if partial_train is not None
         else "  Partial training: disabled (training on all blocks)"
     )
     print(
@@ -53,7 +54,7 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
     )
     print(
         "  Block normalization: enabled (per-key, per-diagonal-status)"
-        if config["normalize_blocks"]
+        if config.get("normalize_blocks", False)
         else "  Block normalization: disabled"
     )
     print(
