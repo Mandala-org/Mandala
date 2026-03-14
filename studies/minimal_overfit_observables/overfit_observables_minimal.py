@@ -233,7 +233,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cutoff-radius",
         type=float,
-        default=8.0,
+        default=7.0,
         help="Cutoff radius in Angstroms",
     )
     parser.add_argument(
