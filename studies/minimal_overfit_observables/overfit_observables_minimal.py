@@ -2702,51 +2702,66 @@ if __name__ == "__main__":
             print(f"      Saved: {curve_json_path}")
             print(f"      Saved: {curve_plot_path}")
 
-        # Per-irrep visualizations (k-range=0)
+        # Per-irrep visualizations (k-range=0), separated by matrix target.
         if CONFIG["log_per_irrep_images"]:
             irrep_output_dir = run_checkpoint_dir / "per_irrep_images"
             irrep_output_dir.mkdir(parents=True, exist_ok=True)
             print("\n  Per-irrep visualizations (k-range=0, percentile=99):")
-
-            for irrep in all_irreps:
-                irrep_str = str(irrep)
-                try:
-                    pred_irrep = split_hamiltonian_by_irrep(
-                        pred_H_matrix_metrics, mapper, irrep_str
-                    )
-                    target_irrep = split_hamiltonian_by_irrep(
-                        target_H_matrix, mapper, irrep_str
-                    )
-
-                    visualize_hamiltonians(
-                        pred_irrep,
-                        target_irrep,
-                        overlap_e3nn,
-                        list(snapshot.hamiltonian.atoms),
-                        orbital_cfg,
-                        k_range=0,
-                        output_dir=irrep_output_dir,
-                        dynamic_range=True,
-                        diff_dynamic_range=True,
-                        per_panel_dynamic_range=True,
-                        partial_train=None,
-                        filename_prefix=f"hamiltonian_{irrep_str}",
-                        percentile=99.0,
-                    )
-
-                    image_path = (
-                        irrep_output_dir / f"hamiltonian_{irrep_str}_sx+0_sy+0_sz+0.png"
-                    )
-                    if image_path.exists():
-                        wandb.log(
-                            {f"irrep_images/{irrep_str}": wandb.Image(str(image_path))}
+            matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+            for matrix_name in CONFIG["matrix_targets"]:
+                alias = matrix_alias.get(matrix_name, matrix_name)
+                pred_matrix_full = pred_matrix_metrics_by_name[matrix_name]
+                target_matrix_full = target_matrices[matrix_name]
+                correction_overlap = (
+                    overlap_e3nn if matrix_name == "hamiltonian" else None
+                )
+                print(f"    [{matrix_name}]")
+                for irrep in all_irreps:
+                    irrep_str = str(irrep)
+                    try:
+                        pred_irrep = split_hamiltonian_by_irrep(
+                            pred_matrix_full, mapper, irrep_str
                         )
-                    else:
+                        target_irrep = split_hamiltonian_by_irrep(
+                            target_matrix_full, mapper, irrep_str
+                        )
+
+                        filename_prefix = f"{matrix_name}_{irrep_str}"
+                        visualize_hamiltonians(
+                            pred_irrep,
+                            target_irrep,
+                            correction_overlap,
+                            list(snapshot.hamiltonian.atoms),
+                            orbital_cfg,
+                            k_range=0,
+                            output_dir=irrep_output_dir,
+                            dynamic_range=True,
+                            diff_dynamic_range=True,
+                            per_panel_dynamic_range=True,
+                            partial_train=None,
+                            filename_prefix=filename_prefix,
+                            percentile=99.0,
+                        )
+
+                        image_path = (
+                            irrep_output_dir / f"{filename_prefix}_sx+0_sy+0_sz+0.png"
+                        )
+                        if image_path.exists():
+                            wandb.log(
+                                {
+                                    f"irrep_images/{alias}/{irrep_str}": wandb.Image(
+                                        str(image_path)
+                                    )
+                                }
+                            )
+                        else:
+                            print(
+                                f"      [WARN] Missing image for irrep {irrep_str}: {image_path.name}"
+                            )
+                    except Exception as e:
                         print(
-                            f"    [WARN] Missing image for irrep {irrep_str}: {image_path.name}"
+                            f"      [WARN] Irrep {irrep_str} visualization failed: {e}"
                         )
-                except Exception as e:
-                    print(f"    [WARN] Irrep {irrep_str} visualization failed: {e}")
 
     # Save final model
     final_model_path = run_checkpoint_dir / "final_model.pt"
