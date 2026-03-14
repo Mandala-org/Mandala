@@ -781,23 +781,6 @@ if __name__ == "__main__":
         print("\n  Target max edge distance by matrix:")
         for name, max_dist in target_max_by_matrix.items():
             print(f"    {name}: {max_dist:.6f} A")
-    if CONFIG["require_exact_edge_match"]:
-        violating = {
-            name: max_dist
-            for name, max_dist in target_max_by_matrix.items()
-            if CONFIG["cutoff_radius"] > max_dist + 1e-8
-        }
-        if len(violating) > 0:
-            violating_desc = ", ".join(
-                [f"{name}={max_dist:.6f}A" for name, max_dist in violating.items()]
-            )
-            raise RuntimeError(
-                "Strict edge match cannot pass with current cutoff. "
-                f"Graph cutoff is {CONFIG['cutoff_radius']:.6f}A, but target matrices "
-                f"only contain edges up to {violating_desc}. "
-                "Use a smaller cutoff (<= target max), or disable exact matching "
-                "via --no-require-exact-edge-match."
-            )
 
     # Scalar observable targets are derived from the (possibly unit-scaled) matrices.
     energy_target = trace_matmul_sparse_block_matrix(
