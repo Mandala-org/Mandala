@@ -1247,6 +1247,36 @@ def compute_detailed_metrics(H_pred, H_gt, S):
     }
 
 
+def compute_basic_matrix_metrics(M_pred, M_gt):
+    """
+    Compute basic MAE/MSE for a generic block matrix pair.
+    """
+    mae = 0.0
+    mse = 0.0
+    total_elements = 0
+
+    for key in M_gt.pair_blocks.keys():
+        if key in M_pred.pair_blocks:
+            pred_blocks = M_pred.pair_blocks[key]
+            gt_blocks = M_gt.pair_blocks[key]
+            min_n = min(pred_blocks.shape[0], gt_blocks.shape[0])
+            if min_n <= 0:
+                continue
+
+            diff = pred_blocks[:min_n] - gt_blocks[:min_n]
+            mae += torch.sum(torch.abs(diff)).item()
+            mse += torch.sum(diff**2).item()
+            total_elements += diff.numel()
+
+    if total_elements <= 0:
+        return {"mae": 0.0, "mse": 0.0}
+
+    return {
+        "mae": mae / total_elements,
+        "mse": mse / total_elements,
+    }
+
+
 def compute_distance_error_curve(
     H_pred,
     H_gt,
@@ -1975,6 +2005,7 @@ def visualize_hamiltonians(
     partial_train=None,
     filename_prefix="hamiltonian",
     percentile=80.0,
+    matrix_label: str = "H",
 ):
     """
     Visualize Hamiltonians for all [sx, sy, sz] combinations in [-k, k]^3.
@@ -2010,8 +2041,11 @@ def visualize_hamiltonians(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Compute mu_H
-    mu_H = compute_mu_H(H_pred, H_gt, S)
+    # Compute optional gauge correction (Hamiltonian-only).
+    if S is not None:
+        mu_H = compute_mu_H(H_pred, H_gt, S)
+    else:
+        mu_H = 0.0
 
     print(f"\nVisualizing Hamiltonians for shifts in [{-k_range}, {k_range}]^3")
     print(f"mu_H correction factor: {mu_H:.6e}")
@@ -2048,7 +2082,10 @@ def visualize_hamiltonians(
 
         # Compute differences
         diff = H_pred_dense - H_gt_dense
-        diff_corrected = diff - mu_H * S_dense if S_dense is not None else diff
+        if S_dense is not None:
+            diff_corrected = diff - mu_H * S_dense
+        else:
+            diff_corrected = np.abs(diff)
 
         # Check if there's any data for this shift
         if np.abs(H_gt_dense).max() < 1e-10 and np.abs(H_pred_dense).max() < 1e-10:
@@ -2060,15 +2097,13 @@ def visualize_hamiltonians(
 
         # Build title with irrep information if present
         if filename_prefix == "hamiltonian":
-            title = f"Hamiltonian Analysis: shift = [{sx}, {sy}, {sz}]"
+            title = f"{matrix_label} Analysis: shift = [{sx}, {sy}, {sz}]"
         elif filename_prefix == "hamiltonian_rotated":
-            title = f"Hamiltonian Analysis (Rotated): shift = [{sx}, {sy}, {sz}]"
+            title = f"{matrix_label} Analysis (Rotated): shift = [{sx}, {sy}, {sz}]"
         else:
             # Extract irrep from prefix (e.g., "hamiltonian_0e" -> "0e")
             irrep_name = filename_prefix.replace("hamiltonian_", "")
-            title = (
-                f"Hamiltonian Analysis - Irrep {irrep_name}: shift = [{sx}, {sy}, {sz}]"
-            )
+            title = f"{matrix_label} Analysis - Irrep {irrep_name}: shift = [{sx}, {sy}, {sz}]"
 
         if partial_train is not None:
             title += f" ({partial_train} blocks only)"
@@ -2116,7 +2151,9 @@ def visualize_hamiltonians(
 
         # 1. Ground truth (top-left)
         im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_gt, vmax=vmax_gt)
-        axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
+        axes[0, 0].set_title(
+            f"Ground Truth {matrix_label}\nMax: {np.abs(H_gt_dense).max():.3f}"
+        )
         axes[0, 0].set_xlabel("Orbital j")
         axes[0, 0].set_ylabel("Orbital i")
         plt.colorbar(im0, ax=axes[0, 0])
@@ -2125,7 +2162,9 @@ def visualize_hamiltonians(
         im1 = axes[0, 1].imshow(
             H_pred_dense, cmap="bwr", vmin=vmin_pred, vmax=vmax_pred
         )
-        axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
+        axes[0, 1].set_title(
+            f"Predicted {matrix_label}\nMax: {np.abs(H_pred_dense).max():.3f}"
+        )
         axes[0, 1].set_xlabel("Orbital j")
         axes[0, 1].set_ylabel("Orbital i")
         plt.colorbar(im1, ax=axes[0, 1])
@@ -2137,16 +2176,21 @@ def visualize_hamiltonians(
         axes[1, 0].set_ylabel("Orbital i")
         plt.colorbar(im2, ax=axes[1, 0])
 
-        # 4. Corrected difference (bottom-right)
+        # 4. Corrected difference (bottom-right) or abs diff for non-H matrices
         im3 = axes[1, 1].imshow(
             diff_corrected,
             cmap="bwr",
             vmin=vmin_diff_corr,
             vmax=vmax_diff_corr,
         )
-        axes[1, 1].set_title(
-            f"Corrected Diff (mu_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
-        )
+        if S_dense is not None:
+            axes[1, 1].set_title(
+                f"Corrected Diff (mu_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
+            )
+        else:
+            axes[1, 1].set_title(
+                f"Absolute Error |pred-gt|\nMAE: {np.abs(diff).mean():.3e}"
+            )
         axes[1, 1].set_xlabel("Orbital j")
         axes[1, 1].set_ylabel("Orbital i")
         plt.colorbar(im3, ax=axes[1, 1])
@@ -2179,6 +2223,7 @@ def create_hamiltonian_frame_figure(
     return_buffer=False,
     epoch=None,
     max_atoms=None,
+    matrix_label: str = "H",
 ):
     """
     Create a single matplotlib figure showing Hamiltonian comparison for one shift.
@@ -2239,10 +2284,12 @@ def create_hamiltonian_frame_figure(
 
     # Compute differences
     diff = H_pred_dense - H_gt_dense
-    diff_corrected = (
-        diff - compute_mu_H(H_pred, H_gt, S) * S_dense if S_dense is not None else diff
-    )
-    mu_H = compute_mu_H(H_pred, H_gt, S)
+    if S_dense is not None:
+        mu_H = compute_mu_H(H_pred, H_gt, S)
+        diff_corrected = diff - mu_H * S_dense
+    else:
+        mu_H = 0.0
+        diff_corrected = np.abs(diff)
 
     # Check if there's any data for this shift
     if np.abs(H_gt_dense).max() < 1e-10 and np.abs(H_pred_dense).max() < 1e-10:
@@ -2293,14 +2340,18 @@ def create_hamiltonian_frame_figure(
 
     # 1. Ground truth (top-left)
     im0 = axes[0, 0].imshow(H_gt_dense, cmap="bwr", vmin=vmin_gt, vmax=vmax_gt)
-    axes[0, 0].set_title(f"Ground Truth H\nMax: {np.abs(H_gt_dense).max():.3f}")
+    axes[0, 0].set_title(
+        f"Ground Truth {matrix_label}\nMax: {np.abs(H_gt_dense).max():.3f}"
+    )
     axes[0, 0].set_xlabel("Orbital j")
     axes[0, 0].set_ylabel("Orbital i")
     plt.colorbar(im0, ax=axes[0, 0])
 
     # 2. Predicted (top-right)
     im1 = axes[0, 1].imshow(H_pred_dense, cmap="bwr", vmin=vmin_pred, vmax=vmax_pred)
-    axes[0, 1].set_title(f"Predicted H\nMax: {np.abs(H_pred_dense).max():.3f}")
+    axes[0, 1].set_title(
+        f"Predicted {matrix_label}\nMax: {np.abs(H_pred_dense).max():.3f}"
+    )
     axes[0, 1].set_xlabel("Orbital j")
     axes[0, 1].set_ylabel("Orbital i")
     plt.colorbar(im1, ax=axes[0, 1])
@@ -2312,16 +2363,21 @@ def create_hamiltonian_frame_figure(
     axes[1, 0].set_ylabel("Orbital i")
     plt.colorbar(im2, ax=axes[1, 0])
 
-    # 4. Corrected difference (bottom-right)
+    # 4. Corrected difference (bottom-right) or abs diff for non-H matrices
     im3 = axes[1, 1].imshow(
         diff_corrected,
         cmap="bwr",
         vmin=vmin_diff_corr,
         vmax=vmax_diff_corr,
     )
-    axes[1, 1].set_title(
-        f"Corrected Diff (mu_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
-    )
+    if S_dense is not None:
+        axes[1, 1].set_title(
+            f"Corrected Diff (mu_H={mu_H:.2e})\nMAE: {np.abs(diff_corrected).mean():.3e}"
+        )
+    else:
+        axes[1, 1].set_title(
+            f"Absolute Error |pred-gt|\nMAE: {np.abs(diff).mean():.3e}"
+        )
     axes[1, 1].set_xlabel("Orbital j")
     axes[1, 1].set_ylabel("Orbital i")
     plt.colorbar(im3, ax=axes[1, 1])
@@ -2369,6 +2425,7 @@ def save_hamiltonian_frame_to_disk(
     partial_train=None,
     percentile=80.0,
     max_atoms=None,
+    matrix_label: str = "H",
 ):
     """
     Save a single Hamiltonian visualization frame to disk for video creation.
@@ -2418,6 +2475,7 @@ def save_hamiltonian_frame_to_disk(
         percentile=percentile,
         epoch=epoch,
         max_atoms=max_atoms,
+        matrix_label=matrix_label,
     )
 
     # Save figure
@@ -2555,7 +2613,7 @@ def split_hamiltonian_by_irrep(H_matrix, mapper, target_irrep):
 
 def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
     """
-    Compute per-irrep metrics with detailed element-level, block-level, and full-matrix metrics.
+    Compute per-irrep block metrics.
 
     Args:
         pred_H_irreps: Predicted Hamiltonian as IrrepsBlockData
@@ -2565,14 +2623,10 @@ def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
 
     Returns:
         Dictionary with keys:
-        - {irrep_str}_l1_elem: MAE (averaged over all elements)
-        - {irrep_str}_l2_elem: RMSE (averaged over all elements)
-        - {irrep_str}_l1_block: Sum absolute error per block, averaged over blocks
-        - {irrep_str}_l1_block_rel: L1 norm of error / L1 norm of target (blocks)
-        - {irrep_str}_l2_block: Root of sum of squared elements, averaged over blocks
-        - {irrep_str}_l2_block_rel: L2 norm of error / L2 norm of target (blocks)
-        - {irrep_str}_l1_full_rel: L1 norm of full error matrix / L1 norm of full target matrix
-        - {irrep_str}_l2_full_rel: L2 norm of full error matrix / L2 norm of full target matrix
+        - {irrep_str}_l1_block_abs
+        - {irrep_str}_l1_block_rel
+        - {irrep_str}_l2_block_abs
+        - {irrep_str}_l2_block_rel
     """
 
     irrep_metrics = {}
@@ -2590,19 +2644,12 @@ def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
         pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
         target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
 
-        # Initialize accumulators
-        sum_l1_elem = 0.0  # Sum of absolute errors (element-level)
-        sum_l2_elem = 0.0  # Sum of squared errors (element-level)
-        total_elements = 0  # Total number of elements
-
+        # Initialize accumulators (block-level only)
         sum_l1_block = 0.0  # Sum of L1 norms (block-level)
         sum_l1_target_block = 0.0  # Sum of L1 norms of target blocks
         sum_l2_block_sq = 0.0  # Sum of L2 norms squared (block-level)
         sum_l2_target_block_sq = 0.0  # Sum of L2 norms squared of target blocks
         total_blocks = 0  # Count of blocks
-
-        sum_l1_target_full = 0.0  # L1 norm of full target matrix
-        sum_l2_target_full_sq = 0.0  # L2 norm squared of full target matrix
 
         # Iterate through each edge type
         for key in target_irrep_blocks.pair_blocks.keys():
@@ -2630,30 +2677,17 @@ def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
                 l1_target_blocks = torch.sum(torch.abs(targ_sel), dim=(1, 2))
                 l2_target_blocks_sq = torch.sum(targ_sel**2, dim=(1, 2))
 
-                # Accumulate element-level metrics
-                sum_l1_elem += torch.sum(l1_error_blocks).item()
-                sum_l2_elem += torch.sum(l2_error_blocks_sq).item()
-                total_elements += diff.numel()
-
                 # Accumulate block-level metrics
                 sum_l1_block += torch.sum(l1_error_blocks).item()
                 sum_l1_target_block += torch.sum(l1_target_blocks).item()
                 sum_l2_block_sq += torch.sum(l2_error_blocks_sq).item()
                 sum_l2_target_block_sq += torch.sum(l2_target_blocks_sq).item()
                 total_blocks += pred_sel.shape[0]
-
-                # Accumulate full matrix metrics
-                sum_l1_target_full += torch.sum(l1_target_blocks).item()
-                sum_l2_target_full_sq += torch.sum(l2_target_blocks_sq).item()
-
-        if total_elements > 0:
-            # Compute element-level metrics
-            l1_elem = sum_l1_elem / total_elements
-            l2_elem = (sum_l2_elem / total_elements) ** 0.5
+        if total_blocks > 0:
 
             # Compute block-level metrics
-            l1_block = sum_l1_block / max(total_blocks, 1)
-            l2_block = (sum_l2_block_sq / max(total_blocks, 1)) ** 0.5
+            l1_block_abs = sum_l1_block / max(total_blocks, 1)
+            l2_block_abs = (sum_l2_block_sq / max(total_blocks, 1)) ** 0.5
 
             # Compute block-level relative metrics
             l1_block_rel = sum_l1_block / (sum_l1_target_block + _REL_EPS)
@@ -2661,20 +2695,12 @@ def compute_irrep_metrics(pred_H_irreps, target_H_irreps, all_irreps, mapper):
                 sum_l2_target_block_sq**0.5 + _REL_EPS
             )
 
-            # Compute full-matrix relative metrics (using element-level accumulators)
-            l1_full_rel = sum_l1_elem / (sum_l1_target_full + _REL_EPS)
-            l2_full_rel = (sum_l2_elem**0.5) / (sum_l2_target_full_sq**0.5 + _REL_EPS)
-
             # Store all metrics
             irrep_str = str(irrep)
-            irrep_metrics[f"{irrep_str}_l1_elem"] = l1_elem
-            irrep_metrics[f"{irrep_str}_l2_elem"] = l2_elem
-            irrep_metrics[f"{irrep_str}_l1_block"] = l1_block
+            irrep_metrics[f"{irrep_str}_l1_block_abs"] = l1_block_abs
             irrep_metrics[f"{irrep_str}_l1_block_rel"] = l1_block_rel
-            irrep_metrics[f"{irrep_str}_l2_block"] = l2_block
+            irrep_metrics[f"{irrep_str}_l2_block_abs"] = l2_block_abs
             irrep_metrics[f"{irrep_str}_l2_block_rel"] = l2_block_rel
-            irrep_metrics[f"{irrep_str}_l1_full_rel"] = l1_full_rel
-            irrep_metrics[f"{irrep_str}_l2_full_rel"] = l2_full_rel
 
     return irrep_metrics
 
