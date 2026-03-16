@@ -962,6 +962,44 @@ if __name__ == "__main__":
     if CONFIG["log_data"]:
         print(f"\n  Batch indices: nodes {batch_node.shape}, edges {batch_edge.shape}")
 
+    atoms_tuple = tuple(atoms_list)
+    atom_counts = Counter(atoms_list)
+    matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+    matrix_label_by_name = {
+        "hamiltonian": "H",
+        "overlap": "S",
+        "density": "D",
+    }
+    irrep_prefix_by_matrix = {
+        "hamiltonian": "H_",
+        "overlap": "S_",
+        "density": "D_",
+    }
+    target_basis_by_name = {
+        matrix_name: target_matrices[matrix_name].basis
+        for matrix_name in CONFIG["matrix_targets"]
+    }
+
+    pred_pair_edges_static = {}
+    pred_lookup_static = {}
+    pred_edge_keys = []
+    for key in mapper.edge_types:
+        type_idx = mapper.edge_type2idx[key]
+        mask = edge_type_idx == type_idx
+        if not bool(mask.any().item()):
+            continue
+        edges_5d = torch.cat([edge_shift[:, mask], edge_index[:, mask]], dim=0)
+        pred_pair_edges_static[key] = edges_5d
+        pred_edge_keys.append(key)
+        for idx, edge_5d in enumerate(edges_5d.t().tolist()):
+            sx, sy, sz, i, j = edge_5d
+            pred_lookup_static[(int(sx), int(sy), int(sz), int(i), int(j))] = (
+                key,
+                idx,
+            )
+    pred_edge_keys = tuple(pred_edge_keys)
+    pred_edge_key_set = set(pred_edge_keys)
+
     # =============================================================================
     # STRICT EDGE ALIGNMENT CHECKS
     # =============================================================================
@@ -1080,6 +1118,32 @@ if __name__ == "__main__":
 
     def finalize_block_loss(acc):
         return acc["loss_sum"]
+
+    def wrap_raw_predictions_to_irreps(pred_raw_by_matrix):
+        pair_vectors_by_name = {}
+        pred_irreps_by_name = {}
+        for matrix_name in CONFIG["matrix_targets"]:
+            raw_matrix = pred_raw_by_matrix[matrix_name]
+            raw_key_set = set(raw_matrix.keys())
+            if raw_key_set != pred_edge_key_set:
+                missing_keys = sorted(pred_edge_key_set - raw_key_set)
+                extra_keys = sorted(raw_key_set - pred_edge_key_set)
+                raise RuntimeError(
+                    f"Raw prediction keys for '{matrix_name}' do not match graph keys. "
+                    f"Missing: {missing_keys}, extra: {extra_keys}"
+                )
+            pair_vec = {key: raw_matrix[key]["vectors"] for key in pred_edge_keys}
+            pair_vectors_by_name[matrix_name] = pair_vec
+            pred_irreps_by_name[matrix_name] = IrrepsBlockData(
+                atoms=atoms_tuple,
+                atom_counts=atom_counts,
+                pair_vectors=pair_vec,
+                pair_edges=pred_pair_edges_static,
+                lookup=pred_lookup_static,
+                orbital_cfg=orbital_cfg,
+                basis=target_basis_by_name[matrix_name],
+            )
+        return pair_vectors_by_name, pred_irreps_by_name
 
     # =============================================================================
     # DEFINE MINIMAL NETWORK
@@ -1284,6 +1348,7 @@ if __name__ == "__main__":
             epoch_core_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
             network.train()
             optimizer.zero_grad(set_to_none=True)
+            stop_after_epoch = False
 
             should_log_now = should_log_epoch(epoch)
             epoch_lr = optimizer.param_groups[0]["lr"]
@@ -1343,36 +1408,12 @@ if __name__ == "__main__":
                     f"Got: {sorted(list(pred_raw_by_matrix.keys()))}"
                 )
 
-            # Wrap predictions into IrrepsBlockData then convert to matrix blocks.
+            # Wrap predictions into IrrepsBlockData using the precomputed graph
+            # structure. Only the vectors change across epochs.
             t_pack_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
-            pair_vectors_by_name = {}
-            pred_irreps_by_name = {}
-            for matrix_name in CONFIG["matrix_targets"]:
-                raw_matrix = pred_raw_by_matrix[matrix_name]
-                pair_vec = {}
-                pair_edges_dict = {}
-                lookup_dict = {}
-
-                for key, payload in raw_matrix.items():
-                    pair_vec[key] = payload["vectors"]
-                    pair_edges_dict[key] = payload["edges"]
-                    for idx, edge_5d in enumerate(payload["edges"].t()):
-                        sx, sy, sz, i, j = edge_5d.tolist()
-                        lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
-                            key,
-                            idx,
-                        )
-
-                pair_vectors_by_name[matrix_name] = pair_vec
-                pred_irreps_by_name[matrix_name] = IrrepsBlockData(
-                    atoms=tuple(atoms_list),
-                    atom_counts=Counter(atoms_list),
-                    pair_vectors=pair_vec,
-                    pair_edges=pair_edges_dict,
-                    lookup=lookup_dict,
-                    orbital_cfg=orbital_cfg,
-                    basis=target_matrices[matrix_name].basis,
-                )
+            pair_vectors_by_name, pred_irreps_by_name = wrap_raw_predictions_to_irreps(
+                pred_raw_by_matrix
+            )
 
             if CONFIG["benchmark"]:
                 benchmark_add(
@@ -1578,7 +1619,6 @@ if __name__ == "__main__":
 
             # Log current learning rate
             current_lr = optimizer.param_groups[0]["lr"]
-            wandb.log({"lr": current_lr, "epoch": epoch})
             # Check for NaN or Inf in loss before backward pass
             if torch.isnan(loss) or torch.isinf(loss):
                 failure_payload = log_invalid_loss_failure(
@@ -1601,9 +1641,9 @@ if __name__ == "__main__":
             # Gradient clipping to prevent exploding gradients
             if CONFIG["grad_clip"] > 0:
                 grad_norm = clip_grad_norm_(network.parameters(), CONFIG["grad_clip"])
-                # Log gradient norm periodically
-                if should_log_now:
-                    wandb.log({"grad_norm": grad_norm.item(), "epoch": epoch})
+                grad_norm_value = float(grad_norm.item())
+            else:
+                grad_norm_value = None
 
             # Check for NaN/Inf in gradients
             has_nan_grad = False
@@ -1633,8 +1673,8 @@ if __name__ == "__main__":
             if CONFIG["benchmark"]:
                 benchmark_add("optimizer_step", time.perf_counter() - t_optimizer_start)
 
-            # Log training loss at every step
-            step_log = {
+            # Collect scalar logs and emit a single WandB payload per epoch.
+            epoch_wandb_log = {
                 "train/loss_step": loss.item(),
                 "train/loss_total": loss.item(),
                 "train/loss_block_total": loss_block.item(),
@@ -1642,136 +1682,133 @@ if __name__ == "__main__":
                 "lr": current_lr,
             }
             for matrix_name, matrix_loss in matrix_block_losses.items():
-                step_log[f"train/loss_block_{matrix_name}"] = float(matrix_loss.item())
+                epoch_wandb_log[f"train/loss_block_{matrix_name}"] = float(
+                    matrix_loss.item()
+                )
 
             if CONFIG["train_on_energy"]:
-                step_log["train/loss_energy_weighted"] = float(
+                epoch_wandb_log["train/loss_energy_weighted"] = float(
                     loss_energy_weighted.item()
                 )
             if CONFIG["train_on_num_electrons"]:
-                step_log["train/loss_num_electrons_weighted"] = float(
+                epoch_wandb_log["train/loss_num_electrons_weighted"] = float(
                     loss_num_electrons_weighted.item()
                 )
             if CONFIG["train_on_forces"]:
-                step_log["train/loss_forces_weighted"] = float(
+                epoch_wandb_log["train/loss_forces_weighted"] = float(
                     loss_forces_weighted.item()
                 )
             if energy_mae is not None:
-                step_log["train/energy_mae"] = float(energy_mae.item())
+                epoch_wandb_log["train/energy_mae"] = float(energy_mae.item())
             if num_electrons_mae is not None:
-                step_log["train/num_electrons_mae"] = float(num_electrons_mae.item())
+                epoch_wandb_log["train/num_electrons_mae"] = float(
+                    num_electrons_mae.item()
+                )
             if forces_mae is not None and forces_mse is not None:
-                step_log["train/forces_mae"] = float(forces_mae.item())
-                step_log["train/forces_mse"] = float(forces_mse.item())
+                epoch_wandb_log["train/forces_mae"] = float(forces_mae.item())
+                epoch_wandb_log["train/forces_mse"] = float(forces_mse.item())
+            if grad_norm_value is not None and should_log_now:
+                epoch_wandb_log["grad_norm"] = grad_norm_value
 
             # Log per-irrep losses if enabled
             if CONFIG["train_on_irrep_parts"]:
-                matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
                 for matrix_name, irrep_losses in irrep_losses_by_matrix.items():
                     prefix = matrix_alias.get(matrix_name, matrix_name)
                     for irrep_str, irrep_loss in irrep_losses.items():
-                        step_log[f"partial/{prefix}_{irrep_str}"] = float(
+                        epoch_wandb_log[f"partial/{prefix}_{irrep_str}"] = float(
                             irrep_loss.item()
                         )
 
-            t_step_wandb_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
-            wandb.log(step_log)
-            if CONFIG["benchmark"]:
-                benchmark_add(
-                    "step_wandb_log", time.perf_counter() - t_step_wandb_start
-                )
-                benchmark_add("epoch_total", time.perf_counter() - epoch_core_start)
-                benchmark_epochs_accum += 1
-
             # Logging
             if should_log_now:
-                pred_H_matrix_metrics = pred_matrix_metrics_by_name["hamiltonian"]
+                with torch.no_grad():
+                    pred_matrix_metrics_log_by_name = {
+                        matrix_name: pred_matrix_metrics_by_name[matrix_name].detach()
+                        for matrix_name in CONFIG["matrix_targets"]
+                    }
+                    pred_H_matrix_metrics = pred_matrix_metrics_log_by_name[
+                        "hamiltonian"
+                    ]
 
-                detailed_metrics = compute_detailed_metrics(
-                    pred_H_matrix_metrics, target_H_matrix, overlap_e3nn
-                )
-                matrix_basic_metrics = {
-                    matrix_name: compute_basic_matrix_metrics(
-                        pred_matrix_metrics_by_name[matrix_name],
-                        target_matrices[matrix_name],
+                    detailed_metrics = compute_detailed_metrics(
+                        pred_H_matrix_metrics, target_H_matrix, overlap_e3nn
                     )
-                    for matrix_name in CONFIG["matrix_targets"]
-                }
+                    matrix_basic_metrics = {
+                        matrix_name: compute_basic_matrix_metrics(
+                            pred_matrix_metrics_log_by_name[matrix_name],
+                            target_matrices[matrix_name],
+                        )
+                        for matrix_name in CONFIG["matrix_targets"]
+                    }
 
-                # mae_H for history
-                mae_H = detailed_metrics["mae"]
+                    # mae_H for history
+                    mae_H = detailed_metrics["mae"]
 
-                history["loss"].append(loss.item())
-                history["mse_H"].append(loss_H.item())
-                history["mae_H"].append(mae_H)
+                    history["loss"].append(loss.item())
+                    history["mse_H"].append(loss_H.item())
+                    history["mae_H"].append(mae_H)
 
-                # Calculate timing
-                current_time = time.time()
-                time_elapsed = current_time - last_log_time
-                epochs_since_last_log = (
-                    (epoch - last_logged_epoch)
-                    if last_logged_epoch >= 0
-                    else (epoch + 1)
-                )
-                avg_epoch_time = time_elapsed / epochs_since_last_log
-                last_log_time = current_time
-                last_logged_epoch = epoch
+                    # Calculate timing
+                    current_time = time.time()
+                    time_elapsed = current_time - last_log_time
+                    epochs_since_last_log = (
+                        (epoch - last_logged_epoch)
+                        if last_logged_epoch >= 0
+                        else (epoch + 1)
+                    )
+                    avg_epoch_time = time_elapsed / epochs_since_last_log
+                    last_log_time = current_time
+                    last_logged_epoch = epoch
 
-                irrep_losses_for_print = None
-                if CONFIG["train_on_irrep_parts"]:
-                    matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
-                    irrep_losses_for_print = {}
-                    for matrix_name, irrep_losses in irrep_losses_by_matrix.items():
-                        prefix = matrix_alias.get(matrix_name, matrix_name)
-                        for irrep_str, irrep_loss in irrep_losses.items():
-                            irrep_losses_for_print[f"{prefix}_{irrep_str}"] = irrep_loss
+                    irrep_losses_for_print = None
+                    if CONFIG["train_on_irrep_parts"]:
+                        irrep_losses_for_print = {}
+                        for matrix_name, irrep_losses in irrep_losses_by_matrix.items():
+                            prefix = matrix_alias.get(matrix_name, matrix_name)
+                            for irrep_str, irrep_loss in irrep_losses.items():
+                                irrep_losses_for_print[f"{prefix}_{irrep_str}"] = (
+                                    irrep_loss
+                                )
 
-                log_detailed_training_metrics(
-                    avg_epoch_time=avg_epoch_time,
-                    epochs_since_last_log=epochs_since_last_log,
-                    time_elapsed=time_elapsed,
-                    loss_value=loss.item(),
-                    detailed_metrics=detailed_metrics,
-                    irrep_losses=irrep_losses_for_print,
-                )
+                    log_detailed_training_metrics(
+                        avg_epoch_time=avg_epoch_time,
+                        epochs_since_last_log=epochs_since_last_log,
+                        time_elapsed=time_elapsed,
+                        loss_value=loss.item(),
+                        detailed_metrics=detailed_metrics,
+                        irrep_losses=irrep_losses_for_print,
+                    )
 
-                if CONFIG["benchmark"]:
-                    print_benchmark_report()
-                    benchmark_accum = {k: 0.0 for k in benchmark_order}
-                    benchmark_epochs_accum = 0
-
-                # Log to WandB
-                periodic_metrics_payload = build_wandb_detailed_metrics_log(
-                    epoch_zero_based=epoch,
-                    loss_value=loss.item(),
-                    detailed_metrics=detailed_metrics,
-                )
-                # Replicate basic matrix metrics for all trained targets.
-                if "hamiltonian" in matrix_basic_metrics:
-                    periodic_metrics_payload["mae_H"] = matrix_basic_metrics[
-                        "hamiltonian"
-                    ]["mae"]
-                    periodic_metrics_payload["mse_H"] = matrix_basic_metrics[
-                        "hamiltonian"
-                    ]["mse"]
-                if "overlap" in matrix_basic_metrics:
-                    periodic_metrics_payload["mae_S"] = matrix_basic_metrics["overlap"][
-                        "mae"
-                    ]
-                    periodic_metrics_payload["mse_S"] = matrix_basic_metrics["overlap"][
-                        "mse"
-                    ]
-                if "density" in matrix_basic_metrics:
-                    periodic_metrics_payload["mae_D"] = matrix_basic_metrics["density"][
-                        "mae"
-                    ]
-                    periodic_metrics_payload["mse_D"] = matrix_basic_metrics["density"][
-                        "mse"
-                    ]
-                if forces_mae is not None and forces_mse is not None:
-                    periodic_metrics_payload["mae_F"] = float(forces_mae.item())
-                    periodic_metrics_payload["mse_F"] = float(forces_mse.item())
-                wandb.log(periodic_metrics_payload)
+                    periodic_metrics_payload = build_wandb_detailed_metrics_log(
+                        epoch_zero_based=epoch,
+                        loss_value=loss.item(),
+                        detailed_metrics=detailed_metrics,
+                    )
+                    if "hamiltonian" in matrix_basic_metrics:
+                        periodic_metrics_payload["mae_H"] = matrix_basic_metrics[
+                            "hamiltonian"
+                        ]["mae"]
+                        periodic_metrics_payload["mse_H"] = matrix_basic_metrics[
+                            "hamiltonian"
+                        ]["mse"]
+                    if "overlap" in matrix_basic_metrics:
+                        periodic_metrics_payload["mae_S"] = matrix_basic_metrics[
+                            "overlap"
+                        ]["mae"]
+                        periodic_metrics_payload["mse_S"] = matrix_basic_metrics[
+                            "overlap"
+                        ]["mse"]
+                    if "density" in matrix_basic_metrics:
+                        periodic_metrics_payload["mae_D"] = matrix_basic_metrics[
+                            "density"
+                        ]["mae"]
+                        periodic_metrics_payload["mse_D"] = matrix_basic_metrics[
+                            "density"
+                        ]["mse"]
+                    if forces_mae is not None and forces_mse is not None:
+                        periodic_metrics_payload["mae_F"] = float(forces_mae.item())
+                        periodic_metrics_payload["mse_F"] = float(forces_mse.item())
+                    epoch_wandb_log.update(periodic_metrics_payload)
 
                 # Save best model
                 if loss.item() < best_loss:
@@ -1794,51 +1831,43 @@ if __name__ == "__main__":
                         f"[OK] Best model saved to {best_model_path.name} (loss: {loss.item():.6e})"
                     )
 
-                irrep_prefix_by_matrix = {
-                    "hamiltonian": "H_",
-                    "overlap": "S_",
-                    "density": "D_",
-                }
-                for matrix_name in CONFIG["matrix_targets"]:
-                    pred_irreps_metrics = pred_matrix_metrics_by_name[
-                        matrix_name
-                    ].to_vectors(mapper)
-                    per_irrep_metrics = compute_irrep_metrics(
-                        pred_irreps_metrics,
-                        target_irreps_by_name[matrix_name],
-                        all_irreps,
-                        mapper,
-                    )
-                    metric_prefix = irrep_prefix_by_matrix.get(matrix_name, "")
-                    if CONFIG["log_per_irrep_metrics"]:
-                        log_per_irrep_metrics(
-                            f"Per-Irrep Metrics ({matrix_name}):",
+                with torch.no_grad():
+                    for matrix_name in CONFIG["matrix_targets"]:
+                        pred_irreps_metrics = pred_matrix_metrics_log_by_name[
+                            matrix_name
+                        ].to_vectors(mapper)
+                        per_irrep_metrics = compute_irrep_metrics(
+                            pred_irreps_metrics,
+                            target_irreps_by_name[matrix_name],
                             all_irreps,
-                            per_irrep_metrics,
-                            metric_prefix=metric_prefix,
+                            mapper,
                         )
-                    wandb.log(
-                        build_wandb_per_irrep_metrics_log(
-                            epoch_zero_based=epoch,
-                            all_irreps=all_irreps,
-                            per_irrep_metrics=per_irrep_metrics,
-                            metric_prefix=metric_prefix,
+                        metric_prefix = irrep_prefix_by_matrix.get(matrix_name, "")
+                        if CONFIG["log_per_irrep_metrics"]:
+                            log_per_irrep_metrics(
+                                f"Per-Irrep Metrics ({matrix_name}):",
+                                all_irreps,
+                                per_irrep_metrics,
+                                metric_prefix=metric_prefix,
+                            )
+                        epoch_wandb_log.update(
+                            build_wandb_per_irrep_metrics_log(
+                                epoch_zero_based=epoch,
+                                all_irreps=all_irreps,
+                                per_irrep_metrics=per_irrep_metrics,
+                                metric_prefix=metric_prefix,
+                            )
                         )
-                    )
 
                 # Save frame for video at every log interval
                 for matrix_name in CONFIG["matrix_targets"]:
                     try:
-                        pred_matrix_curr = pred_matrix_metrics_by_name[matrix_name]
+                        pred_matrix_curr = pred_matrix_metrics_log_by_name[matrix_name]
                         target_matrix_curr = target_matrices[matrix_name]
                         correction_overlap = (
                             overlap_e3nn if matrix_name == "hamiltonian" else None
                         )
-                        label = (
-                            "H"
-                            if matrix_name == "hamiltonian"
-                            else ("S" if matrix_name == "overlap" else "D")
-                        )
+                        label = matrix_label_by_name[matrix_name]
                         save_hamiltonian_frame_to_disk(
                             pred_matrix_curr,
                             target_matrix_curr,
@@ -1864,7 +1893,22 @@ if __name__ == "__main__":
                 if loss.item() < 1e-10:
                     print("")
                     print(f"[OK] Converged! Loss below 1e-10 at epoch {epoch + 1}")
-                    break
+                    stop_after_epoch = True
+
+            t_step_wandb_start = time.perf_counter() if CONFIG["benchmark"] else 0.0
+            wandb.log(epoch_wandb_log)
+            if CONFIG["benchmark"]:
+                benchmark_add(
+                    "step_wandb_log", time.perf_counter() - t_step_wandb_start
+                )
+                benchmark_add("epoch_total", time.perf_counter() - epoch_core_start)
+                benchmark_epochs_accum += 1
+                if should_log_now:
+                    print_benchmark_report()
+                    benchmark_accum = {k: 0.0 for k in benchmark_order}
+                    benchmark_epochs_accum = 0
+            if stop_after_epoch:
+                break
     except KeyboardInterrupt:
         print(
             "\n[INFO] Training interrupted by user (Ctrl-C). Proceeding to final evaluation and saving..."
@@ -1908,33 +1952,10 @@ if __name__ == "__main__":
             f"Got: {sorted(list(pred_raw_by_matrix.keys()))}"
         )
 
-    pred_irreps_by_name = {}
+    _, pred_irreps_by_name = wrap_raw_predictions_to_irreps(pred_raw_by_matrix)
     pred_matrix_norm_by_name = {}
     pred_matrix_metrics_by_name = {}
     for matrix_name in CONFIG["matrix_targets"]:
-        raw_matrix = pred_raw_by_matrix[matrix_name]
-        pair_vec = {}
-        pair_edges_dict = {}
-        lookup_dict = {}
-        for key, payload in raw_matrix.items():
-            pair_vec[key] = payload["vectors"]
-            pair_edges_dict[key] = payload["edges"]
-            for idx, edge_5d in enumerate(payload["edges"].t()):
-                sx, sy, sz, i, j = edge_5d.tolist()
-                lookup_dict[(int(sx), int(sy), int(sz), int(i), int(j))] = (
-                    key,
-                    idx,
-                )
-
-        pred_irreps_by_name[matrix_name] = IrrepsBlockData(
-            atoms=tuple(atoms_list),
-            atom_counts=Counter(atoms_list),
-            pair_vectors=pair_vec,
-            pair_edges=pair_edges_dict,
-            lookup=lookup_dict,
-            orbital_cfg=orbital_cfg,
-            basis=target_matrices[matrix_name].basis,
-        )
         pred_matrix_norm_by_name[matrix_name] = pred_irreps_by_name[
             matrix_name
         ].to_blocks(mapper)
@@ -1948,19 +1969,26 @@ if __name__ == "__main__":
                 matrix_name
             ]
 
-    pred_H_matrix_metrics = pred_matrix_metrics_by_name["hamiltonian"]
-
-    # Compute detailed metrics for final evaluation (Hamiltonian + overlap gauge correction).
-    final_detailed_metrics = compute_detailed_metrics(
-        pred_H_matrix_metrics, target_H_matrix, overlap_e3nn
-    )
-    final_basic_metrics_by_name = {
-        matrix_name: compute_basic_matrix_metrics(
-            pred_matrix_metrics_by_name[matrix_name],
-            target_matrices[matrix_name],
+    with torch.no_grad():
+        pred_matrix_norm_eval_by_name = {
+            matrix_name: pred_matrix_norm_by_name[matrix_name].detach()
+            for matrix_name in CONFIG["matrix_targets"]
+        }
+        pred_matrix_metrics_eval_by_name = {
+            matrix_name: pred_matrix_metrics_by_name[matrix_name].detach()
+            for matrix_name in CONFIG["matrix_targets"]
+        }
+        pred_H_matrix_metrics = pred_matrix_metrics_eval_by_name["hamiltonian"]
+        final_detailed_metrics = compute_detailed_metrics(
+            pred_H_matrix_metrics, target_H_matrix, overlap_e3nn
         )
-        for matrix_name in CONFIG["matrix_targets"]
-    }
+        final_basic_metrics_by_name = {
+            matrix_name: compute_basic_matrix_metrics(
+                pred_matrix_metrics_eval_by_name[matrix_name],
+                target_matrices[matrix_name],
+            )
+            for matrix_name in CONFIG["matrix_targets"]
+        }
 
     log_final_metrics(final_detailed_metrics)
 
@@ -1982,12 +2010,12 @@ if __name__ == "__main__":
 
     if (
         CONFIG["enable_energy"]
-        and "hamiltonian" in pred_matrix_norm_by_name
-        and "density" in pred_matrix_norm_by_name
+        and "hamiltonian" in pred_matrix_norm_eval_by_name
+        and "density" in pred_matrix_norm_eval_by_name
     ):
         energy_pred = trace_matmul_sparse_block_matrix(
-            pred_matrix_norm_by_name["hamiltonian"],
-            pred_matrix_norm_by_name["density"],
+            pred_matrix_norm_eval_by_name["hamiltonian"],
+            pred_matrix_norm_eval_by_name["density"],
         )
         energy_abs_err = torch.abs(energy_pred - energy_target)
         final_metrics["final/energy_pred"] = float(energy_pred.item())
@@ -2002,12 +2030,12 @@ if __name__ == "__main__":
 
     if (
         CONFIG["enable_num_electrons"]
-        and "overlap" in pred_matrix_norm_by_name
-        and "density" in pred_matrix_norm_by_name
+        and "overlap" in pred_matrix_norm_eval_by_name
+        and "density" in pred_matrix_norm_eval_by_name
     ):
         num_electrons_pred = trace_matmul_sparse_block_matrix(
-            pred_matrix_norm_by_name["density"],
-            pred_matrix_norm_by_name["overlap"],
+            pred_matrix_norm_eval_by_name["density"],
+            pred_matrix_norm_eval_by_name["overlap"],
         )
         num_electrons_abs_err = torch.abs(num_electrons_pred - num_electrons_target)
         final_metrics["final/num_electrons_pred"] = float(num_electrons_pred.item())
@@ -2120,11 +2148,10 @@ if __name__ == "__main__":
 
     # Distance-binned error curves (16 bins) for all targets
     print("\n  Distance-binned error curves (16 bins):")
-    matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
     for matrix_name in CONFIG["matrix_targets"]:
         print(f"    [{matrix_name}]")
         distance_curve = compute_distance_error_curve(
-            H_pred=pred_matrix_metrics_by_name[matrix_name],
+            H_pred=pred_matrix_metrics_eval_by_name[matrix_name],
             H_gt=target_matrices[matrix_name],
             positions=positions,
             box=box,
@@ -2176,10 +2203,9 @@ if __name__ == "__main__":
         irrep_output_dir = run_checkpoint_dir / "per_irrep_images"
         irrep_output_dir.mkdir(parents=True, exist_ok=True)
         print("\n  Per-irrep visualizations (k-range=0, percentile=99):")
-        matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
         for matrix_name in CONFIG["matrix_targets"]:
             alias = matrix_alias.get(matrix_name, matrix_name)
-            pred_matrix_full = pred_matrix_metrics_by_name[matrix_name]
+            pred_matrix_full = pred_matrix_metrics_eval_by_name[matrix_name]
             target_matrix_full = target_matrices[matrix_name]
             correction_overlap = overlap_e3nn if matrix_name == "hamiltonian" else None
             print(f"    [{matrix_name}]")
@@ -2260,7 +2286,6 @@ if __name__ == "__main__":
         print("=" * 80)
         print("FINAL VIDEO GENERATION")
         print("=" * 80)
-        matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
         for matrix_name in CONFIG["matrix_targets"]:
             try:
                 frame_dir = matrix_frame_output_dirs[matrix_name]
