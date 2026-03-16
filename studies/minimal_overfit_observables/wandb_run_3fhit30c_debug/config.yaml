@@ -1,0 +1,305 @@
+_wandb:
+    value:
+        cli_version: 0.25.0
+        e:
+            aujqty7q99yqxowysfjhdqduo9oa7lzj:
+                args:
+                    - --adaptive-log-interval
+                    - --log-data
+                    - --log-model
+                    - --log-per-irrep-metrics
+                    - --log-per-irrep-images
+                    - --benchmark
+                    - --separate-shifted-self
+                    - --edge-encoder-use-sh-tensor-square
+                    - --head-use-tensor-square
+                    - --generate-video
+                    - --apply-cutoff-to-targets
+                    - --require-exact-edge-match
+                    - --checkpoint-dir=studies/minimal_overfit_observables/checkpoints
+                    - --cutoff-radius=7
+                    - --data-path=data/small/H2O/original/H2O.matrix
+                    - --device=cuda
+                    - --dtype=float32
+                    - --e3layernorm=True
+                    - --enable-energy=True
+                    - --enable-forces=True
+                    - --enable-num-electrons=True
+                    - --grad-clip=1
+                    - --head-e3mlp-layers=2
+                    - --hidden-dim=32
+                    - --hidden-irreps=32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e
+                    - --info-path=data/small/H2O/original/H2O.info.out
+                    - --l-max=4
+                    - --log-interval=100
+                    - --loss-coef-forces=0
+                    - --loss-coef-observables=1.1842324130905937e-07
+                    - --lr=0.003673224310594715
+                    - --lr-factor=0.2
+                    - --lr-patience=400
+                    - --matrix-targets=hamiltonian,overlap,density
+                    - --n-radial=32
+                    - --num-epochs=4000
+                    - --num-layers=1
+                    - --radial-embedding-scale=none
+                    - --symmetrize-preds=True
+                    - --train-on-energy=True
+                    - --train-on-forces=False
+                    - --train-on-num-electrons=True
+                    - --training-unit=ev
+                codePath: studies/minimal_overfit_observables/overfit_observables_minimal.py
+                codePathLocal: studies/minimal_overfit_observables/overfit_observables_minimal.py
+                cpu_count: 32
+                cpu_count_logical: 64
+                cudaVersion: "12.8"
+                disk:
+                    /:
+                        total: "200144556032"
+                        used: "8633044992"
+                email: b.brzoza@hzdr.de
+                executable: /data/home2/brzoza73/casus/mandala/mandala-venv/bin/python
+                git:
+                    commit: f6172c584e7779c81bd6c0269b199ddbf31a1b05
+                    remote: git@github.com:Mandala-org/Mandala.git
+                gpu: Tesla V100-SXM2-32GB
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Volta
+                      cudaCores: 5120
+                      memoryTotal: "34359738368"
+                      name: Tesla V100-SXM2-32GB
+                      uuid: GPU-1e1b0262-c85a-e92d-4c89-3c316156f756
+                host: gv026
+                memory:
+                    total: "404325597184"
+                os: Linux-5.15.0-118-generic-x86_64-with-glibc2.35
+                program: /data/home2/brzoza73/casus/mandala/studies/minimal_overfit_observables/overfit_observables_minimal.py
+                python: CPython 3.10.4
+                root: /data/home2/brzoza73/casus/mandala
+                slurm:
+                    cluster_name: cluster-rosi
+                    conf: /var/spool/slurmd/conf-cache/slurm.conf
+                    cpus_on_node: "12"
+                    cpus_per_task: "12"
+                    gpus_on_node: "1"
+                    gtids: "0"
+                    job_account: casus
+                    job_cpus_per_node: "12"
+                    job_end_time: "1773707306"
+                    job_gid: "11659"
+                    job_gpus: "1"
+                    job_id: "156523"
+                    job_name: Run
+                    job_nodelist: gv026
+                    job_num_nodes: "1"
+                    job_partition: gpu-v100
+                    job_qos: qos_default
+                    job_start_time: "1773534506"
+                    job_uid: "12189"
+                    job_user: brzoza73
+                    jobid: "156523"
+                    localid: "0"
+                    mem_per_node: "97280"
+                    nnodes: "1"
+                    nodeid: "0"
+                    nodelist: gv026
+                    nprocs: "1"
+                    ntasks: "1"
+                    ntasks_per_node: "1"
+                    prio_process: "0"
+                    procid: "0"
+                    submit_dir: /data/home2/brzoza73/casus/mandala
+                    submit_host: rosi5
+                    task_pid: "2913161"
+                    tasks_per_node: "1"
+                    topology_addr: gv026
+                    topology_addr_pattern: node
+                    tres_per_task: cpu=12
+                startedAt: "2026-03-16T01:30:57.154675Z"
+                writerId: aujqty7q99yqxowysfjhdqduo9oa7lzj
+        m: []
+        python_version: 3.10.4
+        t:
+            "1":
+                - 1
+                - 77
+            "2":
+                - 1
+                - 77
+            "3":
+                - 2
+                - 14
+                - 16
+            "4": 3.10.4
+            "5": 0.25.0
+            "12": 0.25.0
+            "13": linux-x86_64
+adaptive_log_interval:
+    value: true
+apply_cutoff_to_targets:
+    value: true
+benchmark:
+    value: true
+box_convention:
+    value: rows
+change_box:
+    value: right
+checkpoint-dir:
+    value: studies/minimal_overfit_observables/checkpoints
+checkpoint_dir:
+    value: studies/minimal_overfit_observables/checkpoints
+convention:
+    value: e3nn
+cutoff-radius:
+    value: 7
+cutoff_radius:
+    value: 7
+data-path:
+    value: data/small/H2O/original/H2O.matrix
+data_path:
+    value: data/small/H2O/original/H2O.matrix
+device:
+    value: cuda
+dtype:
+    value: float32
+e3layernorm:
+    value: true
+edge_encoder_use_sh_tensor_square:
+    value: true
+enable-energy:
+    value: true
+enable-forces:
+    value: true
+enable-num-electrons:
+    value: true
+enable_energy:
+    value: true
+enable_forces:
+    value: true
+enable_num_electrons:
+    value: true
+generate_video:
+    value: true
+grad-clip:
+    value: 1
+grad_clip:
+    value: 1
+hamiltonian_scale_from_hartree:
+    value: 27.2113845
+head-e3mlp-layers:
+    value: 2
+head_e3mlp_layers:
+    value: 2
+head_use_tensor_square:
+    value: true
+hidden-dim:
+    value: 32
+hidden-irreps:
+    value: 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e
+hidden_dim:
+    value: 32
+hidden_irreps:
+    value: 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e
+info-path:
+    value: data/small/H2O/original/H2O.info.out
+info_path:
+    value: data/small/H2O/original/H2O.info.out
+l-max:
+    value: 4
+l_max:
+    value: 4
+log-interval:
+    value: 100
+log_activations_wandb:
+    value: false
+log_data:
+    value: true
+log_forward:
+    value: false
+log_interval:
+    value: 100
+log_model:
+    value: true
+log_per_irrep_images:
+    value: true
+log_per_irrep_metrics:
+    value: true
+loss-coef-forces:
+    value: 0
+loss-coef-observables:
+    value: 1.1842324130905937e-07
+loss_aggregation:
+    value: per_key
+loss_coef_forces:
+    value: 0
+loss_coef_observables:
+    value: 1.1842324130905937e-07
+lr:
+    value: 0.003673224310594715
+lr-factor:
+    value: 0.2
+lr-patience:
+    value: 400
+lr_factor:
+    value: 0.2
+lr_patience:
+    value: 400
+matrix-targets:
+    value: hamiltonian,overlap,density
+matrix_targets:
+    value:
+        - hamiltonian
+        - overlap
+        - density
+n-radial:
+    value: 32
+n_radial:
+    value: 32
+num-epochs:
+    value: 4000
+num-layers:
+    value: 1
+num_epochs:
+    value: 4000
+num_layers:
+    value: 1
+orbital_selection:
+    value: null
+radial-embedding-scale:
+    value: none
+radial_embedding_scale:
+    value: none
+require_exact_edge_match:
+    value: true
+separate_shifted_self:
+    value: true
+sh_mode:
+    value: aligned
+symmetrize-preds:
+    value: true
+symmetrize_preds:
+    value: true
+train-on-energy:
+    value: true
+train-on-forces:
+    value: false
+train-on-num-electrons:
+    value: true
+train_on_energy:
+    value: true
+train_on_forces:
+    value: false
+train_on_irrep_parts:
+    value: false
+train_on_num_electrons:
+    value: true
+train_target:
+    value: matrix
+training-unit:
+    value: ev
+training_unit:
+    value: ev
+verbose_forward:
+    value: false
+xyz_permutation:
+    value: "012"

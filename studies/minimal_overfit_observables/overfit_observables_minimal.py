@@ -418,6 +418,16 @@ if __name__ == "__main__":
         help="Use TensorSquare(edge embeddings) as input to the main head projections (default: False)",
     )
     parser.add_argument(
+        "--head-use-node-embeddings-for-self-edges",
+        type=parse_bool,
+        default=False,
+        help=(
+            "Use node embeddings as head inputs for zero-shift self-edges, "
+            "while keeping edge embeddings for shifted-self/off-diagonal edges "
+            "(default: False)."
+        ),
+    )
+    parser.add_argument(
         "--head-e3mlp-layers",
         type=int,
         default=3,
@@ -564,6 +574,7 @@ if __name__ == "__main__":
         "generate_video": args.generate_video,
         "verbose_forward": args.verbose_forward,
         "head_use_tensor_square": args.head_use_tensor_square,
+        "head_use_node_embeddings_for_self_edges": args.head_use_node_embeddings_for_self_edges,
         "head_e3mlp_layers": args.head_e3mlp_layers,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         "require_exact_edge_match": args.require_exact_edge_match,
@@ -856,6 +867,9 @@ if __name__ == "__main__":
     sh_irreps = Irreps.spherical_harmonics(CONFIG["l_max"])
     if CONFIG["log_data"]:
         print(f"  SH irreps: {sh_irreps}")
+    sh_non_scalar_slices = [
+        sh_irreps.slices()[idx] for idx, (_, ir) in enumerate(sh_irreps) if ir.l > 0
+    ]
 
     def compute_edge_features(curr_positions: torch.Tensor):
         if box is not None:
@@ -876,13 +890,14 @@ if __name__ == "__main__":
             normalize=True,
             normalization="component",
         )
-        # Enforce exact-zero SH features for zero-shift self-edges.
+        # Keep only the scalar SH channel on zero-shift self-edges.
         is_self_edge_local = (edge_index[0] == edge_index[1]) & (edge_shift == 0).all(
             dim=0
         )
-        if is_self_edge_local.any():
+        if is_self_edge_local.any() and sh_non_scalar_slices:
             edge_sh_local = edge_sh_local.clone()
-            edge_sh_local[is_self_edge_local] = 0.0
+            for slc in sh_non_scalar_slices:
+                edge_sh_local[is_self_edge_local, slc] = 0.0
         edge_length_emb_local = soft_one_hot_linspace(
             edge_dist_local,
             start=0.0,
@@ -1107,6 +1122,9 @@ if __name__ == "__main__":
         edge_encoder_use_sh_tensor_square=CONFIG["edge_encoder_use_sh_tensor_square"],
         use_e3layernorm=CONFIG["e3layernorm"],
         head_use_tensor_square=CONFIG["head_use_tensor_square"],
+        head_use_node_embeddings_for_self_edges=CONFIG[
+            "head_use_node_embeddings_for_self_edges"
+        ],
         separate_shifted_self=CONFIG["separate_shifted_self"],
     ).to(device=device, dtype=torch_dtype)
     if not CONFIG["log_model"]:
