@@ -137,6 +137,19 @@ class BlockMatrix:
             self.basis,
         )
 
+    def detach(self) -> "BlockMatrix":
+        detached_blocks = {k: v.detach() for k, v in self.pair_blocks.items()}
+        detached_edges = {k: v.detach() for k, v in self.pair_edges.items()}
+        return BlockMatrix(
+            self.atoms,
+            self.atom_counts,
+            detached_blocks,
+            detached_edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
+        )
+
     # --------------- change-of-basis --------------------------------------- #
     def to_vectors(self, mapper: BlockIrrepMapper) -> IrrepsBlockData:
         """Convert blocks to irreducible representation vectors using a mapper."""
@@ -755,6 +768,19 @@ class IrrepsBlockData:
             self.atom_counts,
             vecs,
             edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
+        )
+
+    def detach(self) -> "IrrepsBlockData":
+        detached_vecs = {k: v.detach() for k, v in self.pair_vectors.items()}
+        detached_edges = {k: v.detach() for k, v in self.pair_edges.items()}
+        return IrrepsBlockData(
+            self.atoms,
+            self.atom_counts,
+            detached_vecs,
+            detached_edges,
             self.lookup,
             self.orbital_cfg,
             self.basis,
