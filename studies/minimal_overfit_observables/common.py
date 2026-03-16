@@ -871,6 +871,7 @@ class MinimalNetwork(nn.Module):
         magnitude_factorization=False,
         head_mlp_for_scalars=False,
         head_use_tensor_square=False,
+        head_use_node_embeddings_for_self_edges=False,
         separate_shifted_self=False,
         use_e3layernorm=True,
         verbose=True,
@@ -884,6 +885,11 @@ class MinimalNetwork(nn.Module):
             raise ValueError(
                 "head_mlp_for_scalars is not supported in minimal_overfit_observables."
             )
+        if head_use_node_embeddings_for_self_edges and num_layers < 1:
+            raise ValueError(
+                "head_use_node_embeddings_for_self_edges requires num_layers >= 1 "
+                "so node and edge embeddings share hidden_irreps."
+            )
         self.verbose = verbose
         self.matrix_targets = (
             list(matrix_targets) if matrix_targets is not None else ["hamiltonian"]
@@ -891,6 +897,9 @@ class MinimalNetwork(nn.Module):
         if len(self.matrix_targets) == 0:
             raise ValueError("matrix_targets cannot be empty")
         self.multi_target_mode = matrix_targets is not None
+        self.head_use_node_embeddings_for_self_edges = bool(
+            head_use_node_embeddings_for_self_edges
+        )
 
         # Count scalar irreps correctly
         from e3nn.o3 import Irrep
@@ -987,8 +996,17 @@ class MinimalNetwork(nn.Module):
                 verbose=verbose,
             )
 
-        # Use edge features for head
+        # Optionally mirror the main model's onsite path by swapping in node
+        # embeddings for zero-shift self-edges while keeping edge embeddings
+        # for shifted-self and off-diagonal edges.
         head_feat = edge_feat
+        if self.head_use_node_embeddings_for_self_edges:
+            is_self_edge = (edge_index[0] == edge_index[1]) & (edge_shift == 0).all(
+                dim=0
+            )
+            if is_self_edge.any():
+                head_feat = edge_feat.clone()
+                head_feat[is_self_edge] = node_feat[edge_index[0, is_self_edge]]
 
         # Head
         if verbose:
