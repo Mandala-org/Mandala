@@ -40,6 +40,7 @@ from ase.neighborlist import neighbor_list
 # Project-specific imports
 from net.common import build_hidden_irreps
 from data.snapshot import Snapshot
+from data.block_matrix import BlockMatrix
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_block_matrix
 from data.block_matrix import IrrepsBlockData
@@ -202,8 +203,9 @@ if __name__ == "__main__":
         type=parse_bool,
         default=True,
         help=(
-            "Symmetrize predicted H/S/D matrices as (M + M^T) / 2 before "
-            "metrics/observables/forces (default: True)."
+            "Symmetrize predicted H/S/D matrices as (M + M^T) / 2 for "
+            "matrix metrics/visualizations (default: True). Observable and "
+            "force computations use unsymmetrized predictions."
         ),
     )
     parser.add_argument(
@@ -1236,6 +1238,26 @@ if __name__ == "__main__":
             return epoch_one_based % 10 == 0
         return epoch_zero_based % CONFIG["log_interval"] == 0
 
+    def compute_forces_from_pred_matrices(
+        pred_matrix_by_name: dict[str, "BlockMatrix"],
+        positions_tensor: torch.Tensor,
+        *,
+        create_graph: bool,
+        retain_graph: bool,
+    ) -> torch.Tensor:
+        """Main-code parity: F = -dE/dR, E = Tr(H_pred @ D_pred)."""
+        energy = trace_matmul_sparse_block_matrix(
+            pred_matrix_by_name["hamiltonian"],
+            pred_matrix_by_name["density"],
+        )
+        grad_pos = torch.autograd.grad(
+            energy,
+            positions_tensor,
+            create_graph=create_graph,
+            retain_graph=retain_graph,
+        )[0]
+        return -grad_pos
+
     print(f"\nOptimizer: Adam(lr={CONFIG['lr']})")
     print(f"Training for {CONFIG['num_epochs']} epochs...\n")
 
@@ -1449,8 +1471,7 @@ if __name__ == "__main__":
                     loss_block_irrep_filter_to_blocks_time,
                 )
 
-            # Optionally symmetrize predictions for reporting and
-            # observable/force computations.
+            # Symmetrized predictions are for matrix reporting only.
             if CONFIG["symmetrize_preds"]:
                 pred_matrix_metrics_by_name = {
                     matrix_name: (
@@ -1462,6 +1483,8 @@ if __name__ == "__main__":
                 }
             else:
                 pred_matrix_metrics_by_name = dict(pred_matrix_norm_by_name)
+            # Main-code parity: observables/forces use unsymmetrized predictions.
+            pred_matrix_observables_by_name = pred_matrix_norm_by_name
 
             # Observable losses from predicted matrices.
             loss_energy_weighted = torch.tensor(0.0, device=device)
@@ -1474,12 +1497,12 @@ if __name__ == "__main__":
 
             if (
                 CONFIG["enable_energy"]
-                and "hamiltonian" in pred_matrix_metrics_by_name
-                and "density" in pred_matrix_metrics_by_name
+                and "hamiltonian" in pred_matrix_observables_by_name
+                and "density" in pred_matrix_observables_by_name
             ):
                 energy_pred = trace_matmul_sparse_block_matrix(
-                    pred_matrix_metrics_by_name["hamiltonian"],
-                    pred_matrix_metrics_by_name["density"],
+                    pred_matrix_observables_by_name["hamiltonian"],
+                    pred_matrix_observables_by_name["density"],
                 )
                 energy_mae = torch.abs(energy_pred - energy_target)
                 if CONFIG["train_on_energy"]:
@@ -1489,12 +1512,12 @@ if __name__ == "__main__":
 
             if (
                 CONFIG["enable_num_electrons"]
-                and "overlap" in pred_matrix_metrics_by_name
-                and "density" in pred_matrix_metrics_by_name
+                and "overlap" in pred_matrix_observables_by_name
+                and "density" in pred_matrix_observables_by_name
             ):
                 num_electrons_pred = trace_matmul_sparse_block_matrix(
-                    pred_matrix_metrics_by_name["density"],
-                    pred_matrix_metrics_by_name["overlap"],
+                    pred_matrix_observables_by_name["density"],
+                    pred_matrix_observables_by_name["overlap"],
                 )
                 num_electrons_mae = torch.abs(num_electrons_pred - num_electrons_target)
                 if CONFIG["train_on_num_electrons"]:
@@ -1506,20 +1529,15 @@ if __name__ == "__main__":
                 CONFIG["enable_forces"]
                 and positions_for_forces is not None
                 and forces_target is not None
-                and "hamiltonian" in pred_matrix_metrics_by_name
-                and "density" in pred_matrix_metrics_by_name
+                and "hamiltonian" in pred_matrix_observables_by_name
+                and "density" in pred_matrix_observables_by_name
             ):
-                energy_for_forces = trace_matmul_sparse_block_matrix(
-                    pred_matrix_metrics_by_name["hamiltonian"],
-                    pred_matrix_metrics_by_name["density"],
-                )
-                grad_pos = torch.autograd.grad(
-                    energy_for_forces,
+                forces_pred = compute_forces_from_pred_matrices(
+                    pred_matrix_observables_by_name,
                     positions_for_forces,
                     create_graph=CONFIG["train_on_forces"],
                     retain_graph=True,
-                )[0]
-                forces_pred = -grad_pos
+                )
                 forces_err = forces_pred - forces_target
                 forces_mae = torch.mean(torch.abs(forces_err))
                 forces_mse = torch.mean(forces_err**2)
@@ -1946,12 +1964,12 @@ if __name__ == "__main__":
 
     if (
         CONFIG["enable_energy"]
-        and "hamiltonian" in pred_matrix_metrics_by_name
-        and "density" in pred_matrix_metrics_by_name
+        and "hamiltonian" in pred_matrix_norm_by_name
+        and "density" in pred_matrix_norm_by_name
     ):
         energy_pred = trace_matmul_sparse_block_matrix(
-            pred_matrix_metrics_by_name["hamiltonian"],
-            pred_matrix_metrics_by_name["density"],
+            pred_matrix_norm_by_name["hamiltonian"],
+            pred_matrix_norm_by_name["density"],
         )
         energy_abs_err = torch.abs(energy_pred - energy_target)
         final_metrics["final/energy_pred"] = float(energy_pred.item())
@@ -1966,12 +1984,12 @@ if __name__ == "__main__":
 
     if (
         CONFIG["enable_num_electrons"]
-        and "overlap" in pred_matrix_metrics_by_name
-        and "density" in pred_matrix_metrics_by_name
+        and "overlap" in pred_matrix_norm_by_name
+        and "density" in pred_matrix_norm_by_name
     ):
         num_electrons_pred = trace_matmul_sparse_block_matrix(
-            pred_matrix_metrics_by_name["density"],
-            pred_matrix_metrics_by_name["overlap"],
+            pred_matrix_norm_by_name["density"],
+            pred_matrix_norm_by_name["overlap"],
         )
         num_electrons_abs_err = torch.abs(num_electrons_pred - num_electrons_target)
         final_metrics["final/num_electrons_pred"] = float(num_electrons_pred.item())
@@ -1988,20 +2006,15 @@ if __name__ == "__main__":
         CONFIG["enable_forces"]
         and positions_eval is not None
         and forces_target is not None
-        and "hamiltonian" in pred_matrix_metrics_by_name
-        and "density" in pred_matrix_metrics_by_name
+        and "hamiltonian" in pred_matrix_norm_by_name
+        and "density" in pred_matrix_norm_by_name
     ):
-        energy_for_forces = trace_matmul_sparse_block_matrix(
-            pred_matrix_metrics_by_name["hamiltonian"],
-            pred_matrix_metrics_by_name["density"],
-        )
-        grad_pos_eval = torch.autograd.grad(
-            energy_for_forces,
+        forces_pred_eval = compute_forces_from_pred_matrices(
+            pred_matrix_norm_by_name,
             positions_eval,
             create_graph=False,
             retain_graph=False,
-        )[0]
-        forces_pred_eval = -grad_pos_eval
+        )
         forces_err_eval = forces_pred_eval - forces_target
         forces_mae_eval = torch.mean(torch.abs(forces_err_eval))
         forces_mse_eval = torch.mean(forces_err_eval**2)
