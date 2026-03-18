@@ -39,7 +39,7 @@ python studies/minimal_overfit_observables/overfit_observables_minimal.py \
   --num-epochs 10 \
   --log-interval 1 \
   --adaptive-log-interval \
-  --separate-shifted-self \
+  --separate-shifted-self true \
   --log-data \
   --log-model \
   --log-per-irrep-metrics \

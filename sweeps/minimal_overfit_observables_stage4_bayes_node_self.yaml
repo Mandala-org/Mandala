@@ -73,6 +73,12 @@ parameters:
     value: 400
   e3layernorm:
     values: [true, false]
+  separate-shifted-self:
+    value: true
+  edge-encoder-use-sh-tensor-square:
+    value: true
+  head-use-tensor-square:
+    value: true
   radial-embedding-scale:
     value: none
   head-e3mlp-layers:
@@ -90,9 +96,6 @@ command:
   - --log-per-irrep-metrics
   - --log-per-irrep-images
   - --benchmark
-  - --separate-shifted-self
-  - --edge-encoder-use-sh-tensor-square
-  - --head-use-tensor-square
   - --generate-video
   - --apply-cutoff-to-targets
   - --require-exact-edge-match

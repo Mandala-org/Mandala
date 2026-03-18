@@ -1,6 +1,6 @@
 program: studies/minimal_overfit_observables/overfit_observables_minimal.py
 project: mandala-minimal-overfit-observables-stages
-name: minimal_overfit_observables_stage4_bayes
+name: minimal_overfit_observables_stage4_bayes_node_self_arch
 method: bayes
 metric:
   name: mae_H
@@ -10,7 +10,7 @@ parameters:
   # Swept parameters (medium breadth)
   lr:
     distribution: log_uniform_values
-    min: 1e-4
+    min: 1e-3
     max: 1e-2
   loss-coef-observables:
     distribution: log_uniform_values
@@ -24,9 +24,23 @@ parameters:
   cutoff-radius:
     values: [7.0]
   num-layers:
+    values: [2]
+  grad-clip:
+    values: [1.0, 0.0]
+  e3layernorm:
+    values: [true]
+  head-e3mlp-layers:
     values: [1, 2, 3]
 
-  # Fixed explicit parameters (stage-4 defaults)
+  # Architecture toggles to search
+  separate-shifted-self:
+    values: [true, false]
+  edge-encoder-use-sh-tensor-square:
+    values: [true, false]
+  head-use-tensor-square:
+    values: [true, false]
+
+  # Fixed explicit parameters (stage-4 defaults + node-self head path)
   data-path:
     value: data/small/H2O/original/H2O.matrix
   info-path:
@@ -56,7 +70,7 @@ parameters:
   l-max:
     value: 4
   num-epochs:
-    value: 4000
+    value: 16000
   log-interval:
     value: 100
   device:
@@ -65,24 +79,14 @@ parameters:
     value: float32
   checkpoint-dir:
     value: studies/minimal_overfit_observables/checkpoints
-  grad-clip:
-    values: [1.0, 0.0]
   lr-factor:
     value: 0.2
   lr-patience:
     value: 400
-  e3layernorm:
-    values: [true, false]
-  separate-shifted-self:
-    value: true
-  edge-encoder-use-sh-tensor-square:
-    value: true
-  head-use-tensor-square:
-    value: true
   radial-embedding-scale:
     value: none
-  head-e3mlp-layers:
-    values: [1, 2, 3]
+  head-use-node-embeddings-for-self-edges:
+    value: true
 
 command:
   - ${env}

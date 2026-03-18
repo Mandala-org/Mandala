@@ -30,17 +30,17 @@ python studies/minimal_overfit_observables/overfit_observables_minimal.py \
   --enable-num-electrons true \
   --train-on-energy true \
   --train-on-num-electrons true \
-  --loss-coef-observables 1e-5 \
+  --loss-coef-observables 1e-7 \
   --enable-forces true \
-  --train-on-forces false \
-  --loss-coef-forces 0.0 \
+  --train-on-forces true \
+  --loss-coef-forces 1e-7 \
   --symmetrize-preds false \
   --hidden-irreps "32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e" \
   --num-layers 2 \
-  --n-radial 16 \
+  --n-radial 32 \
   --cutoff-radius "${CUTOFF_RADIUS}" \
   --lr 0.01 \
-  --num-epochs 1000 \
+  --num-epochs 100 \
   --log-interval 1 \
   --adaptive-log-interval \
   --separate-shifted-self true \
