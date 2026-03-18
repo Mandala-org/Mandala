@@ -12,7 +12,7 @@ fi
 
 export WANDB_PROJECT="${WANDB_PROJECT:-mandala-minimal-overfit-observables-stages}"
 
-RUN_NAME="${RUN_NAME:-obs_stage4_full_with_forces_10ep}"
+RUN_NAME="${RUN_NAME:-obs_stage4_full_with_forces_4000ep}"
 DEVICE="${DEVICE:-cuda}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-studies/minimal_overfit_observables/checkpoints}"
 DATA_PATH="${DATA_PATH:-data/small/H2O/original/H2O.matrix}"
