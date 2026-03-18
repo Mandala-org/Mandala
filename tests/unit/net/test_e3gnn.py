@@ -18,12 +18,17 @@ class MockHead(nn.Module):
         return self.mock_impl(*args, **kwargs)
 
 
+@pytest.mark.parametrize("edge_encoder_style", ["mandala", "deeph_e3"])
 @pytest.mark.unit
-def test_forward_smoke():
+def test_forward_smoke(edge_encoder_style):
     # ------- dummy orbital config ------------------
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
 
-    cfg = Config(num_layers_gnn=1, safety_checks=True)
+    cfg = Config(
+        num_layers_gnn=1,
+        edge_encoder_style=edge_encoder_style,
+        safety_checks=True,
+    )
 
     model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
 
@@ -53,3 +58,30 @@ def test_forward_smoke():
     assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}
     for v in preds.values():
         assert v.atoms == atoms
+
+
+@pytest.mark.unit
+def test_forward_smoke_onthefly_deeph_e3():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    cfg = Config(
+        num_layers_gnn=1,
+        edge_encoder_style="deeph_e3",
+        precompute_edge_features=False,
+        cutoff_radius=3.0,
+        safety_checks=True,
+        verbosity=0,
+    )
+    model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
+
+    x = {
+        "positions": torch.tensor(
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.8], [0.0, 0.7, 0.0]],
+            dtype=cfg.dtype,
+        ),
+        "box": None,
+        "atoms": ("H", "H", "H"),
+        "node_type_idx": torch.zeros(3, dtype=torch.long),
+    }
+
+    preds = model(x)
+    assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}

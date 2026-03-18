@@ -118,23 +118,39 @@ class EdgeEncoder(nn.Module):
     ):
         super().__init__()
         self.cfg = cfg
-        self.irreps_out = irreps_out
+        self.style = self.cfg.edge_encoder_style.lower()
         self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
         self.info = info
 
-        # 1) scalar embeddings ------------------------------------------------
-        self.edge_emb = nn.Embedding(
-            n_edge_types,
-            self.cfg.edge_type_emb_dim,
-            dtype=self.cfg.dtype,
-        )
-        nn.init.normal_(self.edge_emb.weight, std=0.2)
-        self.tp = FullyConnectedTensorProduct(
-            Irreps(f"{self.cfg.edge_type_emb_dim}x0e"),
-            (Irreps(f"{self.cfg.n_radial}x0e") + self.sh_irreps).simplify(),
-            self.irreps_out,
-            internal_weights=True,
-        )
+        if self.style == "mandala":
+            self.irreps_out = irreps_out
+            self.edge_emb = nn.Embedding(
+                n_edge_types,
+                self.cfg.edge_type_emb_dim,
+                dtype=self.cfg.dtype,
+            )
+            nn.init.normal_(self.edge_emb.weight, std=0.2)
+            self.tp = FullyConnectedTensorProduct(
+                Irreps(f"{self.cfg.edge_type_emb_dim}x0e"),
+                (Irreps(f"{self.cfg.n_radial}x0e") + self.sh_irreps).simplify(),
+                self.irreps_out,
+                internal_weights=True,
+            )
+            self.distance_proj = None
+        elif self.style == "deeph_e3":
+            self.irreps_out = Irreps(f"{self.cfg.hidden_base_dim}x0e")
+            self.edge_emb = None
+            self.tp = None
+            self.distance_proj = nn.Linear(
+                self.cfg.n_radial,
+                self.cfg.hidden_base_dim,
+                dtype=self.cfg.dtype,
+            )
+        else:
+            raise ValueError(
+                f"Unknown edge_encoder_style '{self.cfg.edge_encoder_style}'. "
+                "Expected 'mandala' or 'deeph_e3'."
+            )
 
     # ------------------------------------------------------------------
     def forward(
@@ -147,10 +163,12 @@ class EdgeEncoder(nn.Module):
         """
         Return hidden edge features: Tensor[E, irreps_out.dim].
         """
-        # Concatenate edge type embedding, radial MLP output, and SH projection
-        type_emb = self.edge_emb(edge_type_idx)
-        disp_emb = torch.cat([length_emb, sh], dim=-1)
-        emb = self.tp(type_emb, disp_emb)
+        if self.style == "mandala":
+            type_emb = self.edge_emb(edge_type_idx)
+            disp_emb = torch.cat([length_emb, sh], dim=-1)
+            emb = self.tp(type_emb, disp_emb)
+        else:
+            emb = self.distance_proj(length_emb)
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_{self.info['name']}"
