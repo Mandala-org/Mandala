@@ -370,7 +370,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--edge-encoder-use-sh-tensor-square",
-        action="store_true",
+        type=parse_bool,
         default=False,
         help=(
             "Use TensorSquare(spherical harmonics) before the edge encoder tensor product "
@@ -389,7 +389,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--separate-shifted-self",
-        action="store_true",
+        type=parse_bool,
         default=False,
         help="Use a separate prediction head and normalization bucket for shifted-self edges (i==j with non-zero shift). Keeps previous 2-way behavior when disabled.",
     )
@@ -412,8 +412,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--head-use-tensor-square",
-        dest="head_use_tensor_square",
-        action="store_true",
+        type=parse_bool,
         default=False,
         help="Use TensorSquare(edge embeddings) as input to the main head projections (default: False)",
     )

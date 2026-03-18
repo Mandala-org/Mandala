@@ -43,9 +43,9 @@ python studies/minimal_overfit_observables/overfit_observables_minimal.py \
   --num-epochs 10 \
   --log-interval 1 \
   --adaptive-log-interval \
-  --separate-shifted-self \
-  --edge-encoder-use-sh-tensor-square \
-  --head-use-tensor-square \
+  --separate-shifted-self true \
+  --edge-encoder-use-sh-tensor-square true \
+  --head-use-tensor-square true \
   --log-data \
   --log-model \
   --log-per-irrep-metrics \
