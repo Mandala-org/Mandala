@@ -280,12 +280,16 @@ class EdgeUpdateBlock(nn.Module):
         num_species: int,
         cfg: Config,
         info: dict = None,
+        edge_irreps_out: Irreps | None = None,
     ):
         super().__init__()
         self.cfg = cfg
         self.info = info
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
+        if edge_irreps_out is None:
+            edge_irreps_out = edge_irreps
+        self.edge_irreps_out = edge_irreps_out
 
         # Resolve sh_irreps and n_radial from config
         sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
@@ -310,7 +314,7 @@ class EdgeUpdateBlock(nn.Module):
             n_radial=n_radial,
             irreps_in1=irreps_in1,
             irreps_in2=irreps_in2,
-            irreps_out=edge_irreps,
+            irreps_out=edge_irreps_out,
             cfg=cfg,
             nonlin=True,  # Use gate nonlinearity
         )
@@ -401,7 +405,7 @@ class EdgeUpdateBlock(nn.Module):
             edge = self.dropout(edge)
 
         # Residual connection
-        if self.cfg.edge_update_residual:
+        if self.cfg.edge_update_residual and edge.shape == edge_old.shape:
             edge = edge + edge_old
 
         return edge
@@ -566,7 +570,7 @@ class NodeUpdateBlock(nn.Module):
 # ════════════════════════════════════════════════════════════════════════
 class MessageBlock(nn.Module):
     """
-    One message-passing step: edge update followed by node update.
+    One message-passing step: node update followed by edge update.
 
     Combines EdgeUpdateBlock and NodeUpdateBlock following DeepH-E3.
 
@@ -590,6 +594,8 @@ class MessageBlock(nn.Module):
         num_species: int,
         cfg: Config,
         info: dict = None,
+        node_irreps_out: Irreps | None = None,
+        edge_irreps_out: Irreps | None = None,
     ):
         super().__init__()
         self.cfg = cfg
@@ -597,20 +603,24 @@ class MessageBlock(nn.Module):
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
 
-        self.edge_upd = EdgeUpdateBlock(
-            node_irreps=node_irreps,
-            edge_irreps=edge_irreps,
-            num_species=num_species,
-            cfg=cfg,
-            info=info,
-        )
         self.node_upd = NodeUpdateBlock(
             node_irreps=node_irreps,
             edge_irreps=edge_irreps,
+            node_irreps_out=node_irreps_out,
             num_species=num_species,
             cfg=cfg,
             info=info,
         )
+        self.edge_upd = EdgeUpdateBlock(
+            node_irreps=self.node_upd.irreps_out,
+            edge_irreps=edge_irreps,
+            edge_irreps_out=edge_irreps_out,
+            num_species=num_species,
+            cfg=cfg,
+            info=info,
+        )
+        self.node_irreps_out = self.node_upd.irreps_out
+        self.edge_irreps_out = self.edge_upd.irreps_out
 
     def forward(
         self,
@@ -639,17 +649,6 @@ class MessageBlock(nn.Module):
         Returns:
             Tuple of (updated_node, updated_edge)
         """
-        edge = self.edge_upd(
-            node, edge, edge_index, edge_sh, edge_length_emb, edge_one_hot
-        )
-
-        if activation_mags is not None and self.cfg.log_activation_mag and self.info:
-            prefix = f"mag_edge_{self.info.get('graph', 'graph')}_layer_{self.info.get('layer', 0)}"
-            splits = _magnitude_splits(edge, self.edge_upd.irreps_out)
-            for ir_str, mag in splits.items():
-                tag = f"{prefix}_{ir_str}"
-                activation_mags[tag] = mag
-
         node = self.node_upd(
             node, edge, edge_index, edge_sh, edge_length_emb, node_one_hot
         )
@@ -657,6 +656,17 @@ class MessageBlock(nn.Module):
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_node_{self.info.get('graph', 'graph')}_layer_{self.info.get('layer', 0)}"
             splits = _magnitude_splits(node, self.node_upd.irreps_out)
+            for ir_str, mag in splits.items():
+                tag = f"{prefix}_{ir_str}"
+                activation_mags[tag] = mag
+
+        edge = self.edge_upd(
+            node, edge, edge_index, edge_sh, edge_length_emb, edge_one_hot
+        )
+
+        if activation_mags is not None and self.cfg.log_activation_mag and self.info:
+            prefix = f"mag_edge_{self.info.get('graph', 'graph')}_layer_{self.info.get('layer', 0)}"
+            splits = _magnitude_splits(edge, self.edge_upd.irreps_out)
             for ir_str, mag in splits.items():
                 tag = f"{prefix}_{ir_str}"
                 activation_mags[tag] = mag

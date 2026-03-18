@@ -46,6 +46,7 @@ class Config:
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
     edge_type_emb_dim: int = 32  # edge type embedding size
     emb_use_odd_features: bool = True  # use odd parity
+    edge_encoder_style: str = "mandala"  # "mandala" | "deeph_e3"
 
     # node_type_emb_dim: int = 32  # node type embedding size
 

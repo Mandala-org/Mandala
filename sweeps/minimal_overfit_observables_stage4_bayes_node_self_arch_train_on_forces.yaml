@@ -65,8 +65,6 @@ parameters:
     value: true
   train-on-forces:
     value: true
-  loss-coef-forces:
-    value: 0.0
   symmetrize-preds:
     value: true
   hidden-dim:

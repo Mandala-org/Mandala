@@ -93,21 +93,24 @@ class E3GNN(pl.LightningModule):
         )
 
         # ---------- message-passing ------------------------------
-        # First layer: nodes start as scalars from node_enc
-        # Subsequent layers: nodes have full hidden_irreps after first NodeUpdateBlock expansion
         self.mp_blocks = nn.ModuleList()
+        node_irreps = self.node_enc.irreps_out
+        edge_irreps = self.edge_enc.irreps_out
         for i in range(self.cfg.num_layers_gnn):
-            # First layer uses node_enc output (scalars), rest use hidden_irreps
-            node_irreps_in = self.node_enc.irreps_out if i == 0 else self.hidden_irreps
-            self.mp_blocks.append(
-                MessageBlock(
-                    node_irreps=node_irreps_in,
-                    edge_irreps=self.hidden_irreps,
-                    num_species=len(self.mapper.orbital_cfg.elements()),
-                    cfg=self.cfg,
-                    info={"layer": i},
-                )
+            block = MessageBlock(
+                node_irreps=node_irreps,
+                edge_irreps=edge_irreps,
+                node_irreps_out=self.hidden_irreps,
+                edge_irreps_out=self.hidden_irreps,
+                num_species=len(self.mapper.orbital_cfg.elements()),
+                cfg=self.cfg,
+                info={"layer": i},
             )
+            self.mp_blocks.append(block)
+            node_irreps = block.node_irreps_out
+            edge_irreps = block.edge_irreps_out
+        self.final_node_irreps = node_irreps
+        self.final_edge_irreps = edge_irreps
 
         # ---------- heads ----------------------------------------------
         pair_keys = list(
@@ -116,7 +119,7 @@ class E3GNN(pl.LightningModule):
         self.heads = nn.ModuleDict(
             {
                 name: DeepHead(
-                    irreps_hidden=self.hidden_irreps,
+                    irreps_hidden=self.final_edge_irreps,
                     irreps_neck=self.neck_irreps,
                     pair_keys=pair_keys,
                     mapper=self.mapper,
@@ -189,7 +192,6 @@ class E3GNN(pl.LightningModule):
                 edge_type_idx,
                 edge_length_emb,
                 edge_sh,
-                index_gnn_cutoff,
                 num_self_edges,
             ) = compute_graph_features(
                 positions=x["positions"],
@@ -206,7 +208,6 @@ class E3GNN(pl.LightningModule):
             x["edge_type_idx"] = edge_type_idx
             x["edge_length_emb"] = edge_length_emb
             x["edge_sh"] = edge_sh
-            x["index_gnn_cutoff"] = index_gnn_cutoff
             x["num_self_edges"] = num_self_edges
 
         # ---- encode ----------------------------------------------------
