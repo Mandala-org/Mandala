@@ -30,7 +30,7 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --train-on-forces true \
   --loss-coef-forces 1e-8 \
   --symmetrize-preds true \
-  --hidden-irreps 8x0e+8x1e+8x1o+8x2e+4x2o+4x3e+4x3o+2x4e \
+  --hidden-irreps 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e \
   --hidden-dim 32 \
   --l-max 4 \
   --num-layers 2 \
