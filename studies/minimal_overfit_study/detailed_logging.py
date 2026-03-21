@@ -37,11 +37,6 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         else "  Partial training: disabled (training on all blocks)"
     )
     print(
-        "  Train on irrep parts: enabled (decomposed per-irrep loss)"
-        if config["train_on_irrep_parts"]
-        else "  Train on irrep parts: disabled (standard loss)"
-    )
-    print(
         "  Video generation: enabled"
         if config["generate_video"]
         else "  Video generation: disabled"
