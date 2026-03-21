@@ -34,10 +34,10 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --hidden-dim 32 \
   --l-max 4 \
   --num-layers 2 \
-  --n-radial 64 \
+  --n-radial 32 \
   --head-e3mlp-layers 2 \
   --e3layernorm true \
-  --edge-encoder-use-sh-tensor-square false \
+  --edge-encoder-use-sh-tensor-square true \
   --head-use-tensor-square true \
   --head-use-node-embeddings-for-self-edges true \
   --radial-embedding-scale none \
