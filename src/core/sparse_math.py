@@ -10,11 +10,13 @@ is now routed through :class:`core.block_irrep_mapper.BlockIrrepMapper`.
 
 from __future__ import annotations
 
-from typing import Tuple, Union
+from typing import Dict, Tuple, Union
 
 import torch
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.block_matrix import BlockMatrix
+
+TraceAlignment = Dict[str, Tuple[str, torch.Tensor]]
 
 
 def trace_matmul_sparse(
@@ -87,6 +89,91 @@ def trace_matmul_sparse_block_matrix(A: BlockMatrix, B: BlockMatrix) -> torch.Te
     return out
 
 
+def build_trace_alignment_from_pair_edges(
+    pair_edges_a: Dict[str, torch.Tensor],
+    pair_edges_b: Dict[str, torch.Tensor] | None = None,
+    *,
+    device: torch.device | str | None = None,
+) -> TraceAlignment:
+    """
+    Precompute reverse-edge alignment for vectorized sparse traces.
+
+    For each key ``A-B`` in ``pair_edges_a``, the returned mapping stores:
+    - reverse key ``B-A`` in ``pair_edges_b``
+    - a 1-D LongTensor of indices aligning reverse edges in ``pair_edges_b`` to
+      the order of edges in ``pair_edges_a``
+    """
+    if pair_edges_b is None:
+        pair_edges_b = pair_edges_a
+
+    alignment: TraceAlignment = {}
+    for key, edges_a in pair_edges_a.items():
+        el_a, el_b = key.split("-")
+        rev_key = f"{el_b}-{el_a}"
+        if rev_key not in pair_edges_b:
+            raise ValueError(
+                f"Key {rev_key} missing in second edge set (reverse of {key})."
+            )
+
+        edges_b_rev = pair_edges_b[rev_key]
+        mapping = {
+            tuple(map(int, edge.tolist())): idx
+            for idx, edge in enumerate(edges_b_rev.t())
+        }
+
+        indices_b = []
+        for edge in edges_a.t():
+            sx, sy, sz, i, j = map(int, edge.tolist())
+            rev_edge = (-sx, -sy, -sz, j, i)
+            if rev_edge not in mapping:
+                raise ValueError(
+                    f"Edge {rev_edge} (reverse of {(sx, sy, sz, i, j)}) missing in second edge set."
+                )
+            indices_b.append(mapping[rev_edge])
+
+        idx_device = device if device is not None else edges_a.device
+        alignment[key] = (
+            rev_key,
+            torch.tensor(indices_b, device=idx_device, dtype=torch.long),
+        )
+
+    return alignment
+
+
+def build_trace_alignment(A: BlockMatrix, B: BlockMatrix) -> TraceAlignment:
+    """Convenience wrapper building alignment from BlockMatrix edge dictionaries."""
+    return build_trace_alignment_from_pair_edges(A.pair_edges, B.pair_edges)
+
+
+def trace_matmul_sparse_block_matrix_aligned(
+    A: BlockMatrix,
+    B: BlockMatrix,
+    alignment: TraceAlignment,
+) -> torch.Tensor:
+    """
+    Vectorized sparse trace using a precomputed reverse-edge alignment.
+    """
+    total = torch.zeros(
+        (),
+        dtype=list(A.pair_blocks.values())[0].dtype,
+        device=list(A.pair_blocks.values())[0].device,
+    )
+    for key, blk_a in A.pair_blocks.items():
+        if key not in alignment:
+            raise ValueError(f"Missing trace alignment for key {key}.")
+        rev_key, idx_b = alignment[key]
+        if rev_key not in B.pair_blocks:
+            raise ValueError(
+                f"Key {rev_key} missing in second matrix (reverse of {key})."
+            )
+        blk_b_rev = B.pair_blocks[rev_key]
+        if idx_b.device != blk_b_rev.device:
+            idx_b = idx_b.to(blk_b_rev.device)
+        blk_b_aligned = blk_b_rev.index_select(0, idx_b)
+        total = total + torch.einsum("bij,bji->", blk_a, blk_b_aligned)
+    return total
+
+
 def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch.Tensor:
     """
     Vectorized per *directed* key.
@@ -94,55 +181,17 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
     For each key ``A-B`` we fetch the reverse key ``B-A`` from ``B``.
     This matches the mathematical trace:  Σ_{i,j} Tr( A_{ij} · B_{ji} ).
     """
-    total = torch.tensor(
-        0.0,
-        dtype=list(A.pair_blocks.values())[0].dtype,
-        device=list(A.pair_blocks.values())[0].device,
-    )
-    for key in A.keys():
-        el_A, el_B = key.split("-")
-        rev_key = f"{el_B}-{el_A}"
-        if rev_key not in B.keys():
-            raise ValueError(
-                f"Key {rev_key} missing in second matrix (reverse of {key} in first matrix)."
-            )
-
-        blk_a = A.pair_blocks[key]  # (E, d_A, d_B)
-        blk_b_rev = B.pair_blocks[rev_key]  # (E_rev, d_B, d_A)
-
-        edges_a = A.pair_edges[key]  # (2, E)   (i, j)
-        edges_b_rev = B.pair_edges[rev_key]  # (2, E')  (j, i)
-
-        # map (j,i) tuple -> index in B
-        mapping = {
-            tuple(map(int, (sx, sy, sz, i, j))): idx
-            for idx, (sx, sy, sz, i, j) in enumerate(edges_b_rev.t())
-        }
-
-        # build index list such that order matches edges_a
-        indices_b = []
-
-        for sx, sy, sz, i, j in edges_a.t():
-            rev_edge = tuple(map(int, (-sx, -sy, -sz, j, i)))
-            if rev_edge not in mapping:
-                raise ValueError(
-                    f"Edge {rev_edge} (reverse of {(sx, sy, sz, i, j)}) missing in second matrix."
-                )
-            indices_b.append(mapping[rev_edge])
-
-        idx_b_tensor = torch.tensor(indices_b, device=blk_a.device, dtype=torch.long)
-        blk_b_aligned = blk_b_rev[idx_b_tensor]
-
-        # Trace of A_ij · B_ji
-        total = total + torch.einsum("bij,bji->", blk_a, blk_b_aligned)
-
-    return total
+    alignment = build_trace_alignment(A, B)
+    return trace_matmul_sparse_block_matrix_aligned(A, B, alignment)
 
 
 __all__: Tuple[str, ...] = (
     "trace_matmul_sparse",
     "blocks_to_vectors",
     "vectors_to_blocks",
+    "build_trace_alignment_from_pair_edges",
+    "build_trace_alignment",
     "trace_matmul_sparse_block_matrix",
+    "trace_matmul_sparse_block_matrix_aligned",
     "trace_matmul_sparse_snap_vectorized",
 )
