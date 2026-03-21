@@ -1704,8 +1704,10 @@ def main() -> None:
 
     device = torch.device(args.device)
     if device.type == "cuda":
-        torch.cuda.set_device(device)
-        warmup = torch.zeros((1, 1), device=device, dtype=torch_dtype)
+        cuda_index = device.index if device.index is not None else 0
+        torch.cuda.set_device(cuda_index)
+        warmup_device = torch.device(f"cuda:{cuda_index}")
+        warmup = torch.zeros((1, 1), device=warmup_device, dtype=torch_dtype)
         _ = warmup @ warmup
         torch.cuda.synchronize()
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
