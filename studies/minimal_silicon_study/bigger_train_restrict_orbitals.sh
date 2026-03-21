@@ -19,6 +19,5 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --hidden-irreps 32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e \
   --separate-shifted-self \
   --num-layers 2 \
-  --train-on-irrep-parts \
   --orbital-selection 1s1p \
   --run-name bigger_train_1s1p

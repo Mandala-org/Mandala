@@ -53,7 +53,6 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --benchmark true \
   --apply-cutoff-to-targets true \
   --require-exact-edge-match true \
-  --train-on-irrep-parts true \
   --log-data true \
   --log-model true \
   --log-forward false \

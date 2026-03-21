@@ -10,6 +10,7 @@ A simplified variant of minimal_overfit_study that:
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 import os
 import random
@@ -62,7 +63,6 @@ from common import (
     compute_detailed_metrics,
     compute_distance_error_curve,
     compute_irrep_metrics,
-    filter_irreps_block_data_by_irrep,
     get_all_irreps_in_hamiltonian,
     save_distance_error_curve_plot,
     save_dos_comparison_plot,
@@ -119,7 +119,6 @@ BOOLEAN_ARG_NAMES = [
     "head_mlp_for_scalars",
     "head_use_tensor_square",
     "head_use_node_embeddings_for_self_edges",
-    "train_on_irrep_parts",
     "apply_cutoff_to_targets",
     "require_exact_edge_match",
     "log_data",
@@ -363,7 +362,6 @@ def parse_args() -> argparse.Namespace:
         default=False,
     )
     parser.add_argument("--head-e3mlp-layers", type=int, default=3)
-    parser.add_argument("--train-on-irrep-parts", type=parse_bool, default=False)
     parser.add_argument("--apply-cutoff-to-targets", type=parse_bool, default=False)
     parser.add_argument("--require-exact-edge-match", type=parse_bool, default=False)
 
@@ -592,6 +590,21 @@ def prepare_mapper_from_sample(
     )
 
 
+@contextmanager
+def suppress_stdout(enabled: bool):
+    if not enabled:
+        yield
+        return
+    old_stdout = sys.stdout
+    sink = open(os.devnull, "w")
+    try:
+        sys.stdout = sink
+        yield
+    finally:
+        sys.stdout = old_stdout
+        sink.close()
+
+
 def preprocess_sample(
     x: dict,
     y: dict,
@@ -606,7 +619,6 @@ def preprocess_sample(
     orbital_selection: Any,
     matrix_targets: list[str],
     enable_forces: bool,
-    separate_shifted_self: bool,
     require_exact_edge_match: bool,
     log_data: bool,
     log_model: bool,
@@ -912,54 +924,7 @@ def preprocess_sample(
                 idx,
             )
 
-    def build_irrep_projection_cache(irreps_data, all_irreps_list):
-        cache = {str(ir): {} for ir in all_irreps_list}
-        all_irrep_strs = set(cache.keys())
-        for key in irreps_data.pair_vectors.keys():
-            pair_irreps = mapper.get_pair_irreps(key)
-            el_a, el_b = key.split("-", 1)
-            map_key = (el_a, el_b)
-            itm = mapper._lookup(map_key)
-            q_full = mapper._get_q(map_key)
-
-            start = 0
-            idx_parts_by_irrep = {}
-            for mul, ir in pair_irreps:
-                term_dim = mul * ir.dim
-                ir_str = str(ir)
-                if term_dim > 0 and ir_str in all_irrep_strs:
-                    part_idx = torch.arange(
-                        start,
-                        start + term_dim,
-                        device=q_full.device,
-                        dtype=torch.long,
-                    )
-                    idx_parts_by_irrep.setdefault(ir_str, []).append(part_idx)
-                start += term_dim
-
-            for ir_str, idx_parts in idx_parts_by_irrep.items():
-                idx = (
-                    idx_parts[0] if len(idx_parts) == 1 else torch.cat(idx_parts, dim=0)
-                )
-                q_subset = q_full.index_select(0, idx)
-                cache[ir_str][key] = (idx, q_subset, itm.dim_i, itm.dim_j)
-        return cache
-
-    all_irreps = get_all_irreps_in_hamiltonian(mapper)
-    irrep_projection_cache = build_irrep_projection_cache(
-        target_irreps_by_name["hamiltonian"], all_irreps
-    )
     pred_trace_alignment = build_trace_alignment_from_pair_edges(pred_pair_edges_static)
-    target_irrep_blocks_cache_by_name = {}
-    for matrix_name in matrix_targets:
-        matrix_cache = {}
-        for irrep in all_irreps:
-            matrix_cache[str(irrep)] = filter_irreps_block_data_by_irrep(
-                target_irreps_by_name[matrix_name],
-                irrep,
-                mapper,
-            ).to_blocks(mapper)
-        target_irrep_blocks_cache_by_name[matrix_name] = matrix_cache
 
     return {
         "node_type_idx": node_type_idx,
@@ -989,8 +954,6 @@ def preprocess_sample(
         "pred_edge_key_set": set(pred_edge_keys),
         "pred_trace_alignment": pred_trace_alignment,
         "sh_non_scalar_slices": sh_non_scalar_slices,
-        "irrep_projection_cache": irrep_projection_cache,
-        "target_irrep_blocks_cache_by_name": target_irrep_blocks_cache_by_name,
     }
 
 
@@ -1066,19 +1029,6 @@ def move_sample_to_device(sample: dict, device: torch.device) -> dict:
             moved[key] = tuple(value)
         elif key == "pred_edge_key_set":
             moved[key] = set(value)
-        elif key == "irrep_projection_cache":
-            moved[key] = {
-                irrep_str: {
-                    pair_key: (
-                        idx.to(device),
-                        q_subset.to(device),
-                        dim_i,
-                        dim_j,
-                    )
-                    for pair_key, (idx, q_subset, dim_i, dim_j) in cache.items()
-                }
-                for irrep_str, cache in value.items()
-            }
         elif key == "pred_trace_alignment":
             moved[key] = {
                 pair_key: (rev_key, idx.to(device))
@@ -1087,18 +1037,6 @@ def move_sample_to_device(sample: dict, device: torch.device) -> dict:
         else:
             moved[key] = move_value(value)
     return moved
-
-
-def project_irrep_vectors_to_blocks(
-    vectors_full: torch.Tensor,
-    projector: tuple[torch.Tensor, torch.Tensor, int, int],
-) -> torch.Tensor:
-    idx, q_subset, dim_i, dim_j = projector
-    vec_sel = vectors_full.index_select(1, idx)
-    if vec_sel.dtype != q_subset.dtype:
-        vec_sel = vec_sel.to(dtype=q_subset.dtype)
-    block_flat = vec_sel @ q_subset
-    return block_flat.view(vec_sel.shape[0], dim_i, dim_j)
 
 
 def wrap_raw_predictions_to_irreps(
@@ -1161,11 +1099,8 @@ def compute_loss_for_sample(
     pred_irreps_by_name: dict[str, IrrepsBlockData],
     pred_matrix_norm_by_name: dict[str, BlockMatrix],
     sample: dict,
-    mapper: BlockIrrepMapper,
     *,
     matrix_targets: list[str],
-    train_on_irrep_parts: bool,
-    all_irreps: list,
     enable_energy: bool,
     train_on_energy: bool,
     enable_num_electrons: bool,
@@ -1177,7 +1112,6 @@ def compute_loss_for_sample(
     positions_for_forces: torch.Tensor | None,
 ) -> dict[str, Any]:
     matrix_block_losses: dict[str, torch.Tensor] = {}
-    irrep_losses_by_matrix: dict[str, dict[str, torch.Tensor]] = {}
 
     def mse_loss_blocks(
         pred_blocks: torch.Tensor,
@@ -1191,49 +1125,17 @@ def compute_loss_for_sample(
 
     for matrix_name in matrix_targets:
         target_matrix = sample["target_matrices"][matrix_name]
-        pred_irreps = pred_irreps_by_name[matrix_name]
         pred_matrix = pred_matrix_norm_by_name[matrix_name]
-        irrep_losses: dict[str, torch.Tensor] = {}
-
-        if train_on_irrep_parts:
-            loss_total = torch.tensor(0.0, device=sample["node_type_idx"].device)
-            pair_vec_curr = pred_irreps.pair_vectors
-            target_irrep_blocks_cache = sample["target_irrep_blocks_cache_by_name"][
-                matrix_name
-            ]
-            for ir in all_irreps:
-                l_ir = torch.tensor(0.0, device=loss_total.device)
-                irrep_str = str(ir)
-                irrep_projectors = sample["irrep_projection_cache"].get(irrep_str, {})
-                target_irrep_blocks = target_irrep_blocks_cache[irrep_str]
-                for key in target_irrep_blocks.pair_blocks.keys():
-                    if key not in pair_vec_curr or key not in irrep_projectors:
-                        continue
-                    pred_blocks = project_irrep_vectors_to_blocks(
-                        pair_vec_curr[key],
-                        irrep_projectors[key],
-                    )
-                    l_ir = l_ir + mse_loss_blocks(
-                        pred_blocks,
-                        target_irrep_blocks.pair_blocks[key],
-                        target_matrix.pair_edges[key],
-                    )
-                irrep_losses[irrep_str] = l_ir
-                loss_total = loss_total + l_ir
-            matrix_block_losses[matrix_name] = loss_total
-            irrep_losses_by_matrix[matrix_name] = irrep_losses
-        else:
-            loss_total = torch.tensor(0.0, device=sample["node_type_idx"].device)
-            for key in target_matrix.pair_blocks.keys():
-                if key not in pred_matrix.pair_blocks:
-                    continue
-                loss_total = loss_total + mse_loss_blocks(
-                    pred_matrix.pair_blocks[key],
-                    target_matrix.pair_blocks[key],
-                    target_matrix.pair_edges[key],
-                )
-            matrix_block_losses[matrix_name] = loss_total
-            irrep_losses_by_matrix[matrix_name] = irrep_losses
+        loss_total = torch.tensor(0.0, device=sample["node_type_idx"].device)
+        for key in target_matrix.pair_blocks.keys():
+            if key not in pred_matrix.pair_blocks:
+                continue
+            loss_total = loss_total + mse_loss_blocks(
+                pred_matrix.pair_blocks[key],
+                target_matrix.pair_blocks[key],
+                target_matrix.pair_edges[key],
+            )
+        matrix_block_losses[matrix_name] = loss_total
 
     loss_block = (
         sum(matrix_block_losses.values())
@@ -1316,7 +1218,6 @@ def compute_loss_for_sample(
         "loss_total": loss_total,
         "loss_block_total": loss_block,
         "matrix_block_losses": matrix_block_losses,
-        "irrep_losses_by_matrix": irrep_losses_by_matrix,
         "loss_energy_weighted": loss_energy_weighted,
         "loss_num_electrons_weighted": loss_num_electrons_weighted,
         "loss_forces_weighted": loss_forces_weighted,
@@ -1356,24 +1257,19 @@ def predict_sample(
             radial_embedding_scale=radial_embedding_scale,
         )
 
-    if not verbose_forward and not log_forward:
-        old_stdout = sys.stdout
-        sys.stdout = open(os.devnull, "w")
-    raw = network(
-        sample["node_type_idx"],
-        sample["edge_type_idx"],
-        sample["edge_index"],
-        sample["edge_shift"],
-        edge_length_emb,
-        edge_sh,
-        sample["batch_node"],
-        sample["batch_edge"],
-        log_to_wandb=log_to_wandb,
-        verbose=verbose_forward or log_forward,
-    )
-    if not verbose_forward and not log_forward:
-        sys.stdout.close()
-        sys.stdout = old_stdout
+    with suppress_stdout(not verbose_forward and not log_forward):
+        raw = network(
+            sample["node_type_idx"],
+            sample["edge_type_idx"],
+            sample["edge_index"],
+            sample["edge_shift"],
+            edge_length_emb,
+            edge_sh,
+            sample["batch_node"],
+            sample["batch_edge"],
+            log_to_wandb=log_to_wandb,
+            verbose=verbose_forward or log_forward,
+        )
 
     missing_targets = [name for name in matrix_targets if name not in raw]
     if missing_targets:
@@ -1428,7 +1324,6 @@ def evaluate_split(
     n_radial: int,
     radial_embedding_scale: str,
     symmetrize_preds: bool,
-    train_on_irrep_parts: bool,
     enable_energy: bool,
     train_on_energy: bool,
     enable_num_electrons: bool,
@@ -1501,10 +1396,7 @@ def evaluate_split(
             pred["pred_irreps_by_name"],
             pred["pred_matrix_norm_by_name"],
             sample_dev,
-            mapper,
             matrix_targets=matrix_targets,
-            train_on_irrep_parts=train_on_irrep_parts,
-            all_irreps=all_irreps,
             enable_energy=enable_energy,
             train_on_energy=train_on_energy,
             enable_num_electrons=enable_num_electrons,
@@ -1809,7 +1701,6 @@ def main() -> None:
         "head_use_tensor_square": args.head_use_tensor_square,
         "head_use_node_embeddings_for_self_edges": args.head_use_node_embeddings_for_self_edges,
         "head_e3mlp_layers": args.head_e3mlp_layers,
-        "train_on_irrep_parts": args.train_on_irrep_parts,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         "require_exact_edge_match": args.require_exact_edge_match,
         "log_data": args.log_data,
@@ -1914,7 +1805,6 @@ def main() -> None:
                 orbital_selection=orbital_selection_obj,
                 matrix_targets=matrix_targets,
                 enable_forces=args.enable_forces,
-                separate_shifted_self=args.separate_shifted_self,
                 require_exact_edge_match=args.require_exact_edge_match,
                 log_data=args.log_data and sample_idx == 0,
                 log_model=args.log_model and sample_idx == 0,
@@ -1941,7 +1831,6 @@ def main() -> None:
             orbital_selection=orbital_selection_obj,
             matrix_targets=matrix_targets,
             enable_forces=args.enable_forces,
-            separate_shifted_self=args.separate_shifted_self,
             require_exact_edge_match=args.require_exact_edge_match,
             log_data=False,
             log_model=False,
@@ -1962,30 +1851,25 @@ def main() -> None:
     num_elements = len(mapper.orbital_cfg.elements())
     num_edge_types = num_elements**2
 
-    if not args.log_model:
-        old_stdout = sys.stdout
-        sys.stdout = open(os.devnull, "w")
-    network = MinimalNetwork(
-        num_elements=num_elements,
-        n_radial=args.n_radial,
-        num_edge_types=num_edge_types,
-        hidden_irreps=hidden_irreps,
-        sh_irreps=sh_irreps,
-        num_layers=args.num_layers,
-        mapper=mapper,
-        matrix_targets=matrix_targets,
-        head_e3mlp_layers=args.head_e3mlp_layers,
-        edge_encoder_use_sh_tensor_square=args.edge_encoder_use_sh_tensor_square,
-        magnitude_factorization=False,
-        head_mlp_for_scalars=args.head_mlp_for_scalars,
-        head_use_tensor_square=args.head_use_tensor_square,
-        head_use_node_embeddings_for_self_edges=args.head_use_node_embeddings_for_self_edges,
-        separate_shifted_self=args.separate_shifted_self,
-        use_e3layernorm=args.e3layernorm,
-    ).to(device=device, dtype=torch_dtype)
-    if not args.log_model:
-        sys.stdout.close()
-        sys.stdout = old_stdout
+    with suppress_stdout(not args.log_model):
+        network = MinimalNetwork(
+            num_elements=num_elements,
+            n_radial=args.n_radial,
+            num_edge_types=num_edge_types,
+            hidden_irreps=hidden_irreps,
+            sh_irreps=sh_irreps,
+            num_layers=args.num_layers,
+            mapper=mapper,
+            matrix_targets=matrix_targets,
+            head_e3mlp_layers=args.head_e3mlp_layers,
+            edge_encoder_use_sh_tensor_square=args.edge_encoder_use_sh_tensor_square,
+            magnitude_factorization=False,
+            head_mlp_for_scalars=args.head_mlp_for_scalars,
+            head_use_tensor_square=args.head_use_tensor_square,
+            head_use_node_embeddings_for_self_edges=args.head_use_node_embeddings_for_self_edges,
+            separate_shifted_self=args.separate_shifted_self,
+            use_e3layernorm=args.e3layernorm,
+        ).to(device=device, dtype=torch_dtype)
     if args.log_model:
         print("[OK] Network architecture complete.")
 
@@ -2060,7 +1944,6 @@ def main() -> None:
                 epoch, args.log_interval, args.adaptive_log_interval
             )
             train_loss_total = 0.0
-            train_irrep_losses_total: dict[str, float] = {}
             epoch_wandb_log: dict[str, float] = {"epoch": epoch}
             last_grad_norm = None
 
@@ -2097,10 +1980,7 @@ def main() -> None:
                     pred["pred_irreps_by_name"],
                     pred["pred_matrix_norm_by_name"],
                     sample,
-                    mapper,
                     matrix_targets=matrix_targets,
-                    train_on_irrep_parts=args.train_on_irrep_parts,
-                    all_irreps=all_irreps,
                     enable_energy=args.enable_energy,
                     train_on_energy=args.train_on_energy,
                     enable_num_electrons=args.enable_num_electrons,
@@ -2184,21 +2064,6 @@ def main() -> None:
                         "train/forces_mse", 0.0
                     ) + float(loss_info["forces_mse"].item())
 
-                if args.train_on_irrep_parts:
-                    for matrix_name, ir_losses in loss_info[
-                        "irrep_losses_by_matrix"
-                    ].items():
-                        prefix = matrix_alias.get(matrix_name, matrix_name)
-                        for irrep_str, irrep_loss in ir_losses.items():
-                            key = f"partial/{prefix}_{irrep_str}"
-                            epoch_wandb_log[key] = epoch_wandb_log.get(
-                                key, 0.0
-                            ) + float(irrep_loss.item())
-                            train_irrep_losses_total[key] = (
-                                train_irrep_losses_total.get(key, 0.0)
-                                + float(irrep_loss.item())
-                            )
-
             denom = max(len(train_samples), 1)
             train_loss = train_loss_total / denom
             for key, value in list(epoch_wandb_log.items()):
@@ -2234,7 +2099,6 @@ def main() -> None:
                     n_radial=args.n_radial,
                     radial_embedding_scale=args.radial_embedding_scale,
                     symmetrize_preds=args.symmetrize_preds,
-                    train_on_irrep_parts=args.train_on_irrep_parts,
                     enable_energy=args.enable_energy,
                     train_on_energy=args.train_on_energy,
                     enable_num_electrons=args.enable_num_electrons,
@@ -2300,19 +2164,13 @@ def main() -> None:
                 print(f"\n{'=' * 60}")
                 print(f"EPOCH {epoch + 1}/{args.num_epochs}  |  lr={current_lr:.6e}")
                 print(f"{'=' * 60}")
-                irrep_losses_for_print = None
-                if args.train_on_irrep_parts:
-                    irrep_losses_for_print = {
-                        key: torch.tensor(value / denom)
-                        for key, value in train_irrep_losses_total.items()
-                    }
                 log_detailed_training_metrics(
                     avg_epoch_time=avg_epoch_time,
                     epochs_since_last_log=epochs_since_last_log,
                     time_elapsed=time_elapsed,
                     loss_value=train_loss,
                     detailed_metrics=val_eval["detailed"],
-                    irrep_losses=irrep_losses_for_print,
+                    irrep_losses=None,
                 )
                 if args.log_per_irrep_metrics:
                     for matrix_name in matrix_targets:
@@ -2445,7 +2303,6 @@ def main() -> None:
         n_radial=args.n_radial,
         radial_embedding_scale=args.radial_embedding_scale,
         symmetrize_preds=args.symmetrize_preds,
-        train_on_irrep_parts=args.train_on_irrep_parts,
         enable_energy=args.enable_energy,
         train_on_energy=args.train_on_energy,
         enable_num_electrons=args.enable_num_electrons,

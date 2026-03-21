@@ -24,6 +24,5 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --separate-shifted-self \
   --num-layers 1 \
   --distance-magnitude-normalization \
-  --train-on-irrep-parts \
   --orbital-selection 1s1p \
   --run-name smaller_overfit
