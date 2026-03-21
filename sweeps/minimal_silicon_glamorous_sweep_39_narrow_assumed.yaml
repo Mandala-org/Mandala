@@ -1,0 +1,124 @@
+program: studies/minimal_silicon_study/train_silicon_minimal.py
+project: mandala-minimal-silicon-study
+name: minimal-silicon-glamorous-sweep-39-narrow-assumed
+method: bayes
+metric:
+  name: mae_H
+  goal: minimize
+
+parameters:
+  run-name:
+    value: silicon_glamorous_sweep_39_narrow
+
+  # Silicon dataset defaults.
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
+  train-temps:
+    value: "2700"
+  val-temp:
+    value: 2700
+  n-snapshots-per-temp:
+    value: 100
+  val-n-snapshots:
+    value: 10
+
+  # Centered on run wynxo0rr / glamorous-sweep-39.
+  lr:
+    distribution: log_uniform_values
+    min: 1e-3
+    max: 1e-2
+  loss-coef-observables:
+    distribution: log_uniform_values
+    min: 1e-9
+    max: 1e-8
+  loss-coef-forces:
+    distribution: log_uniform_values
+    min: 1e-8
+    max: 1e-7
+
+  n-radial:
+    values: [64, 128]
+  num-layers:
+    values: [2, 3]
+  head-e3mlp-layers:
+    values: [2, 3]
+  log-interval:
+    values: [100, 200]
+  lr-patience:
+    values: [400, 800]
+
+  # Explicit fixed settings matching the source run as closely as possible.
+  training-unit:
+    value: ev
+  matrix-targets:
+    value: hamiltonian,overlap,density
+  enable-energy:
+    value: true
+  enable-forces:
+    value: true
+  enable-num-electrons:
+    value: true
+  train-on-energy:
+    value: true
+  train-on-forces:
+    value: true
+  train-on-num-electrons:
+    value: true
+  adaptive-log-interval:
+    value: true
+  log-data:
+    value: true
+  log-model:
+    value: true
+  log-per-irrep-metrics:
+    value: true
+  log-per-irrep-images:
+    value: true
+  benchmark:
+    value: true
+  generate-video:
+    value: true
+  apply-cutoff-to-targets:
+    value: true
+  require-exact-edge-match:
+    value: true
+  dtype:
+    value: float32
+  device:
+    value: cuda
+  checkpoint-dir:
+    value: studies/minimal_silicon_study/checkpoints
+  cutoff-radius:
+    value: 7.0
+  e3layernorm:
+    value: true
+  edge-encoder-use-sh-tensor-square:
+    value: false
+  grad-clip:
+    value: 1.0
+  head-use-node-embeddings-for-self-edges:
+    value: true
+  head-use-tensor-square:
+    value: true
+  hidden-dim:
+    value: 32
+  hidden-irreps:
+    value: "32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e"
+  l-max:
+    value: 4
+  lr-factor:
+    value: 0.2
+  num-epochs:
+    value: 16000
+  radial-embedding-scale:
+    value: none
+  separate-shifted-self:
+    value: true
+  symmetrize-preds:
+    value: true
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
