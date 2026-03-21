@@ -660,14 +660,13 @@ def preprocess_sample(
     D = canonicalize_block_matrix_edges(D, positions, box)
 
     H = (H + H.transpose()) * 0.5
-    edge_distances_by_key = compute_edge_distances_by_key(H, positions, box)
-    target_matrices_all = {
+    target_matrices = {
         "hamiltonian": H,
         "overlap": S,
         "density": D,
     }
     target_matrices = {
-        matrix_name: target_matrices_all[matrix_name] for matrix_name in matrix_targets
+        matrix_name: target_matrices[matrix_name] for matrix_name in matrix_targets
     }
     target_irreps_by_name = {
         matrix_name: target_matrices[matrix_name].to_vectors(mapper)
@@ -963,17 +962,11 @@ def preprocess_sample(
         "atoms_list": atoms_list,
         "atoms_tuple": atoms_tuple,
         "atom_counts": atom_counts,
-        "edge_distances_by_key": edge_distances_by_key,
         "target_matrices": target_matrices,
-        "target_matrices_all": target_matrices_all,
         "target_irreps_by_name": target_irreps_by_name,
         "target_basis_by_name": target_basis_by_name,
-        "target_H_matrix_raw": H,
-        "target_H_irreps_raw": H.to_vectors(mapper),
-        "target_H_matrix": H,
         "target_overlap": S,
         "target_density": D,
-        "target_H_irreps": H.to_vectors(mapper),
         "energy_target": energy_target,
         "num_electrons_target": num_electrons_target,
         "forces_target": forces_target,
@@ -1029,6 +1022,52 @@ def recompute_sample_edge_features(
     if radial_embedding_scale == "sqrt_n_radial":
         edge_length_emb = edge_length_emb * n_radial**0.5
     return edge_sh, edge_length_emb, edge_dist
+
+
+def move_sample_to_device(sample: dict, device: torch.device) -> dict:
+    def move_value(value):
+        if value is None:
+            return None
+        if isinstance(value, torch.Tensor):
+            return value.to(device)
+        if isinstance(value, BlockMatrix):
+            return value.to(device)
+        if isinstance(value, IrrepsBlockData):
+            return value.to(device)
+        if isinstance(value, dict):
+            return {k: move_value(v) for k, v in value.items()}
+        if isinstance(value, tuple):
+            return tuple(move_value(v) for v in value)
+        if isinstance(value, list):
+            return [move_value(v) for v in value]
+        return value
+
+    moved = {}
+    for key, value in sample.items():
+        if key == "pred_lookup_static":
+            moved[key] = value
+        elif key == "sh_non_scalar_slices":
+            moved[key] = list(value)
+        elif key == "pred_edge_keys":
+            moved[key] = tuple(value)
+        elif key == "pred_edge_key_set":
+            moved[key] = set(value)
+        elif key == "irrep_projection_cache":
+            moved[key] = {
+                irrep_str: {
+                    pair_key: (
+                        idx.to(device),
+                        q_subset.to(device),
+                        dim_i,
+                        dim_j,
+                    )
+                    for pair_key, (idx, q_subset, dim_i, dim_j) in cache.items()
+                }
+                for irrep_str, cache in value.items()
+            }
+        else:
+            moved[key] = move_value(value)
+    return moved
 
 
 def project_irrep_vectors_to_blocks(
@@ -1351,6 +1390,7 @@ def evaluate_split(
     samples: list[dict],
     mapper: BlockIrrepMapper,
     all_irreps: list,
+    device: torch.device,
     *,
     matrix_targets: list[str],
     sh_irreps: Irreps,
@@ -1407,12 +1447,15 @@ def evaluate_split(
     first_sample = None
 
     for idx, sample in enumerate(samples):
+        sample_dev = move_sample_to_device(sample, device)
         positions_eval = None
         if enable_forces:
-            positions_eval = sample["positions"].detach().clone().requires_grad_(True)
+            positions_eval = (
+                sample_dev["positions"].detach().clone().requires_grad_(True)
+            )
         pred = predict_sample(
             network,
-            sample,
+            sample_dev,
             mapper,
             matrix_targets=matrix_targets,
             sh_irreps=sh_irreps,
@@ -1427,7 +1470,7 @@ def evaluate_split(
         loss_info = compute_loss_for_sample(
             pred["pred_irreps_by_name"],
             pred["pred_matrix_norm_by_name"],
-            sample,
+            sample_dev,
             mapper,
             matrix_targets=matrix_targets,
             train_on_irrep_parts=train_on_irrep_parts,
@@ -1438,7 +1481,7 @@ def evaluate_split(
             train_on_num_electrons=train_on_num_electrons,
             loss_coef_observables=loss_coef_observables,
             enable_forces=enable_forces,
-            train_on_forces=False,
+            train_on_forces=train_on_forces,
             loss_coef_forces=loss_coef_forces,
             positions_for_forces=positions_eval,
         )
@@ -1448,14 +1491,14 @@ def evaluate_split(
 
         detailed = compute_detailed_metrics(
             pred_metrics_by_name["hamiltonian"],
-            sample["target_matrices"]["hamiltonian"],
-            sample["target_overlap"],
+            sample_dev["target_matrices"]["hamiltonian"],
+            sample_dev["target_overlap"],
         )
         for k, v in detailed.items():
             detailed_sum[k] = detailed_sum.get(k, 0.0) + float(v)
 
         for matrix_name in matrix_targets:
-            target_matrix = sample["target_matrices"][matrix_name]
+            target_matrix = sample_dev["target_matrices"][matrix_name]
             pred_matrix_metrics = pred_metrics_by_name[matrix_name]
             basic = compute_basic_matrix_metrics(pred_matrix_metrics, target_matrix)
             basic_acc = basic_sum_by_name.setdefault(matrix_name, {})
@@ -1464,7 +1507,7 @@ def evaluate_split(
 
             per_irrep = compute_irrep_metrics(
                 pred_matrix_metrics.to_vectors(mapper),
-                sample["target_irreps_by_name"][matrix_name],
+                sample_dev["target_irreps_by_name"][matrix_name],
                 all_irreps,
                 mapper,
             )
@@ -1485,7 +1528,7 @@ def evaluate_split(
 
         if idx == 0:
             first_pred_metrics_by_name = pred_metrics_by_name
-            first_sample = sample
+            first_sample = sample_dev
 
     n = float(len(samples))
     return {
@@ -1656,6 +1699,7 @@ def main() -> None:
         if args.num_val < 0:
             raise ValueError("--num-val must be >= 0")
         all_pairs = discover_snapshot_pairs(data_root)
+        random.Random(args.seed).shuffle(all_pairs)
         if len(all_pairs) < args.num_train + args.num_val:
             raise ValueError(
                 f"Requested train+val={args.num_train + args.num_val} pairs but found only {len(all_pairs)} under {data_root}"
@@ -1772,7 +1816,7 @@ def main() -> None:
     cfg_ds.verbosity = 0
     cfg_ds.cache_root = None
     cfg_ds.precompute_edge_features = False
-    cfg_ds.cutoff_radius = args.cutoff_radius if args.apply_cutoff_to_targets else 1e6
+    cfg_ds.cutoff_radius = args.cutoff_radius if args.apply_cutoff_to_targets else None
     cfg_ds.enable_forces = args.enable_forces
     cfg_ds.train_on_forces = args.train_on_forces
 
@@ -1805,8 +1849,13 @@ def main() -> None:
 
     # Build final mapper from first sample after optional orbital reduction.
     x0, y0 = train_ds[0]
-    mapper = prepare_mapper_from_sample(
-        x0, y0, orbital_selection_obj, device, torch_dtype
+    mapper_cpu = prepare_mapper_from_sample(
+        x0, y0, orbital_selection_obj, torch.device("cpu"), torch_dtype
+    )
+    mapper = BlockIrrepMapper(
+        mapper_cpu.orbital_cfg,
+        device=device,
+        dtype=torch_dtype,
     )
 
     # Graph feature config used per sample.
@@ -1820,7 +1869,7 @@ def main() -> None:
             preprocess_sample(
                 x=x,
                 y=y,
-                mapper=mapper,
+                mapper=mapper_cpu,
                 sh_irreps=sh_irreps,
                 n_radial=args.n_radial,
                 radial_embedding_scale=args.radial_embedding_scale,
@@ -1835,7 +1884,7 @@ def main() -> None:
                 require_exact_edge_match=args.require_exact_edge_match,
                 log_data=args.log_data and sample_idx == 0,
                 log_model=args.log_model and sample_idx == 0,
-                device=device,
+                device=torch.device("cpu"),
                 torch_dtype=torch_dtype,
             )
         )
@@ -1847,7 +1896,7 @@ def main() -> None:
         preprocess_sample(
             x=x,
             y=y,
-            mapper=mapper,
+            mapper=mapper_cpu,
             sh_irreps=sh_irreps,
             n_radial=args.n_radial,
             radial_embedding_scale=args.radial_embedding_scale,
@@ -1862,7 +1911,7 @@ def main() -> None:
             require_exact_edge_match=args.require_exact_edge_match,
             log_data=False,
             log_model=False,
-            device=device,
+            device=torch.device("cpu"),
             torch_dtype=torch_dtype,
         )
         for (x, y) in val_iterable
@@ -1925,6 +1974,7 @@ def main() -> None:
     print("TRAINING")
     print("=" * 80)
     print(f"train samples: {len(train_samples)} | val samples: {len(val_samples)}")
+    has_validation = len(val_samples) > 0
 
     matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
     irrep_prefix_by_matrix = {"hamiltonian": "H_", "overlap": "S_", "density": "D_"}
@@ -1980,7 +2030,8 @@ def main() -> None:
             epoch_wandb_log: dict[str, float] = {"epoch": epoch}
             last_grad_norm = None
 
-            for sample in train_samples:
+            for sample_cpu in train_samples:
+                sample = move_sample_to_device(sample_cpu, device)
                 optimizer.zero_grad(set_to_none=True)
                 t_fwd = time.perf_counter() if args.benchmark else 0.0
                 positions_train = None
@@ -2142,6 +2193,7 @@ def main() -> None:
                     samples=val_samples if len(val_samples) > 0 else train_samples,
                     mapper=mapper,
                     all_irreps=all_irreps,
+                    device=device,
                     matrix_targets=matrix_targets,
                     sh_irreps=sh_irreps,
                     cutoff_radius=args.cutoff_radius,
@@ -2163,7 +2215,11 @@ def main() -> None:
                     time.perf_counter() - t_eval if args.benchmark else 0.0,
                 )
 
-            scheduler.step(float(val_eval["loss"]) if do_log else train_loss)
+            if has_validation:
+                if do_log:
+                    scheduler.step(float(val_eval["loss"]))
+            else:
+                scheduler.step(train_loss)
             current_lr = optimizer.param_groups[0]["lr"]
             history["train_loss"].append(train_loss)
             history["val_loss"].append(
@@ -2175,8 +2231,9 @@ def main() -> None:
                 else float("nan")
             )
 
-            score = float(val_eval["loss"]) if do_log else train_loss
-            if score < best_score:
+            score = float(val_eval["loss"]) if has_validation else train_loss
+            should_update_best = do_log if has_validation else True
+            if should_update_best and score < best_score:
                 best_score = score
                 best_epoch = epoch
                 torch.save(
@@ -2347,6 +2404,7 @@ def main() -> None:
         samples=val_samples if len(val_samples) > 0 else train_samples,
         mapper=mapper,
         all_irreps=all_irreps,
+        device=device,
         matrix_targets=matrix_targets,
         sh_irreps=sh_irreps,
         cutoff_radius=args.cutoff_radius,
