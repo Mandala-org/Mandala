@@ -1158,6 +1158,7 @@ def compute_loss_for_sample(
     train_on_forces: bool,
     loss_coef_forces: float,
     positions_for_forces: torch.Tensor | None,
+    force_loss_requires_grad: bool,
 ) -> dict[str, Any]:
     matrix_block_losses: dict[str, torch.Tensor] = {}
 
@@ -1247,8 +1248,8 @@ def compute_loss_for_sample(
             pred_matrix_observables_by_name,
             positions_for_forces,
             sample["pred_trace_alignment"],
-            create_graph=train_on_forces,
-            retain_graph=True,
+            create_graph=force_loss_requires_grad,
+            retain_graph=force_loss_requires_grad,
         )
         forces_err = forces_pred - sample["forces_target"]
         forces_mae = torch.mean(torch.abs(forces_err))
@@ -1452,26 +1453,27 @@ def evaluate_split(
             train_on_forces=train_on_forces,
             loss_coef_forces=loss_coef_forces,
             positions_for_forces=positions_eval,
+            force_loss_requires_grad=False,
         )
         total_loss += float(loss_info["loss_total"].item())
 
         pred_metrics_by_name = {
-            matrix_name: matrix.detach()
+            matrix_name: matrix.detach().to("cpu")
             for matrix_name, matrix in pred["pred_matrix_metrics_by_name"].items()
         }
         pred_irreps_metrics_by_name = {
-            matrix_name: data.detach()
+            matrix_name: data.detach().to("cpu")
             for matrix_name, data in pred["pred_irreps_metrics_by_name"].items()
         }
         target_matrices_detached = {
-            matrix_name: matrix.detach()
+            matrix_name: matrix.detach().to("cpu")
             for matrix_name, matrix in sample_dev["target_matrices"].items()
         }
         target_irreps_detached = {
-            matrix_name: data.detach()
+            matrix_name: data.detach().to("cpu")
             for matrix_name, data in sample_dev["target_irreps_by_name"].items()
         }
-        target_overlap_detached = sample_dev["target_overlap"].detach()
+        target_overlap_detached = sample_dev["target_overlap"].detach().to("cpu")
 
         with torch.no_grad():
             detailed = compute_detailed_metrics_aligned(
@@ -1515,7 +1517,18 @@ def evaluate_split(
 
         if idx == 0:
             first_pred_metrics_by_name = pred_metrics_by_name
-            first_sample = sample_dev
+            first_sample = {
+                **sample_dev,
+                "positions": sample_dev["positions"].detach().to("cpu"),
+                "box": (
+                    sample_dev["box"].detach().to("cpu")
+                    if sample_dev["box"] is not None
+                    else None
+                ),
+                "target_overlap": sample_dev["target_overlap"].detach().to("cpu"),
+                "target_matrices": target_matrices_detached,
+                "target_irreps_by_name": target_irreps_detached,
+            }
 
     n = float(len(samples))
     return {
@@ -2067,6 +2080,7 @@ def main() -> None:
                     train_on_forces=args.train_on_forces,
                     loss_coef_forces=args.loss_coef_forces,
                     positions_for_forces=positions_train,
+                    force_loss_requires_grad=args.train_on_forces,
                 )
                 loss = loss_info["loss_total"]
                 benchmark_add(
