@@ -1057,6 +1057,34 @@ def compute_mu_H(H_pred, H_gt, S):
         return 0.0
 
 
+def compute_mu_H_aligned(H_pred, H_gt, S):
+    """
+    Compute mu_H assuming H_pred/H_gt/S already have matching keys and edge order.
+    """
+    numerator = 0.0
+    denominator = 0.0
+
+    for key in H_gt.pair_blocks.keys():
+        pred_blocks = H_pred.pair_blocks[key]
+        gt_blocks = H_gt.pair_blocks[key]
+        s_blocks = S.pair_blocks[key]
+        if (
+            pred_blocks.shape[0] != gt_blocks.shape[0]
+            or pred_blocks.shape[0] != s_blocks.shape[0]
+        ):
+            raise ValueError(
+                f"Aligned mu_H requires matching block counts for key '{key}'"
+            )
+
+        diff = pred_blocks - gt_blocks
+        numerator += torch.sum(diff * s_blocks).item()
+        denominator += torch.sum(s_blocks * s_blocks).item()
+
+    if denominator > 1e-10:
+        return numerator / denominator
+    return 0.0
+
+
 def compute_detailed_metrics(H_pred, H_gt, S):
     """
     Compute all metrics: MAE, MSE, modified MAE/MSE, mu_H, and correction statistics.
@@ -1135,6 +1163,67 @@ def compute_detailed_metrics(H_pred, H_gt, S):
     }
 
 
+def compute_detailed_metrics_aligned(H_pred, H_gt, S):
+    """
+    Compute detailed Hamiltonian metrics assuming aligned keys and edge order.
+    """
+    mae = 0.0
+    mse = 0.0
+    total_elements = 0
+
+    for key in H_gt.pair_blocks.keys():
+        pred_blocks = H_pred.pair_blocks[key]
+        gt_blocks = H_gt.pair_blocks[key]
+        if pred_blocks.shape != gt_blocks.shape:
+            raise ValueError(
+                f"Aligned detailed metrics require matching block shapes for key '{key}'"
+            )
+        diff = pred_blocks - gt_blocks
+        mae += torch.sum(torch.abs(diff)).item()
+        mse += torch.sum(diff**2).item()
+        total_elements += diff.numel()
+
+    mae /= total_elements
+    mse /= total_elements
+
+    mu_H = compute_mu_H_aligned(H_pred, H_gt, S)
+
+    mae_mod = 0.0
+    mse_mod = 0.0
+    correction_mae = 0.0
+    correction_mse = 0.0
+
+    for key in H_gt.pair_blocks.keys():
+        pred_blocks = H_pred.pair_blocks[key]
+        gt_blocks = H_gt.pair_blocks[key]
+        s_blocks = S.pair_blocks[key]
+        if pred_blocks.shape != gt_blocks.shape or pred_blocks.shape != s_blocks.shape:
+            raise ValueError(
+                f"Aligned detailed metrics require matching H/S block shapes for key '{key}'"
+            )
+        correction = mu_H * s_blocks
+        diff_corrected = pred_blocks - gt_blocks - correction
+        mae_mod += torch.sum(torch.abs(diff_corrected)).item()
+        mse_mod += torch.sum(diff_corrected**2).item()
+        correction_mae += torch.sum(torch.abs(correction)).item()
+        correction_mse += torch.sum(correction**2).item()
+
+    mae_mod /= total_elements
+    mse_mod /= total_elements
+    correction_mae /= total_elements
+    correction_mse /= total_elements
+
+    return {
+        "mae": mae,
+        "mse": mse,
+        "mae_mod": mae_mod,
+        "mse_mod": mse_mod,
+        "mu_H": mu_H,
+        "correction_mae": correction_mae,
+        "correction_mse": correction_mse,
+    }
+
+
 def compute_basic_matrix_metrics(M_pred, M_gt):
     """
     Compute basic MAE/MSE for a generic block matrix pair.
@@ -1155,6 +1244,35 @@ def compute_basic_matrix_metrics(M_pred, M_gt):
             mae += torch.sum(torch.abs(diff)).item()
             mse += torch.sum(diff**2).item()
             total_elements += diff.numel()
+
+    if total_elements <= 0:
+        return {"mae": 0.0, "mse": 0.0}
+
+    return {
+        "mae": mae / total_elements,
+        "mse": mse / total_elements,
+    }
+
+
+def compute_basic_matrix_metrics_aligned(M_pred, M_gt):
+    """
+    Compute MAE/MSE for aligned block matrices.
+    """
+    mae = 0.0
+    mse = 0.0
+    total_elements = 0
+
+    for key in M_gt.pair_blocks.keys():
+        pred_blocks = M_pred.pair_blocks[key]
+        gt_blocks = M_gt.pair_blocks[key]
+        if pred_blocks.shape != gt_blocks.shape:
+            raise ValueError(
+                f"Aligned basic metrics require matching block shapes for key '{key}'"
+            )
+        diff = pred_blocks - gt_blocks
+        mae += torch.sum(torch.abs(diff)).item()
+        mse += torch.sum(diff**2).item()
+        total_elements += diff.numel()
 
     if total_elements <= 0:
         return {"mae": 0.0, "mse": 0.0}

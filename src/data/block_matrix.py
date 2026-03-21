@@ -254,6 +254,40 @@ class BlockMatrix:
             basis=self.basis,
         )
 
+    def transpose_aligned(
+        self, reverse_alignment: Dict[str, Tuple[str, torch.Tensor]]
+    ) -> "BlockMatrix":
+        """
+        Return the transpose assuming reverse-edge permutations are already known.
+
+        ``reverse_alignment[key] = (rev_key, perm)`` means that
+        ``self.pair_blocks[rev_key][perm]`` matches the edge order of ``key`` after
+        applying the reverse-edge transform and transposing each block.
+        """
+        final_blocks = {}
+        for key, blk in self.pair_blocks.items():
+            if key not in reverse_alignment:
+                raise ValueError(f"Missing reverse alignment for key '{key}'")
+            rev_key, perm = reverse_alignment[key]
+            if rev_key not in self.pair_blocks:
+                raise ValueError(
+                    f"Reverse key '{rev_key}' missing in BlockMatrix (for key '{key}')"
+                )
+            rev_blocks = self.pair_blocks[rev_key]
+            if perm.device != rev_blocks.device:
+                perm = perm.to(rev_blocks.device)
+            final_blocks[key] = rev_blocks.index_select(0, perm).transpose(-1, -2)
+
+        return BlockMatrix(
+            atoms=self.atoms,
+            atom_counts=self.atom_counts,
+            pair_blocks=final_blocks,
+            pair_edges=self.pair_edges,
+            lookup=self.lookup,
+            orbital_cfg=self.orbital_cfg,
+            basis=self.basis,
+        )
+
     def __mul__(self, scalar: float) -> "BlockMatrix":
         """
         Scalar multiplication of all blocks by a float or int.
@@ -348,6 +382,28 @@ class BlockMatrix:
         new_blocks = {k: a.pair_blocks[k] + b.pair_blocks[k] for k in a.pair_blocks}
         return a._replace_pair_blocks(new_blocks, basis=a.basis)
 
+    def add_aligned(self, other: "BlockMatrix") -> "BlockMatrix":
+        """
+        Fast addition assuming pair keys, edge order, and block shapes are already aligned.
+        """
+        if not isinstance(other, BlockMatrix):
+            raise TypeError("Operand must be BlockMatrix")
+        if self.atoms != other.atoms:
+            raise ValueError("Atoms differ; cannot add aligned BlockMatrix objects")
+        if self.basis != other.basis:
+            raise ValueError("Basis differs (openmx vs e3nn)")
+        if self.orbital_cfg.to_dict() != other.orbital_cfg.to_dict():
+            raise ValueError("OrbitalIrrepConfig differs")
+        if self.keys() != other.keys():
+            raise ValueError("Snapshots contain different element-pair keys")
+
+        new_blocks = {}
+        for k in self.pair_blocks:
+            if self.pair_blocks[k].shape != other.pair_blocks[k].shape:
+                raise ValueError(f"Shape mismatch for key '{k}'")
+            new_blocks[k] = self.pair_blocks[k] + other.pair_blocks[k]
+        return self._replace_pair_blocks(new_blocks, basis=self.basis)
+
     __radd__ = __add__  # commutative
 
     def __neg__(self):
@@ -360,6 +416,38 @@ class BlockMatrix:
         a, b = self._align_with(other)
         new_blocks = {k: a.pair_blocks[k] - b.pair_blocks[k] for k in a.pair_blocks}
         return a._replace_pair_blocks(new_blocks, basis=a.basis)
+
+    def sub_aligned(self, other: "BlockMatrix") -> "BlockMatrix":
+        """
+        Fast subtraction assuming pair keys, edge order, and block shapes are already aligned.
+        """
+        if not isinstance(other, BlockMatrix):
+            raise TypeError("Operand must be BlockMatrix")
+        if self.atoms != other.atoms:
+            raise ValueError(
+                "Atoms differ; cannot subtract aligned BlockMatrix objects"
+            )
+        if self.basis != other.basis:
+            raise ValueError("Basis differs (openmx vs e3nn)")
+        if self.orbital_cfg.to_dict() != other.orbital_cfg.to_dict():
+            raise ValueError("OrbitalIrrepConfig differs")
+        if self.keys() != other.keys():
+            raise ValueError("Snapshots contain different element-pair keys")
+
+        new_blocks = {}
+        for k in self.pair_blocks:
+            if self.pair_blocks[k].shape != other.pair_blocks[k].shape:
+                raise ValueError(f"Shape mismatch for key '{k}'")
+            new_blocks[k] = self.pair_blocks[k] - other.pair_blocks[k]
+        return self._replace_pair_blocks(new_blocks, basis=self.basis)
+
+    def symmetrize_aligned(
+        self, reverse_alignment: Dict[str, Tuple[str, torch.Tensor]]
+    ) -> "BlockMatrix":
+        """
+        Compute ``0.5 * (M + M^T)`` using precomputed reverse-edge permutations.
+        """
+        return self.add_aligned(self.transpose_aligned(reverse_alignment)) * 0.5
 
     def __rsub__(self, other):
         # allow (0 - snapshot)
