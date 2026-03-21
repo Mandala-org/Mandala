@@ -59,8 +59,8 @@ from common import (
     MinimalNetwork,
     canonicalize_edge_order,
     compile_frames_to_video,
-    compute_basic_matrix_metrics,
-    compute_detailed_metrics,
+    compute_basic_matrix_metrics_aligned,
+    compute_detailed_metrics_aligned,
     compute_distance_error_curve,
     compute_irrep_metrics,
     get_all_irreps_in_hamiltonian,
@@ -1335,11 +1335,9 @@ def predict_sample(
     }
     if symmetrize_preds:
         pred_matrix_metrics_by_name = {
-            matrix_name: (
-                pred_matrix_norm_by_name[matrix_name]
-                + pred_matrix_norm_by_name[matrix_name].transpose()
+            matrix_name: pred_matrix_norm_by_name[matrix_name].symmetrize_aligned(
+                sample["pred_trace_alignment"]
             )
-            * 0.5
             for matrix_name in matrix_targets
         }
         pred_irreps_metrics_by_name = {
@@ -1476,7 +1474,7 @@ def evaluate_split(
         target_overlap_detached = sample_dev["target_overlap"].detach()
 
         with torch.no_grad():
-            detailed = compute_detailed_metrics(
+            detailed = compute_detailed_metrics_aligned(
                 pred_metrics_by_name["hamiltonian"],
                 target_matrices_detached["hamiltonian"],
                 target_overlap_detached,
@@ -1487,7 +1485,9 @@ def evaluate_split(
             for matrix_name in matrix_targets:
                 target_matrix = target_matrices_detached[matrix_name]
                 pred_matrix_metrics = pred_metrics_by_name[matrix_name]
-                basic = compute_basic_matrix_metrics(pred_matrix_metrics, target_matrix)
+                basic = compute_basic_matrix_metrics_aligned(
+                    pred_matrix_metrics, target_matrix
+                )
                 basic_acc = basic_sum_by_name.setdefault(matrix_name, {})
                 for k, v in basic.items():
                     basic_acc[k] = basic_acc.get(k, 0.0) + float(v)
