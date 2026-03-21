@@ -624,17 +624,19 @@ def preprocess_sample(
     if log_data:
         log_snapshot_info(snap)
 
-    positions = snap.positions.to(device=device, dtype=torch_dtype)
+    positions = snap.positions.detach().to(device=device, dtype=torch_dtype)
     box = (
-        snap.box.to(device=device, dtype=torch_dtype) if snap.box is not None else None
+        snap.box.detach().to(device=device, dtype=torch_dtype)
+        if snap.box is not None
+        else None
     )
     atoms_list = list(snap.hamiltonian.atoms)
     atoms_tuple = tuple(atoms_list)
     atom_counts = Counter(atoms_list)
 
-    H = snap.hamiltonian.to(device) * float(hamiltonian_scale_from_hartree)
-    S = snap.overlap.to(device)
-    D = snap.density.to(device)
+    H = snap.hamiltonian.to(device).detach() * float(hamiltonian_scale_from_hartree)
+    S = snap.overlap.to(device).detach()
+    D = snap.density.to(device).detach()
     if log_data:
         print(
             "  Converted Hamiltonian units: "
@@ -710,7 +712,9 @@ def preprocess_sample(
             raise RuntimeError(
                 "--enable-forces was set, but snapshot does not contain force targets."
             )
-        forces_target = snap.forces.to(device=device, dtype=torch_dtype) * force_scale
+        forces_target = (
+            snap.forces.detach().to(device=device, dtype=torch_dtype) * force_scale
+        )
         if log_data:
             print(
                 "  Converted force units: Hartree/Bohr -> selected training unit/Angstrom "
@@ -1817,8 +1821,8 @@ def main() -> None:
     cfg_ds.cache_root = None
     cfg_ds.precompute_edge_features = False
     cfg_ds.cutoff_radius = args.cutoff_radius if args.apply_cutoff_to_targets else None
-    cfg_ds.enable_forces = args.enable_forces
-    cfg_ds.train_on_forces = args.train_on_forces
+    cfg_ds.enable_forces = False
+    cfg_ds.train_on_forces = False
 
     fac = DatasetFactory(cfg_ds, convention=args.convention)
     for m, i in train_pairs:
