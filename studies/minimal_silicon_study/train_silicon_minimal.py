@@ -1703,6 +1703,11 @@ def main() -> None:
         raise ValueError("Resolved training snapshot list is empty.")
 
     device = torch.device(args.device)
+    if device.type == "cuda":
+        torch.cuda.set_device(device)
+        warmup = torch.zeros((1, 1), device=device, dtype=torch_dtype)
+        _ = warmup @ warmup
+        torch.cuda.synchronize()
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
 
     is_sweep_run = bool(os.environ.get("WANDB_SWEEP_ID"))
