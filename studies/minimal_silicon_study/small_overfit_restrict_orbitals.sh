@@ -20,6 +20,5 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --hidden-irreps 32x0e+32x1e+32x1o+16x2e \
   --separate-shifted-self \
   --num-layers 2 \
-  --train-on-irrep-parts \
   --orbital-selection 2s2p \
   --run-name small_overfit
