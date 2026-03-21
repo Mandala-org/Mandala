@@ -26,6 +26,8 @@ from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import wandb
+from ase import Atoms
+from ase.neighborlist import neighbor_list
 from e3nn.math import soft_one_hot_linspace
 from e3nn.o3 import Irreps, spherical_harmonics
 
@@ -47,7 +49,6 @@ from data.block_matrix import BlockMatrix, IrrepsBlockData
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import trace_matmul_sparse_block_matrix
 from net.common import Config as NetConfig, build_hidden_irreps
-from data.graph_features import compute_graph_features
 
 from common import (
     MinimalNetwork,
@@ -70,11 +71,15 @@ from detailed_logging import (
     build_wandb_detailed_metrics_log,
     build_wandb_per_irrep_metrics_log,
     log_config,
+    log_cutoff_application,
     log_detailed_training_metrics,
     log_final_metrics,
+    log_graph,
     log_mapper_info,
     log_orbital_config,
     log_per_irrep_metrics,
+    log_snapshot_info,
+    log_strict_checks_passed,
     log_study_complete,
 )
 
@@ -587,8 +592,10 @@ def preprocess_sample(
     x: dict,
     y: dict,
     mapper: BlockIrrepMapper,
-    cfg_graph: NetConfig,
     sh_irreps: Irreps,
+    n_radial: int,
+    radial_embedding_scale: str,
+    training_unit: str,
     hamiltonian_scale_from_hartree: float,
     cutoff_radius: float,
     apply_cutoff_to_targets: bool,
@@ -597,6 +604,8 @@ def preprocess_sample(
     enable_forces: bool,
     separate_shifted_self: bool,
     require_exact_edge_match: bool,
+    log_data: bool,
+    log_model: bool,
     device: torch.device,
     torch_dtype: torch.dtype,
 ) -> dict:
@@ -612,6 +621,9 @@ def preprocess_sample(
     if orbital_selection is not None:
         snap = snap.reduce_orbitals(orbital_selection)
 
+    if log_data:
+        log_snapshot_info(snap)
+
     positions = snap.positions.to(device=device, dtype=torch_dtype)
     box = (
         snap.box.to(device=device, dtype=torch_dtype) if snap.box is not None else None
@@ -623,11 +635,25 @@ def preprocess_sample(
     H = snap.hamiltonian.to(device) * float(hamiltonian_scale_from_hartree)
     S = snap.overlap.to(device)
     D = snap.density.to(device)
+    if log_data:
+        print(
+            "  Converted Hamiltonian units: "
+            f"Hartree -> {UNIT_DISPLAY_NAME[training_unit]} "
+            f"(x{hamiltonian_scale_from_hartree:.7f})"
+        )
+
+    if log_model:
+        log_orbital_config(mapper.orbital_cfg)
+        log_mapper_info(mapper)
 
     if apply_cutoff_to_targets:
+        before_edges = sum(edges.shape[1] for edges in H.pair_edges.values())
         H = filter_block_matrix_by_cutoff(H, positions, box, cutoff_radius)
         S = filter_block_matrix_by_cutoff(S, positions, box, cutoff_radius)
         D = filter_block_matrix_by_cutoff(D, positions, box, cutoff_radius)
+        if log_data:
+            after_edges = sum(edges.shape[1] for edges in H.pair_edges.values())
+            log_cutoff_application(before_edges, after_edges, cutoff_radius)
 
     H = canonicalize_block_matrix_edges(H, positions, box)
     S = canonicalize_block_matrix_edges(S, positions, box)
@@ -650,6 +676,33 @@ def preprocess_sample(
     energy_target = trace_matmul_sparse_block_matrix(H, D)
     num_electrons_target = trace_matmul_sparse_block_matrix(D, S)
 
+    def compute_block_matrix_max_distance(block_matrix: BlockMatrix) -> float:
+        max_dist = 0.0
+        for edges_5d in block_matrix.pair_edges.values():
+            if edges_5d.shape[1] == 0:
+                continue
+            src = edges_5d[3].long()
+            dst = edges_5d[4].long()
+            if box is not None:
+                shift_float = edges_5d[:3].T.to(dtype=positions.dtype)
+                edge_vec_local = positions[dst] - positions[src] + shift_float @ box
+            else:
+                edge_vec_local = positions[dst] - positions[src]
+            edge_dist_local = torch.linalg.norm(edge_vec_local, dim=1)
+            if edge_dist_local.numel() > 0:
+                max_dist = max(max_dist, float(edge_dist_local.max().item()))
+        return max_dist
+
+    if log_data:
+        target_max_by_matrix = {
+            "hamiltonian": compute_block_matrix_max_distance(H),
+            "overlap": compute_block_matrix_max_distance(S),
+            "density": compute_block_matrix_max_distance(D),
+        }
+        print("\n  Target max edge distance by matrix:")
+        for name, max_dist in target_max_by_matrix.items():
+            print(f"    {name}: {max_dist:.6f} A")
+
     BOHR_TO_ANGSTROM = 0.529177210903
     force_scale = float(hamiltonian_scale_from_hartree) / BOHR_TO_ANGSTROM
     forces_target = None
@@ -659,34 +712,140 @@ def preprocess_sample(
                 "--enable-forces was set, but snapshot does not contain force targets."
             )
         forces_target = snap.forces.to(device=device, dtype=torch_dtype) * force_scale
+        if log_data:
+            print(
+                "  Converted force units: Hartree/Bohr -> selected training unit/Angstrom "
+                f"(x{force_scale:.7f})"
+            )
 
-    (
-        edge_index,
-        edge_shift,
-        edge_type_idx,
-        edge_length_emb,
-        edge_sh,
-        _num_self_edges,
-    ) = compute_graph_features(
-        positions=positions,
-        box=box,
-        atoms=tuple(atoms_list),
-        cfg=cfg_graph,
-        sh_irreps=sh_irreps,
-        edge_type2idx=mapper.edge_type2idx,
+    ase_atoms = Atoms(
+        symbols=atoms_list,
+        positions=positions.detach().cpu().numpy(),
+        cell=box.detach().cpu().numpy() if box is not None else None,
+        pbc=box is not None,
+    )
+    src_np, dst_np, offsets_np = neighbor_list(
+        "ijS",
+        ase_atoms,
+        cutoff_radius,
+        self_interaction=False,
     )
 
-    # extra canonicalization to match current training script convention exactly
+    num_atoms = len(atoms_list)
+    self_src = torch.arange(num_atoms, dtype=torch.long, device=device)
+    self_dst = torch.arange(num_atoms, dtype=torch.long, device=device)
+    self_offsets = torch.zeros((num_atoms, 3), dtype=torch.long, device=device)
+    src_offdiag = torch.from_numpy(src_np).to(device=device, dtype=torch.long)
+    dst_offdiag = torch.from_numpy(dst_np).to(device=device, dtype=torch.long)
+    offsets_offdiag = torch.from_numpy(offsets_np).to(device=device, dtype=torch.long)
+
+    all_src = torch.cat([self_src, src_offdiag], dim=0)
+    all_dst = torch.cat([self_dst, dst_offdiag], dim=0)
+    all_offsets = torch.cat([self_offsets, offsets_offdiag], dim=0)
+
+    edge_index = torch.stack([all_src, all_dst], dim=0)
+    edge_shift = all_offsets.T
     edge_index, edge_shift, _ = canonicalize_edge_order(
         edge_index=edge_index,
         edge_shift=edge_shift,
         positions=positions,
         box=box,
     )
+    num_self_edges = int(
+        (
+            (edge_index[0] == edge_index[1])
+            & (edge_shift[0] == 0)
+            & (edge_shift[1] == 0)
+            & (edge_shift[2] == 0)
+        )
+        .sum()
+        .item()
+    )
+
+    sh_non_scalar_slices = [
+        sh_irreps.slices()[idx] for idx, (_, ir) in enumerate(sh_irreps) if ir.l > 0
+    ]
+
+    def compute_edge_features(curr_positions: torch.Tensor):
+        if box is not None:
+            shift_float_local = edge_shift.T.to(dtype=curr_positions.dtype)
+            edge_vec_local = (
+                curr_positions[edge_index[1]]
+                - curr_positions[edge_index[0]]
+                + shift_float_local @ box
+            )
+        else:
+            edge_vec_local = (
+                curr_positions[edge_index[1]] - curr_positions[edge_index[0]]
+            )
+        edge_dist_local = torch.linalg.norm(edge_vec_local, dim=1)
+        edge_sh_local = spherical_harmonics(
+            sh_irreps,
+            edge_vec_local,
+            normalize=True,
+            normalization="component",
+        )
+        is_self_edge_local = (edge_index[0] == edge_index[1]) & (edge_shift == 0).all(
+            dim=0
+        )
+        if is_self_edge_local.any() and sh_non_scalar_slices:
+            edge_sh_local = edge_sh_local.clone()
+            for slc in sh_non_scalar_slices:
+                edge_sh_local[is_self_edge_local, slc] = 0.0
+        edge_length_emb_local = soft_one_hot_linspace(
+            edge_dist_local,
+            start=0.0,
+            end=cutoff_radius,
+            number=n_radial,
+            basis="gaussian",
+            cutoff=False,
+        )
+        if radial_embedding_scale == "sqrt_n_radial":
+            edge_length_emb_local = edge_length_emb_local * n_radial**0.5
+        return edge_vec_local, edge_dist_local, edge_sh_local, edge_length_emb_local
+
+    edge_vec, edge_dist, edge_sh, edge_length_emb = compute_edge_features(positions)
+
+    if log_data:
+        log_graph(
+            atoms_list=atoms_list,
+            positions=positions,
+            box=box,
+            cutoff_radius=cutoff_radius,
+            src=src_np,
+            dst=dst_np,
+            offsets=offsets_np,
+            edge_index=edge_index,
+            num_self_edges=num_self_edges,
+            edge_dist=edge_dist,
+        )
+        print(f"  Edge SH shape: {edge_sh.shape}")
+        print(f"\n  Computing radial embeddings ({n_radial} basis functions)...")
+        print(f"  Radial embedding scale: {radial_embedding_scale}")
+        print(f"  Edge length embedding shape: {edge_length_emb.shape}")
 
     strict_reverse_edge_check(
         edge_index=edge_index, edge_shift=edge_shift, edge_set_name="graph"
     )
+
+    element_to_idx = {
+        elem: idx for idx, elem in enumerate(mapper.orbital_cfg.elements())
+    }
+    node_type_idx = torch.tensor(
+        [element_to_idx[a] for a in atoms_list], dtype=torch.long, device=device
+    )
+    batch_node = torch.zeros(len(atoms_list), dtype=torch.long, device=device)
+    batch_edge = torch.zeros(edge_index.shape[1], dtype=torch.long, device=device)
+    edge_type_strs = [
+        f"{atoms_list[edge_index[0, i].item()]}-{atoms_list[edge_index[1, i].item()]}"
+        for i in range(edge_index.shape[1])
+    ]
+    edge_type_idx = torch.tensor(
+        [mapper.edge_type2idx[edge_type] for edge_type in edge_type_strs],
+        dtype=torch.long,
+        device=device,
+    )
+
     strict_edge_alignment_check(
         target_matrix=H,
         edge_index=edge_index,
@@ -717,18 +876,9 @@ def preprocess_sample(
         matrix_name="density",
         require_exact=require_exact_edge_match,
     )
+    if log_data:
+        log_strict_checks_passed()
 
-    element_to_idx = {
-        elem: idx for idx, elem in enumerate(mapper.orbital_cfg.elements())
-    }
-    node_type_idx = torch.tensor(
-        [element_to_idx[a] for a in atoms_list], dtype=torch.long, device=device
-    )
-    batch_node = torch.zeros(len(atoms_list), dtype=torch.long, device=device)
-    batch_edge = torch.zeros(edge_index.shape[1], dtype=torch.long, device=device)
-    sh_non_scalar_slices = [
-        sh_irreps.slices()[idx] for idx, (_, ir) in enumerate(sh_irreps) if ir.l > 0
-    ]
     pred_pair_edges_static = {}
     pred_lookup_static = {}
     pred_edge_keys = []
@@ -750,6 +900,54 @@ def preprocess_sample(
                 key,
                 idx,
             )
+
+    def build_irrep_projection_cache(irreps_data, all_irreps_list):
+        cache = {str(ir): {} for ir in all_irreps_list}
+        all_irrep_strs = set(cache.keys())
+        for key in irreps_data.pair_vectors.keys():
+            pair_irreps = mapper.get_pair_irreps(key)
+            el_a, el_b = key.split("-", 1)
+            map_key = (el_a, el_b)
+            itm = mapper._lookup(map_key)
+            q_full = mapper._get_q(map_key)
+
+            start = 0
+            idx_parts_by_irrep = {}
+            for mul, ir in pair_irreps:
+                term_dim = mul * ir.dim
+                ir_str = str(ir)
+                if term_dim > 0 and ir_str in all_irrep_strs:
+                    part_idx = torch.arange(
+                        start,
+                        start + term_dim,
+                        device=q_full.device,
+                        dtype=torch.long,
+                    )
+                    idx_parts_by_irrep.setdefault(ir_str, []).append(part_idx)
+                start += term_dim
+
+            for ir_str, idx_parts in idx_parts_by_irrep.items():
+                idx = (
+                    idx_parts[0] if len(idx_parts) == 1 else torch.cat(idx_parts, dim=0)
+                )
+                q_subset = q_full.index_select(0, idx)
+                cache[ir_str][key] = (idx, q_subset, itm.dim_i, itm.dim_j)
+        return cache
+
+    all_irreps = get_all_irreps_in_hamiltonian(mapper)
+    irrep_projection_cache = build_irrep_projection_cache(
+        target_irreps_by_name["hamiltonian"], all_irreps
+    )
+    target_irrep_blocks_cache_by_name = {}
+    for matrix_name in matrix_targets:
+        matrix_cache = {}
+        for irrep in all_irreps:
+            matrix_cache[str(irrep)] = filter_irreps_block_data_by_irrep(
+                target_irreps_by_name[matrix_name],
+                irrep,
+                mapper,
+            ).to_blocks(mapper)
+        target_irrep_blocks_cache_by_name[matrix_name] = matrix_cache
 
     return {
         "node_type_idx": node_type_idx,
@@ -784,6 +982,8 @@ def preprocess_sample(
         "pred_edge_keys": tuple(pred_edge_keys),
         "pred_edge_key_set": set(pred_edge_keys),
         "sh_non_scalar_slices": sh_non_scalar_slices,
+        "irrep_projection_cache": irrep_projection_cache,
+        "target_irrep_blocks_cache_by_name": target_irrep_blocks_cache_by_name,
     }
 
 
@@ -829,6 +1029,18 @@ def recompute_sample_edge_features(
     if radial_embedding_scale == "sqrt_n_radial":
         edge_length_emb = edge_length_emb * n_radial**0.5
     return edge_sh, edge_length_emb, edge_dist
+
+
+def project_irrep_vectors_to_blocks(
+    vectors_full: torch.Tensor,
+    projector: tuple[torch.Tensor, torch.Tensor, int, int],
+) -> torch.Tensor:
+    idx, q_subset, dim_i, dim_j = projector
+    vec_sel = vectors_full.index_select(1, idx)
+    if vec_sel.dtype != q_subset.dtype:
+        vec_sel = vec_sel.to(dtype=q_subset.dtype)
+    block_flat = vec_sel @ q_subset
+    return block_flat.view(vec_sel.shape[0], dim_i, dim_j)
 
 
 def wrap_raw_predictions_to_irreps(
@@ -919,30 +1131,34 @@ def compute_loss_for_sample(
 
     for matrix_name in matrix_targets:
         target_matrix = sample["target_matrices"][matrix_name]
-        target_irreps = sample["target_irreps_by_name"][matrix_name]
         pred_irreps = pred_irreps_by_name[matrix_name]
         pred_matrix = pred_matrix_norm_by_name[matrix_name]
         irrep_losses: dict[str, torch.Tensor] = {}
 
         if train_on_irrep_parts:
             loss_total = torch.tensor(0.0, device=sample["node_type_idx"].device)
+            pair_vec_curr = pred_irreps.pair_vectors
+            target_irrep_blocks_cache = sample["target_irrep_blocks_cache_by_name"][
+                matrix_name
+            ]
             for ir in all_irreps:
-                pred_part = filter_irreps_block_data_by_irrep(
-                    pred_irreps, ir, mapper
-                ).to_blocks(mapper)
-                targ_part = filter_irreps_block_data_by_irrep(
-                    target_irreps, ir, mapper
-                ).to_blocks(mapper)
                 l_ir = torch.tensor(0.0, device=loss_total.device)
-                for key in targ_part.pair_blocks.keys():
-                    if key not in pred_part.pair_blocks:
+                irrep_str = str(ir)
+                irrep_projectors = sample["irrep_projection_cache"].get(irrep_str, {})
+                target_irrep_blocks = target_irrep_blocks_cache[irrep_str]
+                for key in target_irrep_blocks.pair_blocks.keys():
+                    if key not in pair_vec_curr or key not in irrep_projectors:
                         continue
+                    pred_blocks = project_irrep_vectors_to_blocks(
+                        pair_vec_curr[key],
+                        irrep_projectors[key],
+                    )
                     l_ir = l_ir + mse_loss_blocks(
-                        pred_part.pair_blocks[key],
-                        targ_part.pair_blocks[key],
+                        pred_blocks,
+                        target_irrep_blocks.pair_blocks[key],
                         target_matrix.pair_edges[key],
                     )
-                irrep_losses[str(ir)] = l_ir
+                irrep_losses[irrep_str] = l_ir
                 loss_total = loss_total + l_ir
             matrix_block_losses[matrix_name] = loss_total
             irrep_losses_by_matrix[matrix_name] = irrep_losses
@@ -1592,41 +1808,37 @@ def main() -> None:
     mapper = prepare_mapper_from_sample(
         x0, y0, orbital_selection_obj, device, torch_dtype
     )
-    if args.log_model:
-        log_orbital_config(mapper.orbital_cfg)
-        log_mapper_info(mapper)
 
     # Graph feature config used per sample.
-    cfg_graph = NetConfig()
-    cfg_graph.cutoff_radius = args.cutoff_radius
-    cfg_graph.n_radial = args.n_radial
-    cfg_graph.l_max = args.l_max
-    cfg_graph.dtype = torch_dtype
-    cfg_graph.safety_checks = False
     sh_irreps = Irreps.spherical_harmonics(args.l_max)
 
     if args.log_data:
         print("[DATA] preprocessing train samples...")
-    train_samples = [
-        preprocess_sample(
-            x=x,
-            y=y,
-            mapper=mapper,
-            cfg_graph=cfg_graph,
-            sh_irreps=sh_irreps,
-            hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
-            cutoff_radius=args.cutoff_radius,
-            apply_cutoff_to_targets=args.apply_cutoff_to_targets,
-            orbital_selection=orbital_selection_obj,
-            matrix_targets=matrix_targets,
-            enable_forces=args.enable_forces,
-            separate_shifted_self=args.separate_shifted_self,
-            require_exact_edge_match=args.require_exact_edge_match,
-            device=device,
-            torch_dtype=torch_dtype,
+    train_samples = []
+    for sample_idx, (x, y) in enumerate(train_ds):
+        train_samples.append(
+            preprocess_sample(
+                x=x,
+                y=y,
+                mapper=mapper,
+                sh_irreps=sh_irreps,
+                n_radial=args.n_radial,
+                radial_embedding_scale=args.radial_embedding_scale,
+                training_unit=args.training_unit,
+                hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
+                cutoff_radius=args.cutoff_radius,
+                apply_cutoff_to_targets=args.apply_cutoff_to_targets,
+                orbital_selection=orbital_selection_obj,
+                matrix_targets=matrix_targets,
+                enable_forces=args.enable_forces,
+                separate_shifted_self=args.separate_shifted_self,
+                require_exact_edge_match=args.require_exact_edge_match,
+                log_data=args.log_data and sample_idx == 0,
+                log_model=args.log_model and sample_idx == 0,
+                device=device,
+                torch_dtype=torch_dtype,
+            )
         )
-        for (x, y) in train_ds
-    ]
 
     if args.log_data:
         print("[DATA] preprocessing val samples...")
@@ -1636,8 +1848,10 @@ def main() -> None:
             x=x,
             y=y,
             mapper=mapper,
-            cfg_graph=cfg_graph,
             sh_irreps=sh_irreps,
+            n_radial=args.n_radial,
+            radial_embedding_scale=args.radial_embedding_scale,
+            training_unit=args.training_unit,
             hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
             cutoff_radius=args.cutoff_radius,
             apply_cutoff_to_targets=args.apply_cutoff_to_targets,
@@ -1646,6 +1860,8 @@ def main() -> None:
             enable_forces=args.enable_forces,
             separate_shifted_self=args.separate_shifted_self,
             require_exact_edge_match=args.require_exact_edge_match,
+            log_data=False,
+            log_model=False,
             device=device,
             torch_dtype=torch_dtype,
         )
