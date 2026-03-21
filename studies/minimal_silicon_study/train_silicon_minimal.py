@@ -26,27 +26,34 @@ from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import wandb
+from e3nn.math import soft_one_hot_linspace
+from e3nn.o3 import Irreps, spherical_harmonics
 
 # Add project root.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Reuse minimal-overfit utilities.
+# Reuse observables-study utilities.
 MINIMAL_OVERFIT_DIR = Path(__file__).resolve().parents[1] / "minimal_overfit_study"
 sys.path.insert(0, str(MINIMAL_OVERFIT_DIR))
+OBSERVABLES_STUDY_DIR = (
+    Path(__file__).resolve().parents[1] / "minimal_overfit_observables"
+)
+sys.path.insert(0, str(OBSERVABLES_STUDY_DIR))
 
 from data.factory import DatasetFactory
 from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix, IrrepsBlockData
 from core.block_irrep_mapper import BlockIrrepMapper
+from core.sparse_math import trace_matmul_sparse_block_matrix
 from net.common import Config as NetConfig, build_hidden_irreps
 from data.graph_features import compute_graph_features
-from e3nn.o3 import Irreps
 
 from common import (
     MinimalNetwork,
     canonicalize_edge_order,
     compile_frames_to_video,
+    compute_basic_matrix_metrics,
     compute_detailed_metrics,
     compute_distance_error_curve,
     compute_irrep_metrics,
@@ -87,14 +94,22 @@ UNIT_DISPLAY_NAME = {
     "mev": "meV",
     "100mev": "100meV",
 }
-STORE_TRUE_ARG_NAMES = [
+BOOLEAN_ARG_NAMES = [
+    "enable_energy",
+    "enable_num_electrons",
+    "train_on_energy",
+    "train_on_num_electrons",
+    "enable_forces",
+    "train_on_forces",
+    "symmetrize_preds",
     "adaptive_log_interval",
     "benchmark",
+    "e3layernorm",
     "separate_shifted_self",
-    "normalize_blocks",
-    "distance_magnitude_normalization",
     "edge_encoder_use_sh_tensor_square",
     "head_mlp_for_scalars",
+    "head_use_tensor_square",
+    "head_use_node_embeddings_for_self_edges",
     "train_on_irrep_parts",
     "apply_cutoff_to_targets",
     "require_exact_edge_match",
@@ -106,6 +121,26 @@ STORE_TRUE_ARG_NAMES = [
     "log_per_irrep_images",
     "generate_video",
 ]
+
+
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    value_norm = str(value).strip().lower()
+    if value_norm in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if value_norm in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Cannot interpret boolean value: {value}")
+
+
+def parse_matrix_targets(value):
+    targets = [t.strip().lower() for t in str(value).split(",") if t.strip()]
+    if not targets:
+        raise argparse.ArgumentTypeError(
+            "Expected at least one target in --matrix-targets."
+        )
+    return targets
 
 
 def _coerce_wandb_bool(name: str, value: object) -> bool:
@@ -197,6 +232,70 @@ def parse_args() -> argparse.Namespace:
     # Selected features.
     parser.add_argument("--convention", type=str, default="e3nn")
     parser.add_argument(
+        "--matrix-targets",
+        type=parse_matrix_targets,
+        default=parse_matrix_targets("hamiltonian,overlap,density"),
+        help="Comma-separated matrix targets to predict/train (subset of: hamiltonian,overlap,density).",
+    )
+    parser.add_argument(
+        "--enable-energy",
+        type=parse_bool,
+        default=True,
+        help="Enable energy metric computation from predicted matrices (default: True).",
+    )
+    parser.add_argument(
+        "--enable-num-electrons",
+        type=parse_bool,
+        default=True,
+        help="Enable number-of-electrons metric computation from predicted matrices (default: True).",
+    )
+    parser.add_argument(
+        "--train-on-energy",
+        type=parse_bool,
+        default=True,
+        help="Enable energy loss term (default: True).",
+    )
+    parser.add_argument(
+        "--train-on-num-electrons",
+        type=parse_bool,
+        default=True,
+        help="Enable number-of-electrons loss term (default: True).",
+    )
+    parser.add_argument(
+        "--loss-coef-observables",
+        type=float,
+        default=1e-5,
+        help="Loss coefficient for energy/num-electrons terms (default: 1e-5).",
+    )
+    parser.add_argument(
+        "--enable-forces",
+        type=parse_bool,
+        default=False,
+        help="Enable force-related data/paths.",
+    )
+    parser.add_argument(
+        "--train-on-forces",
+        type=parse_bool,
+        default=False,
+        help="Enable force loss term.",
+    )
+    parser.add_argument(
+        "--loss-coef-forces",
+        type=float,
+        default=0.0,
+        help="Loss coefficient for force term (default: 0.0).",
+    )
+    parser.add_argument(
+        "--symmetrize-preds",
+        type=parse_bool,
+        default=True,
+        help=(
+            "Symmetrize predicted H/S/D matrices as (M + M^T) / 2 for "
+            "matrix metrics/visualizations (default: True). Observable and "
+            "force computations use unsymmetrized predictions."
+        ),
+    )
+    parser.add_argument(
         "--orbital-selection",
         type=str,
         default=None,
@@ -213,46 +312,59 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-radial", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--num-epochs", type=int, default=4000)
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        default="float32",
+        choices=["float32", "float64"],
+        help="Floating-point dtype for data and model parameters (default: float32)",
+    )
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--lr-factor", type=float, default=0.5)
     parser.add_argument("--lr-patience", type=int, default=200)
     parser.add_argument("--log-interval", type=int, default=10)
-    parser.add_argument("--adaptive-log-interval", action="store_true", default=False)
-    parser.add_argument("--benchmark", action="store_true", default=False)
-    parser.add_argument("--separate-shifted-self", action="store_true", default=False)
-    parser.add_argument("--normalize-blocks", action="store_true", default=False)
-    parser.add_argument(
-        "--distance-magnitude-normalization",
-        action="store_true",
-        default=False,
-        help=(
-            "Pre-normalize off-diagonal block magnitudes using a distance model "
-            "(fixed power=4), train in normalized space, and evaluate on de-normalized predictions."
-        ),
-    )
+    parser.add_argument("--adaptive-log-interval", type=parse_bool, default=False)
+    parser.add_argument("--benchmark", type=parse_bool, default=False)
+    parser.add_argument("--e3layernorm", type=parse_bool, default=True)
+    parser.add_argument("--separate-shifted-self", type=parse_bool, default=False)
     parser.add_argument(
         "--edge-encoder-use-sh-tensor-square",
-        action="store_true",
+        type=parse_bool,
         default=False,
         help=(
             "Use TensorSquare(spherical harmonics) before the edge encoder tensor product "
             "(default: False)."
         ),
     )
-    parser.add_argument("--head-mlp-for-scalars", action="store_true", default=False)
-    parser.add_argument("--train-on-irrep-parts", action="store_true", default=False)
-    parser.add_argument("--apply-cutoff-to-targets", action="store_true", default=False)
     parser.add_argument(
-        "--require-exact-edge-match", action="store_true", default=False
+        "--radial-embedding-scale",
+        type=str,
+        default="none",
+        choices=["none", "sqrt_n_radial"],
+        help=(
+            "Optional extra scaling for radial embeddings. "
+            "'none' matches src/DeepH-style; 'sqrt_n_radial' reproduces legacy minimal behavior."
+        ),
     )
+    parser.add_argument("--head-mlp-for-scalars", type=parse_bool, default=False)
+    parser.add_argument("--head-use-tensor-square", type=parse_bool, default=False)
+    parser.add_argument(
+        "--head-use-node-embeddings-for-self-edges",
+        type=parse_bool,
+        default=False,
+    )
+    parser.add_argument("--head-e3mlp-layers", type=int, default=3)
+    parser.add_argument("--train-on-irrep-parts", type=parse_bool, default=False)
+    parser.add_argument("--apply-cutoff-to-targets", type=parse_bool, default=False)
+    parser.add_argument("--require-exact-edge-match", type=parse_bool, default=False)
 
-    parser.add_argument("--log-data", action="store_true", default=False)
-    parser.add_argument("--log-model", action="store_true", default=False)
-    parser.add_argument("--log-forward", action="store_true", default=False)
-    parser.add_argument("--verbose-forward", action="store_true", default=False)
-    parser.add_argument("--log-per-irrep-metrics", action="store_true", default=False)
-    parser.add_argument("--log-per-irrep-images", action="store_true", default=False)
-    parser.add_argument("--generate-video", action="store_true", default=False)
+    parser.add_argument("--log-data", type=parse_bool, default=False)
+    parser.add_argument("--log-model", type=parse_bool, default=False)
+    parser.add_argument("--log-forward", type=parse_bool, default=False)
+    parser.add_argument("--verbose-forward", type=parse_bool, default=False)
+    parser.add_argument("--log-per-irrep-metrics", type=parse_bool, default=False)
+    parser.add_argument("--log-per-irrep-images", type=parse_bool, default=False)
+    parser.add_argument("--generate-video", type=parse_bool, default=False)
     parser.add_argument(
         "--video-max-atoms",
         type=int,
@@ -379,58 +491,6 @@ def get_diagonal_mask(edges_5d: torch.Tensor) -> torch.Tensor:
     return (sx == 0) & (sy == 0) & (sz == 0) & (i == j)
 
 
-def get_block_status(
-    edges_5d: torch.Tensor,
-    edge_idx: int,
-    separate_shifted_self: bool,
-) -> str:
-    sx = int(edges_5d[0, edge_idx].item())
-    sy = int(edges_5d[1, edge_idx].item())
-    sz = int(edges_5d[2, edge_idx].item())
-    i = int(edges_5d[3, edge_idx].item())
-    j = int(edges_5d[4, edge_idx].item())
-    if i == j and sx == 0 and sy == 0 and sz == 0:
-        return "diag"
-    if i == j and separate_shifted_self:
-        return "shifted_self"
-    return "offdiag"
-
-
-def compute_block_normalization_factors(
-    block_matrix: BlockMatrix,
-    separate_shifted_self: bool,
-) -> dict[str, dict[str, float]]:
-    norm_factors: dict[str, dict[str, float]] = {}
-    for key in block_matrix.pair_blocks.keys():
-        blocks = block_matrix.pair_blocks[key]
-        edges = block_matrix.pair_edges[key]
-        sx, sy, sz, i, j = edges[0], edges[1], edges[2], edges[3], edges[4]
-        is_same_atom = i == j
-        is_zero_shift = (sx == 0) & (sy == 0) & (sz == 0)
-        diag_mask = is_same_atom & is_zero_shift
-        shifted_self_mask = is_same_atom & (~is_zero_shift)
-        if separate_shifted_self:
-            offdiag_mask = ~is_same_atom
-        else:
-            offdiag_mask = ~diag_mask
-
-        def avg_norm(mask: torch.Tensor) -> float:
-            if mask.any():
-                b = blocks[mask]
-                v = torch.linalg.norm(b.reshape(b.shape[0], -1), dim=1).mean().item()
-                return max(float(v), 1e-8)
-            return 1.0
-
-        entry = {
-            "diag": avg_norm(diag_mask),
-            "offdiag": avg_norm(offdiag_mask),
-        }
-        if separate_shifted_self:
-            entry["shifted_self"] = avg_norm(shifted_self_mask)
-        norm_factors[key] = entry
-    return norm_factors
-
-
 def compute_edge_distances_by_key(
     block_matrix: BlockMatrix,
     positions: torch.Tensor,
@@ -450,227 +510,6 @@ def compute_edge_distances_by_key(
             disp = positions[dst] - positions[src]
         out[key] = torch.linalg.norm(disp, dim=1)
     return out
-
-
-def fit_distance_normalization_coeffs(
-    samples: list[dict],
-) -> dict[str, dict[str, float | int | bool]]:
-    """
-    Fit per-key coefficients for:
-        z = (log_offset - log(m))^(1/4) - (a*r + b)
-    on off-diagonal edges of training data only.
-    """
-    dist_acc: dict[str, list[np.ndarray]] = {}
-    mag_acc: dict[str, list[np.ndarray]] = {}
-
-    for sample in samples:
-        H_raw: BlockMatrix = sample["target_H_matrix_raw"]
-        dists_by_key: dict[str, torch.Tensor] = sample["edge_distances_by_key"]
-        for key, blocks in H_raw.pair_blocks.items():
-            if key not in dists_by_key:
-                continue
-            edges = H_raw.pair_edges[key]
-            mask = ~get_diagonal_mask(edges)
-            if not mask.any():
-                continue
-
-            mags = torch.linalg.norm(blocks[mask].reshape(mask.sum().item(), -1), dim=1)
-            d = dists_by_key[key][mask]
-            valid = torch.isfinite(d) & torch.isfinite(mags) & (d > 0) & (mags > 0)
-            if not valid.any():
-                continue
-
-            d_np = d[valid].detach().cpu().numpy()
-            m_np = mags[valid].detach().cpu().numpy()
-            dist_acc.setdefault(key, []).append(d_np)
-            mag_acc.setdefault(key, []).append(m_np)
-
-    coeffs: dict[str, dict[str, float | int | bool]] = {}
-    keys = sorted(set(list(dist_acc.keys()) + list(mag_acc.keys())))
-    for key in keys:
-        d_list = dist_acc.get(key, [])
-        m_list = mag_acc.get(key, [])
-        if len(d_list) == 0 or len(m_list) == 0:
-            coeffs[key] = {
-                "identity": True,
-                "a": 0.0,
-                "b": 0.0,
-                "log_offset": 0.0,
-                "power": DISTANCE_NORM_POWER,
-                "min_arg": DISTANCE_NORM_MIN_ARG,
-                "num_points": 0,
-            }
-            continue
-
-        d = np.concatenate(d_list)
-        m = np.concatenate(m_list)
-        n = int(d.shape[0])
-        if n < 2:
-            coeffs[key] = {
-                "identity": True,
-                "a": 0.0,
-                "b": 0.0,
-                "log_offset": 0.0,
-                "power": DISTANCE_NORM_POWER,
-                "min_arg": DISTANCE_NORM_MIN_ARG,
-                "num_points": n,
-            }
-            continue
-
-        log_m = np.log(np.clip(m, DISTANCE_NORM_MAG_EPS, None))
-        log_offset = max(0.0, float(np.max(log_m)) + DISTANCE_NORM_MIN_ARG)
-        arg = np.maximum(log_offset - log_m, DISTANCE_NORM_MIN_ARG)
-        y = np.power(arg, 1.0 / DISTANCE_NORM_POWER)
-
-        if float(np.ptp(d)) <= 1e-12:
-            a = 0.0
-            b = float(np.mean(y))
-        else:
-            a, b = np.polyfit(d, y, deg=1)
-            a = float(a)
-            b = float(b)
-
-        coeffs[key] = {
-            "identity": False,
-            "a": a,
-            "b": b,
-            "log_offset": float(log_offset),
-            "power": DISTANCE_NORM_POWER,
-            "min_arg": DISTANCE_NORM_MIN_ARG,
-            "num_points": n,
-        }
-
-    return coeffs
-
-
-def apply_distance_normalization_to_samples(
-    samples: list[dict],
-    mapper: BlockIrrepMapper,
-    separate_shifted_self: bool,
-    coeffs_by_key: dict[str, dict[str, float | int | bool]],
-) -> None:
-    """
-    In-place: replace training targets with distance-normalized versions.
-    Raw targets stay available in target_H_matrix_raw / target_H_irreps_raw.
-    """
-    for sample in samples:
-        H_raw: BlockMatrix = sample["target_H_matrix_raw"]
-        H_norm = normalize_block_matrix_with_distance_model(
-            H_raw,
-            sample["edge_distances_by_key"],
-            coeffs_by_key,
-        )
-        sample["target_H_matrix"] = H_norm
-        sample["target_H_irreps"] = H_norm.to_vectors(mapper)
-        sample["norm_factors"] = compute_block_normalization_factors(
-            H_norm, separate_shifted_self
-        )
-
-
-def normalize_block_matrix_with_distance_model(
-    block_matrix: BlockMatrix,
-    edge_distances_by_key: dict[str, torch.Tensor],
-    coeffs_by_key: dict[str, dict[str, float | int | bool]],
-) -> BlockMatrix:
-    """
-    Apply pre-training normalization to off-diagonal block magnitudes.
-    """
-    new_blocks: dict[str, torch.Tensor] = {}
-
-    for key, blocks in block_matrix.pair_blocks.items():
-        edges = block_matrix.pair_edges[key]
-        dists = edge_distances_by_key[key].to(blocks.device, blocks.dtype)
-        coeffs = coeffs_by_key.get(key, {"identity": True})
-        identity = bool(coeffs.get("identity", True))
-        offdiag_mask = ~get_diagonal_mask(edges)
-
-        if identity or not offdiag_mask.any():
-            new_blocks[key] = blocks
-            continue
-
-        a = float(coeffs["a"])
-        b = float(coeffs["b"])
-        log_offset = float(coeffs["log_offset"])
-
-        out = blocks.clone()
-        blk = blocks[offdiag_mask]
-        dist = dists[offdiag_mask]
-
-        mags = torch.linalg.norm(blk.reshape(blk.shape[0], -1), dim=1)
-        mags_safe = torch.clamp(mags, min=DISTANCE_NORM_MAG_EPS)
-
-        log_m = torch.log(mags_safe)
-        arg = torch.clamp(log_offset - log_m, min=DISTANCE_NORM_MIN_ARG)
-        y = torch.pow(arg, 1.0 / DISTANCE_NORM_POWER)
-        z = y - (a * dist + b)
-        mags_norm = torch.exp(z)
-
-        scale = mags_safe
-        while scale.ndim < blk.ndim:
-            scale = scale.unsqueeze(-1)
-        unit = blk / scale
-
-        scale_norm = mags_norm
-        while scale_norm.ndim < blk.ndim:
-            scale_norm = scale_norm.unsqueeze(-1)
-        out[offdiag_mask] = unit * scale_norm
-
-        new_blocks[key] = out
-
-    return block_matrix._replace_pair_blocks(new_blocks, basis=block_matrix.basis)
-
-
-def denormalize_block_matrix_with_distance_model(
-    block_matrix: BlockMatrix,
-    edge_distances_by_key: dict[str, torch.Tensor],
-    coeffs_by_key: dict[str, dict[str, float | int | bool]],
-) -> BlockMatrix:
-    """
-    Invert distance-based normalization on off-diagonal block magnitudes.
-    """
-    new_blocks: dict[str, torch.Tensor] = {}
-
-    for key, blocks in block_matrix.pair_blocks.items():
-        edges = block_matrix.pair_edges[key]
-        dists = edge_distances_by_key[key].to(blocks.device, blocks.dtype)
-        coeffs = coeffs_by_key.get(key, {"identity": True})
-        identity = bool(coeffs.get("identity", True))
-        offdiag_mask = ~get_diagonal_mask(edges)
-
-        if identity or not offdiag_mask.any():
-            new_blocks[key] = blocks
-            continue
-
-        a = float(coeffs["a"])
-        b = float(coeffs["b"])
-        log_offset = float(coeffs["log_offset"])
-
-        out = blocks.clone()
-        blk = blocks[offdiag_mask]
-        dist = dists[offdiag_mask]
-
-        mags_norm = torch.linalg.norm(blk.reshape(blk.shape[0], -1), dim=1)
-        mags_norm_safe = torch.clamp(mags_norm, min=DISTANCE_NORM_MAG_EPS)
-
-        z = torch.log(mags_norm_safe)
-        y = z + (a * dist + b)
-        arg = torch.pow(y, DISTANCE_NORM_POWER)
-        log_m = log_offset - arg
-        mags = torch.exp(log_m)
-
-        scale = mags_norm_safe
-        while scale.ndim < blk.ndim:
-            scale = scale.unsqueeze(-1)
-        unit = blk / scale
-
-        scale_raw = mags
-        while scale_raw.ndim < blk.ndim:
-            scale_raw = scale_raw.unsqueeze(-1)
-        out[offdiag_mask] = unit * scale_raw
-
-        new_blocks[key] = out
-
-    return block_matrix._replace_pair_blocks(new_blocks, basis=block_matrix.basis)
 
 
 def canonicalize_block_matrix_edges(
@@ -728,6 +567,7 @@ def prepare_mapper_from_sample(
     y: dict,
     orbital_selection: Any,
     device: torch.device,
+    torch_dtype: torch.dtype,
 ) -> BlockIrrepMapper:
     snap = Snapshot(
         hamiltonian=y["hamiltonian"],
@@ -739,7 +579,7 @@ def prepare_mapper_from_sample(
     if orbital_selection is not None:
         snap = snap.reduce_orbitals(orbital_selection)
     return BlockIrrepMapper(
-        snap.hamiltonian.orbital_cfg, device=device, dtype=torch.float32
+        snap.hamiltonian.orbital_cfg, device=device, dtype=torch_dtype
     )
 
 
@@ -753,9 +593,12 @@ def preprocess_sample(
     cutoff_radius: float,
     apply_cutoff_to_targets: bool,
     orbital_selection: Any,
+    matrix_targets: list[str],
+    enable_forces: bool,
     separate_shifted_self: bool,
     require_exact_edge_match: bool,
     device: torch.device,
+    torch_dtype: torch.dtype,
 ) -> dict:
     snap = Snapshot(
         hamiltonian=y["hamiltonian"],
@@ -763,14 +606,19 @@ def preprocess_sample(
         density=y["density"],
         positions=x["positions"],
         box=x["box"],
+        forces=y.get("forces"),
     )
 
     if orbital_selection is not None:
         snap = snap.reduce_orbitals(orbital_selection)
 
-    positions = snap.positions.to(device)
-    box = snap.box.to(device) if snap.box is not None else None
+    positions = snap.positions.to(device=device, dtype=torch_dtype)
+    box = (
+        snap.box.to(device=device, dtype=torch_dtype) if snap.box is not None else None
+    )
     atoms_list = list(snap.hamiltonian.atoms)
+    atoms_tuple = tuple(atoms_list)
+    atom_counts = Counter(atoms_list)
 
     H = snap.hamiltonian.to(device) * float(hamiltonian_scale_from_hartree)
     S = snap.overlap.to(device)
@@ -787,6 +635,30 @@ def preprocess_sample(
 
     H = (H + H.transpose()) * 0.5
     edge_distances_by_key = compute_edge_distances_by_key(H, positions, box)
+    target_matrices_all = {
+        "hamiltonian": H,
+        "overlap": S,
+        "density": D,
+    }
+    target_matrices = {
+        matrix_name: target_matrices_all[matrix_name] for matrix_name in matrix_targets
+    }
+    target_irreps_by_name = {
+        matrix_name: target_matrices[matrix_name].to_vectors(mapper)
+        for matrix_name in matrix_targets
+    }
+    energy_target = trace_matmul_sparse_block_matrix(H, D)
+    num_electrons_target = trace_matmul_sparse_block_matrix(D, S)
+
+    BOHR_TO_ANGSTROM = 0.529177210903
+    force_scale = float(hamiltonian_scale_from_hartree) / BOHR_TO_ANGSTROM
+    forces_target = None
+    if enable_forces:
+        if snap.forces is None:
+            raise RuntimeError(
+                "--enable-forces was set, but snapshot does not contain force targets."
+            )
+        forces_target = snap.forces.to(device=device, dtype=torch_dtype) * force_scale
 
     (
         edge_index,
@@ -854,6 +726,30 @@ def preprocess_sample(
     )
     batch_node = torch.zeros(len(atoms_list), dtype=torch.long, device=device)
     batch_edge = torch.zeros(edge_index.shape[1], dtype=torch.long, device=device)
+    sh_non_scalar_slices = [
+        sh_irreps.slices()[idx] for idx, (_, ir) in enumerate(sh_irreps) if ir.l > 0
+    ]
+    pred_pair_edges_static = {}
+    pred_lookup_static = {}
+    pred_edge_keys = []
+    target_basis_by_name = {
+        matrix_name: target_matrices[matrix_name].basis
+        for matrix_name in matrix_targets
+    }
+    for key in mapper.edge_types:
+        type_idx = mapper.edge_type2idx[key]
+        mask = edge_type_idx == type_idx
+        if not bool(mask.any().item()):
+            continue
+        edges_5d = torch.cat([edge_shift[:, mask], edge_index[:, mask]], dim=0)
+        pred_pair_edges_static[key] = edges_5d
+        pred_edge_keys.append(key)
+        for idx, edge_5d in enumerate(edges_5d.t().tolist()):
+            sx, sy, sz, i, j = edge_5d
+            pred_lookup_static[(int(sx), int(sy), int(sz), int(i), int(j))] = (
+                key,
+                idx,
+            )
 
     return {
         "node_type_idx": node_type_idx,
@@ -867,92 +763,289 @@ def preprocess_sample(
         "positions": positions,
         "box": box,
         "atoms_list": atoms_list,
+        "atoms_tuple": atoms_tuple,
+        "atom_counts": atom_counts,
         "edge_distances_by_key": edge_distances_by_key,
+        "target_matrices": target_matrices,
+        "target_matrices_all": target_matrices_all,
+        "target_irreps_by_name": target_irreps_by_name,
+        "target_basis_by_name": target_basis_by_name,
         "target_H_matrix_raw": H,
         "target_H_irreps_raw": H.to_vectors(mapper),
         "target_H_matrix": H,
         "target_overlap": S,
         "target_density": D,
         "target_H_irreps": H.to_vectors(mapper),
-        "norm_factors": compute_block_normalization_factors(H, separate_shifted_self),
+        "energy_target": energy_target,
+        "num_electrons_target": num_electrons_target,
+        "forces_target": forces_target,
+        "pred_pair_edges_static": pred_pair_edges_static,
+        "pred_lookup_static": pred_lookup_static,
+        "pred_edge_keys": tuple(pred_edge_keys),
+        "pred_edge_key_set": set(pred_edge_keys),
+        "sh_non_scalar_slices": sh_non_scalar_slices,
     }
 
 
+def recompute_sample_edge_features(
+    sample: dict,
+    positions: torch.Tensor,
+    *,
+    sh_irreps: Irreps,
+    cutoff_radius: float,
+    n_radial: int,
+    radial_embedding_scale: str,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    edge_index = sample["edge_index"]
+    edge_shift = sample["edge_shift"]
+    box = sample["box"]
+    if box is not None:
+        shift_float = edge_shift.T.to(dtype=positions.dtype)
+        edge_vec = (
+            positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
+        )
+    else:
+        edge_vec = positions[edge_index[1]] - positions[edge_index[0]]
+    edge_dist = torch.linalg.norm(edge_vec, dim=1)
+    edge_sh = spherical_harmonics(
+        sh_irreps,
+        edge_vec,
+        normalize=True,
+        normalization="component",
+    )
+    is_self_edge = (edge_index[0] == edge_index[1]) & (edge_shift == 0).all(dim=0)
+    if is_self_edge.any() and sample["sh_non_scalar_slices"]:
+        edge_sh = edge_sh.clone()
+        for slc in sample["sh_non_scalar_slices"]:
+            edge_sh[is_self_edge, slc] = 0.0
+    edge_length_emb = soft_one_hot_linspace(
+        edge_dist,
+        start=0.0,
+        end=cutoff_radius,
+        number=n_radial,
+        basis="gaussian",
+        cutoff=False,
+    )
+    if radial_embedding_scale == "sqrt_n_radial":
+        edge_length_emb = edge_length_emb * n_radial**0.5
+    return edge_sh, edge_length_emb, edge_dist
+
+
+def wrap_raw_predictions_to_irreps(
+    pred_raw_by_matrix: dict[str, dict],
+    sample: dict,
+    mapper: BlockIrrepMapper,
+    matrix_targets: list[str],
+) -> dict[str, IrrepsBlockData]:
+    pred_irreps_by_name = {}
+    pred_edge_key_set = sample["pred_edge_key_set"]
+    pred_edge_keys = sample["pred_edge_keys"]
+    pred_pair_edges_static = sample["pred_pair_edges_static"]
+    pred_lookup_static = sample["pred_lookup_static"]
+    for matrix_name in matrix_targets:
+        raw_matrix = pred_raw_by_matrix[matrix_name]
+        raw_key_set = set(raw_matrix.keys())
+        if raw_key_set != pred_edge_key_set:
+            missing_keys = sorted(pred_edge_key_set - raw_key_set)
+            extra_keys = sorted(raw_key_set - pred_edge_key_set)
+            raise RuntimeError(
+                f"Raw prediction keys for '{matrix_name}' do not match graph keys. "
+                f"Missing: {missing_keys}, extra: {extra_keys}"
+            )
+        pair_vec = {key: raw_matrix[key]["vectors"] for key in pred_edge_keys}
+        pred_irreps_by_name[matrix_name] = IrrepsBlockData(
+            atoms=sample["atoms_tuple"],
+            atom_counts=sample["atom_counts"],
+            pair_vectors=pair_vec,
+            pair_edges=pred_pair_edges_static,
+            lookup=pred_lookup_static,
+            orbital_cfg=mapper.orbital_cfg,
+            basis=sample["target_basis_by_name"][matrix_name],
+        )
+    return pred_irreps_by_name
+
+
+def compute_forces_from_pred_matrices(
+    pred_matrix_by_name: dict[str, BlockMatrix],
+    positions_tensor: torch.Tensor,
+    *,
+    create_graph: bool,
+    retain_graph: bool,
+) -> torch.Tensor:
+    energy = trace_matmul_sparse_block_matrix(
+        pred_matrix_by_name["hamiltonian"],
+        pred_matrix_by_name["density"],
+    )
+    grad_pos = torch.autograd.grad(
+        energy,
+        positions_tensor,
+        create_graph=create_graph,
+        retain_graph=retain_graph,
+    )[0]
+    return -grad_pos
+
+
 def compute_loss_for_sample(
-    pred_irreps: IrrepsBlockData,
-    pred_matrix: BlockMatrix,
+    pred_irreps_by_name: dict[str, IrrepsBlockData],
+    pred_matrix_norm_by_name: dict[str, BlockMatrix],
     sample: dict,
     mapper: BlockIrrepMapper,
     *,
+    matrix_targets: list[str],
     train_on_irrep_parts: bool,
-    normalize_blocks: bool,
-    separate_shifted_self: bool,
     all_irreps: list,
-) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    target_H_matrix = sample["target_H_matrix"]
-    target_H_irreps = sample["target_H_irreps"]
-    norm_factors = sample["norm_factors"]
-    irrep_losses: dict[str, torch.Tensor] = {}
+    enable_energy: bool,
+    train_on_energy: bool,
+    enable_num_electrons: bool,
+    train_on_num_electrons: bool,
+    loss_coef_observables: float,
+    enable_forces: bool,
+    train_on_forces: bool,
+    loss_coef_forces: float,
+    positions_for_forces: torch.Tensor | None,
+) -> dict[str, Any]:
+    matrix_block_losses: dict[str, torch.Tensor] = {}
+    irrep_losses_by_matrix: dict[str, dict[str, torch.Tensor]] = {}
 
-    def mse_with_optional_norm(
+    def mse_loss_blocks(
         pred_blocks: torch.Tensor,
         targ_blocks: torch.Tensor,
         edges_5d: torch.Tensor,
-        key: str,
     ) -> torch.Tensor:
         min_n = min(pred_blocks.shape[0], targ_blocks.shape[0], edges_5d.shape[1])
         p = pred_blocks[:min_n]
         t = targ_blocks[:min_n]
-        if normalize_blocks:
-            norm_vec = torch.ones(min_n, device=p.device, dtype=p.dtype)
-            for e in range(min_n):
-                status = get_block_status(edges_5d, e, separate_shifted_self)
-                norm_vec[e] = norm_factors[key][status]
-            while norm_vec.ndim < p.ndim:
-                norm_vec = norm_vec.unsqueeze(-1)
-            p = p / norm_vec
-            t = t / norm_vec
         return F.mse_loss(p, t)
 
-    if train_on_irrep_parts:
-        loss_total = torch.tensor(
-            0.0,
-            device=pred_matrix.pair_blocks[next(iter(pred_matrix.pair_blocks))].device,
-        )
-        for ir in all_irreps:
-            pred_part = filter_irreps_block_data_by_irrep(
-                pred_irreps, ir, mapper
-            ).to_blocks(mapper)
-            targ_part = filter_irreps_block_data_by_irrep(
-                target_H_irreps, ir, mapper
-            ).to_blocks(mapper)
-            l_ir = torch.tensor(0.0, device=loss_total.device)
-            for key in targ_part.pair_blocks.keys():
-                if key not in pred_part.pair_blocks:
-                    continue
-                l_ir = l_ir + mse_with_optional_norm(
-                    pred_part.pair_blocks[key],
-                    targ_part.pair_blocks[key],
-                    target_H_matrix.pair_edges[key],
-                    key,
-                )
-            irrep_losses[str(ir)] = l_ir
-            loss_total = loss_total + l_ir
-        return loss_total, irrep_losses
+    for matrix_name in matrix_targets:
+        target_matrix = sample["target_matrices"][matrix_name]
+        target_irreps = sample["target_irreps_by_name"][matrix_name]
+        pred_irreps = pred_irreps_by_name[matrix_name]
+        pred_matrix = pred_matrix_norm_by_name[matrix_name]
+        irrep_losses: dict[str, torch.Tensor] = {}
 
-    loss_total = torch.tensor(
-        0.0, device=pred_matrix.pair_blocks[next(iter(pred_matrix.pair_blocks))].device
+        if train_on_irrep_parts:
+            loss_total = torch.tensor(0.0, device=sample["node_type_idx"].device)
+            for ir in all_irreps:
+                pred_part = filter_irreps_block_data_by_irrep(
+                    pred_irreps, ir, mapper
+                ).to_blocks(mapper)
+                targ_part = filter_irreps_block_data_by_irrep(
+                    target_irreps, ir, mapper
+                ).to_blocks(mapper)
+                l_ir = torch.tensor(0.0, device=loss_total.device)
+                for key in targ_part.pair_blocks.keys():
+                    if key not in pred_part.pair_blocks:
+                        continue
+                    l_ir = l_ir + mse_loss_blocks(
+                        pred_part.pair_blocks[key],
+                        targ_part.pair_blocks[key],
+                        target_matrix.pair_edges[key],
+                    )
+                irrep_losses[str(ir)] = l_ir
+                loss_total = loss_total + l_ir
+            matrix_block_losses[matrix_name] = loss_total
+            irrep_losses_by_matrix[matrix_name] = irrep_losses
+        else:
+            loss_total = torch.tensor(0.0, device=sample["node_type_idx"].device)
+            for key in target_matrix.pair_blocks.keys():
+                if key not in pred_matrix.pair_blocks:
+                    continue
+                loss_total = loss_total + mse_loss_blocks(
+                    pred_matrix.pair_blocks[key],
+                    target_matrix.pair_blocks[key],
+                    target_matrix.pair_edges[key],
+                )
+            matrix_block_losses[matrix_name] = loss_total
+            irrep_losses_by_matrix[matrix_name] = irrep_losses
+
+    loss_block = (
+        sum(matrix_block_losses.values())
+        if matrix_block_losses
+        else torch.tensor(0.0, device=sample["node_type_idx"].device)
     )
-    for key in target_H_matrix.pair_blocks.keys():
-        if key not in pred_matrix.pair_blocks:
-            continue
-        loss_total = loss_total + mse_with_optional_norm(
-            pred_matrix.pair_blocks[key],
-            target_H_matrix.pair_blocks[key],
-            target_H_matrix.pair_edges[key],
-            key,
+    pred_matrix_observables_by_name = pred_matrix_norm_by_name
+
+    loss_energy_weighted = torch.tensor(0.0, device=sample["node_type_idx"].device)
+    loss_num_electrons_weighted = torch.tensor(
+        0.0, device=sample["node_type_idx"].device
+    )
+    loss_forces_weighted = torch.tensor(0.0, device=sample["node_type_idx"].device)
+    energy_mae = None
+    num_electrons_mae = None
+    forces_mae = None
+    forces_mse = None
+
+    if (
+        enable_energy
+        and "hamiltonian" in pred_matrix_observables_by_name
+        and "density" in pred_matrix_observables_by_name
+    ):
+        energy_pred = trace_matmul_sparse_block_matrix(
+            pred_matrix_observables_by_name["hamiltonian"],
+            pred_matrix_observables_by_name["density"],
         )
-    return loss_total, irrep_losses
+        energy_mae = torch.abs(energy_pred - sample["energy_target"])
+        if train_on_energy:
+            loss_energy_weighted = loss_coef_observables * F.mse_loss(
+                energy_pred, sample["energy_target"]
+            )
+
+    if (
+        enable_num_electrons
+        and "overlap" in pred_matrix_observables_by_name
+        and "density" in pred_matrix_observables_by_name
+    ):
+        num_electrons_pred = trace_matmul_sparse_block_matrix(
+            pred_matrix_observables_by_name["density"],
+            pred_matrix_observables_by_name["overlap"],
+        )
+        num_electrons_mae = torch.abs(
+            num_electrons_pred - sample["num_electrons_target"]
+        )
+        if train_on_num_electrons:
+            loss_num_electrons_weighted = loss_coef_observables * F.mse_loss(
+                num_electrons_pred, sample["num_electrons_target"]
+            )
+
+    if (
+        enable_forces
+        and positions_for_forces is not None
+        and sample["forces_target"] is not None
+        and "hamiltonian" in pred_matrix_observables_by_name
+        and "density" in pred_matrix_observables_by_name
+    ):
+        forces_pred = compute_forces_from_pred_matrices(
+            pred_matrix_observables_by_name,
+            positions_for_forces,
+            create_graph=train_on_forces,
+            retain_graph=True,
+        )
+        forces_err = forces_pred - sample["forces_target"]
+        forces_mae = torch.mean(torch.abs(forces_err))
+        forces_mse = torch.mean(forces_err**2)
+        if train_on_forces:
+            loss_forces_weighted = loss_coef_forces * forces_mse
+
+    loss_total = (
+        loss_block
+        + loss_energy_weighted
+        + loss_num_electrons_weighted
+        + loss_forces_weighted
+    )
+    return {
+        "loss_total": loss_total,
+        "loss_block_total": loss_block,
+        "matrix_block_losses": matrix_block_losses,
+        "irrep_losses_by_matrix": irrep_losses_by_matrix,
+        "loss_energy_weighted": loss_energy_weighted,
+        "loss_num_electrons_weighted": loss_num_electrons_weighted,
+        "loss_forces_weighted": loss_forces_weighted,
+        "energy_mae": energy_mae,
+        "num_electrons_mae": num_electrons_mae,
+        "forces_mae": forces_mae,
+        "forces_mse": forces_mse,
+    }
 
 
 def predict_sample(
@@ -960,9 +1053,30 @@ def predict_sample(
     sample: dict,
     mapper: BlockIrrepMapper,
     *,
+    matrix_targets: list[str],
+    sh_irreps: Irreps,
+    cutoff_radius: float,
+    n_radial: int,
+    radial_embedding_scale: str,
+    symmetrize_preds: bool,
     verbose_forward: bool,
     log_forward: bool,
-) -> tuple[IrrepsBlockData, BlockMatrix, BlockMatrix]:
+    log_to_wandb: bool = False,
+    positions_override: torch.Tensor | None = None,
+) -> dict[str, Any]:
+    if positions_override is None:
+        edge_sh = sample["edge_sh"]
+        edge_length_emb = sample["edge_length_emb"]
+    else:
+        edge_sh, edge_length_emb, _ = recompute_sample_edge_features(
+            sample,
+            positions_override,
+            sh_irreps=sh_irreps,
+            cutoff_radius=cutoff_radius,
+            n_radial=n_radial,
+            radial_embedding_scale=radial_embedding_scale,
+        )
+
     if not verbose_forward and not log_forward:
         old_stdout = sys.stdout
         sys.stdout = open(os.devnull, "w")
@@ -971,38 +1085,49 @@ def predict_sample(
         sample["edge_type_idx"],
         sample["edge_index"],
         sample["edge_shift"],
-        sample["edge_length_emb"],
-        sample["edge_sh"],
+        edge_length_emb,
+        edge_sh,
         sample["batch_node"],
         sample["batch_edge"],
-        log_to_wandb=False,
+        log_to_wandb=log_to_wandb,
+        verbose=verbose_forward or log_forward,
     )
     if not verbose_forward and not log_forward:
         sys.stdout.close()
         sys.stdout = old_stdout
 
-    pair_vec = {}
-    pair_edges = {}
-    lookup = {}
-    for key, payload in raw.items():
-        pair_vec[key] = payload["vectors"]
-        pair_edges[key] = payload["edges"]
-        for idx, e5d in enumerate(payload["edges"].t()):
-            sx, sy, sz, i, j = map(int, e5d.tolist())
-            lookup[(sx, sy, sz, i, j)] = (key, idx)
+    missing_targets = [name for name in matrix_targets if name not in raw]
+    if missing_targets:
+        raise RuntimeError(
+            f"Network output is missing targets: {missing_targets}. "
+            f"Got: {sorted(list(raw.keys()))}"
+        )
 
-    pred_irreps = IrrepsBlockData(
-        atoms=tuple(sample["atoms_list"]),
-        atom_counts=Counter(sample["atoms_list"]),
-        pair_vectors=pair_vec,
-        pair_edges=pair_edges,
-        lookup=lookup,
-        orbital_cfg=mapper.orbital_cfg,
-        basis=sample["target_H_matrix"].basis,
+    pred_irreps_by_name = wrap_raw_predictions_to_irreps(
+        raw, sample, mapper, matrix_targets
     )
-    pred_matrix = pred_irreps.to_blocks(mapper)
-    pred_metrics = (pred_matrix + pred_matrix.transpose()) * 0.5
-    return pred_irreps, pred_matrix, pred_metrics
+    pred_matrix_norm_by_name = {
+        matrix_name: pred_irreps_by_name[matrix_name].to_blocks(mapper)
+        for matrix_name in matrix_targets
+    }
+    if symmetrize_preds:
+        pred_matrix_metrics_by_name = {
+            matrix_name: (
+                pred_matrix_norm_by_name[matrix_name]
+                + pred_matrix_norm_by_name[matrix_name].transpose()
+            )
+            * 0.5
+            for matrix_name in matrix_targets
+        }
+    else:
+        pred_matrix_metrics_by_name = dict(pred_matrix_norm_by_name)
+
+    return {
+        "raw": raw,
+        "pred_irreps_by_name": pred_irreps_by_name,
+        "pred_matrix_norm_by_name": pred_matrix_norm_by_name,
+        "pred_matrix_metrics_by_name": pred_matrix_metrics_by_name,
+    }
 
 
 def evaluate_split(
@@ -1011,11 +1136,21 @@ def evaluate_split(
     mapper: BlockIrrepMapper,
     all_irreps: list,
     *,
+    matrix_targets: list[str],
+    sh_irreps: Irreps,
+    cutoff_radius: float,
+    n_radial: int,
+    radial_embedding_scale: str,
+    symmetrize_preds: bool,
     train_on_irrep_parts: bool,
-    normalize_blocks: bool,
-    separate_shifted_self: bool,
-    distance_magnitude_normalization: bool,
-    distance_norm_coeffs: dict[str, dict[str, float | int | bool]] | None,
+    enable_energy: bool,
+    train_on_energy: bool,
+    enable_num_electrons: bool,
+    train_on_num_electrons: bool,
+    loss_coef_observables: float,
+    enable_forces: bool,
+    train_on_forces: bool,
+    loss_coef_forces: float,
 ) -> dict:
     empty_detailed = {
         "mae": 0.0,
@@ -1030,81 +1165,181 @@ def evaluate_split(
         return {
             "loss": 0.0,
             "detailed": empty_detailed,
-            "per_irrep": {},
-            "first_pred_metrics": None,
+            "basic_by_name": {},
+            "per_irrep_by_name": {},
+            "forces_mae": None,
+            "forces_mse": None,
+            "energy_mae": None,
+            "num_electrons_mae": None,
+            "first_pred_metrics_by_name": None,
             "first_sample": None,
         }
 
     network.eval()
     total_loss = 0.0
     detailed_sum: dict[str, float] = {}
-    per_irrep_sum: dict[str, float] = {}
-    first_pred_metrics = None
+    basic_sum_by_name: dict[str, dict[str, float]] = {}
+    per_irrep_sum_by_name: dict[str, dict[str, float]] = {}
+    forces_mae_sum = 0.0
+    forces_mse_sum = 0.0
+    forces_count = 0
+    energy_mae_sum = 0.0
+    energy_count = 0
+    num_electrons_mae_sum = 0.0
+    num_electrons_count = 0
+    first_pred_metrics_by_name = None
     first_sample = None
 
-    with torch.no_grad():
-        for idx, sample in enumerate(samples):
-            pred_irreps, pred_matrix, pred_metrics = predict_sample(
-                network, sample, mapper, verbose_forward=False, log_forward=False
-            )
-            loss_t, _ = compute_loss_for_sample(
-                pred_irreps,
-                pred_matrix,
-                sample,
-                mapper,
-                train_on_irrep_parts=train_on_irrep_parts,
-                normalize_blocks=normalize_blocks,
-                separate_shifted_self=separate_shifted_self,
-                all_irreps=all_irreps,
-            )
-            total_loss += float(loss_t.item())
+    for idx, sample in enumerate(samples):
+        positions_eval = None
+        if enable_forces:
+            positions_eval = sample["positions"].detach().clone().requires_grad_(True)
+        pred = predict_sample(
+            network,
+            sample,
+            mapper,
+            matrix_targets=matrix_targets,
+            sh_irreps=sh_irreps,
+            cutoff_radius=cutoff_radius,
+            n_radial=n_radial,
+            radial_embedding_scale=radial_embedding_scale,
+            symmetrize_preds=symmetrize_preds,
+            verbose_forward=False,
+            log_forward=False,
+            positions_override=positions_eval,
+        )
+        loss_info = compute_loss_for_sample(
+            pred["pred_irreps_by_name"],
+            pred["pred_matrix_norm_by_name"],
+            sample,
+            mapper,
+            matrix_targets=matrix_targets,
+            train_on_irrep_parts=train_on_irrep_parts,
+            all_irreps=all_irreps,
+            enable_energy=enable_energy,
+            train_on_energy=train_on_energy,
+            enable_num_electrons=enable_num_electrons,
+            train_on_num_electrons=train_on_num_electrons,
+            loss_coef_observables=loss_coef_observables,
+            enable_forces=enable_forces,
+            train_on_forces=False,
+            loss_coef_forces=loss_coef_forces,
+            positions_for_forces=positions_eval,
+        )
+        total_loss += float(loss_info["loss_total"].item())
 
-            if distance_magnitude_normalization:
-                if distance_norm_coeffs is None:
-                    raise RuntimeError(
-                        "distance_magnitude_normalization is enabled but coefficients are missing."
-                    )
-                pred_eval = denormalize_block_matrix_with_distance_model(
-                    pred_metrics,
-                    sample["edge_distances_by_key"],
-                    distance_norm_coeffs,
-                )
-                target_eval_matrix = sample["target_H_matrix_raw"]
-                target_eval_irreps = sample["target_H_irreps_raw"]
-            else:
-                pred_eval = pred_metrics
-                target_eval_matrix = sample["target_H_matrix"]
-                target_eval_irreps = sample["target_H_irreps"]
+        pred_metrics_by_name = pred["pred_matrix_metrics_by_name"]
 
-            detailed = compute_detailed_metrics(
-                pred_eval, target_eval_matrix, sample["target_overlap"]
-            )
-            for k, v in detailed.items():
-                detailed_sum[k] = detailed_sum.get(k, 0.0) + float(v)
+        detailed = compute_detailed_metrics(
+            pred_metrics_by_name["hamiltonian"],
+            sample["target_matrices"]["hamiltonian"],
+            sample["target_overlap"],
+        )
+        for k, v in detailed.items():
+            detailed_sum[k] = detailed_sum.get(k, 0.0) + float(v)
 
-            pred_ir_metrics = pred_eval.to_vectors(mapper)
+        for matrix_name in matrix_targets:
+            target_matrix = sample["target_matrices"][matrix_name]
+            pred_matrix_metrics = pred_metrics_by_name[matrix_name]
+            basic = compute_basic_matrix_metrics(pred_matrix_metrics, target_matrix)
+            basic_acc = basic_sum_by_name.setdefault(matrix_name, {})
+            for k, v in basic.items():
+                basic_acc[k] = basic_acc.get(k, 0.0) + float(v)
+
             per_irrep = compute_irrep_metrics(
-                pred_ir_metrics, target_eval_irreps, all_irreps, mapper
+                pred_matrix_metrics.to_vectors(mapper),
+                sample["target_irreps_by_name"][matrix_name],
+                all_irreps,
+                mapper,
             )
+            per_irrep_acc = per_irrep_sum_by_name.setdefault(matrix_name, {})
             for k, v in per_irrep.items():
-                per_irrep_sum[k] = per_irrep_sum.get(k, 0.0) + float(v)
+                per_irrep_acc[k] = per_irrep_acc.get(k, 0.0) + float(v)
 
-            if idx == 0:
-                first_pred_metrics = pred_eval
-                first_sample = sample
+        if loss_info["forces_mae"] is not None and loss_info["forces_mse"] is not None:
+            forces_mae_sum += float(loss_info["forces_mae"].item())
+            forces_mse_sum += float(loss_info["forces_mse"].item())
+            forces_count += 1
+        if loss_info["energy_mae"] is not None:
+            energy_mae_sum += float(loss_info["energy_mae"].item())
+            energy_count += 1
+        if loss_info["num_electrons_mae"] is not None:
+            num_electrons_mae_sum += float(loss_info["num_electrons_mae"].item())
+            num_electrons_count += 1
+
+        if idx == 0:
+            first_pred_metrics_by_name = pred_metrics_by_name
+            first_sample = sample
 
     n = float(len(samples))
     return {
         "loss": total_loss / n,
         "detailed": {k: v / n for k, v in detailed_sum.items()},
-        "per_irrep": {k: v / n for k, v in per_irrep_sum.items()},
-        "first_pred_metrics": first_pred_metrics,
+        "basic_by_name": {
+            matrix_name: {k: v / n for k, v in metrics.items()}
+            for matrix_name, metrics in basic_sum_by_name.items()
+        },
+        "per_irrep_by_name": {
+            matrix_name: {k: v / n for k, v in metrics.items()}
+            for matrix_name, metrics in per_irrep_sum_by_name.items()
+        },
+        "forces_mae": (forces_mae_sum / forces_count) if forces_count > 0 else None,
+        "forces_mse": (forces_mse_sum / forces_count) if forces_count > 0 else None,
+        "energy_mae": (energy_mae_sum / energy_count) if energy_count > 0 else None,
+        "num_electrons_mae": (
+            num_electrons_mae_sum / num_electrons_count
+            if num_electrons_count > 0
+            else None
+        ),
+        "first_pred_metrics_by_name": first_pred_metrics_by_name,
         "first_sample": first_sample,
     }
 
 
 def main() -> None:
     args = parse_args()
+    valid_matrix_targets = {"hamiltonian", "overlap", "density"}
+    matrix_targets = list(dict.fromkeys(args.matrix_targets))
+    invalid_targets = sorted(set(matrix_targets) - valid_matrix_targets)
+    if invalid_targets:
+        raise ValueError(
+            f"Invalid --matrix-targets entries: {invalid_targets}. "
+            f"Valid targets: {sorted(valid_matrix_targets)}"
+        )
+    if "hamiltonian" not in matrix_targets:
+        raise ValueError("Hamiltonian must be included in --matrix-targets.")
+    if args.head_e3mlp_layers < 1:
+        raise ValueError("--head-e3mlp-layers must be >= 1.")
+    if args.loss_coef_observables == 0.0 and (
+        args.train_on_energy or args.train_on_num_electrons
+    ):
+        raise ValueError(
+            "If training on energy or num electrons, loss-coef-observables must be nonzero."
+        )
+    if args.train_on_energy and not {"hamiltonian", "density"}.issubset(
+        set(matrix_targets)
+    ):
+        raise ValueError(
+            "--train-on-energy requires hamiltonian and density in --matrix-targets."
+        )
+    if args.train_on_num_electrons and not {"overlap", "density"}.issubset(
+        set(matrix_targets)
+    ):
+        raise ValueError(
+            "--train-on-num-electrons requires overlap and density in --matrix-targets."
+        )
+    if args.train_on_forces and not args.enable_forces:
+        raise ValueError("--train-on-forces requires --enable-forces=True.")
+    if args.train_on_forces and args.loss_coef_forces == 0.0:
+        raise ValueError("If training on forces, loss-coef-forces must be nonzero.")
+    if args.train_on_forces and not {"hamiltonian", "density"}.issubset(
+        set(matrix_targets)
+    ):
+        raise ValueError(
+            "--train-on-forces requires hamiltonian and density in --matrix-targets."
+        )
+    torch_dtype = getattr(torch, args.dtype)
+    torch.set_default_dtype(torch_dtype)
     set_seed(args.seed)
 
     print("=" * 80)
@@ -1228,7 +1463,7 @@ def main() -> None:
         wandb_kwargs["name"] = args.run_name
     wandb.init(**wandb_kwargs)
 
-    for name in STORE_TRUE_ARG_NAMES:
+    for name in BOOLEAN_ARG_NAMES:
         cfg_val = _get_wandb_config_value(name)
         if cfg_val is not None:
             setattr(args, name, _coerce_wandb_bool(name, cfg_val))
@@ -1237,6 +1472,16 @@ def main() -> None:
         "data_path": str(data_root),
         "training_unit": args.training_unit,
         "hamiltonian_scale_from_hartree": UNIT_SCALE_FROM_HARTREE[args.training_unit],
+        "matrix_targets": matrix_targets,
+        "enable_energy": args.enable_energy,
+        "enable_num_electrons": args.enable_num_electrons,
+        "train_on_energy": args.train_on_energy,
+        "train_on_num_electrons": args.train_on_num_electrons,
+        "loss_coef_observables": args.loss_coef_observables,
+        "enable_forces": args.enable_forces,
+        "train_on_forces": args.train_on_forces,
+        "loss_coef_forces": args.loss_coef_forces,
+        "symmetrize_preds": args.symmetrize_preds,
         "split_mode": split_mode,
         "num_train": args.num_train,
         "num_val": args.num_val,
@@ -1255,17 +1500,21 @@ def main() -> None:
         "n_radial": args.n_radial,
         "lr": args.lr,
         "num_epochs": args.num_epochs,
+        "dtype": args.dtype,
         "grad_clip": args.grad_clip,
         "lr_factor": args.lr_factor,
         "lr_patience": args.lr_patience,
         "log_interval": args.log_interval,
         "adaptive_log_interval": args.adaptive_log_interval,
         "benchmark": args.benchmark,
+        "e3layernorm": args.e3layernorm,
         "separate_shifted_self": args.separate_shifted_self,
-        "normalize_blocks": args.normalize_blocks,
-        "distance_magnitude_normalization": args.distance_magnitude_normalization,
         "edge_encoder_use_sh_tensor_square": args.edge_encoder_use_sh_tensor_square,
+        "radial_embedding_scale": args.radial_embedding_scale,
         "head_mlp_for_scalars": args.head_mlp_for_scalars,
+        "head_use_tensor_square": args.head_use_tensor_square,
+        "head_use_node_embeddings_for_self_edges": args.head_use_node_embeddings_for_self_edges,
+        "head_e3mlp_layers": args.head_e3mlp_layers,
         "train_on_irrep_parts": args.train_on_irrep_parts,
         "apply_cutoff_to_targets": args.apply_cutoff_to_targets,
         "require_exact_edge_match": args.require_exact_edge_match,
@@ -1302,12 +1551,14 @@ def main() -> None:
     # Build datasets via DatasetFactory (requested).
     # Use very large cutoff when targets should stay unfiltered.
     cfg_ds = NetConfig()
-    cfg_ds.dtype = torch.float32
+    cfg_ds.dtype = torch_dtype
     cfg_ds.device = "cpu"
     cfg_ds.verbosity = 0
     cfg_ds.cache_root = None
     cfg_ds.precompute_edge_features = False
     cfg_ds.cutoff_radius = args.cutoff_radius if args.apply_cutoff_to_targets else 1e6
+    cfg_ds.enable_forces = args.enable_forces
+    cfg_ds.train_on_forces = args.train_on_forces
 
     fac = DatasetFactory(cfg_ds, convention=args.convention)
     for m, i in train_pairs:
@@ -1338,7 +1589,9 @@ def main() -> None:
 
     # Build final mapper from first sample after optional orbital reduction.
     x0, y0 = train_ds[0]
-    mapper = prepare_mapper_from_sample(x0, y0, orbital_selection_obj, device)
+    mapper = prepare_mapper_from_sample(
+        x0, y0, orbital_selection_obj, device, torch_dtype
+    )
     if args.log_model:
         log_orbital_config(mapper.orbital_cfg)
         log_mapper_info(mapper)
@@ -1348,7 +1601,7 @@ def main() -> None:
     cfg_graph.cutoff_radius = args.cutoff_radius
     cfg_graph.n_radial = args.n_radial
     cfg_graph.l_max = args.l_max
-    cfg_graph.dtype = torch.float32
+    cfg_graph.dtype = torch_dtype
     cfg_graph.safety_checks = False
     sh_irreps = Irreps.spherical_harmonics(args.l_max)
 
@@ -1365,9 +1618,12 @@ def main() -> None:
             cutoff_radius=args.cutoff_radius,
             apply_cutoff_to_targets=args.apply_cutoff_to_targets,
             orbital_selection=orbital_selection_obj,
+            matrix_targets=matrix_targets,
+            enable_forces=args.enable_forces,
             separate_shifted_self=args.separate_shifted_self,
             require_exact_edge_match=args.require_exact_edge_match,
             device=device,
+            torch_dtype=torch_dtype,
         )
         for (x, y) in train_ds
     ]
@@ -1386,38 +1642,15 @@ def main() -> None:
             cutoff_radius=args.cutoff_radius,
             apply_cutoff_to_targets=args.apply_cutoff_to_targets,
             orbital_selection=orbital_selection_obj,
+            matrix_targets=matrix_targets,
+            enable_forces=args.enable_forces,
             separate_shifted_self=args.separate_shifted_self,
             require_exact_edge_match=args.require_exact_edge_match,
             device=device,
+            torch_dtype=torch_dtype,
         )
         for (x, y) in val_iterable
     ]
-
-    distance_norm_coeffs: dict[str, dict[str, float | int | bool]] | None = None
-    if args.distance_magnitude_normalization:
-        distance_norm_coeffs = fit_distance_normalization_coeffs(train_samples)
-        apply_distance_normalization_to_samples(
-            train_samples,
-            mapper,
-            args.separate_shifted_self,
-            distance_norm_coeffs,
-        )
-        apply_distance_normalization_to_samples(
-            val_samples,
-            mapper,
-            args.separate_shifted_self,
-            distance_norm_coeffs,
-        )
-        if args.log_data:
-            non_identity = sum(
-                1
-                for c in distance_norm_coeffs.values()
-                if not bool(c.get("identity", True))
-            )
-            print(
-                "[DATA] distance normalization enabled: "
-                f"{len(distance_norm_coeffs)} key(s), {non_identity} fitted"
-            )
 
     if args.hidden_irreps is not None:
         hidden_irreps = Irreps(args.hidden_irreps)
@@ -1441,12 +1674,16 @@ def main() -> None:
         sh_irreps=sh_irreps,
         num_layers=args.num_layers,
         mapper=mapper,
+        matrix_targets=matrix_targets,
+        head_e3mlp_layers=args.head_e3mlp_layers,
         edge_encoder_use_sh_tensor_square=args.edge_encoder_use_sh_tensor_square,
         magnitude_factorization=False,
         head_mlp_for_scalars=args.head_mlp_for_scalars,
-        head_use_tensor_square=False,
+        head_use_tensor_square=args.head_use_tensor_square,
+        head_use_node_embeddings_for_self_edges=args.head_use_node_embeddings_for_self_edges,
         separate_shifted_self=args.separate_shifted_self,
-    ).to(device)
+        use_e3layernorm=args.e3layernorm,
+    ).to(device=device, dtype=torch_dtype)
     if not args.log_model:
         sys.stdout.close()
         sys.stdout = old_stdout
@@ -1472,6 +1709,14 @@ def main() -> None:
     print("TRAINING")
     print("=" * 80)
     print(f"train samples: {len(train_samples)} | val samples: {len(val_samples)}")
+
+    matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
+    irrep_prefix_by_matrix = {"hamiltonian": "H_", "overlap": "S_", "density": "D_"}
+    matrix_frame_output_dirs = {}
+    for matrix_name in matrix_targets:
+        matrix_dir = frame_output_dir / matrix_name
+        matrix_dir.mkdir(parents=True, exist_ok=True)
+        matrix_frame_output_dirs[matrix_name] = matrix_dir
 
     history = {"train_loss": [], "val_loss": [], "val_mae_H": []}
     best_score = float("inf")
@@ -1511,21 +1756,35 @@ def main() -> None:
         for epoch in range(args.num_epochs):
             epoch_t0 = time.perf_counter() if args.benchmark else 0.0
             network.train()
+            should_log_now = should_log_epoch(
+                epoch, args.log_interval, args.adaptive_log_interval
+            )
             train_loss_total = 0.0
             train_irrep_losses_total: dict[str, float] = {}
+            epoch_wandb_log: dict[str, float] = {"epoch": epoch}
+            last_grad_norm = None
 
             for sample in train_samples:
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 t_fwd = time.perf_counter() if args.benchmark else 0.0
-                pred_irreps, pred_matrix, _pred_metrics = predict_sample(
+                positions_train = None
+                if args.enable_forces:
+                    positions_train = (
+                        sample["positions"].detach().clone().requires_grad_(True)
+                    )
+                pred = predict_sample(
                     network,
                     sample,
                     mapper,
+                    matrix_targets=matrix_targets,
+                    sh_irreps=sh_irreps,
+                    cutoff_radius=args.cutoff_radius,
+                    n_radial=args.n_radial,
+                    radial_embedding_scale=args.radial_embedding_scale,
+                    symmetrize_preds=args.symmetrize_preds,
                     verbose_forward=args.verbose_forward,
-                    log_forward=args.log_forward
-                    and should_log_epoch(
-                        epoch, args.log_interval, args.adaptive_log_interval
-                    ),
+                    log_forward=args.log_forward and should_log_now,
+                    positions_override=positions_train,
                 )
                 benchmark_add(
                     "train_forward",
@@ -1533,16 +1792,25 @@ def main() -> None:
                 )
 
                 t_loss = time.perf_counter() if args.benchmark else 0.0
-                loss, ir_losses = compute_loss_for_sample(
-                    pred_irreps=pred_irreps,
-                    pred_matrix=pred_matrix,
-                    sample=sample,
-                    mapper=mapper,
+                loss_info = compute_loss_for_sample(
+                    pred["pred_irreps_by_name"],
+                    pred["pred_matrix_norm_by_name"],
+                    sample,
+                    mapper,
+                    matrix_targets=matrix_targets,
                     train_on_irrep_parts=args.train_on_irrep_parts,
-                    normalize_blocks=args.normalize_blocks,
-                    separate_shifted_self=args.separate_shifted_self,
                     all_irreps=all_irreps,
+                    enable_energy=args.enable_energy,
+                    train_on_energy=args.train_on_energy,
+                    enable_num_electrons=args.enable_num_electrons,
+                    train_on_num_electrons=args.train_on_num_electrons,
+                    loss_coef_observables=args.loss_coef_observables,
+                    enable_forces=args.enable_forces,
+                    train_on_forces=args.train_on_forces,
+                    loss_coef_forces=args.loss_coef_forces,
+                    positions_for_forces=positions_train,
                 )
+                loss = loss_info["loss_total"]
                 benchmark_add(
                     "train_loss",
                     time.perf_counter() - t_loss if args.benchmark else 0.0,
@@ -1556,7 +1824,8 @@ def main() -> None:
                 )
 
                 if args.grad_clip > 0:
-                    clip_grad_norm_(network.parameters(), args.grad_clip)
+                    grad_norm = clip_grad_norm_(network.parameters(), args.grad_clip)
+                    last_grad_norm = float(grad_norm.item())
 
                 t_opt = time.perf_counter() if args.benchmark else 0.0
                 optimizer.step()
@@ -1566,21 +1835,88 @@ def main() -> None:
                 )
 
                 train_loss_total += float(loss.item())
-                for k, v in ir_losses.items():
-                    train_irrep_losses_total[k] = train_irrep_losses_total.get(
-                        k, 0.0
-                    ) + float(v.item())
+                for matrix_name, matrix_loss in loss_info[
+                    "matrix_block_losses"
+                ].items():
+                    key = f"train/loss_block_{matrix_name}"
+                    epoch_wandb_log[key] = epoch_wandb_log.get(key, 0.0) + float(
+                        matrix_loss.item()
+                    )
+                epoch_wandb_log["train/loss_block_total"] = epoch_wandb_log.get(
+                    "train/loss_block_total", 0.0
+                ) + float(loss_info["loss_block_total"].item())
+                epoch_wandb_log["train/loss_total"] = epoch_wandb_log.get(
+                    "train/loss_total", 0.0
+                ) + float(loss.item())
+                epoch_wandb_log["train/loss_step"] = float(loss.item())
+                epoch_wandb_log["lr"] = optimizer.param_groups[0]["lr"]
 
-            train_loss = train_loss_total / max(len(train_samples), 1)
+                if args.train_on_energy:
+                    epoch_wandb_log["train/loss_energy_weighted"] = epoch_wandb_log.get(
+                        "train/loss_energy_weighted", 0.0
+                    ) + float(loss_info["loss_energy_weighted"].item())
+                if args.train_on_num_electrons:
+                    epoch_wandb_log["train/loss_num_electrons_weighted"] = (
+                        epoch_wandb_log.get("train/loss_num_electrons_weighted", 0.0)
+                        + float(loss_info["loss_num_electrons_weighted"].item())
+                    )
+                if args.train_on_forces:
+                    epoch_wandb_log["train/loss_forces_weighted"] = epoch_wandb_log.get(
+                        "train/loss_forces_weighted", 0.0
+                    ) + float(loss_info["loss_forces_weighted"].item())
+                if loss_info["energy_mae"] is not None:
+                    epoch_wandb_log["train/energy_mae"] = epoch_wandb_log.get(
+                        "train/energy_mae", 0.0
+                    ) + float(loss_info["energy_mae"].item())
+                if loss_info["num_electrons_mae"] is not None:
+                    epoch_wandb_log["train/num_electrons_mae"] = epoch_wandb_log.get(
+                        "train/num_electrons_mae", 0.0
+                    ) + float(loss_info["num_electrons_mae"].item())
+                if (
+                    loss_info["forces_mae"] is not None
+                    and loss_info["forces_mse"] is not None
+                ):
+                    epoch_wandb_log["train/forces_mae"] = epoch_wandb_log.get(
+                        "train/forces_mae", 0.0
+                    ) + float(loss_info["forces_mae"].item())
+                    epoch_wandb_log["train/forces_mse"] = epoch_wandb_log.get(
+                        "train/forces_mse", 0.0
+                    ) + float(loss_info["forces_mse"].item())
 
-            do_log = should_log_epoch(
-                epoch, args.log_interval, args.adaptive_log_interval
-            )
+                if args.train_on_irrep_parts:
+                    for matrix_name, ir_losses in loss_info[
+                        "irrep_losses_by_matrix"
+                    ].items():
+                        prefix = matrix_alias.get(matrix_name, matrix_name)
+                        for irrep_str, irrep_loss in ir_losses.items():
+                            key = f"partial/{prefix}_{irrep_str}"
+                            epoch_wandb_log[key] = epoch_wandb_log.get(
+                                key, 0.0
+                            ) + float(irrep_loss.item())
+                            train_irrep_losses_total[key] = (
+                                train_irrep_losses_total.get(key, 0.0)
+                                + float(irrep_loss.item())
+                            )
+
+            denom = max(len(train_samples), 1)
+            train_loss = train_loss_total / denom
+            for key, value in list(epoch_wandb_log.items()):
+                if key.startswith("train/") or key.startswith("partial/"):
+                    epoch_wandb_log[key] = value / denom
+            if last_grad_norm is not None:
+                epoch_wandb_log["grad_norm"] = last_grad_norm
+
+            do_log = should_log_now
             val_eval = {
                 "loss": train_loss,
                 "detailed": {},
-                "per_irrep": {},
-                "first_pred_metrics": None,
+                "basic_by_name": {},
+                "per_irrep_by_name": {},
+                "forces_mae": None,
+                "forces_mse": None,
+                "energy_mae": None,
+                "num_electrons_mae": None,
+                "first_pred_metrics_by_name": None,
                 "first_sample": None,
             }
             if do_log:
@@ -1590,21 +1926,29 @@ def main() -> None:
                     samples=val_samples if len(val_samples) > 0 else train_samples,
                     mapper=mapper,
                     all_irreps=all_irreps,
+                    matrix_targets=matrix_targets,
+                    sh_irreps=sh_irreps,
+                    cutoff_radius=args.cutoff_radius,
+                    n_radial=args.n_radial,
+                    radial_embedding_scale=args.radial_embedding_scale,
+                    symmetrize_preds=args.symmetrize_preds,
                     train_on_irrep_parts=args.train_on_irrep_parts,
-                    normalize_blocks=args.normalize_blocks,
-                    separate_shifted_self=args.separate_shifted_self,
-                    distance_magnitude_normalization=args.distance_magnitude_normalization,
-                    distance_norm_coeffs=distance_norm_coeffs,
+                    enable_energy=args.enable_energy,
+                    train_on_energy=args.train_on_energy,
+                    enable_num_electrons=args.enable_num_electrons,
+                    train_on_num_electrons=args.train_on_num_electrons,
+                    loss_coef_observables=args.loss_coef_observables,
+                    enable_forces=args.enable_forces,
+                    train_on_forces=args.train_on_forces,
+                    loss_coef_forces=args.loss_coef_forces,
                 )
                 benchmark_add(
                     "eval_total",
                     time.perf_counter() - t_eval if args.benchmark else 0.0,
                 )
 
-            target_scheduler_loss = val_eval["loss"] if do_log else train_loss
-            scheduler.step(target_scheduler_loss)
+            scheduler.step(float(val_eval["loss"]) if do_log else train_loss)
             current_lr = optimizer.param_groups[0]["lr"]
-
             history["train_loss"].append(train_loss)
             history["val_loss"].append(
                 float(val_eval["loss"]) if do_log else float("nan")
@@ -1615,7 +1959,6 @@ def main() -> None:
                 else float("nan")
             )
 
-            # Best checkpoint by evaluation loss when available.
             score = float(val_eval["loss"]) if do_log else train_loss
             if score < best_score:
                 best_score = score
@@ -1650,89 +1993,118 @@ def main() -> None:
                 print(f"\n{'=' * 60}")
                 print(f"EPOCH {epoch + 1}/{args.num_epochs}  |  lr={current_lr:.6e}")
                 print(f"{'=' * 60}")
+                irrep_losses_for_print = None
+                if args.train_on_irrep_parts:
+                    irrep_losses_for_print = {
+                        key: torch.tensor(value / denom)
+                        for key, value in train_irrep_losses_total.items()
+                    }
                 log_detailed_training_metrics(
                     avg_epoch_time=avg_epoch_time,
                     epochs_since_last_log=epochs_since_last_log,
                     time_elapsed=time_elapsed,
                     loss_value=train_loss,
                     detailed_metrics=val_eval["detailed"],
-                    irrep_losses=(
-                        {
-                            k: torch.tensor(v / max(len(train_samples), 1))
-                            for k, v in train_irrep_losses_total.items()
-                        }
-                        if args.train_on_irrep_parts
-                        else None
-                    ),
+                    irrep_losses=irrep_losses_for_print,
                 )
-                if args.log_per_irrep_metrics and val_eval["per_irrep"]:
-                    log_per_irrep_metrics(
-                        "Validation Per-Irrep Metrics:",
-                        all_irreps,
-                        val_eval["per_irrep"],
-                    )
+                if args.log_per_irrep_metrics:
+                    for matrix_name in matrix_targets:
+                        per_irrep = val_eval["per_irrep_by_name"].get(matrix_name, {})
+                        if per_irrep:
+                            log_per_irrep_metrics(
+                                f"Validation Per-Irrep Metrics ({matrix_name}):",
+                                all_irreps,
+                                per_irrep,
+                                metric_prefix=irrep_prefix_by_matrix.get(
+                                    matrix_name, ""
+                                ),
+                            )
 
-                # frame from first eval sample
                 if (
-                    val_eval["first_pred_metrics"] is not None
+                    val_eval["first_pred_metrics_by_name"] is not None
                     and val_eval["first_sample"] is not None
                 ):
                     fs = val_eval["first_sample"]
-                    target_for_eval = (
-                        fs["target_H_matrix_raw"]
-                        if args.distance_magnitude_normalization
-                        else fs["target_H_matrix"]
-                    )
-                    try:
-                        save_hamiltonian_frame_to_disk(
-                            val_eval["first_pred_metrics"],
-                            target_for_eval,
-                            fs["target_overlap"],
-                            fs["atoms_list"],
-                            mapper.orbital_cfg,
-                            frame_output_dir,
-                            epoch,
-                            sx=0,
-                            sy=0,
-                            sz=0,
-                            dynamic_range=False,
-                            diff_dynamic_range=True,
-                            partial_train=None,
-                            percentile=99.0,
-                            max_atoms=(
-                                args.video_max_atoms
-                                if args.video_max_atoms is not None
-                                and args.video_max_atoms > 0
-                                else None
-                            ),
-                        )
-                    except Exception as exc:
-                        print(f"[WARN] Could not save frame for epoch {epoch}: {exc}")
+                    for matrix_name in matrix_targets:
+                        try:
+                            save_hamiltonian_frame_to_disk(
+                                val_eval["first_pred_metrics_by_name"][matrix_name],
+                                fs["target_matrices"][matrix_name],
+                                (
+                                    fs["target_overlap"]
+                                    if matrix_name == "hamiltonian"
+                                    else None
+                                ),
+                                fs["atoms_list"],
+                                mapper.orbital_cfg,
+                                matrix_frame_output_dirs[matrix_name],
+                                epoch,
+                                sx=0,
+                                sy=0,
+                                sz=0,
+                                dynamic_range=False,
+                                diff_dynamic_range=True,
+                                percentile=99.0,
+                                matrix_label=matrix_alias.get(matrix_name, matrix_name),
+                                max_atoms=(
+                                    args.video_max_atoms
+                                    if args.video_max_atoms is not None
+                                    and args.video_max_atoms > 0
+                                    else None
+                                ),
+                            )
+                        except Exception as exc:
+                            print(
+                                f"[WARN] Could not save {matrix_name} frame for epoch {epoch}: {exc}"
+                            )
 
-                t_wandb = time.perf_counter() if args.benchmark else 0.0
-                wandb.log(
+                epoch_wandb_log.update(
                     build_wandb_detailed_metrics_log(
                         epoch_zero_based=epoch,
                         loss_value=train_loss,
                         detailed_metrics=val_eval["detailed"],
                     )
                 )
-                if val_eval["per_irrep"]:
-                    wandb.log(
-                        build_wandb_per_irrep_metrics_log(
-                            epoch_zero_based=epoch,
-                            all_irreps=all_irreps,
-                            per_irrep_metrics=val_eval["per_irrep"],
+                basic_by_name = val_eval["basic_by_name"]
+                if "hamiltonian" in basic_by_name:
+                    epoch_wandb_log["mae_H"] = basic_by_name["hamiltonian"]["mae"]
+                    epoch_wandb_log["mse_H"] = basic_by_name["hamiltonian"]["mse"]
+                if "overlap" in basic_by_name:
+                    epoch_wandb_log["mae_S"] = basic_by_name["overlap"]["mae"]
+                    epoch_wandb_log["mse_S"] = basic_by_name["overlap"]["mse"]
+                if "density" in basic_by_name:
+                    epoch_wandb_log["mae_D"] = basic_by_name["density"]["mae"]
+                    epoch_wandb_log["mse_D"] = basic_by_name["density"]["mse"]
+                if (
+                    val_eval["forces_mae"] is not None
+                    and val_eval["forces_mse"] is not None
+                ):
+                    epoch_wandb_log["mae_F"] = val_eval["forces_mae"]
+                    epoch_wandb_log["mse_F"] = val_eval["forces_mse"]
+                if val_eval["energy_mae"] is not None:
+                    epoch_wandb_log["val/energy_mae"] = val_eval["energy_mae"]
+                if val_eval["num_electrons_mae"] is not None:
+                    epoch_wandb_log["val/num_electrons_mae"] = val_eval[
+                        "num_electrons_mae"
+                    ]
+                for matrix_name in matrix_targets:
+                    per_irrep = val_eval["per_irrep_by_name"].get(matrix_name, {})
+                    if per_irrep:
+                        epoch_wandb_log.update(
+                            build_wandb_per_irrep_metrics_log(
+                                epoch_zero_based=epoch,
+                                all_irreps=all_irreps,
+                                per_irrep_metrics=per_irrep,
+                                metric_prefix=irrep_prefix_by_matrix.get(
+                                    matrix_name, ""
+                                ),
+                            )
                         )
-                    )
-                wandb.log(
-                    {
-                        "train/loss_step": train_loss,
-                        "val/loss": float(val_eval["loss"]),
-                        "lr": current_lr,
-                        "epoch": epoch,
-                    }
-                )
+                epoch_wandb_log["val/loss"] = float(val_eval["loss"])
+                epoch_wandb_log["lr"] = current_lr
+
+                t_wandb = time.perf_counter() if args.benchmark else 0.0
+                wandb.log(epoch_wandb_log)
                 benchmark_add(
                     "wandb_log",
                     time.perf_counter() - t_wandb if args.benchmark else 0.0,
@@ -1754,122 +2126,164 @@ def main() -> None:
     print("FINAL EVALUATION")
     print("=" * 80)
 
-    # Final eval on validation split if available, otherwise train.
     final_eval = evaluate_split(
         network=network,
         samples=val_samples if len(val_samples) > 0 else train_samples,
         mapper=mapper,
         all_irreps=all_irreps,
+        matrix_targets=matrix_targets,
+        sh_irreps=sh_irreps,
+        cutoff_radius=args.cutoff_radius,
+        n_radial=args.n_radial,
+        radial_embedding_scale=args.radial_embedding_scale,
+        symmetrize_preds=args.symmetrize_preds,
         train_on_irrep_parts=args.train_on_irrep_parts,
-        normalize_blocks=args.normalize_blocks,
-        separate_shifted_self=args.separate_shifted_self,
-        distance_magnitude_normalization=args.distance_magnitude_normalization,
-        distance_norm_coeffs=distance_norm_coeffs,
+        enable_energy=args.enable_energy,
+        train_on_energy=args.train_on_energy,
+        enable_num_electrons=args.enable_num_electrons,
+        train_on_num_electrons=args.train_on_num_electrons,
+        loss_coef_observables=args.loss_coef_observables,
+        enable_forces=args.enable_forces,
+        train_on_forces=args.train_on_forces,
+        loss_coef_forces=args.loss_coef_forces,
     )
 
-    final_detailed_metrics = (
-        final_eval["detailed"]
-        if final_eval["detailed"]
-        else {
-            "mae": 0.0,
-            "mse": 0.0,
-            "mae_mod": 0.0,
-            "mse_mod": 0.0,
-            "mu_H": 0.0,
-            "correction_mae": 0.0,
-            "correction_mse": 0.0,
-        }
-    )
+    final_detailed_metrics = final_eval["detailed"] or {
+        "mae": 0.0,
+        "mse": 0.0,
+        "mae_mod": 0.0,
+        "mse_mod": 0.0,
+        "mu_H": 0.0,
+        "correction_mae": 0.0,
+        "correction_mse": 0.0,
+    }
     log_final_metrics(final_detailed_metrics)
 
-    final_metrics = {f"final/{k}": float(v) for k, v in final_detailed_metrics.items()}
+    final_metrics = {
+        "final/mae_H": final_detailed_metrics["mae"],
+        "final/mse_H": final_detailed_metrics["mse"],
+        "final/mae_H_mod": final_detailed_metrics["mae_mod"],
+        "final/mse_H_mod": final_detailed_metrics["mse_mod"],
+        "final/mu_H": final_detailed_metrics["mu_H"],
+        "final/correction_mae": final_detailed_metrics["correction_mae"],
+        "final/correction_mse": final_detailed_metrics["correction_mse"],
+    }
+    basic_by_name = final_eval["basic_by_name"]
+    if "overlap" in basic_by_name:
+        final_metrics["final/mae_S"] = basic_by_name["overlap"]["mae"]
+        final_metrics["final/mse_S"] = basic_by_name["overlap"]["mse"]
+    if "density" in basic_by_name:
+        final_metrics["final/mae_D"] = basic_by_name["density"]["mae"]
+        final_metrics["final/mse_D"] = basic_by_name["density"]["mse"]
+    if final_eval["energy_mae"] is not None:
+        final_metrics["final/energy_mae"] = final_eval["energy_mae"]
+    if final_eval["num_electrons_mae"] is not None:
+        final_metrics["final/num_electrons_mae"] = final_eval["num_electrons_mae"]
+    if final_eval["forces_mae"] is not None and final_eval["forces_mse"] is not None:
+        final_metrics["final/mae_F"] = final_eval["forces_mae"]
+        final_metrics["final/mse_F"] = final_eval["forces_mse"]
 
-    # Representative sample diagnostics.
-    if (
-        final_eval["first_sample"] is not None
-        and final_eval["first_pred_metrics"] is not None
-    ):
-        fs = final_eval["first_sample"]
-        pred_metrics = final_eval["first_pred_metrics"]
-        target_for_eval = (
-            fs["target_H_matrix_raw"]
-            if args.distance_magnitude_normalization
-            else fs["target_H_matrix"]
-        )
+    fs = final_eval["first_sample"]
+    pred_metrics_by_name = final_eval["first_pred_metrics_by_name"]
+    if fs is not None and pred_metrics_by_name is not None:
+        if "hamiltonian" in pred_metrics_by_name:
+            dos_plot_path = run_checkpoint_dir / "dos_comparison_final.png"
+            try:
+                dos_metrics = save_dos_comparison_plot(
+                    H_pred=pred_metrics_by_name["hamiltonian"],
+                    H_gt=fs["target_matrices"]["hamiltonian"],
+                    S=fs["target_overlap"],
+                    output_path=dos_plot_path,
+                    sigma=0.2,
+                    bin_width=0.1,
+                    title="DOS Comparison (Representative)",
+                )
+                for k, v in dos_metrics.items():
+                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                        final_metrics[f"final/{k}"] = float(v)
+                wandb.log(
+                    {"final/dos_comparison_plot": wandb.Image(str(dos_plot_path))}
+                )
+            except Exception as exc:
+                print(f"[WARN] Could not generate DOS comparison plot: {exc}")
 
-        # DOS/eigen diagnostics.
-        dos_plot_path = run_checkpoint_dir / "dos_comparison_final.png"
-        try:
-            dos_metrics = save_dos_comparison_plot(
-                H_pred=pred_metrics,
-                H_gt=target_for_eval,
-                S=fs["target_overlap"],
-                output_path=dos_plot_path,
-                sigma=0.2,
-                bin_width=0.1,
-                title="DOS Comparison (Representative)",
+        for matrix_name in matrix_targets:
+            dist_curve = compute_distance_error_curve(
+                H_pred=pred_metrics_by_name[matrix_name],
+                H_gt=fs["target_matrices"][matrix_name],
+                positions=fs["positions"],
+                box=fs["box"],
+                n_bins=16,
             )
-            for k, v in dos_metrics.items():
-                if isinstance(v, (int, float)) and not isinstance(v, bool):
-                    final_metrics[f"final/{k}"] = float(v)
-            wandb.log({"final/dos_comparison_plot": wandb.Image(str(dos_plot_path))})
-            print(f"  DOS plot saved: {dos_plot_path}")
-        except Exception as exc:
-            print(f"[WARN] Could not generate DOS comparison plot: {exc}")
-
-        # Distance curve.
-        dist_curve = compute_distance_error_curve(
-            H_pred=pred_metrics,
-            H_gt=target_for_eval,
-            positions=fs["positions"],
-            box=fs["box"],
-            partial_train=None,
-            n_bins=64,
-        )
-        if dist_curve is not None:
-            curve_json_path = run_checkpoint_dir / "distance_error_curve.json"
-            curve_plot_path = run_checkpoint_dir / "distance_error_curve.png"
-            with open(curve_json_path, "w", encoding="utf-8") as f:
-                json.dump(dist_curve, f, indent=2)
-            save_distance_error_curve_plot(
-                dist_curve,
-                curve_plot_path,
-                title="Distance Error Curves (Final, representative)",
-            )
-            wandb.log({"distance_curve/plot": wandb.Image(str(curve_plot_path))})
-            print(f"  Saved: {curve_json_path}")
-            print(f"  Saved: {curve_plot_path}")
+            if dist_curve is not None:
+                curve_json_path = (
+                    run_checkpoint_dir / f"distance_error_curve_{matrix_name}.json"
+                )
+                curve_plot_path = (
+                    run_checkpoint_dir / f"distance_error_curve_{matrix_name}.png"
+                )
+                with open(curve_json_path, "w", encoding="utf-8") as f:
+                    json.dump(dist_curve, f, indent=2)
+                save_distance_error_curve_plot(
+                    dist_curve,
+                    curve_plot_path,
+                    title=f"Distance Error Curves ({matrix_name}, Final)",
+                )
+                wandb.log(
+                    {
+                        f"distance_curve/{matrix_alias.get(matrix_name, matrix_name)}_plot": wandb.Image(
+                            str(curve_plot_path)
+                        )
+                    }
+                )
 
         if args.log_per_irrep_images:
             irrep_output_dir = run_checkpoint_dir / "per_irrep_images"
             irrep_output_dir.mkdir(parents=True, exist_ok=True)
-            for irrep in all_irreps:
-                ir_str = str(irrep)
-                try:
-                    pred_ir = split_hamiltonian_by_irrep(pred_metrics, mapper, ir_str)
-                    targ_ir = split_hamiltonian_by_irrep(
-                        target_for_eval, mapper, ir_str
-                    )
-                    visualize_hamiltonians(
-                        pred_ir,
-                        targ_ir,
-                        fs["target_overlap"],
-                        fs["atoms_list"],
-                        mapper.orbital_cfg,
-                        k_range=0,
-                        output_dir=irrep_output_dir,
-                        dynamic_range=True,
-                        diff_dynamic_range=True,
-                        per_panel_dynamic_range=True,
-                        partial_train=None,
-                        filename_prefix=f"hamiltonian_{ir_str}",
-                        percentile=99.0,
-                    )
-                    img = irrep_output_dir / f"hamiltonian_{ir_str}_sx+0_sy+0_sz+0.png"
-                    if img.exists():
-                        wandb.log({f"irrep_images/{ir_str}": wandb.Image(str(img))})
-                except Exception as exc:
-                    print(f"[WARN] Irrep image failed for {ir_str}: {exc}")
+            for matrix_name in matrix_targets:
+                for irrep in all_irreps:
+                    ir_str = str(irrep)
+                    try:
+                        pred_ir = split_hamiltonian_by_irrep(
+                            pred_metrics_by_name[matrix_name], mapper, ir_str
+                        )
+                        targ_ir = split_hamiltonian_by_irrep(
+                            fs["target_matrices"][matrix_name], mapper, ir_str
+                        )
+                        filename_prefix = f"{matrix_name}_{ir_str}"
+                        visualize_hamiltonians(
+                            pred_ir,
+                            targ_ir,
+                            (
+                                fs["target_overlap"]
+                                if matrix_name == "hamiltonian"
+                                else None
+                            ),
+                            fs["atoms_list"],
+                            mapper.orbital_cfg,
+                            k_range=0,
+                            output_dir=irrep_output_dir,
+                            dynamic_range=True,
+                            diff_dynamic_range=True,
+                            per_panel_dynamic_range=True,
+                            filename_prefix=filename_prefix,
+                            percentile=99.0,
+                        )
+                        image_path = (
+                            irrep_output_dir / f"{filename_prefix}_sx+0_sy+0_sz+0.png"
+                        )
+                        if image_path.exists():
+                            wandb.log(
+                                {
+                                    f"irrep_images/{matrix_alias.get(matrix_name, matrix_name)}/{ir_str}": wandb.Image(
+                                        str(image_path)
+                                    )
+                                }
+                            )
+                    except Exception as exc:
+                        print(
+                            f"[WARN] Irrep image failed for {matrix_name}/{ir_str}: {exc}"
+                        )
 
     wandb.log(final_metrics)
 
@@ -1884,7 +2298,8 @@ def main() -> None:
             ),
             "config": config,
             "history": history,
-            "final_metrics": final_detailed_metrics,
+            "final_metrics": final_metrics,
+            "final_metrics_hamiltonian_detailed": final_detailed_metrics,
         },
         final_model_path,
     )
@@ -1900,21 +2315,25 @@ def main() -> None:
     )
 
     if args.generate_video:
-        try:
-            video_path = run_checkpoint_dir / "training_progress.mp4"
-            compile_frames_to_video(
-                frame_output_dir,
-                video_path,
-                fps=5,
-                pattern="frame_epoch_*.png",
-                format="mp4",
-            )
-            wandb.log(
-                {"training_video": wandb.Video(str(video_path), fps=5, format="mp4")}
-            )
-            print("[OK] Training video logged to WandB")
-        except Exception as exc:
-            print(f"[WARN] Could not generate final video: {exc}")
+        for matrix_name in matrix_targets:
+            try:
+                video_path = run_checkpoint_dir / f"training_progress_{matrix_name}.mp4"
+                compile_frames_to_video(
+                    matrix_frame_output_dirs[matrix_name],
+                    video_path,
+                    fps=5,
+                    pattern="frame_epoch_*.png",
+                    format="mp4",
+                )
+                wandb.log(
+                    {
+                        f"training_video_{matrix_alias.get(matrix_name, matrix_name)}": wandb.Video(
+                            str(video_path), fps=5, format="mp4"
+                        )
+                    }
+                )
+            except Exception as exc:
+                print(f"[WARN] Could not generate final video for {matrix_name}: {exc}")
 
     wandb.finish()
 
