@@ -15,9 +15,9 @@ parameters:
   val-temp:
     value: 2700
   n-snapshots-per-temp:
-    value: 100
-  val-n-snapshots:
     value: 10
+  val-n-snapshots:
+    value: 1
 
   # Centered on run wynxo0rr / glamorous-sweep-39.
   lr:
@@ -27,20 +27,20 @@ parameters:
   loss-coef-observables:
     distribution: log_uniform_values
     min: 1e-9
-    max: 1e-8
+    max: 1e-7
   loss-coef-forces:
     distribution: log_uniform_values
-    min: 1e-8
+    min: 1e-9
     max: 1e-7
 
   n-radial:
-    values: [64, 128]
+    values: [32, 64]
   num-layers:
-    values: [2, 3]
+    values: [2]
   head-e3mlp-layers:
     values: [2, 3]
   log-interval:
-    values: [100, 200]
+    value: 100
   lr-patience:
     values: [400, 800]
 
@@ -90,23 +90,23 @@ parameters:
   e3layernorm:
     value: true
   edge-encoder-use-sh-tensor-square:
-    value: false
+    values: [true, false]
   grad-clip:
     value: 1.0
   head-use-node-embeddings-for-self-edges:
     value: true
   head-use-tensor-square:
-    value: true
+    values: [true, false]
   hidden-dim:
     value: 32
   hidden-irreps:
-    value: "32x0e+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+8x4e"
+    value: "32x0e+24x1e+24x1o+16x2e+16x2o+12x3e+12x3o+8x4e"
   l-max:
     value: 4
   lr-factor:
     value: 0.2
   num-epochs:
-    value: 16000
+    value: 100
   radial-embedding-scale:
     value: none
   separate-shifted-self:
