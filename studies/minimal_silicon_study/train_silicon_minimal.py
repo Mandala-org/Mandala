@@ -1006,11 +1006,11 @@ def move_sample_to_device(sample: dict, device: torch.device) -> dict:
         if value is None:
             return None
         if isinstance(value, torch.Tensor):
-            return value.to(device)
+            return value.to(device, non_blocking=True)
         if isinstance(value, BlockMatrix):
-            return value.to(device)
+            return value.to(device, non_blocking=True)
         if isinstance(value, IrrepsBlockData):
-            return value.to(device)
+            return value.to(device, non_blocking=True)
         if isinstance(value, dict):
             return {k: move_value(v) for k, v in value.items()}
         if isinstance(value, tuple):
@@ -1031,11 +1031,59 @@ def move_sample_to_device(sample: dict, device: torch.device) -> dict:
             moved[key] = set(value)
         elif key == "pred_trace_alignment":
             moved[key] = {
-                pair_key: (rev_key, idx.to(device))
+                pair_key: (rev_key, idx.to(device, non_blocking=True))
                 for pair_key, (rev_key, idx) in value.items()
             }
         else:
             moved[key] = move_value(value)
+    return moved
+
+
+def pin_sample_memory(sample: dict) -> dict:
+    def pin_value(value):
+        if value is None:
+            return None
+        if isinstance(value, torch.Tensor):
+            return value.pin_memory()
+        if isinstance(value, BlockMatrix):
+            return value.pin_memory()
+        if isinstance(value, IrrepsBlockData):
+            return value.pin_memory()
+        if isinstance(value, dict):
+            return {k: pin_value(v) for k, v in value.items()}
+        if isinstance(value, tuple):
+            return tuple(pin_value(v) for v in value)
+        if isinstance(value, list):
+            return [pin_value(v) for v in value]
+        return value
+
+    pinned = {}
+    for key, value in sample.items():
+        if key == "pred_lookup_static":
+            pinned[key] = value
+        elif key == "sh_non_scalar_slices":
+            pinned[key] = list(value)
+        elif key == "pred_edge_keys":
+            pinned[key] = tuple(value)
+        elif key == "pred_edge_key_set":
+            pinned[key] = set(value)
+        else:
+            pinned[key] = pin_value(value)
+    return pinned
+
+
+def move_small_sample_tensors_to_device(sample: dict, device: torch.device) -> dict:
+    moved = dict(sample)
+    for key in ("positions", "box", "forces_target"):
+        value = moved.get(key)
+        if isinstance(value, torch.Tensor):
+            moved[key] = value.to(device, non_blocking=True)
+    pred_trace_alignment = moved.get("pred_trace_alignment")
+    if pred_trace_alignment is not None:
+        moved["pred_trace_alignment"] = {
+            pair_key: (rev_key, idx.to(device, non_blocking=True))
+            for pair_key, (rev_key, idx) in pred_trace_alignment.items()
+        }
     return moved
 
 
@@ -1409,33 +1457,50 @@ def evaluate_split(
         )
         total_loss += float(loss_info["loss_total"].item())
 
-        pred_metrics_by_name = pred["pred_matrix_metrics_by_name"]
+        pred_metrics_by_name = {
+            matrix_name: matrix.detach()
+            for matrix_name, matrix in pred["pred_matrix_metrics_by_name"].items()
+        }
+        pred_irreps_metrics_by_name = {
+            matrix_name: data.detach()
+            for matrix_name, data in pred["pred_irreps_metrics_by_name"].items()
+        }
+        target_matrices_detached = {
+            matrix_name: matrix.detach()
+            for matrix_name, matrix in sample_dev["target_matrices"].items()
+        }
+        target_irreps_detached = {
+            matrix_name: data.detach()
+            for matrix_name, data in sample_dev["target_irreps_by_name"].items()
+        }
+        target_overlap_detached = sample_dev["target_overlap"].detach()
 
-        detailed = compute_detailed_metrics(
-            pred_metrics_by_name["hamiltonian"],
-            sample_dev["target_matrices"]["hamiltonian"],
-            sample_dev["target_overlap"],
-        )
-        for k, v in detailed.items():
-            detailed_sum[k] = detailed_sum.get(k, 0.0) + float(v)
-
-        for matrix_name in matrix_targets:
-            target_matrix = sample_dev["target_matrices"][matrix_name]
-            pred_matrix_metrics = pred_metrics_by_name[matrix_name]
-            basic = compute_basic_matrix_metrics(pred_matrix_metrics, target_matrix)
-            basic_acc = basic_sum_by_name.setdefault(matrix_name, {})
-            for k, v in basic.items():
-                basic_acc[k] = basic_acc.get(k, 0.0) + float(v)
-
-            per_irrep = compute_irrep_metrics(
-                pred["pred_irreps_metrics_by_name"][matrix_name],
-                sample_dev["target_irreps_by_name"][matrix_name],
-                all_irreps,
-                mapper,
+        with torch.no_grad():
+            detailed = compute_detailed_metrics(
+                pred_metrics_by_name["hamiltonian"],
+                target_matrices_detached["hamiltonian"],
+                target_overlap_detached,
             )
-            per_irrep_acc = per_irrep_sum_by_name.setdefault(matrix_name, {})
-            for k, v in per_irrep.items():
-                per_irrep_acc[k] = per_irrep_acc.get(k, 0.0) + float(v)
+            for k, v in detailed.items():
+                detailed_sum[k] = detailed_sum.get(k, 0.0) + float(v)
+
+            for matrix_name in matrix_targets:
+                target_matrix = target_matrices_detached[matrix_name]
+                pred_matrix_metrics = pred_metrics_by_name[matrix_name]
+                basic = compute_basic_matrix_metrics(pred_matrix_metrics, target_matrix)
+                basic_acc = basic_sum_by_name.setdefault(matrix_name, {})
+                for k, v in basic.items():
+                    basic_acc[k] = basic_acc.get(k, 0.0) + float(v)
+
+                per_irrep = compute_irrep_metrics(
+                    pred_irreps_metrics_by_name[matrix_name],
+                    target_irreps_detached[matrix_name],
+                    all_irreps,
+                    mapper,
+                )
+                per_irrep_acc = per_irrep_sum_by_name.setdefault(matrix_name, {})
+                for k, v in per_irrep.items():
+                    per_irrep_acc[k] = per_irrep_acc.get(k, 0.0) + float(v)
 
         if loss_info["forces_mae"] is not None and loss_info["forces_mse"] is not None:
             forces_mae_sum += float(loss_info["forces_mae"].item())
@@ -1790,34 +1855,37 @@ def main() -> None:
         print("[DATA] preprocessing train samples...")
     train_samples = []
     for sample_idx, (x, y) in enumerate(train_ds):
-        train_samples.append(
-            preprocess_sample(
-                x=x,
-                y=y,
-                mapper=mapper_cpu,
-                sh_irreps=sh_irreps,
-                n_radial=args.n_radial,
-                radial_embedding_scale=args.radial_embedding_scale,
-                training_unit=args.training_unit,
-                hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
-                cutoff_radius=args.cutoff_radius,
-                apply_cutoff_to_targets=args.apply_cutoff_to_targets,
-                orbital_selection=orbital_selection_obj,
-                matrix_targets=matrix_targets,
-                enable_forces=args.enable_forces,
-                require_exact_edge_match=args.require_exact_edge_match,
-                log_data=args.log_data and sample_idx == 0,
-                log_model=args.log_model and sample_idx == 0,
-                device=torch.device("cpu"),
-                torch_dtype=torch_dtype,
-            )
+        sample = preprocess_sample(
+            x=x,
+            y=y,
+            mapper=mapper_cpu,
+            sh_irreps=sh_irreps,
+            n_radial=args.n_radial,
+            radial_embedding_scale=args.radial_embedding_scale,
+            training_unit=args.training_unit,
+            hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
+            cutoff_radius=args.cutoff_radius,
+            apply_cutoff_to_targets=args.apply_cutoff_to_targets,
+            orbital_selection=orbital_selection_obj,
+            matrix_targets=matrix_targets,
+            enable_forces=args.enable_forces,
+            require_exact_edge_match=args.require_exact_edge_match,
+            log_data=args.log_data and sample_idx == 0,
+            log_model=args.log_model and sample_idx == 0,
+            device=torch.device("cpu"),
+            torch_dtype=torch_dtype,
         )
+        if device.type == "cuda":
+            sample = pin_sample_memory(sample)
+            sample = move_small_sample_tensors_to_device(sample, device)
+        train_samples.append(sample)
 
     if args.log_data:
         print("[DATA] preprocessing val samples...")
     val_iterable = val_ds if val_ds is not None else []
-    val_samples = [
-        preprocess_sample(
+    val_samples = []
+    for x, y in val_iterable:
+        sample = preprocess_sample(
             x=x,
             y=y,
             mapper=mapper_cpu,
@@ -1837,8 +1905,10 @@ def main() -> None:
             device=torch.device("cpu"),
             torch_dtype=torch_dtype,
         )
-        for (x, y) in val_iterable
-    ]
+        if device.type == "cuda":
+            sample = pin_sample_memory(sample)
+            sample = move_small_sample_tensors_to_device(sample, device)
+        val_samples.append(sample)
 
     if args.hidden_irreps is not None:
         hidden_irreps = Irreps(args.hidden_irreps)
@@ -1870,6 +1940,9 @@ def main() -> None:
             separate_shifted_self=args.separate_shifted_self,
             use_e3layernorm=args.e3layernorm,
         ).to(device=device, dtype=torch_dtype)
+    if hasattr(torch, "compile"):
+        network = torch.compile(network, dynamic=True)
+    network_for_ckpt = network._orig_mod if hasattr(network, "_orig_mod") else network
     if args.log_model:
         print("[OK] Network architecture complete.")
 
@@ -2137,7 +2210,7 @@ def main() -> None:
                 torch.save(
                     {
                         "epoch": epoch,
-                        "model_state_dict": network.state_dict(),
+                        "model_state_dict": network_for_ckpt.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "loss": score,
                         "config": config,

@@ -124,14 +124,33 @@ class BlockMatrix:
         return off_dict
 
     # --------------- device handling --------------------------------------- #
-    def to(self, device):
-        new_blocks = {k: v.to(device) for k, v in self.pair_blocks.items()}
-        new_edges = {k: v.to(device) for k, v in self.pair_edges.items()}
+    def to(self, device, non_blocking: bool = False):
+        new_blocks = {
+            k: v.to(device, non_blocking=non_blocking)
+            for k, v in self.pair_blocks.items()
+        }
+        new_edges = {
+            k: v.to(device, non_blocking=non_blocking)
+            for k, v in self.pair_edges.items()
+        }
         return BlockMatrix(
             self.atoms,
             self.atom_counts,
             new_blocks,
             new_edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
+        )
+
+    def pin_memory(self) -> "BlockMatrix":
+        pinned_blocks = {k: v.pin_memory() for k, v in self.pair_blocks.items()}
+        pinned_edges = {k: v.pin_memory() for k, v in self.pair_edges.items()}
+        return BlockMatrix(
+            self.atoms,
+            self.atom_counts,
+            pinned_blocks,
+            pinned_edges,
             self.lookup,
             self.orbital_cfg,
             self.basis,
@@ -760,14 +779,33 @@ class IrrepsBlockData:
     basis: str = "e3nn"  # always "e3nn"
 
     # -------- device -------- #
-    def to(self, device):
-        vecs = {k: v.to(device) for k, v in self.pair_vectors.items()}
-        edges = {k: v.to(device) for k, v in self.pair_edges.items()}
+    def to(self, device, non_blocking: bool = False):
+        vecs = {
+            k: v.to(device, non_blocking=non_blocking)
+            for k, v in self.pair_vectors.items()
+        }
+        edges = {
+            k: v.to(device, non_blocking=non_blocking)
+            for k, v in self.pair_edges.items()
+        }
         return IrrepsBlockData(
             self.atoms,
             self.atom_counts,
             vecs,
             edges,
+            self.lookup,
+            self.orbital_cfg,
+            self.basis,
+        )
+
+    def pin_memory(self) -> "IrrepsBlockData":
+        pinned_vecs = {k: v.pin_memory() for k, v in self.pair_vectors.items()}
+        pinned_edges = {k: v.pin_memory() for k, v in self.pair_edges.items()}
+        return IrrepsBlockData(
+            self.atoms,
+            self.atom_counts,
+            pinned_vecs,
+            pinned_edges,
             self.lookup,
             self.orbital_cfg,
             self.basis,
