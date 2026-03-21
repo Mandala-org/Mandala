@@ -1362,6 +1362,7 @@ def evaluate_split(
     network: MinimalNetwork,
     samples: list[dict],
     mapper: BlockIrrepMapper,
+    mapper_cpu: BlockIrrepMapper,
     all_irreps: list,
     device: torch.device,
     *,
@@ -1498,7 +1499,7 @@ def evaluate_split(
                     pred_irreps_metrics_by_name[matrix_name],
                     target_irreps_detached[matrix_name],
                     all_irreps,
-                    mapper,
+                    mapper_cpu,
                 )
                 per_irrep_acc = per_irrep_sum_by_name.setdefault(matrix_name, {})
                 for k, v in per_irrep.items():
@@ -1720,8 +1721,11 @@ def main() -> None:
         cuda_index = device.index if device.index is not None else 0
         torch.cuda.set_device(cuda_index)
         warmup_device = torch.device(f"cuda:{cuda_index}")
-        warmup = torch.zeros((1, 1), device=warmup_device, dtype=torch_dtype)
-        _ = warmup @ warmup
+        warmup = torch.zeros(
+            (1, 1), device=warmup_device, dtype=torch_dtype, requires_grad=True
+        )
+        warmup_loss = (warmup @ warmup).sum()
+        warmup_loss.backward()
         torch.cuda.synchronize()
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
 
@@ -2182,6 +2186,7 @@ def main() -> None:
                     network=network,
                     samples=val_samples if len(val_samples) > 0 else train_samples,
                     mapper=mapper,
+                    mapper_cpu=mapper_cpu,
                     all_irreps=all_irreps,
                     device=device,
                     matrix_targets=matrix_targets,
@@ -2386,6 +2391,7 @@ def main() -> None:
         network=network,
         samples=val_samples if len(val_samples) > 0 else train_samples,
         mapper=mapper,
+        mapper_cpu=mapper_cpu,
         all_irreps=all_irreps,
         device=device,
         matrix_targets=matrix_targets,
