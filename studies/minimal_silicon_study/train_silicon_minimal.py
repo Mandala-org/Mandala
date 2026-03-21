@@ -1995,11 +1995,11 @@ def main() -> None:
         if args.benchmark and name in benchmark_accum:
             benchmark_accum[name] += max(float(dt), 0.0)
 
-    def benchmark_report() -> None:
+    def benchmark_report(epoch_zero_based: int) -> None:
         if not args.benchmark or benchmark_epochs <= 0:
             return
         epoch_ms = benchmark_accum["epoch_total"] * 1000.0 / benchmark_epochs
-        print("\n[BENCHMARK]")
+        print(f"\n[BENCHMARK EPOCH {epoch_zero_based + 1}/{args.num_epochs}]")
         print(f"  averaged over {benchmark_epochs} epoch(s): {epoch_ms:.3f} ms/epoch")
         for k in benchmark_order:
             ms = benchmark_accum[k] * 1000.0 / benchmark_epochs
@@ -2345,13 +2345,13 @@ def main() -> None:
                     time.perf_counter() - t_wandb if args.benchmark else 0.0,
                 )
 
-            if args.benchmark:
-                benchmark_add("epoch_total", time.perf_counter() - epoch_t0)
-                benchmark_epochs += 1
-                if do_log:
-                    benchmark_report()
-                    benchmark_accum = {k: 0.0 for k in benchmark_order}
-                    benchmark_epochs = 0
+                if args.benchmark:
+                    benchmark_add("epoch_total", time.perf_counter() - epoch_t0)
+                    benchmark_epochs += 1
+                    if do_log:
+                        benchmark_report(epoch)
+                        benchmark_accum = {k: 0.0 for k in benchmark_order}
+                        benchmark_epochs = 0
 
     except KeyboardInterrupt:
         print("\n[INFO] Training interrupted by user; running final evaluation.")
