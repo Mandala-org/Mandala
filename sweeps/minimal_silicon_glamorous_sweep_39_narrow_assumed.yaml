@@ -36,7 +36,7 @@ parameters:
   n-radial:
     values: [32, 64]
   num-layers:
-    values: [2]
+    values: [2, 3]
   head-e3mlp-layers:
     values: [2, 3]
   log-interval:
