@@ -47,7 +47,11 @@ from data.factory import DatasetFactory
 from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix, IrrepsBlockData
 from core.block_irrep_mapper import BlockIrrepMapper
-from core.sparse_math import trace_matmul_sparse_block_matrix
+from core.sparse_math import (
+    build_trace_alignment,
+    build_trace_alignment_from_pair_edges,
+    trace_matmul_sparse_block_matrix_aligned,
+)
 from net.common import Config as NetConfig, build_hidden_irreps
 
 from common import (
@@ -674,8 +678,12 @@ def preprocess_sample(
         matrix_name: target_matrices[matrix_name].to_vectors(mapper)
         for matrix_name in matrix_targets
     }
-    energy_target = trace_matmul_sparse_block_matrix(H, D)
-    num_electrons_target = trace_matmul_sparse_block_matrix(D, S)
+    target_hd_alignment = build_trace_alignment(H, D)
+    target_ds_alignment = build_trace_alignment(D, S)
+    energy_target = trace_matmul_sparse_block_matrix_aligned(H, D, target_hd_alignment)
+    num_electrons_target = trace_matmul_sparse_block_matrix_aligned(
+        D, S, target_ds_alignment
+    )
 
     def compute_block_matrix_max_distance(block_matrix: BlockMatrix) -> float:
         max_dist = 0.0
@@ -941,6 +949,7 @@ def preprocess_sample(
     irrep_projection_cache = build_irrep_projection_cache(
         target_irreps_by_name["hamiltonian"], all_irreps
     )
+    pred_trace_alignment = build_trace_alignment_from_pair_edges(pred_pair_edges_static)
     target_irrep_blocks_cache_by_name = {}
     for matrix_name in matrix_targets:
         matrix_cache = {}
@@ -978,6 +987,7 @@ def preprocess_sample(
         "pred_lookup_static": pred_lookup_static,
         "pred_edge_keys": tuple(pred_edge_keys),
         "pred_edge_key_set": set(pred_edge_keys),
+        "pred_trace_alignment": pred_trace_alignment,
         "sh_non_scalar_slices": sh_non_scalar_slices,
         "irrep_projection_cache": irrep_projection_cache,
         "target_irrep_blocks_cache_by_name": target_irrep_blocks_cache_by_name,
@@ -1069,6 +1079,11 @@ def move_sample_to_device(sample: dict, device: torch.device) -> dict:
                 }
                 for irrep_str, cache in value.items()
             }
+        elif key == "pred_trace_alignment":
+            moved[key] = {
+                pair_key: (rev_key, idx.to(device))
+                for pair_key, (rev_key, idx) in value.items()
+            }
         else:
             moved[key] = move_value(value)
     return moved
@@ -1123,13 +1138,15 @@ def wrap_raw_predictions_to_irreps(
 def compute_forces_from_pred_matrices(
     pred_matrix_by_name: dict[str, BlockMatrix],
     positions_tensor: torch.Tensor,
+    pred_trace_alignment,
     *,
     create_graph: bool,
     retain_graph: bool,
 ) -> torch.Tensor:
-    energy = trace_matmul_sparse_block_matrix(
+    energy = trace_matmul_sparse_block_matrix_aligned(
         pred_matrix_by_name["hamiltonian"],
         pred_matrix_by_name["density"],
+        pred_trace_alignment,
     )
     grad_pos = torch.autograd.grad(
         energy,
@@ -1240,9 +1257,10 @@ def compute_loss_for_sample(
         and "hamiltonian" in pred_matrix_observables_by_name
         and "density" in pred_matrix_observables_by_name
     ):
-        energy_pred = trace_matmul_sparse_block_matrix(
+        energy_pred = trace_matmul_sparse_block_matrix_aligned(
             pred_matrix_observables_by_name["hamiltonian"],
             pred_matrix_observables_by_name["density"],
+            sample["pred_trace_alignment"],
         )
         energy_mae = torch.abs(energy_pred - sample["energy_target"])
         if train_on_energy:
@@ -1255,9 +1273,10 @@ def compute_loss_for_sample(
         and "overlap" in pred_matrix_observables_by_name
         and "density" in pred_matrix_observables_by_name
     ):
-        num_electrons_pred = trace_matmul_sparse_block_matrix(
+        num_electrons_pred = trace_matmul_sparse_block_matrix_aligned(
             pred_matrix_observables_by_name["density"],
             pred_matrix_observables_by_name["overlap"],
+            sample["pred_trace_alignment"],
         )
         num_electrons_mae = torch.abs(
             num_electrons_pred - sample["num_electrons_target"]
@@ -1277,6 +1296,7 @@ def compute_loss_for_sample(
         forces_pred = compute_forces_from_pred_matrices(
             pred_matrix_observables_by_name,
             positions_for_forces,
+            sample["pred_trace_alignment"],
             create_graph=train_on_forces,
             retain_graph=True,
         )
@@ -1378,12 +1398,18 @@ def predict_sample(
             * 0.5
             for matrix_name in matrix_targets
         }
+        pred_irreps_metrics_by_name = {
+            matrix_name: pred_matrix_metrics_by_name[matrix_name].to_vectors(mapper)
+            for matrix_name in matrix_targets
+        }
     else:
         pred_matrix_metrics_by_name = dict(pred_matrix_norm_by_name)
+        pred_irreps_metrics_by_name = dict(pred_irreps_by_name)
 
     return {
         "raw": raw,
         "pred_irreps_by_name": pred_irreps_by_name,
+        "pred_irreps_metrics_by_name": pred_irreps_metrics_by_name,
         "pred_matrix_norm_by_name": pred_matrix_norm_by_name,
         "pred_matrix_metrics_by_name": pred_matrix_metrics_by_name,
     }
@@ -1510,7 +1536,7 @@ def evaluate_split(
                 basic_acc[k] = basic_acc.get(k, 0.0) + float(v)
 
             per_irrep = compute_irrep_metrics(
-                pred_matrix_metrics.to_vectors(mapper),
+                pred["pred_irreps_metrics_by_name"][matrix_name],
                 sample_dev["target_irreps_by_name"][matrix_name],
                 all_irreps,
                 mapper,
@@ -1603,6 +1629,10 @@ def main() -> None:
         )
     torch_dtype = getattr(torch, args.dtype)
     torch.set_default_dtype(torch_dtype)
+    if args.device.startswith("cuda") and args.dtype == "float32":
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.set_float32_matmul_precision("high")
     set_seed(args.seed)
 
     print("=" * 80)
