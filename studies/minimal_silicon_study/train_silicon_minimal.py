@@ -1940,9 +1940,6 @@ def main() -> None:
             separate_shifted_self=args.separate_shifted_self,
             use_e3layernorm=args.e3layernorm,
         ).to(device=device, dtype=torch_dtype)
-    if hasattr(torch, "compile"):
-        network = torch.compile(network, dynamic=True)
-    network_for_ckpt = network._orig_mod if hasattr(network, "_orig_mod") else network
     if args.log_model:
         print("[OK] Network architecture complete.")
 
@@ -2210,7 +2207,7 @@ def main() -> None:
                 torch.save(
                     {
                         "epoch": epoch,
-                        "model_state_dict": network_for_ckpt.state_dict(),
+                        "model_state_dict": network.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "loss": score,
                         "config": config,
