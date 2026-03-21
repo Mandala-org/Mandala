@@ -1,6 +1,6 @@
 program: studies/minimal_silicon_study/train_silicon_minimal.py
-project: mandala-minimal-silicon-study
-name: minimal-silicon-glamorous-sweep-39-narrow-assumed
+project: mandala-silicon-forces
+name: silicon-forces-glamorous-sweep-39-based
 method: bayes
 metric:
   name: mae_H
