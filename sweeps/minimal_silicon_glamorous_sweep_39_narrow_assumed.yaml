@@ -1,6 +1,6 @@
 program: studies/minimal_silicon_study/train_silicon_minimal.py
 project: mandala-silicon-forces
-name: silicon-forces-glamorous-sweep-39-based
+name: silicon-forces-glamorous-sweep-39-based-longer
 method: bayes
 metric:
   name: mae_H
@@ -106,7 +106,7 @@ parameters:
   lr-factor:
     value: 0.2
   num-epochs:
-    value: 100
+    value: 1500
   radial-embedding-scale:
     value: none
   separate-shifted-self:
