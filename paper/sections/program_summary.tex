@@ -1,0 +1,13 @@
+{\bf PROGRAM SUMMARY}
+
+\begin{small}
+\noindent
+{\em Program Title:} Mandala \\
+{\em CPC Library link to program files:} [TODO: to be added by the Technical Editor] \\
+{\em Developer's repository link:} \texttt{https://github.com/Mandala-org/Mandala} \\
+{\em Licensing provisions:} BSD-3-Clause \\
+{\em Programming language:} Python \\
+{\em Nature of problem:} Electronic-structure calculations based on Kohn-Sham density functional theory remain a central tool in computational materials science and chemistry, but their computational cost limits accessible system sizes, trajectory lengths, and hyperparameter studies. Machine-learned interatomic potentials alleviate this cost for energies and forces, yet they generally do not expose the electronic operators needed for richer observables or electronic post-processing. A complementary route is to learn sparse representations of electronic-structure matrices themselves. Such a program must support multiple atom types, changing orbital bases, periodic boundary conditions, equivariant geometric processing, and physically meaningful observable targets such as total energy and atomic forces. \\
+{\em Solution method:} Mandala represents Hamiltonian, overlap, and density matrices as atom-pair-resolved sparse block tensors and maps these blocks to irreducible E(3) representations compatible with equivariant neural networks. The package combines parser modules for electronic-structure data, basis-conversion utilities, a shared irrep mapper, graph construction routines, and configurable E(3)-equivariant message-passing models. Multi-head prediction allows simultaneous learning of several matrices, while observable-level quantities are evaluated from the predicted operators using sparse traces. Observable losses can be added during training, and force supervision is obtained through automatic differentiation of predicted energies with respect to atomic coordinates. The framework is organized to support extensibility, architecture search, and reproducible training workflows. \\
+{\em Additional comments including restrictions and unusual features:} The framework is optimized for sparse matrix learning in atomistic systems with localized orbital bases and periodic or non-periodic geometries. A distinctive feature of Mandala is the combination of operator-level learning with optional observable guidance derived from those operators, which enables a single software stack to serve both electronic-structure emulation and observable-guided atomistic applications. The package is designed to accommodate multiple data backends and a wide search space of equivariant architectures and training objectives.
+\end{small}

@@ -1,0 +1,8 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+Mandala is a scientific software framework for learning sparse electronic-structure operators with E(3)-equivariant graph neural networks. Its defining features are the explicit sparse block representation of Hamiltonian, overlap, and density matrices; the modular software layers that connect parsing, basis harmonization, irrep mapping, graph construction, model definition, and training; and the ability to supervise not only matrices themselves but also observables derived from them.
+
+The framework is designed to connect two communities that are often separated in practice. From the electronic-structure side, it retains access to operator-level information and basis-aware quantities. From the atomistic machine-learning side, it inherits the flexibility of modern equivariant message passing, multitask learning, and automated hyperparameter search. By combining these perspectives, Mandala supports workflows in which one can train on matrix fidelity, total-energy fidelity, electron-count fidelity, and force fidelity within one coherent implementation.
+
+Quantitative benchmarks on [TODO: list systems], scientific case studies for [TODO: list applications], and comparative assessments against [TODO: list baseline methods] are reported in Section [TODO: numerical results section]. Mandala is therefore positioned not merely as a prototype model, but as a modular platform for operator-level machine learning in electronic-structure simulation.

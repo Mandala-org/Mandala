@@ -110,6 +110,7 @@ BOOLEAN_ARG_NAMES = [
     "train_on_num_electrons",
     "enable_forces",
     "train_on_forces",
+    "rescale_density_to_num_electrons",
     "symmetrize_preds",
     "adaptive_log_interval",
     "benchmark",
@@ -301,6 +302,16 @@ def parse_args() -> argparse.Namespace:
             "Symmetrize predicted H/S/D matrices as (M + M^T) / 2 for "
             "matrix metrics/visualizations (default: True). Observable and "
             "force computations use unsymmetrized predictions."
+        ),
+    )
+    parser.add_argument(
+        "--rescale-density-to-num-electrons",
+        type=parse_bool,
+        default=False,
+        help=(
+            "Post-prediction metrics-only correction: rescale predicted density so "
+            "Tr(D_pred S_pred) matches the target number of electrons. "
+            "Training losses and observable losses stay on the raw prediction."
         ),
     )
     parser.add_argument(
@@ -1272,6 +1283,7 @@ def compute_loss_for_sample(
         "loss_forces_weighted": loss_forces_weighted,
         "energy_mae": energy_mae,
         "num_electrons_mae": num_electrons_mae,
+        "num_electrons_mae_pre_correction": num_electrons_mae,
         "forces_mae": forces_mae,
         "forces_mse": forces_mse,
     }
@@ -1288,6 +1300,7 @@ def predict_sample(
     n_radial: int,
     radial_embedding_scale: str,
     symmetrize_preds: bool,
+    rescale_density_to_num_electrons: bool,
     verbose_forward: bool,
     log_forward: bool,
     log_to_wandb: bool = False,
@@ -1349,12 +1362,44 @@ def predict_sample(
         pred_matrix_metrics_by_name = dict(pred_matrix_norm_by_name)
         pred_irreps_metrics_by_name = dict(pred_irreps_by_name)
 
+    density_rescale_factor = None
+    num_electrons_pred_pre_correction = None
+    num_electrons_mae_pre_correction = None
+    if (
+        rescale_density_to_num_electrons
+        and "density" in pred_matrix_metrics_by_name
+        and "overlap" in pred_matrix_metrics_by_name
+    ):
+        num_electrons_pred_pre_correction = trace_matmul_sparse_block_matrix_aligned(
+            pred_matrix_metrics_by_name["density"],
+            pred_matrix_metrics_by_name["overlap"],
+            sample["pred_trace_alignment"],
+        )
+        num_electrons_mae_pre_correction = torch.abs(
+            num_electrons_pred_pre_correction - sample["num_electrons_target"]
+        )
+        pred_safe = torch.where(
+            torch.abs(num_electrons_pred_pre_correction) > 1e-12,
+            num_electrons_pred_pre_correction,
+            torch.full_like(num_electrons_pred_pre_correction, 1e-12),
+        )
+        density_rescale_factor = sample["num_electrons_target"] / pred_safe
+        pred_matrix_metrics_by_name["density"] = pred_matrix_metrics_by_name[
+            "density"
+        ] * float(density_rescale_factor.item())
+        pred_irreps_metrics_by_name["density"] = pred_matrix_metrics_by_name[
+            "density"
+        ].to_vectors(mapper)
+
     return {
         "raw": raw,
         "pred_irreps_by_name": pred_irreps_by_name,
         "pred_irreps_metrics_by_name": pred_irreps_metrics_by_name,
         "pred_matrix_norm_by_name": pred_matrix_norm_by_name,
         "pred_matrix_metrics_by_name": pred_matrix_metrics_by_name,
+        "density_rescale_factor": density_rescale_factor,
+        "num_electrons_pred_pre_correction": num_electrons_pred_pre_correction,
+        "num_electrons_mae_pre_correction": num_electrons_mae_pre_correction,
     }
 
 
@@ -1372,6 +1417,7 @@ def evaluate_split(
     n_radial: int,
     radial_embedding_scale: str,
     symmetrize_preds: bool,
+    rescale_density_to_num_electrons: bool,
     enable_energy: bool,
     train_on_energy: bool,
     enable_num_electrons: bool,
@@ -1400,6 +1446,7 @@ def evaluate_split(
             "forces_mse": None,
             "energy_mae": None,
             "num_electrons_mae": None,
+            "num_electrons_mae_pre_correction": None,
             "first_pred_metrics_by_name": None,
             "first_sample": None,
         }
@@ -1416,6 +1463,8 @@ def evaluate_split(
     energy_count = 0
     num_electrons_mae_sum = 0.0
     num_electrons_count = 0
+    num_electrons_mae_pre_correction_sum = 0.0
+    num_electrons_pre_correction_count = 0
     first_pred_metrics_by_name = None
     first_sample = None
 
@@ -1436,6 +1485,7 @@ def evaluate_split(
             n_radial=n_radial,
             radial_embedding_scale=radial_embedding_scale,
             symmetrize_preds=symmetrize_preds,
+            rescale_density_to_num_electrons=rescale_density_to_num_electrons,
             verbose_forward=False,
             log_forward=False,
             positions_override=positions_eval,
@@ -1515,6 +1565,11 @@ def evaluate_split(
         if loss_info["num_electrons_mae"] is not None:
             num_electrons_mae_sum += float(loss_info["num_electrons_mae"].item())
             num_electrons_count += 1
+        if pred["num_electrons_mae_pre_correction"] is not None:
+            num_electrons_mae_pre_correction_sum += float(
+                pred["num_electrons_mae_pre_correction"].item()
+            )
+            num_electrons_pre_correction_count += 1
 
         if idx == 0:
             first_pred_metrics_by_name = pred_metrics_by_name
@@ -1549,6 +1604,11 @@ def evaluate_split(
         "num_electrons_mae": (
             num_electrons_mae_sum / num_electrons_count
             if num_electrons_count > 0
+            else None
+        ),
+        "num_electrons_mae_pre_correction": (
+            num_electrons_mae_pre_correction_sum / num_electrons_pre_correction_count
+            if num_electrons_pre_correction_count > 0
             else None
         ),
         "first_pred_metrics_by_name": first_pred_metrics_by_name,
@@ -1597,6 +1657,12 @@ def main() -> None:
     ):
         raise ValueError(
             "--train-on-forces requires hamiltonian and density in --matrix-targets."
+        )
+    if args.rescale_density_to_num_electrons and not {"overlap", "density"}.issubset(
+        set(matrix_targets)
+    ):
+        raise ValueError(
+            "--rescale-density-to-num-electrons requires overlap and density in --matrix-targets."
         )
     torch_dtype = getattr(torch, args.dtype)
     torch.set_default_dtype(torch_dtype)
@@ -1756,6 +1822,7 @@ def main() -> None:
         "enable_forces": args.enable_forces,
         "train_on_forces": args.train_on_forces,
         "loss_coef_forces": args.loss_coef_forces,
+        "rescale_density_to_num_electrons": args.rescale_density_to_num_electrons,
         "symmetrize_preds": args.symmetrize_preds,
         "split_mode": split_mode,
         "num_train": args.num_train,
@@ -2060,6 +2127,7 @@ def main() -> None:
                     n_radial=args.n_radial,
                     radial_embedding_scale=args.radial_embedding_scale,
                     symmetrize_preds=args.symmetrize_preds,
+                    rescale_density_to_num_electrons=args.rescale_density_to_num_electrons,
                     verbose_forward=args.verbose_forward,
                     log_forward=args.log_forward and should_log_now,
                     positions_override=positions_train,
@@ -2148,6 +2216,13 @@ def main() -> None:
                     epoch_wandb_log["train/num_electrons_mae"] = epoch_wandb_log.get(
                         "train/num_electrons_mae", 0.0
                     ) + float(loss_info["num_electrons_mae"].item())
+                if pred["num_electrons_mae_pre_correction"] is not None:
+                    epoch_wandb_log["train/num_electrons_mae_pre_correction"] = (
+                        epoch_wandb_log.get(
+                            "train/num_electrons_mae_pre_correction", 0.0
+                        )
+                        + float(pred["num_electrons_mae_pre_correction"].item())
+                    )
                 if (
                     loss_info["forces_mae"] is not None
                     and loss_info["forces_mse"] is not None
@@ -2177,6 +2252,7 @@ def main() -> None:
                 "forces_mse": None,
                 "energy_mae": None,
                 "num_electrons_mae": None,
+                "num_electrons_mae_pre_correction": None,
                 "first_pred_metrics_by_name": None,
                 "first_sample": None,
             }
@@ -2195,6 +2271,7 @@ def main() -> None:
                     n_radial=args.n_radial,
                     radial_embedding_scale=args.radial_embedding_scale,
                     symmetrize_preds=args.symmetrize_preds,
+                    rescale_density_to_num_electrons=args.rescale_density_to_num_electrons,
                     enable_energy=args.enable_energy,
                     train_on_energy=args.train_on_energy,
                     enable_num_electrons=args.enable_num_electrons,
@@ -2348,6 +2425,10 @@ def main() -> None:
                     epoch_wandb_log["val/num_electrons_mae"] = val_eval[
                         "num_electrons_mae"
                     ]
+                if val_eval["num_electrons_mae_pre_correction"] is not None:
+                    epoch_wandb_log["val/num_electrons_mae_pre_correction"] = val_eval[
+                        "num_electrons_mae_pre_correction"
+                    ]
                 for matrix_name in matrix_targets:
                     per_irrep = val_eval["per_irrep_by_name"].get(matrix_name, {})
                     if per_irrep:
@@ -2400,6 +2481,7 @@ def main() -> None:
         n_radial=args.n_radial,
         radial_embedding_scale=args.radial_embedding_scale,
         symmetrize_preds=args.symmetrize_preds,
+        rescale_density_to_num_electrons=args.rescale_density_to_num_electrons,
         enable_energy=args.enable_energy,
         train_on_energy=args.train_on_energy,
         enable_num_electrons=args.enable_num_electrons,
@@ -2441,6 +2523,10 @@ def main() -> None:
         final_metrics["final/energy_mae"] = final_eval["energy_mae"]
     if final_eval["num_electrons_mae"] is not None:
         final_metrics["final/num_electrons_mae"] = final_eval["num_electrons_mae"]
+    if final_eval["num_electrons_mae_pre_correction"] is not None:
+        final_metrics["final/num_electrons_mae_pre_correction"] = final_eval[
+            "num_electrons_mae_pre_correction"
+        ]
     if final_eval["forces_mae"] is not None and final_eval["forces_mse"] is not None:
         final_metrics["final/mae_F"] = final_eval["forces_mae"]
         final_metrics["final/mse_F"] = final_eval["forces_mse"]
