@@ -1,0 +1,90 @@
+\begin{thebibliography}{10}
+\expandafter\ifx\csname url\endcsname\relax
+  \def\url#1{\texttt{#1}}\fi
+\expandafter\ifx\csname urlprefix\endcsname\relax\def\urlprefix{URL }\fi
+\expandafter\ifx\csname href\endcsname\relax
+  \def\href#1#2{#2} \def\path#1{#1}\fi
+
+\bibitem{HoKo1964}
+P.~Hohenberg, W.~Kohn, {Inhomogeneous electron gas}, Phys. Rev. 136 (1964)
+  B864--B871.
+\newblock \href {https://doi.org/10.1103/PhysRev.136.B864}
+  {\path{doi:10.1103/PhysRev.136.B864}}.
+
+\bibitem{KoSh1965}
+W.~Kohn, L.~J. Sham, {Self-Consistent Equations Including Exchange and
+  Correlation Effects}, {Phys. Rev.} 140 (1965) A1133--A1138.
+\newblock \href {https://doi.org/10.1103/PhysRev.140.A1133}
+  {\path{doi:10.1103/PhysRev.140.A1133}}.
+
+\bibitem{BrVo2017}
+F.~Brockherde, L.~Vogt, L.~Li, M.~E. Tuckerman, K.~Burke, K.-R. M{\"u}ller,
+  {Bypassing the Kohn-Sham equations with machine learning}, {Nat. Commun.}
+  8~(1) (2017) 872.
+\newblock \href {https://doi.org/10.1038/s41467-017-00839-3}
+  {\path{doi:10.1038/s41467-017-00839-3}}.
+
+\bibitem{chandrasekaran_solving_2019}
+A.~Chandrasekaran, D.~Kamal, R.~Batra, C.~Kim, L.~Chen, R.~Ramprasad, Solving
+  the electronic structure problem with machine learning, npj computational
+  materials 5~(1) (2019) 22.
+\newblock \href {https://doi.org/10.1038/s41524-019-0162-7}
+  {\path{doi:10.1038/s41524-019-0162-7}}.
+
+\bibitem{TsMi2020}
+M.~Tsubaki, T.~Mizoguchi,
+  \href{https://link.aps.org/doi/10.1103/PhysRevLett.125.206401}{{Quantum Deep
+  Field: Data-Driven Wave Function, Electron Density Generation, and
+  Atomization Energy Prediction and Extrapolation with Machine Learning}},
+  {Phys. Rev. Lett.} 125 (2020) 206401.
+\newblock \href {https://doi.org/10.1103/PhysRevLett.125.206401}
+  {\path{doi:10.1103/PhysRevLett.125.206401}}.
+\newline\urlprefix\url{https://link.aps.org/doi/10.1103/PhysRevLett.125.206401}
+
+\bibitem{Shao_2023}
+X.~Shao, L.~Paetow, M.~E. Tuckerman, M.~Pavanello,
+  \href{http://dx.doi.org/10.1038/s41467-023-41953-9}{Machine learning
+  electronic structure methods based on the one-electron reduced density
+  matrix}, Nature Communications 14~(1) (Oct. 2023).
+\newblock \href {https://doi.org/10.1038/s41467-023-41953-9}
+  {\path{doi:10.1038/s41467-023-41953-9}}.
+\newline\urlprefix\url{http://dx.doi.org/10.1038/s41467-023-41953-9}
+
+\bibitem{KoKoBe22}
+E.~Kocer, T.~W. Ko, J.~Behler,
+  \href{https://www.annualreviews.org/content/journals/10.1146/annurev-physchem-082720-034254}{Neural
+  network potentials: A concise overview of methods}, Annual Review of Physical
+  Chemistry 73~(Volume 73, 2022) (2022) 163--186.
+\newblock \href
+  {https://doi.org/https://doi.org/10.1146/annurev-physchem-082720-034254}
+  {\path{doi:https://doi.org/10.1146/annurev-physchem-082720-034254}}.
+\newline\urlprefix\url{https://www.annualreviews.org/content/journals/10.1146/annurev-physchem-082720-034254}
+
+\bibitem{Rackers_2023}
+J.~A. Rackers, L.~Tecot, M.~Geiger, T.~E. Smidt,
+  \href{https://dx.doi.org/10.1088/2632-2153/acb314}{A recipe for cracking the
+  quantum scaling limit with machine learned electron densities}, Machine
+  Learning: Science and Technology 4~(1) (2023) 015027.
+\newblock \href {https://doi.org/10.1088/2632-2153/acb314}
+  {\path{doi:10.1088/2632-2153/acb314}}.
+\newline\urlprefix\url{https://dx.doi.org/10.1088/2632-2153/acb314}
+
+\bibitem{born_zur_1927}
+M.~Born, R.~Oppenheimer, {Zur Quantentheorie der Molekeln}, Ann. Phys. 389~(20)
+  (1927) 457--484.
+\newblock \href {https://doi.org/10.1002/andp.19273892002}
+  {\path{doi:10.1002/andp.19273892002}}.
+
+\bibitem{nearsightedness}
+E.~Prodan, W.~Kohn,
+  \href{https://www.pnas.org/doi/abs/10.1073/pnas.0505436102}{Nearsightedness
+  of electronic matter}, Proceedings of the National Academy of Sciences
+  102~(33) (2005) 11635--11638.
+\newblock \href
+  {http://arxiv.org/abs/https://www.pnas.org/doi/pdf/10.1073/pnas.0505436102}
+  {\path{arXiv:https://www.pnas.org/doi/pdf/10.1073/pnas.0505436102}}, \href
+  {https://doi.org/10.1073/pnas.0505436102}
+  {\path{doi:10.1073/pnas.0505436102}}.
+\newline\urlprefix\url{https://www.pnas.org/doi/abs/10.1073/pnas.0505436102}
+
+\end{thebibliography}

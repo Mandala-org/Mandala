@@ -1,0 +1,50 @@
+\documentclass[preprint,12pt,compress,numafflabel]{elsarticle}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{bm}
+
+\journal{Computer Physics Communications}
+
+\newcommand{\Tr}{\mathrm{Tr}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\Loss}{\mathcal{L}}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{MANDALA: A Modular E(3)-Equivariant Framework for Learning Sparse Electronic-Structure Matrices and Downstream Observables}
+
+\author[casus,hzdr,uwr]{Bartosz Brzoza}
+\author[casus,hzdr]{Attila Cangi}
+\author[hzdr]{Mani Lokamani}
+\author[casus,hzdr,wut]{Wiktoria Szopa}
+\author[casus,hzdr]{Zakaria Elabid}
+\author[casus,hzdr]{Vincent Martinetto}
+
+\address[casus]{Center for Advanced Systems Understanding (CASUS)}
+\address[hzdr]{Helmholtz-Zentrum Dresden-Rossendorf (HZDR)}
+\address[uwr]{Computational Intelligence Research Group,\\ Institute of Computer Science,\\ University of Wroc\l aw}
+\address[wut]{Faculty of Physics,\\ Warsaw University of Technology}
+
+\input{sections/abstract}
+
+\begin{keyword}
+Electronic structure \sep Density functional theory \sep Equivariant graph neural networks \sep Sparse matrix learning \sep Energy and force prediction \sep Scientific machine learning
+\end{keyword}
+
+\end{frontmatter}
+
+\input{sections/program_summary}
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/implementation}
+\input{sections/conclusion}
+\input{sections/acknowledgments}
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references.bib}
+
+\end{document}

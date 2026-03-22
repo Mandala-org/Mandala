@@ -1,0 +1,1 @@
+#$pdflatex = "latexdiff Submission/main.tex Revision01/main_revision_01.tex > main-d.tex; pdflatex %O  main-d"
