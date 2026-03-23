@@ -1,6 +1,6 @@
 program: studies/minimal_silicon_study/train_silicon_minimal.py
 project: mandala-silicon-forces
-name: silicon-forces-glamorous-sweep-39-based-longer
+name: silicon-forces-glamorous-sweep-39-based-even-longer
 method: bayes
 metric:
   name: mae_H
@@ -23,18 +23,18 @@ parameters:
   lr:
     distribution: log_uniform_values
     min: 1e-3
-    max: 1e-2
+    max: 3e-2
   loss-coef-observables:
     distribution: log_uniform_values
-    min: 1e-9
-    max: 1e-7
+    min: 1e-7
+    max: 1e-4
   loss-coef-forces:
     distribution: log_uniform_values
-    min: 1e-9
-    max: 1e-7
+    min: 1e-7
+    max: 1e-4
 
   n-radial:
-    values: [32, 64]
+    values: [32, 64, 128]
   num-layers:
     values: [2, 3]
   head-e3mlp-layers:
@@ -106,7 +106,7 @@ parameters:
   lr-factor:
     value: 0.2
   num-epochs:
-    value: 1500
+    value: 2500
   radial-embedding-scale:
     value: none
   separate-shifted-self:
