@@ -21,7 +21,7 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --val-n-snapshots 10 \
   --num-epochs 500 \
   --lr 0.0174 \
-  --loss-coef-density-matrix 1 \
+  --loss-coef-density-matrix 10 \
   --lr-patience 80 \
   --log-interval 10 \
   --adaptive-log-interval true
