@@ -1,84 +1,9 @@
 \section{Numerical Implementation}
 \label{sec:implementation}
 
-\subsection{Software design goals and overall workflow}
-\label{subsec:workflow}
-
-Mandala is organized as a layered scientific software stack rather than a single end-to-end training script. The central workflow is: parse electronic-structure outputs into a common sparse representation; harmonize basis conventions; construct graph inputs and matrix targets; train an E(3)-equivariant model; map predictions back to sparse blocks; and evaluate matrix-level and observable-level quantities. This design is reflected in the separation between data abstractions, irrep mapping, network components, observable evaluation, and training orchestration within one coherent codebase.
-
-The practical advantage of this organization is that individual layers can evolve independently. New parser backends do not require changes to the neural network modules. New readout heads do not require a different sparse matrix container. Observable-based loss terms can be added on top of the existing matrix prediction pipeline rather than replacing it. This modularity is one of the principal contributions of the framework and is essential for a project whose scope spans both software engineering and electronic-structure methodology.
-
-\subsection{Data model: sparse blocks, snapshots, and basis harmonization}
-\label{subsec:data_model}
-
-The core data abstractions are \texttt{BlockMatrix}, \texttt{IrrepsBlockData}, and \texttt{Snapshot}. A \texttt{BlockMatrix} stores a sparse operator as a dictionary of atom-pair block tensors together with explicit edge metadata indexing lattice shifts and source and destination atoms. A \texttt{Snapshot} bundles the matrices belonging to one structure, in particular the Hamiltonian, overlap, and density matrices, along with positions, cell information, and optional force and stress targets. This makes a single object sufficient to support both matrix reconstruction and observable-level evaluation.
-
-The use of a snapshot-level container is crucial for keeping the framework physically coherent. Because $H$, $S$, and $D$ correspond to the same structure and basis, they must share atom ordering, orbital metadata, and sparse indexing. Mandala enforces this consistency at construction time and exposes common physics helpers such as the sparse traces used for energy and electron-count evaluation. The same operator-level representation also preserves access to Hamiltonian-based post-processing, including band-structure calculations [TODO: specify workflow/API entry point]. In this way, the matrix prediction problem is formulated at the level of one physically meaningful configuration rather than as three unrelated tensors.
-
-Mandala also includes a dedicated basis-conversion layer. Different electronic-structure packages store localized orbitals in different real spherical-harmonic orderings and sign conventions. The basis converters normalize these conventions to the representation expected by the equivariant learning stack. This harmonization is implemented as a separate software component because it should be reused by parsing, training, and evaluation code alike. This layer supports OpenMX and FHI-aims conventions, and PySCF data are likewise mapped into the same internal sparse format [TODO: finish PySCF training-data integration].
-
-\subsection{Parser layer and multi-backend data ingestion}
-\label{subsec:parsers}
-
-Mandala provides parser support for several electronic-structure data sources. The primary parser target is OpenMX, from which Mandala reads sparse Hamiltonian, overlap, and density blocks together with structural metadata and, when available, forces. Separate parser modules also support FHI-aims outputs and PySCF data [TODO: finish PySCF training-data integration]. Although these backends differ in file format and basis ordering, they are funneled into the same internal \texttt{Snapshot} representation.
-
-This unification is a significant practical feature. Electronic-structure machine-learning projects often become tied to a single simulator and a single data layout, which makes comparison, extension, and long-term maintenance difficult. Mandala instead treats file-format handling as a pluggable front end. As long as a backend can provide atomic identities, orbital metadata, positions, and the relevant sparse matrices, it can be incorporated into the same training and evaluation workflow. For a scientific software paper, this separation between backend-specific I/O and backend-agnostic learning logic is especially important because it determines how broadly the code can be reused.
-
-\subsection{Irrep mapping and graph construction}
-\label{subsec:irrep_graph}
-
-The bridge between sparse matrices and equivariant learning is the \texttt{BlockIrrepMapper}. For each ordered pair of chemical species, the mapper uses orbital metadata to construct the change-of-basis operators that connect matrix blocks to irreducible E(3) features. This mapping is reused across the data pipeline, the model heads, and the evaluation code, which avoids duplicated representation logic and ensures that training targets and predictions remain aligned.
-
-Graph construction is performed from atomic positions, cell vectors, and species labels. Nodes correspond to atoms. Edges correspond to self-interactions and neighbor interactions within a cutoff radius, with explicit lattice shifts for periodic systems. For each edge, Mandala computes distance embeddings and spherical-harmonic features, and it preserves a canonical ordering that is kept consistent with the sparse matrix representation. The graph and matrix views of the data are therefore coupled but not conflated: the graph is the input geometry on which the neural network operates, while the sparse blocks remain the target operator representation.
-
-\subsection{E(3)-equivariant network architecture}
-\label{subsec:architecture}
-
-The Mandala architecture organizes the model into node encoders, edge encoders, message-passing blocks, and matrix-specific readout heads. Hidden features are represented as direct sums of irreducible representations up to a configurable angular cutoff $l_{\max}$. The edge encoder combines radial information and spherical harmonics, while the message-passing stack updates node and edge features with equivariant tensor-product-based operations. The final readout projects learned edge features back into the irrep spaces associated with the requested matrix blocks and then into sparse matrix form.
-
-Mandala is designed to support a broad architecture search space, not one frozen model. Exposed choices include the hidden irrep content, the number of message-passing layers, tensor-product style, residual pathways, normalization strategy, nonlinearities, edge-update and node-update variants, head depth, the use of tensor-square transformations in the readout, separate treatment of diagonal and shifted-self interactions, and the selection of matrix targets to be predicted jointly. This breadth is one of the major strengths of the framework because it allows systematic experimentation with architecture families while preserving the same data model and training pipeline.
-
-From a software perspective, the multi-head design is especially important. Mandala can be configured to predict only the Hamiltonian or to predict Hamiltonian, overlap, and density simultaneously. Because the heads operate on a shared equivariant latent representation, the cost of multi-target learning is mostly in the final projections rather than in a completely separate model. This structure is what enables operator-level multitask learning and, in turn, the observable-aware training objectives discussed below.
-
-\subsection{Observable-aware training on energies, electron counts, and forces}
-\label{subsec:training_objectives}
-
-Mandala treats matrix reconstruction as the primary supervised task but augments it with optional losses on observables computed from the predicted matrices. In its most general form, the training objective may be written as
-\begin{equation}
-\Loss =
-\sum_{m \in \mathcal{M}} \lambda_m \Loss_{m}^{\mathrm{matrix}}
-\, + \,
-\lambda_E \Loss^{E}
-\, + \,
-\lambda_N \Loss^{N}
-\, + \,
-\lambda_F \Loss^{F},
-\end{equation}
-where $\mathcal{M}$ denotes the set of predicted matrix targets. The matrix terms compare predicted and reference sparse blocks, while the observable terms act on quantities derived from the predicted operators. In the current implementation these include at least
-\begin{equation}
-E_{\mathrm{pred}} = \Tr(D_{\mathrm{pred}} H_{\mathrm{pred}}),
-\qquad
-N_{e,\mathrm{pred}} = \Tr(D_{\mathrm{pred}} S_{\mathrm{pred}}),
-\end{equation}
-together with force targets obtained from
-\begin{equation}
-\bm{F}_{\mathrm{pred}} = -\frac{\partial E_{\mathrm{pred}}}{\partial \bm{R}}.
-\end{equation}
-
-This design has several practical benefits. First, observable losses couple the learning of different matrices in a physically meaningful way. The network is not only encouraged to reconstruct each operator individually, but also to do so in a manner that preserves derived observables. Second, the same formulation supports several training regimes: pure matrix regression, multitask matrix-plus-observable regression, and force-aware training derived from the learned electronic representation. Third, because the observables are computed directly from the sparse predicted matrices, no extra surrogate layer is needed between matrix prediction and physical evaluation.
-
-Mandala jointly predicts Hamiltonian, overlap, and density matrices and includes optional losses for energy and electron count. The same framework extends naturally to force supervision obtained through automatic differentiation of predicted energy with respect to positions. These capabilities define the framework's scientific scope and fit naturally into the existing abstractions of the codebase.
-
-\subsection{Hyperparameter optimization and architecture search}
-\label{subsec:search}
-
-Architecture and training search are treated as first-class use cases. Mandala uses configuration-driven training together with optional Weights \& Biases logging and sweep specifications for rapid experimentation. The search dimensions already explored in the framework include hidden widths, angular cutoffs, radial basis size, message-passing depth, head depth, learning-rate schedules, observable-loss coefficients, force-loss coefficients, symmetry handling, and several alternative equivariant head constructions.
-
-This matters scientifically because sparse matrix learning is not a one-size-fits-all problem. The optimal architecture can depend on the target matrix set, the chemical diversity of the dataset, the desired balance between matrix accuracy and observable accuracy, and the degree to which force supervision should shape the learned representation. By organizing these choices as configurable software parameters rather than ad hoc code edits, Mandala enables systematic model selection and ablation studies without changing the surrounding workflow.
-
-\subsection{Verification, reproducibility, and extensibility}
-\label{subsec:verification}
-
-Mandala includes a substantial test suite covering data parsing, sparse matrix operations, irrep mapping, graph construction, architectural components, equivariance, force prediction, and end-to-end training workflows. These tests are not incidental; they are part of the framework design. In a code base where basis conventions, sparse indexing, and equivariant tensor algebra interact closely, silent bookkeeping errors are otherwise easy to introduce and hard to diagnose. Explicit unit and physics-style tests therefore play the role of software-level conservation laws.
-
-Reproducibility is supported through configuration-driven training, consistent dataset construction via \texttt{DatasetFactory}, explicit checkpointing, and logging hooks that expose both physics metrics and training diagnostics. Extensibility follows from the layered design described above: new file parsers, new equivariant building blocks, new observable definitions, and new training objectives can all be added without discarding the existing infrastructure. This is the software-engineering foundation that allows Mandala to serve both as a research vehicle for new model variants and as a stable framework for future application studies.
+\input{sections/implementation_workflow}
+\input{sections/implementation_architecture}
+\input{sections/implementation_postprocessing}
+\input{sections/implementation_training}
+\input{sections/implementation_search}
+\input{sections/implementation_verification}

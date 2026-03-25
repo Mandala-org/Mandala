@@ -1,0 +1,68 @@
+\subsection{Sparse operator algebra, symmetrization, gauge correction, and density normalization}
+\label{subsec:postprocessing}
+
+Sparse operator manipulations are implemented directly on aligned block data.
+Given two sparse operators $A$ and $B$ with reverse-edge alignment already
+established, Mandala evaluates their trace contraction as
+\begin{equation}
+\Tr(AB)
+=
+\sum_{(\bm{L},i,j)}
+\mathrm{tr}\!\left(A_{ij}^{\bm{L}} B_{ji}^{-\bm{L}}\right),
+\end{equation}
+without assembling dense global matrices. This operator algebra is reused for
+energy and electron-count evaluation, loss construction, and diagnostic
+analysis.
+
+For matrix targets expected to be symmetric or Hermitian in the chosen basis,
+Mandala supports explicit sparse symmetrization after block reconstruction. In
+the real-valued convention used by the implementation, this takes the
+form
+\begin{equation}
+X_{ij}^{\bm{L}}
+\leftarrow
+\frac{1}{2}
+\left(
+X_{ij}^{\bm{L}} + \left(X_{ji}^{-\bm{L}}\right)^{\top}
+\right).
+\end{equation}
+This operation is carried out using precomputed reverse-edge permutations, so
+that symmetry is enforced consistently across periodic images and self-edges.
+
+Hamiltonian gauge freedom is handled operationally through the overlap-shift
+correction described in Section~\ref{subsubsec:gauge_invariance}. In practical
+evaluation and analysis workflows, Mandala computes
+\begin{equation}
+\widetilde{H}^{\mathrm{pred}}
+=
+H^{\mathrm{pred}} - \mu_H S,
+\qquad
+\mu_H
+=
+\frac{
+\left\langle H^{\mathrm{pred}} - H^{\mathrm{ref}}, S \right\rangle_F
+}{
+\left\langle S, S \right\rangle_F
+},
+\end{equation}
+so that purely gauge-like Hamiltonian offsets are removed before reporting
+gauge-corrected operator errors.
+
+The framework also supports density normalization to the correct number of
+electrons. If a predicted density $\widehat{D}$ and overlap $\widehat{S}$
+produce
+$\widehat{N}_e = \Tr(\widehat{D}\widehat{S})$, then a normalized density is
+obtained by the scalar rescaling
+\begin{equation}
+\widehat{D}_{\mathrm{norm}}
+=
+\beta \widehat{D},
+\qquad
+\beta = \frac{N_e^{\mathrm{target}}}{\Tr(\widehat{D}\widehat{S})}.
+\end{equation}
+This provides a simple and effective way to enforce electron-count consistency.
+
+Together, sparse trace evaluation, symmetry restoration, gauge correction, and
+density normalization define a compact postprocessing layer that turns raw
+network outputs into physically interpretable operators ready for observable
+evaluation and Hamiltonian-based analyses such as band-structure calculation.
