@@ -10,6 +10,7 @@ A simplified variant of minimal_overfit_study that:
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import copy
 import json
@@ -228,6 +229,8 @@ SCHEDULER_OVERRIDE_ARG_NAMES = {"lr", "lr_factor", "lr_patience"}
 NON_TRAINING_OVERRIDE_ARG_NAMES = {
     "run_name",
     "checkpoint_dir",
+    "snapshot_cache_dir",
+    "preprocess_workers",
     "device",
     "log_interval",
     "adaptive_log_interval",
@@ -469,6 +472,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--checkpoint-dir",
         type=str,
         default="studies/minimal_silicon_study/checkpoints",
+    )
+    parser.add_argument(
+        "--snapshot-cache-dir",
+        type=str,
+        default=None,
+        help=(
+            "Optional directory for raw parsed Snapshot .pt cache. "
+            "If omitted, no snapshot cache is used."
+        ),
+    )
+    parser.add_argument(
+        "--preprocess-workers",
+        type=int,
+        default=max(1, min(os.cpu_count() or 1, 8)),
+        help="Number of CPU worker threads for sample preprocessing (default: auto, up to 8).",
     )
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -1204,6 +1222,69 @@ def preprocess_sample(
     }
 
 
+def preprocess_dataset_samples(
+    dataset,
+    *,
+    mapper: BlockIrrepMapper,
+    sh_irreps: Irreps,
+    n_radial: int,
+    radial_embedding_scale: str,
+    training_unit: str,
+    hamiltonian_scale_from_hartree: float,
+    cutoff_radius: float,
+    apply_cutoff_to_targets: bool,
+    orbital_selection: Any,
+    matrix_targets: list[str],
+    enable_forces: bool,
+    require_exact_edge_match: bool,
+    device: torch.device,
+    torch_dtype: torch.dtype,
+    preprocess_workers: int,
+    log_first_sample: bool,
+    log_model_first_sample: bool,
+) -> list[dict]:
+    jobs = [(idx, x, y) for idx, (x, y) in enumerate(dataset)]
+    if not jobs:
+        return []
+
+    def _build_sample(job: tuple[int, dict, dict]) -> dict:
+        idx, x, y = job
+        return preprocess_sample(
+            x=x,
+            y=y,
+            mapper=mapper,
+            sh_irreps=sh_irreps,
+            n_radial=n_radial,
+            radial_embedding_scale=radial_embedding_scale,
+            training_unit=training_unit,
+            hamiltonian_scale_from_hartree=hamiltonian_scale_from_hartree,
+            cutoff_radius=cutoff_radius,
+            apply_cutoff_to_targets=apply_cutoff_to_targets,
+            orbital_selection=orbital_selection,
+            matrix_targets=matrix_targets,
+            enable_forces=enable_forces,
+            require_exact_edge_match=require_exact_edge_match,
+            log_data=log_first_sample and idx == 0,
+            log_model=log_model_first_sample and idx == 0,
+            device=device,
+            torch_dtype=torch_dtype,
+        )
+
+    samples = [_build_sample(jobs[0])]
+    remaining_jobs = jobs[1:]
+    if not remaining_jobs:
+        return samples
+
+    max_workers = max(1, min(int(preprocess_workers), len(remaining_jobs)))
+    if max_workers == 1:
+        samples.extend(_build_sample(job) for job in remaining_jobs)
+        return samples
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        samples.extend(executor.map(_build_sample, remaining_jobs))
+    return samples
+
+
 def recompute_sample_edge_features(
     sample: dict,
     positions: torch.Tensor,
@@ -1861,6 +1942,7 @@ def main() -> None:
     resume_changes: dict[str, tuple[Any, Any]] = {}
     reset_scheduler_state = False
     start_epoch = 0
+    train_end_epoch = 0
     resume_source_kind = "none"
 
     if args.resume_from_checkpoint is not None:
@@ -1900,9 +1982,12 @@ def main() -> None:
             & (DATA_OVERRIDE_ARG_NAMES | OBJECTIVE_OVERRIDE_ARG_NAMES)
         ) or bool(set(resume_changes) & SCHEDULER_OVERRIDE_ARG_NAMES)
         start_epoch = int(resume_payload.get("epoch", -1)) + 1
+        train_end_epoch = start_epoch + max(int(args.num_epochs), 0)
         resume_source_kind = (
             "latest" if resume_checkpoint.name == "latest_checkpoint.pt" else "legacy"
         )
+    else:
+        train_end_epoch = max(int(args.num_epochs), 0)
 
     valid_matrix_targets = {"hamiltonian", "overlap", "density"}
     matrix_targets = list(dict.fromkeys(args.matrix_targets))
@@ -2159,6 +2244,8 @@ def main() -> None:
         "video_max_atoms": args.video_max_atoms,
         "device": args.device,
         "checkpoint_dir": args.checkpoint_dir,
+        "snapshot_cache_dir": args.snapshot_cache_dir,
+        "preprocess_workers": args.preprocess_workers,
         "run_name": args.run_name,
         "seed": args.seed,
         "resume_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
@@ -2186,7 +2273,7 @@ def main() -> None:
     cfg_ds.dtype = torch_dtype
     cfg_ds.device = "cpu"
     cfg_ds.verbosity = 0
-    cfg_ds.cache_root = None
+    cfg_ds.snapshot_cache_dir = args.snapshot_cache_dir
     cfg_ds.precompute_edge_features = False
     cfg_ds.cutoff_radius = args.cutoff_radius if args.apply_cutoff_to_targets else None
     cfg_ds.enable_forces = False
@@ -2235,62 +2322,60 @@ def main() -> None:
 
     if args.log_data:
         print("[DATA] preprocessing train samples...")
-    train_samples = []
-    for sample_idx, (x, y) in enumerate(train_ds):
-        sample = preprocess_sample(
-            x=x,
-            y=y,
-            mapper=mapper_cpu,
-            sh_irreps=sh_irreps,
-            n_radial=args.n_radial,
-            radial_embedding_scale=args.radial_embedding_scale,
-            training_unit=args.training_unit,
-            hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
-            cutoff_radius=args.cutoff_radius,
-            apply_cutoff_to_targets=args.apply_cutoff_to_targets,
-            orbital_selection=orbital_selection_obj,
-            matrix_targets=matrix_targets,
-            enable_forces=args.enable_forces,
-            require_exact_edge_match=args.require_exact_edge_match,
-            log_data=args.log_data and sample_idx == 0,
-            log_model=args.log_model and sample_idx == 0,
-            device=torch.device("cpu"),
-            torch_dtype=torch_dtype,
-        )
+    train_samples = preprocess_dataset_samples(
+        train_ds,
+        mapper=mapper_cpu,
+        sh_irreps=sh_irreps,
+        n_radial=args.n_radial,
+        radial_embedding_scale=args.radial_embedding_scale,
+        training_unit=args.training_unit,
+        hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
+        cutoff_radius=args.cutoff_radius,
+        apply_cutoff_to_targets=args.apply_cutoff_to_targets,
+        orbital_selection=orbital_selection_obj,
+        matrix_targets=matrix_targets,
+        enable_forces=args.enable_forces,
+        require_exact_edge_match=args.require_exact_edge_match,
+        device=torch.device("cpu"),
+        torch_dtype=torch_dtype,
+        preprocess_workers=args.preprocess_workers,
+        log_first_sample=args.log_data,
+        log_model_first_sample=args.log_model,
+    )
+    for idx, sample in enumerate(train_samples):
         if device.type == "cuda":
             sample = pin_sample_memory(sample)
             sample = move_small_sample_tensors_to_device(sample, device)
-        train_samples.append(sample)
+        train_samples[idx] = sample
 
     if args.log_data:
         print("[DATA] preprocessing val samples...")
     val_iterable = val_ds if val_ds is not None else []
-    val_samples = []
-    for x, y in val_iterable:
-        sample = preprocess_sample(
-            x=x,
-            y=y,
-            mapper=mapper_cpu,
-            sh_irreps=sh_irreps,
-            n_radial=args.n_radial,
-            radial_embedding_scale=args.radial_embedding_scale,
-            training_unit=args.training_unit,
-            hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
-            cutoff_radius=args.cutoff_radius,
-            apply_cutoff_to_targets=args.apply_cutoff_to_targets,
-            orbital_selection=orbital_selection_obj,
-            matrix_targets=matrix_targets,
-            enable_forces=args.enable_forces,
-            require_exact_edge_match=args.require_exact_edge_match,
-            log_data=False,
-            log_model=False,
-            device=torch.device("cpu"),
-            torch_dtype=torch_dtype,
-        )
+    val_samples = preprocess_dataset_samples(
+        val_iterable,
+        mapper=mapper_cpu,
+        sh_irreps=sh_irreps,
+        n_radial=args.n_radial,
+        radial_embedding_scale=args.radial_embedding_scale,
+        training_unit=args.training_unit,
+        hamiltonian_scale_from_hartree=config["hamiltonian_scale_from_hartree"],
+        cutoff_radius=args.cutoff_radius,
+        apply_cutoff_to_targets=args.apply_cutoff_to_targets,
+        orbital_selection=orbital_selection_obj,
+        matrix_targets=matrix_targets,
+        enable_forces=args.enable_forces,
+        require_exact_edge_match=args.require_exact_edge_match,
+        device=torch.device("cpu"),
+        torch_dtype=torch_dtype,
+        preprocess_workers=args.preprocess_workers,
+        log_first_sample=False,
+        log_model_first_sample=False,
+    )
+    for idx, sample in enumerate(val_samples):
         if device.type == "cuda":
             sample = pin_sample_memory(sample)
             sample = move_small_sample_tensors_to_device(sample, device)
-        val_samples.append(sample)
+        val_samples[idx] = sample
 
     if args.hidden_irreps is not None:
         hidden_irreps = Irreps(args.hidden_irreps)
@@ -2380,10 +2465,10 @@ def main() -> None:
     print("TRAINING")
     print("=" * 80)
     print(f"train samples: {len(train_samples)} | val samples: {len(val_samples)}")
-    if resume_payload is not None and start_epoch >= args.num_epochs:
+    if resume_payload is not None and train_end_epoch <= start_epoch:
         print(
-            "resume requested, but checkpoint epoch already reaches/exceeds "
-            f"--num-epochs ({start_epoch}/{args.num_epochs}); skipping training loop."
+            "resume requested, but additional --num-epochs is <= 0; "
+            "skipping training loop."
         )
     has_validation = len(val_samples) > 0
 
@@ -2402,7 +2487,7 @@ def main() -> None:
     latest_checkpoint_path = run_checkpoint_dir / "latest_checkpoint.pt"
     last_log_time = time.time()
     last_logged_epoch = -1
-    total_run_epochs = max(args.num_epochs - start_epoch, 0)
+    total_run_epochs = max(train_end_epoch - start_epoch, 0)
     last_completed_epoch = start_epoch - 1
 
     benchmark_order = [
@@ -2433,7 +2518,7 @@ def main() -> None:
             print(f"  {k:24s} {ms:10.3f} ms  ({pct:6.2f}%)")
 
     try:
-        for epoch in range(start_epoch, args.num_epochs):
+        for epoch in range(start_epoch, train_end_epoch):
             local_epoch = epoch - start_epoch
             epoch_t0 = time.perf_counter() if args.benchmark else 0.0
             network.train()

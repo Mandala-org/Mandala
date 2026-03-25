@@ -164,7 +164,8 @@ class Config:
     log_model: bool = False  # whether to log the model to WandB
 
     # ----------------- caching ------------------------------------------
-    cache_root: str | None = None  # path to cache directory, if any
+    cache_root: str | None = None  # legacy unused cache setting
+    snapshot_cache_dir: str | None = None  # raw Snapshot .pt cache, if any
     seed: int = 42  # random seed for reproducibility
     precompute_edge_features: bool = True  # precompute edge features
 

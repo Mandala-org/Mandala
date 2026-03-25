@@ -14,7 +14,6 @@ helpers.
 
 from __future__ import annotations
 import hashlib
-import pickle
 from pathlib import Path
 
 from typing import Dict, List, Sequence, Tuple
@@ -62,53 +61,54 @@ class E3GNNDataset(Dataset):
         if cfg.train_on_stress and not self.cfg.enable_stress:
             raise Exception("Stress must be enabled to train on it")
 
-        if cfg.cache_root and (self.cfg.enable_forces or self.cfg.enable_stress):
-            raise Exception("Caching must be disabled for forces and stress to work")
-
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
         self.orbital_cfg = mapper.orbital_cfg
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
 
-        # configure cache root (if None, caching is disabled)
-        if cfg.cache_root is not None:
-            self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
-
         # preprocess all snapshots
         self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
         for matrix_path, info_path in tqdm(snapshot_paths, desc="Loading snapshots"):
-            sample = self._load_or_process_snapshot(matrix_path, info_path)
+            snapshot = self._load_snapshot(matrix_path, info_path)
+            sample = self._process_snapshot_to_sample(snapshot)
             self.snapshots.append(sample)
 
     # ---------------------------------------------------------------- snapshot caching & helpers
-    def _load_or_process_snapshot(
+    def _snapshot_cache_file(self, matrix_path: Path, info_path: Path) -> Path | None:
+        snapshot_cache_dir = getattr(self.cfg, "snapshot_cache_dir", None)
+        if snapshot_cache_dir is None:
+            return None
+        cache_dir = Path(snapshot_cache_dir).expanduser()
+        mat_stat = matrix_path.stat()
+        info_stat = info_path.stat()
+        key = "|".join(
+            [
+                str(matrix_path.resolve()),
+                str(info_path.resolve()),
+                self.convention,
+                str(self.cfg.cutoff_radius),
+                str(self.dtype),
+                str(mat_stat.st_mtime_ns),
+                str(mat_stat.st_size),
+                str(info_stat.st_mtime_ns),
+                str(info_stat.st_size),
+            ]
+        )
+        key_hash = hashlib.md5(key.encode("utf-8")).hexdigest()
+        return cache_dir / f"{matrix_path.stem}_{key_hash}.pt"
+
+    def _load_snapshot(
         self,
         matrix_path: Path,
         info_path: Path,
-    ) -> Tuple[Dict, Dict, Dict]:
-        """
-        Load processed snapshot from cache if available, otherwise process and cache it.
-        """
-        # build cache key from snapshot payload and model settings
-        if self.cfg.cache_root is not None:
-            key_obj = (
-                matrix_path.resolve(),
-                info_path.resolve(),
-                self.cfg.n_radial,
-                self.cfg.cutoff_radius,
-                self.cfg.l_max,
-                self.cfg.precompute_edge_features,
-            )
-            key_hash = hashlib.md5(pickle.dumps(key_obj)).hexdigest()
-            cache_file = self.cfg.cache_root / f"{key_hash}.pt"
-            # attempt load from cache
-            if cache_file.exists():
-                try:
-                    return torch.load(cache_file)
-                except Exception:
-                    pass
+    ) -> Snapshot:
+        cache_file = self._snapshot_cache_file(matrix_path, info_path)
+        if cache_file is not None and cache_file.exists():
+            try:
+                return Snapshot.load(cache_file, device="cpu")
+            except Exception:
+                pass
 
-        # process snapshot
         snapshot = Snapshot.from_openmx(
             matrix_path=matrix_path,
             info_path=info_path,
@@ -117,15 +117,13 @@ class E3GNNDataset(Dataset):
             cutoff_radius=self.cfg.cutoff_radius,
             cfg=self.cfg,
         )
-        sample = self._process_snapshot_to_sample(snapshot)
-        # save to cache if enabled
-        if self.cfg.cache_root is not None:
+        if cache_file is not None:
             try:
-                self.cfg.cache_root.mkdir(parents=True, exist_ok=True)
-                torch.save(sample, cache_file)
+                cache_file.parent.mkdir(parents=True, exist_ok=True)
+                snapshot.save(cache_file)
             except Exception:
                 pass
-        return sample
+        return snapshot
 
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot_to_sample(
