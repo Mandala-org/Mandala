@@ -1,0 +1,51 @@
+program: studies/minimal_silicon_study/train_silicon_minimal.py
+project: mandala-silicon-restart-autumn-sweep-23
+name: silicon-restart-autumn-sweep-23
+method: bayes
+metric:
+  name: mae_H
+  goal: minimize
+
+early_terminate:
+  type: hyperband
+  min_iter: 100
+  eta: 3
+
+parameters:
+  resume-from-checkpoint:
+    value: studies/minimal_silicon_study/checkpoints/autumn-sweep-23/final_model.pt
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
+  train-temps:
+    value: "2700"
+  val-temp:
+    value: 2700
+  n-snapshots-per-temp:
+    value: 100
+  val-n-snapshots:
+    value: 10
+  num-epochs:
+    value: 800
+  log-interval:
+    value: 10
+  adaptive-log-interval:
+    value: true
+
+  lr:
+    values: [0.001, 0.003, 0.006, 0.01, 0.0174, 0.03]
+  lr-patience:
+    values: [40, 80, 120]
+  loss-coef-density-matrix:
+    values: [1, 4, 10]
+  loss-coef-observables:
+    values: [1e-4, 1e-5, 1e-6, 1e-7]
+  loss-coef-forces:
+    values: [1e-4, 1e-5, 1e-6, 1e-7]
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
