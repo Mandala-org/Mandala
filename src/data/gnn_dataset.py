@@ -14,7 +14,9 @@ helpers.
 
 from __future__ import annotations
 import hashlib
+import os
 from pathlib import Path
+import tempfile
 
 from typing import Dict, List, Sequence, Tuple
 
@@ -120,7 +122,19 @@ class E3GNNDataset(Dataset):
         if cache_file is not None:
             try:
                 cache_file.parent.mkdir(parents=True, exist_ok=True)
-                snapshot.save(cache_file)
+                with tempfile.NamedTemporaryFile(
+                    dir=cache_file.parent,
+                    prefix=f"{cache_file.stem}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as tmp:
+                    tmp_path = Path(tmp.name)
+                try:
+                    snapshot.save(tmp_path)
+                    os.replace(tmp_path, cache_file)
+                finally:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
             except Exception:
                 pass
         return snapshot
