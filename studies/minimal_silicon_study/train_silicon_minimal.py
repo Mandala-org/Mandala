@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+import copy
 import json
 import os
 import random
@@ -176,11 +177,79 @@ def _get_wandb_config_value(name: str):
     return None
 
 
-def parse_args() -> argparse.Namespace:
+ARCHITECTURE_ARG_NAMES = {
+    "training_unit",
+    "convention",
+    "matrix_targets",
+    "orbital_selection",
+    "hidden_dim",
+    "l_max",
+    "hidden_irreps",
+    "num_layers",
+    "n_radial",
+    "dtype",
+    "e3layernorm",
+    "separate_shifted_self",
+    "edge_encoder_use_sh_tensor_square",
+    "radial_embedding_scale",
+    "head_mlp_for_scalars",
+    "head_use_tensor_square",
+    "head_use_node_embeddings_for_self_edges",
+    "head_e3mlp_layers",
+}
+DATA_OVERRIDE_ARG_NAMES = {
+    "data_path",
+    "num_train",
+    "num_val",
+    "train_temps",
+    "val_temp",
+    "n_snapshots_per_temp",
+    "val_n_snapshots",
+    "seed",
+    "require_exact_edge_match",
+}
+FORBIDDEN_RESUME_OVERRIDE_ARG_NAMES = {
+    "cutoff_radius",
+    "apply_cutoff_to_targets",
+}
+OBJECTIVE_OVERRIDE_ARG_NAMES = {
+    "enable_energy",
+    "enable_num_electrons",
+    "enable_forces",
+    "train_on_energy",
+    "train_on_num_electrons",
+    "train_on_forces",
+    "loss_coef_observables",
+    "loss_coef_forces",
+    "rescale_density_to_num_electrons",
+    "symmetrize_preds",
+}
+SCHEDULER_OVERRIDE_ARG_NAMES = {"lr", "lr_factor", "lr_patience"}
+NON_TRAINING_OVERRIDE_ARG_NAMES = {
+    "run_name",
+    "checkpoint_dir",
+    "device",
+    "log_interval",
+    "adaptive_log_interval",
+    "benchmark",
+    "log_data",
+    "log_model",
+    "log_forward",
+    "verbose_forward",
+    "log_per_irrep_metrics",
+    "log_per_irrep_images",
+    "generate_video",
+    "video_max_atoms",
+    "grad_clip",
+    "num_epochs",
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Minimal silicon multi-snapshot study")
 
     # Data split arguments.
-    parser.add_argument("--data-path", type=str, required=True)
+    parser.add_argument("--data-path", type=str, default=None)
     parser.add_argument(
         "--training-unit",
         type=str.lower,
@@ -403,7 +472,174 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
-    return parser.parse_args()
+    parser.add_argument("--resume-from-checkpoint", type=str, default=None)
+    return parser
+
+
+def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
+    parser = build_parser()
+    return parser, parser.parse_args()
+
+
+def _get_explicit_cli_overrides(
+    parser: argparse.ArgumentParser, argv: list[str]
+) -> set[str]:
+    option_to_dest = {}
+    for action in parser._actions:
+        for option_string in action.option_strings:
+            option_to_dest[option_string] = action.dest
+
+    explicit: set[str] = set()
+    i = 0
+    while i < len(argv):
+        token = argv[i]
+        if not token.startswith("--"):
+            i += 1
+            continue
+        opt = token.split("=", 1)[0]
+        dest = option_to_dest.get(opt)
+        if dest is not None:
+            explicit.add(dest)
+        i += 1
+    return explicit
+
+
+def _normalize_config_value(name: str, value):
+    if name == "matrix_targets" and value is not None:
+        return list(value)
+    if name == "train_temps" and isinstance(value, list):
+        return ",".join(str(v) for v in value)
+    return value
+
+
+def _apply_checkpoint_config_overrides(
+    args: argparse.Namespace,
+    checkpoint_config: dict[str, Any],
+    explicit_overrides: set[str],
+) -> argparse.Namespace:
+    merged = copy.deepcopy(args)
+    for name, value in checkpoint_config.items():
+        if not hasattr(merged, name):
+            continue
+        if name in explicit_overrides or name == "resume_from_checkpoint":
+            continue
+        setattr(merged, name, _normalize_config_value(name, value))
+    return merged
+
+
+def _load_checkpoint(path: str | os.PathLike) -> dict[str, Any]:
+    return torch.load(path, map_location="cpu")
+
+
+def _resolve_resume_checkpoint_path(path: str | os.PathLike) -> Path:
+    candidate = Path(path).expanduser().resolve()
+    if candidate.is_dir():
+        latest = candidate / "latest_checkpoint.pt"
+        best = candidate / "best_model.pt"
+        final = candidate / "final_model.pt"
+        for option in (latest, best, final):
+            if option.exists():
+                return option
+        raise FileNotFoundError(
+            f"No checkpoint file found in directory {candidate}. "
+            "Expected one of latest_checkpoint.pt, best_model.pt, final_model.pt."
+        )
+    if not candidate.exists():
+        raise FileNotFoundError(f"--resume-from-checkpoint does not exist: {candidate}")
+    return candidate
+
+
+def _config_differences(
+    args: argparse.Namespace, checkpoint_config: dict[str, Any]
+) -> dict[str, tuple[Any, Any]]:
+    diffs: dict[str, tuple[Any, Any]] = {}
+    for name, old_value in checkpoint_config.items():
+        if not hasattr(args, name):
+            continue
+        new_value = getattr(args, name)
+        norm_old = _normalize_config_value(name, old_value)
+        norm_new = _normalize_config_value(name, new_value)
+        if norm_old != norm_new:
+            diffs[name] = (norm_old, norm_new)
+    return diffs
+
+
+def _move_optimizer_state_to_device(
+    optimizer: torch.optim.Optimizer, device: torch.device
+) -> None:
+    for state in optimizer.state.values():
+        for key, value in state.items():
+            if isinstance(value, torch.Tensor):
+                state[key] = value.to(device)
+
+
+def _serialize_pairs(pairs: list[tuple[Path, Path]]) -> list[tuple[str, str]]:
+    return [(str(m), str(i)) for m, i in pairs]
+
+
+def _deserialize_pairs(
+    payload: list[tuple[str, str]] | None,
+) -> list[tuple[Path, Path]] | None:
+    if payload is None:
+        return None
+    return [(Path(m), Path(i)) for m, i in payload]
+
+
+def _summarize_resume_changes(
+    explicit_overrides: set[str],
+    checkpoint_config: dict[str, Any],
+    args: argparse.Namespace,
+) -> dict[str, tuple[Any, Any]]:
+    changes: dict[str, tuple[Any, Any]] = {}
+    for name in explicit_overrides:
+        if name == "resume_from_checkpoint" or not hasattr(args, name):
+            continue
+        old_value = _normalize_config_value(name, checkpoint_config.get(name))
+        new_value = _normalize_config_value(name, getattr(args, name))
+        if old_value != new_value:
+            changes[name] = (old_value, new_value)
+    return changes
+
+
+def _save_training_checkpoint(
+    path: Path,
+    *,
+    epoch: int,
+    network: MinimalNetwork,
+    optimizer: torch.optim.Optimizer,
+    scheduler: ReduceLROnPlateau,
+    score: float,
+    config: dict[str, Any],
+    history: dict[str, list[float]],
+    best_score: float,
+    best_epoch: int,
+    train_pairs: list[tuple[Path, Path]],
+    val_pairs: list[tuple[Path, Path]],
+    metrics: dict[str, Any] | None = None,
+) -> None:
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": network.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "loss": score,
+            "config": config,
+            "metrics": metrics or {},
+            "history": history,
+            "best_score": best_score,
+            "best_epoch": best_epoch,
+            "train_pairs": _serialize_pairs(train_pairs),
+            "val_pairs": _serialize_pairs(val_pairs),
+            "rng_state_python": random.getstate(),
+            "rng_state_numpy": np.random.get_state(),
+            "rng_state_torch_cpu": torch.get_rng_state(),
+            "rng_state_torch_cuda": (
+                torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+            ),
+        },
+        path,
+    )
 
 
 def set_seed(seed: int) -> None:
@@ -1617,7 +1853,57 @@ def evaluate_split(
 
 
 def main() -> None:
-    args = parse_args()
+    parser, args = parse_args()
+    explicit_overrides = _get_explicit_cli_overrides(parser, sys.argv[1:])
+    resume_checkpoint = None
+    resume_payload: dict[str, Any] | None = None
+    resume_config: dict[str, Any] = {}
+    resume_changes: dict[str, tuple[Any, Any]] = {}
+    reset_scheduler_state = False
+    start_epoch = 0
+    resume_source_kind = "none"
+
+    if args.resume_from_checkpoint is not None:
+        resume_checkpoint = _resolve_resume_checkpoint_path(args.resume_from_checkpoint)
+        resume_payload = _load_checkpoint(resume_checkpoint)
+        resume_config = dict(resume_payload.get("config") or {})
+        if not resume_config:
+            raise ValueError(
+                f"Checkpoint {resume_checkpoint} does not contain a usable config."
+            )
+        args = _apply_checkpoint_config_overrides(
+            args, resume_config, explicit_overrides
+        )
+        resume_changes = _summarize_resume_changes(
+            explicit_overrides, resume_config, args
+        )
+        architecture_changes = {
+            k: v for k, v in resume_changes.items() if k in ARCHITECTURE_ARG_NAMES
+        }
+        forbidden_changes = {
+            k: v
+            for k, v in resume_changes.items()
+            if k in FORBIDDEN_RESUME_OVERRIDE_ARG_NAMES
+        }
+        if architecture_changes or forbidden_changes:
+            all_conflicts = {**architecture_changes, **forbidden_changes}
+            details = ", ".join(
+                f"{name}: {old!r} -> {new!r}"
+                for name, (old, new) in sorted(all_conflicts.items())
+            )
+            raise ValueError(
+                "Cannot resume with architecture-affecting or forbidden overrides. "
+                f"Conflicts: {details}"
+            )
+        reset_scheduler_state = bool(
+            set(resume_changes)
+            & (DATA_OVERRIDE_ARG_NAMES | OBJECTIVE_OVERRIDE_ARG_NAMES)
+        ) or bool(set(resume_changes) & SCHEDULER_OVERRIDE_ARG_NAMES)
+        start_epoch = int(resume_payload.get("epoch", -1)) + 1
+        resume_source_kind = (
+            "latest" if resume_checkpoint.name == "latest_checkpoint.pt" else "legacy"
+        )
+
     valid_matrix_targets = {"hamiltonian", "overlap", "density"}
     matrix_targets = list(dict.fromkeys(args.matrix_targets))
     invalid_targets = sorted(set(matrix_targets) - valid_matrix_targets)
@@ -1676,6 +1962,10 @@ def main() -> None:
     print("MINIMAL SILICON STUDY - MULTI SNAPSHOT")
     print("=" * 80)
 
+    if args.data_path is None:
+        raise ValueError(
+            "--data-path must be provided unless it is recovered from --resume-from-checkpoint."
+        )
     data_root = Path(args.data_path).resolve()
     if not data_root.exists():
         raise FileNotFoundError(f"--data-path does not exist: {data_root}")
@@ -1871,6 +2161,7 @@ def main() -> None:
         "checkpoint_dir": args.checkpoint_dir,
         "run_name": args.run_name,
         "seed": args.seed,
+        "resume_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
         # Logger-compat keys expected by detailed_logging.log_config from minimal_overfit_study.
         "partial_train": None,
         "box_convention": "rows",
@@ -2048,11 +2339,52 @@ def main() -> None:
         verbose=True,
     )
 
+    if resume_payload is not None:
+        network.load_state_dict(resume_payload["model_state_dict"])
+        if "optimizer_state_dict" in resume_payload:
+            optimizer.load_state_dict(resume_payload["optimizer_state_dict"])
+            _move_optimizer_state_to_device(optimizer, device)
+        if "lr" in explicit_overrides:
+            for group in optimizer.param_groups:
+                group["lr"] = args.lr
+        if (
+            not reset_scheduler_state
+            and "scheduler_state_dict" in resume_payload
+            and resume_payload["scheduler_state_dict"] is not None
+        ):
+            scheduler.load_state_dict(resume_payload["scheduler_state_dict"])
+
+    print("")
+    if resume_payload is not None:
+        print("=" * 80)
+        print("RESUME")
+        print("=" * 80)
+        print(f"checkpoint: {resume_checkpoint}")
+        print(f"checkpoint epoch: {int(resume_payload.get('epoch', -1)) + 1}")
+        print(f"resume source: {resume_source_kind}")
+        if resume_changes:
+            print("explicit config overrides:")
+            for name in sorted(resume_changes):
+                old_value, new_value = resume_changes[name]
+                print(f"  {name}: {old_value!r} -> {new_value!r}")
+        else:
+            print("explicit config overrides: none")
+        print(
+            "scheduler state: "
+            + ("reset from current args" if reset_scheduler_state else "restored")
+        )
+        print("best/history state: reset for new run")
+
     print("")
     print("=" * 80)
     print("TRAINING")
     print("=" * 80)
     print(f"train samples: {len(train_samples)} | val samples: {len(val_samples)}")
+    if resume_payload is not None and start_epoch >= args.num_epochs:
+        print(
+            "resume requested, but checkpoint epoch already reaches/exceeds "
+            f"--num-epochs ({start_epoch}/{args.num_epochs}); skipping training loop."
+        )
     has_validation = len(val_samples) > 0
 
     matrix_alias = {"hamiltonian": "H", "overlap": "S", "density": "D"}
@@ -2067,8 +2399,11 @@ def main() -> None:
     best_score = float("inf")
     best_epoch = -1
     best_model_path = run_checkpoint_dir / "best_model.pt"
+    latest_checkpoint_path = run_checkpoint_dir / "latest_checkpoint.pt"
     last_log_time = time.time()
     last_logged_epoch = -1
+    total_run_epochs = max(args.num_epochs - start_epoch, 0)
+    last_completed_epoch = start_epoch - 1
 
     benchmark_order = [
         "epoch_total",
@@ -2090,7 +2425,7 @@ def main() -> None:
         if not args.benchmark or benchmark_epochs <= 0:
             return
         epoch_ms = benchmark_accum["epoch_total"] * 1000.0 / benchmark_epochs
-        print(f"\n[BENCHMARK EPOCH {epoch_zero_based + 1}/{args.num_epochs}]")
+        print(f"\n[BENCHMARK EPOCH {epoch_zero_based + 1}/{max(total_run_epochs, 1)}]")
         print(f"  averaged over {benchmark_epochs} epoch(s): {epoch_ms:.3f} ms/epoch")
         for k in benchmark_order:
             ms = benchmark_accum[k] * 1000.0 / benchmark_epochs
@@ -2098,14 +2433,15 @@ def main() -> None:
             print(f"  {k:24s} {ms:10.3f} ms  ({pct:6.2f}%)")
 
     try:
-        for epoch in range(args.num_epochs):
+        for epoch in range(start_epoch, args.num_epochs):
+            local_epoch = epoch - start_epoch
             epoch_t0 = time.perf_counter() if args.benchmark else 0.0
             network.train()
             should_log_now = should_log_epoch(
-                epoch, args.log_interval, args.adaptive_log_interval
+                local_epoch, args.log_interval, args.adaptive_log_interval
             )
             train_loss_total = 0.0
-            epoch_wandb_log: dict[str, float] = {"epoch": epoch}
+            epoch_wandb_log: dict[str, float] = {"epoch": local_epoch}
             last_grad_norm = None
 
             for sample_cpu in train_samples:
@@ -2177,6 +2513,7 @@ def main() -> None:
                     "optimizer_step",
                     time.perf_counter() - t_opt if args.benchmark else 0.0,
                 )
+                last_completed_epoch = epoch
 
                 train_loss_total += float(loss.item())
                 for matrix_name, matrix_loss in loss_info[
@@ -2306,36 +2643,44 @@ def main() -> None:
             should_update_best = do_log if has_validation else True
             if should_update_best and score < best_score:
                 best_score = score
-                best_epoch = epoch
-                torch.save(
-                    {
-                        "epoch": epoch,
-                        "model_state_dict": network.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "loss": score,
-                        "config": config,
-                        "metrics": val_eval["detailed"],
-                    },
+                best_epoch = local_epoch
+                _save_training_checkpoint(
                     best_model_path,
+                    epoch=epoch,
+                    network=network,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    score=score,
+                    config=config,
+                    history=history,
+                    best_score=best_score,
+                    best_epoch=best_epoch,
+                    train_pairs=train_pairs,
+                    val_pairs=val_pairs,
+                    metrics=val_eval["detailed"],
                 )
                 print(
                     f"[OK] Best model saved to {best_model_path.name} (score: {score:.6e})"
                 )
 
+            latest_score = float(val_eval["loss"]) if do_log else train_loss
+
             if do_log:
                 current_time = time.time()
                 time_elapsed = current_time - last_log_time
                 epochs_since_last_log = (
-                    (epoch - last_logged_epoch)
+                    (local_epoch - last_logged_epoch)
                     if last_logged_epoch >= 0
-                    else (epoch + 1)
+                    else (local_epoch + 1)
                 )
                 avg_epoch_time = time_elapsed / max(epochs_since_last_log, 1)
                 last_log_time = current_time
-                last_logged_epoch = epoch
+                last_logged_epoch = local_epoch
 
                 print(f"\n{'=' * 60}")
-                print(f"EPOCH {epoch + 1}/{args.num_epochs}  |  lr={current_lr:.6e}")
+                print(
+                    f"EPOCH {local_epoch + 1}/{max(total_run_epochs, 1)}  |  lr={current_lr:.6e}"
+                )
                 print(f"{'=' * 60}")
                 log_detailed_training_metrics(
                     avg_epoch_time=avg_epoch_time,
@@ -2376,7 +2721,7 @@ def main() -> None:
                                 fs["atoms_list"],
                                 mapper.orbital_cfg,
                                 matrix_frame_output_dirs[matrix_name],
-                                epoch,
+                                local_epoch,
                                 sx=0,
                                 sy=0,
                                 sz=0,
@@ -2398,7 +2743,7 @@ def main() -> None:
 
                 epoch_wandb_log.update(
                     build_wandb_detailed_metrics_log(
-                        epoch_zero_based=epoch,
+                        epoch_zero_based=local_epoch,
                         loss_value=train_loss,
                         detailed_metrics=val_eval["detailed"],
                     )
@@ -2434,7 +2779,7 @@ def main() -> None:
                     if per_irrep:
                         epoch_wandb_log.update(
                             build_wandb_per_irrep_metrics_log(
-                                epoch_zero_based=epoch,
+                                epoch_zero_based=local_epoch,
                                 all_irreps=all_irreps,
                                 per_irrep_metrics=per_irrep,
                                 metric_prefix=irrep_prefix_by_matrix.get(
@@ -2451,12 +2796,27 @@ def main() -> None:
                     "wandb_log",
                     time.perf_counter() - t_wandb if args.benchmark else 0.0,
                 )
+                _save_training_checkpoint(
+                    latest_checkpoint_path,
+                    epoch=epoch,
+                    network=network,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    score=latest_score,
+                    config=config,
+                    history=history,
+                    best_score=best_score,
+                    best_epoch=best_epoch,
+                    train_pairs=train_pairs,
+                    val_pairs=val_pairs,
+                    metrics=val_eval["detailed"],
+                )
 
                 if args.benchmark:
                     benchmark_add("epoch_total", time.perf_counter() - epoch_t0)
                     benchmark_epochs += 1
                     if do_log:
-                        benchmark_report(epoch)
+                        benchmark_report(local_epoch)
                         benchmark_accum = {k: 0.0 for k in benchmark_order}
                         benchmark_epochs = 0
 
@@ -2636,16 +2996,36 @@ def main() -> None:
     wandb.log(final_metrics)
 
     final_model_path = run_checkpoint_dir / "final_model.pt"
+    _save_training_checkpoint(
+        latest_checkpoint_path,
+        epoch=last_completed_epoch,
+        network=network,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        score=history["train_loss"][-1] if history["train_loss"] else float("nan"),
+        config=config,
+        history=history,
+        best_score=best_score,
+        best_epoch=best_epoch,
+        train_pairs=train_pairs,
+        val_pairs=val_pairs,
+        metrics=final_metrics,
+    )
     torch.save(
         {
-            "epoch": len(history["train_loss"]) - 1,
+            "epoch": last_completed_epoch,
             "model_state_dict": network.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
             "loss": (
                 history["train_loss"][-1] if history["train_loss"] else float("nan")
             ),
             "config": config,
             "history": history,
+            "best_score": best_score,
+            "best_epoch": best_epoch,
+            "train_pairs": _serialize_pairs(train_pairs),
+            "val_pairs": _serialize_pairs(val_pairs),
             "final_metrics": final_metrics,
             "final_metrics_hamiltonian_detailed": final_detailed_metrics,
         },
