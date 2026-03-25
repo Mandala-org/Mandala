@@ -1018,6 +1018,40 @@ def preprocess_sample(
         cutoff_radius,
         self_interaction=False,
     )
+    offdiag_counts = Counter(
+        (
+            int(offset[0]),
+            int(offset[1]),
+            int(offset[2]),
+            int(src),
+            int(dst),
+        )
+        for src, dst, offset in zip(
+            src_np.tolist(), dst_np.tolist(), offsets_np.tolist()
+        )
+    )
+    missing_reverse_edges: list[tuple[int, int, int, int, int]] = []
+    for edge, count in offdiag_counts.items():
+        sx, sy, sz, src_i, dst_i = edge
+        reverse = (-sx, -sy, -sz, dst_i, src_i)
+        reverse_count = offdiag_counts.get(reverse, 0)
+        if reverse_count < count:
+            missing_reverse_edges.extend([reverse] * (count - reverse_count))
+    if missing_reverse_edges:
+        missing_arr = np.asarray(missing_reverse_edges, dtype=np.int64)
+        src_np = np.concatenate([src_np, missing_arr[:, 3]])
+        dst_np = np.concatenate([dst_np, missing_arr[:, 4]])
+        offsets_np = np.concatenate([offsets_np, missing_arr[:, :3]], axis=0)
+        snapshot_label = (
+            Path(str(snap.matrix_path)).name
+            if snap.matrix_path is not None
+            else "snapshot"
+        )
+        print(
+            "[GRAPH] Added "
+            f"{len(missing_reverse_edges)} missing reverse off-diagonal edge(s) "
+            f"for {snapshot_label}."
+        )
 
     num_atoms = len(atoms_list)
     self_src = torch.arange(num_atoms, dtype=torch.long, device=device)
