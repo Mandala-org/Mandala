@@ -221,6 +221,7 @@ OBJECTIVE_OVERRIDE_ARG_NAMES = {
     "train_on_num_electrons",
     "train_on_forces",
     "loss_coef_observables",
+    "loss_coef_density_matrix",
     "loss_coef_forces",
     "rescale_density_to_num_electrons",
     "symmetrize_preds",
@@ -347,6 +348,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1e-5,
         help="Loss coefficient for energy/num-electrons terms (default: 1e-5).",
+    )
+    parser.add_argument(
+        "--loss-coef-density-matrix",
+        type=float,
+        default=1.0,
+        help="Additional multiplier applied only to the density matrix block loss (default: 1.0).",
     )
     parser.add_argument(
         "--enable-forces",
@@ -1477,6 +1484,7 @@ def compute_loss_for_sample(
     sample: dict,
     *,
     matrix_targets: list[str],
+    loss_coef_density_matrix: float,
     enable_energy: bool,
     train_on_energy: bool,
     enable_num_electrons: bool,
@@ -1512,6 +1520,8 @@ def compute_loss_for_sample(
                 target_matrix.pair_blocks[key],
                 target_matrix.pair_edges[key],
             )
+        if matrix_name == "density":
+            loss_total = loss_total * float(loss_coef_density_matrix)
         matrix_block_losses[matrix_name] = loss_total
 
     loss_block = (
@@ -1739,6 +1749,7 @@ def evaluate_split(
     train_on_energy: bool,
     enable_num_electrons: bool,
     train_on_num_electrons: bool,
+    loss_coef_density_matrix: float,
     loss_coef_observables: float,
     enable_forces: bool,
     train_on_forces: bool,
@@ -1812,6 +1823,7 @@ def evaluate_split(
             pred["pred_matrix_norm_by_name"],
             sample_dev,
             matrix_targets=matrix_targets,
+            loss_coef_density_matrix=loss_coef_density_matrix,
             enable_energy=enable_energy,
             train_on_energy=train_on_energy,
             enable_num_electrons=enable_num_electrons,
@@ -2194,6 +2206,7 @@ def main() -> None:
         "train_on_energy": args.train_on_energy,
         "train_on_num_electrons": args.train_on_num_electrons,
         "loss_coef_observables": args.loss_coef_observables,
+        "loss_coef_density_matrix": args.loss_coef_density_matrix,
         "enable_forces": args.enable_forces,
         "train_on_forces": args.train_on_forces,
         "loss_coef_forces": args.loss_coef_forces,
@@ -2564,6 +2577,7 @@ def main() -> None:
                     pred["pred_matrix_norm_by_name"],
                     sample,
                     matrix_targets=matrix_targets,
+                    loss_coef_density_matrix=args.loss_coef_density_matrix,
                     enable_energy=args.enable_energy,
                     train_on_energy=args.train_on_energy,
                     enable_num_electrons=args.enable_num_electrons,
@@ -2698,6 +2712,7 @@ def main() -> None:
                     train_on_energy=args.train_on_energy,
                     enable_num_electrons=args.enable_num_electrons,
                     train_on_num_electrons=args.train_on_num_electrons,
+                    loss_coef_density_matrix=args.loss_coef_density_matrix,
                     loss_coef_observables=args.loss_coef_observables,
                     enable_forces=args.enable_forces,
                     train_on_forces=args.train_on_forces,
@@ -2931,6 +2946,7 @@ def main() -> None:
         train_on_energy=args.train_on_energy,
         enable_num_electrons=args.enable_num_electrons,
         train_on_num_electrons=args.train_on_num_electrons,
+        loss_coef_density_matrix=args.loss_coef_density_matrix,
         loss_coef_observables=args.loss_coef_observables,
         enable_forces=args.enable_forces,
         train_on_forces=args.train_on_forces,
