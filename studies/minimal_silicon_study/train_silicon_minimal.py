@@ -806,13 +806,13 @@ def filter_block_matrix_by_cutoff(
 
 
 def should_log_epoch(epoch_zero_based: int, log_interval: int, adaptive: bool) -> bool:
+    log_interval = max(int(log_interval), 1)
     if not adaptive:
         return epoch_zero_based % log_interval == 0
-    ep = epoch_zero_based + 1
-    if ep <= 10:
+    if epoch_zero_based <= 10:
         return True
-    if ep <= 100:
-        return ep % 10 == 0
+    if epoch_zero_based < 100:
+        return epoch_zero_based % 10 == 0
     return epoch_zero_based % log_interval == 0
 
 
@@ -2953,10 +2953,10 @@ def main() -> None:
                     ir_str = str(irrep)
                     try:
                         pred_ir = split_hamiltonian_by_irrep(
-                            pred_metrics_by_name[matrix_name], mapper, ir_str
+                            pred_metrics_by_name[matrix_name], mapper_cpu, ir_str
                         )
                         targ_ir = split_hamiltonian_by_irrep(
-                            fs["target_matrices"][matrix_name], mapper, ir_str
+                            fs["target_matrices"][matrix_name], mapper_cpu, ir_str
                         )
                         filename_prefix = f"{matrix_name}_{ir_str}"
                         visualize_hamiltonians(
