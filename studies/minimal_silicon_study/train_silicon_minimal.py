@@ -10,7 +10,6 @@ A simplified variant of minimal_overfit_study that:
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import copy
 import json
@@ -33,6 +32,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from e3nn.math import soft_one_hot_linspace
 from e3nn.o3 import Irreps, spherical_harmonics
+from tqdm.auto import tqdm
 
 # Add project root.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -231,7 +231,6 @@ NON_TRAINING_OVERRIDE_ARG_NAMES = {
     "run_name",
     "checkpoint_dir",
     "snapshot_cache_dir",
-    "preprocess_workers",
     "device",
     "log_interval",
     "adaptive_log_interval",
@@ -488,12 +487,6 @@ def build_parser() -> argparse.ArgumentParser:
             "Optional directory for raw parsed Snapshot .pt cache. "
             "If omitted, no snapshot cache is used."
         ),
-    )
-    parser.add_argument(
-        "--preprocess-workers",
-        type=int,
-        default=max(1, min(os.cpu_count() or 1, 8)),
-        help="Number of CPU worker threads for sample preprocessing (default: auto, up to 8).",
     )
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -1246,9 +1239,9 @@ def preprocess_dataset_samples(
     require_exact_edge_match: bool,
     device: torch.device,
     torch_dtype: torch.dtype,
-    preprocess_workers: int,
     log_first_sample: bool,
     log_model_first_sample: bool,
+    progress_desc: str,
 ) -> list[dict]:
     jobs = [(idx, x, y) for idx, (x, y) in enumerate(dataset)]
     if not jobs:
@@ -1277,18 +1270,9 @@ def preprocess_dataset_samples(
             torch_dtype=torch_dtype,
         )
 
-    samples = [_build_sample(jobs[0])]
-    remaining_jobs = jobs[1:]
-    if not remaining_jobs:
-        return samples
-
-    max_workers = max(1, min(int(preprocess_workers), len(remaining_jobs)))
-    if max_workers == 1:
-        samples.extend(_build_sample(job) for job in remaining_jobs)
-        return samples
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        samples.extend(executor.map(_build_sample, remaining_jobs))
+    samples = []
+    for job in tqdm(jobs, desc=progress_desc):
+        samples.append(_build_sample(job))
     return samples
 
 
@@ -2258,7 +2242,6 @@ def main() -> None:
         "device": args.device,
         "checkpoint_dir": args.checkpoint_dir,
         "snapshot_cache_dir": args.snapshot_cache_dir,
-        "preprocess_workers": args.preprocess_workers,
         "run_name": args.run_name,
         "seed": args.seed,
         "resume_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
@@ -2351,9 +2334,9 @@ def main() -> None:
         require_exact_edge_match=args.require_exact_edge_match,
         device=torch.device("cpu"),
         torch_dtype=torch_dtype,
-        preprocess_workers=args.preprocess_workers,
         log_first_sample=args.log_data,
         log_model_first_sample=args.log_model,
+        progress_desc="Preprocessing train samples",
     )
     for idx, sample in enumerate(train_samples):
         if device.type == "cuda":
@@ -2380,9 +2363,9 @@ def main() -> None:
         require_exact_edge_match=args.require_exact_edge_match,
         device=torch.device("cpu"),
         torch_dtype=torch_dtype,
-        preprocess_workers=args.preprocess_workers,
         log_first_sample=False,
         log_model_first_sample=False,
+        progress_desc="Preprocessing val samples",
     )
     for idx, sample in enumerate(val_samples):
         if device.type == "cuda":
