@@ -1,0 +1,74 @@
+\subsection{E(3)-equivariant message passing, readout heads, and architecture variants}
+\label{subsec:architecture}
+
+The network is composed of node encoders, edge encoders, a stack of equivariant
+message-passing blocks, and matrix-specific readout heads. Node encoders embed
+chemical species into scalar channels. Edge encoders combine edge-type
+embeddings, radial distance embeddings, and spherical harmonics into equivariant
+edge features. If $\bm{h}_i^{(t)}$ denotes node features and
+$\bm{e}_{ij}^{(t)}$ denotes edge features at layer $t$, a generic Mandala
+message-passing step may be written as
+\begin{align}
+\bm{m}_{ij}^{(t)} &=
+\Phi_{\mathrm{edge}}^{(t)}
+\left(
+\bm{h}_i^{(t)}, \bm{h}_j^{(t)}, \bm{e}_{ij}^{(t)},
+Y(\hat{\bm{r}}_{ij}), \varphi(r_{ij})
+\right), \\
+\bm{h}_i^{(t+1)} &=
+\Phi_{\mathrm{node}}^{(t)}
+\left(
+\bm{h}_i^{(t)},
+\mathrm{Agg}_{j \in \mathcal{N}(i)} \, \bm{m}_{ij}^{(t)}
+\right),
+\end{align}
+where $\Phi_{\mathrm{edge}}^{(t)}$ and $\Phi_{\mathrm{node}}^{(t)}$ are
+equivariant maps assembled from tensor products, equivariant linear layers,
+radial MLPs, parity-aware nonlinearities, and optional residual connections,
+while $\mathrm{Agg}$ denotes a configurable aggregation rule such as summation
+or attention.
+
+The readout stage maps final latent features to the irrep content required by
+each matrix target. For a target operator $X$, the head predicts irrep vectors
+\begin{equation}
+\widehat{\bm{x}}_{ij}^{\bm{L},X}
+=
+\Psi_X\!\left(
+\bm{e}_{ij}^{(L)},
+\bm{h}_i^{(L)},
+\bm{h}_j^{(L)},
+\varphi(r_{ij})
+\right),
+\end{equation}
+followed by inverse irrep-to-block conversion
+\begin{equation}
+\widehat{X}_{ij}^{\bm{L}}
+=
+Q_{a_i a_j}^{\top}\widehat{\bm{x}}_{ij}^{\bm{L},X}.
+\end{equation}
+Because heads share the same equivariant latent representation, Mandala can
+predict Hamiltonian, overlap, and density matrices jointly with only modest
+additional readout cost.
+
+An important feature of the framework is that the architecture is not fixed to
+one canonical model. Mandala exposes a broad family of variants within the same
+software interface. Search dimensions include the hidden irrep content, the
+angular cutoff $\ell_{\max}$, the number of message-passing layers, the radial
+basis size, the depth of the neck and head MLPs, and the choice of tensor
+product implementation. The message-passing blocks support alternative edge
+updates (tensor-product, concatenation-based, and replacement-style variants),
+alternative node updates (sum, concatenation, and replacement variants),
+alternative aggregation mechanisms (including attention-style aggregation),
+pre- and post-linear transformations, optional self-connections, and optional
+node and edge residual paths.
+
+The encoder and head stages are likewise configurable. Edge encoders support
+various variants, together with optional tensor-square
+feature expansion of spherical-harmonics. Readout heads support direct
+equivariant projections, deeper equivariant MLP heads, optional tensor-square
+preconditioning of hidden features, scalar-specific auxiliary branches, optional
+log-scale or magnitude factorization for output amplitudes, optional use of node
+embeddings for self-edges, and separate treatment of diagonal, shifted-self,
+and off-diagonal blocks. Because all of these variants share the same
+block-sparse data model and irrep mapping layer, architecture search can be
+performed without changing the surrounding training and evaluation workflow.

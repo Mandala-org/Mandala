@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.2.9)  22 MAR 2026 23:36
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.2.9)  23 MAR 2026 13:32
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -250,9 +250,21 @@ an-dard workhorses
  []
 
 
-Overfull \hbox (19.1439pt too wide) in paragraph at lines 6--7
-\OT1/cmr/m/n/12 rectly avail-able. For ap-pli-ca-tions that re-main fun-da-men-
-tally electronic-structure-
+Overfull \hbox (4.7959pt too wide) in paragraph at lines 4--5
+\OT1/cmr/m/n/12 flows that re-quire large su-per-cells, long molecular-dynamics
+ tra-jec-to-ries, broad
+ []
+
+
+Overfull \hbox (0.48761pt too wide) in paragraph at lines 4--5
+\OT1/cmr/m/n/12 learned sur-ro-gates for quantum-mechanical sim-u-la-tion, in-c
+lud-ing di-rect learn-
+ []
+
+
+Overfull \hbox (10.00511pt too wide) in paragraph at lines 6--7
+\OT1/cmr/m/n/12 able. For ap-pli-ca-tions that re-main fun-da-men-tally electro
+nic-structure-centered,
  []
 
 
@@ -267,50 +279,43 @@ Overfull \hbox (15.0444pt too wide) in paragraph at lines 12--13
 ins use-ful for electronic-
  []
 
-) (./sections/background.tex [4] [5] [6]
-Overfull \hbox (6.55421pt too wide) in paragraph at lines 44--45
-[]\OT1/cmr/m/n/12 Mandala bridges sparse electronic-structure ma-tri-ces and eq
-uiv-ari-ant graph
+) (./sections/background.tex (./sections/background_dft.tex [4] [5] [6]
+[7]) (./sections/background_equivariance.tex [8])
+(./sections/background_tensor_products.tex [9])
+(./sections/background_operator_prediction.tex
+Overfull \hbox (6.22011pt too wide) in paragraph at lines 18--23
+\OT1/cmr/m/n/12 trans-pose. In the code, these maps are ma-te-ri-al-ized by the
+ \OT1/cmtt/m/n/12 BlockIrrepMapper\OT1/cmr/m/n/12 ,
  []
 
-) (./sections/implementation.tex
-Overfull \hbox (12.43332pt too wide) in paragraph at lines 52--1
-[]\OT1/cmr/m/n/12 This operator-first view-point dif-fers from the more com-mon
- direct-regression
+[10])) (./sections/implementation.tex (./sections/implementation_workflow.tex
+[11]) (./sections/implementation_architecture.tex
+Overfull \hbox (8.71252pt too wide) in paragraph at lines 41--1
+[]\OT1/cmr/m/n/12 The same snapshot-level rep-re-sen-ta-tion pre-serves ac-cess
+ to operator-derived
  []
 
-
-Overfull \hbox (1.97603pt too wide) in paragraph at lines 7--8
-\OT1/cmr/m/n/12 ven-tions; con-struct graph in-puts and ma-trix tar-gets; train
- an E(3)-equivariant
+[12]) (./sections/implementation_postprocessing.tex [13])
+(./sections/implementation_training.tex
+Overfull \hbox (0.48344pt too wide) in paragraph at lines 65--1
+\OT1/cmr/m/n/12 ob-serv-able eval-u-a-tion and Hamiltonian-based anal-y-ses suc
+h as band-structure
  []
 
-[7] [8]
-Overfull \hbox (18.6828pt too wide) in paragraph at lines 18--19
-[]\OT1/cmr/m/n/12 Mandala also in-cludes a ded-i-cated basis-conversion layer.
-Dif-fer-ent electronic-
+[14] [15]) (./sections/implementation_search.tex
+Overfull \hbox (11.0625pt too wide) in paragraph at lines 92--1
+\OT1/cmr/m/n/12 This com-pletes the observable-guidance pic-ture: one can train
+ a sin-gle operator-
  []
 
-
-Overfull \hbox (65.47412pt too wide) in paragraph at lines 30--31
-[]\OT1/cmr/m/n/12 The bridge be-tween sparse ma-tri-ces and equiv-ari-ant learn
--ing is the \OT1/cmtt/m/n/12 BlockIrrepMapper\OT1/cmr/m/n/12 .
- []
-
-[9]
-Overfull \hbox (14.00461pt too wide) in paragraph at lines 32--33
-\OT1/cmr/m/n/12 species la-bels. Nodes cor-re-spond to atoms. Edges cor-re-spon
-d to self-interactions
- []
-
-[10] [11]) (./sections/conclusion.tex [12]) (./sections/acknowledgments.tex)
-(./main.bbl
+) (./sections/implementation_verification.tex)) (./sections/conclusion.tex
+[16]) (./sections/acknowledgments.tex) [17] (./main.bbl
 Underfull \hbox (badness 1590) in paragraph at lines 15--19
 []\OT1/cmr/m/n/12 W. Kohn, L. J. Sham, Self-Consistent Equa-tions In-clud-ing E
 x-
  []
 
-[13]
+
 Underfull \hbox (badness 1708) in paragraph at lines 35--43
 \OT1/cmr/m/n/12 Func-tion, Elec-tron Den-sity Gen-er-a-tion, and At-om-iza-tion
  En-ergy
@@ -334,38 +339,42 @@ Overfull \hbox (186.43456pt too wide) in paragraph at lines 54--62
 nals/10.1146/annurev-physchem-082720-034254
  []
 
-) [14] (./main.aux)
+[18]) [19] (./main.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
  )
 Here is how much of TeX's memory you used:
- 3611 strings out of 476182
- 52520 string characters out of 5795596
- 1930975 words of memory out of 5000000
- 25549 multiletter control sequences out of 15000+600000
+ 3694 strings out of 476182
+ 55907 string characters out of 5795596
+ 1932975 words of memory out of 5000000
+ 25602 multiletter control sequences out of 15000+600000
  572263 words of font info for 88 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 72i,6n,79p,1134b,334s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 72i,10n,79p,1203b,334s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/shar
 e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texl
-ive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/tex
-mf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/share/texlive/texmf-di
-st/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/font
-s/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1
-/public/amsfonts/cm/cmr17.pfb></usr/share/texlive/texmf-dist/fonts/type1/public
-/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfont
-s/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/c
-msy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.p
-fb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></u
-sr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti7.pfb></usr/shar
-e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texl
-ive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb>
-Output written on main.pdf (14 pages, 242928 bytes).
+ive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist
+/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/share/texlive/texmf-dist/font
+s/type1/public/amsfonts/cmextra/cmmib8.pfb></usr/share/texlive/texmf-dist/fonts
+/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/
+public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/
+amsfonts/cm/cmr17.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfont
+s/cm/cmr6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr
+8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
+</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/s
+hare/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/share/t
+exlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/share/texlive
+/texmf-dist/fonts/type1/public/amsfonts/cm/cmti7.pfb></usr/share/texlive/texmf-
+dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/f
+onts/type1/public/amsfonts/cm/cmtt12.pfb></usr/share/texlive/texmf-dist/fonts/t
+ype1/public/amsfonts/symbols/msbm10.pfb>
+Output written on main.pdf (19 pages, 305480 bytes).
 PDF statistics:
- 130 PDF objects out of 1000 (max. 8388607)
- 81 compressed objects within 1 object stream
+ 167 PDF objects out of 1000 (max. 8388607)
+ 104 compressed objects within 2 object streams
  0 named destinations out of 1000 (max. 500000)
  1 words of extra memory for PDF output out of 10000 (max. 10000000)

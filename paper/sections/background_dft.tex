@@ -1,0 +1,190 @@
+\subsection{From the full electron-nuclear Schr\"odinger equation to Kohn-Sham DFT}
+\label{subsec:dft_background}
+
+At the most fundamental nonrelativistic level, an atomistic system is described by
+the stationary many-body Schr\"odinger equation for all electrons and all nuclei,
+\begin{equation}
+\hat{H}(\bm{r};\bm{R}) \Psi(\bm{r};\bm{R})
+=
+E \Psi(\bm{r};\bm{R}),
+\end{equation}
+where $\Psi(\bm{r};\bm{R})$ denotes the many-body wavefunction, $\bm{r}$ the
+collection of electronic coordinates, and $\bm{R}$ the collection of ionic
+coordinates. The semicolon indicates that the dependence on ionic coordinates
+is parametric within the Born-Oppenheimer approximation. We adopt atomic units throughout,
+with $\hbar = m_e = e^2 = 1$, so that energies are measured in Hartree and
+lengths in Bohr radii.
+
+Under the Born-Oppenheimer approximation \cite{born_zur_1927}, the electronic
+Hamiltonian is written as
+\begin{equation}
+=
+\hat{T}_e(\bm{r}) + \hat{V}_{ee}(\bm{r}) + \hat{V}_{ei}(\bm{r};\bm{R}) + E_{ii}(\bm{R}),
+\end{equation}
+with
+\begin{equation}
+\hat{T}_e(\bm{r}) = -\frac{1}{2}\sum_{j=1}^{N_e} \nabla_j^2,
+\end{equation}
+\begin{equation}
+\hat{V}_{ee}(\bm{r}) =
+\frac{1}{2}\sum_{j=1}^{N_e}\sum_{k \ne j}^{N_e}\frac{1}{|\bm{r}_j-\bm{r}_k|},
+\end{equation}
+\begin{equation}
+\hat{V}_{ei}(\bm{r};\bm{R}) =
+-\sum_{j=1}^{N_e}\sum_{\alpha=1}^{N_i}\frac{Z_{\alpha}}{|\bm{r}_j-\bm{R}_{\alpha}|},
+\end{equation}
+and
+\begin{equation}
+E_{ii}(\bm{R}) =
+\frac{1}{2}\sum_{\alpha=1}^{N_i}\sum_{\beta \ne \alpha}^{N_i}
+\frac{Z_{\alpha} Z_{\beta}}{|\bm{R}_{\alpha}-\bm{R}_{\beta}|}.
+\end{equation}
+The ion-ion term amounts to a constant energy shift for fixed ionic
+configuration, while the Hamiltonian and wavefunction depend only
+parametrically on $\bm{R}$. In the following, this parametric dependence is
+not always written explicitly.
+
+The central remaining difficulty is therefore the interacting many-electron
+problem defined by $\hat{T}_e + \hat{V}_{ee} + \hat{V}_{ei}$ at fixed ionic
+geometry.
+
+Density functional theory (DFT) replaces the many-electron wavefunction by the
+electron density as the central variable \cite{HoKo1964}. In the Kohn-Sham
+construction \cite{KoSh1965}, the interacting electron problem is mapped onto a
+fictitious system of non-interacting electrons governed by
+\begin{equation}
+\left[
+-\frac{1}{2}\nabla^2 + v_S(\bm{r})
+\right]\psi_j(\bm{r}) = \epsilon_j \psi_j(\bm{r}),
+\end{equation}
+where $j=1,\dots,N_e$ labels the Kohn-Sham orbitals. The corresponding
+electronic density is
+\begin{equation}
+n(\bm{r}) = \sum_{j=1}^{N_e} |\psi_j(\bm{r})|^2.
+\end{equation}
+The Kohn-Sham potential is
+\begin{equation}
+v_S(\bm{r}) =
+\frac{\delta E_H[n]}{\delta n(\bm{r})}
++ \frac{\delta E_{XC}[n]}{\delta n(\bm{r})}
++ v_{ei}(\bm{r}),
+\end{equation}
+where $E_H[n]$ is the Hartree energy, $E_{XC}[n]$ the exchange-correlation
+energy, and
+\begin{equation}
+v_{ei}(\bm{r}) = -\sum_{\alpha} \frac{Z_{\alpha}}{|\bm{r}-\bm{R}_{\alpha}|}.
+\end{equation}
+Although the Kohn-Sham construction is formally exact, practical calculations
+rely on approximations to $E_{XC}$.
+
+In this notation, the ground-state energy functional is written as
+\begin{equation}
+E[n] =
+T_S[n] + E_H[n] + E_{XC}[n]
++ \int d\bm{r}\, n(\bm{r}) v_{ei}(\bm{r})
++ E_{ii},
+\end{equation}
+where $T_S[n]$ is the Kohn-Sham kinetic energy. This is the DFT-level starting
+point that Mandala connects to localized-orbital operator learning.
+
+Mandala operates on localized-orbital matrix representations of this problem.
+Expanding the Kohn-Sham orbitals in a finite basis $\{\chi_{\mu}\}$,
+\begin{equation}
+\psi_j(\bm{r}) = \sum_{\mu} C_{\mu j}\chi_{\mu}(\bm{r}),
+\end{equation}
+leads to the generalized eigenvalue problem
+\begin{equation}
+\sum_{\nu} H_{\mu \nu} C_{\nu j}
+=
+\epsilon_j \sum_{\nu} S_{\mu \nu} C_{\nu j},
+\end{equation}
+with
+\begin{equation}
+H_{\mu \nu} = \langle \chi_{\mu} | \hat{H}_{\mathrm{KS}} | \chi_{\nu} \rangle,
+\qquad
+S_{\mu \nu} = \langle \chi_{\mu} | \chi_{\nu} \rangle.
+\end{equation}
+The one-particle density matrix is
+\begin{equation}
+D_{\mu \nu} = \sum_j f_j C_{\mu j} C_{\nu j}^{*},
+\end{equation}
+where $f_j$ denotes the orbital occupation. In a nonorthogonal basis, the
+electron count is
+\begin{equation}
+N_e = \Tr(DS),
+\end{equation}
+while the energy observable used throughout Mandala is obtained from
+\begin{equation}
+E_{\mathrm{op}} = \Tr(DH).
+\end{equation}
+For backend-specific total energies, additional double-counting and ion-ion
+terms may be required, but the trace expressions above are the core operator
+identities used throughout Mandala.
+
+Localized basis sets also induce block sparsity. If orbital $\mu$ belongs to
+atom $i$ and orbital $\nu$ belongs to atom $j$, then matrix entries can be
+organized into atom-pair blocks $X_{ij}^{\bm{L}}$, where
+$X \in \{H,S,D\}$ and $\bm{L} \in \mathbb{Z}^3$ indexes periodic lattice
+images. This sparse block structure is the operator domain learned by Mandala.
+
+\subsubsection{Hamiltonian gauge invariance and the overlap-shift correction}
+\label{subsubsec:gauge_invariance}
+
+In a nonorthogonal basis, the generalized eigenproblem is invariant under a
+rigid shift of the Hamiltonian by a multiple of the overlap matrix. Let
+\begin{equation}
+H C = S C \varepsilon,
+\end{equation}
+and define a shifted Hamiltonian
+\begin{equation}
+\widetilde{H} = H - \alpha S.
+\end{equation}
+Then
+\begin{equation}
+\widetilde{H} C
+=
+(H-\alpha S) C
+=
+S C \varepsilon - \alpha S C
+=
+S C (\varepsilon - \alpha I).
+\end{equation}
+Therefore the generalized eigenvectors are unchanged, while all eigenvalues are
+shifted by the same constant $\alpha$. This proves that the choice of zero of
+energy can be represented, in matrix form, as the transformation
+$H \mapsto H - \alpha S$. For a fixed electron number and a geometry-independent
+shift $\alpha$, one also finds
+\begin{equation}
+\Tr(D\widetilde{H}) = \Tr(DH) - \alpha \Tr(DS) = \Tr(DH) - \alpha N_e,
+\end{equation}
+so only the absolute energy reference changes.
+
+Mandala exploits this gauge freedom through the overlap-shift correction
+$\mu_H$, which is chosen to minimize the mean-squared discrepancy between a
+predicted Hamiltonian and a reference Hamiltonian after subtraction of a
+multiple of the overlap matrix:
+\begin{equation}
+\mu_H
+=
+\arg\min_{\mu}
+\left\|
+H^{\mathrm{pred}} - H^{\mathrm{ref}} - \mu S
+\right\|_F^2.
+\end{equation}
+Taking the derivative with respect to $\mu$ and setting it to zero yields
+\begin{equation}
+\mu_H
+=
+\frac{
+\left\langle
+H^{\mathrm{pred}} - H^{\mathrm{ref}}, S
+\right\rangle_F
+}{
+\left\langle S, S \right\rangle_F
+},
+\end{equation}
+where $\langle A,B\rangle_F = \sum_{\mu \nu} A_{\mu \nu} B_{\mu \nu}$ is the
+Frobenius inner product, evaluated in Mandala blockwise over the aligned sparse
+representation. The corrected Hamiltonian
+$H^{\mathrm{pred}} - \mu_H S$ therefore removes a pure gauge offset without
+altering the physically relevant eigenvectors.
