@@ -44,9 +44,6 @@ class DatasetFactory:
     ):
         self.cfg = cfg
         self.convention = convention
-        # cache root for processed snapshots; if None, caching is disabled
-        if self.cfg.cache_root is not None:
-            self.cfg.cache_root = Path(self.cfg.cache_root).expanduser()
 
         # paths grouped by purpose --------------------------------------
         self._pairs: Dict[Purpose, List[Tuple[Path, Path]]] = {"train": [], "val": []}

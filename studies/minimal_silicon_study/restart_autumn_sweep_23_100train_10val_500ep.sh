@@ -14,6 +14,7 @@ python studies/minimal_silicon_study/train_silicon_minimal.py \
   --resume-from-checkpoint studies/minimal_silicon_study/checkpoints/autumn-sweep-23/final_model.pt \
   --run-name test_restart \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A \
+  --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache \
   --train-temps 2700 \
   --val-temp 2700 \
   --n-snapshots-per-temp 100 \
