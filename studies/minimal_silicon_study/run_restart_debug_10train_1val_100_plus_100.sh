@@ -16,10 +16,12 @@ GROUP_NAME="silicon_restart_debug_10train_1val_100_plus_100"
 PHASE1_CHECKPOINT_DIR="studies/minimal_silicon_study/checkpoints/${PHASE1_RUN_NAME}"
 
 export WANDB_RUN_GROUP="${GROUP_NAME}"
+export WANDB_PROJECT="resume-tests"
 
 COMMON_ARGS=(
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
+  --wandb-project resume-tests
   --train-temps 2700
   --val-temp 2700
   --n-snapshots-per-temp 10
@@ -79,7 +81,21 @@ if [[ ! -f "${PHASE1_CHECKPOINT_DIR}/latest_checkpoint.pt" ]]; then
   exit 1
 fi
 
+PHASE1_RUN_ID="$(python - <<'PY'
+import torch
+ckpt = torch.load(
+    'studies/minimal_silicon_study/checkpoints/silicon_restart_debug_10train_1val_100ep_phase1/latest_checkpoint.pt',
+    map_location='cpu',
+)
+run_id = ckpt.get('wandb_run_id')
+if not run_id:
+    raise SystemExit('Could not find wandb_run_id in latest_checkpoint.pt')
+print(run_id)
+PY
+)"
+
 python studies/minimal_silicon_study/train_silicon_minimal.py \
+  --resume-from-run-id "${PHASE1_RUN_ID}" \
   --resume-from-checkpoint "${PHASE1_CHECKPOINT_DIR}/latest_checkpoint.pt" \
   --run-name "${PHASE2_RUN_NAME}" \
   --num-epochs 100 \

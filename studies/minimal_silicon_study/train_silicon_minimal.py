@@ -231,6 +231,8 @@ NON_TRAINING_OVERRIDE_ARG_NAMES = {
     "run_name",
     "checkpoint_dir",
     "snapshot_cache_dir",
+    "wandb_project",
+    "wandb_entity",
     "device",
     "log_interval",
     "adaptive_log_interval",
@@ -480,6 +482,18 @@ def build_parser() -> argparse.ArgumentParser:
         default="studies/minimal_silicon_study/checkpoints",
     )
     parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="mandala-minimal-silicon-study",
+        help="Weights & Biases project name.",
+    )
+    parser.add_argument(
+        "--wandb-entity",
+        type=str,
+        default=None,
+        help="Optional Weights & Biases entity. If omitted, use WANDB_ENTITY/default account.",
+    )
+    parser.add_argument(
         "--snapshot-cache-dir",
         type=str,
         default=None,
@@ -491,6 +505,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume-from-checkpoint", type=str, default=None)
+    parser.add_argument("--resume-from-run-id", type=str, default=None)
     return parser
 
 
@@ -567,6 +582,56 @@ def _resolve_resume_checkpoint_path(path: str | os.PathLike) -> Path:
     return candidate
 
 
+def _resolve_wandb_entity(explicit_entity: str | None) -> str:
+    if explicit_entity:
+        return explicit_entity
+    env_entity = os.environ.get("WANDB_ENTITY")
+    if env_entity:
+        return env_entity
+    api = wandb.Api()
+    default_entity = getattr(api, "default_entity", None)
+    if default_entity:
+        return default_entity
+    raise ValueError(
+        "Could not determine W&B entity for --resume-from-run-id. "
+        "Pass --wandb-entity explicitly or set WANDB_ENTITY."
+    )
+
+
+def _resolve_resume_checkpoint_from_run_id(
+    run_id: str, *, project: str, entity: str
+) -> Path:
+    api = wandb.Api()
+    try:
+        run = api.run(f"{entity}/{project}/{run_id}")
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not resolve W&B run '{entity}/{project}/{run_id}'."
+        ) from exc
+
+    summary = run.summary
+    checkpoint_path = (
+        summary.get("checkpoint/latest_path")
+        or summary.get("checkpoint/final_path")
+        or summary.get("latest_checkpoint_path")
+        or summary.get("final_model_path")
+    )
+    if not checkpoint_path:
+        raise RuntimeError(
+            "W&B run does not contain a saved checkpoint path in summary. "
+            "Expected one of: checkpoint/latest_path, checkpoint/final_path, "
+            "latest_checkpoint_path, final_model_path."
+        )
+
+    checkpoint = Path(str(checkpoint_path)).expanduser()
+    if not checkpoint.exists():
+        raise RuntimeError(
+            "Checkpoint path resolved from W&B summary does not exist on this machine: "
+            f"{checkpoint}"
+        )
+    return checkpoint.resolve()
+
+
 def _config_differences(
     args: argparse.Namespace, checkpoint_config: dict[str, Any]
 ) -> dict[str, tuple[Any, Any]]:
@@ -634,6 +699,10 @@ def _save_training_checkpoint(
     train_pairs: list[tuple[Path, Path]],
     val_pairs: list[tuple[Path, Path]],
     metrics: dict[str, Any] | None = None,
+    wandb_run_id: str | None = None,
+    wandb_project: str | None = None,
+    wandb_entity: str | None = None,
+    wandb_run_name: str | None = None,
 ) -> None:
     torch.save(
         {
@@ -655,9 +724,30 @@ def _save_training_checkpoint(
             "rng_state_torch_cuda": (
                 torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
             ),
+            "wandb_run_id": wandb_run_id,
+            "wandb_project": wandb_project,
+            "wandb_entity": wandb_entity,
+            "wandb_run_name": wandb_run_name,
         },
         path,
     )
+
+
+def _update_wandb_checkpoint_summary(
+    *,
+    latest_checkpoint_path: Path | None = None,
+    final_model_path: Path | None = None,
+) -> None:
+    if wandb.run is None:
+        return
+    if latest_checkpoint_path is not None:
+        wandb.run.summary["checkpoint/latest_path"] = str(
+            latest_checkpoint_path.resolve()
+        )
+    if final_model_path is not None:
+        wandb.run.summary["checkpoint/final_path"] = str(final_model_path.resolve())
+    wandb.run.summary["wandb/run_id"] = wandb.run.id
+    wandb.run.summary["wandb/run_name"] = wandb.run.name
 
 
 def set_seed(seed: int) -> None:
@@ -1974,9 +2064,22 @@ def main() -> None:
     start_epoch = 0
     train_end_epoch = 0
     resume_source_kind = "none"
+    continue_wandb_run = args.resume_from_run_id is not None
+    resolved_wandb_entity = None
+
+    if args.resume_from_run_id is not None:
+        resolved_wandb_entity = _resolve_wandb_entity(args.wandb_entity)
 
     if args.resume_from_checkpoint is not None:
         resume_checkpoint = _resolve_resume_checkpoint_path(args.resume_from_checkpoint)
+    elif args.resume_from_run_id is not None:
+        resume_checkpoint = _resolve_resume_checkpoint_from_run_id(
+            args.resume_from_run_id,
+            project=args.wandb_project,
+            entity=resolved_wandb_entity,
+        )
+
+    if resume_checkpoint is not None:
         resume_payload = _load_checkpoint(resume_checkpoint)
         resume_config = dict(resume_payload.get("config") or {})
         if not resume_config:
@@ -2201,13 +2304,22 @@ def main() -> None:
     orbital_selection_obj = parse_orbital_selection(args.orbital_selection)
 
     is_sweep_run = bool(os.environ.get("WANDB_SWEEP_ID"))
-    wandb_kwargs = {"project": "mandala-minimal-silicon-study"}
-    if not is_sweep_run:
+    wandb_kwargs = {"project": args.wandb_project}
+    if resolved_wandb_entity is not None:
+        wandb_kwargs["entity"] = resolved_wandb_entity
+    elif args.wandb_entity is not None:
+        wandb_kwargs["entity"] = args.wandb_entity
+    if continue_wandb_run:
+        wandb_kwargs["id"] = args.resume_from_run_id
+        wandb_kwargs["resume"] = "must"
+    elif not is_sweep_run:
         # For non-sweep runs, log full argparse namespace directly.
         wandb_kwargs["config"] = vars(args)
-    if args.run_name is not None:
+    if args.run_name is not None and not continue_wandb_run:
         wandb_kwargs["name"] = args.run_name
     wandb.init(**wandb_kwargs)
+    if continue_wandb_run and not is_sweep_run:
+        wandb.config.update(vars(args), allow_val_change=True)
 
     for name in BOOLEAN_ARG_NAMES:
         cfg_val = _get_wandb_config_value(name)
@@ -2275,10 +2387,13 @@ def main() -> None:
         "video_max_atoms": args.video_max_atoms,
         "device": args.device,
         "checkpoint_dir": args.checkpoint_dir,
+        "wandb_project": args.wandb_project,
+        "wandb_entity": wandb_kwargs.get("entity"),
         "snapshot_cache_dir": args.snapshot_cache_dir,
         "run_name": args.run_name,
         "seed": args.seed,
         "resume_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
+        "resume_from_run_id": args.resume_from_run_id,
         # Logger-compat keys expected by detailed_logging.log_config from minimal_overfit_study.
         "partial_train": None,
         "box_convention": "rows",
@@ -2550,13 +2665,14 @@ def main() -> None:
     try:
         for epoch in range(start_epoch, train_end_epoch):
             local_epoch = epoch - start_epoch
+            wandb_epoch = epoch if continue_wandb_run else local_epoch
             epoch_t0 = time.perf_counter() if args.benchmark else 0.0
             network.train()
             should_log_now = should_log_epoch(
                 local_epoch, args.log_interval, args.adaptive_log_interval
             )
             train_loss_total = 0.0
-            epoch_wandb_log: dict[str, float] = {"epoch": local_epoch}
+            epoch_wandb_log: dict[str, float] = {"epoch": wandb_epoch}
             last_grad_norm = None
 
             for sample_cpu in train_samples:
@@ -2860,7 +2976,7 @@ def main() -> None:
 
                 epoch_wandb_log.update(
                     build_wandb_detailed_metrics_log(
-                        epoch_zero_based=local_epoch,
+                        epoch_zero_based=wandb_epoch,
                         loss_value=train_loss,
                         detailed_metrics=val_eval["detailed"],
                     )
@@ -2896,7 +3012,7 @@ def main() -> None:
                     if per_irrep:
                         epoch_wandb_log.update(
                             build_wandb_per_irrep_metrics_log(
-                                epoch_zero_based=local_epoch,
+                                epoch_zero_based=wandb_epoch,
                                 all_irreps=all_irreps,
                                 per_irrep_metrics=per_irrep,
                                 metric_prefix=irrep_prefix_by_matrix.get(
@@ -2927,6 +3043,13 @@ def main() -> None:
                     train_pairs=train_pairs,
                     val_pairs=val_pairs,
                     metrics=val_eval["detailed"],
+                    wandb_run_id=wandb.run.id if wandb.run is not None else None,
+                    wandb_project=args.wandb_project,
+                    wandb_entity=wandb_kwargs.get("entity"),
+                    wandb_run_name=wandb.run.name if wandb.run is not None else None,
+                )
+                _update_wandb_checkpoint_summary(
+                    latest_checkpoint_path=latest_checkpoint_path
                 )
 
                 if args.benchmark:
@@ -3128,6 +3251,10 @@ def main() -> None:
         train_pairs=train_pairs,
         val_pairs=val_pairs,
         metrics=final_metrics,
+        wandb_run_id=wandb.run.id if wandb.run is not None else None,
+        wandb_project=args.wandb_project,
+        wandb_entity=wandb_kwargs.get("entity"),
+        wandb_run_name=wandb.run.name if wandb.run is not None else None,
     )
     torch.save(
         {
@@ -3146,8 +3273,16 @@ def main() -> None:
             "val_pairs": _serialize_pairs(val_pairs),
             "final_metrics": final_metrics,
             "final_metrics_hamiltonian_detailed": final_detailed_metrics,
+            "wandb_run_id": wandb.run.id if wandb.run is not None else None,
+            "wandb_project": args.wandb_project,
+            "wandb_entity": wandb_kwargs.get("entity"),
+            "wandb_run_name": wandb.run.name if wandb.run is not None else None,
         },
         final_model_path,
+    )
+    _update_wandb_checkpoint_summary(
+        latest_checkpoint_path=latest_checkpoint_path,
+        final_model_path=final_model_path,
     )
 
     log_study_complete(
