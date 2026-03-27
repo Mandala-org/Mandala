@@ -38,6 +38,8 @@ CHAIN_INDEX="${CHAIN_INDEX:-1}"
 export WANDB_RUN_GROUP="${GROUP_NAME}"
 export WANDB_PROJECT="${WANDB_PROJECT_NAME}"
 export CHAIN_RUN_ID
+export CHECKPOINT_DIR
+export LATEST_CHECKPOINT
 
 TRAIN_PID=""
 INTERRUPTED_BY_SIGNAL=0
@@ -108,8 +110,7 @@ get_completed_epochs() {
 from pathlib import Path
 import torch
 import os
-chain_run_id = os.environ["CHAIN_RUN_ID"]
-path = Path(f"studies/minimal_silicon_study/checkpoints/silicon_restart_debug_4train_1val_100ep_chain_test_{chain_run_id}/latest_checkpoint.pt")
+path = Path(os.environ["LATEST_CHECKPOINT"])
 if not path.exists():
     print(0)
 else:
@@ -123,8 +124,7 @@ get_run_id() {
 from pathlib import Path
 import torch
 import os
-chain_run_id = os.environ["CHAIN_RUN_ID"]
-path = Path(f"studies/minimal_silicon_study/checkpoints/silicon_restart_debug_4train_1val_100ep_chain_test_{chain_run_id}/latest_checkpoint.pt")
+path = Path(os.environ["LATEST_CHECKPOINT"])
 ckpt = torch.load(path, map_location="cpu")
 run_id = ckpt.get("wandb_run_id")
 if not run_id:
