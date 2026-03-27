@@ -129,6 +129,7 @@ BOOLEAN_ARG_NAMES = [
     "log_forward",
     "verbose_forward",
     "log_per_irrep_metrics",
+    "print_per_irrep_metrics",
     "log_per_irrep_images",
     "generate_video",
 ]
@@ -242,6 +243,7 @@ NON_TRAINING_OVERRIDE_ARG_NAMES = {
     "log_forward",
     "verbose_forward",
     "log_per_irrep_metrics",
+    "print_per_irrep_metrics",
     "log_per_irrep_images",
     "generate_video",
     "video_max_atoms",
@@ -461,6 +463,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-forward", type=parse_bool, default=False)
     parser.add_argument("--verbose-forward", type=parse_bool, default=False)
     parser.add_argument("--log-per-irrep-metrics", type=parse_bool, default=False)
+    parser.add_argument("--print-per-irrep-metrics", type=parse_bool, default=False)
     parser.add_argument("--log-per-irrep-images", type=parse_bool, default=False)
     parser.add_argument("--generate-video", type=parse_bool, default=False)
     parser.add_argument(
@@ -2382,6 +2385,7 @@ def main() -> None:
         "log_forward": args.log_forward,
         "verbose_forward": args.verbose_forward,
         "log_per_irrep_metrics": args.log_per_irrep_metrics,
+        "print_per_irrep_metrics": args.print_per_irrep_metrics,
         "log_per_irrep_images": args.log_per_irrep_images,
         "generate_video": args.generate_video,
         "video_max_atoms": args.video_max_atoms,
@@ -2923,7 +2927,7 @@ def main() -> None:
                     detailed_metrics=val_eval["detailed"],
                     irrep_losses=None,
                 )
-                if args.log_per_irrep_metrics:
+                if args.print_per_irrep_metrics:
                     for matrix_name in matrix_targets:
                         per_irrep = val_eval["per_irrep_by_name"].get(matrix_name, {})
                         if per_irrep:

@@ -74,7 +74,7 @@ def log_config(config: dict, run_checkpoint_dir, frame_output_dir) -> None:
         f"  Log forward console details: {'enabled' if config.get('log_forward', False) else 'disabled'}"
     )
     print(
-        f"  Log per-irrep metrics console details: {'enabled' if config.get('log_per_irrep_metrics', False) else 'disabled'}"
+        f"  Log per-irrep metrics console details: {'enabled' if config.get('print_per_irrep_metrics', config.get('log_per_irrep_metrics', False)) else 'disabled'}"
     )
     print(
         f"  Log activations to WandB: {'enabled' if config.get('log_activations_wandb', False) else 'disabled'}"

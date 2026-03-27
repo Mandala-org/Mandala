@@ -25,8 +25,9 @@ if [[ -f "${REPO_ROOT}/mandala-venv/bin/activate" ]]; then
   source "${REPO_ROOT}/mandala-venv/bin/activate"
 fi
 
-RUN_NAME="silicon_restart_debug_4train_1val_100ep_chain_test"
-GROUP_NAME="silicon_restart_debug_4train_1val_100ep_chain_test"
+CHAIN_RUN_ID="${CHAIN_RUN_ID:-${SLURM_JOB_ID}}"
+RUN_NAME="silicon_restart_debug_4train_1val_100ep_chain_test_${CHAIN_RUN_ID}"
+GROUP_NAME="${RUN_NAME}"
 WANDB_PROJECT_NAME="resume-tests"
 CHECKPOINT_DIR="studies/minimal_silicon_study/checkpoints/${RUN_NAME}"
 LATEST_CHECKPOINT="${CHECKPOINT_DIR}/latest_checkpoint.pt"
@@ -36,6 +37,7 @@ CHAIN_INDEX="${CHAIN_INDEX:-1}"
 
 export WANDB_RUN_GROUP="${GROUP_NAME}"
 export WANDB_PROJECT="${WANDB_PROJECT_NAME}"
+export CHAIN_RUN_ID
 
 TRAIN_PID=""
 INTERRUPTED_BY_SIGNAL=0
@@ -96,6 +98,7 @@ COMMON_ARGS=(
   --log-forward false
   --verbose-forward false
   --log-per-irrep-metrics true
+  --print-per-irrep-metrics false
   --log-per-irrep-images true
   --generate-video true
 )
@@ -104,7 +107,9 @@ get_completed_epochs() {
   python - <<'PY'
 from pathlib import Path
 import torch
-path = Path("studies/minimal_silicon_study/checkpoints/silicon_restart_debug_4train_1val_100ep_chain_test/latest_checkpoint.pt")
+import os
+chain_run_id = os.environ["CHAIN_RUN_ID"]
+path = Path(f"studies/minimal_silicon_study/checkpoints/silicon_restart_debug_4train_1val_100ep_chain_test_{chain_run_id}/latest_checkpoint.pt")
 if not path.exists():
     print(0)
 else:
@@ -117,7 +122,9 @@ get_run_id() {
   python - <<'PY'
 from pathlib import Path
 import torch
-path = Path("studies/minimal_silicon_study/checkpoints/silicon_restart_debug_4train_1val_100ep_chain_test/latest_checkpoint.pt")
+import os
+chain_run_id = os.environ["CHAIN_RUN_ID"]
+path = Path(f"studies/minimal_silicon_study/checkpoints/silicon_restart_debug_4train_1val_100ep_chain_test_{chain_run_id}/latest_checkpoint.pt")
 ckpt = torch.load(path, map_location="cpu")
 run_id = ckpt.get("wandb_run_id")
 if not run_id:
@@ -130,6 +137,7 @@ COMPLETED_EPOCHS="$(get_completed_epochs)"
 REMAINING_EPOCHS=$(( TOTAL_EPOCHS - COMPLETED_EPOCHS ))
 
 echo "[SLURM] chain index: ${CHAIN_INDEX}/${MAX_CHAIN_JOBS}"
+echo "[SLURM] chain run id: ${CHAIN_RUN_ID}"
 echo "[SLURM] completed epochs before launch: ${COMPLETED_EPOCHS}/${TOTAL_EPOCHS}"
 
 if (( REMAINING_EPOCHS <= 0 )); then
@@ -195,4 +203,4 @@ fi
 
 NEXT_CHAIN_INDEX=$(( CHAIN_INDEX + 1 ))
 echo "[SLURM] Resubmitting next job with CHAIN_INDEX=${NEXT_CHAIN_INDEX}"
-sbatch --export=ALL,CHAIN_INDEX="${NEXT_CHAIN_INDEX}",MAX_CHAIN_JOBS="${MAX_CHAIN_JOBS}" "$0"
+sbatch --export=ALL,CHAIN_INDEX="${NEXT_CHAIN_INDEX}",MAX_CHAIN_JOBS="${MAX_CHAIN_JOBS}",CHAIN_RUN_ID="${CHAIN_RUN_ID}" "$0"
