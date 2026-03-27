@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node 1
 #SBATCH --gres gpu:1
 #SBATCH --time 00:10:00
-#SBATCH --signal=INT@300
+#SBATCH --signal=INT@900
 #SBATCH --mem 264G
 #SBATCH --cpus-per-task 16
 #SBATCH -A casus
