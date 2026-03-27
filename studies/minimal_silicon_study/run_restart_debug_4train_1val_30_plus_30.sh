@@ -84,7 +84,7 @@ fi
 PHASE1_RUN_ID="$(python - <<'PY'
 import torch
 ckpt = torch.load(
-    'studies/minimal_silicon_study/checkpoints/silicon_restart_debug_10train_1val_100ep_phase1/latest_checkpoint.pt',
+    'studies/minimal_silicon_study/checkpoints/silicon_restart_debug_4train_1val_30ep_phase1/latest_checkpoint.pt',
     map_location='cpu',
 )
 run_id = ckpt.get('wandb_run_id')
