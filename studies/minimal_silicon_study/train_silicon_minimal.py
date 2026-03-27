@@ -2638,6 +2638,10 @@ def main() -> None:
     last_logged_epoch = -1
     total_run_epochs = max(train_end_epoch - start_epoch, 0)
     last_completed_epoch = start_epoch - 1
+    use_global_display_epoch = continue_wandb_run
+    display_total_epochs = (
+        train_end_epoch if use_global_display_epoch else total_run_epochs
+    )
 
     benchmark_order = [
         "epoch_total",
@@ -2659,7 +2663,9 @@ def main() -> None:
         if not args.benchmark or benchmark_epochs <= 0:
             return
         epoch_ms = benchmark_accum["epoch_total"] * 1000.0 / benchmark_epochs
-        print(f"\n[BENCHMARK EPOCH {epoch_zero_based + 1}/{max(total_run_epochs, 1)}]")
+        print(
+            f"\n[BENCHMARK EPOCH {epoch_zero_based + 1}/{max(display_total_epochs, 1)}]"
+        )
         print(f"  averaged over {benchmark_epochs} epoch(s): {epoch_ms:.3f} ms/epoch")
         for k in benchmark_order:
             ms = benchmark_accum[k] * 1000.0 / benchmark_epochs
@@ -2670,10 +2676,11 @@ def main() -> None:
         for epoch in range(start_epoch, train_end_epoch):
             local_epoch = epoch - start_epoch
             wandb_epoch = epoch if continue_wandb_run else local_epoch
+            display_epoch = epoch if use_global_display_epoch else local_epoch
             epoch_t0 = time.perf_counter() if args.benchmark else 0.0
             network.train()
             should_log_now = should_log_epoch(
-                local_epoch, args.log_interval, args.adaptive_log_interval
+                display_epoch, args.log_interval, args.adaptive_log_interval
             )
             train_loss_total = 0.0
             epoch_wandb_log: dict[str, float] = {"epoch": wandb_epoch}
@@ -2880,7 +2887,7 @@ def main() -> None:
             should_update_best = do_log if has_validation else True
             if should_update_best and score < best_score:
                 best_score = score
-                best_epoch = local_epoch
+                best_epoch = display_epoch
                 _save_training_checkpoint(
                     best_model_path,
                     epoch=epoch,
@@ -2906,17 +2913,17 @@ def main() -> None:
                 current_time = time.time()
                 time_elapsed = current_time - last_log_time
                 epochs_since_last_log = (
-                    (local_epoch - last_logged_epoch)
+                    (display_epoch - last_logged_epoch)
                     if last_logged_epoch >= 0
-                    else (local_epoch + 1)
+                    else (display_epoch + 1)
                 )
                 avg_epoch_time = time_elapsed / max(epochs_since_last_log, 1)
                 last_log_time = current_time
-                last_logged_epoch = local_epoch
+                last_logged_epoch = display_epoch
 
                 print(f"\n{'=' * 60}")
                 print(
-                    f"EPOCH {local_epoch + 1}/{max(total_run_epochs, 1)}  |  lr={current_lr:.6e}"
+                    f"EPOCH {display_epoch + 1}/{max(display_total_epochs, 1)}  |  lr={current_lr:.6e}"
                 )
                 print(f"{'=' * 60}")
                 log_detailed_training_metrics(
@@ -2958,7 +2965,7 @@ def main() -> None:
                                 fs["atoms_list"],
                                 mapper.orbital_cfg,
                                 matrix_frame_output_dirs[matrix_name],
-                                local_epoch,
+                                display_epoch,
                                 sx=0,
                                 sy=0,
                                 sz=0,
@@ -3060,7 +3067,7 @@ def main() -> None:
                     benchmark_add("epoch_total", time.perf_counter() - epoch_t0)
                     benchmark_epochs += 1
                     if do_log:
-                        benchmark_report(local_epoch)
+                        benchmark_report(display_epoch)
                         benchmark_accum = {k: 0.0 for k in benchmark_order}
                         benchmark_epochs = 0
 
@@ -3291,7 +3298,11 @@ def main() -> None:
 
     log_study_complete(
         run_name=run_name,
-        total_training_epochs=max(len(history["train_loss"]), 0),
+        total_training_epochs=(
+            max(last_completed_epoch + 1, 0)
+            if use_global_display_epoch
+            else max(len(history["train_loss"]), 0)
+        ),
         final_loss=history["train_loss"][-1] if history["train_loss"] else float("nan"),
         best_loss=best_score if best_score < float("inf") else float("nan"),
         best_epoch=(best_epoch + 1) if best_epoch >= 0 else -1,
