@@ -39,12 +39,13 @@ export WANDB_PROJECT="${WANDB_PROJECT_NAME}"
 
 TRAIN_PID=""
 INTERRUPTED_BY_SIGNAL=0
+TRAIN_EXIT=0
 
 forward_sigint() {
   echo "[SLURM] Received pre-timeout signal. Forwarding SIGINT to training process."
   INTERRUPTED_BY_SIGNAL=1
   if [[ -n "${TRAIN_PID}" ]] && kill -0 "${TRAIN_PID}" 2>/dev/null; then
-    kill -INT "${TRAIN_PID}" || true
+    kill -INT -- -"${TRAIN_PID}" 2>/dev/null || kill -INT "${TRAIN_PID}" || true
   fi
 }
 trap forward_sigint USR1
@@ -90,16 +91,16 @@ COMMON_ARGS=(
   --grad-clip 1.0
   --log-interval 1
   --adaptive-log-interval false
-  --benchmark false
+  --benchmark true
   --apply-cutoff-to-targets true
   --require-exact-edge-match true
   --log-data false
   --log-model false
   --log-forward false
   --verbose-forward false
-  --log-per-irrep-metrics false
-  --log-per-irrep-images false
-  --generate-video false
+  --log-per-irrep-metrics true
+  --log-per-irrep-images true
+  --generate-video true
 )
 
 get_completed_epochs() {
@@ -142,7 +143,7 @@ fi
 if [[ -f "${LATEST_CHECKPOINT}" ]]; then
   RUN_ID="$(get_run_id)"
   echo "[SLURM] Resuming run id ${RUN_ID} from ${LATEST_CHECKPOINT}"
-  python studies/minimal_silicon_study/train_silicon_minimal.py \
+  setsid python -u studies/minimal_silicon_study/train_silicon_minimal.py \
     --resume-from-run-id "${RUN_ID}" \
     --resume-from-checkpoint "${LATEST_CHECKPOINT}" \
     --run-name "${RUN_NAME}" \
@@ -150,19 +151,35 @@ if [[ -f "${LATEST_CHECKPOINT}" ]]; then
     "${COMMON_ARGS[@]}" &
 else
   echo "[SLURM] Starting fresh run ${RUN_NAME}"
-  python studies/minimal_silicon_study/train_silicon_minimal.py \
+  setsid python -u studies/minimal_silicon_study/train_silicon_minimal.py \
     --run-name "${RUN_NAME}" \
     --num-epochs "${REMAINING_EPOCHS}" \
     "${COMMON_ARGS[@]}" &
 fi
 
 TRAIN_PID=$!
-wait "${TRAIN_PID}" || TRAIN_EXIT=$?
-TRAIN_EXIT="${TRAIN_EXIT:-0}"
+while true; do
+  set +e
+  wait "${TRAIN_PID}"
+  TRAIN_EXIT=$?
+  set -e
+  if [[ "${TRAIN_EXIT}" -eq 0 ]]; then
+    break
+  fi
+  if kill -0 "${TRAIN_PID}" 2>/dev/null; then
+    echo "[SLURM] wait was interrupted (exit=${TRAIN_EXIT}) but training is still running; continuing to wait."
+    continue
+  fi
+  break
+done
 
 if [[ "${TRAIN_EXIT}" -ne 0 ]]; then
-  echo "[SLURM] Training process exited with code ${TRAIN_EXIT}" >&2
-  exit "${TRAIN_EXIT}"
+  if [[ "${INTERRUPTED_BY_SIGNAL}" -eq 1 ]]; then
+    echo "[SLURM] Training exited with code ${TRAIN_EXIT} after timeout signal; inspecting checkpoint state."
+  else
+    echo "[SLURM] Training process exited with code ${TRAIN_EXIT}" >&2
+    exit "${TRAIN_EXIT}"
+  fi
 fi
 
 COMPLETED_EPOCHS="$(get_completed_epochs)"
