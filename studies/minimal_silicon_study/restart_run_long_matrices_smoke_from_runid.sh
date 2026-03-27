@@ -43,8 +43,8 @@ srun --ntasks=1 --unbuffered python -u studies/minimal_silicon_study/train_silic
   --lr 0.015 \
   --lr-factor 0.2 \
   --lr-patience 8 \
-  --loss-coef-observables 1.0119033766422853e-7 \
-  --loss-coef-forces 0.0000010340073235427382 \
+  --loss-coef-observables 1e-9 \
+  --loss-coef-forces 1e-10 \
   --loss-coef-density-matrix 10 \
   --num-epochs "${ADDITIONAL_EPOCHS}" \
   --log-interval 1 \
