@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 3 ]]; then
+  echo "Usage: $0 <wandb_run_id> [additional_epochs=100] [wandb_project=mandala-minimal-silicon-study]" >&2
+  exit 1
+fi
+
+RUN_ID="$1"
+ADDITIONAL_EPOCHS="${2:-100}"
+WANDB_PROJECT="${3:-mandala-minimal-silicon-study}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "${REPO_ROOT}"
+
+if [[ -f "${REPO_ROOT}/mandala-venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/mandala-venv/bin/activate"
+fi
+
+srun --ntasks=1 --unbuffered python -u studies/minimal_silicon_study/train_silicon_minimal.py \
+  --resume-from-run-id "${RUN_ID}" \
+  --wandb-project "${WANDB_PROJECT}" \
+  --checkpoint-dir studies/minimal_silicon_study/checkpoints \
+  --data-path /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A \
+  --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache \
+  --train-temps 2700 \
+  --val-temp 2700 \
+  --n-snapshots-per-temp 10 \
+  --val-n-snapshots 2 \
+  --device cuda \
+  --dtype float32 \
+  --training-unit ev \
+  --matrix-targets hamiltonian,overlap,density \
+  --enable-energy true \
+  --enable-forces true \
+  --enable-num-electrons true \
+  --train-on-energy true \
+  --train-on-forces true \
+  --train-on-num-electrons true \
+  --rescale-density-to-num-electrons true \
+  --lr 0.015 \
+  --lr-factor 0.2 \
+  --lr-patience 8 \
+  --loss-coef-observables 1.0119033766422853e-7 \
+  --loss-coef-forces 0.0000010340073235427382 \
+  --loss-coef-density-matrix 10 \
+  --num-epochs "${ADDITIONAL_EPOCHS}" \
+  --log-interval 1 \
+  --adaptive-log-interval false \
+  --benchmark true \
+  --log-data true \
+  --log-model true \
+  --log-per-irrep-metrics true \
+  --print-per-irrep-metrics false \
+  --log-per-irrep-images true \
+  --generate-video true \
+  --grad-clip 1 \
+  --hidden-dim 32 \
+  --hidden-irreps 32x0e+24x1e+24x1o+16x2e+16x2o+12x3e+12x3o+8x4e \
+  --l-max 4 \
+  --num-layers 2 \
+  --n-radial 64 \
+  --head-e3mlp-layers 2 \
+  --e3layernorm true \
+  --edge-encoder-use-sh-tensor-square true \
+  --head-use-tensor-square true \
+  --head-use-node-embeddings-for-self-edges true \
+  --radial-embedding-scale none \
+  --separate-shifted-self true \
+  --cutoff-radius 7 \
+  --symmetrize-preds true \
+  --apply-cutoff-to-targets true \
+  --require-exact-edge-match true
