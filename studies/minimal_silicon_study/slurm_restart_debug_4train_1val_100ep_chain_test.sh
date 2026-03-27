@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node 1
 #SBATCH --gres gpu:1
 #SBATCH --time 00:10:00
-#SBATCH --signal=B:USR1@300
+#SBATCH --signal=INT@300
 #SBATCH --mem 264G
 #SBATCH --cpus-per-task 16
 #SBATCH -A casus
@@ -41,14 +41,11 @@ TRAIN_PID=""
 INTERRUPTED_BY_SIGNAL=0
 TRAIN_EXIT=0
 
-forward_sigint() {
-  echo "[SLURM] Received pre-timeout signal. Forwarding SIGINT to training process."
+handle_timeout_signal() {
+  echo "[SLURM] Received pre-timeout SIGINT. Waiting for the srun training step to handle it cleanly."
   INTERRUPTED_BY_SIGNAL=1
-  if [[ -n "${TRAIN_PID}" ]] && kill -0 "${TRAIN_PID}" 2>/dev/null; then
-    kill -INT -- -"${TRAIN_PID}" 2>/dev/null || kill -INT "${TRAIN_PID}" || true
-  fi
 }
-trap forward_sigint USR1
+trap handle_timeout_signal INT
 
 COMMON_ARGS=(
   --wandb-project "${WANDB_PROJECT_NAME}"
@@ -143,7 +140,7 @@ fi
 if [[ -f "${LATEST_CHECKPOINT}" ]]; then
   RUN_ID="$(get_run_id)"
   echo "[SLURM] Resuming run id ${RUN_ID} from ${LATEST_CHECKPOINT}"
-  setsid python -u studies/minimal_silicon_study/train_silicon_minimal.py \
+  srun --ntasks=1 --unbuffered python -u studies/minimal_silicon_study/train_silicon_minimal.py \
     --resume-from-run-id "${RUN_ID}" \
     --resume-from-checkpoint "${LATEST_CHECKPOINT}" \
     --run-name "${RUN_NAME}" \
@@ -151,7 +148,7 @@ if [[ -f "${LATEST_CHECKPOINT}" ]]; then
     "${COMMON_ARGS[@]}" &
 else
   echo "[SLURM] Starting fresh run ${RUN_NAME}"
-  setsid python -u studies/minimal_silicon_study/train_silicon_minimal.py \
+  srun --ntasks=1 --unbuffered python -u studies/minimal_silicon_study/train_silicon_minimal.py \
     --run-name "${RUN_NAME}" \
     --num-epochs "${REMAINING_EPOCHS}" \
     "${COMMON_ARGS[@]}" &
