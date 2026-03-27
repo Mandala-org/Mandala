@@ -507,6 +507,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--randomize-seed",
+        type=parse_bool,
+        default=False,
+        help="If true, replace --seed with a fresh random seed at startup.",
+    )
     parser.add_argument("--resume-from-checkpoint", type=str, default=None)
     parser.add_argument("--resume-from-run-id", type=str, default=None)
     return parser
@@ -758,6 +764,12 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def choose_runtime_seed(fixed_seed: int, randomize_seed: bool) -> int:
+    if not randomize_seed:
+        return int(fixed_seed)
+    return random.SystemRandom().randint(0, 2**31 - 1)
 
 
 def parse_orbital_selection(selection_raw: str | None) -> Any:
@@ -2177,11 +2189,16 @@ def main() -> None:
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
         torch.set_float32_matmul_precision("high")
+    args.seed = choose_runtime_seed(args.seed, args.randomize_seed)
     set_seed(args.seed)
 
     print("=" * 80)
     print("MINIMAL SILICON STUDY - MULTI SNAPSHOT")
     print("=" * 80)
+    if args.randomize_seed:
+        print(f"[SEED] Randomized runtime seed: {args.seed}")
+    else:
+        print(f"[SEED] Fixed runtime seed: {args.seed}")
 
     if args.data_path is None:
         raise ValueError(
@@ -2396,6 +2413,7 @@ def main() -> None:
         "snapshot_cache_dir": args.snapshot_cache_dir,
         "run_name": args.run_name,
         "seed": args.seed,
+        "randomize_seed": args.randomize_seed,
         "resume_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
         "resume_from_run_id": args.resume_from_run_id,
         # Logger-compat keys expected by detailed_logging.log_config from minimal_overfit_study.

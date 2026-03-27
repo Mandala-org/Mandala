@@ -35,6 +35,7 @@ srun --ntasks=1 --unbuffered python -u studies/minimal_silicon_study/train_silic
   --lr-patience 8 \
   --loss-coef-density-matrix 10 \
   --num-epochs 1000 \
+  --randomize-seed true \
   --log-interval 1 \
   --adaptive-log-interval false \
   --benchmark true \
