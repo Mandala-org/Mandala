@@ -13,10 +13,12 @@ import argparse
 from contextlib import contextmanager
 import copy
 from datetime import datetime
+import hashlib
 import json
 import os
 import random
 import sys
+import tempfile
 import time
 from collections import Counter
 from pathlib import Path
@@ -776,6 +778,98 @@ def choose_runtime_seed(fixed_seed: int, randomize_seed: bool) -> int:
 def build_timestamped_run_name(prefix: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     return f"{prefix}_{timestamp}"
+
+
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v1"
+
+
+def _orbital_selection_cache_key(orbital_selection: Any) -> str:
+    if orbital_selection is None:
+        return "none"
+    if isinstance(orbital_selection, dict):
+        return json.dumps(orbital_selection, sort_keys=True)
+    return str(orbital_selection)
+
+
+def get_preprocessed_sample_cache_file(
+    *,
+    snapshot_cache_dir: str | None,
+    matrix_path: Path,
+    info_path: Path,
+    mapper: BlockIrrepMapper,
+    sh_irreps: Irreps,
+    n_radial: int,
+    radial_embedding_scale: str,
+    training_unit: str,
+    hamiltonian_scale_from_hartree: float,
+    cutoff_radius: float,
+    apply_cutoff_to_targets: bool,
+    orbital_selection: Any,
+    matrix_targets: list[str],
+    enable_forces: bool,
+    require_exact_edge_match: bool,
+    torch_dtype: torch.dtype,
+) -> Path | None:
+    if snapshot_cache_dir is None:
+        return None
+    cache_root = Path(snapshot_cache_dir).expanduser() / "preprocessed_samples"
+    mat_stat = matrix_path.stat()
+    info_stat = info_path.stat()
+    key_payload = {
+        "version": PREPROCESSED_SAMPLE_CACHE_VERSION,
+        "matrix_path": str(matrix_path.resolve()),
+        "info_path": str(info_path.resolve()),
+        "matrix_mtime_ns": mat_stat.st_mtime_ns,
+        "matrix_size": mat_stat.st_size,
+        "info_mtime_ns": info_stat.st_mtime_ns,
+        "info_size": info_stat.st_size,
+        "orbital_cfg": mapper.orbital_cfg.to_dict(),
+        "sh_irreps": str(sh_irreps),
+        "n_radial": int(n_radial),
+        "radial_embedding_scale": radial_embedding_scale,
+        "training_unit": training_unit,
+        "hamiltonian_scale_from_hartree": float(hamiltonian_scale_from_hartree),
+        "cutoff_radius": float(cutoff_radius),
+        "graph_cutoff_eps": GRAPH_NEIGHBORLIST_CUTOFF_EPS,
+        "apply_cutoff_to_targets": bool(apply_cutoff_to_targets),
+        "orbital_selection": _orbital_selection_cache_key(orbital_selection),
+        "matrix_targets": list(matrix_targets),
+        "enable_forces": bool(enable_forces),
+        "require_exact_edge_match": bool(require_exact_edge_match),
+        "torch_dtype": str(torch_dtype),
+    }
+    key_hash = hashlib.md5(
+        json.dumps(key_payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    return cache_root / f"{matrix_path.stem}_{key_hash}.pt"
+
+
+def load_preprocessed_sample_cache(path: Path) -> dict | None:
+    try:
+        return torch.load(path, map_location="cpu")
+    except Exception:
+        try:
+            path.unlink()
+        except Exception:
+            pass
+        return None
+
+
+def save_preprocessed_sample_cache(path: Path, sample: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        dir=path.parent,
+        prefix=f"{path.stem}.",
+        suffix=".tmp",
+        delete=False,
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        torch.save(sample, tmp_path)
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def parse_orbital_selection(selection_raw: str | None) -> Any:
@@ -1544,9 +1638,50 @@ def preprocess_dataset_samples(
     jobs = [(idx, x, y) for idx, (x, y) in enumerate(dataset)]
     if not jobs:
         return []
+    snapshot_paths = getattr(dataset, "snapshot_paths", None)
+    dataset_cfg = getattr(dataset, "cfg", None)
+    snapshot_cache_dir = (
+        getattr(dataset_cfg, "snapshot_cache_dir", None)
+        if dataset_cfg is not None
+        else None
+    )
+    preprocessed_cache_hits = 0
+    preprocessed_cache_misses = 0
 
     def _build_sample(job: tuple[int, dict, dict]) -> dict:
+        nonlocal preprocessed_cache_hits, preprocessed_cache_misses
         idx, x, y = job
+        cache_file = None
+        if snapshot_paths is not None and idx < len(snapshot_paths):
+            matrix_path, info_path = snapshot_paths[idx]
+            cache_file = get_preprocessed_sample_cache_file(
+                snapshot_cache_dir=snapshot_cache_dir,
+                matrix_path=matrix_path,
+                info_path=info_path,
+                mapper=mapper,
+                sh_irreps=sh_irreps,
+                n_radial=n_radial,
+                radial_embedding_scale=radial_embedding_scale,
+                training_unit=training_unit,
+                hamiltonian_scale_from_hartree=hamiltonian_scale_from_hartree,
+                cutoff_radius=cutoff_radius,
+                apply_cutoff_to_targets=apply_cutoff_to_targets,
+                orbital_selection=orbital_selection,
+                matrix_targets=matrix_targets,
+                enable_forces=enable_forces,
+                require_exact_edge_match=require_exact_edge_match,
+                torch_dtype=torch_dtype,
+            )
+            if cache_file is not None and cache_file.exists():
+                cached_sample = load_preprocessed_sample_cache(cache_file)
+                if cached_sample is not None:
+                    preprocessed_cache_hits += 1
+                    if idx == 0 and (log_first_sample or log_model_first_sample):
+                        print(
+                            f"[CACHE] Loaded first preprocessed sample from {cache_file}"
+                        )
+                    return cached_sample
+        preprocessed_cache_misses += 1
         return preprocess_sample(
             x=x,
             y=y,
@@ -1570,7 +1705,42 @@ def preprocess_dataset_samples(
 
     samples = []
     for job in tqdm(jobs, desc=progress_desc):
-        samples.append(_build_sample(job))
+        sample = _build_sample(job)
+        idx = job[0]
+        if snapshot_paths is not None and idx < len(snapshot_paths):
+            matrix_path, info_path = snapshot_paths[idx]
+            cache_file = get_preprocessed_sample_cache_file(
+                snapshot_cache_dir=snapshot_cache_dir,
+                matrix_path=matrix_path,
+                info_path=info_path,
+                mapper=mapper,
+                sh_irreps=sh_irreps,
+                n_radial=n_radial,
+                radial_embedding_scale=radial_embedding_scale,
+                training_unit=training_unit,
+                hamiltonian_scale_from_hartree=hamiltonian_scale_from_hartree,
+                cutoff_radius=cutoff_radius,
+                apply_cutoff_to_targets=apply_cutoff_to_targets,
+                orbital_selection=orbital_selection,
+                matrix_targets=matrix_targets,
+                enable_forces=enable_forces,
+                require_exact_edge_match=require_exact_edge_match,
+                torch_dtype=torch_dtype,
+            )
+            if cache_file is not None and not cache_file.exists():
+                save_preprocessed_sample_cache(cache_file, sample)
+        samples.append(sample)
+    if snapshot_cache_dir is None:
+        print(
+            f"[CACHE] {progress_desc}: cache disabled, processed {len(samples)} sample(s)"
+        )
+    else:
+        total = preprocessed_cache_hits + preprocessed_cache_misses
+        print(
+            f"[CACHE] {progress_desc}: "
+            f"{preprocessed_cache_hits} hit(s), {preprocessed_cache_misses} miss(es), "
+            f"{total} total"
+        )
     return samples
 
 
