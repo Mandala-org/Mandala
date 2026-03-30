@@ -52,8 +52,9 @@ class E3GNNDataset(Dataset):
     ):
         self.cfg = cfg
         self.convention = convention
+        self.snapshot_paths = list(snapshot_paths)
 
-        if not snapshot_paths:
+        if not self.snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
 
         self.dtype = self.cfg.dtype
@@ -70,10 +71,25 @@ class E3GNNDataset(Dataset):
 
         # preprocess all snapshots
         self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
-        for matrix_path, info_path in tqdm(snapshot_paths, desc="Loading snapshots"):
+        self.snapshot_cache_hits = 0
+        self.snapshot_cache_misses = 0
+        for matrix_path, info_path in tqdm(
+            self.snapshot_paths, desc="Loading snapshots"
+        ):
             snapshot = self._load_snapshot(matrix_path, info_path)
             sample = self._process_snapshot_to_sample(snapshot)
             self.snapshots.append(sample)
+        if getattr(self.cfg, "snapshot_cache_dir", None) is None:
+            print(
+                f"[CACHE] Snapshot loading: cache disabled, loaded {len(self.snapshot_paths)} snapshot(s)"
+            )
+        else:
+            total = self.snapshot_cache_hits + self.snapshot_cache_misses
+            print(
+                "[CACHE] Snapshot loading: "
+                f"{self.snapshot_cache_hits} hit(s), {self.snapshot_cache_misses} miss(es), "
+                f"{total} total"
+            )
 
     # ---------------------------------------------------------------- snapshot caching & helpers
     def _snapshot_cache_file(self, matrix_path: Path, info_path: Path) -> Path | None:
@@ -107,10 +123,13 @@ class E3GNNDataset(Dataset):
         cache_file = self._snapshot_cache_file(matrix_path, info_path)
         if cache_file is not None and cache_file.exists():
             try:
+                self.snapshot_cache_hits += 1
                 return Snapshot.load(cache_file, device="cpu")
             except Exception:
+                self.snapshot_cache_hits -= 1
                 pass
 
+        self.snapshot_cache_misses += 1
         snapshot = Snapshot.from_openmx(
             matrix_path=matrix_path,
             info_path=info_path,
