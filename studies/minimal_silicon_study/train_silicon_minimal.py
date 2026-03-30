@@ -945,6 +945,135 @@ def should_log_epoch(epoch_zero_based: int, log_interval: int, adaptive: bool) -
     return epoch_zero_based % log_interval == 0
 
 
+GRAPH_NEIGHBORLIST_CUTOFF_EPS = 1e-6
+
+
+def edge5_distance(
+    edge: tuple[int, int, int, int, int],
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+) -> float:
+    sx, sy, sz, src, dst = edge
+    src_t = torch.tensor(src, device=positions.device, dtype=torch.long)
+    dst_t = torch.tensor(dst, device=positions.device, dtype=torch.long)
+    disp = positions[dst_t] - positions[src_t]
+    if box is not None:
+        shift = torch.tensor(
+            [sx, sy, sz], device=positions.device, dtype=positions.dtype
+        )
+        disp = disp + shift @ box
+    return float(torch.linalg.norm(disp).item())
+
+
+def block_matrix_edges_by_key(
+    block_matrix: BlockMatrix,
+) -> dict[str, list[tuple[int, int, int, int, int]]]:
+    grouped: dict[str, list[tuple[int, int, int, int, int]]] = {}
+    for key, edges_t in block_matrix.pair_edges.items():
+        grouped[key] = [tuple(map(int, row)) for row in edges_t.t().tolist()]
+    return grouped
+
+
+def graph_edges_by_key(
+    edge_index: torch.Tensor,
+    edge_shift: torch.Tensor,
+    atoms_list: list[str],
+) -> dict[str, list[tuple[int, int, int, int, int]]]:
+    grouped: dict[str, list[tuple[int, int, int, int, int]]] = {}
+    n_edges = edge_index.shape[1]
+    for e in range(n_edges):
+        src = int(edge_index[0, e].item())
+        dst = int(edge_index[1, e].item())
+        key = f"{atoms_list[src]}-{atoms_list[dst]}"
+        grouped.setdefault(key, []).append(
+            (
+                int(edge_shift[0, e].item()),
+                int(edge_shift[1, e].item()),
+                int(edge_shift[2, e].item()),
+                src,
+                dst,
+            )
+        )
+    return grouped
+
+
+def build_global_edge_tensors_from_pair_edges(
+    pair_edges_by_key: dict[str, torch.Tensor],
+    ordered_keys: list[str],
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    ordered_edges = [
+        pair_edges_by_key[key]
+        for key in ordered_keys
+        if key in pair_edges_by_key and pair_edges_by_key[key].shape[1] > 0
+    ]
+    if not ordered_edges:
+        raise RuntimeError("Cannot build graph edge tensors from empty pair_edges.")
+    all_edges = torch.cat(ordered_edges, dim=1).to(device=device, dtype=torch.long)
+    edge_index = all_edges[3:5]
+    edge_shift = all_edges[:3]
+    return edge_index, edge_shift
+
+
+def reconcile_graph_edges_to_target(
+    *,
+    edge_index: torch.Tensor,
+    edge_shift: torch.Tensor,
+    reference_matrix: BlockMatrix,
+    atoms_list: list[str],
+    mapper: BlockIrrepMapper,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+    snapshot_label: str,
+) -> tuple[torch.Tensor, torch.Tensor, bool]:
+    target_by_key = block_matrix_edges_by_key(reference_matrix)
+    graph_by_key = graph_edges_by_key(edge_index, edge_shift, atoms_list)
+
+    mismatch_lines: list[str] = []
+    needs_fix = False
+    all_keys = sorted(set(target_by_key) | set(graph_by_key))
+    for key in all_keys:
+        target_edges = target_by_key.get(key, [])
+        graph_edges = graph_by_key.get(key, [])
+        target_counter = Counter(target_edges)
+        graph_counter = Counter(graph_edges)
+        if target_counter == graph_counter:
+            continue
+        needs_fix = True
+        missing_in_graph = list((target_counter - graph_counter).elements())
+        extra_in_graph = list((graph_counter - target_counter).elements())
+        if missing_in_graph:
+            edge = missing_in_graph[0]
+            mismatch_lines.append(
+                "[GRAPH DIAGNOSTIC] "
+                f"{snapshot_label} key={key} missing_in_graph "
+                f"(sx,sy,sz,i,j,dist)=({edge[0]}, {edge[1]}, {edge[2]}, {edge[3]}, {edge[4]}, "
+                f"{edge5_distance(edge, positions, box):.6f}) count={len(missing_in_graph)}"
+            )
+        if extra_in_graph:
+            edge = extra_in_graph[0]
+            mismatch_lines.append(
+                "[GRAPH DIAGNOSTIC] "
+                f"{snapshot_label} key={key} extra_in_graph "
+                f"(sx,sy,sz,i,j,dist)=({edge[0]}, {edge[1]}, {edge[2]}, {edge[3]}, {edge[4]}, "
+                f"{edge5_distance(edge, positions, box):.6f}) count={len(extra_in_graph)}"
+            )
+
+    if not needs_fix:
+        return edge_index, edge_shift, False
+
+    for line in mismatch_lines[:10]:
+        print(line)
+    print(
+        "[GRAPH] Replacing graph edge list with target-matrix edge list "
+        f"for {snapshot_label} so exact edge matching holds."
+    )
+    fixed_edge_index, fixed_edge_shift = build_global_edge_tensors_from_pair_edges(
+        reference_matrix.pair_edges, mapper.edge_types, edge_index.device
+    )
+    return fixed_edge_index, fixed_edge_shift, True
+
+
 def prepare_mapper_from_sample(
     x: dict,
     y: dict,
@@ -1123,10 +1252,11 @@ def preprocess_sample(
         cell=box.detach().cpu().numpy() if box is not None else None,
         pbc=box is not None,
     )
+    graph_cutoff_radius = float(cutoff_radius) + GRAPH_NEIGHBORLIST_CUTOFF_EPS
     src_np, dst_np, offsets_np = neighbor_list(
         "ijS",
         ase_atoms,
-        cutoff_radius,
+        graph_cutoff_radius,
         self_interaction=False,
     )
     offdiag_counts = Counter(
@@ -1184,6 +1314,29 @@ def preprocess_sample(
         positions=positions,
         box=box,
     )
+
+    if require_exact_edge_match:
+        snapshot_label = (
+            Path(str(snap.matrix_path)).name
+            if snap.matrix_path is not None
+            else "snapshot"
+        )
+        edge_index, edge_shift, graph_edges_fixed = reconcile_graph_edges_to_target(
+            edge_index=edge_index,
+            edge_shift=edge_shift,
+            reference_matrix=H,
+            atoms_list=atoms_list,
+            mapper=mapper,
+            positions=positions,
+            box=box,
+            snapshot_label=snapshot_label,
+        )
+        if graph_edges_fixed:
+            print(
+                "[GRAPH] Exact-match reconciliation applied "
+                f"for {snapshot_label} (neighbor cutoff used {graph_cutoff_radius:.6f} A)."
+            )
+
     num_self_edges = int(
         (
             (edge_index[0] == edge_index[1])
