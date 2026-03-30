@@ -1,0 +1,48 @@
+program: studies/minimal_silicon_study/train_silicon_minimal.py
+project: mandala-minimal-silicon-long-matrices-observables
+name: minimal-silicon-long-matrices-observables-from-checkpoint
+method: bayes
+metric:
+  name: mae_H
+  goal: minimize
+
+parameters:
+  resume-from-checkpoint:
+    value: studies/minimal_silicon_study/checkpoints/long_matrices_1000snap_1000ep/
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
+  train-temps:
+    value: "2700"
+  val-temp:
+    value: 2700
+  n-snapshots-per-temp:
+    value: 1000
+  val-n-snapshots:
+    value: 20
+  num-epochs:
+    value: 1000
+  enable-energy:
+    value: true
+  enable-num-electrons:
+    value: true
+  train-on-energy:
+    value: true
+  train-on-num-electrons:
+    value: true
+
+  lr:
+    distribution: log_uniform_values
+    min: 1e-4
+    max: 1e-2
+  loss-coef-observables:
+    distribution: log_uniform_values
+    min: 1e-8
+    max: 1e-4
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
