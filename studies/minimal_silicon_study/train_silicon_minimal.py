@@ -518,6 +518,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--resume-from-checkpoint", type=str, default=None)
     parser.add_argument("--resume-from-run-id", type=str, default=None)
+    parser.add_argument(
+        "--fresh-run",
+        type=parse_bool,
+        default=False,
+        help=(
+            "If true together with --resume-from-run-id, load the checkpoint resolved "
+            "from that run id but start a new independent W&B run."
+        ),
+    )
     return parser
 
 
@@ -2408,7 +2417,7 @@ def main() -> None:
     start_epoch = 0
     train_end_epoch = 0
     resume_source_kind = "none"
-    continue_wandb_run = args.resume_from_run_id is not None
+    continue_wandb_run = args.resume_from_run_id is not None and not args.fresh_run
     resolved_wandb_entity = None
 
     if args.resume_from_run_id is not None:
@@ -2463,6 +2472,8 @@ def main() -> None:
         resume_source_kind = (
             "latest" if resume_checkpoint.name == "latest_checkpoint.pt" else "legacy"
         )
+        if args.resume_from_run_id is not None and args.fresh_run:
+            resume_source_kind = f"{resume_source_kind}+fresh_run_from_run_id"
     else:
         train_end_epoch = max(int(args.num_epochs), 0)
 
@@ -2588,6 +2599,7 @@ def main() -> None:
             picked = random.sample(temp_pairs, n_pick)
             train_pairs_by_temp[temp] = picked
             train_pairs.extend(picked)
+        random.Random(args.seed).shuffle(train_pairs)
 
         val_n = (
             args.val_n_snapshots
@@ -2749,6 +2761,7 @@ def main() -> None:
         "randomize_seed": args.randomize_seed,
         "resume_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
         "resume_from_run_id": args.resume_from_run_id,
+        "fresh_run": args.fresh_run,
         # Logger-compat keys expected by detailed_logging.log_config from minimal_overfit_study.
         "partial_train": None,
         "box_convention": "rows",
