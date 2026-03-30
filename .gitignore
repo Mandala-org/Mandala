@@ -60,3 +60,4 @@ saved_models/
 *.png
 *.jpg
 *.jpeg
+.codex
