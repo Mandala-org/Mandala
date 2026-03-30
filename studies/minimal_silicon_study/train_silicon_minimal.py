@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import copy
+from datetime import datetime
 import json
 import os
 import random
@@ -770,6 +771,11 @@ def choose_runtime_seed(fixed_seed: int, randomize_seed: bool) -> int:
     if not randomize_seed:
         return int(fixed_seed)
     return random.SystemRandom().randint(0, 2**31 - 1)
+
+
+def build_timestamped_run_name(prefix: str) -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return f"{prefix}_{timestamp}"
 
 
 def parse_orbital_selection(selection_raw: str | None) -> Any:
@@ -2325,6 +2331,8 @@ def main() -> None:
 
     is_sweep_run = bool(os.environ.get("WANDB_SWEEP_ID"))
     wandb_kwargs = {"project": args.wandb_project}
+    requested_run_name = args.run_name
+    effective_run_name = requested_run_name
     if resolved_wandb_entity is not None:
         wandb_kwargs["entity"] = resolved_wandb_entity
     elif args.wandb_entity is not None:
@@ -2335,8 +2343,9 @@ def main() -> None:
     elif not is_sweep_run:
         # For non-sweep runs, log full argparse namespace directly.
         wandb_kwargs["config"] = vars(args)
-    if args.run_name is not None and not continue_wandb_run:
-        wandb_kwargs["name"] = args.run_name
+    if requested_run_name is not None and not continue_wandb_run:
+        effective_run_name = build_timestamped_run_name(requested_run_name)
+        wandb_kwargs["name"] = effective_run_name
     wandb.init(**wandb_kwargs)
     if continue_wandb_run and not is_sweep_run:
         wandb.config.update(vars(args), allow_val_change=True)
@@ -2411,7 +2420,8 @@ def main() -> None:
         "wandb_project": args.wandb_project,
         "wandb_entity": wandb_kwargs.get("entity"),
         "snapshot_cache_dir": args.snapshot_cache_dir,
-        "run_name": args.run_name,
+        "run_name": effective_run_name,
+        "run_name_prefix": requested_run_name,
         "seed": args.seed,
         "randomize_seed": args.randomize_seed,
         "resume_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
@@ -2424,6 +2434,7 @@ def main() -> None:
 
     run_name = wandb.run.name
     run_checkpoint_dir = Path(args.checkpoint_dir) / run_name
+    print(f"[CHECKPOINTS] Run checkpoint directory: {run_checkpoint_dir}")
     run_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     frame_output_dir = run_checkpoint_dir / "frames"
     frame_output_dir.mkdir(parents=True, exist_ok=True)
