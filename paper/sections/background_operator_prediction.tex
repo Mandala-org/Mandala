@@ -1,7 +1,7 @@
 \subsection{From equivariant local features to sparse operator prediction}
 \label{subsec:matrix_observable_background}
 
-Mandala represents each operator $X \in \{H,S,D\}$ as a sparse family of
+\texttt{Mandala} represents each operator $X \in \{H,S,D\}$ as a sparse family of
 atom-pair blocks $X_{ij}^{\bm{L}}$, where $i$ and $j$ index atoms and
 $\bm{L}$ labels periodic images. The block representation is converted into an
 irrep representation by a fixed change of basis,
@@ -33,7 +33,7 @@ evaluated as
 A_{ij}^{\bm{L}} B_{ji}^{-\bm{L}}
 \right),
 \end{equation}
-which is exactly the sparse contraction implemented by Mandala. This gives
+which is exactly the sparse contraction implemented by \texttt{Mandala}. This gives
 direct access to electron counts, energy observables, and
 derivative observables such as forces and stress, all from the same predicted
 operator set. The resulting workflow differs from direct scalar regression:

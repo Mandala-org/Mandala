@@ -1,7 +1,7 @@
 \subsection{Observable guidance with energies, electron counts, forces, and stress}
 \label{subsec:training_objectives}
 
-Mandala supports pure matrix learning, mixed matrix-and-observable learning, and
+\texttt{Mandala} supports pure matrix learning, mixed matrix-and-observable learning, and
 fully observable-guided training from one common operator-prediction pipeline.
 For a chosen set of matrix targets $\mathcal{M} \subseteq \{H,S,D\}$, the
 general training objective is
@@ -25,7 +25,7 @@ a weighted combination of $\ell_1$ and $\ell_2$ errors,
 with $\eta$ controlled by configuration.
 
 Observable guidance is defined on quantities derived from the predicted
-operators. In the operator-centered workflow used throughout Mandala, the
+operators. In the operator-centered workflow used throughout \texttt{Mandala}, the
 energy observable used in training and the number of electrons are
 \begin{equation}
 \widehat{E} = \Tr(\widehat{D}\widehat{H}),
@@ -68,7 +68,7 @@ predicted operators that define the energy.
 
 For periodic systems, stress guidance is obtained by differentiating the
 predicted energy with respect to the cell matrix $h$. If
-$\Omega = \det(h)$ is the cell volume, Mandala uses
+$\Omega = \det(h)$ is the cell volume, \texttt{Mandala} uses
 \begin{equation}
 \widehat{\sigma}
 =
