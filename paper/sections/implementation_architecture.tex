@@ -6,7 +6,7 @@ message-passing blocks, and matrix-specific readout heads. Node encoders embed
 chemical species into scalar channels. Edge encoders combine edge-type
 embeddings, radial distance embeddings, and spherical harmonics into equivariant
 edge features. If $\bm{h}_i^{(t)}$ denotes node features and
-$\bm{e}_{ij}^{(t)}$ denotes edge features at layer $t$, a generic Mandala
+$\bm{e}_{ij}^{(t)}$ denotes edge features at layer $t$, a generic \texttt{Mandala}
 message-passing step may be written as
 \begin{align}
 \bm{m}_{ij}^{(t)} &=
@@ -22,6 +22,7 @@ Y(\hat{\bm{r}}_{ij}), \varphi(r_{ij})
 \mathrm{Agg}_{j \in \mathcal{N}(i)} \, \bm{m}_{ij}^{(t)}
 \right),
 \end{align}
+Comment: Define all quantities.
 where $\Phi_{\mathrm{edge}}^{(t)}$ and $\Phi_{\mathrm{node}}^{(t)}$ are
 equivariant maps assembled from tensor products, equivariant linear layers,
 radial MLPs, parity-aware nonlinearities, and optional residual connections,
@@ -46,12 +47,15 @@ followed by inverse irrep-to-block conversion
 =
 Q_{a_i a_j}^{\top}\widehat{\bm{x}}_{ij}^{\bm{L},X}.
 \end{equation}
-Because heads share the same equivariant latent representation, Mandala can
+Because heads share the same equivariant latent representation, \texttt{Mandala} can
 predict Hamiltonian, overlap, and density matrices jointly with only modest
 additional readout cost.
 
 An important feature of the framework is that the architecture is not fixed to
-one canonical model. Mandala exposes a broad family of variants within the same
+one canonical model.
+Comment: We would need a sketch of the overall Mandala architecture.
+Comment: And perhaps a few detailed sketches to illustrate some of the descriptions in Section 3.
+\texttt{Mandala} exposes a broad family of variants within the same
 software interface. Search dimensions include the hidden irrep content, the
 angular cutoff $\ell_{\max}$, the number of message-passing layers, the radial
 basis size, the depth of the neck and head MLPs, and the choice of tensor

@@ -3,7 +3,7 @@
 
 Sparse operator manipulations are implemented directly on aligned block data.
 Given two sparse operators $A$ and $B$ with reverse-edge alignment already
-established, Mandala evaluates their trace contraction as
+established, \texttt{Mandala} evaluates their trace contraction as
 \begin{equation}
 \Tr(AB)
 =
@@ -15,7 +15,7 @@ energy and electron-count evaluation, loss construction, and diagnostic
 analysis.
 
 For matrix targets expected to be symmetric or Hermitian in the chosen basis,
-Mandala supports explicit sparse symmetrization after block reconstruction. In
+\texttt{Mandala} supports explicit sparse symmetrization after block reconstruction. In
 the real-valued convention used by the implementation, this takes the
 form
 \begin{equation}
@@ -31,7 +31,7 @@ that symmetry is enforced consistently across periodic images and self-edges.
 
 Hamiltonian gauge freedom is handled operationally through the overlap-shift
 correction described in Section~\ref{subsubsec:gauge_invariance}. In practical
-evaluation and analysis workflows, Mandala computes
+evaluation and analysis workflows, \texttt{Mandala} computes
 \begin{equation}
 \widetilde{H}^{\mathrm{pred}}
 =

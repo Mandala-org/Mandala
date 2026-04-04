@@ -1,7 +1,7 @@
 \subsection{Software design goals, sparse data model, and periodic graph construction}
 \label{subsec:workflow}
 
-Mandala is organized as a layered scientific software stack whose core workflow
+\texttt{Mandala} is organized as a layered scientific software stack whose core workflow
 consists of parsing electronic-structure outputs, harmonizing basis
 conventions, building sparse operators and graphs, predicting irrep vectors,
 reconstructing operators, and evaluating observables.
@@ -17,7 +17,9 @@ explicit edge metadata $(\bm{L},i,j)$, where $\bm{L}\in\mathbb{Z}^3$ is the
 lattice-image shift. Basis-conversion modules map backend-specific orbital
 orderings and sign conventions into the common internal representation expected
 by the equivariant stack. In the current framework, OpenMX and FHI-aims are
-fully supported, and PySCF data are handled through the same sparse operator
+fully supported, and PySCF
+Comment: Add references.
+data are handled through the same sparse operator
 interface [TODO: finish PySCF training-data integration].
 
 Graph construction mirrors the sparse operator indexing. Nodes correspond to
@@ -32,7 +34,7 @@ shift vector $\bm{L}$ and a relative displacement
 where $\{\bm{a}_{\alpha}\}$ are the cell vectors. These displacements are used
 to construct radial embeddings and spherical-harmonic features. To preserve
 exact agreement between
-graph edges and sparse matrix blocks, Mandala imposes a canonical ordering of
+graph edges and sparse matrix blocks, \texttt{Mandala} imposes a canonical ordering of
 edges by distance and lattice shift, with reverse-edge lookup tables used for
 sparse traces and symmetrization. This explicit reverse alignment is essential
 for both physical correctness and reproducibility under periodic boundary

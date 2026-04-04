@@ -85,9 +85,9 @@ T_S[n] + E_H[n] + E_{XC}[n]
 + E_{ii},
 \end{equation}
 where $T_S[n]$ is the Kohn-Sham kinetic energy. This is the DFT-level starting
-point that Mandala connects to localized-orbital operator learning.
+point that \texttt{Mandala} connects to localized-orbital operator learning.
 
-Mandala operates on localized-orbital matrix representations of this problem.
+\texttt{Mandala} operates on localized-orbital matrix representations of this problem.
 Expanding the Kohn-Sham orbitals in a finite basis $\{\chi_{\mu}\}$,
 \begin{equation}
 \psi_j(\bm{r}) = \sum_{\mu} C_{\mu j}\chi_{\mu}(\bm{r}),
@@ -113,19 +113,19 @@ electron count is
 \begin{equation}
 N_e = \Tr(DS),
 \end{equation}
-while the energy observable used throughout Mandala is obtained from
+while the energy observable used throughout \texttt{Mandala} is obtained from
 \begin{equation}
 E_{\mathrm{op}} = \Tr(DH).
 \end{equation}
 For backend-specific total energies, additional double-counting and ion-ion
 terms may be required, but the trace expressions above are the core operator
-identities used throughout Mandala.
+identities used throughout \texttt{Mandala}.
 
 Localized basis sets also induce block sparsity. If orbital $\mu$ belongs to
 atom $i$ and orbital $\nu$ belongs to atom $j$, then matrix entries can be
 organized into atom-pair blocks $X_{ij}^{\bm{L}}$, where
 $X \in \{H,S,D\}$ and $\bm{L} \in \mathbb{Z}^3$ indexes periodic lattice
-images. This sparse block structure is the operator domain learned by Mandala.
+images. This sparse block structure is the operator domain learned by \texttt{Mandala}.
 
 \subsubsection{Hamiltonian gauge invariance and the overlap-shift correction}
 \label{subsubsec:gauge_invariance}
@@ -159,7 +159,7 @@ shift $\alpha$, one also finds
 \end{equation}
 so only the absolute energy reference changes.
 
-Mandala exploits this gauge freedom through the overlap-shift correction
+\texttt{Mandala} exploits this gauge freedom through the overlap-shift correction
 $\mu_H$, which is chosen to minimize the mean-squared discrepancy between a
 predicted Hamiltonian and a reference Hamiltonian after subtraction of a
 multiple of the overlap matrix:
@@ -184,7 +184,7 @@ H^{\mathrm{pred}} - H^{\mathrm{ref}}, S
 },
 \end{equation}
 where $\langle A,B\rangle_F = \sum_{\mu \nu} A_{\mu \nu} B_{\mu \nu}$ is the
-Frobenius inner product, evaluated in Mandala blockwise over the aligned sparse
+Frobenius inner product, evaluated in \texttt{Mandala} blockwise over the aligned sparse
 representation. The corrected Hamiltonian
 $H^{\mathrm{pred}} - \mu_H S$ therefore removes a pure gauge offset without
 altering the physically relevant eigenvectors.
