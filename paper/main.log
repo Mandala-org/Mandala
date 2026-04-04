@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.2.9)  23 MAR 2026 13:32
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.4.4)  4 APR 2026 21:58
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -19,6 +19,10 @@ File: l3backend-pdftex.def 2024-01-04 L3 backend support: PDF output (pdfTeX)
 (/usr/share/texlive/texmf-dist/tex/latex/l3packages/xparse/xparse.sty
 Package: xparse 2023-10-10 L3 Experimental document command parser
 )
+(/usr/share/texlive/texmf-dist/tex/latex/etoolbox/etoolbox.sty
+Package: etoolbox 2020/10/05 v2.5k e-TeX tools for LaTeX (JAW)
+\etb@tempcnta=\count188
+)
 \@bls=\dimen140
 
 (/usr/share/texlive/texmf-dist/tex/latex/base/article.cls
@@ -26,14 +30,14 @@ Document Class: article 2023/05/17 v1.4n Standard LaTeX document class
 (/usr/share/texlive/texmf-dist/tex/latex/base/size12.clo
 File: size12.clo 2023/05/17 v1.4n Standard LaTeX file (size option)
 )
-\c@part=\count188
-\c@section=\count189
-\c@subsection=\count190
-\c@subsubsection=\count191
-\c@paragraph=\count192
-\c@subparagraph=\count193
-\c@figure=\count194
-\c@table=\count195
+\c@part=\count189
+\c@section=\count190
+\c@subsection=\count191
+\c@subsubsection=\count192
+\c@paragraph=\count193
+\c@subparagraph=\count194
+\c@figure=\count195
+\c@table=\count196
 \abovecaptionskip=\skip48
 \belowcaptionskip=\skip49
 \bibindent=\dimen141
@@ -62,13 +66,13 @@ File: pdftex.def 2022/09/22 v1.2b Graphics/color driver for pdftex
 \Gin@req@height=\dimen142
 \Gin@req@width=\dimen143
 )
-\c@tnote=\count196
-\c@fnote=\count197
-\c@cnote=\count198
-\c@ead=\count199
-\c@author=\count266
+\c@tnote=\count197
+\c@fnote=\count198
+\c@cnote=\count199
+\c@ead=\count266
+\c@author=\count267
 \@eadauthor=\toks18
-\c@affn=\count267
+\c@affn=\count268
 \absbox=\box52
 \elsarticlehighlightsbox=\box53
 \elsarticlegrabsbox=\box54
@@ -86,7 +90,7 @@ Package: natbib 2010/09/13 8.31b (PWD, AO)
 \bibhang=\skip52
 \bibsep=\skip53
 LaTeX Info: Redefining \cite on input line 694.
-\c@NAT@ctr=\count268
+\c@NAT@ctr=\count269
 )
 \splwrite=\write3
 \openout3 = `main.spl'.
@@ -125,14 +129,14 @@ Package: amsbsy 1999/11/29 v1.2d Bold Symbols
 (/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsopn.sty
 Package: amsopn 2022/04/08 v2.04 operator names
 )
-\inf@bad=\count269
+\inf@bad=\count270
 LaTeX Info: Redefining \frac on input line 234.
-\uproot@=\count270
-\leftroot@=\count271
+\uproot@=\count271
+\leftroot@=\count272
 LaTeX Info: Redefining \overline on input line 399.
 LaTeX Info: Redefining \colon on input line 410.
-\classnum@=\count272
-\DOTSCASE@=\count273
+\classnum@=\count273
+\DOTSCASE@=\count274
 LaTeX Info: Redefining \ldots on input line 496.
 LaTeX Info: Redefining \dots on input line 499.
 LaTeX Info: Redefining \cdots on input line 620.
@@ -145,20 +149,20 @@ LaTeX Info: Redefining \Bigg on input line 725.
 \big@size=\dimen150
 LaTeX Font Info:    Redeclaring font encoding OML on input line 743.
 LaTeX Font Info:    Redeclaring font encoding OMS on input line 744.
-\macc@depth=\count274
+\macc@depth=\count275
 LaTeX Info: Redefining \bmod on input line 905.
 LaTeX Info: Redefining \pmod on input line 910.
 LaTeX Info: Redefining \smash on input line 940.
 LaTeX Info: Redefining \relbar on input line 970.
 LaTeX Info: Redefining \Relbar on input line 971.
-\c@MaxMatrixCols=\count275
+\c@MaxMatrixCols=\count276
 \dotsspace@=\muskip16
-\c@parentequation=\count276
-\dspbrk@lvl=\count277
+\c@parentequation=\count277
+\dspbrk@lvl=\count278
 \tag@help=\toks22
-\row@=\count278
-\column@=\count279
-\maxfields@=\count280
+\row@=\count279
+\column@=\count280
+\maxfields@=\count281
 \andhelp@=\toks23
 \eqnshift@=\dimen151
 \alignsep@=\dimen152
@@ -182,36 +186,174 @@ Package bm Info: No bold for \OMX/cmex/m/n, using \pmb.
 Package bm Info: No bold for \U/msa/m/n, using \pmb.
 Package bm Info: No bold for \U/msb/m/n, using \pmb.
 LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 149.
-) (./main.aux)
+)
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/hyperref.sty
+Package: hyperref 2024-01-20 v7.01h Hypertext links for LaTeX
+
+(/usr/share/texlive/texmf-dist/tex/generic/iftex/iftex.sty
+Package: iftex 2022/02/03 v1.0f TeX engine tests
+)
+(/usr/share/texlive/texmf-dist/tex/latex/kvsetkeys/kvsetkeys.sty
+Package: kvsetkeys 2022-10-05 v1.19 Key value parser (HO)
+)
+(/usr/share/texlive/texmf-dist/tex/generic/kvdefinekeys/kvdefinekeys.sty
+Package: kvdefinekeys 2019-12-19 v1.6 Define keys (HO)
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pdfescape/pdfescape.sty
+Package: pdfescape 2019/12/09 v1.15 Implements pdfTeX's escape features (HO)
+
+(/usr/share/texlive/texmf-dist/tex/generic/ltxcmds/ltxcmds.sty
+Package: ltxcmds 2023-12-04 v1.26 LaTeX kernel commands for general use (HO)
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pdftexcmds/pdftexcmds.sty
+Package: pdftexcmds 2020-06-27 v0.33 Utility functions of pdfTeX for LuaTeX (HO
+)
+
+(/usr/share/texlive/texmf-dist/tex/generic/infwarerr/infwarerr.sty
+Package: infwarerr 2019/12/03 v1.5 Providing info/warning/error messages (HO)
+)
+Package pdftexcmds Info: \pdf@primitive is available.
+Package pdftexcmds Info: \pdf@ifprimitive is available.
+Package pdftexcmds Info: \pdfdraftmode found.
+))
+(/usr/share/texlive/texmf-dist/tex/latex/hycolor/hycolor.sty
+Package: hycolor 2020-01-27 v1.10 Color options for hyperref/bookmark (HO)
+)
+(/usr/share/texlive/texmf-dist/tex/latex/auxhook/auxhook.sty
+Package: auxhook 2019-12-17 v1.6 Hooks for auxiliary files (HO)
+)
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/nameref.sty
+Package: nameref 2023-11-26 v2.56 Cross-referencing by name of section
+
+(/usr/share/texlive/texmf-dist/tex/latex/refcount/refcount.sty
+Package: refcount 2019/12/15 v3.6 Data extraction from label references (HO)
+)
+(/usr/share/texlive/texmf-dist/tex/generic/gettitlestring/gettitlestring.sty
+Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
+
+(/usr/share/texlive/texmf-dist/tex/latex/kvoptions/kvoptions.sty
+Package: kvoptions 2022-06-15 v3.15 Key value format for package options (HO)
+))
+\c@section@level=\count282
+)
+\@linkdim=\dimen157
+\Hy@linkcounter=\count283
+\Hy@pagecounter=\count284
+
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/pd1enc.def
+File: pd1enc.def 2024-01-20 v7.01h Hyperref: PDFDocEncoding definition (HO)
+Now handling font encoding PD1 ...
+... no UTF-8 mapping file for font encoding PD1
+)
+(/usr/share/texlive/texmf-dist/tex/generic/intcalc/intcalc.sty
+Package: intcalc 2019/12/15 v1.3 Expandable calculations with integers (HO)
+)
+\Hy@SavedSpaceFactor=\count285
+
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/puenc.def
+File: puenc.def 2024-01-20 v7.01h Hyperref: PDF Unicode definition (HO)
+Now handling font encoding PU ...
+... no UTF-8 mapping file for font encoding PU
+)
+Package hyperref Info: Hyper figures OFF on input line 4179.
+Package hyperref Info: Link nesting OFF on input line 4184.
+Package hyperref Info: Hyper index ON on input line 4187.
+Package hyperref Info: Plain pages OFF on input line 4194.
+Package hyperref Info: Backreferencing OFF on input line 4199.
+Package hyperref Info: Implicit mode ON; LaTeX internals redefined.
+Package hyperref Info: Bookmarks ON on input line 4446.
+\c@Hy@tempcnt=\count286
+
+(/usr/share/texlive/texmf-dist/tex/latex/url/url.sty
+\Urlmuskip=\muskip17
+Package: url 2013/09/16  ver 3.4  Verb mode for urls, etc.
+)
+LaTeX Info: Redefining \url on input line 4784.
+\XeTeXLinkMargin=\dimen158
+
+(/usr/share/texlive/texmf-dist/tex/generic/bitset/bitset.sty
+Package: bitset 2019/12/09 v1.3 Handle bit-vector datatype (HO)
+
+(/usr/share/texlive/texmf-dist/tex/generic/bigintcalc/bigintcalc.sty
+Package: bigintcalc 2019/12/15 v1.5 Expandable calculations on big integers (HO
+)
+))
+\Fld@menulength=\count287
+\Field@Width=\dimen159
+\Fld@charsize=\dimen160
+Package hyperref Info: Hyper figures OFF on input line 6063.
+Package hyperref Info: Link nesting OFF on input line 6068.
+Package hyperref Info: Hyper index ON on input line 6071.
+Package hyperref Info: backreferencing OFF on input line 6078.
+Package hyperref Info: Link coloring OFF on input line 6083.
+Package hyperref Info: Link coloring with OCG OFF on input line 6088.
+Package hyperref Info: PDF/A mode OFF on input line 6093.
+
+(/usr/share/texlive/texmf-dist/tex/latex/base/atbegshi-ltx.sty
+Package: atbegshi-ltx 2021/01/10 v1.0c Emulation of the original atbegshi
+package with kernel methods
+)
+\Hy@abspage=\count288
+\c@Item=\count289
+\c@Hfootnote=\count290
+)
+Package hyperref Info: Driver (autodetected): hpdftex.
+
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/hpdftex.def
+File: hpdftex.def 2024-01-20 v7.01h Hyperref driver for pdfTeX
+
+(/usr/share/texlive/texmf-dist/tex/latex/base/atveryend-ltx.sty
+Package: atveryend-ltx 2020/08/19 v1.0a Emulation of the original atveryend pac
+kage
+with kernel methods
+)
+\Fld@listcount=\count291
+\c@bookmark@seq@number=\count292
+
+(/usr/share/texlive/texmf-dist/tex/latex/rerunfilecheck/rerunfilecheck.sty
+Package: rerunfilecheck 2022-07-10 v1.10 Rerun checks for auxiliary files (HO)
+
+(/usr/share/texlive/texmf-dist/tex/generic/uniquecounter/uniquecounter.sty
+Package: uniquecounter 2019/12/15 v1.4 Provide unlimited unique counter (HO)
+)
+Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 2
+85.
+)
+\Hy@SectionHShift=\skip57
+)
+(./main.aux)
 \openout1 = `main.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-
-(/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 15.
+LaTeX Font Info:    ... okay on input line 15.
+ (/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count281
-\scratchdimen=\dimen157
+\scratchcounter=\count293
+\scratchdimen=\dimen161
 \scratchbox=\box60
-\nofMPsegments=\count282
-\nofMParguments=\count283
+\nofMPsegments=\count294
+\nofMParguments=\count295
 \everyMPshowfont=\toks26
-\MPscratchCnt=\count284
-\MPscratchDim=\dimen158
-\MPnumerator=\count285
-\makeMPintoPDFobject=\count286
+\MPscratchCnt=\count296
+\MPscratchDim=\dimen162
+\MPnumerator=\count297
+\makeMPintoPDFobject=\count298
 \everyMPtoPDFconversion=\toks27
 ) (/usr/share/texlive/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
@@ -222,14 +364,17 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
-(./sections/abstract.tex)
-LaTeX Font Info:    Trying to load font information for U+msa on input line 38.
+Package hyperref Info: Link coloring OFF on input line 15.
+\@outlinefile=\write4
+\openout4 = `main.out'.
+
+LaTeX Font Info:    Trying to load font information for U+msa on input line 48.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 38.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 48.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
@@ -242,117 +387,141 @@ Overfull \hbox (2.61108pt too wide) has occurred while \output is active
 [1
 
 
-{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
-(./sections/program_summary.tex) (./sections/introduction.tex [2]
-Overfull \hbox (22.21527pt too wide) in paragraph at lines 4--5
-[]\OT1/cmr/m/n/12 Kohn-Sham den-sity func-tional the-ory (DFT) is one of the st
-an-dard workhorses
- []
+{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] [2]
+
+Package natbib Warning: Citation `Cangi:2025aa' on page 3 undefined on input li
+ne 66.
 
 
-Overfull \hbox (4.7959pt too wide) in paragraph at lines 4--5
+Overfull \hbox (4.7959pt too wide) in paragraph at lines 66--70
 \OT1/cmr/m/n/12 flows that re-quire large su-per-cells, long molecular-dynamics
  tra-jec-to-ries, broad
  []
 
-
-Overfull \hbox (0.48761pt too wide) in paragraph at lines 4--5
-\OT1/cmr/m/n/12 learned sur-ro-gates for quantum-mechanical sim-u-la-tion, in-c
-lud-ing di-rect learn-
- []
-
-
-Overfull \hbox (10.00511pt too wide) in paragraph at lines 6--7
-\OT1/cmr/m/n/12 able. For ap-pli-ca-tions that re-main fun-da-men-tally electro
-nic-structure-centered,
- []
-
-
-Overfull \hbox (16.67633pt too wide) in paragraph at lines 8--9
+[3]
+Overfull \hbox (16.67633pt too wide) in paragraph at lines 76--77
 \OT1/cmr/m/n/12 work tar-gets block-sparse ma-trix quan-ti-ties aris-ing in loc
 alized-orbital electronic-
  []
 
-[3]
-Overfull \hbox (15.0444pt too wide) in paragraph at lines 12--13
-\OT1/cmr/m/n/12 dala pre-serves an operator-level rep-re-sen-ta-tion that re-ma
-ins use-ful for electronic-
+
+Overfull \hbox (6.23062pt too wide) in paragraph at lines 81--82
+\OT1/cmr/m/n/12 in two ways. Rel-a-tive to purely observable-driven in-ter-atom
+ic mod-els, \OT1/cmtt/m/n/12 Mandala
  []
 
-) (./sections/background.tex (./sections/background_dft.tex [4] [5] [6]
-[7]) (./sections/background_equivariance.tex [8])
-(./sections/background_tensor_products.tex [9])
-(./sections/background_operator_prediction.tex
-Overfull \hbox (6.22011pt too wide) in paragraph at lines 18--23
+[4] [5] [6] [7] [8] [9]
+Overfull \hbox (6.22011pt too wide) in paragraph at lines 385--390
 \OT1/cmr/m/n/12 trans-pose. In the code, these maps are ma-te-ri-al-ized by the
  \OT1/cmtt/m/n/12 BlockIrrepMapper\OT1/cmr/m/n/12 ,
  []
 
-[10])) (./sections/implementation.tex (./sections/implementation_workflow.tex
-[11]) (./sections/implementation_architecture.tex
-Overfull \hbox (8.71252pt too wide) in paragraph at lines 41--1
+[10] [11]
+Overfull \hbox (8.71252pt too wide) in paragraph at lines 454--458
 []\OT1/cmr/m/n/12 The same snapshot-level rep-re-sen-ta-tion pre-serves ac-cess
  to operator-derived
  []
 
-[12]) (./sections/implementation_postprocessing.tex [13])
-(./sections/implementation_training.tex
-Overfull \hbox (0.48344pt too wide) in paragraph at lines 65--1
+[12] [13]
+
+Package hyperref Warning: Suppressing link with empty target on input line 568.
+
+
+
+Overfull \hbox (0.48344pt too wide) in paragraph at lines 600--604
 \OT1/cmr/m/n/12 ob-serv-able eval-u-a-tion and Hamiltonian-based anal-y-ses suc
 h as band-structure
  []
 
-[14] [15]) (./sections/implementation_search.tex
-Overfull \hbox (11.0625pt too wide) in paragraph at lines 92--1
+[14] [15]
+Overfull \hbox (11.0625pt too wide) in paragraph at lines 695--699
 \OT1/cmr/m/n/12 This com-pletes the observable-guidance pic-ture: one can train
  a sin-gle operator-
  []
 
-) (./sections/implementation_verification.tex)) (./sections/conclusion.tex
-[16]) (./sections/acknowledgments.tex) [17] (./main.bbl
-Underfull \hbox (badness 1590) in paragraph at lines 15--19
-[]\OT1/cmr/m/n/12 W. Kohn, L. J. Sham, Self-Consistent Equa-tions In-clud-ing E
-x-
- []
-
-
+[16] [17] (./main.bbl
 Underfull \hbox (badness 1708) in paragraph at lines 35--43
 \OT1/cmr/m/n/12 Func-tion, Elec-tron Den-sity Gen-er-a-tion, and At-om-iza-tion
  En-ergy
  []
 
 
-Overfull \hbox (1.18446pt too wide) in paragraph at lines 35--43
-\OT1/cmr/m/n/12 URL \OT1/cmtt/m/n/12 https://link.aps.org/doi/10.1103/PhysRevLe
-tt.125.206401
+Underfull \hbox (badness 10000) in paragraph at lines 35--43
+\OT1/cmr/m/n/12 URL []$\OT1/cmtt/m/n/12 https : / / link . aps . org / doi / 10
+ . 1103 / PhysRevLett . 125 .
+ []
+
+[18]
+Underfull \hbox (badness 4120) in paragraph at lines 54--62
+[]\OT1/cmr/m/n/12 E. Ko-cer, T. W. Ko, J. Behler, []Neu-ral net-work po-ten-tia
+ls:
  []
 
 
-Underfull \hbox (badness 2961) in paragraph at lines 54--62
-\OT1/cmr/m/n/12 73, 2022) (2022) 163--186.  doi:https://doi.org/10.1146/annurev
--
+Underfull \hbox (badness 5862) in paragraph at lines 54--62
+\OT1/cmr/m/n/12 A con-cise overview of meth-ods[], An-nual Re-view of Phys-i-ca
+l
  []
 
 
-Overfull \hbox (186.43456pt too wide) in paragraph at lines 54--62
-\OT1/cmr/m/n/12 URL \OT1/cmtt/m/n/12 https://www.annualreviews.org/content/jour
-nals/10.1146/annurev-physchem-082720-034254
+Underfull \hbox (badness 1776) in paragraph at lines 54--62
+\OT1/cmr/m/n/12 Chem-istry 73 (Vol-ume 73, 2022) (2022) 163--186.  []$\OT1/cmtt
+/m/n/12 doi : https :
  []
 
-[18]) [19] (./main.aux)
+
+Underfull \hbox (badness 10000) in paragraph at lines 54--62
+\OT1/cmr/m/n/12 URL []$\OT1/cmtt/m/n/12 https : / / www . annualreviews . org /
+ content / journals / 10 .
+ []
+
+
+Underfull \hbox (badness 7326) in paragraph at lines 79--89
+[]\OT1/cmr/m/n/12 E. Pro-dan, W. Kohn, []Near-sight-ed-ness of elec-tronic mat-
+ter[],
+ []
+
+
+Underfull \hbox (badness 7558) in paragraph at lines 79--89
+\OT1/cmr/m/n/12 Pro-ceed-ings of the Na-tional Academy of Sci-ences 102 (33)
+ []
+
+
+Underfull \hbox (badness 2103) in paragraph at lines 79--89
+\OT1/cmr/m/n/12 (2005) 11635--11638.  []$\OT1/cmtt/m/n/12 arXiv : https : / / w
+ww . pnas . org / doi / pdf / 10 .
+ []
+
+)
+
+Package natbib Warning: There were undefined citations.
+
+[19] (./main.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+
+Package rerunfilecheck Warning: File `main.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+Package rerunfilecheck Info: Checksums for `main.out':
+(rerunfilecheck)             Before: <no file>
+(rerunfilecheck)             After:  F0F1CF62AF9BB964E4B993167845DB8C;4926.
  )
 Here is how much of TeX's memory you used:
- 3694 strings out of 476182
- 55907 string characters out of 5795596
- 1932975 words of memory out of 5000000
- 25602 multiletter control sequences out of 15000+600000
+ 10622 strings out of 476182
+ 159357 string characters out of 5795596
+ 1933975 words of memory out of 5000000
+ 32382 multiletter control sequences out of 15000+600000
  572263 words of font info for 88 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 72i,10n,79p,1203b,334s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,10n,79p,1171b,611s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/shar
 e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texl
@@ -372,9 +541,9 @@ exlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/share/texlive
 dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/f
 onts/type1/public/amsfonts/cm/cmtt12.pfb></usr/share/texlive/texmf-dist/fonts/t
 ype1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (19 pages, 305480 bytes).
+Output written on main.pdf (19 pages, 315751 bytes).
 PDF statistics:
- 167 PDF objects out of 1000 (max. 8388607)
- 104 compressed objects within 2 object streams
- 0 named destinations out of 1000 (max. 500000)
+ 337 PDF objects out of 1000 (max. 8388607)
+ 273 compressed objects within 3 object streams
+ 100 named destinations out of 1000 (max. 500000)
  1 words of extra memory for PDF output out of 10000 (max. 10000000)
