@@ -3122,14 +3122,21 @@ def main() -> None:
         for matrix_name in matrix_targets:
             per_irrep = initial_eval["per_irrep_by_name"].get(matrix_name, {})
             if per_irrep:
+                per_irrep_log = build_wandb_per_irrep_metrics_log(
+                    epoch_zero_based=0,
+                    all_irreps=all_irreps,
+                    per_irrep_metrics=per_irrep,
+                    metric_prefix=irrep_prefix_by_matrix.get(matrix_name, ""),
+                )
                 initial_wandb_log.update(
-                    build_wandb_per_irrep_metrics_log(
-                        epoch_zero_based=0,
-                        all_irreps=all_irreps,
-                        per_irrep_metrics=per_irrep,
-                        metric_prefix=irrep_prefix_by_matrix.get(matrix_name, ""),
-                        split_prefix=f"initial/{matrix_alias.get(matrix_name, matrix_name)}_",
-                    )
+                    {
+                        (
+                            key
+                            if key == "epoch"
+                            else f"initial/{matrix_alias.get(matrix_name, matrix_name)}_{key}"
+                        ): value
+                        for key, value in per_irrep_log.items()
+                    }
                 )
         wandb.log(initial_wandb_log)
 
