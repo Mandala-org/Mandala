@@ -19,4 +19,5 @@ srun --ntasks=1 --unbuffered python -u studies/minimal_silicon_study/train_silic
   --fresh-run true \
   --wandb-project "${WANDB_PROJECT}" \
   --run-name "${RUN_NAME_PREFIX}" \
+  --n-snapshots-per-temp 100 \
   --num-epochs "${ADDITIONAL_EPOCHS}"
