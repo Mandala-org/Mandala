@@ -500,6 +500,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Weights & Biases project name.",
     )
     parser.add_argument(
+        "--checkpoint-source-project",
+        type=str,
+        default=None,
+        help=(
+            "Optional Weights & Biases project used only to resolve "
+            "--resume-from-run-id. If omitted, --wandb-project is used."
+        ),
+    )
+    parser.add_argument(
         "--wandb-entity",
         type=str,
         default=None,
@@ -2434,7 +2443,7 @@ def main() -> None:
     elif args.resume_from_run_id is not None:
         resume_checkpoint = _resolve_resume_checkpoint_from_run_id(
             args.resume_from_run_id,
-            project=args.wandb_project,
+            project=args.checkpoint_source_project or args.wandb_project,
             entity=resolved_wandb_entity,
         )
 
