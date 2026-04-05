@@ -1,0 +1,55 @@
+program: studies/minimal_silicon_study/train_silicon_minimal.py
+project: mandala-silicon-restart-6avwd0u2-observables
+name: silicon-restart-6avwd0u2-observables-no-forces
+method: bayes
+metric:
+  name: val/energy_mae
+  goal: minimize
+
+early_terminate:
+  type: hyperband
+  min_iter: 100
+  eta: 3
+
+parameters:
+  resume-from-run-id:
+    value: 6avwd0u2
+  fresh-run:
+    value: true
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
+  train-temps:
+    value: "2700"
+  val-temp:
+    value: 2700
+  n-snapshots-per-temp:
+    value: 100
+  val-n-snapshots:
+    value: 10
+  num-epochs:
+    value: 800
+  log-interval:
+    value: 10
+  adaptive-log-interval:
+    value: true
+  enable-forces:
+    value: false
+  train-on-forces:
+    value: false
+
+  lr:
+    values: [0.001, 0.003, 0.006, 0.01, 0.03]
+  lr-patience:
+    values: [40, 80, 120]
+  loss-coef-density-matrix:
+    values: [1, 4, 10]
+  loss-coef-observables:
+    values: [1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5]
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
