@@ -49,5 +49,6 @@ parameters:
 command:
   - ${env}
   - ${interpreter}
+  - -u
   - ${program}
   - ${args}
