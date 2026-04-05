@@ -1,6 +1,6 @@
 program: studies/minimal_silicon_study/train_silicon_minimal.py
 project: mandala-silicon-observables
-name: silicon-restart-6avwd0u2-observables-no-forces
+name: silicon-fit-energy
 method: bayes
 metric:
   name: val/energy_mae
