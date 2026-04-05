@@ -424,6 +424,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Floating-point dtype for data and model parameters (default: float32)",
     )
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument(
+        "--grad-accum-steps",
+        type=int,
+        default=1,
+        help="Accumulate gradients across this many train samples before optimizer step.",
+    )
     parser.add_argument("--lr-factor", type=float, default=0.5)
     parser.add_argument("--lr-patience", type=int, default=200)
     parser.add_argument("--log-interval", type=int, default=10)
@@ -2489,6 +2495,8 @@ def main() -> None:
         raise ValueError("Hamiltonian must be included in --matrix-targets.")
     if args.head_e3mlp_layers < 1:
         raise ValueError("--head-e3mlp-layers must be >= 1.")
+    if args.grad_accum_steps < 1:
+        raise ValueError("--grad-accum-steps must be >= 1.")
     if args.loss_coef_observables == 0.0 and (
         args.train_on_energy or args.train_on_num_electrons
     ):
@@ -2726,6 +2734,7 @@ def main() -> None:
         "num_epochs": args.num_epochs,
         "dtype": args.dtype,
         "grad_clip": args.grad_clip,
+        "grad_accum_steps": args.grad_accum_steps,
         "lr_factor": args.lr_factor,
         "lr_patience": args.lr_patience,
         "log_interval": args.log_interval,
@@ -3037,6 +3046,93 @@ def main() -> None:
             pct = 100.0 * ms / max(epoch_ms, 1e-12)
             print(f"  {k:24s} {ms:10.3f} ms  ({pct:6.2f}%)")
 
+    if resume_payload is not None:
+        print("")
+        print("=" * 80)
+        print("INITIAL EVALUATION")
+        print("=" * 80)
+        initial_eval = evaluate_split(
+            network=network,
+            samples=val_samples if len(val_samples) > 0 else train_samples,
+            mapper=mapper,
+            mapper_cpu=mapper_cpu,
+            all_irreps=all_irreps,
+            device=device,
+            matrix_targets=matrix_targets,
+            sh_irreps=sh_irreps,
+            cutoff_radius=args.cutoff_radius,
+            n_radial=args.n_radial,
+            radial_embedding_scale=args.radial_embedding_scale,
+            symmetrize_preds=args.symmetrize_preds,
+            rescale_density_to_num_electrons=args.rescale_density_to_num_electrons,
+            enable_energy=args.enable_energy,
+            train_on_energy=args.train_on_energy,
+            enable_num_electrons=args.enable_num_electrons,
+            train_on_num_electrons=args.train_on_num_electrons,
+            loss_coef_density_matrix=args.loss_coef_density_matrix,
+            loss_coef_observables=args.loss_coef_observables,
+            enable_forces=args.enable_forces,
+            train_on_forces=args.train_on_forces,
+            loss_coef_forces=args.loss_coef_forces,
+        )
+        initial_detailed_metrics = initial_eval["detailed"]
+        log_detailed_training_metrics(
+            avg_epoch_time=0.0,
+            epochs_since_last_log=0,
+            time_elapsed=0.0,
+            loss_value=float(initial_eval["loss"]),
+            detailed_metrics=initial_detailed_metrics,
+            irrep_losses=None,
+        )
+        initial_wandb_log: dict[str, float] = {"epoch": 0}
+        initial_wandb_log.update(
+            build_wandb_detailed_metrics_log(
+                epoch_zero_based=0,
+                loss_value=float(initial_eval["loss"]),
+                detailed_metrics=initial_detailed_metrics,
+            )
+        )
+        basic_by_name = initial_eval["basic_by_name"]
+        if "hamiltonian" in basic_by_name:
+            initial_wandb_log["initial/mae_H"] = basic_by_name["hamiltonian"]["mae"]
+            initial_wandb_log["initial/mse_H"] = basic_by_name["hamiltonian"]["mse"]
+        if "overlap" in basic_by_name:
+            initial_wandb_log["initial/mae_S"] = basic_by_name["overlap"]["mae"]
+            initial_wandb_log["initial/mse_S"] = basic_by_name["overlap"]["mse"]
+        if "density" in basic_by_name:
+            initial_wandb_log["initial/mae_D"] = basic_by_name["density"]["mae"]
+            initial_wandb_log["initial/mse_D"] = basic_by_name["density"]["mse"]
+        initial_wandb_log["initial/loss_total"] = float(initial_eval["loss"])
+        if (
+            initial_eval["forces_mae"] is not None
+            and initial_eval["forces_mse"] is not None
+        ):
+            initial_wandb_log["initial/mae_F"] = initial_eval["forces_mae"]
+            initial_wandb_log["initial/mse_F"] = initial_eval["forces_mse"]
+        if initial_eval["energy_mae"] is not None:
+            initial_wandb_log["initial/energy_mae"] = initial_eval["energy_mae"]
+        if initial_eval["num_electrons_mae"] is not None:
+            initial_wandb_log["initial/num_electrons_mae"] = initial_eval[
+                "num_electrons_mae"
+            ]
+        if initial_eval["num_electrons_mae_pre_correction"] is not None:
+            initial_wandb_log["initial/num_electrons_mae_pre_correction"] = (
+                initial_eval["num_electrons_mae_pre_correction"]
+            )
+        for matrix_name in matrix_targets:
+            per_irrep = initial_eval["per_irrep_by_name"].get(matrix_name, {})
+            if per_irrep:
+                initial_wandb_log.update(
+                    build_wandb_per_irrep_metrics_log(
+                        epoch_zero_based=0,
+                        all_irreps=all_irreps,
+                        per_irrep_metrics=per_irrep,
+                        metric_prefix=irrep_prefix_by_matrix.get(matrix_name, ""),
+                        split_prefix=f"initial/{matrix_alias.get(matrix_name, matrix_name)}_",
+                    )
+                )
+        wandb.log(initial_wandb_log)
+
     try:
         for epoch in range(start_epoch, train_end_epoch):
             local_epoch = epoch - start_epoch
@@ -3050,10 +3146,12 @@ def main() -> None:
             train_loss_total = 0.0
             epoch_wandb_log: dict[str, float] = {"epoch": wandb_epoch}
             last_grad_norm = None
+            num_train_samples = len(train_samples)
+            group_start_idx = 0
+            optimizer.zero_grad(set_to_none=True)
 
-            for sample_cpu in train_samples:
+            for sample_idx, sample_cpu in enumerate(train_samples):
                 sample = move_sample_to_device(sample_cpu, device)
-                optimizer.zero_grad(set_to_none=True)
                 t_fwd = time.perf_counter() if args.benchmark else 0.0
                 positions_train = None
                 if args.enable_forces:
@@ -3104,24 +3202,34 @@ def main() -> None:
                     time.perf_counter() - t_loss if args.benchmark else 0.0,
                 )
 
+                current_group_size = min(
+                    args.grad_accum_steps, num_train_samples - group_start_idx
+                )
+                loss_to_backward = loss / float(current_group_size)
                 t_bwd = time.perf_counter() if args.benchmark else 0.0
-                loss.backward()
+                loss_to_backward.backward()
                 benchmark_add(
                     "backward_total",
                     time.perf_counter() - t_bwd if args.benchmark else 0.0,
                 )
 
-                if args.grad_clip > 0:
-                    grad_norm = clip_grad_norm_(network.parameters(), args.grad_clip)
-                    last_grad_norm = float(grad_norm.item())
+                should_step = (sample_idx - group_start_idx + 1) >= current_group_size
+                if should_step:
+                    if args.grad_clip > 0:
+                        grad_norm = clip_grad_norm_(
+                            network.parameters(), args.grad_clip
+                        )
+                        last_grad_norm = float(grad_norm.item())
 
-                t_opt = time.perf_counter() if args.benchmark else 0.0
-                optimizer.step()
-                benchmark_add(
-                    "optimizer_step",
-                    time.perf_counter() - t_opt if args.benchmark else 0.0,
-                )
-                last_completed_epoch = epoch
+                    t_opt = time.perf_counter() if args.benchmark else 0.0
+                    optimizer.step()
+                    benchmark_add(
+                        "optimizer_step",
+                        time.perf_counter() - t_opt if args.benchmark else 0.0,
+                    )
+                    optimizer.zero_grad(set_to_none=True)
+                    group_start_idx = sample_idx + 1
+                    last_completed_epoch = epoch
 
                 train_loss_total += float(loss.item())
                 for matrix_name, matrix_loss in loss_info[
