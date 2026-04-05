@@ -1,5 +1,5 @@
 program: studies/minimal_silicon_study/train_silicon_minimal.py
-project: mandala-silicon-restart-6avwd0u2-observables
+project: mandala-silicon-forces
 name: silicon-restart-6avwd0u2-observables-no-forces
 method: bayes
 metric:
@@ -14,6 +14,8 @@ early_terminate:
 parameters:
   resume-from-run-id:
     value: 6avwd0u2
+  wandb-project:
+    value: mandala-silicon-forces
   fresh-run:
     value: true
   data-path:
