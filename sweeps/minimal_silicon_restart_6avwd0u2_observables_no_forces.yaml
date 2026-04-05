@@ -41,6 +41,8 @@ parameters:
     values: [0.001, 0.003, 0.006, 0.01, 0.03]
   lr-patience:
     values: [40, 80, 120]
+  grad-accum-steps:
+    values: [1, 4, 10]
   loss-coef-density-matrix:
     values: [1, 4, 10]
   loss-coef-observables:
