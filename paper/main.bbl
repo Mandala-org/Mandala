@@ -17,12 +17,62 @@ W.~Kohn, L.~J. Sham, {Self-Consistent Equations Including Exchange and
 \newblock \href {https://doi.org/10.1103/PhysRev.140.A1133}
   {\path{doi:10.1103/PhysRev.140.A1133}}.
 
-\bibitem{BrVo2017}
-F.~Brockherde, L.~Vogt, L.~Li, M.~E. Tuckerman, K.~Burke, K.-R. M{\"u}ller,
-  {Bypassing the Kohn-Sham equations with machine learning}, {Nat. Commun.}
-  8~(1) (2017) 872.
-\newblock \href {https://doi.org/10.1038/s41467-017-00839-3}
-  {\path{doi:10.1038/s41467-017-00839-3}}.
+\bibitem{deepdive}
+L.~Fiedler, K.~Shah, M.~Bussmann, A.~Cangi,
+  \href{https://link.aps.org/doi/10.1103/PhysRevMaterials.6.040301}{Deep dive
+  into machine learning density functional theory for materials science and
+  chemistry}, Phys. Rev. Mater. 6 (2022) 040301.
+\newblock \href {https://doi.org/10.1103/PhysRevMaterials.6.040301}
+  {\path{doi:10.1103/PhysRevMaterials.6.040301}}.
+\newline\urlprefix\url{https://link.aps.org/doi/10.1103/PhysRevMaterials.6.040301}
+
+\bibitem{malapaper}
+J.~A. Ellis, L.~Fiedler, G.~A. Popoola, N.~A. Modine, J.~A. Stephens, A.~P.
+  Thompson, A.~Cangi, S.~Rajamanickam,
+  \href{https://link.aps.org/doi/10.1103/PhysRevB.104.035120}{{Accelerating
+  finite-temperature Kohn-Sham density functional theory with deep neural
+  networks}}, Phys. Rev. B 104 (2021) 035120.
+\newblock \href {https://doi.org/10.1103/PhysRevB.104.035120}
+  {\path{doi:10.1103/PhysRevB.104.035120}}.
+\newline\urlprefix\url{https://link.aps.org/doi/10.1103/PhysRevB.104.035120}
+
+\bibitem{temperaturepaper}
+L.~Fiedler, N.~A. Modine, K.~D. Miller, A.~Cangi,
+  \href{https://link.aps.org/doi/10.1103/PhysRevB.108.125146}{Machine learning
+  the electronic structure of matter across temperatures}, Phys. Rev. B 108
+  (2023) 125146.
+\newblock \href {https://doi.org/10.1103/PhysRevB.108.125146}
+  {\path{doi:10.1103/PhysRevB.108.125146}}.
+\newline\urlprefix\url{https://link.aps.org/doi/10.1103/PhysRevB.108.125146}
+
+\bibitem{sizetransferpaper}
+L.~Fiedler, N.~A. Modine, S.~Schmerler, D.~J. Vogel, G.~A. Popoola, A.~P.
+  Thompson, S.~Rajamanickam, A.~Cangi,
+  \href{https://www.nature.com/articles/s41524-023-01070-z}{Predicting
+  electronic structures at any length scale with machine learning}, npj Comput
+  Mater 9~(1) (2023) 1--10.
+\newblock \href {https://doi.org/10.1038/s41524-023-01070-z}
+  {\path{doi:10.1038/s41524-023-01070-z}}.
+\newline\urlprefix\url{https://www.nature.com/articles/s41524-023-01070-z}
+
+\bibitem{ofdftpaper}
+L.~Fiedler, Z.~A. Moldabekov, X.~Shao, K.~Jiang, T.~Dornheim, M.~Pavanello,
+  A.~Cangi,
+  \href{https://link.aps.org/doi/10.1103/PhysRevResearch.4.043033}{Accelerating
+  equilibration in first-principles molecular dynamics with orbital-free
+  density functional theory}, Phys. Rev. Res. 4 (2022) 043033.
+\newblock \href {https://doi.org/10.1103/PhysRevResearch.4.043033}
+  {\path{doi:10.1103/PhysRevResearch.4.043033}}.
+\newline\urlprefix\url{https://link.aps.org/doi/10.1103/PhysRevResearch.4.043033}
+
+\bibitem{ghasemi2021}
+S.~A. Ghasemi, T.~D. K{\"u}hne,
+  \href{https://doi.org/10.1063/5.0037319}{Artificial neural networks for the
+  kinetic energy functional of non-interacting fermions}, J. Chem. Phys.
+  154~(7) (2021) 074107.
+\newblock \href {https://doi.org/10.1063/5.0037319}
+  {\path{doi:10.1063/5.0037319}}.
+\newline\urlprefix\url{https://doi.org/10.1063/5.0037319}
 
 \bibitem{chandrasekaran_solving_2019}
 A.~Chandrasekaran, D.~Kamal, R.~Batra, C.~Kim, L.~Chen, R.~Ramprasad, Solving
@@ -50,6 +100,13 @@ X.~Shao, L.~Paetow, M.~E. Tuckerman, M.~Pavanello,
   {\path{doi:10.1038/s41467-023-41953-9}}.
 \newline\urlprefix\url{http://dx.doi.org/10.1038/s41467-023-41953-9}
 
+\bibitem{BrVo2017}
+F.~Brockherde, L.~Vogt, L.~Li, M.~E. Tuckerman, K.~Burke, K.-R. M{\"u}ller,
+  {Bypassing the Kohn-Sham equations with machine learning}, {Nat. Commun.}
+  8~(1) (2017) 872.
+\newblock \href {https://doi.org/10.1038/s41467-017-00839-3}
+  {\path{doi:10.1038/s41467-017-00839-3}}.
+
 \bibitem{KoKoBe22}
 E.~Kocer, T.~W. Ko, J.~Behler,
   \href{https://www.annualreviews.org/content/journals/10.1146/annurev-physchem-082720-034254}{Neural
@@ -69,22 +126,111 @@ J.~A. Rackers, L.~Tecot, M.~Geiger, T.~E. Smidt,
   {\path{doi:10.1088/2632-2153/acb314}}.
 \newline\urlprefix\url{https://dx.doi.org/10.1088/2632-2153/acb314}
 
+\bibitem{deeph2022}
+H.~Li, Z.~Wang, N.~Zou, M.~Ye, R.~Xu, X.~Gong, W.~Duan, Y.~Xu,
+  \href{https://doi.org/10.1038/s43588-022-00265-6}{Deep-learning density
+  functional theory hamiltonian for efficient ab initio electronic-structure
+  calculation}, Nat. Comput. Sci. 2~(6) (2022) 367--377.
+\newblock \href {https://doi.org/10.1038/s43588-022-00265-6}
+  {\path{doi:10.1038/s43588-022-00265-6}}.
+\newline\urlprefix\url{https://doi.org/10.1038/s43588-022-00265-6}
+
+\bibitem{deeph_magnetic_2023}
+H.~Li, Z.~Tang, X.~Gong, N.~Zou, W.~Duan, Y.~Xu,
+  \href{https://doi.org/10.1038/s43588-023-00424-3}{Deep-learning
+  electronic-structure calculation of magnetic superstructures}, Nat. Comput.
+  Sci. 3~(4) (2023) 321--327.
+\newblock \href {https://doi.org/10.1038/s43588-023-00424-3}
+  {\path{doi:10.1038/s43588-023-00424-3}}.
+\newline\urlprefix\url{https://doi.org/10.1038/s43588-023-00424-3}
+
+\bibitem{deephe3_2023}
+X.~Gong, H.~Li, N.~Zou, R.~Xu, W.~Duan, Y.~Xu,
+  \href{https://doi.org/10.1038/s41467-023-38468-8}{General framework for
+  e(3)-equivariant neural network representation of density functional theory
+  hamiltonian}, Nat. Commun. 14~(1) (2023) 2848.
+\newblock \href {https://doi.org/10.1038/s41467-023-38468-8}
+  {\path{doi:10.1038/s41467-023-38468-8}}.
+\newline\urlprefix\url{https://doi.org/10.1038/s41467-023-38468-8}
+
+\bibitem{deeph_hybrid_2024}
+Z.~Tang, H.~Li, P.~Lin, X.~Gong, G.~Jin, L.~He, H.~Jiang, X.~Ren, W.~Duan,
+  Y.~Xu, \href{https://doi.org/10.1038/s41467-024-53028-4}{A deep equivariant
+  neural network approach for efficient hybrid density functional
+  calculations}, Nat. Commun. 15~(1) (2024) 8815.
+\newblock \href {https://doi.org/10.1038/s41467-024-53028-4}
+  {\path{doi:10.1038/s41467-024-53028-4}}.
+\newline\urlprefix\url{https://doi.org/10.1038/s41467-024-53028-4}
+
+\bibitem{deeph_pw_2024}
+X.~Gong, S.~G. Louie, W.~Duan, Y.~Xu,
+  \href{https://doi.org/10.1038/s43588-024-00701-9}{Generalizing deep learning
+  electronic structure calculation to the plane-wave basis}, Nat. Comput. Sci.
+  4~(10) (2024) 752--760.
+\newblock \href {https://doi.org/10.1038/s43588-024-00701-9}
+  {\path{doi:10.1038/s43588-024-00701-9}}.
+\newline\urlprefix\url{https://doi.org/10.1038/s43588-024-00701-9}
+
+\bibitem{deeph_review_2025}
+Z.~Tang, H.~Chen, Y.~Li, Y.~Qian, Y.~Wang, W.~Fu, J.~Li, C.~Si, W.~Duan,
+  J.~Chen, Y.~Xu,
+  \href{https://doi.org/10.1038/s43588-025-00932-4}{Deep-learning electronic
+  structure calculations}, Nat. Comput. Sci. 5~(12) (2025) 1133--1146.
+\newblock \href {https://doi.org/10.1038/s43588-025-00932-4}
+  {\path{doi:10.1038/s43588-025-00932-4}}.
+\newline\urlprefix\url{https://doi.org/10.1038/s43588-025-00932-4}
+
 \bibitem{born_zur_1927}
 M.~Born, R.~Oppenheimer, {Zur Quantentheorie der Molekeln}, Ann. Phys. 389~(20)
   (1927) 457--484.
 \newblock \href {https://doi.org/10.1002/andp.19273892002}
   {\path{doi:10.1002/andp.19273892002}}.
 
-\bibitem{nearsightedness}
-E.~Prodan, W.~Kohn,
-  \href{https://www.pnas.org/doi/abs/10.1073/pnas.0505436102}{Nearsightedness
-  of electronic matter}, Proceedings of the National Academy of Sciences
-  102~(33) (2005) 11635--11638.
-\newblock \href
-  {http://arxiv.org/abs/https://www.pnas.org/doi/pdf/10.1073/pnas.0505436102}
-  {\path{arXiv:https://www.pnas.org/doi/pdf/10.1073/pnas.0505436102}}, \href
-  {https://doi.org/10.1073/pnas.0505436102}
-  {\path{doi:10.1073/pnas.0505436102}}.
-\newline\urlprefix\url{https://www.pnas.org/doi/abs/10.1073/pnas.0505436102}
+\bibitem{ozaki2003}
+T.~Ozaki, \href{https://doi.org/10.1103/PhysRevB.67.155108}{Variationally
+  optimized atomic orbitals for large-scale electronic structures}, Phys. Rev.
+  B 67~(15) (2003) 155108.
+\newblock \href {https://doi.org/10.1103/PhysRevB.67.155108}
+  {\path{doi:10.1103/PhysRevB.67.155108}}.
+\newline\urlprefix\url{https://doi.org/10.1103/PhysRevB.67.155108}
+
+\bibitem{ozakikino2004}
+T.~Ozaki, H.~Kino, \href{https://doi.org/10.1103/PhysRevB.69.195113}{Numerical
+  atomic basis orbitals from h to kr}, Phys. Rev. B 69~(19) (2004) 195113.
+\newblock \href {https://doi.org/10.1103/PhysRevB.69.195113}
+  {\path{doi:10.1103/PhysRevB.69.195113}}.
+\newline\urlprefix\url{https://doi.org/10.1103/PhysRevB.69.195113}
+
+\bibitem{blum2009}
+V.~Blum, R.~Gehrke, F.~Hanke, P.~Havu, V.~Havu, X.~Ren, K.~Reuter,
+  M.~Scheffler, \href{https://doi.org/10.1016/j.cpc.2009.06.022}{Ab initio
+  molecular simulations with numeric atom-centered orbitals}, Comput. Phys.
+  Commun. 180~(11) (2009) 2175--2196.
+\newblock \href {https://doi.org/10.1016/j.cpc.2009.06.022}
+  {\path{doi:10.1016/j.cpc.2009.06.022}}.
+\newline\urlprefix\url{https://doi.org/10.1016/j.cpc.2009.06.022}
+
+\bibitem{pyscf2020}
+Q.~Sun, X.~Zhang, S.~Banerjee, P.~Bao, M.~Barbry, N.~S. Blunt, N.~A. Bogdanov,
+  G.~H. Booth, J.~Chen, Z.-H. Cui, J.~J. Eriksen, Y.~Gao, S.~Guo, J.~Hermann,
+  M.~R. Hermes, K.~Koh, P.~Koval, S.~Lehtola, Z.~Li, J.~Liu, N.~Mardirossian,
+  J.~D. McClain, M.~Motta, B.~Mussard, H.~Q. Pham, A.~Pulkin, W.~Purwanto,
+  P.~J. Robinson, E.~Ronca, E.~R. Sayfutyarova, M.~Scheurer, H.~F. Schurkus,
+  J.~E.~T. Smith, C.~Sun, S.-N. Sun, S.~Upadhyay, L.~K. Wagner, X.~Wang,
+  A.~White, J.~D. Whitfield, M.~J. Williamson, S.~Wouters, J.~Yang, J.~M. Yu,
+  T.~Zhu, T.~C. Berkelbach, S.~Sharma, A.~Y. Sokolov, G.~K.-L. Chan,
+  \href{https://doi.org/10.1063/5.0006074}{Recent developments in the {PySCF}
+  program package}, J. Chem. Phys. 153~(2) (2020) 024109.
+\newblock \href {https://doi.org/10.1063/5.0006074}
+  {\path{doi:10.1063/5.0006074}}.
+\newline\urlprefix\url{https://doi.org/10.1063/5.0006074}
+
+\bibitem{hyperparameterpaper}
+L.~Fiedler, N.~Hoffmann, P.~Mohammed, G.~A. Popoola, T.~Yovell, V.~Oles, J.~A.
+  Ellis, S.~Rajamanickam, A.~Cangi, Training-free hyperparameter optimization
+  of neural networks for electronic structures in matter, { Mach. Learn.: Sci.
+  Technol.} 3~(4) (2022) 045008.
+\newblock \href {https://doi.org/10.1088/2632-2153/ac9956}
+  {\path{doi:10.1088/2632-2153/ac9956}}.
 
 \end{thebibliography}
