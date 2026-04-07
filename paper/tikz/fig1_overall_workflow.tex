@@ -1,0 +1,50 @@
+\documentclass[tikz,border=6pt]{standalone}
+\input{mandala_tikz_styles.tex}
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+
+\node[titlebox, minimum width=18.2cm] (title) at (0,0) {Mandala Overall Workflow};
+
+% Abstract logical schematic:
+% (1) backend data -> (2) unified snapshot -> (3) dataset / mapper -> (4) model
+% (5) predicted operators feed both training and postprocessing/analysis
+% (6) reference targets originate from Snapshot objects
+% (7) runtime support stays separate as cross-cutting infrastructure
+
+\node[stage=mandalaBlue, minimum width=2.9cm] (backend) at (-7.2,-2.4)
+{Backend data\\OpenMX, FHI-aims,\\PySCF};
+\node[stage=mandalaTeal, minimum width=3.1cm] (snapshot) at (-3.8,-2.4)
+{Unified snapshots\\\texttt{Snapshot}};
+\node[stage=mandalaTeal, minimum width=3.4cm] (dataset) at (-0.1,-2.4)
+{Dataset build\\\texttt{DatasetFactory.create()}\\+\ \texttt{E3GNNDataset}};
+\node[stage=mandalaGold, minimum width=3.0cm] (model) at (3.8,-2.4)
+{Model\\\texttt{E3GNN.forward()}};
+\node[stage=mandalaViolet, minimum width=3.1cm] (ops) at (7.4,-2.4)
+{Predicted operators\\$\widehat{H},\widehat{S},\widehat{D}$};
+
+\draw[arrow] (backend) -- (snapshot);
+\draw[arrow] (snapshot) -- (dataset);
+\draw[arrow] (dataset) -- (model);
+\draw[arrow] (model) -- (ops);
+
+\node[stage=mandalaBlue, minimum width=3.4cm] (targets) at (-5.3,-5.3)
+{Reference targets\\matrix blocks or irreps\\$E$, $N_e$, forces, stress};
+\node[stage=mandalaRed, minimum width=3.8cm] (train) at (0.0,-5.3)
+{Training / validation\\\texttt{E3GNN.\_shared\_step()}};
+\node[stage=mandalaGreen, minimum width=3.9cm] (post) at (4.6,-5.3)
+{Postprocessing\\symmetrization, gauge,\\density normalization};
+\node[stage=mandalaGold, minimum width=3.6cm] (analysis) at (8.7,-5.3)
+{Analysis\\metrics, DOS,\\band structure};
+
+\draw[arrow] (snapshot.south) |- (targets.north);
+\draw[arrow] (targets.east) -- (train.west);
+\draw[arrow] (ops.south) |- (train.north);
+\draw[arrow] (ops.south) |- (post.north);
+\draw[arrow] (post.east) -- (analysis.west);
+
+\node[sidepanel=mandalaBlue, text width=13.5cm] (runtime) at (0.9,-8.2)
+{\textbf{Runtime and experiment infrastructure}\\
+\texttt{Config}, checkpointing, proper graceful termination and resuming of training runs, logging, sweep orchestration, cache reuse, and reproducibility support.};
+
+\end{tikzpicture}
+\end{document}
