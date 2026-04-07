@@ -1,0 +1,111 @@
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,backgrounds,shapes.multipart,shapes.geometric}
+
+\colorlet{mandalaBlue}{blue!55!black}
+\colorlet{mandalaTeal}{teal!55!black}
+\colorlet{mandalaGreen}{green!45!black}
+\colorlet{mandalaGold}{orange!70!black}
+\colorlet{mandalaRed}{red!55!black}
+\colorlet{mandalaViolet}{violet!55!black}
+\colorlet{mandalaGray}{black!55}
+\colorlet{mandalaLight}{black!3}
+
+\tikzset{
+  >=Latex,
+  font=\sffamily,
+  % Color semantics used consistently across all diagrams:
+  % mandalaBlue   -> external inputs / sources / configuration
+  % mandalaTeal   -> internal data containers / encoded features
+  % mandalaGreen  -> geometric or physics-aware transformations
+  % mandalaGold   -> model computation or linear-algebra solve stages
+  % mandalaViolet -> predicted operator-valued objects and heads
+  % mandalaRed    -> optimization / objectives / losses
+  titlebox/.style={
+    rounded corners=2.5pt,
+    fill=mandalaBlue!8,
+    draw=mandalaBlue,
+    line width=0.8pt,
+    inner sep=6pt,
+    minimum height=10mm,
+    align=center,
+    font=\sffamily\bfseries\large
+  },
+  panel/.style={
+    rounded corners=3pt,
+    fill=white,
+    draw=black!45,
+    line width=0.8pt,
+    inner sep=5pt
+  },
+  stage/.style={
+    rounded corners=3pt,
+    fill=#1!10,
+    draw=#1!85!black,
+    line width=0.9pt,
+    minimum width=32mm,
+    minimum height=11mm,
+    align=center,
+    font=\sffamily\small
+  },
+  stage/.default=mandalaBlue,
+  smallstage/.style={
+    rounded corners=2.5pt,
+    fill=#1!9,
+    draw=#1!80!black,
+    line width=0.75pt,
+    minimum width=27mm,
+    minimum height=8.5mm,
+    align=center,
+    font=\sffamily\scriptsize
+  },
+  smallstage/.default=mandalaBlue,
+  sidepanel/.style={
+    rounded corners=3pt,
+    fill=#1!8,
+    draw=#1!75!black,
+    line width=0.8pt,
+    inner sep=5pt,
+    align=left,
+    font=\sffamily\scriptsize,
+    text width=43mm
+  },
+  sidepanel/.default=mandalaTeal,
+  annot/.style={
+    font=\sffamily\scriptsize,
+    text=mandalaGray,
+    align=left
+  },
+  arrow/.style={
+    -{Latex[length=2.6mm,width=1.8mm]},
+    line width=0.95pt,
+    draw=black!70
+  },
+  dashedarrow/.style={
+    -{Latex[length=2.4mm,width=1.7mm]},
+    line width=0.85pt,
+    draw=black!65,
+    dashed
+  },
+  softfit/.style={
+    rounded corners=4pt,
+    draw=black!35,
+    fill=black!1,
+    line width=0.7pt,
+    inner sep=6pt
+  },
+  lab/.style={
+    font=\sffamily\scriptsize\bfseries,
+    text=black!75
+  },
+  tinycode/.style={
+    font=\ttfamily\tiny,
+    text=black!70,
+    align=center
+  }
+}

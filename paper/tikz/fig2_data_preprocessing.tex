@@ -1,0 +1,61 @@
+\documentclass[tikz,border=6pt]{standalone}
+\input{mandala_tikz_styles.tex}
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+
+\node[titlebox, minimum width=18.2cm] (title) at (0,0) {Data Loading, Handling, and Preprocessing};
+
+% Abstract logical structure:
+% parsers -> Snapshot objects -> dataset factory / shared mapper -> GNNDataset samples
+
+\node[stage=mandalaBlue, minimum width=4.2cm] (parse) at (-6.2,-2.2)
+{Backend parsers\\
+\texttt{parse\_openmx\_scfout()}\\
+\texttt{parse\_fhiaims\_output()}\\
+\texttt{load\_pyscf\_snapshot()}};
+
+\node[stage=mandalaTeal, minimum width=4.0cm] (snap) at (-1.4,-2.2)
+{Unified data object\\
+\texttt{Snapshot}\\
+$\{H,S,D,\mathbf R,h,E,N_e,\mathbf F,\sigma\}$};
+
+\node[stage=mandalaTeal, minimum width=4.3cm] (factory) at (4.2,-2.2)
+{Dataset construction\\
+\texttt{DatasetFactory.add\_snapshot()}\\
+\texttt{DatasetFactory.create()}};
+
+\node[stage=mandalaGreen, minimum width=4.8cm] (dataset) at (7.0,-4.8)
+{Graph sample assembly\\
+\texttt{E3GNNDataset.\_process\_snapshot\_to\_sample()}};
+
+\draw[arrow] (parse) -- (snap);
+\draw[arrow] (snap) -- (factory);
+\draw[arrow] (factory.south east) |- (dataset.north);
+
+\node[sidepanel=mandalaTeal, text width=5.0cm] (snap_panel) at (-5.7,-5.8)
+{\textbf{Snapshot preparation}\\
+- \texttt{Snapshot.canonicalize\_edges()}\\
+- \texttt{Snapshot.to\_e3nn()} / \texttt{to\_openmx()} / \texttt{to\_fhiaims()}\\
+- \texttt{Snapshot.filter\_by\_distance()}\\
+- \texttt{Snapshot.get\_energy()}\\
+- \texttt{Snapshot.get\_number\_of\_electrons()}};
+
+\node[sidepanel=mandalaTeal, text width=5.4cm] (factory_panel) at (0.4,-5.8)
+{\textbf{Shared dataset state}\\
+- one global \texttt{BlockIrrepMapper}\\
+- merged orbital metadata from \texttt{OrbitalIrrepConfig.from\_info\_list()}\\
+- reusable train / validation dataset splits\\
+- raw snapshot-cache reuse};
+
+\node[sidepanel=mandalaGreen, text width=5.7cm] (dataset_panel) at (6.8,-8.2)
+{\textbf{GNNDataset sample payload}\\
+$x=\{z_i,\mathbf R,h,\texttt{edge\_index},\texttt{edge\_shift},\texttt{edge\_type\_idx},\phi(r_{ij}),Y_{\ell m}(\hat{\mathbf r}_{ij})\}$\\
+$y=\{H,S,D \text{ or irreps},E,N_e,\mathbf F,\sigma\}$\\
+via \texttt{compute\_graph\_features()} and \texttt{E3GNNDataset.\_load\_snapshot()}};
+
+\draw[dashedarrow] (snap.south) -- (snap_panel.north);
+\draw[dashedarrow] (factory.south) -- (factory_panel.north);
+\draw[dashedarrow] (dataset.south) -- (dataset_panel.north);
+
+\end{tikzpicture}
+\end{document}
