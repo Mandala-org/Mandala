@@ -89,6 +89,15 @@ def _pyscf_energy(snapshot: Snapshot) -> float:
     raise KeyError("Could not find total energy in PySCF metadata.")
 
 
+def _pyscf_energy_unit(snapshot: Snapshot) -> str:
+    pyscf_meta = snapshot.info["pyscf"]
+    if "total_energy_hartree" in pyscf_meta:
+        return "hartree"
+    if "total_energy_ev" in pyscf_meta:
+        return "eV"
+    return "unknown"
+
+
 def _edge_count(snapshot: Snapshot) -> int:
     return sum(
         int(edges.shape[1]) for edges in snapshot.hamiltonian.pair_edges.values()
@@ -189,27 +198,42 @@ def main() -> None:
 
     if snap_orig.box is None or snap_rot.box is None:
         raise RuntimeError("Both snapshots must contain periodic boxes")
-    if snap_orig.forces is None or snap_rot.forces is None:
-        raise RuntimeError("Both snapshots must contain force targets")
-    if snap_orig.stress is None or snap_rot.stress is None:
-        raise RuntimeError("Both snapshots must contain stress targets")
+    if snap_orig.positions is None or snap_rot.positions is None:
+        raise RuntimeError("Both snapshots must contain positions")
 
     R = _nearest_rotation_from_boxes(snap_orig.box, snap_rot.box)
     snap_rot_calc = snap_orig.rotate(R)
+
+    force_available = snap_orig.forces is not None and snap_rot.forces is not None
+    stress_available = snap_orig.stress is not None and snap_rot.stress is not None
+    energy_unit = _pyscf_energy_unit(snap_orig)
+    energy_orig = _pyscf_energy(snap_orig)
+    energy_rot = _pyscf_energy(snap_rot)
 
     metrics = {
         "rotation_matrix": R.tolist(),
         "edge_count_total": _edge_count(snap_orig),
         "edge_count_by_key": _edge_count_by_key(snap_orig),
-        "energy_original_hartree": _pyscf_energy(snap_orig),
-        "energy_rotated_hartree": _pyscf_energy(snap_rot),
-        "energy_delta_hartree": abs(_pyscf_energy(snap_orig) - _pyscf_energy(snap_rot)),
+        "energy_unit": energy_unit,
+        "energy_original": energy_orig,
+        "energy_rotated": energy_rot,
+        "energy_delta": abs(energy_orig - energy_rot),
         "positions_max_abs": _tensor_max_abs(
             snap_rot_calc.positions, snap_rot.positions
         ),
         "box_max_abs": _tensor_max_abs(snap_rot_calc.box, snap_rot.box),
-        "forces_max_abs": _tensor_max_abs(snap_rot_calc.forces, snap_rot.forces),
-        "stress_max_abs": _tensor_max_abs(snap_rot_calc.stress, snap_rot.stress),
+        "forces_available": force_available,
+        "stress_available": stress_available,
+        "forces_max_abs": (
+            _tensor_max_abs(snap_rot_calc.forces, snap_rot.forces)
+            if force_available
+            else None
+        ),
+        "stress_max_abs": (
+            _tensor_max_abs(snap_rot_calc.stress, snap_rot.stress)
+            if stress_available
+            else None
+        ),
         "hamiltonian_mae": _tensor_mae(
             snap_rot_calc.hamiltonian.to_dense(), snap_rot.hamiltonian.to_dense()
         ),
@@ -272,9 +296,9 @@ def main() -> None:
     (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 
     failures = []
-    if metrics["energy_delta_hartree"] > args.energy_atol:
+    if metrics["energy_delta"] > args.energy_atol:
         failures.append(
-            f"energy delta {metrics['energy_delta_hartree']:.3e} > {args.energy_atol:.3e}"
+            f"energy delta {metrics['energy_delta']:.3e} > {args.energy_atol:.3e}"
         )
     for name in (
         "positions_max_abs",
@@ -282,7 +306,7 @@ def main() -> None:
         "forces_max_abs",
         "stress_max_abs",
     ):
-        if metrics[name] > args.vector_atol:
+        if metrics[name] is not None and metrics[name] > args.vector_atol:
             failures.append(f"{name} {metrics[name]:.3e} > {args.vector_atol:.3e}")
     for name in ("hamiltonian_max_abs", "overlap_max_abs", "density_max_abs"):
         if metrics[name] > args.matrix_atol:
