@@ -61,3 +61,6 @@ saved_models/
 *.jpg
 *.jpeg
 .codex
+
+# slurm.out
+slurm_*.out

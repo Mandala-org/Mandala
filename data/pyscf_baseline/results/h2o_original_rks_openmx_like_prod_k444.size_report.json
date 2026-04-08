@@ -1,0 +1,36 @@
+{
+  "inputs": {
+    "pyscf_npz": "data/pyscf_baseline/results/h2o_original_rks_openmx_like_prod_k444.npz",
+    "pyscf_json": "data/pyscf_baseline/results/h2o_original_rks_openmx_like_prod_k444.json",
+    "openmx_matrix": "data/small/H2O/original/H2O.matrix",
+    "openmx_info": "data/small/H2O/original/H2O.info.out"
+  },
+  "pyscf": {
+    "num_atoms": 6,
+    "nshift": 64,
+    "edge_count_total": 3636,
+    "edge_count_by_key": {
+      "H-H": 1616,
+      "H-O": 808,
+      "O-H": 808,
+      "O-O": 404
+    },
+    "max_distance_angstrom": 15.030627250671387,
+    "expected_dense_shift_edges": 2304
+  },
+  "openmx": {
+    "edge_count_total": 1674,
+    "edge_count_by_key": {
+      "H-H": 712,
+      "H-O": 384,
+      "O-O": 194,
+      "O-H": 384
+    },
+    "max_distance_angstrom": 7.394084930419922
+  },
+  "comparison": {
+    "edge_count_delta": 1962,
+    "edge_count_ratio": 2.172043010752688,
+    "distance_delta_angstrom": 7.636542320251465
+  }
+}
