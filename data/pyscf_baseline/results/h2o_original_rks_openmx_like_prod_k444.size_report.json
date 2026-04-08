@@ -26,11 +26,11 @@
       "O-O": 194,
       "O-H": 384
     },
-    "max_distance_angstrom": 7.394084930419922
+    "max_distance_angstrom": 7.394084453582764
   },
   "comparison": {
     "edge_count_delta": 1962,
     "edge_count_ratio": 2.172043010752688,
-    "distance_delta_angstrom": 7.636542320251465
+    "distance_delta_angstrom": 7.636542797088623
   }
 }
