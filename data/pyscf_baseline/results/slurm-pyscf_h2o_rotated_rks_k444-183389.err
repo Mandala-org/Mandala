@@ -1,0 +1,2 @@
+/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/calc_pyscf_baseline.py:490: ComplexWarning: Casting complex values to real discards the imaginary part
+  "mo_coeff": np.asarray(mf.mo_coeff, dtype=np.float32),

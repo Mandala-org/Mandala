@@ -1,0 +1,219 @@
+{
+  "artifacts": {
+    "density_npy_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.density_ao.npy",
+    "density_shifted_npy_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.density_shifted.npy",
+    "hamiltonian_npy_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.hamiltonian_ao.npy",
+    "hamiltonian_shifted_npy_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.hamiltonian_shifted.npy",
+    "npz_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.npz",
+    "overlap_npy_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.overlap_ao.npy",
+    "overlap_shifted_npy_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.overlap_shifted.npy",
+    "shifts_npy_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.shifts.npy",
+    "xyz_path": "/data/home2/brzoza73/casus/mandala/data/pyscf_baseline/results/h2o_rotated_rks_openmx_like_prod_k444.xyz"
+  },
+  "openmx_reference": {
+    "energies_ev": {
+      "Enpy": -947.43932069583,
+      "UH0": -17868.284365315205,
+      "UH1": 3.4886508133233796,
+      "Uch": 0.0,
+      "Ucore": 17155.85725567316,
+      "Ucs": 0.0,
+      "Uef": 0.0,
+      "Uele": -232.48483667378332,
+      "Uhub": 0.0,
+      "Ukin": 728.9102274886229,
+      "Una": -894.3901759588023,
+      "Unl": 183.0402580812866,
+      "UpV": 0.0,
+      "Utot": -947.43932069583,
+      "UvdW": 0.0,
+      "Uxc0": -128.03011517811322,
+      "Uxc1": -128.03011517811322,
+      "Uzo": 0.0,
+      "Uzs": 0.0
+    },
+    "forces_ev_per_angstrom": [
+      [
+        1.0427839662687688,
+        0.2841391254733496,
+        0.7196572542521367
+      ],
+      [
+        -1.0429517746938572,
+        -0.2841841425736872,
+        0.7196099862967822
+      ],
+      [
+        0.28424352683370707,
+        -1.042804654978711,
+        0.719669370556802
+      ],
+      [
+        -0.28405917222971794,
+        1.0428541737890826,
+        0.7196695142283989
+      ],
+      [
+        0.0027711643237882987,
+        0.0007425391953026179,
+        -1.4405951013372829
+      ],
+      [
+        -0.0031278906097165463,
+        -0.0008382928069773419,
+        -1.4411580066536327
+      ]
+    ],
+    "stress_ev_per_angstrom3": null
+  },
+  "pyscf": {
+    "converged": true,
+    "density_trace_num_electrons": 19.418184540567978,
+    "forces_ev_per_angstrom": null,
+    "forces_stress_status": "not_requested",
+    "num_electrons": 20,
+    "one_body_trace_energy_ev": -1126.9462806843478,
+    "periodic": {
+      "num_kpts": 64,
+      "num_nonzero_shifts": 63,
+      "num_shifts": 64,
+      "zero_shift_index": 0
+    },
+    "stress_ev_per_angstrom3": null,
+    "total_energy_ev": -3396.2662271744052
+  },
+  "run_name": "h2o_rotated_rks_openmx_like_prod_k444",
+  "settings": {
+    "basis_mode": "openmx_like_shell_count_matched",
+    "charge": 0,
+    "conv_tol": 1e-09,
+    "df_auxbasis": null,
+    "df_backend": "gdf",
+    "grid_level": 3,
+    "hamiltonian_definition": "Kohn-Sham matrix hcore + veff (not PySCF get_fock)",
+    "ke_cutoff": null,
+    "kmesh": [
+      4,
+      4,
+      4
+    ],
+    "max_cycle": 200,
+    "max_memory_mb": 1200000,
+    "method": "KRKS",
+    "orbital_set": {
+      "H": "3s2p",
+      "O": "3s3p2d"
+    },
+    "pbc_precision": 1e-08,
+    "pyscf_verbose": 4,
+    "require_forces_stress": false,
+    "spin": 0,
+    "xc": "pbe,pbe"
+  },
+  "snapshot": {
+    "atoms": [
+      {
+        "element": "H",
+        "index": 1,
+        "x_angstrom": 1.530650019645691,
+        "y_angstrom": 0.4101400077342987,
+        "z_angstrom": 1.0548900365829468
+      },
+      {
+        "element": "H",
+        "index": 2,
+        "x_angstrom": 3.0429298877716064,
+        "y_angstrom": 0.8153499960899353,
+        "z_angstrom": 1.0548900365829468
+      },
+      {
+        "element": "H",
+        "index": 3,
+        "x_angstrom": 2.696929931640625,
+        "y_angstrom": -0.917900025844574,
+        "z_angstrom": 2.674870014190674
+      },
+      {
+        "element": "H",
+        "index": 4,
+        "x_angstrom": 1.8766499757766724,
+        "y_angstrom": 2.143389940261841,
+        "z_angstrom": 2.674870014190674
+      },
+      {
+        "element": "O",
+        "index": 5,
+        "x_angstrom": 0.0,
+        "y_angstrom": 0.0,
+        "z_angstrom": 0.02858000062406063
+      },
+      {
+        "element": "O",
+        "index": 6,
+        "x_angstrom": 2.286789894104004,
+        "y_angstrom": 0.6127399802207947,
+        "z_angstrom": 1.648550033569336
+      }
+    ],
+    "box_angstrom": [
+      [
+        2.89953875541687,
+        -1.674044132232666,
+        -5.652882009599125e-06
+      ],
+      [
+        1.6740392446517944,
+        2.8995285034179688,
+        -6.67572021484375e-06
+      ],
+      [
+        2.6226043701171875e-06,
+        3.5762786865234375e-06,
+        3.239956855773926
+      ]
+    ],
+    "info_path": "/data/home2/brzoza73/casus/mandala/data/small/H2O/rotated/H2O.info.out",
+    "num_atoms": 6,
+    "positions_angstrom": [
+      [
+        1.530650019645691,
+        0.4101400077342987,
+        1.0548900365829468
+      ],
+      [
+        3.0429298877716064,
+        0.8153499960899353,
+        1.0548900365829468
+      ],
+      [
+        2.696929931640625,
+        -0.917900025844574,
+        2.674870014190674
+      ],
+      [
+        1.8766499757766724,
+        2.143389940261841,
+        2.674870014190674
+      ],
+      [
+        0.0,
+        0.0,
+        0.02858000062406063
+      ],
+      [
+        2.286789894104004,
+        0.6127399802207947,
+        1.648550033569336
+      ]
+    ]
+  },
+  "units": {
+    "density": "electron",
+    "energy": "eV",
+    "force": "eV/Angstrom",
+    "hamiltonian": "eV",
+    "length": "Angstrom",
+    "overlap": "dimensionless",
+    "stress": "eV/Angstrom^3"
+  }
+}
