@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 import torch
 from collections import Counter
+import math
 
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
@@ -50,6 +51,60 @@ def test_save_load_roundtrip(tmp_path):
     assert torch.allclose(
         snap2.get_number_of_electrons(), snap.get_number_of_electrons(), atol=1e-6
     )
+
+
+@pytest.mark.unit
+def test_stress_transforms_under_basis_change_and_rotation():
+    atoms = ("H",)
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})
+    pair_edges = {"H-H": torch.tensor([[0], [0], [0], [0], [0]], dtype=torch.long)}
+    pair_blocks = {"H-H": torch.ones(1, 1, 1)}
+    lookup = {(0, 0, 0, 0, 0): ("H-H", 0)}
+    bm = BlockMatrix(
+        atoms=atoms,
+        atom_counts=Counter(atoms),
+        pair_blocks=pair_blocks,
+        pair_edges=pair_edges,
+        lookup=lookup,
+        orbital_cfg=orb_cfg,
+        basis="openmx",
+    )
+    positions = torch.tensor([[1.0, 2.0, 3.0]])
+    forces = torch.tensor([[0.3, -0.4, 0.5]])
+    box = torch.tensor([[2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 4.0]])
+    stress = torch.tensor([[1.0, 0.2, -0.1], [0.3, 2.0, 0.4], [-0.2, 0.5, 3.0]])
+    snap = Snapshot(
+        hamiltonian=bm,
+        overlap=bm,
+        density=bm,
+        positions=positions,
+        forces=forces,
+        box=box,
+        stress=stress,
+    )
+
+    cob = torch.eye(3)[[2, 0, 1]]
+    snap_e3 = snap.to_e3nn()
+    assert torch.allclose(snap_e3.positions, positions @ cob, atol=1e-6)
+    assert torch.allclose(snap_e3.forces, forces @ cob, atol=1e-6)
+    assert torch.allclose(snap_e3.box, box @ cob, atol=1e-6)
+    assert torch.allclose(snap_e3.stress, cob.T @ stress @ cob, atol=1e-6)
+    assert torch.allclose(snap_e3.to_openmx().stress, stress, atol=1e-6)
+
+    theta = math.pi / 2.0
+    R = torch.tensor(
+        [
+            [math.cos(theta), -math.sin(theta), 0.0],
+            [math.sin(theta), math.cos(theta), 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=torch.float32,
+    )
+    snap_rot = snap.rotate(R)
+    assert torch.allclose(snap_rot.positions, positions @ R.T, atol=1e-6)
+    assert torch.allclose(snap_rot.forces, forces @ R.T, atol=1e-6)
+    assert torch.allclose(snap_rot.box, box @ R.T, atol=1e-6)
+    assert torch.allclose(snap_rot.stress, R @ stress @ R.T, atol=1e-6)
 
 
 # ---------------------------------------------------------------- basis conversion

@@ -130,14 +130,24 @@ class E3GNNDataset(Dataset):
                 pass
 
         self.snapshot_cache_misses += 1
-        snapshot = Snapshot.from_openmx(
-            matrix_path=matrix_path,
-            info_path=info_path,
-            convention=self.convention,
-            symmetrize_density=True,
-            cutoff_radius=self.cfg.cutoff_radius,
-            cfg=self.cfg,
-        )
+        if matrix_path.suffix == ".npz" or info_path.suffix == ".json":
+            snapshot = Snapshot.from_pyscf(
+                npz_path=matrix_path,
+                json_path=info_path,
+                convention=self.convention,
+                cutoff_radius=self.cfg.cutoff_radius,
+                dtype=self.dtype,
+                cfg=self.cfg,
+            )
+        else:
+            snapshot = Snapshot.from_openmx(
+                matrix_path=matrix_path,
+                info_path=info_path,
+                convention=self.convention,
+                symmetrize_density=True,
+                cutoff_radius=self.cfg.cutoff_radius,
+                cfg=self.cfg,
+            )
         if cache_file is not None:
             try:
                 cache_file.parent.mkdir(parents=True, exist_ok=True)

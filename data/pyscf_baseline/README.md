@@ -1,15 +1,19 @@
 # PySCF Baseline (PBC-Only)
 
-This folder contains a cheap, reproducible periodic (PBC) PySCF baseline workflow for:
+This folder contains a reproducible periodic (PBC) PySCF baseline workflow for:
 
 - `data/small/H2O/original/H2O.info.out`
+- `data/small/H2O/rotated/H2O.info.out`
 
 ## What the baseline does
 
 - Reads geometry/lattice and reference energies from the OpenMX `.info.out` snapshot.
 - Runs a periodic baseline on a k-point mesh (`heuristic` by default; PySCF for `rhf`/`rks`).
-- Writes shift-resolved AO matrices for lattice translations.
+- Writes shift-resolved AO matrices for lattice translations, preserving the
+  explicit integer-lattice image structure.
 - Enforces shell-count-matched basis size from OpenMX `orbital_set`.
+- Emits full snapshot metadata needed by Mandala loaders: positions, box,
+  energy, forces, and stress.
 
 For this H2O snapshot, the shell counts are:
 
@@ -19,7 +23,9 @@ For this H2O snapshot, the shell counts are:
 ## Files
 
 - `calc_pyscf_baseline.py`: main PBC runner.
-- `run_h2o_original_baseline.sh`: simple launcher.
+- `run_h2o_original_baseline.sh`: simple launcher for the original geometry.
+- `run_h2o_real_pair_equivariance.sh`: runs real PySCF on the original and
+  rotated H2O pair and verifies equivariance.
 - `results/`: target for generated baseline data.
 
 ## Usage
@@ -32,6 +38,12 @@ bash data/pyscf_baseline/run_h2o_original_baseline.sh
 
 This defaults to `METHOD=heuristic` and writes Hamiltonian/overlap/density artifacts.
 On this setup it is expected to run roughly under 1 second.
+
+Run the real periodic PySCF pair workflow plus equivariance verification:
+
+```bash
+bash data/pyscf_baseline/run_h2o_real_pair_equivariance.sh
+```
 
 Direct Python run:
 
@@ -85,6 +97,8 @@ For `--run-name <name>`, the runner writes:
 - `<name>.npz`: packed arrays including:
   - central-cell matrices: `hamiltonian_ao`, `overlap_ao`, `dm_ao`, `hcore_ao`
   - shift-resolved matrices: `shifts`, `hamiltonian_shifted`, `overlap_shifted`, `density_shifted`
+  - geometry/targets: `positions_angstrom`, `box_angstrom`, `total_energy_hartree`
+  - optional response data: `forces_hartree_per_bohr`, `stress_hartree_per_angstrom3`
   - k-space metadata: `kmesh`, `kpts_abs`
   - orbital data: `mo_coeff`, `mo_occ`, `mo_energy_hartree`
 - Standalone arrays:
@@ -110,6 +124,8 @@ snapshot = load_pyscf_snapshot("data/pyscf_baseline/results/<run>.npz")
 
 The loader is PBC-only and requires shift-resolved tensors (`shifts`, `*_shifted`).
 It builds `BlockMatrix` directly from `(shift, block)` data (no dense fallback path).
+Loaded snapshots use `basis="pyscf"` for the raw AO convention and can be
+converted via `Snapshot.to_e3nn()` / `Snapshot.from_pyscf(..., convention="e3nn")`.
 
 ## Method options and rough cost
 

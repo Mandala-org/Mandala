@@ -20,12 +20,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple, Literal, Optional
+from types import SimpleNamespace
 
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
 from data.openmx_info_parser import parse_info_out, InfoOutData
+from data.pyscf_baseline_parser import load_pyscf_metadata
 from net.common import Config
 from utils.summary import print_dataset_summary
 
@@ -74,6 +76,9 @@ class DatasetFactory:
 
     # ------------------------------------------------------------------ helpers
     def _load_info(self, path: Path) -> InfoOutData:
+        if path.suffix == ".json":
+            meta = load_pyscf_metadata(path)
+            return SimpleNamespace(orbital_set=meta.orbital_set)
         return parse_info_out(path)
 
     # ------------------------------------------------------------------ create
