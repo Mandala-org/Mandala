@@ -695,7 +695,7 @@ def main() -> None:
             # then cast to requested training dtype below.
             dtype=torch.float32,
             device=device,
-            basis="openmx",
+            basis="pyscf",
         ).to_e3nn()
         baseline_hamiltonian_raw = (
             cast_block_matrix_dtype(

@@ -22,6 +22,8 @@ from data.snapshot import Snapshot
 
 __all__ = [
     "PySCFBaselineData",
+    "PySCFMetadataInfo",
+    "load_pyscf_metadata",
     "load_pyscf_baseline",
     "load_pyscf_snapshot",
 ]
@@ -41,6 +43,26 @@ def _load_metadata(path: Path | None) -> Dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Metadata JSON not found: {path}")
     return json.loads(path.read_text())
+
+
+@dataclass(slots=True)
+class PySCFMetadataInfo:
+    """Lightweight metadata container for dataset/factory integration."""
+
+    metadata: Dict[str, Any]
+    orbital_set: Dict[str, str]
+
+
+def load_pyscf_metadata(path: str | Path) -> PySCFMetadataInfo:
+    """Load PySCF JSON metadata and expose the orbital set like InfoOutData."""
+    path_obj = Path(path)
+    metadata = _load_metadata(path_obj)
+    orbital_set = metadata.get("settings", {}).get("orbital_set")
+    if orbital_set is None:
+        orbital_set = metadata.get("openmx_reference", {}).get("orbital_set")
+    if orbital_set is None:
+        raise ValueError(f"Could not infer orbital_set from metadata JSON: {path_obj}")
+    return PySCFMetadataInfo(metadata=metadata, orbital_set=dict(orbital_set))
 
 
 def _extract_atoms(
@@ -105,6 +127,66 @@ def _extract_positions(
     return torch.tensor(pos, dtype=dtype, device=device)
 
 
+def _extract_box(
+    metadata: Dict[str, Any],
+    npz_payload: np.lib.npyio.NpzFile,
+    dtype: torch.dtype,
+    device: str | torch.device,
+) -> torch.Tensor | None:
+    if "box_angstrom" in npz_payload:
+        arr = np.asarray(npz_payload["box_angstrom"], dtype=np.float32)
+        return torch.as_tensor(arr, dtype=dtype, device=device)
+
+    box = metadata.get("snapshot", {}).get("box_angstrom")
+    if box is None:
+        return None
+    return torch.tensor(box, dtype=dtype, device=device)
+
+
+def _extract_forces(
+    metadata: Dict[str, Any],
+    npz_payload: np.lib.npyio.NpzFile,
+    dtype: torch.dtype,
+    device: str | torch.device,
+) -> torch.Tensor | None:
+    if "forces_ev_per_angstrom" in npz_payload:
+        arr = np.asarray(npz_payload["forces_ev_per_angstrom"], dtype=np.float32)
+        return torch.as_tensor(arr, dtype=dtype, device=device)
+    if "forces_hartree_per_bohr" in npz_payload:
+        arr = np.asarray(npz_payload["forces_hartree_per_bohr"], dtype=np.float32)
+        return torch.as_tensor(arr, dtype=dtype, device=device)
+
+    forces = metadata.get("pyscf", {}).get("forces_ev_per_angstrom")
+    if forces is not None:
+        return torch.tensor(forces, dtype=dtype, device=device)
+    forces = metadata.get("pyscf", {}).get("forces_hartree_per_bohr")
+    if forces is None:
+        return None
+    return torch.tensor(forces, dtype=dtype, device=device)
+
+
+def _extract_stress(
+    metadata: Dict[str, Any],
+    npz_payload: np.lib.npyio.NpzFile,
+    dtype: torch.dtype,
+    device: str | torch.device,
+) -> torch.Tensor | None:
+    if "stress_ev_per_angstrom3" in npz_payload:
+        arr = np.asarray(npz_payload["stress_ev_per_angstrom3"], dtype=np.float32)
+        return torch.as_tensor(arr, dtype=dtype, device=device)
+    if "stress_hartree_per_angstrom3" in npz_payload:
+        arr = np.asarray(npz_payload["stress_hartree_per_angstrom3"], dtype=np.float32)
+        return torch.as_tensor(arr, dtype=dtype, device=device)
+
+    stress = metadata.get("pyscf", {}).get("stress_ev_per_angstrom3")
+    if stress is not None:
+        return torch.tensor(stress, dtype=dtype, device=device)
+    stress = metadata.get("pyscf", {}).get("stress_hartree_per_angstrom3")
+    if stress is None:
+        return None
+    return torch.tensor(stress, dtype=dtype, device=device)
+
+
 def _pick_hamiltonian(npz_payload: np.lib.npyio.NpzFile) -> np.ndarray:
     for key in ("hamiltonian_ao", "fock_ao", "hcore_ao"):
         if key in npz_payload:
@@ -148,11 +230,18 @@ def _block_matrix_from_shifted_dense(
     *,
     basis: str,
 ) -> BlockMatrix:
-    pair_blocks: dict[str, list[torch.Tensor]] = {}
-    pair_edges: dict[str, list[list[int]]] = {}
-    lookup: dict[tuple[int, int, int, int, int], tuple[str, int]] = {}
-
     offsets = _atom_offsets(atoms, orbital_cfg)
+    edge_blocks: dict[tuple[int, int, int, int, int], torch.Tensor] = {}
+
+    def _register_edge(
+        edge: tuple[int, int, int, int, int], block: torch.Tensor
+    ) -> None:
+        existing = edge_blocks.get(edge)
+        if existing is None:
+            edge_blocks[edge] = block
+            return
+        if not torch.allclose(existing, block, atol=1e-5, rtol=1e-5):
+            raise ValueError(f"Inconsistent duplicate PySCF block for edge {edge}")
 
     for s_idx in range(int(shifts.shape[0])):
         sx, sy, sz = [int(v) for v in shifts[s_idx].tolist()]
@@ -164,23 +253,52 @@ def _block_matrix_from_shifted_dense(
             for j, el_j in enumerate(atoms):
                 dj = orbital_cfg.block_dims(f"{el_j}-{el_j}")[0]
                 c0 = int(offsets[j])
-
-                key = f"{el_i}-{el_j}"
-                if key not in pair_blocks:
-                    pair_blocks[key] = []
-                    pair_edges[key] = []
-
                 blk = mat[r0 : r0 + di, c0 : c0 + dj].clone()
-                local_idx = len(pair_blocks[key])
-                pair_blocks[key].append(blk)
-                pair_edges[key].append([sx, sy, sz, i, j])
-                lookup[(sx, sy, sz, i, j)] = (key, local_idx)
+                edge = (sx, sy, sz, i, j)
+                _register_edge(edge, blk)
+                reverse_edge = (-sx, -sy, -sz, j, i)
+                _register_edge(reverse_edge, blk.T.clone())
+
+    pair_blocks: dict[str, list[torch.Tensor]] = {}
+    pair_edges: dict[str, list[list[int]]] = {}
+    lookup: dict[tuple[int, int, int, int, int], tuple[str, int]] = {}
+    for edge, blk in sorted(edge_blocks.items()):
+        sx, sy, sz, i, j = edge
+        key = f"{atoms[i]}-{atoms[j]}"
+        if key not in pair_blocks:
+            pair_blocks[key] = []
+            pair_edges[key] = []
+        local_idx = len(pair_blocks[key])
+        pair_blocks[key].append(blk)
+        pair_edges[key].append([sx, sy, sz, i, j])
+        lookup[edge] = (key, local_idx)
 
     pair_blocks_t = {k: torch.stack(v, dim=0) for k, v in pair_blocks.items()}
     pair_edges_t = {
         k: torch.tensor(v, dtype=torch.long, device=shifted.device).t()
         for k, v in pair_edges.items()
     }
+
+    all_edges = set()
+    for edges in pair_edges_t.values():
+        for edge in edges.t().tolist():
+            all_edges.add(tuple(edge))
+    total_edges = sum(int(edges.shape[1]) for edges in pair_edges_t.values())
+    if len(all_edges) != total_edges:
+        raise ValueError("Duplicate edges found while rebuilding PySCF shift blocks")
+    if len(lookup) != total_edges:
+        raise ValueError("Lookup size does not match PySCF edge count")
+    for i, atom in enumerate(atoms):
+        key = f"{atom}-{atom}"
+        if key not in pair_blocks_t:
+            raise ValueError(f"Missing self-edge key {key} in PySCF block matrix")
+        if (0, 0, 0, i, i) not in lookup:
+            raise ValueError(f"Missing self-edge lookup entry for atom {i}")
+    for sx, sy, sz, i, j in lookup:
+        if (-sx, -sy, -sz, j, i) not in lookup:
+            raise ValueError(
+                "PySCF shift graph is not symmetric for edge " f"{(sx, sy, sz, i, j)}"
+            )
 
     return BlockMatrix(
         atoms=atoms,
@@ -210,8 +328,11 @@ class PySCFBaselineData:
     overlap_shifted: torch.Tensor | None
     density_shifted: torch.Tensor | None
     positions: torch.Tensor | None
+    box: torch.Tensor | None
+    forces: torch.Tensor | None
+    stress: torch.Tensor | None
 
-    def to_snapshot(self, *, basis: str = "openmx") -> Snapshot:
+    def to_snapshot(self, *, basis: str = "pyscf") -> Snapshot:
         """Convert parsed matrices to a project-native ``Snapshot``."""
         if self.shifts is None:
             raise ValueError("PBC-only loader requires `shifts` in the NPZ payload.")
@@ -254,6 +375,11 @@ class PySCFBaselineData:
             overlap=ovl,
             density=den,
             positions=self.positions,
+            forces=self.forces,
+            box=self.box,
+            stress=self.stress,
+            matrix_path=self.npz_path,
+            info_path=self.json_path,
             info=self.metadata,
         )
 
@@ -310,6 +436,9 @@ def load_pyscf_baseline(
         positions = _extract_positions(
             metadata, npz_payload, dtype=dtype, device=device
         )
+        box = _extract_box(metadata, npz_payload, dtype=dtype, device=device)
+        forces = _extract_forces(metadata, npz_payload, dtype=dtype, device=device)
+        stress = _extract_stress(metadata, npz_payload, dtype=dtype, device=device)
 
     ham_t = torch.as_tensor(ham_arr, dtype=dtype, device=device)
     overlap_t = torch.as_tensor(overlap_arr, dtype=dtype, device=device)
@@ -370,6 +499,17 @@ def load_pyscf_baseline(
             "positions length does not match atoms: "
             f"{positions.shape[0]} vs {len(atoms_tuple)}"
         )
+    if forces is not None and positions is None:
+        raise ValueError("forces were present but positions are missing")
+    if forces is not None and forces.shape != positions.shape:
+        raise ValueError(
+            "forces shape does not match positions: "
+            f"{tuple(forces.shape)} vs {tuple(positions.shape)}"
+        )
+    if box is not None and tuple(box.shape) != (3, 3):
+        raise ValueError(f"box must have shape (3,3), got {tuple(box.shape)}")
+    if stress is not None and tuple(stress.shape) != (3, 3):
+        raise ValueError(f"stress must have shape (3,3), got {tuple(stress.shape)}")
 
     return PySCFBaselineData(
         npz_path=npz_path_obj,
@@ -385,6 +525,9 @@ def load_pyscf_baseline(
         overlap_shifted=ovl_shift_t,
         density_shifted=den_shift_t,
         positions=positions,
+        box=box,
+        forces=forces,
+        stress=stress,
     )
 
 
@@ -397,7 +540,7 @@ def load_pyscf_snapshot(
     orbital_cfg: OrbitalIrrepConfig | None = None,
     dtype: torch.dtype = torch.float32,
     device: str | torch.device = "cpu",
-    basis: str = "openmx",
+    basis: str = "pyscf",
 ) -> Snapshot:
     """Convenience wrapper: parse artifacts and return a ``Snapshot``."""
     payload = load_pyscf_baseline(

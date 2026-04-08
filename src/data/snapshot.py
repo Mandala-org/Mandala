@@ -41,7 +41,11 @@ from core.sparse_math import (
     trace_matmul_sparse_block_matrix,
 )
 from data.block_matrix import BlockMatrix
-from core.basis_converter import OpenMXE3NNConverter, FHIaimsE3NNConverter
+from core.basis_converter import (
+    OpenMXE3NNConverter,
+    FHIaimsE3NNConverter,
+    PySCFE3NNConverter,
+)
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from net.common import Config
 
@@ -250,7 +254,10 @@ class Snapshot:
             "positions": self.positions.cpu() if self.positions is not None else None,
             "forces": self.forces.cpu() if self.forces is not None else None,
             "box": self.box.cpu() if self.box is not None else None,
-            "stress": self.stress.cpu() if self.box is not None else None,
+            "stress": self.stress.cpu() if self.stress is not None else None,
+            "matrix_path": self.matrix_path,
+            "info_path": self.info_path,
+            "cutoff_radius": self.cutoff_radius,
             "mats": {k: v._to_payload() for k, v in self._mats.items()},
         }
 
@@ -341,11 +348,12 @@ class Snapshot:
 
     def _change_basis(self, target: str) -> "Snapshot":
         """
-        Return a **new** snapshot in `target` basis ("openmx" | "e3nn" | "fhi-aims").
+        Return a **new** snapshot in `target` basis
+        ("openmx" | "e3nn" | "fhi-aims" | "pyscf").
         If already in that basis the current instance is returned unchanged.
         """
-        if target not in {"openmx", "e3nn", "fhi-aims"}:
-            raise ValueError("target must be 'openmx', 'e3nn', or 'fhi-aims'")
+        if target not in {"openmx", "e3nn", "fhi-aims", "pyscf"}:
+            raise ValueError("target must be 'openmx', 'e3nn', 'fhi-aims', or 'pyscf'")
 
         if self.density.basis == target:
             return self
@@ -356,6 +364,7 @@ class Snapshot:
         pos = self.positions
         forces = self.forces
         box = self.box
+        stress = self.stress
 
         if self.density.basis == "openmx" and target == "e3nn":
             conv = OpenMXE3NNConverter(cfg, device=device)
@@ -370,6 +379,11 @@ class Snapshot:
             pos = pos @ change_of_basis if pos is not None else None
             forces = forces @ change_of_basis if forces is not None else None
             box = box @ change_of_basis if box is not None else None
+            stress = (
+                change_of_basis.T @ stress @ change_of_basis
+                if stress is not None and stress.shape == torch.Size([3, 3])
+                else stress
+            )
         elif self.density.basis == "e3nn" and target == "openmx":
             conv = OpenMXE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_openmx(self.hamiltonian)
@@ -383,6 +397,11 @@ class Snapshot:
             pos = pos @ change_of_basis if pos is not None else None
             forces = forces @ change_of_basis if forces is not None else None
             box = box @ change_of_basis if box is not None else None
+            stress = (
+                change_of_basis.T @ stress @ change_of_basis
+                if stress is not None and stress.shape == torch.Size([3, 3])
+                else stress
+            )
         elif self.density.basis == "fhi-aims" and target == "e3nn":
             conv = FHIaimsE3NNConverter(cfg, device=device)
             ham = conv.matrix_to_e3nn(self.hamiltonian)
@@ -393,6 +412,16 @@ class Snapshot:
             ham = conv.matrix_to_fhiaims(self.hamiltonian)
             ovl = conv.matrix_to_fhiaims(self.overlap)
             den = conv.matrix_to_fhiaims(self.density)
+        elif self.density.basis == "pyscf" and target == "e3nn":
+            conv = PySCFE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_e3nn(self.hamiltonian)
+            ovl = conv.matrix_to_e3nn(self.overlap)
+            den = conv.matrix_to_e3nn(self.density)
+        elif self.density.basis == "e3nn" and target == "pyscf":
+            conv = PySCFE3NNConverter(cfg, device=device)
+            ham = conv.matrix_to_pyscf(self.hamiltonian)
+            ovl = conv.matrix_to_pyscf(self.overlap)
+            den = conv.matrix_to_pyscf(self.density)
         else:
             raise RuntimeError("Unsupported basis conversion")
 
@@ -403,7 +432,7 @@ class Snapshot:
             positions=pos,
             forces=forces,
             box=box,
-            stress=self.stress,
+            stress=stress,
             matrix_path=self.matrix_path,
             info_path=self.info_path,
             cutoff_radius=self.cutoff_radius,
@@ -424,6 +453,10 @@ class Snapshot:
         """Return a (possibly new) Snapshot in the **FHI-AIMS** convention."""
         return self._change_basis("fhi-aims")
 
+    def to_pyscf(self) -> "Snapshot":
+        """Return a (possibly new) Snapshot in the raw **PySCF** AO convention."""
+        return self._change_basis("pyscf")
+
     # ---------------------------------------------------------------- rotation
     def rotate(self, R: torch.Tensor) -> "Snapshot":
         """
@@ -433,8 +466,6 @@ class Snapshot:
         ham = self.hamiltonian.rotate(R)
         ovl = self.overlap.rotate(R)
         den = self.density.rotate(R)
-        if self.stress is not None:
-            print("Warning: stress rotation to be checked!")
         return Snapshot(
             ham,
             ovl,
@@ -443,10 +474,10 @@ class Snapshot:
             forces=self.forces @ R.T if self.forces is not None else None,
             box=self.box @ R.T if self.box is not None else None,
             stress=(
-                self.stress @ R.T
-                if self.stress is not None and self.stress.shape != torch.Size([0])
+                R @ self.stress @ R.T
+                if self.stress is not None and self.stress.shape == torch.Size([3, 3])
                 else None
-            ),  # ! Check that it's correct
+            ),
             matrix_path=None,
             info_path=None,
             cutoff_radius=self.cutoff_radius,
@@ -731,7 +762,7 @@ class Snapshot:
         snap.positions = info.positions if info.positions.numel() else None
         snap.forces = info.forces if info.forces.numel() else None
         snap.box = info.box if info.box.numel() else None
-        snap.stress = info.stress if info.box.numel() else None
+        snap.stress = info.stress if info.stress.numel() else None
         snap.cfg = cfg
         snap.info = info
 
@@ -740,6 +771,33 @@ class Snapshot:
 
         snap = snap._change_basis(convention)
 
+        snap = snap.canonicalize_edges()
+        return snap
+
+    @staticmethod
+    def from_pyscf(
+        npz_path: str | os.PathLike,
+        json_path: str | os.PathLike | None = None,
+        *,
+        convention: str = "e3nn",
+        cutoff_radius: float | None = None,
+        dtype: torch.dtype = torch.float32,
+        cfg: Config = None,
+    ) -> "Snapshot":
+        from data.pyscf_baseline_parser import load_pyscf_snapshot
+
+        snap = load_pyscf_snapshot(
+            npz_path=npz_path,
+            json_path=json_path,
+            dtype=dtype,
+            basis="pyscf",
+        )
+        snap.cfg = cfg
+
+        if cutoff_radius is not None:
+            snap = snap.filter_by_distance(cutoff_radius)
+
+        snap = snap._change_basis(convention)
         snap = snap.canonicalize_edges()
         return snap
 
