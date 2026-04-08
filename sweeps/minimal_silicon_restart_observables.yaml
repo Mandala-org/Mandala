@@ -44,7 +44,7 @@ parameters:
     value: false
 
   lr:
-    values: [0.001, 0.003, 0.006, 0.01, 0.03]
+    values: [1e-6, 3e-6, 1e-5, 3e-4, 1e-4, 3e-4]
   lr-patience:
     values: [40, 80, 120]
   grad-accum-steps:
