@@ -532,3 +532,57 @@ Artifacts:
 
 Status:
 - provisional local result; larger runs may override it
+
+
+## 2026-04-09 17:33 - batch1_synth_quadratic_20260409_170335
+
+Executed synthetic teacher study.
+
+- run dir: [batch1_synth_quadratic_20260409_170335](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_quadratic_20260409_170335)
+- teacher kind: `quadratic`
+- hidden irreps preset: `preliminary`
+- hidden irreps: `16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e`
+- smoke test: `False`
+
+Top provisional rows:
+- `film` depth=6 loss=huber val_mae=4.1844e-02 val_mse=3.8092e-03
+- `film` depth=4 loss=huber val_mae=4.3281e-02 val_mse=3.8838e-03
+- `film` depth=6 loss=mse val_mae=4.4579e-02 val_mse=4.2338e-03
+- `film` depth=4 loss=mse val_mae=4.6565e-02 val_mse=4.3292e-03
+- `film` depth=2 loss=huber val_mae=7.0496e-02 val_mse=9.1954e-03
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_quadratic_20260409_170335/summary.csv)
+- [validation loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_quadratic_20260409_170335/plots/val_loss_curves.png)
+- [sample target vs prediction](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_quadratic_20260409_170335/plots/sample_target_vs_prediction.png)
+- [per-irrep validation MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_quadratic_20260409_170335/plots/per_irrep_val_mae.png)
+
+Status:
+- provisional local result; larger runs may override it
+
+
+## 2026-04-09 17:46 - batch1_synth_mixed_20260409_170325
+
+Executed synthetic teacher study.
+
+- run dir: [batch1_synth_mixed_20260409_170325](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325)
+- teacher kind: `mixed`
+- hidden irreps preset: `preliminary`
+- hidden irreps: `16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e`
+- smoke test: `False`
+
+Top provisional rows:
+- `film` depth=2 loss=mae val_mae=4.7066e-01 val_mse=3.8661e-01
+- `film` depth=2 loss=huber val_mae=4.7210e-01 val_mse=3.8855e-01
+- `film` depth=2 loss=mse val_mae=4.7371e-01 val_mse=3.9125e-01
+- `gatemagnitudes` depth=6 loss=mse val_mae=4.8889e-01 val_mse=4.0483e-01
+- `gatemagnitudes` depth=6 loss=huber val_mae=4.8920e-01 val_mse=4.0521e-01
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/summary.csv)
+- [validation loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/val_loss_curves.png)
+- [sample target vs prediction](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/sample_target_vs_prediction.png)
+- [per-irrep validation MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/per_irrep_val_mae.png)
+
+Status:
+- provisional local result; larger runs may override it

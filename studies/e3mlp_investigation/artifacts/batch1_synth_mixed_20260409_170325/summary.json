@@ -1,0 +1,94 @@
+{
+  "run_name": "batch1_synth_mixed_20260409_170325",
+  "teacher_kind": "mixed",
+  "hidden_irreps": "16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e",
+  "top_rows": [
+    {
+      "variant": "film",
+      "depth": 2,
+      "loss_kind": "mae",
+      "val_loss": 0.4706563949584961,
+      "val_mae": 0.4706563949584961,
+      "val_mse": 0.38661202788352966
+    },
+    {
+      "variant": "film",
+      "depth": 2,
+      "loss_kind": "huber",
+      "val_loss": 0.18147367735703787,
+      "val_mae": 0.4721034864584605,
+      "val_mse": 0.3885526458422343
+    },
+    {
+      "variant": "film",
+      "depth": 2,
+      "loss_kind": "mse",
+      "val_loss": 0.39125057061513263,
+      "val_mae": 0.47370784481366474,
+      "val_mse": 0.39125057061513263
+    },
+    {
+      "variant": "gatemagnitudes",
+      "depth": 6,
+      "loss_kind": "mse",
+      "val_loss": 0.40483035643895465,
+      "val_mae": 0.4888857305049896,
+      "val_mse": 0.40483035643895465
+    },
+    {
+      "variant": "gatemagnitudes",
+      "depth": 6,
+      "loss_kind": "huber",
+      "val_loss": 0.1899516781171163,
+      "val_mae": 0.4892028272151947,
+      "val_mse": 0.40521493554115295
+    },
+    {
+      "variant": "gatemagnitudes",
+      "depth": 6,
+      "loss_kind": "mae",
+      "val_loss": 0.4892539183298747,
+      "val_mae": 0.4892539183298747,
+      "val_mse": 0.40506431460380554
+    },
+    {
+      "variant": "film",
+      "depth": 6,
+      "loss_kind": "mse",
+      "val_loss": 0.4367457826932271,
+      "val_mae": 0.5013760328292847,
+      "val_mse": 0.4367457826932271
+    },
+    {
+      "variant": "film",
+      "depth": 4,
+      "loss_kind": "mse",
+      "val_loss": 0.4442990918954213,
+      "val_mae": 0.5022026002407074,
+      "val_mse": 0.4442990918954213
+    },
+    {
+      "variant": "film",
+      "depth": 6,
+      "loss_kind": "huber",
+      "val_loss": 0.2035994033018748,
+      "val_mae": 0.505398174126943,
+      "val_mse": 0.4435990850130717
+    },
+    {
+      "variant": "gatemagnitudes",
+      "depth": 4,
+      "loss_kind": "mse",
+      "val_loss": 0.43460678060849506,
+      "val_mae": 0.5078356862068176,
+      "val_mse": 0.43460678060849506
+    }
+  ],
+  "plots": [
+    "studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/val_loss_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/final_val_mae.png",
+    "studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/sample_target_vs_prediction.png",
+    "studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/per_irrep_val_mae.png",
+    "studies/e3mlp_investigation/artifacts/batch1_synth_mixed_20260409_170325/plots/target_vs_prediction_norm.png"
+  ]
+}
