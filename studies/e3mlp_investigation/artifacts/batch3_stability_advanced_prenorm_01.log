@@ -36614,3 +36614,3243 @@
 
 
 stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:43,  3.09s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:04,  9.60s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9005e-01 ratio=0.024 rel=1.0007e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:13,  6.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:25<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0114e+00 ratio=0.023 rel=1.0003e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.92s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.61s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.39s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.24s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0051e+00 ratio=0.023 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.14s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.06s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.6943e-01 ratio=0.024 rel=1.0001e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 365/432 done variant=bilinear depth=10 os=0.2 init=0.2 res=0.1 seed=0 loss=9.6943e-01 ratio=0.024 rel=1.0001e+00
+
+
+
+
+[stability] seeds d=10 os=0.2:  50%|█████     | 1/2 [00:57<00:57, 57.17s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.2 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0301e+00 ratio=0.021 rel=1.0004e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.47s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:44,  3.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.66s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0344e+00 ratio=0.021 rel=1.0008e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.20s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:47,  4.28s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:27<00:21,  2.39s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8633e-01 ratio=0.021 rel=9.9987e-01
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.57s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.36s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0309e+00 ratio=0.021 rel=1.0002e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.04s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:01,  1.00it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0302e+00 ratio=0.021 rel=1.0003e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 366/432 done variant=bilinear depth=10 os=0.2 init=0.2 res=0.1 seed=1 loss=1.0302e+00 ratio=0.021 rel=1.0003e+00
+
+
+
+
+[stability] seeds d=10 os=0.2: 100%|██████████| 2/2 [01:54<00:00, 57.12s/it][A[A[A[A
+
+
+
+                                                                            [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.2: 100%|██████████| 3/3 [05:40<00:00, 113.80s/it][A[A[A
+
+
+                                                                                       [A[A[A
+
+[stability] init scales d=10 os=0.2:  33%|███▎      | 1/3 [05:40<11:21, 340.90s/it][A[A
+
+
+[stability] residual scales d=10 os=0.2:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A
+
+
+
+[stability] seeds d=10 os=0.2:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.35 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0057e+00 ratio=0.042 rel=1.0015e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.51s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:43,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:04,  9.58s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9187e-01 ratio=0.041 rel=1.0017e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:13,  6.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:25<00:31,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0125e+00 ratio=0.040 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.38s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0066e+00 ratio=0.041 rel=1.0012e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.06s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.00s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:33<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7030e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.08it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 367/432 done variant=bilinear depth=10 os=0.2 init=0.35 res=0.02 seed=0 loss=9.7030e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+[stability] seeds d=10 os=0.2:  50%|█████     | 1/2 [00:57<00:57, 57.10s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.35 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0313e+00 ratio=0.037 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.50s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:44,  3.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.65s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0362e+00 ratio=0.036 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.19s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:47,  4.27s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8677e-01 ratio=0.037 rel=1.0001e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0317e+00 ratio=0.037 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0313e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 368/432 done variant=bilinear depth=10 os=0.2 init=0.35 res=0.02 seed=1 loss=1.0313e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+[stability] seeds d=10 os=0.2: 100%|██████████| 2/2 [01:54<00:00, 57.18s/it][A[A[A[A
+
+
+
+                                                                            [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.2:  33%|███▎      | 1/3 [01:54<03:48, 114.35s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.2:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.35 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0057e+00 ratio=0.042 rel=1.0015e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:36,  2.42s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:05<00:43,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:04,  9.61s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9185e-01 ratio=0.041 rel=1.0017e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:13,  6.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:25<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0125e+00 ratio=0.041 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.38s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.24s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0067e+00 ratio=0.041 rel=1.0013e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:01,  1.01it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:33<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7031e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 369/432 done variant=bilinear depth=10 os=0.2 init=0.35 res=0.05 seed=0 loss=9.7031e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+[stability] seeds d=10 os=0.2:  50%|█████     | 1/2 [00:57<00:57, 57.34s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.35 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0313e+00 ratio=0.037 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:38,  2.53s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:44,  3.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:04,  9.58s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0362e+00 ratio=0.036 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:13,  6.14s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.24s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:25<00:31,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8676e-01 ratio=0.037 rel=1.0001e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.21s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0317e+00 ratio=0.037 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.00s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:33<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0313e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.03it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 370/432 done variant=bilinear depth=10 os=0.2 init=0.35 res=0.05 seed=1 loss=1.0313e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+[stability] seeds d=10 os=0.2: 100%|██████████| 2/2 [01:54<00:00, 57.03s/it][A[A[A[A
+
+
+
+                                                                            [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.2:  67%|██████▋   | 2/3 [03:48<01:54, 114.24s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.2:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.35 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0057e+00 ratio=0.042 rel=1.0015e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.49s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:43,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.63s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9182e-01 ratio=0.041 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.18s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.27s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0125e+00 ratio=0.041 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:10,  1.57s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.35s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.21s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0067e+00 ratio=0.041 rel=1.0013e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:01,  1.00it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:33<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7034e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 371/432 done variant=bilinear depth=10 os=0.2 init=0.35 res=0.1 seed=0 loss=9.7034e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+[stability] seeds d=10 os=0.2:  50%|█████     | 1/2 [00:57<00:57, 57.25s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.35 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0313e+00 ratio=0.037 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:36,  2.47s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:43,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:04,  9.58s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0362e+00 ratio=0.036 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:13,  6.14s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:25<00:30,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8676e-01 ratio=0.037 rel=1.0001e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.38s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0318e+00 ratio=0.037 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.06s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:33<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0312e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.07it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 372/432 done variant=bilinear depth=10 os=0.2 init=0.35 res=0.1 seed=1 loss=1.0312e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+[stability] seeds d=10 os=0.2: 100%|██████████| 2/2 [01:54<00:00, 57.26s/it][A[A[A[A
+
+
+
+                                                                            [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.2: 100%|██████████| 3/3 [05:43<00:00, 114.37s/it][A[A[A
+
+
+                                                                                       [A[A[A
+
+[stability] init scales d=10 os=0.2:  67%|██████▋   | 2/3 [11:23<05:42, 342.15s/it][A[A
+
+
+[stability] residual scales d=10 os=0.2:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A
+
+
+
+[stability] seeds d=10 os=0.2:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.5 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0081e+00 ratio=0.060 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.50s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:44,  3.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.62s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9428e-01 ratio=0.059 rel=1.0029e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.40s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0142e+00 ratio=0.058 rel=1.0018e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0088e+00 ratio=0.058 rel=1.0023e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:01,  1.00it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7180e-01 ratio=0.059 rel=1.0013e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 373/432 done variant=bilinear depth=10 os=0.2 init=0.5 res=0.02 seed=0 loss=9.7180e-01 ratio=0.059 rel=1.0013e+00
+
+
+
+
+[stability] seeds d=10 os=0.2:  50%|█████     | 1/2 [00:56<00:56, 56.99s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.5 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0330e+00 ratio=0.052 rel=1.0017e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.50s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:43,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.63s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0385e+00 ratio=0.052 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8768e-01 ratio=0.052 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0330e+00 ratio=0.052 rel=1.0012e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.06s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.02it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0328e+00 ratio=0.052 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 374/432 done variant=bilinear depth=10 os=0.2 init=0.5 res=0.02 seed=1 loss=1.0328e+00 ratio=0.052 rel=1.0016e+00
+
+
+
+
+[stability] seeds d=10 os=0.2: 100%|██████████| 2/2 [01:54<00:00, 57.22s/it][A[A[A[A
+
+
+
+                                                                            [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.2:  33%|███▎      | 1/3 [01:54<03:48, 114.37s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.2:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.5 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0081e+00 ratio=0.060 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.50s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:44,  3.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.62s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9425e-01 ratio=0.059 rel=1.0029e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.39s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0143e+00 ratio=0.058 rel=1.0018e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.60s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.38s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0088e+00 ratio=0.058 rel=1.0023e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.04s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:01,  1.01it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7183e-01 ratio=0.059 rel=1.0014e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 375/432 done variant=bilinear depth=10 os=0.2 init=0.5 res=0.05 seed=0 loss=9.7183e-01 ratio=0.059 rel=1.0014e+00
+
+
+
+
+[stability] seeds d=10 os=0.2:  50%|█████     | 1/2 [00:56<00:56, 56.90s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.5 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0330e+00 ratio=0.052 rel=1.0017e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:38,  2.54s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:44,  3.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.65s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0385e+00 ratio=0.052 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8768e-01 ratio=0.052 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0331e+00 ratio=0.052 rel=1.0012e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0328e+00 ratio=0.052 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 376/432 done variant=bilinear depth=10 os=0.2 init=0.5 res=0.05 seed=1 loss=1.0328e+00 ratio=0.052 rel=1.0016e+00
+
+
+
+
+[stability] seeds d=10 os=0.2: 100%|██████████| 2/2 [01:54<00:00, 57.23s/it][A[A[A[A
+
+
+
+                                                                            [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.2:  67%|██████▋   | 2/3 [03:48<01:54, 114.37s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.2:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.5 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0081e+00 ratio=0.060 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.48s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:44,  3.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:05,  9.63s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9421e-01 ratio=0.059 rel=1.0029e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:14,  6.18s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.27s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.39s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0143e+00 ratio=0.058 rel=1.0019e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.35s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.21s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0089e+00 ratio=0.058 rel=1.0023e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.04s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:01,  1.01it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:33<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7187e-01 ratio=0.059 rel=1.0014e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 377/432 done variant=bilinear depth=10 os=0.2 init=0.5 res=0.1 seed=0 loss=9.7187e-01 ratio=0.059 rel=1.0014e+00
+
+
+
+
+[stability] seeds d=10 os=0.2:  50%|█████     | 1/2 [00:57<00:57, 57.35s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.2 weight_init_scale=0.5 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.2:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0330e+00 ratio=0.052 rel=1.0017e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:   6%|▋         | 1/16 [00:02<00:37,  2.49s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  12%|█▎        | 2/16 [00:06<00:43,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  19%|█▉        | 3/16 [00:23<02:04,  9.60s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0385e+00 ratio=0.052 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  25%|██▌       | 4/16 [00:24<01:13,  6.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  38%|███▊      | 6/16 [00:25<00:30,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8767e-01 ratio=0.052 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  62%|██████▎   | 10/16 [00:29<00:08,  1.38s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  69%|██████▉   | 11/16 [00:30<00:06,  1.25s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0332e+00 ratio=0.052 rel=1.0012e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2:  75%|███████▌  | 12/16 [00:31<00:04,  1.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  81%|████████▏ | 13/16 [00:32<00:03,  1.07s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  88%|████████▊ | 14/16 [00:33<00:02,  1.02s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.2:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0327e+00 ratio=0.052 rel=1.0015e+00
+
+
+
+
+
+stability bilinear d=10 os=0.2: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                               [A[A[A[A[A[stability] config 378/432 done variant=bilinear depth=10 os=0.2 init=0.5 res=0.1 seed=1 loss=1.0327e+00 ratio=0.052 rel=1.0015e+00
+
+
+
+
+[stability] seeds d=10 os=0.2: 100%|██████████| 2/2 [01:54<00:00, 57.31s/it][A[A[A[A
+
+
+
+                                                                            [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.2: 100%|██████████| 3/3 [05:43<00:00, 114.50s/it][A[A[A
+
+
+                                                                                       [A[A[A
+
+[stability] init scales d=10 os=0.2: 100%|██████████| 3/3 [17:07<00:00, 342.72s/it][A[A
+
+                                                                                   [A[A
+[stability] output scales d=10:  25%|██▌       | 1/4 [17:07<51:21, 1027.32s/it][A
+
+[stability] init scales d=10 os=0.35:   0%|          | 0/3 [00:00<?, ?it/s][A[A
+
+
+[stability] residual scales d=10 os=0.35:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.2 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0057e+00 ratio=0.042 rel=1.0015e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.51s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:44,  3.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.66s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9187e-01 ratio=0.041 rel=1.0017e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.18s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0125e+00 ratio=0.040 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0066e+00 ratio=0.040 rel=1.0012e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7026e-01 ratio=0.041 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 379/432 done variant=bilinear depth=10 os=0.35 init=0.2 res=0.02 seed=0 loss=9.7026e-01 ratio=0.041 rel=1.0005e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.15s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.2 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0313e+00 ratio=0.037 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.52s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:43,  3.14s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.62s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0362e+00 ratio=0.036 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.18s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.39s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8675e-01 ratio=0.037 rel=1.0001e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.57s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.35s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:05,  1.20s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0317e+00 ratio=0.037 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.04s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:01,  1.01it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:33<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0313e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 380/432 done variant=bilinear depth=10 os=0.35 init=0.2 res=0.02 seed=1 loss=1.0313e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:54<00:00, 57.32s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35:  33%|███▎      | 1/3 [01:54<03:49, 114.59s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.2 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0057e+00 ratio=0.042 rel=1.0015e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.52s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:43,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.63s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9185e-01 ratio=0.041 rel=1.0017e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0125e+00 ratio=0.040 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0066e+00 ratio=0.041 rel=1.0012e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7028e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.07it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 381/432 done variant=bilinear depth=10 os=0.35 init=0.2 res=0.05 seed=0 loss=9.7028e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.06s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.2 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0313e+00 ratio=0.037 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.49s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:44,  3.19s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.64s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0362e+00 ratio=0.036 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.19s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.27s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8674e-01 ratio=0.037 rel=1.0001e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.89s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.21s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0317e+00 ratio=0.037 rel=1.0005e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:01,  1.00it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:33<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0312e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 382/432 done variant=bilinear depth=10 os=0.35 init=0.2 res=0.05 seed=1 loss=1.0312e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:54<00:00, 57.38s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35:  67%|██████▋   | 2/3 [03:49<01:54, 114.64s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.2 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0057e+00 ratio=0.042 rel=1.0015e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.47s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:43,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:04,  9.58s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9181e-01 ratio=0.041 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:13,  6.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:25<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0125e+00 ratio=0.040 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.39s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.25s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0067e+00 ratio=0.041 rel=1.0013e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.00s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7031e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 383/432 done variant=bilinear depth=10 os=0.35 init=0.2 res=0.1 seed=0 loss=9.7031e-01 ratio=0.041 rel=1.0006e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.09s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.2 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0313e+00 ratio=0.037 rel=1.0009e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.51s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:44,  3.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.62s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0362e+00 ratio=0.036 rel=1.0016e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8674e-01 ratio=0.037 rel=1.0001e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0317e+00 ratio=0.037 rel=1.0006e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0312e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 384/432 done variant=bilinear depth=10 os=0.35 init=0.2 res=0.1 seed=1 loss=1.0312e+00 ratio=0.036 rel=1.0008e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:54<00:00, 57.47s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35: 100%|██████████| 3/3 [05:44<00:00, 114.72s/it][A[A[A
+
+
+                                                                                        [A[A[A
+
+[stability] init scales d=10 os=0.35:  33%|███▎      | 1/3 [05:44<11:28, 344.08s/it][A[A
+
+
+[stability] residual scales d=10 os=0.35:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.35 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0103e+00 ratio=0.073 rel=1.0038e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.52s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:43,  3.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:04,  9.59s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9649e-01 ratio=0.072 rel=1.0041e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:13,  6.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:25<00:31,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0159e+00 ratio=0.071 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.88s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.57s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.36s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0107e+00 ratio=0.071 rel=1.0033e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:33<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7328e-01 ratio=0.072 rel=1.0021e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 385/432 done variant=bilinear depth=10 os=0.35 init=0.35 res=0.02 seed=0 loss=9.7328e-01 ratio=0.072 rel=1.0021e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.14s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.35 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0347e+00 ratio=0.064 rel=1.0025e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:36,  2.41s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:05<00:43,  3.07s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.63s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0405e+00 ratio=0.063 rel=1.0037e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.18s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:25<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.38s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8866e-01 ratio=0.064 rel=1.0010e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0343e+00 ratio=0.064 rel=1.0018e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:01,  1.00it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:33<00:00,  1.05it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0342e+00 ratio=0.063 rel=1.0023e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.08it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 386/432 done variant=bilinear depth=10 os=0.35 init=0.35 res=0.02 seed=1 loss=1.0342e+00 ratio=0.063 rel=1.0023e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:54<00:00, 57.19s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35:  33%|███▎      | 1/3 [01:54<03:48, 114.38s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.35 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0103e+00 ratio=0.073 rel=1.0038e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:38,  2.56s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:44,  3.19s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:04,  9.61s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9645e-01 ratio=0.072 rel=1.0040e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:13,  6.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0160e+00 ratio=0.071 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0107e+00 ratio=0.071 rel=1.0033e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7331e-01 ratio=0.072 rel=1.0021e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 387/432 done variant=bilinear depth=10 os=0.35 init=0.35 res=0.05 seed=0 loss=9.7331e-01 ratio=0.072 rel=1.0021e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.85s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.35 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0346e+00 ratio=0.064 rel=1.0025e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.50s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:43,  3.14s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:04,  9.61s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0405e+00 ratio=0.063 rel=1.0037e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:13,  6.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.40s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8865e-01 ratio=0.064 rel=1.0010e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.92s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0344e+00 ratio=0.064 rel=1.0018e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:01,  1.00it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0342e+00 ratio=0.063 rel=1.0023e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 388/432 done variant=bilinear depth=10 os=0.35 init=0.35 res=0.05 seed=1 loss=1.0342e+00 ratio=0.063 rel=1.0023e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:55<00:00, 57.52s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35:  67%|██████▋   | 2/3 [03:49<01:54, 114.83s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.35 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0103e+00 ratio=0.073 rel=1.0038e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:36,  2.45s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:05<00:43,  3.09s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:04,  9.59s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=9.9639e-01 ratio=0.072 rel=1.0040e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:13,  6.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.25s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:25<00:31,  3.10s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0160e+00 ratio=0.071 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.38s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0108e+00 ratio=0.071 rel=1.0033e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.06s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:33<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7337e-01 ratio=0.072 rel=1.0022e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 389/432 done variant=bilinear depth=10 os=0.35 init=0.35 res=0.1 seed=0 loss=9.7337e-01 ratio=0.072 rel=1.0022e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.15s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.35 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0346e+00 ratio=0.064 rel=1.0025e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.51s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:44,  3.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:04,  9.61s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0405e+00 ratio=0.063 rel=1.0037e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:13,  6.16s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.24s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:25<00:30,  3.09s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.8865e-01 ratio=0.064 rel=1.0010e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0345e+00 ratio=0.064 rel=1.0019e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.01s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:33<00:00,  1.04it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0341e+00 ratio=0.063 rel=1.0022e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 390/432 done variant=bilinear depth=10 os=0.35 init=0.35 res=0.1 seed=1 loss=1.0341e+00 ratio=0.063 rel=1.0022e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:54<00:00, 57.19s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35: 100%|██████████| 3/3 [05:43<00:00, 114.62s/it][A[A[A
+
+
+                                                                                        [A[A[A
+
+[stability] init scales d=10 os=0.35:  67%|██████▋   | 2/3 [11:27<05:43, 343.97s/it][A[A
+
+
+[stability] residual scales d=10 os=0.35:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.5 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0168e+00 ratio=0.104 rel=1.0070e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.50s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:43,  3.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.66s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=1.0030e+00 ratio=0.103 rel=1.0074e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.19s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:47,  4.27s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:27<00:21,  2.40s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0212e+00 ratio=0.101 rel=1.0054e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.92s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.60s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.39s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0167e+00 ratio=0.101 rel=1.0062e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.04s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:01,  1.01it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.06it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7818e-01 ratio=0.103 rel=1.0047e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.08it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 391/432 done variant=bilinear depth=10 os=0.35 init=0.5 res=0.02 seed=0 loss=9.7818e-01 ratio=0.103 rel=1.0047e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.95s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.5 residual_scale=0.02 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0395e+00 ratio=0.092 rel=1.0048e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:38,  2.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:44,  3.17s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:04,  9.59s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0463e+00 ratio=0.090 rel=1.0064e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:13,  6.15s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.24s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.37s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.9205e-01 ratio=0.091 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.58s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.21s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0385e+00 ratio=0.091 rel=1.0038e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.00s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0387e+00 ratio=0.090 rel=1.0045e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.05it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 392/432 done variant=bilinear depth=10 os=0.35 init=0.5 res=0.02 seed=1 loss=1.0387e+00 ratio=0.090 rel=1.0045e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:55<00:00, 57.61s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35:  33%|███▎      | 1/3 [01:55<03:50, 115.33s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.5 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0168e+00 ratio=0.104 rel=1.0070e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.50s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:43,  3.13s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.62s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=4/16 loss=1.0030e+00 ratio=0.103 rel=1.0074e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.19s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:47,  4.28s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.39s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=8/16 loss=1.0213e+00 ratio=0.101 rel=1.0054e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.90s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.57s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.36s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.22s/it][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=12/16 loss=1.0167e+00 ratio=0.101 rel=1.0063e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.04s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:02,  1.00s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:34<00:00,  1.03it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=16/16 loss=9.7822e-01 ratio=0.103 rel=1.0047e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.06it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 393/432 done variant=bilinear depth=10 os=0.35 init=0.5 res=0.05 seed=0 loss=9.7822e-01 ratio=0.103 rel=1.0047e+00
+
+
+
+
+[stability] seeds d=10 os=0.35:  50%|█████     | 1/2 [00:57<00:57, 57.41s/it][A[A[A[A[stability] seed=1 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.5 residual_scale=0.05 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=1/16 loss=1.0395e+00 ratio=0.092 rel=1.0048e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:36,  2.41s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:05<00:43,  3.08s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  19%|█▉        | 3/16 [00:23<02:05,  9.64s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=4/16 loss=1.0463e+00 ratio=0.090 rel=1.0064e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  25%|██▌       | 4/16 [00:24<01:14,  6.18s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  31%|███▏      | 5/16 [00:25<00:46,  4.26s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  38%|███▊      | 6/16 [00:26<00:31,  3.11s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  44%|████▍     | 7/16 [00:26<00:21,  2.39s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=8/16 loss=9.9204e-01 ratio=0.091 rel=1.0027e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  50%|█████     | 8/16 [00:27<00:15,  1.91s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  56%|█████▋    | 9/16 [00:28<00:11,  1.59s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  62%|██████▎   | 10/16 [00:29<00:08,  1.37s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  69%|██████▉   | 11/16 [00:30<00:06,  1.23s/it][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=12/16 loss=1.0386e+00 ratio=0.091 rel=1.0039e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:  75%|███████▌  | 12/16 [00:31<00:04,  1.12s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  81%|████████▏ | 13/16 [00:32<00:03,  1.05s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  88%|████████▊ | 14/16 [00:33<00:01,  1.01it/s][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  94%|█████████▍| 15/16 [00:33<00:00,  1.05it/s][A[A[A[A[A[stability] progress seed=1 variant=bilinear depth=10 step=16/16 loss=1.0386e+00 ratio=0.090 rel=1.0044e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35: 100%|██████████| 16/16 [00:34<00:00,  1.07it/s][A[A[A[A[A
+
+
+
+
+                                                                                [A[A[A[A[A[stability] config 394/432 done variant=bilinear depth=10 os=0.35 init=0.5 res=0.05 seed=1 loss=1.0386e+00 ratio=0.090 rel=1.0044e+00
+
+
+
+
+[stability] seeds d=10 os=0.35: 100%|██████████| 2/2 [01:54<00:00, 57.34s/it][A[A[A[A
+
+
+
+                                                                             [A[A[A[A
+
+
+[stability] residual scales d=10 os=0.35:  67%|██████▋   | 2/3 [03:50<01:54, 114.96s/it][A[A[A
+
+
+
+[stability] seeds d=10 os=0.35:   0%|          | 0/2 [00:00<?, ?it/s][A[A[A[A[stability] seed=0 variant=bilinear depth=10 output_scale=0.35 weight_init_scale=0.5 residual_scale=0.1 device=cuda
+
+
+
+
+
+stability bilinear d=10 os=0.35:   0%|          | 0/16 [00:00<?, ?it/s][A[A[A[A[A[stability] progress seed=0 variant=bilinear depth=10 step=1/16 loss=1.0168e+00 ratio=0.104 rel=1.0070e+00
+
+
+
+
+
+stability bilinear d=10 os=0.35:   6%|▋         | 1/16 [00:02<00:37,  2.51s/it][A[A[A[A[A
+
+
+
+
+stability bilinear d=10 os=0.35:  12%|█▎        | 2/16 [00:06<00:44,  3.16s/it][A[A[A[A[A

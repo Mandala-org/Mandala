@@ -1,0 +1,37 @@
+{
+  "run_name": "batch3_silicon_hamiltonian_mean_lr3x_01",
+  "hidden_irreps": "32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e",
+  "raw_irreps": "64x0e+1x0e+1x1o+1x2e+1x3o+1x4e",
+  "output_irreps": "9x0e+12x1o+5x1e+4x2o+9x2e+4x3o+1x3e+1x4e",
+  "plot_paths": [
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_lr3x_01/plots/loss_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_lr3x_01/plots/relative_error_curve.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_lr3x_01/plots/per_irrep_mae.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_lr3x_01/plots/distance_mae_hexbin.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_lr3x_01/plots/distance_relative_error_hexbin.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_lr3x_01/plots/sample_blocks.png"
+  ],
+  "summary": [
+    {
+      "target": "hamiltonian",
+      "aggregation": "mean",
+      "architecture": "single",
+      "variant": "gatemagnitudes",
+      "depth": 4,
+      "loss_kind": "huber",
+      "train_snapshots": "2700K",
+      "eval_snapshots": "900K",
+      "completed_steps": 80,
+      "interrupted": false,
+      "final_train_loss": 0.0016108033541968325,
+      "final_eval_loss": 0.0014104798901826143,
+      "final_eval_rel": 52.62870407104492,
+      "final_eval_block_mae": 0.021830081939697266,
+      "final_eval_block_mse": 0.0028209600131958723,
+      "final_eval_block_rel": 52.62870407104492,
+      "final_energy_mae": 211.0992431640625,
+      "final_energy_rel": 0.8050654190575406,
+      "elapsed_sec": 155.56502004060894
+    }
+  ]
+}
