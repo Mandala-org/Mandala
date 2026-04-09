@@ -1,0 +1,35 @@
+{
+  "run_name": "batch3_silicon_hamiltonian_mean_zoo_prenorm_01_normact",
+  "hidden_irreps": "32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e",
+  "raw_irreps": "64x0e+1x0e+1x1o+1x2e+1x3o+1x4e",
+  "output_irreps": "9x0e+12x1o+5x1e+4x2o+9x2e+4x3o+1x3e+1x4e",
+  "plot_paths": [
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_zoo_prenorm_01_normact/plots/loss_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_zoo_prenorm_01_normact/plots/relative_error_curve.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_zoo_prenorm_01_normact/plots/per_irrep_mae.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_zoo_prenorm_01_normact/plots/distance_mae_hexbin.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_zoo_prenorm_01_normact/plots/distance_relative_error_hexbin.png",
+    "studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_zoo_prenorm_01_normact/plots/sample_blocks.png"
+  ],
+  "summary": [
+    {
+      "target": "hamiltonian",
+      "aggregation": "mean",
+      "architecture": "single",
+      "variant": "normact",
+      "depth": 4,
+      "loss_kind": "huber",
+      "train_snapshots": "2700K",
+      "eval_snapshots": "900K",
+      "final_train_loss": 0.0032013540621846914,
+      "final_eval_loss": 0.003149497089907527,
+      "final_eval_rel": 82.09974670410156,
+      "final_eval_block_mae": 0.039322126656770706,
+      "final_eval_block_mse": 0.006299016531556845,
+      "final_eval_block_rel": 82.09974670410156,
+      "final_energy_mae": 248.75912475585938,
+      "final_energy_rel": 0.9486882378840116,
+      "elapsed_sec": 196.1619627289474
+    }
+  ]
+}
