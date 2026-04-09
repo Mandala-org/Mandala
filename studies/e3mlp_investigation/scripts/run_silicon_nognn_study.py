@@ -58,6 +58,10 @@ class StudyConfig:
     max_train_edges: int | None
     max_eval_edges: int | None
     device: str
+    output_scale: float
+    weight_init_scale: float
+    residual_scale: float
+    pre_norm: bool
     smoke_test: bool
 
 
@@ -114,6 +118,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-train-edges", type=int, default=None)
     p.add_argument("--max-eval-edges", type=int, default=None)
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--output-scale", type=float, default=1.0)
+    p.add_argument("--weight-init-scale", type=float, default=1.0)
+    p.add_argument("--residual-scale", type=float, default=0.1)
+    p.add_argument("--pre-norm", action="store_true")
     p.add_argument("--run-name", type=str, default=None)
     p.add_argument(
         "--output-root", type=str, default="studies/e3mlp_investigation/artifacts"
@@ -136,6 +144,14 @@ def loss_fn(name: str, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor
     if name == "huber":
         return F.huber_loss(pred, target, delta=1.0)
     raise ValueError(f"Unsupported loss kind '{name}'")
+
+
+def relative_vector_error(
+    pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-8
+) -> torch.Tensor:
+    diff = (pred - target).norm(dim=-1)
+    denom = target.norm(dim=-1).clamp_min(eps)
+    return (diff / denom).mean()
 
 
 def scale_irreps(irreps: Irreps, factor: int) -> Irreps:
@@ -322,23 +338,26 @@ def make_per_irrep_mae_plot(
 
 def make_distance_error_plot(
     distances: torch.Tensor,
-    per_edge_mae: torch.Tensor,
+    per_edge_metric: torch.Tensor,
     out_dir: Path,
     title: str,
+    *,
+    ylabel: str,
+    filename: str,
 ) -> Path:
     fig, ax = plt.subplots(figsize=(7, 5))
     hb = ax.hexbin(
         distances.cpu().numpy(),
-        per_edge_mae.cpu().numpy(),
+        per_edge_metric.cpu().numpy(),
         gridsize=45,
         bins="log",
         cmap="viridis",
     )
     fig.colorbar(hb, ax=ax, label="count")
     ax.set_xlabel("distance")
-    ax.set_ylabel("block MAE")
+    ax.set_ylabel(ylabel)
     ax.set_title(title)
-    path = out_dir / "distance_mae_hexbin.png"
+    path = out_dir / filename
     save_plot(fig, path)
     return path
 
@@ -408,6 +427,7 @@ class SiliconNoGNNStudy(nn.Module):
         output_scale: float = 1.0,
         weight_init_scale: float = 1.0,
         residual_scale: float = 0.1,
+        pre_norm: bool = False,
     ) -> None:
         super().__init__()
         self.raw_irreps = raw_irreps
@@ -443,6 +463,7 @@ class SiliconNoGNNStudy(nn.Module):
                 output_scale=output_scale,
                 weight_init_scale=weight_init_scale,
                 residual_scale=residual_scale,
+                pre_norm=pre_norm,
             )
         elif architecture == "message_then_predict":
             self.message_encoder = build_variant(
@@ -454,6 +475,7 @@ class SiliconNoGNNStudy(nn.Module):
                 output_scale=output_scale,
                 weight_init_scale=weight_init_scale,
                 residual_scale=residual_scale,
+                pre_norm=pre_norm,
             )
             self.message_aggregator = NeighborhoodAggregator(
                 hidden_irreps.dim, aggregation, topk
@@ -481,6 +503,7 @@ class SiliconNoGNNStudy(nn.Module):
                 output_scale=output_scale,
                 weight_init_scale=weight_init_scale,
                 residual_scale=residual_scale,
+                pre_norm=pre_norm,
             )
         else:
             raise ValueError(f"Unsupported architecture '{architecture}'")
@@ -589,6 +612,7 @@ def evaluate(
     with torch.no_grad():
         pred_vec = model(edge_features, edge_index, neighborhoods)
         pred_loss = loss_summary(loss_kind, pred_vec, target_vec)
+        pred_rel = relative_vector_error(pred_vec, target_vec)
         pred_blocks = mapper.vectors_to_blocks(("Si", "Si"), pred_vec)
         pred_matrix = build_block_matrix(target_matrix, "Si-Si", pred_blocks)
         if target_name == "hamiltonian":
@@ -602,8 +626,23 @@ def evaluate(
             (pred_blocks - target_matrix.pair_blocks["Si-Si"]).abs().mean().item()
         )
         block_mse = F.mse_loss(pred_blocks, target_matrix.pair_blocks["Si-Si"]).item()
+        block_rel = relative_vector_error(
+            pred_blocks.reshape(pred_blocks.shape[0], -1),
+            target_matrix.pair_blocks["Si-Si"].reshape(
+                target_matrix.pair_blocks["Si-Si"].shape[0], -1
+            ),
+        ).item()
         per_edge_mae = (
             (pred_blocks - target_matrix.pair_blocks["Si-Si"]).abs().mean(dim=(1, 2))
+        )
+        per_edge_rel = (pred_blocks - target_matrix.pair_blocks["Si-Si"]).reshape(
+            pred_blocks.shape[0], -1
+        ).norm(dim=-1) / target_matrix.pair_blocks["Si-Si"].reshape(
+            target_matrix.pair_blocks["Si-Si"].shape[0], -1
+        ).norm(
+            dim=-1
+        ).clamp_min(
+            1e-8
         )
         distances = eval_distances.to(per_edge_mae.device)
 
@@ -623,6 +662,18 @@ def evaluate(
             per_edge_mae.detach().cpu(),
             out_dir,
             f"{target_name} block MAE vs distance",
+            ylabel="block MAE",
+            filename="distance_mae_hexbin.png",
+        )
+    )
+    plot_paths.append(
+        make_distance_error_plot(
+            distances,
+            per_edge_rel.detach().cpu(),
+            out_dir,
+            f"{target_name} block relative error vs distance",
+            ylabel="block relative error",
+            filename="distance_relative_error_hexbin.png",
         )
     )
     plot_paths.append(
@@ -636,11 +687,16 @@ def evaluate(
 
     return {
         "eval_loss": float(pred_loss.item()),
+        "eval_rel": float(pred_rel.item()),
         "block_mae": float(block_mae),
         "block_mse": float(block_mse),
+        "block_rel": float(block_rel),
         "energy_pred": float(energy_pred.item()),
         "energy_true": float(energy_true.item()),
         "energy_mae": float(abs(energy_pred - energy_true).item()),
+        "energy_rel": float(
+            (abs(energy_pred - energy_true) / energy_true.abs().clamp_min(1e-8)).item()
+        ),
         "plot_paths": plot_paths,
     }
 
@@ -672,6 +728,10 @@ def main() -> None:
         max_train_edges=args.max_train_edges,
         max_eval_edges=args.max_eval_edges,
         device=args.device,
+        output_scale=args.output_scale,
+        weight_init_scale=args.weight_init_scale,
+        residual_scale=args.residual_scale,
+        pre_norm=args.pre_norm,
         smoke_test=args.smoke_test,
     )
     dump_yaml(run_dir / "config.yaml", cfg.__dict__)
@@ -679,6 +739,12 @@ def main() -> None:
     print(
         f"[silicon] train_snapshots={cfg.train_snapshots} eval_snapshots={cfg.eval_snapshots} "
         f"target={cfg.target} aggregation={cfg.aggregation} architecture={cfg.architecture}",
+        flush=True,
+    )
+    print(
+        f"[silicon] variant={cfg.variant} depth={cfg.depth} loss={cfg.loss_kind} "
+        f"output_scale={cfg.output_scale} weight_init_scale={cfg.weight_init_scale} "
+        f"residual_scale={cfg.residual_scale} pre_norm={cfg.pre_norm}",
         flush=True,
     )
 
@@ -718,6 +784,10 @@ def main() -> None:
         predictor_variant=cfg.predictor_variant,
         predictor_depth=cfg.predictor_depth,
         topk=cfg.topk,
+        output_scale=cfg.output_scale,
+        weight_init_scale=cfg.weight_init_scale,
+        residual_scale=cfg.residual_scale,
+        pre_norm=cfg.pre_norm,
     ).to(cfg.device)
 
     train_edge_features = train_data["edge_features"].to(cfg.device)
@@ -754,6 +824,7 @@ def main() -> None:
                 eval_edge_features, eval_edge_index, eval_neighborhoods
             )
             eval_loss = loss_summary(cfg.loss_kind, eval_pred_vec, eval_target_vec)
+            eval_rel = relative_vector_error(eval_pred_vec, eval_target_vec)
         rows.append(
             {
                 "step": step,
@@ -765,11 +836,24 @@ def main() -> None:
                 "loss_kind": cfg.loss_kind,
                 "train_loss": float(loss.item()),
                 "eval_loss": float(eval_loss.item()),
+                "eval_rel": float(eval_rel.item()),
             }
         )
         step_iter.set_postfix(
-            train=f"{loss.item():.3e}", eval=f"{eval_loss.item():.3e}"
+            train=f"{loss.item():.3e}",
+            eval=f"{eval_loss.item():.3e}",
+            rel=f"{eval_rel.item():.3e}",
         )
+        if (
+            step == 0
+            or (step + 1) == cfg.num_steps
+            or (step + 1) % max(1, cfg.num_steps // 4) == 0
+        ):
+            print(
+                f"[silicon] progress step={step + 1}/{cfg.num_steps} "
+                f"train={loss.item():.4e} eval={eval_loss.item():.4e} rel={eval_rel.item():.4e}",
+                flush=True,
+            )
 
     elapsed = time.perf_counter() - t0
     df = pd.DataFrame(rows)
@@ -781,6 +865,13 @@ def main() -> None:
     ax.set_yscale("log")
     ax.set_title("No-GNN silicon loss curves")
     path = plots_dir / "loss_curves.png"
+    save_plot(fig, path)
+    plot_paths.append(path)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    sns.lineplot(data=df, x="step", y="eval_rel", ax=ax, label="eval relative error")
+    ax.set_yscale("log")
+    ax.set_title("No-GNN silicon relative error curve")
+    path = plots_dir / "relative_error_curve.png"
     save_plot(fig, path)
     plot_paths.append(path)
 
@@ -815,9 +906,12 @@ def main() -> None:
                 "eval_snapshots": ",".join(cfg.eval_snapshots),
                 "final_train_loss": float(df.iloc[-1]["train_loss"]),
                 "final_eval_loss": float(df.iloc[-1]["eval_loss"]),
+                "final_eval_rel": float(df.iloc[-1]["eval_rel"]),
                 "final_eval_block_mae": final_eval["block_mae"],
                 "final_eval_block_mse": final_eval["block_mse"],
+                "final_eval_block_rel": final_eval["block_rel"],
                 "final_energy_mae": final_eval["energy_mae"],
+                "final_energy_rel": final_eval["energy_rel"],
                 "elapsed_sec": elapsed,
             }
         ]

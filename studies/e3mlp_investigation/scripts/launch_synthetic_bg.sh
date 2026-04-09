@@ -20,7 +20,6 @@ python studies/e3mlp_investigation/scripts/run_synthetic_teacher_study.py \
   --num-steps "${NUM_STEPS:-24}" \
   --num-seeds "${NUM_SEEDS:-2}" \
   --run-name "${RUN_NAME}" \
-  --append-log \
   > "${OUT_DIR}/stdout.log" 2>&1
 
 echo 0 > "${OUT_DIR}/exit_code.txt"

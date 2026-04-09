@@ -26,6 +26,5 @@ python -u studies/e3mlp_investigation/scripts/run_silicon_nognn_study.py \
   --loss-kind mse \
   --topk 8 \
   --device "${DEVICE}" \
-  --run-name "${RUN_NAME}" \
-  --append-log
+  --run-name "${RUN_NAME}"
 echo "[batch2_run02] finished: ${RUN_NAME}"

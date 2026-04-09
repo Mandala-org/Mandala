@@ -14,5 +14,4 @@ python studies/e3mlp_investigation/scripts/build_silicon_pair_cache.py \
   --snapshot "${SNAPSHOT}" \
   --cutoff-radius "${CUTOFF_RADIUS}" \
   --l-max "${L_MAX}" \
-  --n-radial "${N_RADIAL}" \
-  --append-log
+  --n-radial "${N_RADIAL}"
