@@ -269,6 +269,28 @@ Status:
 - applies to future and currently launched runs from this point onward
 - no experimental claims changed
 
+## 2026-04-09 17:09 - batch1_synth_linear_20260409_170313
+
+Executed synthetic teacher study.
+
+- run dir: [batch1_synth_linear_20260409_170313](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_170313)
+- teacher kind: `linear`
+- hidden irreps preset: `preliminary`
+- hidden irreps: `16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e`
+- smoke test: `False`
+
+Top provisional rows:
+- `gatemagnitudes` depth=4 loss=mse val_mae=5.0740e-01 val_mse=4.3416e-01
+- `gatemagnitudes` depth=4 loss=huber val_mae=5.0753e-01 val_mse=4.3447e-01
+- `normact` depth=4 loss=mse val_mae=5.3080e-01 val_mse=4.7630e-01
+- `normact` depth=4 loss=huber val_mae=5.3093e-01 val_mse=4.7668e-01
+- `gatemagnitudes` depth=2 loss=mse val_mae=5.3321e-01 val_mse=4.9777e-01
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_170313/summary.csv)
+- [validation loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_170313/plots/val_loss_curves.png)
+- [sample target vs prediction](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_170313/plots/sample_target_vs_prediction.png)
+- [per-irrep validation MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_170313/plots/per_irrep_val_mae.png)
 
 ## 2026-04-09 18:05 - smoke_silicon_nognn_01
 
@@ -390,11 +412,6 @@ Executed synthetic teacher study.
 
 - run dir: [quick_synth_mixed_b](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/quick_synth_mixed_b)
 - teacher kind: `mixed`
-- hidden irreps preset: `preliminary`
-- hidden irreps: `16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e`
-- smoke test: `False`
-
-Top provisional rows:
 - `gatemagnitudes` depth=4 loss=mae val_mae=4.9444e-01 val_mse=4.2610e-01
 - `gatemagnitudes` depth=4 loss=mse val_mae=4.9449e-01 val_mse=4.2628e-01
 - `gatemagnitudes` depth=4 loss=huber val_mae=4.9450e-01 val_mse=4.2625e-01
@@ -487,6 +504,31 @@ Artifacts:
 - [per-irrep MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/per_irrep_mae.png)
 - [distance MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/distance_mae_hexbin.png)
 - [sample blocks](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/sample_blocks.png)
+
+Status:
+- provisional local result; larger runs may override it
+
+
+## 2026-04-09 17:21 - prelim_stability_scale_sweep_a
+
+Executed stability micro-study.
+
+- run dir: [prelim_stability_scale_sweep_a](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/prelim_stability_scale_sweep_a)
+- hidden irreps preset: `preliminary`
+- hidden irreps: `16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e`
+- smoke test: `False`
+
+Top provisional rows:
+- `gatemagnitudes` depth=10 output_scale=0.5 weight_init_scale=0.5 residual_scale=0.1 loss=9.7407e-01 ratio=0.059 grad=5.171e-02 nan=False
+- `gatemagnitudes` depth=10 output_scale=0.5 weight_init_scale=0.5 residual_scale=0.25 loss=9.7407e-01 ratio=0.059 grad=5.171e-02 nan=False
+- `normact` depth=10 output_scale=0.5 weight_init_scale=0.5 residual_scale=0.1 loss=9.7662e-01 ratio=0.079 grad=5.189e-02 nan=False
+- `normact` depth=10 output_scale=0.5 weight_init_scale=0.5 residual_scale=0.25 loss=9.7662e-01 ratio=0.079 grad=5.189e-02 nan=False
+- `gatemagnitudes` depth=10 output_scale=1.0 weight_init_scale=0.5 residual_scale=0.1 loss=9.8196e-01 ratio=0.122 grad=1.321e-01 nan=False
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/prelim_stability_scale_sweep_a/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/prelim_stability_scale_sweep_a/plots/loss_curves.png)
+- [gradient curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/prelim_stability_scale_sweep_a/plots/gradient_curves.png)
 
 Status:
 - provisional local result; larger runs may override it
