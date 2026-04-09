@@ -32,6 +32,7 @@ for variant in "${variant_list[@]}"; do
     --weight-init-scale 0.5 \
     --residual-scale 0.05 \
     --pre-norm \
+    --edge-batch-size 1024 \
     --run-name "${subrun}"
 done
 echo "[batch3_run04] finished: ${RUN_NAME}"

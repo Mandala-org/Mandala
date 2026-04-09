@@ -62,6 +62,7 @@ class StudyConfig:
     weight_init_scale: float
     residual_scale: float
     pre_norm: bool
+    edge_batch_size: int | None
     smoke_test: bool
 
 
@@ -122,6 +123,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--weight-init-scale", type=float, default=1.0)
     p.add_argument("--residual-scale", type=float, default=0.1)
     p.add_argument("--pre-norm", action="store_true")
+    p.add_argument("--edge-batch-size", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
     p.add_argument(
         "--output-root", type=str, default="studies/e3mlp_investigation/artifacts"
@@ -527,6 +529,44 @@ class SiliconNoGNNStudy(nn.Module):
         return self.predictor(model_in)
 
 
+def batched_forward(
+    model: SiliconNoGNNStudy,
+    edge_features: torch.Tensor,
+    edge_index: torch.Tensor,
+    neighborhoods: list[torch.Tensor],
+    *,
+    edge_batch_size: int | None,
+) -> torch.Tensor:
+    num_edges = edge_features.shape[0]
+    if edge_batch_size is None or edge_batch_size >= num_edges:
+        return model(edge_features, edge_index, neighborhoods)
+
+    outputs: list[torch.Tensor] = []
+    if model.architecture == "single":
+        node_ctx = model.raw_aggregator(edge_features, neighborhoods)
+        for start in range(0, num_edges, edge_batch_size):
+            end = min(start + edge_batch_size, num_edges)
+            batch_features = edge_features[start:end]
+            batch_edge_index = edge_index[:, start:end]
+            model_in = assemble_edge_inputs(
+                batch_features, node_ctx, batch_edge_index, model.aggregation
+            )
+            outputs.append(model.predictor(model_in))
+        return torch.cat(outputs, dim=0)
+
+    encoded = model.message_encoder(edge_features)
+    node_ctx = model.message_aggregator(encoded, neighborhoods)
+    for start in range(0, num_edges, edge_batch_size):
+        end = min(start + edge_batch_size, num_edges)
+        batch_encoded = encoded[start:end]
+        batch_edge_index = edge_index[:, start:end]
+        model_in = assemble_edge_inputs(
+            batch_encoded, node_ctx, batch_edge_index, model.aggregation
+        )
+        outputs.append(model.predictor(model_in))
+    return torch.cat(outputs, dim=0)
+
+
 def load_snapshot(
     snapshot_name: str,
 ) -> tuple[dict[str, torch.Tensor], dict[str, BlockMatrix], object]:
@@ -608,9 +648,16 @@ def evaluate(
     loss_kind: str,
     eval_distances: torch.Tensor,
     out_dir: Path,
+    edge_batch_size: int | None,
 ) -> dict[str, float | Path]:
     with torch.no_grad():
-        pred_vec = model(edge_features, edge_index, neighborhoods)
+        pred_vec = batched_forward(
+            model,
+            edge_features,
+            edge_index,
+            neighborhoods,
+            edge_batch_size=edge_batch_size,
+        )
         pred_loss = loss_summary(loss_kind, pred_vec, target_vec)
         pred_rel = relative_vector_error(pred_vec, target_vec)
         pred_vec_cpu = pred_vec.detach().cpu()
@@ -734,6 +781,7 @@ def main() -> None:
         weight_init_scale=args.weight_init_scale,
         residual_scale=args.residual_scale,
         pre_norm=args.pre_norm,
+        edge_batch_size=args.edge_batch_size,
         smoke_test=args.smoke_test,
     )
     dump_yaml(run_dir / "config.yaml", cfg.__dict__)
@@ -746,7 +794,8 @@ def main() -> None:
     print(
         f"[silicon] variant={cfg.variant} depth={cfg.depth} loss={cfg.loss_kind} "
         f"output_scale={cfg.output_scale} weight_init_scale={cfg.weight_init_scale} "
-        f"residual_scale={cfg.residual_scale} pre_norm={cfg.pre_norm}",
+        f"residual_scale={cfg.residual_scale} pre_norm={cfg.pre_norm} "
+        f"edge_batch_size={cfg.edge_batch_size}",
         flush=True,
     )
 
@@ -820,14 +869,24 @@ def main() -> None:
     for step in step_iter:
         print(f"[silicon] step={step + 1}/{cfg.num_steps} start", flush=True)
         optimizer.zero_grad(set_to_none=True)
-        pred_vec = model(train_edge_features, train_edge_index, train_neighborhoods)
+        pred_vec = batched_forward(
+            model,
+            train_edge_features,
+            train_edge_index,
+            train_neighborhoods,
+            edge_batch_size=cfg.edge_batch_size,
+        )
         loss = loss_summary(cfg.loss_kind, pred_vec, train_target_vec)
         loss.backward()
         optimizer.step()
 
         with torch.no_grad():
-            eval_pred_vec = model(
-                eval_edge_features, eval_edge_index, eval_neighborhoods
+            eval_pred_vec = batched_forward(
+                model,
+                eval_edge_features,
+                eval_edge_index,
+                eval_neighborhoods,
+                edge_batch_size=cfg.edge_batch_size,
             )
             eval_loss = loss_summary(cfg.loss_kind, eval_pred_vec, eval_target_vec)
             eval_rel = relative_vector_error(eval_pred_vec, eval_target_vec)
@@ -896,6 +955,7 @@ def main() -> None:
             loss_kind=cfg.loss_kind,
             eval_distances=eval_distances,
             out_dir=plots_dir,
+            edge_batch_size=cfg.edge_batch_size,
         )
         plot_paths.extend(final_eval["plot_paths"])
 
