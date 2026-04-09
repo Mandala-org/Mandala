@@ -45,6 +45,10 @@ class StudyConfig:
     num_seeds: int
     hidden_irreps_preset: str
     device: str
+    output_scale: float
+    weight_init_scale: float
+    residual_scale: float
+    pre_norm: bool
     smoke_test: bool
 
 
@@ -110,6 +114,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--num-seeds", type=int, default=2)
     p.add_argument("--hidden-irreps-preset", type=str, default="preliminary")
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--output-scale", type=float, default=1.0)
+    p.add_argument("--weight-init-scale", type=float, default=1.0)
+    p.add_argument("--residual-scale", type=float, default=0.1)
+    p.add_argument("--pre-norm", action="store_true")
     p.add_argument("--run-name", type=str, default=None)
     p.add_argument(
         "--output-root", type=str, default="studies/e3mlp_investigation/artifacts"
@@ -132,6 +140,14 @@ def loss_fn(name: str, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor
     if name == "huber":
         return F.huber_loss(pred, target, delta=1.0)
     raise ValueError(f"Unsupported loss kind '{name}'")
+
+
+def relative_vector_error(
+    pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-8
+) -> torch.Tensor:
+    diff = (pred - target).norm(dim=-1)
+    denom = target.norm(dim=-1).clamp_min(eps)
+    return (diff / denom).mean()
 
 
 def make_dataset(
@@ -159,6 +175,10 @@ def train_one(
     lr: float,
     seed: int,
     device: str,
+    output_scale: float,
+    weight_init_scale: float,
+    residual_scale: float,
+    pre_norm: bool,
 ):
     print(
         f"[synthetic] seed={seed} variant={variant} depth={depth} loss={loss_kind} device={device}",
@@ -177,9 +197,10 @@ def train_one(
         irreps,
         irreps,
         num_layers=depth,
-        output_scale=1.0,
-        weight_init_scale=1.0,
-        residual_scale=0.1,
+        output_scale=output_scale,
+        weight_init_scale=weight_init_scale,
+        residual_scale=residual_scale,
+        pre_norm=pre_norm,
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     rows: list[dict] = []
@@ -205,6 +226,7 @@ def train_one(
             val_loss = loss_fn(loss_kind, val_pred, val_y)
             val_mae = F.l1_loss(val_pred, val_y)
             val_mse = F.mse_loss(val_pred, val_y)
+            val_rel = relative_vector_error(val_pred, val_y)
         rows.append(
             {
                 "variant": variant,
@@ -217,6 +239,7 @@ def train_one(
                 "val_loss": float(val_loss.item()),
                 "val_mae": float(val_mae.item()),
                 "val_mse": float(val_mse.item()),
+                "val_rel": float(val_rel.item()),
             }
         )
         if (
@@ -226,7 +249,7 @@ def train_one(
         ):
             print(
                 f"[synthetic] progress seed={seed} variant={variant} depth={depth} loss={loss_kind} "
-                f"step={step + 1}/{num_steps} train={loss.item():.4e} val={val_loss.item():.4e}",
+                f"step={step + 1}/{num_steps} train={loss.item():.4e} val={val_loss.item():.4e} rel={val_rel.item():.4e}",
                 flush=True,
             )
     with torch.no_grad():
@@ -335,6 +358,10 @@ def main() -> None:
         num_seeds=1 if args.smoke_test else args.num_seeds,
         hidden_irreps_preset=args.hidden_irreps_preset,
         device=args.device,
+        output_scale=args.output_scale,
+        weight_init_scale=args.weight_init_scale,
+        residual_scale=args.residual_scale,
+        pre_norm=args.pre_norm,
         smoke_test=args.smoke_test,
     )
     irreps = get_hidden_irreps(cfg.hidden_irreps_preset)
@@ -345,9 +372,15 @@ def main() -> None:
     )
     print(f"[synthetic] hidden_irreps={irreps}", flush=True)
     print(
-        f"[synthetic] variants={cfg.variants} depths={cfg.depths} losses={cfg.loss_kinds}",
+        f"[synthetic] variants={cfg.variants} depths={cfg.depths} losses={cfg.loss_kinds} "
+        f"output_scale={cfg.output_scale} weight_init_scale={cfg.weight_init_scale} "
+        f"residual_scale={cfg.residual_scale} pre_norm={cfg.pre_norm}",
         flush=True,
     )
+    total_configs = (
+        len(cfg.variants) * len(cfg.depths) * len(cfg.loss_kinds) * cfg.num_seeds
+    )
+    completed = 0
 
     rows: list[dict] = []
     sample_payload = None
@@ -384,8 +417,20 @@ def main() -> None:
                         lr=cfg.lr,
                         seed=seed,
                         device=cfg.device,
+                        output_scale=cfg.output_scale,
+                        weight_init_scale=cfg.weight_init_scale,
+                        residual_scale=cfg.residual_scale,
+                        pre_norm=cfg.pre_norm,
                     )
                     rows.extend(run_rows)
+                    completed += 1
+                    current = pd.DataFrame(run_rows).iloc[-1]
+                    print(
+                        f"[synthetic] config {completed}/{total_configs} done "
+                        f"variant={variant} depth={depth} loss={loss_kind} seed={seed} "
+                        f"val_mae={current['val_mae']:.4e} val_rel={current['val_rel']:.4e}",
+                        flush=True,
+                    )
                     if sample_payload is None:
                         sample_payload = (
                             variant,
@@ -431,8 +476,9 @@ def main() -> None:
             val_loss=("val_loss", "mean"),
             val_mae=("val_mae", "mean"),
             val_mse=("val_mse", "mean"),
+            val_rel=("val_rel", "mean"),
         )
-        .sort_values(["val_mae", "val_mse"])
+        .sort_values(["val_rel", "val_mae", "val_mse"])
     )
     save_df(run_dir / "summary.csv", summary)
     print(f"[synthetic] wrote summary and plots to {run_dir}", flush=True)

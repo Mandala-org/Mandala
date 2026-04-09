@@ -210,6 +210,23 @@ class InvariantFiLMActivation(nn.Module):
         return torch.cat(out, dim=-1)
 
 
+class EquivariantRMSNorm(nn.Module):
+    def __init__(self, irreps: Irreps, eps: float = 1e-8) -> None:
+        super().__init__()
+        self.irreps = Irreps(irreps)
+        self.copy_specs = _copy_slices(self.irreps)
+        self.eps = float(eps)
+        self.weight = nn.Parameter(torch.ones(len(self.copy_specs)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out: list[torch.Tensor] = []
+        for idx, (start, dim, _, _) in enumerate(self.copy_specs):
+            block = x[..., start : start + dim]
+            norm = torch.linalg.norm(block, dim=-1, keepdim=True).clamp_min(self.eps)
+            out.append(block * (self.weight[idx] / norm))
+        return torch.cat(out, dim=-1)
+
+
 def make_gate_activation(
     irreps: Irreps,
     *,
@@ -400,6 +417,8 @@ class VariantConfig:
     gate_activation: str = "sigmoid"
     odd_gate_activation: str = "tanh"
     film_hidden_dim: int = 128
+    pre_norm: bool = False
+    norm_eps: float = 1e-8
 
 
 class SimpleE3MLP(nn.Module):
@@ -424,27 +443,44 @@ class SimpleE3MLP(nn.Module):
         self.variant = variant
 
         if num_layers == 1:
-            self.single = ScaledLinear(
+            single: nn.Module = ScaledLinear(
                 self.irreps_in,
                 self.irreps_out,
                 output_scale=cfg.output_scale,
                 weight_init_scale=cfg.weight_init_scale,
             )
+            if cfg.pre_norm:
+                single = nn.Sequential(
+                    EquivariantRMSNorm(self.irreps_in, eps=cfg.norm_eps),
+                    single,
+                )
+            self.single = single
             return
 
         blocks: list[nn.Module] = []
         current_irreps = self.irreps_in
         for _ in range(num_layers - 1):
             block = self._make_hidden_block(current_irreps, cfg)
+            if cfg.pre_norm:
+                block = nn.Sequential(
+                    EquivariantRMSNorm(current_irreps, eps=cfg.norm_eps),
+                    block,
+                )
             blocks.append(block)
             current_irreps = self.irreps_hidden
         self.blocks = nn.ModuleList(blocks)
-        self.final_linear = ScaledLinear(
+        final_linear: nn.Module = ScaledLinear(
             self.irreps_hidden,
             self.irreps_out,
             output_scale=cfg.output_scale,
             weight_init_scale=cfg.weight_init_scale,
         )
+        if cfg.pre_norm:
+            final_linear = nn.Sequential(
+                EquivariantRMSNorm(self.irreps_hidden, eps=cfg.norm_eps),
+                final_linear,
+            )
+        self.final_linear = final_linear
 
     def _make_hidden_block(self, irreps_in: Irreps, cfg: VariantConfig) -> nn.Module:
         variant = self.variant.lower()
@@ -657,6 +693,8 @@ def build_variant(
     gate_activation: str = "sigmoid",
     odd_gate_activation: str = "tanh",
     film_hidden_dim: int = 128,
+    pre_norm: bool = False,
+    norm_eps: float = 1e-8,
 ) -> nn.Module:
     cfg = VariantConfig(
         output_scale=output_scale,
@@ -667,6 +705,8 @@ def build_variant(
         gate_activation=gate_activation,
         odd_gate_activation=odd_gate_activation,
         film_hidden_dim=film_hidden_dim,
+        pre_norm=pre_norm,
+        norm_eps=norm_eps,
     )
     return SimpleE3MLP(
         irreps_in,

@@ -18,7 +18,6 @@ python studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
   --num-steps "${NUM_STEPS:-8}" \
   --num-seeds "${NUM_SEEDS:-2}" \
   --run-name "${RUN_NAME}" \
-  --append-log \
   > "${OUT_DIR}/stdout.log" 2>&1
 
 echo 0 > "${OUT_DIR}/exit_code.txt"

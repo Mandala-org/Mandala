@@ -31,5 +31,4 @@ python -u studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
   --lr "${LR}" \
   --hidden-irreps-preset "${HIDDEN_IRREPS_PRESET}" \
   --device "${DEVICE}" \
-  --run-name "${RUN_NAME}" \
-  --append-log
+  --run-name "${RUN_NAME}"

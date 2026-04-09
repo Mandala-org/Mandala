@@ -45,6 +45,7 @@ class StudyConfig:
     lr: float
     hidden_irreps_preset: str
     device: str
+    pre_norm: bool
     smoke_test: bool
 
 
@@ -70,6 +71,7 @@ def parse_args() -> argparse.Namespace:
         choices=["preliminary", "silicon", "silicon_doubled"],
     )
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--pre-norm", action="store_true")
     p.add_argument("--run-name", type=str, default=None)
     p.add_argument(
         "--output-root", type=str, default="studies/e3mlp_investigation/artifacts"
@@ -101,6 +103,14 @@ def _record_layer_stats(
         cursor += size
 
 
+def relative_vector_error(
+    pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-8
+) -> torch.Tensor:
+    diff = (pred - target).norm(dim=-1)
+    denom = target.norm(dim=-1).clamp_min(eps)
+    return (diff / denom).mean()
+
+
 def train_once(
     *,
     variant: str,
@@ -114,6 +124,7 @@ def train_once(
     lr: float,
     device: str,
     seed: int,
+    pre_norm: bool,
 ):
     print(
         f"[stability] seed={seed} variant={variant} depth={depth} "
@@ -131,6 +142,7 @@ def train_once(
         output_scale=output_scale,
         weight_init_scale=weight_init_scale,
         residual_scale=residual_scale,
+        pre_norm=pre_norm,
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     target_linear = torch.randn(irreps.dim, irreps.dim, device=device) / math.sqrt(
@@ -177,6 +189,7 @@ def train_once(
 
         output_norm = y.detach().norm(dim=-1).mean().item()
         input_norm = x.detach().norm(dim=-1).mean().item()
+        rel_err = relative_vector_error(y.detach(), y_target.detach()).item()
         nan_flag = bool(torch.isnan(y).any().item() or torch.isnan(loss).item())
         step_rows.append(
             {
@@ -191,6 +204,7 @@ def train_once(
                 "input_norm": input_norm,
                 "output_norm": output_norm,
                 "output_to_input_ratio": output_norm / max(input_norm, 1e-12),
+                "relative_error": rel_err,
                 "grad_norm": grad_sq**0.5,
                 "max_grad": max_grad,
                 "weight_norm": weight_sq**0.5,
@@ -205,7 +219,7 @@ def train_once(
             print(
                 f"[stability] progress seed={seed} variant={variant} depth={depth} "
                 f"step={step + 1}/{num_steps} loss={loss.item():.4e} "
-                f"ratio={output_norm / max(input_norm, 1e-12):.3f}",
+                f"ratio={output_norm / max(input_norm, 1e-12):.3f} rel={rel_err:.4e}",
                 flush=True,
             )
 
@@ -343,6 +357,7 @@ def main() -> None:
         lr=args.lr,
         hidden_irreps_preset=args.hidden_irreps_preset,
         device=args.device,
+        pre_norm=args.pre_norm,
         smoke_test=args.smoke_test,
     )
     dump_yaml(run_dir / "config.yaml", cfg.__dict__)
@@ -352,9 +367,18 @@ def main() -> None:
     print(f"[stability] hidden_irreps={irreps}", flush=True)
     print(
         f"[stability] variants={cfg.variants} depths={cfg.depths} output_scales={cfg.output_scales} "
-        f"weight_init_scales={cfg.weight_init_scales} residual_scales={cfg.residual_scales}",
+        f"weight_init_scales={cfg.weight_init_scales} residual_scales={cfg.residual_scales} pre_norm={cfg.pre_norm}",
         flush=True,
     )
+    total_configs = (
+        len(cfg.variants)
+        * len(cfg.depths)
+        * len(cfg.output_scales)
+        * len(cfg.weight_init_scales)
+        * len(cfg.residual_scales)
+        * cfg.num_seeds
+    )
+    completed = 0
     all_steps: list[dict] = []
     all_irreps: list[dict] = []
     timing_rows: list[dict] = []
@@ -403,6 +427,7 @@ def main() -> None:
                                 lr=cfg.lr,
                                 device=cfg.device,
                                 seed=seed,
+                                pre_norm=cfg.pre_norm,
                             )
                             all_steps.extend(step_rows)
                             all_irreps.extend(per_irrep_rows)
@@ -417,6 +442,17 @@ def main() -> None:
                                     "elapsed_sec": elapsed,
                                 }
                             )
+                            completed += 1
+                            if step_rows:
+                                current = step_rows[-1]
+                                print(
+                                    f"[stability] config {completed}/{total_configs} done "
+                                    f"variant={variant} depth={depth} os={output_scale} "
+                                    f"init={weight_init_scale} res={residual_scale} seed={seed} "
+                                    f"loss={current['loss']:.4e} ratio={current['output_to_input_ratio']:.3f} "
+                                    f"rel={current['relative_error']:.4e}",
+                                    flush=True,
+                                )
         print(f"[stability] variant sweep done: {variant}", flush=True)
 
     df_steps = pd.DataFrame(all_steps)
@@ -458,10 +494,13 @@ def main() -> None:
             .agg(
                 final_loss=("loss", "mean"),
                 final_ratio=("output_to_input_ratio", "mean"),
+                final_relative_error=("relative_error", "mean"),
                 final_grad_norm=("grad_norm", "mean"),
                 has_nan=("has_nan", "max"),
             )
-            .sort_values(["has_nan", "final_loss", "final_grad_norm"])
+            .sort_values(
+                ["has_nan", "final_relative_error", "final_loss", "final_grad_norm"]
+            )
         )
     else:
         summary = pd.DataFrame()

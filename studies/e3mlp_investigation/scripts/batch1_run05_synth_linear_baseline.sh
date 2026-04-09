@@ -22,6 +22,5 @@ python -u studies/e3mlp_investigation/scripts/run_synthetic_teacher_study.py \
   --num-seeds 3 \
   --hidden-irreps-preset preliminary \
   --device "${DEVICE}" \
-  --run-name "${RUN_NAME}" \
-  --append-log
+  --run-name "${RUN_NAME}"
 echo "[batch1_run05] finished: ${RUN_NAME}"
