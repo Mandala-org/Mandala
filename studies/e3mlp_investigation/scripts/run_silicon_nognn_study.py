@@ -613,7 +613,9 @@ def evaluate(
         pred_vec = model(edge_features, edge_index, neighborhoods)
         pred_loss = loss_summary(loss_kind, pred_vec, target_vec)
         pred_rel = relative_vector_error(pred_vec, target_vec)
-        pred_blocks = mapper.vectors_to_blocks(("Si", "Si"), pred_vec)
+        pred_vec_cpu = pred_vec.detach().cpu()
+        target_vec_cpu = target_vec.detach().cpu()
+        pred_blocks = mapper.vectors_to_blocks(("Si", "Si"), pred_vec_cpu)
         pred_matrix = build_block_matrix(target_matrix, "Si-Si", pred_blocks)
         if target_name == "hamiltonian":
             energy_pred = trace_matmul_sparse_block_matrix(pred_matrix, gt_density)
@@ -650,8 +652,8 @@ def evaluate(
     plot_paths.append(
         make_per_irrep_mae_plot(
             mapper.get_pair_irreps(("Si", "Si")),
-            target_vec,
-            pred_vec,
+            target_vec_cpu,
+            pred_vec_cpu,
             out_dir,
             f"{target_name} per-irrep MAE",
         )
@@ -679,7 +681,7 @@ def evaluate(
     plot_paths.append(
         make_sample_block_plot(
             target_matrix.pair_blocks["Si-Si"],
-            pred_blocks.detach().cpu(),
+            pred_blocks,
             out_dir,
             f"{target_name} sample blocks",
         )
@@ -695,7 +697,7 @@ def evaluate(
         "energy_true": float(energy_true.item()),
         "energy_mae": float(abs(energy_pred - energy_true).item()),
         "energy_rel": float(
-            (abs(energy_pred - energy_true) / energy_true.abs().clamp_min(1e-8)).item()
+            abs(energy_pred - energy_true).item() / max(abs(energy_true.item()), 1e-8)
         ),
         "plot_paths": plot_paths,
     }
@@ -793,13 +795,17 @@ def main() -> None:
     train_edge_features = train_data["edge_features"].to(cfg.device)
     train_edge_index = train_data["edge_index"].to(cfg.device)
     train_neighborhoods = [nbr.to(cfg.device) for nbr in train_data["neighborhoods"]]
-    train_target_matrix = train_data["target"].to(cfg.device)
+    train_target_matrix = train_data["target"]
     eval_edge_features = eval_data["edge_features"].to(cfg.device)
     eval_edge_index = eval_data["edge_index"].to(cfg.device)
     eval_neighborhoods = [nbr.to(cfg.device) for nbr in eval_data["neighborhoods"]]
-    eval_target_matrix = eval_data["target"].to(cfg.device)
-    train_target_vec = train_target_matrix.to_vectors(mapper).pair_vectors["Si-Si"]
-    eval_target_vec = eval_target_matrix.to_vectors(mapper).pair_vectors["Si-Si"]
+    eval_target_matrix = eval_data["target"]
+    train_target_vec = (
+        train_target_matrix.to_vectors(mapper).pair_vectors["Si-Si"].to(cfg.device)
+    )
+    eval_target_vec = (
+        eval_target_matrix.to_vectors(mapper).pair_vectors["Si-Si"].to(cfg.device)
+    )
     # train_distances = train_data["edge_dist"].to(cfg.device) # not used
     eval_distances = eval_data["edge_dist"].to(cfg.device)
 
@@ -882,8 +888,8 @@ def main() -> None:
             edge_index=eval_edge_index,
             neighborhoods=eval_neighborhoods,
             target_matrix=eval_target_matrix,
-            gt_density=eval_data["gt_density"].to(cfg.device),
-            gt_hamiltonian=eval_data["gt_hamiltonian"].to(cfg.device),
+            gt_density=eval_data["gt_density"],
+            gt_hamiltonian=eval_data["gt_hamiltonian"],
             target_vec=eval_target_vec,
             mapper=mapper,
             target_name=cfg.target,
