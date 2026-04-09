@@ -46,7 +46,9 @@ def _load_summary_rows(root: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataF
         df = pd.read_csv(summary)
         df = df.copy()
         df["run_name"] = path.name
-        if "teacher_kind" in df.columns:
+        if {"val_mae", "val_mse"}.issubset(
+            df.columns
+        ) and "aggregation" not in df.columns:
             synth_rows.append(df)
         elif "output_scale" in df.columns:
             stab_rows.append(df)
