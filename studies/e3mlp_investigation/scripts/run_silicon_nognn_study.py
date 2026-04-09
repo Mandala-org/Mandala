@@ -124,6 +124,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--residual-scale", type=float, default=0.1)
     p.add_argument("--pre-norm", action="store_true")
     p.add_argument("--edge-batch-size", type=int, default=None)
+    p.add_argument("--resume-from", type=str, default=None)
     p.add_argument("--run-name", type=str, default=None)
     p.add_argument(
         "--output-root", type=str, default="studies/e3mlp_investigation/artifacts"
@@ -408,6 +409,53 @@ def loss_summary(
     loss_kind: str, pred: torch.Tensor, target: torch.Tensor
 ) -> torch.Tensor:
     return loss_fn(loss_kind, pred, target)
+
+
+def save_training_checkpoint(
+    *,
+    path: Path,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    cfg: StudyConfig,
+    completed_steps: int,
+    rows: list[dict],
+    elapsed_sec: float,
+    interrupted: bool,
+) -> None:
+    payload = {
+        "config": cfg.__dict__,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "completed_steps": completed_steps,
+        "rows": rows,
+        "elapsed_sec": elapsed_sec,
+        "interrupted": interrupted,
+        "torch_rng_state": torch.get_rng_state(),
+    }
+    if torch.cuda.is_available():
+        payload["cuda_rng_state_all"] = torch.cuda.get_rng_state_all()
+    torch.save(payload, path)
+
+
+def load_training_checkpoint(
+    *,
+    path: Path,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    device: str,
+) -> tuple[int, list[dict], float, bool]:
+    payload = torch.load(path, map_location=device)
+    model.load_state_dict(payload["model_state_dict"])
+    optimizer.load_state_dict(payload["optimizer_state_dict"])
+    torch.set_rng_state(payload["torch_rng_state"].cpu())
+    if torch.cuda.is_available() and "cuda_rng_state_all" in payload:
+        torch.cuda.set_rng_state_all(payload["cuda_rng_state_all"])
+    return (
+        int(payload.get("completed_steps", 0)),
+        list(payload.get("rows", [])),
+        float(payload.get("elapsed_sec", 0.0)),
+        bool(payload.get("interrupted", False)),
+    )
 
 
 class SiliconNoGNNStudy(nn.Module):
@@ -824,9 +872,14 @@ def evaluate(
 
 def main() -> None:
     args = parse_args()
-    run_name = args.run_name or time.strftime("silicon_nognn_%Y%m%d_%H%M%S")
+    if args.resume_from and args.run_name is None:
+        run_name = Path(args.resume_from).resolve().parents[1].name
+    else:
+        run_name = args.run_name or time.strftime("silicon_nognn_%Y%m%d_%H%M%S")
     run_dir = ensure_dir(Path(args.output_root) / run_name)
     plots_dir = ensure_dir(run_dir / "plots")
+    checkpoints_dir = ensure_dir(run_dir / "checkpoints")
+    checkpoint_path = checkpoints_dir / "last.pt"
     configure_matplotlib(Path("studies/e3mlp_investigation/cache/mplconfig"))
 
     cfg = StudyConfig(
@@ -932,85 +985,123 @@ def main() -> None:
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     rows: list[dict] = []
+    elapsed_before = 0.0
+    start_step = 0
+    if args.resume_from:
+        resume_path = Path(args.resume_from)
+        start_step, rows, elapsed_before, was_interrupted = load_training_checkpoint(
+            path=resume_path,
+            model=model,
+            optimizer=optimizer,
+            device=cfg.device,
+        )
+        print(
+            f"[silicon] resumed from {resume_path} at step={start_step} "
+            f"elapsed_before={elapsed_before:.1f}s interrupted={was_interrupted}",
+            flush=True,
+        )
     t0 = time.perf_counter()
     step_iter = tqdm(
-        range(cfg.num_steps),
+        range(start_step, cfg.num_steps),
         desc=f"silicon {cfg.target} {cfg.aggregation}",
         dynamic_ncols=True,
     )
-    for step in step_iter:
-        print(f"[silicon] step={step + 1}/{cfg.num_steps} start", flush=True)
-        optimizer.zero_grad(set_to_none=True)
-        pred_vec, train_loss_value = training_loss_step(
-            model,
-            train_edge_features,
-            train_edge_index,
-            train_neighborhoods,
-            train_target_vec,
-            loss_kind=cfg.loss_kind,
-            edge_batch_size=cfg.edge_batch_size,
-        )
-        optimizer.step()
-
-        with torch.no_grad():
-            eval_pred_vec = batched_forward(
+    interrupted = False
+    try:
+        for step in step_iter:
+            print(f"[silicon] step={step + 1}/{cfg.num_steps} start", flush=True)
+            optimizer.zero_grad(set_to_none=True)
+            pred_vec, train_loss_value = training_loss_step(
                 model,
-                eval_edge_features,
-                eval_edge_index,
-                eval_neighborhoods,
+                train_edge_features,
+                train_edge_index,
+                train_neighborhoods,
+                train_target_vec,
+                loss_kind=cfg.loss_kind,
                 edge_batch_size=cfg.edge_batch_size,
             )
-            eval_loss = loss_summary(cfg.loss_kind, eval_pred_vec, eval_target_vec)
-            eval_rel = relative_vector_error(eval_pred_vec, eval_target_vec)
-        rows.append(
-            {
-                "step": step,
-                "target": cfg.target,
-                "aggregation": cfg.aggregation,
-                "architecture": cfg.architecture,
-                "variant": cfg.variant,
-                "depth": cfg.depth,
-                "loss_kind": cfg.loss_kind,
-                "train_loss": float(train_loss_value),
-                "eval_loss": float(eval_loss.item()),
-                "eval_rel": float(eval_rel.item()),
-            }
-        )
-        step_iter.set_postfix(
-            train=f"{train_loss_value:.3e}",
-            eval=f"{eval_loss.item():.3e}",
-            rel=f"{eval_rel.item():.3e}",
-        )
-        if (
-            step == 0
-            or (step + 1) == cfg.num_steps
-            or (step + 1) % max(1, cfg.num_steps // 4) == 0
-        ):
-            print(
-                f"[silicon] progress step={step + 1}/{cfg.num_steps} "
-                f"train={train_loss_value:.4e} eval={eval_loss.item():.4e} rel={eval_rel.item():.4e}",
-                flush=True,
-            )
+            optimizer.step()
 
-    elapsed = time.perf_counter() - t0
+            with torch.no_grad():
+                eval_pred_vec = batched_forward(
+                    model,
+                    eval_edge_features,
+                    eval_edge_index,
+                    eval_neighborhoods,
+                    edge_batch_size=cfg.edge_batch_size,
+                )
+                eval_loss = loss_summary(cfg.loss_kind, eval_pred_vec, eval_target_vec)
+                eval_rel = relative_vector_error(eval_pred_vec, eval_target_vec)
+            rows.append(
+                {
+                    "step": step,
+                    "target": cfg.target,
+                    "aggregation": cfg.aggregation,
+                    "architecture": cfg.architecture,
+                    "variant": cfg.variant,
+                    "depth": cfg.depth,
+                    "loss_kind": cfg.loss_kind,
+                    "train_loss": float(train_loss_value),
+                    "eval_loss": float(eval_loss.item()),
+                    "eval_rel": float(eval_rel.item()),
+                }
+            )
+            step_iter.set_postfix(
+                train=f"{train_loss_value:.3e}",
+                eval=f"{eval_loss.item():.3e}",
+                rel=f"{eval_rel.item():.3e}",
+            )
+            if (
+                step == start_step
+                or (step + 1) == cfg.num_steps
+                or (step + 1) % max(1, cfg.num_steps // 4) == 0
+            ):
+                print(
+                    f"[silicon] progress step={step + 1}/{cfg.num_steps} "
+                    f"train={train_loss_value:.4e} eval={eval_loss.item():.4e} rel={eval_rel.item():.4e}",
+                    flush=True,
+                )
+    except KeyboardInterrupt:
+        interrupted = True
+        print("[silicon] KeyboardInterrupt received; saving checkpoint", flush=True)
+
+    elapsed = elapsed_before + (time.perf_counter() - t0)
+    completed_steps = 0 if not rows else int(max(row["step"] for row in rows) + 1)
+    save_training_checkpoint(
+        path=checkpoint_path,
+        model=model,
+        optimizer=optimizer,
+        cfg=cfg,
+        completed_steps=completed_steps,
+        rows=rows,
+        elapsed_sec=elapsed,
+        interrupted=interrupted,
+    )
+    print(
+        f"[silicon] checkpoint saved to {checkpoint_path} at completed_steps={completed_steps}",
+        flush=True,
+    )
     df = pd.DataFrame(rows)
     save_df(run_dir / "metrics.csv", df)
     plot_paths = []
-    fig, ax = plt.subplots(figsize=(8, 5))
-    sns.lineplot(data=df, x="step", y="train_loss", ax=ax, label="train")
-    sns.lineplot(data=df, x="step", y="eval_loss", ax=ax, label="eval")
-    ax.set_yscale("log")
-    ax.set_title("No-GNN silicon loss curves")
-    path = plots_dir / "loss_curves.png"
-    save_plot(fig, path)
-    plot_paths.append(path)
-    fig, ax = plt.subplots(figsize=(8, 5))
-    sns.lineplot(data=df, x="step", y="eval_rel", ax=ax, label="eval relative error")
-    ax.set_yscale("log")
-    ax.set_title("No-GNN silicon relative error curve")
-    path = plots_dir / "relative_error_curve.png"
-    save_plot(fig, path)
-    plot_paths.append(path)
+    if not df.empty:
+        fig, ax = plt.subplots(figsize=(8, 5))
+        sns.lineplot(data=df, x="step", y="train_loss", ax=ax, label="train")
+        sns.lineplot(data=df, x="step", y="eval_loss", ax=ax, label="eval")
+        ax.set_yscale("log")
+        ax.set_title("No-GNN silicon loss curves")
+        path = plots_dir / "loss_curves.png"
+        save_plot(fig, path)
+        plot_paths.append(path)
+        fig, ax = plt.subplots(figsize=(8, 5))
+        sns.lineplot(
+            data=df, x="step", y="eval_rel", ax=ax, label="eval relative error"
+        )
+        ax.set_yscale("log")
+        ax.set_title("No-GNN silicon relative error curve")
+        path = plots_dir / "relative_error_curve.png"
+        save_plot(fig, path)
+        plot_paths.append(path)
 
     with torch.no_grad():
         final_eval = evaluate(
@@ -1042,9 +1133,17 @@ def main() -> None:
                 "loss_kind": cfg.loss_kind,
                 "train_snapshots": ",".join(cfg.train_snapshots),
                 "eval_snapshots": ",".join(cfg.eval_snapshots),
-                "final_train_loss": float(df.iloc[-1]["train_loss"]),
-                "final_eval_loss": float(df.iloc[-1]["eval_loss"]),
-                "final_eval_rel": float(df.iloc[-1]["eval_rel"]),
+                "completed_steps": completed_steps,
+                "interrupted": interrupted,
+                "final_train_loss": (
+                    float(df.iloc[-1]["train_loss"]) if not df.empty else float("nan")
+                ),
+                "final_eval_loss": (
+                    float(df.iloc[-1]["eval_loss"]) if not df.empty else float("nan")
+                ),
+                "final_eval_rel": (
+                    float(df.iloc[-1]["eval_rel"]) if not df.empty else float("nan")
+                ),
                 "final_eval_block_mae": final_eval["block_mae"],
                 "final_eval_block_mse": final_eval["block_mse"],
                 "final_eval_block_rel": final_eval["block_rel"],
