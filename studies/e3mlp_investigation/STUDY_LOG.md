@@ -270,6 +270,120 @@ Status:
 - no experimental claims changed
 
 
+## 2026-04-09 18:05 - smoke_silicon_nognn_01
+
+Executed the first no-GNN silicon smoke test on the cached pair data.
+
+- run dir: [smoke_silicon_nognn_01](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01)
+- train snapshot: `2700K`
+- eval snapshot: `900K`
+- target: `hamiltonian`
+- aggregation: `mean`
+- architecture: `single`
+- variant: `gatemagnitudes`
+- depth: `2`
+
+Provisional metrics:
+
+- final eval loss: `8.2040e-03`
+- final eval block MAE: `3.5544e-02`
+- final energy MAE: `1.0792e+02`
+
+Artifacts:
+
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/loss_curves.png)
+- [per-irrep MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/per_irrep_mae.png)
+- [distance MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/distance_mae_hexbin.png)
+- [sample blocks](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/sample_blocks.png)
+
+Status:
+
+- provisional local result; larger silicon runs may override it
+
+
+## 2026-04-09 - silicon_no_gnn_launchers_prepared
+
+Prepared the first silicon no-GNN bash launchers.
+
+Scripts:
+
+- [batch2_run01_silicon_hamiltonian_mean.sh](/home/bartek/casus/mandala/studies/e3mlp_investigation/scripts/batch2_run01_silicon_hamiltonian_mean.sh)
+- [batch2_run02_silicon_hamiltonian_attention.sh](/home/bartek/casus/mandala/studies/e3mlp_investigation/scripts/batch2_run02_silicon_hamiltonian_attention.sh)
+- [batch2_run03_silicon_density_mean.sh](/home/bartek/casus/mandala/studies/e3mlp_investigation/scripts/batch2_run03_silicon_density_mean.sh)
+- [run_cluster_batch2_all.sh](/home/bartek/casus/mandala/studies/e3mlp_investigation/scripts/run_cluster_batch2_all.sh)
+
+Cross-run summary:
+
+- [summary_overview/](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/summary_overview)
+- includes combined stability and silicon overview plots
+
+
+## 2026-04-09 18:20 - smoke_silicon_nognn_attention_01
+
+Executed a second no-GNN silicon smoke test with attention-style aggregation.
+
+- run dir: [smoke_silicon_nognn_attention_01](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01)
+- train snapshot: `2700K`
+- eval snapshot: `900K`
+- target: `hamiltonian`
+- aggregation: `attention`
+- architecture: `message_then_predict`
+- variant: `gatemagnitudes`
+- depth: `4`
+
+Provisional metrics:
+
+- final eval loss: `2.2046e-02`
+- final eval block MAE: `9.4178e-02`
+- final energy MAE: `1.0158e+02`
+- elapsed: `19.4s`
+
+Artifacts:
+
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/loss_curves.png)
+- [per-irrep MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/per_irrep_mae.png)
+- [distance MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/distance_mae_hexbin.png)
+- [sample blocks](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/sample_blocks.png)
+
+Status:
+
+- provisional local result; larger silicon runs may override it
+
+
+## 2026-04-09 18:28 - smoke_silicon_nognn_density_01
+
+Executed the density branch of the no-GNN silicon smoke test.
+
+- run dir: [smoke_silicon_nognn_density_01](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01)
+- train snapshot: `2700K`
+- eval snapshot: `900K`
+- target: `density`
+- aggregation: `mean`
+- architecture: `single`
+- variant: `normact`
+- depth: `2`
+
+Provisional metrics:
+
+- final eval loss: `1.2029e-02`
+- final eval block MAE: `5.0997e-02`
+- final energy MAE: `1.0491e+02`
+
+Artifacts:
+
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/loss_curves.png)
+- [per-irrep MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/per_irrep_mae.png)
+- [distance MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/distance_mae_hexbin.png)
+- [sample blocks](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/sample_blocks.png)
+
+Status:
+
+- provisional local result; larger silicon runs may override it
+
+
 ## 2026-04-09 17:05 - quick_synth_mixed_b
 
 Executed synthetic teacher study.
@@ -292,6 +406,87 @@ Artifacts:
 - [validation loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/quick_synth_mixed_b/plots/val_loss_curves.png)
 - [sample target vs prediction](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/quick_synth_mixed_b/plots/sample_target_vs_prediction.png)
 - [per-irrep validation MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/quick_synth_mixed_b/plots/per_irrep_val_mae.png)
+
+Status:
+- provisional local result; larger runs may override it
+
+
+## 2026-04-09 17:13 - smoke_silicon_nognn_01
+
+Executed silicon no-GNN study.
+
+- run dir: [smoke_silicon_nognn_01](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01)
+- train snapshots: `['2700K']`
+- eval snapshots: `['900K']`
+- target: `hamiltonian`
+- aggregation: `mean`
+- architecture: `single`
+- variant: `gatemagnitudes` depth=2
+- hidden irreps preset: `preliminary`
+
+Top provisional rows:
+- final eval loss=8.2040e-03 block_mae=3.5544e-02 energy_mae=1.0792e+02
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/loss_curves.png)
+- [per-irrep MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/per_irrep_mae.png)
+- [distance MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/distance_mae_hexbin.png)
+- [sample blocks](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_01/plots/sample_blocks.png)
+
+Status:
+- provisional local result; larger runs may override it
+
+
+## 2026-04-09 17:15 - smoke_silicon_nognn_attention_01
+
+Executed silicon no-GNN study.
+
+- run dir: [smoke_silicon_nognn_attention_01](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01)
+- train snapshots: `['2700K']`
+- eval snapshots: `['900K']`
+- target: `hamiltonian`
+- aggregation: `attention`
+- architecture: `message_then_predict`
+- variant: `gatemagnitudes` depth=4
+- hidden irreps preset: `preliminary`
+
+Top provisional rows:
+- final eval loss=2.2046e-02 block_mae=9.4178e-02 energy_mae=1.0158e+02
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/loss_curves.png)
+- [per-irrep MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/per_irrep_mae.png)
+- [distance MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/distance_mae_hexbin.png)
+- [sample blocks](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_attention_01/plots/sample_blocks.png)
+
+Status:
+- provisional local result; larger runs may override it
+
+
+## 2026-04-09 17:16 - smoke_silicon_nognn_density_01
+
+Executed silicon no-GNN study.
+
+- run dir: [smoke_silicon_nognn_density_01](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01)
+- train snapshots: `['2700K']`
+- eval snapshots: `['900K']`
+- target: `density`
+- aggregation: `mean`
+- architecture: `single`
+- variant: `normact` depth=2
+- hidden irreps preset: `preliminary`
+
+Top provisional rows:
+- final eval loss=1.2025e-02 block_mae=5.0997e-02 energy_mae=7.5720e+01
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/loss_curves.png)
+- [per-irrep MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/per_irrep_mae.png)
+- [distance MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/distance_mae_hexbin.png)
+- [sample blocks](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/smoke_silicon_nognn_density_01/plots/sample_blocks.png)
 
 Status:
 - provisional local result; larger runs may override it
