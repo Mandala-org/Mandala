@@ -1,0 +1,104 @@
+{
+  "run_name": "batch3_synth_quadratic_prenorm_huber_01",
+  "teacher_kind": "quadratic",
+  "hidden_irreps": "16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e",
+  "top_rows": [
+    {
+      "variant": "film",
+      "depth": 6,
+      "loss_kind": "huber",
+      "val_loss": 0.007247915646682183,
+      "val_mae": 0.08177719513575236,
+      "val_mse": 0.0144958704089125,
+      "val_rel": 2.2567478020985923
+    },
+    {
+      "variant": "normact",
+      "depth": 6,
+      "loss_kind": "huber",
+      "val_loss": 0.007484118143717448,
+      "val_mae": 0.08464519182840984,
+      "val_mse": 0.014968236287434896,
+      "val_rel": 2.2867730458577475
+    },
+    {
+      "variant": "gatemagnitudes",
+      "depth": 6,
+      "loss_kind": "huber",
+      "val_loss": 0.007484498433768749,
+      "val_mae": 0.08464962989091873,
+      "val_mse": 0.014968996867537498,
+      "val_rel": 2.286813735961914
+    },
+    {
+      "variant": "gate",
+      "depth": 6,
+      "loss_kind": "huber",
+      "val_loss": 0.007844481772432724,
+      "val_mae": 0.08638028303782146,
+      "val_mse": 0.015688964165747166,
+      "val_rel": 2.3497862815856934
+    },
+    {
+      "variant": "gatemagnitudes",
+      "depth": 4,
+      "loss_kind": "huber",
+      "val_loss": 0.007938418071717024,
+      "val_mae": 0.08925589174032211,
+      "val_mse": 0.015876893885433674,
+      "val_rel": 2.3638253211975098
+    },
+    {
+      "variant": "normact",
+      "depth": 4,
+      "loss_kind": "huber",
+      "val_loss": 0.007939150712142387,
+      "val_mae": 0.08925830821196239,
+      "val_mse": 0.0158783591662844,
+      "val_rel": 2.3638994693756104
+    },
+    {
+      "variant": "gate",
+      "depth": 4,
+      "loss_kind": "huber",
+      "val_loss": 0.008093079241613546,
+      "val_mae": 0.08937318871418636,
+      "val_mse": 0.016186158483227093,
+      "val_rel": 2.3873343467712402
+    },
+    {
+      "variant": "film",
+      "depth": 4,
+      "loss_kind": "huber",
+      "val_loss": 0.008303822639087835,
+      "val_mae": 0.08935842663049698,
+      "val_mse": 0.016607871279120445,
+      "val_rel": 2.4121042092641196
+    },
+    {
+      "variant": "gatemagnitudes",
+      "depth": 2,
+      "loss_kind": "huber",
+      "val_loss": 0.008872545324265957,
+      "val_mae": 0.09651646514733632,
+      "val_mse": 0.01774510306616624,
+      "val_rel": 2.501836617787679
+    },
+    {
+      "variant": "normact",
+      "depth": 2,
+      "loss_kind": "huber",
+      "val_loss": 0.00887263473123312,
+      "val_mae": 0.09651658435662587,
+      "val_mse": 0.017745283121864002,
+      "val_rel": 2.501851717631022
+    }
+  ],
+  "plots": [
+    "studies/e3mlp_investigation/artifacts/batch3_synth_quadratic_prenorm_huber_01/plots/val_loss_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch3_synth_quadratic_prenorm_huber_01/plots/final_val_mae.png",
+    "studies/e3mlp_investigation/artifacts/batch3_synth_quadratic_prenorm_huber_01/plots/sample_target_vs_prediction.png",
+    "studies/e3mlp_investigation/artifacts/batch3_synth_quadratic_prenorm_huber_01/plots/per_irrep_val_mae.png",
+    "studies/e3mlp_investigation/artifacts/batch3_synth_quadratic_prenorm_huber_01/plots/target_vs_prediction_norm.png"
+  ]
+}
