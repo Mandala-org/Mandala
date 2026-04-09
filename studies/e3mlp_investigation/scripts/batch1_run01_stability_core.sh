@@ -8,7 +8,8 @@ RUN_NAME="${RUN_NAME:-batch1_stability_core_$(date +%Y%m%d_%H%M%S)}"
 DEVICE="${DEVICE:-cuda}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-studies/e3mlp_investigation/cache/mplconfig}"
 
-python studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
+echo "[batch1_run01] starting stability core sweep: ${RUN_NAME}"
+python -u studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
   --variants "normact,gate,gatemagnitudes,resnormact,resgatemagnitudes" \
   --depths "6,10,12" \
   --output-scales "0.5,1.0,1.5" \
@@ -22,3 +23,4 @@ python studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
   --device "${DEVICE}" \
   --run-name "${RUN_NAME}" \
   --append-log
+echo "[batch1_run01] finished: ${RUN_NAME}"

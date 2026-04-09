@@ -13,6 +13,7 @@ import seaborn as sns
 import torch
 import torch.nn.functional as F
 from e3nn.o3 import Irreps
+from tqdm.auto import tqdm
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -114,6 +115,12 @@ def train_once(
     device: str,
     seed: int,
 ):
+    print(
+        f"[stability] seed={seed} variant={variant} depth={depth} "
+        f"output_scale={output_scale} weight_init_scale={weight_init_scale} "
+        f"residual_scale={residual_scale} device={device}",
+        flush=True,
+    )
     torch.manual_seed(seed)
     model = build_variant(
         variant,
@@ -133,7 +140,13 @@ def train_once(
     step_rows: list[dict] = []
     per_irrep_rows: list[dict] = []
     t0 = time.perf_counter()
-    for step in range(num_steps):
+    step_iter = tqdm(
+        range(num_steps),
+        desc=f"stability {variant} d={depth} os={output_scale}",
+        leave=False,
+        dynamic_ncols=True,
+    )
+    for step in step_iter:
         x = irreps.randn(batch_size, -1).to(device)
         y_target = x @ target_linear.T
         optimizer.zero_grad(set_to_none=True)
@@ -184,6 +197,17 @@ def train_once(
                 "has_nan": nan_flag,
             }
         )
+        if (
+            step == 0
+            or (step + 1) == num_steps
+            or (step + 1) % max(1, num_steps // 4) == 0
+        ):
+            print(
+                f"[stability] progress seed={seed} variant={variant} depth={depth} "
+                f"step={step + 1}/{num_steps} loss={loss.item():.4e} "
+                f"ratio={output_norm / max(input_norm, 1e-12):.3f}",
+                flush=True,
+            )
 
         for key, values in hidden_stats.items():
             per_irrep_rows.append(
@@ -201,6 +225,10 @@ def train_once(
             )
 
         if nan_flag:
+            print(
+                f"[stability] early stop on NaN at step={step} variant={variant} depth={depth}",
+                flush=True,
+            )
             break
 
     elapsed = time.perf_counter() - t0
@@ -318,18 +346,51 @@ def main() -> None:
         smoke_test=args.smoke_test,
     )
     dump_yaml(run_dir / "config.yaml", cfg.__dict__)
+    print(f"[stability] run_dir={run_dir}", flush=True)
 
     irreps = get_hidden_irreps(cfg.hidden_irreps_preset)
+    print(f"[stability] hidden_irreps={irreps}", flush=True)
+    print(
+        f"[stability] variants={cfg.variants} depths={cfg.depths} output_scales={cfg.output_scales} "
+        f"weight_init_scales={cfg.weight_init_scales} residual_scales={cfg.residual_scales}",
+        flush=True,
+    )
     all_steps: list[dict] = []
     all_irreps: list[dict] = []
     timing_rows: list[dict] = []
 
     for variant in cfg.variants:
-        for depth in cfg.depths:
-            for output_scale in cfg.output_scales:
-                for weight_init_scale in cfg.weight_init_scales:
-                    for residual_scale in cfg.residual_scales:
-                        for seed in range(cfg.num_seeds):
+        print(f"[stability] variant sweep start: {variant}", flush=True)
+        for depth in tqdm(
+            cfg.depths,
+            desc=f"[stability] depths {variant}",
+            leave=False,
+            dynamic_ncols=True,
+        ):
+            for output_scale in tqdm(
+                cfg.output_scales,
+                desc=f"[stability] output scales d={depth}",
+                leave=False,
+                dynamic_ncols=True,
+            ):
+                for weight_init_scale in tqdm(
+                    cfg.weight_init_scales,
+                    desc=f"[stability] init scales d={depth} os={output_scale}",
+                    leave=False,
+                    dynamic_ncols=True,
+                ):
+                    for residual_scale in tqdm(
+                        cfg.residual_scales,
+                        desc=f"[stability] residual scales d={depth} os={output_scale}",
+                        leave=False,
+                        dynamic_ncols=True,
+                    ):
+                        for seed in tqdm(
+                            range(cfg.num_seeds),
+                            desc=f"[stability] seeds d={depth} os={output_scale}",
+                            leave=False,
+                            dynamic_ncols=True,
+                        ):
                             step_rows, per_irrep_rows, elapsed = train_once(
                                 variant=variant,
                                 depth=depth,
@@ -356,6 +417,7 @@ def main() -> None:
                                     "elapsed_sec": elapsed,
                                 }
                             )
+        print(f"[stability] variant sweep done: {variant}", flush=True)
 
     df_steps = pd.DataFrame(all_steps)
     df_irreps = pd.DataFrame(all_irreps)
@@ -404,6 +466,7 @@ def main() -> None:
     else:
         summary = pd.DataFrame()
     save_df(run_dir / "summary.csv", summary)
+    print(f"[stability] wrote summary and plots to {run_dir}", flush=True)
     dump_json(
         run_dir / "summary.json",
         {
