@@ -1,0 +1,125 @@
+{
+  "run_name": "batch1_stability_advanced_20260409_170318",
+  "hidden_irreps": "16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e",
+  "num_configs": 648,
+  "plot_paths": [
+    "studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/heatmap_norm_ratio_bilinear.png",
+    "studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/heatmap_norm_ratio_film.png",
+    "studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/loss_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/gradient_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/per_irrep_activation_bilinear.png",
+    "studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/per_irrep_activation_film.png"
+  ],
+  "top_rows": [
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 1.5,
+      "weight_init_scale": 0.5,
+      "residual_scale": 0.05,
+      "final_loss": 0.9917823473612467,
+      "final_ratio": 0.024744450322141256,
+      "final_grad_norm": 0.010927978644211722,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 1.5,
+      "weight_init_scale": 0.5,
+      "residual_scale": 0.1,
+      "final_loss": 0.9917823473612467,
+      "final_ratio": 0.024744450322141256,
+      "final_grad_norm": 0.010927978644211722,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 1.5,
+      "weight_init_scale": 0.5,
+      "residual_scale": 0.25,
+      "final_loss": 0.9917823473612467,
+      "final_ratio": 0.024744450322141256,
+      "final_grad_norm": 0.010927978644211722,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 1.0,
+      "weight_init_scale": 0.5,
+      "residual_scale": 0.05,
+      "final_loss": 0.9922306934992472,
+      "final_ratio": 0.005304442631302909,
+      "final_grad_norm": 0.0037291461438875226,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 1.0,
+      "weight_init_scale": 0.5,
+      "residual_scale": 0.1,
+      "final_loss": 0.9922306934992472,
+      "final_ratio": 0.005304442631302909,
+      "final_grad_norm": 0.0037291461438875226,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 1.0,
+      "weight_init_scale": 0.5,
+      "residual_scale": 0.25,
+      "final_loss": 0.9922306934992472,
+      "final_ratio": 0.005304442631302909,
+      "final_grad_norm": 0.0037291461438875226,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 0.5,
+      "weight_init_scale": 1.0,
+      "residual_scale": 0.05,
+      "final_loss": 0.9922508597373962,
+      "final_ratio": 0.005257863372997243,
+      "final_grad_norm": 0.0037108650130584665,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 0.5,
+      "weight_init_scale": 1.0,
+      "residual_scale": 0.25,
+      "final_loss": 0.9922508597373962,
+      "final_ratio": 0.005257863372997243,
+      "final_grad_norm": 0.0037108650130584665,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 0.5,
+      "weight_init_scale": 1.0,
+      "residual_scale": 0.1,
+      "final_loss": 0.9922508597373962,
+      "final_ratio": 0.005257863372997243,
+      "final_grad_norm": 0.003710865013058467,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 0.35,
+      "weight_init_scale": 0.25,
+      "residual_scale": 0.05,
+      "final_loss": 0.9922827283541361,
+      "final_ratio": 0.001549381507965598,
+      "final_grad_norm": 0.0005766562945871194,
+      "has_nan": false
+    }
+  ]
+}
