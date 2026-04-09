@@ -33,9 +33,10 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _load_summary_rows(root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _load_summary_rows(root: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     synth_rows = []
     stab_rows = []
+    silicon_rows = []
     for path in root.iterdir():
         if not path.is_dir():
             continue
@@ -49,9 +50,14 @@ def _load_summary_rows(root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
             synth_rows.append(df)
         elif "output_scale" in df.columns:
             stab_rows.append(df)
+        elif "aggregation" in df.columns and "architecture" in df.columns:
+            silicon_rows.append(df)
     synth = pd.concat(synth_rows, ignore_index=True) if synth_rows else pd.DataFrame()
     stab = pd.concat(stab_rows, ignore_index=True) if stab_rows else pd.DataFrame()
-    return synth, stab
+    silicon = (
+        pd.concat(silicon_rows, ignore_index=True) if silicon_rows else pd.DataFrame()
+    )
+    return synth, stab, silicon
 
 
 def _plot_synth_summary(df: pd.DataFrame, out_dir: Path) -> list[Path]:
@@ -105,21 +111,76 @@ def _plot_stability_summary(df: pd.DataFrame, out_dir: Path) -> list[Path]:
     return paths
 
 
+def _plot_silicon_summary(df: pd.DataFrame, out_dir: Path) -> list[Path]:
+    paths: list[Path] = []
+    if df.empty:
+        return paths
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.barplot(
+        data=df,
+        x="aggregation",
+        y="final_eval_block_mae",
+        hue="variant",
+        ax=ax,
+        errorbar=None,
+    )
+    ax.set_yscale("log")
+    ax.set_title("Silicon no-GNN runs: final block MAE")
+    ax.tick_params(axis="x", rotation=45)
+    path = out_dir / "silicon_final_block_mae.png"
+    save_plot(fig, path)
+    paths.append(path)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.barplot(
+        data=df,
+        x="aggregation",
+        y="final_energy_mae",
+        hue="target",
+        ax=ax,
+        errorbar=None,
+    )
+    ax.set_yscale("log")
+    ax.set_title("Silicon no-GNN runs: final energy MAE")
+    ax.tick_params(axis="x", rotation=45)
+    path = out_dir / "silicon_final_energy_mae.png"
+    save_plot(fig, path)
+    paths.append(path)
+    return paths
+
+
 def main() -> None:
     args = parse_args()
     root = Path(args.artifacts_root)
     out_dir = ensure_dir(Path(args.output_dir))
-    synth, stab = _load_summary_rows(root)
-    print(f"[summary] loaded synth_rows={len(synth)} stab_rows={len(stab)}", flush=True)
+    synth, stab, silicon = _load_summary_rows(root)
+    print(
+        f"[summary] loaded synth_rows={len(synth)} stab_rows={len(stab)} silicon_rows={len(silicon)}",
+        flush=True,
+    )
 
     paths = []
     paths.extend(_plot_synth_summary(synth, out_dir))
     paths.extend(_plot_stability_summary(stab, out_dir))
+    paths.extend(_plot_silicon_summary(silicon, out_dir))
+
+    combined = []
+    if not synth.empty:
+        combined.append(synth.assign(kind="synthetic"))
+    if not stab.empty:
+        combined.append(stab.assign(kind="stability"))
+    if not silicon.empty:
+        combined.append(silicon.assign(kind="silicon"))
+    if combined:
+        pd.concat(combined, ignore_index=True).to_csv(
+            out_dir / "combined_summary.csv", index=False
+        )
 
     pd.DataFrame(
         [
             {"kind": "synthetic", "rows": len(synth)},
             {"kind": "stability", "rows": len(stab)},
+            {"kind": "silicon", "rows": len(silicon)},
         ]
     ).to_csv(out_dir / "summary_counts.csv", index=False)
     print(f"[summary] wrote {len(paths)} plot(s) to {out_dir}", flush=True)

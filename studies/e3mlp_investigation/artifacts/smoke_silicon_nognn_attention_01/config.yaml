@@ -1,0 +1,22 @@
+train_snapshots:
+- 2700K
+eval_snapshots:
+- 900K
+target: hamiltonian
+aggregation: attention
+architecture: message_then_predict
+variant: gatemagnitudes
+depth: 4
+hidden_irreps_preset: preliminary
+num_steps: 2
+lr: 0.0003
+loss_kind: mse
+topk: 4
+message_variant: gatemagnitudes
+message_depth: 2
+predictor_variant: gatemagnitudes
+predictor_depth: 2
+max_train_edges: 128
+max_eval_edges: 128
+device: cpu
+smoke_test: false
