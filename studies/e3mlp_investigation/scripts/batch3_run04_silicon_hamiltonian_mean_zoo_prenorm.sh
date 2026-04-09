@@ -13,6 +13,10 @@ echo "[batch3_run04] starting silicon hamiltonian prenorm zoo sweep: ${RUN_NAME}
 IFS=',' read -r -a variant_list <<< "${VARIANTS}"
 for variant in "${variant_list[@]}"; do
   subrun="${RUN_NAME}_${variant}"
+  edge_batch_size=1024
+  if [[ "${variant}" == "bilinear" ]]; then
+    edge_batch_size=128
+  fi
   echo "[batch3_run04] variant=${variant} subrun=${subrun}"
   python -u studies/e3mlp_investigation/scripts/run_silicon_nognn_study.py \
     --train-snapshots "2700K" \
@@ -32,7 +36,7 @@ for variant in "${variant_list[@]}"; do
     --weight-init-scale 0.5 \
     --residual-scale 0.05 \
     --pre-norm \
-    --edge-batch-size 1024 \
+    --edge-batch-size "${edge_batch_size}" \
     --run-name "${subrun}"
 done
 echo "[batch3_run04] finished: ${RUN_NAME}"

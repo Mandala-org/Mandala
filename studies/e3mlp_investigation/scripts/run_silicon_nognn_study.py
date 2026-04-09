@@ -567,6 +567,78 @@ def batched_forward(
     return torch.cat(outputs, dim=0)
 
 
+def prepare_chunk_cache(
+    model: SiliconNoGNNStudy,
+    edge_features: torch.Tensor,
+    neighborhoods: list[torch.Tensor],
+) -> dict[str, torch.Tensor]:
+    if model.architecture == "single":
+        return {
+            "mode": "single",
+            "edge_features": edge_features,
+            "node_ctx": model.raw_aggregator(edge_features, neighborhoods),
+        }
+    encoded = model.message_encoder(edge_features)
+    return {
+        "mode": "message_then_predict",
+        "encoded": encoded,
+        "node_ctx": model.message_aggregator(encoded, neighborhoods),
+    }
+
+
+def forward_chunk(
+    model: SiliconNoGNNStudy,
+    cache: dict[str, torch.Tensor],
+    edge_index: torch.Tensor,
+    start: int,
+    end: int,
+) -> torch.Tensor:
+    batch_edge_index = edge_index[:, start:end]
+    if cache["mode"] == "single":
+        batch_features = cache["edge_features"][start:end]
+        model_in = assemble_edge_inputs(
+            batch_features, cache["node_ctx"], batch_edge_index, model.aggregation
+        )
+        return model.predictor(model_in)
+    batch_encoded = cache["encoded"][start:end]
+    model_in = assemble_edge_inputs(
+        batch_encoded, cache["node_ctx"], batch_edge_index, model.aggregation
+    )
+    return model.predictor(model_in)
+
+
+def training_loss_step(
+    model: SiliconNoGNNStudy,
+    edge_features: torch.Tensor,
+    edge_index: torch.Tensor,
+    neighborhoods: list[torch.Tensor],
+    target_vec: torch.Tensor,
+    *,
+    loss_kind: str,
+    edge_batch_size: int | None,
+) -> tuple[torch.Tensor, float]:
+    num_edges = edge_features.shape[0]
+    if edge_batch_size is None or edge_batch_size >= num_edges:
+        pred_vec = model(edge_features, edge_index, neighborhoods)
+        loss = loss_summary(loss_kind, pred_vec, target_vec)
+        loss.backward()
+        return pred_vec.detach(), float(loss.item())
+
+    cache = prepare_chunk_cache(model, edge_features, neighborhoods)
+    pred_chunks: list[torch.Tensor] = []
+    total_loss = 0.0
+    for start in range(0, num_edges, edge_batch_size):
+        end = min(start + edge_batch_size, num_edges)
+        pred_chunk = forward_chunk(model, cache, edge_index, start, end)
+        target_chunk = target_vec[start:end]
+        chunk_loss = loss_summary(loss_kind, pred_chunk, target_chunk)
+        scaled_loss = chunk_loss * ((end - start) / num_edges)
+        scaled_loss.backward()
+        total_loss += float(scaled_loss.item())
+        pred_chunks.append(pred_chunk.detach())
+    return torch.cat(pred_chunks, dim=0), total_loss
+
+
 def load_snapshot(
     snapshot_name: str,
 ) -> tuple[dict[str, torch.Tensor], dict[str, BlockMatrix], object]:
@@ -869,15 +941,15 @@ def main() -> None:
     for step in step_iter:
         print(f"[silicon] step={step + 1}/{cfg.num_steps} start", flush=True)
         optimizer.zero_grad(set_to_none=True)
-        pred_vec = batched_forward(
+        pred_vec, train_loss_value = training_loss_step(
             model,
             train_edge_features,
             train_edge_index,
             train_neighborhoods,
+            train_target_vec,
+            loss_kind=cfg.loss_kind,
             edge_batch_size=cfg.edge_batch_size,
         )
-        loss = loss_summary(cfg.loss_kind, pred_vec, train_target_vec)
-        loss.backward()
         optimizer.step()
 
         with torch.no_grad():
@@ -899,13 +971,13 @@ def main() -> None:
                 "variant": cfg.variant,
                 "depth": cfg.depth,
                 "loss_kind": cfg.loss_kind,
-                "train_loss": float(loss.item()),
+                "train_loss": float(train_loss_value),
                 "eval_loss": float(eval_loss.item()),
                 "eval_rel": float(eval_rel.item()),
             }
         )
         step_iter.set_postfix(
-            train=f"{loss.item():.3e}",
+            train=f"{train_loss_value:.3e}",
             eval=f"{eval_loss.item():.3e}",
             rel=f"{eval_rel.item():.3e}",
         )
@@ -916,7 +988,7 @@ def main() -> None:
         ):
             print(
                 f"[silicon] progress step={step + 1}/{cfg.num_steps} "
-                f"train={loss.item():.4e} eval={eval_loss.item():.4e} rel={eval_rel.item():.4e}",
+                f"train={train_loss_value:.4e} eval={eval_loss.item():.4e} rel={eval_rel.item():.4e}",
                 flush=True,
             )
 
