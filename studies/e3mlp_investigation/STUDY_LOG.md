@@ -225,3 +225,19 @@ Use:
 
 - intended for interactive GPU jobs, not Slurm
 - results from this batch should override current smoke-study impressions where they disagree
+
+
+## 2026-04-09 17:40 - runner_hygiene_update
+
+Updated the batch-1 runners so future jobs are easier to monitor live.
+
+Changes:
+
+- all batch scripts now invoke Python with `-u`
+- synthetic and stability study runners now print run configuration, per-variant progress, and completion messages
+- added [summarize_completed_runs.py](/home/bartek/casus/mandala/studies/e3mlp_investigation/scripts/summarize_completed_runs.py) for quick cross-run summaries once results land
+
+Status:
+
+- applies to future and currently launched runs from this point onward
+- no experimental claims changed

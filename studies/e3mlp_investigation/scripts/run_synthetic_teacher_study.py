@@ -12,6 +12,7 @@ import seaborn as sns
 import torch
 import torch.nn.functional as F
 from e3nn.o3 import FullyConnectedTensorProduct, Irrep, Irreps, Linear
+from tqdm.auto import tqdm
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -159,6 +160,10 @@ def train_one(
     seed: int,
     device: str,
 ):
+    print(
+        f"[synthetic] seed={seed} variant={variant} depth={depth} loss={loss_kind} device={device}",
+        flush=True,
+    )
     train_x, train_y = make_dataset(irreps, teacher_kind, num_train, seed)
     val_x, val_y = make_dataset(irreps, teacher_kind, num_val, seed + 10_000)
     train_x = train_x.to(device)
@@ -179,7 +184,13 @@ def train_one(
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     rows: list[dict] = []
 
-    for step in range(num_steps):
+    step_iter = tqdm(
+        range(num_steps),
+        desc=f"synthetic {variant} d={depth} {loss_kind}",
+        leave=False,
+        dynamic_ncols=True,
+    )
+    for step in step_iter:
         idx = torch.randint(0, num_train, (batch_size,))
         x = train_x[idx]
         y = train_y[idx]
@@ -208,6 +219,16 @@ def train_one(
                 "val_mse": float(val_mse.item()),
             }
         )
+        if (
+            step == 0
+            or (step + 1) == num_steps
+            or (step + 1) % max(1, num_steps // 4) == 0
+        ):
+            print(
+                f"[synthetic] progress seed={seed} variant={variant} depth={depth} loss={loss_kind} "
+                f"step={step + 1}/{num_steps} train={loss.item():.4e} val={val_loss.item():.4e}",
+                flush=True,
+            )
     with torch.no_grad():
         final_pred = model(val_x)
     return rows, val_x, val_y, final_pred
@@ -318,13 +339,38 @@ def main() -> None:
     )
     irreps = get_hidden_irreps(cfg.hidden_irreps_preset)
     dump_yaml(run_dir / "config.yaml", cfg.__dict__)
+    print(f"[synthetic] run_dir={run_dir}", flush=True)
+    print(
+        f"[synthetic] teacher_kind={cfg.teacher_kind} device={cfg.device}", flush=True
+    )
+    print(f"[synthetic] hidden_irreps={irreps}", flush=True)
+    print(
+        f"[synthetic] variants={cfg.variants} depths={cfg.depths} losses={cfg.loss_kinds}",
+        flush=True,
+    )
 
     rows: list[dict] = []
     sample_payload = None
     for variant in cfg.variants:
-        for depth in cfg.depths:
-            for loss_kind in cfg.loss_kinds:
-                for seed in range(cfg.num_seeds):
+        print(f"[synthetic] variant sweep start: {variant}", flush=True)
+        for depth in tqdm(
+            cfg.depths,
+            desc=f"[synthetic] depths {variant}",
+            leave=False,
+            dynamic_ncols=True,
+        ):
+            for loss_kind in tqdm(
+                cfg.loss_kinds,
+                desc=f"[synthetic] losses d={depth}",
+                leave=False,
+                dynamic_ncols=True,
+            ):
+                for seed in tqdm(
+                    range(cfg.num_seeds),
+                    desc=f"[synthetic] seeds d={depth} {loss_kind}",
+                    leave=False,
+                    dynamic_ncols=True,
+                ):
                     run_rows, val_x, val_y, final_pred = train_one(
                         irreps=irreps,
                         variant=variant,
@@ -348,6 +394,7 @@ def main() -> None:
                             val_y[:8],
                             final_pred[:8],
                         )
+        print(f"[synthetic] variant sweep done: {variant}", flush=True)
     df = pd.DataFrame(rows)
     save_df(run_dir / "metrics.csv", df)
     plot_paths = make_plots(df, plots_dir)
@@ -388,6 +435,7 @@ def main() -> None:
         .sort_values(["val_mae", "val_mse"])
     )
     save_df(run_dir / "summary.csv", summary)
+    print(f"[synthetic] wrote summary and plots to {run_dir}", flush=True)
     dump_json(
         run_dir / "summary.json",
         {

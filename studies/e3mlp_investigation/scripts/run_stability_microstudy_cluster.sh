@@ -19,7 +19,7 @@ DEVICE="${DEVICE:-cuda}"
 
 export MPLCONFIGDIR="${MPLCONFIGDIR:-studies/e3mlp_investigation/cache/mplconfig}"
 
-python studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
+python -u studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
   --variants "${VARIANTS}" \
   --depths "${DEPTHS}" \
   --output-scales "${OUTPUT_SCALES}" \

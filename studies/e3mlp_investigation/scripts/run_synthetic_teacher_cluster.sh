@@ -20,7 +20,7 @@ DEVICE="${DEVICE:-cuda}"
 
 export MPLCONFIGDIR="${MPLCONFIGDIR:-studies/e3mlp_investigation/cache/mplconfig}"
 
-python studies/e3mlp_investigation/scripts/run_synthetic_teacher_study.py \
+python -u studies/e3mlp_investigation/scripts/run_synthetic_teacher_study.py \
   --teacher-kind "${TEACHER_KIND}" \
   --variants "${VARIANTS}" \
   --depths "${DEPTHS}" \

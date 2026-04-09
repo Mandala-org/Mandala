@@ -8,7 +8,8 @@ RUN_NAME="${RUN_NAME:-batch1_stability_advanced_$(date +%Y%m%d_%H%M%S)}"
 DEVICE="${DEVICE:-cuda}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-studies/e3mlp_investigation/cache/mplconfig}"
 
-python studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
+echo "[batch1_run02] starting stability advanced sweep: ${RUN_NAME}"
+python -u studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
   --variants "film,bilinear" \
   --depths "4,6,10" \
   --output-scales "0.35,0.5,1.0,1.5" \
@@ -22,3 +23,4 @@ python studies/e3mlp_investigation/scripts/run_stability_microstudy.py \
   --device "${DEVICE}" \
   --run-name "${RUN_NAME}" \
   --append-log
+echo "[batch1_run02] finished: ${RUN_NAME}"

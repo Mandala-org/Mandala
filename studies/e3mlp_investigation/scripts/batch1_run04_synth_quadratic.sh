@@ -8,7 +8,8 @@ RUN_NAME="${RUN_NAME:-batch1_synth_quadratic_$(date +%Y%m%d_%H%M%S)}"
 DEVICE="${DEVICE:-cuda}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-studies/e3mlp_investigation/cache/mplconfig}"
 
-python studies/e3mlp_investigation/scripts/run_synthetic_teacher_study.py \
+echo "[batch1_run04] starting synthetic quadratic sweep: ${RUN_NAME}"
+python -u studies/e3mlp_investigation/scripts/run_synthetic_teacher_study.py \
   --teacher-kind quadratic \
   --variants "normact,gatemagnitudes,resgatemagnitudes,film,bilinear" \
   --depths "2,4,6" \
@@ -23,3 +24,4 @@ python studies/e3mlp_investigation/scripts/run_synthetic_teacher_study.py \
   --device "${DEVICE}" \
   --run-name "${RUN_NAME}" \
   --append-log
+echo "[batch1_run04] finished: ${RUN_NAME}"
