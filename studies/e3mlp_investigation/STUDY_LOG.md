@@ -586,3 +586,28 @@ Artifacts:
 
 Status:
 - provisional local result; larger runs may override it
+
+
+## 2026-04-09 20:41 - batch1_stability_advanced_20260409_170318
+
+Executed stability micro-study.
+
+- run dir: [batch1_stability_advanced_20260409_170318](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318)
+- hidden irreps preset: `preliminary`
+- hidden irreps: `16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e`
+- smoke test: `False`
+
+Top provisional rows:
+- `film` depth=10 output_scale=1.5 weight_init_scale=0.5 residual_scale=0.05 loss=9.9178e-01 ratio=0.025 grad=1.093e-02 nan=False
+- `film` depth=10 output_scale=1.5 weight_init_scale=0.5 residual_scale=0.1 loss=9.9178e-01 ratio=0.025 grad=1.093e-02 nan=False
+- `film` depth=10 output_scale=1.5 weight_init_scale=0.5 residual_scale=0.25 loss=9.9178e-01 ratio=0.025 grad=1.093e-02 nan=False
+- `film` depth=10 output_scale=1.0 weight_init_scale=0.5 residual_scale=0.05 loss=9.9223e-01 ratio=0.005 grad=3.729e-03 nan=False
+- `film` depth=10 output_scale=1.0 weight_init_scale=0.5 residual_scale=0.1 loss=9.9223e-01 ratio=0.005 grad=3.729e-03 nan=False
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/summary.csv)
+- [loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/loss_curves.png)
+- [gradient curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_stability_advanced_20260409_170318/plots/gradient_curves.png)
+
+Status:
+- provisional local result; larger runs may override it
