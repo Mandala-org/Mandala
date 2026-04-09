@@ -1,0 +1,22 @@
+teacher_kind: linear
+variants:
+- normact
+- gate
+- gatemagnitudes
+- resnormact
+- resgatemagnitudes
+depths:
+- 2
+- 4
+loss_kinds:
+- mse
+- huber
+num_train: 2048
+num_val: 512
+batch_size: 128
+num_steps: 80
+lr: 0.0003
+num_seeds: 3
+hidden_irreps_preset: preliminary
+device: cuda
+smoke_test: false
