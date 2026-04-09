@@ -225,3 +225,30 @@ Use:
 
 - intended for interactive GPU jobs, not Slurm
 - results from this batch should override current smoke-study impressions where they disagree
+
+
+## 2026-04-09 16:58 - batch1_synth_linear_20260409_165309
+
+Executed synthetic teacher study.
+
+- run dir: [batch1_synth_linear_20260409_165309](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_165309)
+- teacher kind: `linear`
+- hidden irreps preset: `preliminary`
+- hidden irreps: `16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e`
+- smoke test: `False`
+
+Top provisional rows:
+- `gatemagnitudes` depth=4 loss=mse val_mae=5.0740e-01 val_mse=4.3416e-01
+- `gatemagnitudes` depth=4 loss=huber val_mae=5.0753e-01 val_mse=4.3447e-01
+- `normact` depth=4 loss=mse val_mae=5.3080e-01 val_mse=4.7630e-01
+- `normact` depth=4 loss=huber val_mae=5.3093e-01 val_mse=4.7668e-01
+- `gatemagnitudes` depth=2 loss=mse val_mae=5.3321e-01 val_mse=4.9777e-01
+
+Artifacts:
+- [summary.csv](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_165309/summary.csv)
+- [validation loss curves](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_165309/plots/val_loss_curves.png)
+- [sample target vs prediction](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_165309/plots/sample_target_vs_prediction.png)
+- [per-irrep validation MAE](/home/bartek/casus/mandala/studies/e3mlp_investigation/artifacts/batch1_synth_linear_20260409_165309/plots/per_irrep_val_mae.png)
+
+Status:
+- provisional local result; larger runs may override it

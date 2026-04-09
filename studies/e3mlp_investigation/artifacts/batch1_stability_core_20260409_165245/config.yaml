@@ -1,0 +1,27 @@
+variants:
+- normact
+- gate
+- gatemagnitudes
+- resnormact
+- resgatemagnitudes
+depths:
+- 6
+- 10
+- 12
+output_scales:
+- 0.5
+- 1.0
+- 1.5
+weight_init_scales:
+- 0.5
+- 1.0
+residual_scales:
+- 0.05
+- 0.25
+num_steps: 20
+num_seeds: 3
+batch_size: 64
+lr: 0.001
+hidden_irreps_preset: preliminary
+device: cuda
+smoke_test: false
