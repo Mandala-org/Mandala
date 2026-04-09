@@ -1,0 +1,28 @@
+teacher_kind: quadratic
+variants:
+- normact
+- gate
+- gatemagnitudes
+- resnormact
+- resgatemagnitudes
+- film
+- bilinear
+depths:
+- 2
+- 4
+- 6
+loss_kinds:
+- huber
+num_train: 2048
+num_val: 512
+batch_size: 128
+num_steps: 140
+lr: 0.0003
+num_seeds: 3
+hidden_irreps_preset: preliminary
+device: cuda
+output_scale: 0.5
+weight_init_scale: 0.5
+residual_scale: 0.05
+pre_norm: true
+smoke_test: false
