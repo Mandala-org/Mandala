@@ -1,0 +1,16 @@
+teacher_kind: mixed
+variants:
+- normact
+- gatemagnitudes
+depths:
+- 2
+loss_kinds:
+- mse
+num_train: 64
+num_val: 32
+batch_size: 16
+num_steps: 4
+lr: 0.001
+num_seeds: 1
+hidden_irreps_preset: preliminary
+smoke_test: true

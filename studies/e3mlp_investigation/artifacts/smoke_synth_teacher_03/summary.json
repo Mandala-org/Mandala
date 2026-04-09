@@ -1,0 +1,30 @@
+{
+  "run_name": "smoke_synth_teacher_03",
+  "teacher_kind": "mixed",
+  "hidden_irreps": "16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e",
+  "top_rows": [
+    {
+      "variant": "gatemagnitudes",
+      "depth": 2,
+      "loss_kind": "mse",
+      "val_loss": 0.4952881634235382,
+      "val_mae": 0.5374820828437805,
+      "val_mse": 0.4952881634235382
+    },
+    {
+      "variant": "normact",
+      "depth": 2,
+      "loss_kind": "mse",
+      "val_loss": 0.5022041201591492,
+      "val_mae": 0.5423683524131775,
+      "val_mse": 0.5022041201591492
+    }
+  ],
+  "plots": [
+    "studies/e3mlp_investigation/artifacts/smoke_synth_teacher_03/plots/val_loss_curves.png",
+    "studies/e3mlp_investigation/artifacts/smoke_synth_teacher_03/plots/final_val_mae.png",
+    "studies/e3mlp_investigation/artifacts/smoke_synth_teacher_03/plots/sample_target_vs_prediction.png",
+    "studies/e3mlp_investigation/artifacts/smoke_synth_teacher_03/plots/per_irrep_val_mae.png",
+    "studies/e3mlp_investigation/artifacts/smoke_synth_teacher_03/plots/target_vs_prediction_norm.png"
+  ]
+}
