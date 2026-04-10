@@ -45,7 +45,7 @@ parameters:
   symmetrize-preds:
     value: false
   rescale-density-to-num-electrons:
-    value: true
+    value: false
   hidden-irreps:
     value: 32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e
   hidden-dim:
