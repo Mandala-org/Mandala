@@ -23,15 +23,15 @@
       "eval_snapshots": "900K",
       "completed_steps": 80,
       "interrupted": false,
-      "final_train_loss": 0.001674194279985386,
-      "final_eval_loss": 0.0015816476661711931,
-      "final_eval_rel": 56.28065490722656,
-      "final_eval_block_mae": 0.024678437039256096,
-      "final_eval_block_mse": 0.0031632957980036736,
-      "final_eval_block_rel": 56.28065490722656,
-      "final_energy_mae": 215.10118103027344,
-      "final_energy_rel": 0.8203275381301296,
-      "elapsed_sec": 158.27219566795975
+      "final_train_loss": 0.001469700084271608,
+      "final_eval_loss": 0.0013210813049227,
+      "final_eval_rel": 49.08009338378906,
+      "final_eval_block_mae": 0.022071249783039093,
+      "final_eval_block_mse": 0.0026421626098454,
+      "final_eval_block_rel": 49.0800895690918,
+      "final_energy_mae": 254.0100860595703,
+      "final_energy_rel": 0.9687137353659782,
+      "elapsed_sec": 155.41232569981366
     }
   ]
 }

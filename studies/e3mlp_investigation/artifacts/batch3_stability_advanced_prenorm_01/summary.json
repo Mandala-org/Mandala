@@ -1,0 +1,135 @@
+{
+  "run_name": "batch3_stability_advanced_prenorm_01",
+  "hidden_irreps": "16x0e+16x0o+8x1e+8x1o+4x2e+4x2o+4x3e+4x3o+4x4e",
+  "num_configs": 432,
+  "plot_paths": [
+    "studies/e3mlp_investigation/artifacts/batch3_stability_advanced_prenorm_01/plots/heatmap_norm_ratio_bilinear.png",
+    "studies/e3mlp_investigation/artifacts/batch3_stability_advanced_prenorm_01/plots/heatmap_norm_ratio_film.png",
+    "studies/e3mlp_investigation/artifacts/batch3_stability_advanced_prenorm_01/plots/loss_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch3_stability_advanced_prenorm_01/plots/gradient_curves.png",
+    "studies/e3mlp_investigation/artifacts/batch3_stability_advanced_prenorm_01/plots/per_irrep_activation_bilinear.png",
+    "studies/e3mlp_investigation/artifacts/batch3_stability_advanced_prenorm_01/plots/per_irrep_activation_film.png"
+  ],
+  "top_rows": [
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.02,
+      "final_loss": 0.9847246706485748,
+      "final_ratio": 0.02243747726716161,
+      "final_relative_error": 1.0000258088111877,
+      "final_grad_norm": 0.018372761493603135,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.05,
+      "final_loss": 0.9847246706485748,
+      "final_ratio": 0.02243747726716161,
+      "final_relative_error": 1.0000258088111877,
+      "final_grad_norm": 0.018372761493603135,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 10,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.1,
+      "final_loss": 0.9847246706485748,
+      "final_ratio": 0.02243747726716161,
+      "final_relative_error": 1.0000258088111877,
+      "final_grad_norm": 0.018372761493603135,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 4,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.02,
+      "final_loss": 0.9919951558113098,
+      "final_ratio": 0.022540340647806495,
+      "final_relative_error": 1.0000773668289185,
+      "final_grad_norm": 0.005739626331557075,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 4,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.05,
+      "final_loss": 0.9919951558113098,
+      "final_ratio": 0.022540340647806495,
+      "final_relative_error": 1.0000773668289185,
+      "final_grad_norm": 0.005739626331557075,
+      "has_nan": false
+    },
+    {
+      "variant": "film",
+      "depth": 4,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.1,
+      "final_loss": 0.9919951558113098,
+      "final_ratio": 0.022540340647806495,
+      "final_relative_error": 1.0000773668289185,
+      "final_grad_norm": 0.005739626331557075,
+      "has_nan": false
+    },
+    {
+      "variant": "bilinear",
+      "depth": 10,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.1,
+      "final_loss": 0.9998331367969513,
+      "final_ratio": 0.022184605257020557,
+      "final_relative_error": 1.000192105770111,
+      "final_grad_norm": 0.0024853841565165465,
+      "has_nan": false
+    },
+    {
+      "variant": "bilinear",
+      "depth": 10,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.05,
+      "final_loss": 0.9998376071453094,
+      "final_ratio": 0.022192506271472692,
+      "final_relative_error": 1.0001928806304932,
+      "final_grad_norm": 0.002470810767659669,
+      "has_nan": false
+    },
+    {
+      "variant": "bilinear",
+      "depth": 10,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.02,
+      "final_loss": 0.9998399615287781,
+      "final_ratio": 0.022196277532609048,
+      "final_relative_error": 1.0001932978630066,
+      "final_grad_norm": 0.0024682315418621654,
+      "has_nan": false
+    },
+    {
+      "variant": "bilinear",
+      "depth": 4,
+      "output_scale": 0.2,
+      "weight_init_scale": 0.2,
+      "residual_scale": 0.1,
+      "final_loss": 1.0042960047721863,
+      "final_ratio": 0.02214039858044852,
+      "final_relative_error": 1.0001962780952454,
+      "final_grad_norm": 0.0024509300671273298,
+      "has_nan": false
+    }
+  ]
+}
