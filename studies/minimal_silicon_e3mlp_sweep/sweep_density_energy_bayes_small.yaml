@@ -87,7 +87,7 @@ parameters:
   lr-patience:
     value: 80
   num-epochs:
-    value: 600
+    value: 4
   log-interval:
     value: 25
   adaptive-log-interval:
@@ -111,9 +111,9 @@ parameters:
   generate-video:
     value: true
   num-train:
-    value: 100
+    value: 2
   num-val:
-    value: 10
+    value: 1
   lr:
     values:
       - 0.00003
