@@ -1,0 +1,22 @@
+snapshots:
+- 2700K
+- 900K
+target: hamiltonian
+variants:
+- gate
+- gatemagnitudes
+- resgatemagnitudes
+- normact
+- film
+hidden_irreps_preset: silicon
+aggregation: mean
+architecture: single
+depth: 4
+topk: 8
+output_scale: 0.5
+weight_init_scale: 0.5
+residual_scale: 0.05
+pre_norm: true
+num_seeds: 1
+edge_batch_size: 1024
+device: cpu
