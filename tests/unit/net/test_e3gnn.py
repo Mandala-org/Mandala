@@ -7,6 +7,7 @@ from net.common import Config
 from core.block_irrep_mapper import BlockIrrepMapper
 from net.e3gnn import E3GNN
 from e3nn.o3 import Irreps
+from data.factory import DatasetFactory
 
 
 class MockHead(nn.Module):
@@ -85,3 +86,62 @@ def test_forward_smoke_onthefly_deeph_e3():
 
     preds = model(x)
     assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}
+
+
+@pytest.mark.integration
+def test_forward_h2o_cutoff5_with_split_head():
+    cfg = Config(
+        cutoff_radius=5.0,
+        separate_shifted_self=True,
+        head_use_node_embeddings_for_self_edges=True,
+        safety_checks=True,
+        verbosity=0,
+    )
+    factory = DatasetFactory(cfg)
+    factory.add_snapshot(
+        "data/small/H2O/original/H2O.matrix",
+        "data/small/H2O/original/H2O.info.out",
+    )
+    train_ds, _, mapper = factory.create()
+    model = E3GNN(mapper, cfg)
+    x, _ = train_ds[0]
+
+    preds = model(x)
+
+    assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}
+
+
+@pytest.mark.parametrize(
+    ("partial_train", "separate_shifted_self", "expected"),
+    [
+        ("diag", False, [True, False, False]),
+        ("shifted_self", False, [False, True, False]),
+        ("offdiag", False, [False, True, True]),
+        ("offdiag", True, [False, False, True]),
+    ],
+)
+@pytest.mark.unit
+def test_partial_train_mask(partial_train, separate_shifted_self, expected):
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    cfg = Config(
+        num_layers_gnn=1,
+        partial_train=partial_train,
+        separate_shifted_self=separate_shifted_self,
+        safety_checks=True,
+        verbosity=0,
+    )
+    model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
+    edges_5d = torch.tensor(
+        [
+            [0, 1, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 1, 0],
+            [0, 1, 1],
+        ],
+        dtype=torch.long,
+    )
+
+    mask = model._partial_train_mask(edges_5d)
+
+    assert mask.tolist() == expected

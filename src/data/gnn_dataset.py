@@ -224,12 +224,18 @@ class E3GNNDataset(Dataset):
             x["num_self_edges"] = num_self_edges
 
         with torch.no_grad():
+            hamiltonian_target_matrix = snap.hamiltonian
+            if self.cfg.symmetrize_hamiltonian_targets:
+                hamiltonian_target_matrix = (
+                    hamiltonian_target_matrix + hamiltonian_target_matrix.transpose()
+                ) * 0.5
+
             if self.cfg.train_target == "matrix":
-                hamiltonian_target = snap.hamiltonian
+                hamiltonian_target = hamiltonian_target_matrix
                 overlap_target = snap.overlap
                 density_target = snap.density
             elif self.cfg.train_target == "irreps":
-                hamiltonian_target = snap.hamiltonian.to_vectors(self.mapper)
+                hamiltonian_target = hamiltonian_target_matrix.to_vectors(self.mapper)
                 overlap_target = snap.overlap.to_vectors(self.mapper)
                 density_target = snap.density.to_vectors(self.mapper)
             else:

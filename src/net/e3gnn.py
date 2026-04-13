@@ -67,6 +67,10 @@ class E3GNN(pl.LightningModule):
             raise ValueError("If training on forces, loss_coef_forces must be nonzero.")
         if cfg.train_on_stress and cfg.loss_coef_stress == 0.0:
             raise ValueError("If training on stress, loss_coef_stress must be nonzero.")
+        if cfg.partial_train not in (None, "diag", "shifted_self", "offdiag"):
+            raise ValueError(
+                "partial_train must be one of None, 'diag', 'shifted_self', or 'offdiag'."
+            )
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = build_hidden_irreps(
@@ -119,7 +123,12 @@ class E3GNN(pl.LightningModule):
         self.heads = nn.ModuleDict(
             {
                 name: DeepHead(
-                    irreps_hidden=self.final_edge_irreps,
+                    irreps_diag_in=(
+                        self.final_node_irreps
+                        if self.cfg.head_use_node_embeddings_for_self_edges
+                        else self.final_edge_irreps
+                    ),
+                    irreps_edge_in=self.final_edge_irreps,
                     irreps_neck=self.neck_irreps,
                     pair_keys=pair_keys,
                     mapper=self.mapper,
@@ -179,36 +188,64 @@ class E3GNN(pl.LightningModule):
         )
         return irreps_blocks
 
+    def _should_recompute_edge_features(self, x: Dict[str, Any]) -> bool:
+        if not self.cfg.precompute_edge_features:
+            return True
+        if "positions" in x and x["positions"].requires_grad:
+            return True
+        if x.get("box") is not None and x["box"].requires_grad:
+            return True
+        return False
+
+    def _populate_edge_features(self, x: Dict[str, Any]) -> None:
+        (
+            edge_index,
+            edge_shift,
+            edge_type_idx,
+            edge_length_emb,
+            edge_sh,
+            num_self_edges,
+        ) = compute_graph_features(
+            positions=x["positions"],
+            box=x["box"],
+            atoms=x["atoms"],
+            cfg=self.cfg,
+            sh_irreps=self.sh_irreps,
+            edge_type2idx=self.mapper.edge_type2idx,
+        )
+        x["edge_index"] = edge_index
+        x["edge_shift"] = edge_shift
+        x["edge_type_idx"] = edge_type_idx
+        x["edge_length_emb"] = edge_length_emb
+        x["edge_sh"] = edge_sh
+        x["num_self_edges"] = num_self_edges
+
+    def _partial_train_mask(self, edges_5d: torch.Tensor) -> torch.Tensor:
+        mask = torch.ones(edges_5d.shape[1], dtype=torch.bool, device=edges_5d.device)
+        if self.cfg.partial_train is None:
+            return mask
+
+        sx, sy, sz, i, j = edges_5d
+        is_diag = (i == j) & (sx == 0) & (sy == 0) & (sz == 0)
+        is_shifted_self = (i == j) & ~((sx == 0) & (sy == 0) & (sz == 0))
+
+        if self.cfg.partial_train == "diag":
+            return is_diag
+        if self.cfg.partial_train == "shifted_self":
+            return is_shifted_self
+        if self.cfg.partial_train == "offdiag":
+            if self.cfg.separate_shifted_self:
+                return i != j
+            return ~is_diag
+        raise RuntimeError(f"Unsupported partial_train value: {self.cfg.partial_train}")
+
     # ------------------------------------------------------------------ forward
     def forward(self, x: Dict[str, Any]):
         # initialize activation magnitudes storage
         self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
 
-        # If edge features are not precomputed, compute them on the fly
-        if not self.cfg.precompute_edge_features:
-            (
-                edge_index,
-                edge_shift,
-                edge_type_idx,
-                edge_length_emb,
-                edge_sh,
-                num_self_edges,
-            ) = compute_graph_features(
-                positions=x["positions"],
-                box=x["box"],
-                atoms=x["atoms"],
-                cfg=self.cfg,
-                sh_irreps=self.sh_irreps,
-                edge_type2idx=self.mapper.edge_type2idx,
-            )
-
-            # Update x with the newly computed features
-            x["edge_index"] = edge_index
-            x["edge_shift"] = edge_shift
-            x["edge_type_idx"] = edge_type_idx
-            x["edge_length_emb"] = edge_length_emb
-            x["edge_sh"] = edge_sh
-            x["num_self_edges"] = num_self_edges
+        if self._should_recompute_edge_features(x):
+            self._populate_edge_features(x)
 
         # ---- encode ----------------------------------------------------
         node = self.node_enc(x["node_type_idx"], activation_mags=self._activation_mags)
@@ -248,20 +285,11 @@ class E3GNN(pl.LightningModule):
             )
 
         # ---- heads -----------------------------------------------------
-        # The head operates on a concatenation of node features (for self-edges)
-        # and edge features (for off-diagonal edges).
-
-        # concatenate edge_shift with edge_index
-        head_edge_index = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
+        head_edges_5d = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
         head_edge_type_idx = x["edge_type_idx"]
 
-        if self.cfg.head_use_self_edges:
-            head_embeddings = edge
-        else:
-            head_embeddings = torch.cat([node, edge[x["num_self_edges"] :]], dim=0)
-
         preds_raw = {
-            name: head(head_embeddings, head_edge_type_idx, head_edge_index)
+            name: head(node, edge, head_edge_type_idx, head_edges_5d)
             for name, head in self.heads.items()
         }
 
@@ -337,11 +365,19 @@ class E3GNN(pl.LightningModule):
                 min_n = min(preds.shape[0], targets.shape[0])
                 preds = preds[:min_n]
                 targets = targets[:min_n]
+                pred_edges = p.pair_edges[key][:, :min_n]
+                target_edges = t.pair_edges[key][:, :min_n]
 
                 if self.cfg.safety_checks:
                     assert torch.equal(
-                        p.pair_edges[key][:, :min_n], t.pair_edges[key][:, :min_n]
+                        pred_edges, target_edges
                     ), f"Edge mismatch in block loss for matrix {name}, key {key}."
+
+                partial_mask = self._partial_train_mask(target_edges)
+                preds = preds[partial_mask]
+                targets = targets[partial_mask]
+                if preds.shape[0] == 0:
+                    continue
 
                 mse_val += self._mse(preds, targets)
                 mae_val += self._mae(preds, targets)
@@ -370,6 +406,7 @@ class E3GNN(pl.LightningModule):
         t_obs_start = time.perf_counter()
         loss_E_weighted = torch.tensor(0.0, device=self.device)
         loss_N_weighted = torch.tensor(0.0, device=self.device)
+        loss_F_weighted = torch.tensor(0.0, device=self.device)
 
         # Standard observables
         if (
@@ -404,6 +441,18 @@ class E3GNN(pl.LightningModule):
             if self.cfg.train_on_num_electrons and not self.cfg.train_observables_on_gt:
                 loss_N_weighted = self.cfg.loss_coef_observables * self._mse(
                     N_pred, N_true
+                )
+
+        if self.cfg.enable_forces and y.get("forces") is not None:
+            forces_pred = self.get_forces(preds_irreps, x["positions"], x["box"])
+            forces_true = y["forces"]
+            metrics[f"{stage}/forces_mae"] = torch.mean(
+                torch.abs(forces_pred - forces_true)
+            )
+            metrics[f"{stage}/forces_mse"] = self._mse(forces_pred, forces_true)
+            if self.cfg.train_on_forces:
+                loss_F_weighted = self.cfg.loss_coef_forces * self._mse(
+                    forces_pred, forces_true
                 )
 
         # Partial Ground Truth Observables
@@ -463,7 +512,12 @@ class E3GNN(pl.LightningModule):
         )
 
         total_l1_loss = total_matrix_l1_component
-        total_l2_loss = total_matrix_l2_component + loss_E_weighted + loss_N_weighted
+        total_l2_loss = (
+            total_matrix_l2_component
+            + loss_E_weighted
+            + loss_N_weighted
+            + loss_F_weighted
+        )
 
         loss = total_l1_loss + total_l2_loss
 
@@ -485,6 +539,8 @@ class E3GNN(pl.LightningModule):
             metrics[f"{stage}/loss_energy"] = loss_E_weighted
         if loss_N_weighted > 0:
             metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted
+        if loss_F_weighted > 0:
+            metrics[f"{stage}/loss_forces"] = loss_F_weighted
 
         if stage == "train" and loss > 1e-12:
             for name, val in combined_matrix_losses.items():
@@ -493,6 +549,8 @@ class E3GNN(pl.LightningModule):
                 metrics["frac/loss_energy"] = loss_E_weighted / loss
             if loss_N_weighted > 0:
                 metrics["frac/loss_num_electrons"] = loss_N_weighted / loss
+            if loss_F_weighted > 0:
+                metrics["frac/loss_forces"] = loss_F_weighted / loss
 
         self.log_dict(
             metrics,
@@ -661,9 +719,15 @@ class E3GNN(pl.LightningModule):
         return stress
 
     def predict_forces(self, x: Dict[str, Any]) -> torch.Tensor:
+        x = dict(x)
+        if not x["positions"].requires_grad:
+            x["positions"] = x["positions"].clone().detach().requires_grad_(True)
         predictions = self(x)
         return self.get_forces(predictions, x["positions"], x["box"])
 
     def predict_stress(self, x: Dict[str, Any]) -> torch.Tensor:
+        x = dict(x)
+        if x.get("box") is not None and not x["box"].requires_grad:
+            x["box"] = x["box"].clone().detach().requires_grad_(True)
         predictions = self(x)
         return self.get_stress(predictions, x["positions"], x["box"])

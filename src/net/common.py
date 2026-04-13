@@ -80,7 +80,8 @@ class Config:
 
     neck_depth: int = 1
     head_depth: int = 3
-    head_use_self_edges: bool = True
+    head_use_node_embeddings_for_self_edges: bool = True
+    separate_shifted_self: bool = False
 
     head_log_scale_mlp_n_layers: int = 1
 
@@ -127,6 +128,7 @@ class Config:
 
     # -------------- training targets -----------------------------------
     train_target: str = "matrix"  # "irreps" | "matrix"
+    partial_train: str | None = None  # None | "diag" | "shifted_self" | "offdiag"
     train_on_forces: bool = False
     train_on_stress: bool = False
     train_on_energy: bool = True
@@ -136,6 +138,7 @@ class Config:
     )
     train_observables_on_gt: bool = False
     symmetrize_output: bool = True  # symmetrize matrix outputs
+    symmetrize_hamiltonian_targets: bool = True
 
     # -------------- loss weighting --------------------------------------
     loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1
