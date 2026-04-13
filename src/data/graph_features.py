@@ -8,6 +8,12 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 
+def _non_scalar_sh_slices(sh_irreps: Irreps) -> list[slice]:
+    return [
+        sh_irreps.slices()[idx] for idx, (_, ir) in enumerate(sh_irreps) if ir.l > 0
+    ]
+
+
 def _minimal_disp(
     pos: torch.Tensor,
     edges: torch.Tensor,
@@ -193,6 +199,12 @@ def compute_graph_features(
     edge_sh = spherical_harmonics(
         sh_irreps, edge_disp, normalize=True, normalization="component"
     )
+    is_zero_shift_self_edge = (edge_src == edge_dst) & (edge_shift == 0).all(dim=0)
+    sh_non_scalar_slices = _non_scalar_sh_slices(sh_irreps)
+    if is_zero_shift_self_edge.any() and sh_non_scalar_slices:
+        edge_sh = edge_sh.clone()
+        for slc in sh_non_scalar_slices:
+            edge_sh[is_zero_shift_self_edge, slc] = 0.0
     edge_length_emb = soft_one_hot_linspace(
         edge_lengths,
         start=0.0,

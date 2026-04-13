@@ -294,21 +294,35 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     # Layer
     hidden_irreps = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
     neck_irreps = build_hidden_irreps(cfg.l_max, cfg.hidden_base_dim)
-    layer = DeepHead(hidden_irreps, neck_irreps, pair_keys, mapper, cfg)
+    layer = DeepHead(
+        irreps_diag_in=hidden_irreps,
+        irreps_edge_in=hidden_irreps,
+        irreps_neck=neck_irreps,
+        pair_keys=pair_keys,
+        mapper=mapper,
+        cfg=cfg,
+    )
 
     # Inputs and Rotation
+    N = 10
+    node_feat = generate_equivariant_input(hidden_irreps, batch_size=N)
     edge_feat = generate_equivariant_input(hidden_irreps, batch_size=E)
     edge_type_idx = torch.randint(0, len(pair_keys), (E,))
-    edge_index = torch.randint(0, 10, (2, E))  # Dummy node indices
+    edge_index = torch.randint(0, N, (2, E))  # Dummy node indices
+    edge_shift = torch.zeros(3, E, dtype=torch.long)
+    edges_5d = torch.cat([edge_shift, edge_index], dim=0)
     rot = random_rotation_matrix()
     D_in = hidden_irreps.D_from_matrix(rot)
 
     # Transform input
+    node_feat_rotated = node_feat @ D_in.T
     edge_feat_rotated = edge_feat @ D_in.T
 
     # Apply layer
-    y_dict = layer(edge_feat, edge_type_idx, edge_index)
-    y_dict_rotated_input = layer(edge_feat_rotated, edge_type_idx, edge_index)
+    y_dict = layer(node_feat, edge_feat, edge_type_idx, edges_5d)
+    y_dict_rotated_input = layer(
+        node_feat_rotated, edge_feat_rotated, edge_type_idx, edges_5d
+    )
 
     # Check equivariance for each output pair
     for key in y_dict:

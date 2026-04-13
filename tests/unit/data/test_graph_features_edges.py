@@ -87,3 +87,8 @@ def test_compute_graph_features():
     # 1->0 is -8.0. Minimal is +2.0.
     # 2.0 = -8.0 + shift*10 -> shift = +1
     assert torch.allclose(edge_shift[:, idx].float(), torch.tensor([1.0, 0.0, 0.0]))
+
+    # Zero-shift self edges should keep only the scalar SH channel.
+    assert torch.allclose(
+        edge_sh[:num_self_edges, 1:], torch.zeros_like(edge_sh[:num_self_edges, 1:])
+    )
