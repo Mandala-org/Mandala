@@ -1,0 +1,184 @@
+program: scripts/train_silicon.py
+method: bayes
+metric:
+  name: val/energy_mae
+  goal: minimize
+early_terminate:
+  type: hyperband
+  min_iter: 400
+  eta: 3
+command:
+  - ${env}
+  - python
+  - -u
+  - ${program}
+  - ${args}
+parameters:
+  wandb-project:
+    value: mandala-minimal-silicon-e3mlp-sweep
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
+  checkpoint-dir:
+    value: checkpoints/silicon
+  matrix-targets:
+    value: density
+  enable-energy:
+    value: true
+  enable-num-electrons:
+    value: true
+  train-on-energy:
+    value: false
+  train-on-num-electrons:
+    value: false
+  loss-coef-observables:
+    value: 0.0
+  enable-forces:
+    value: false
+  train-on-forces:
+    value: false
+  loss-coef-forces:
+    value: 0.0
+  symmetrize-output:
+    value: false
+  hidden-irreps:
+    value: 32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e
+  hidden-base-dim:
+    value: 32
+  l-max:
+    value: 4
+  num-layers-gnn:
+    values:
+      - 2
+      - 3
+  n-radial:
+    value: 64
+  cutoff-radius:
+    value: 7.0
+  edge-encoder-style:
+    value: mandala
+  e3layernorm:
+    value: true
+  separate-shifted-self:
+    value: false
+  edge-encoder-use-sh-tensor-square:
+    value: false
+  radial-embedding-scale:
+    value: none
+  apply-cutoff-to-targets:
+    value: true
+  require-exact-edge-match:
+    value: true
+  dtype:
+    value: float32
+  device:
+    value: cuda
+  grad-clip-val:
+    value: 1.0
+  accumulate-grad-batches:
+    value: 1
+  lr-scheduler-factor:
+    value: 0.2
+  lr-scheduler-patience:
+    value: 100
+  max-epochs:
+    value: 1000
+  log-interval:
+    value: 10
+  adaptive-log-interval:
+    value: true
+  benchmark:
+    value: true
+  log-data:
+    value: true
+  log-model:
+    value: true
+  log-forward:
+    value: false
+  verbose-forward:
+    value: false
+  log-per-irrep-metrics:
+    value: true
+  print-per-irrep-metrics:
+    value: true
+  log-per-irrep-images:
+    value: true
+  generate-video:
+    value: true
+  num-train:
+    value: 20
+  num-val:
+    value: 5
+  lr:
+    values:
+      - 0.0003
+      - 0.001
+      - 0.003
+      - 0.01
+      - 0.03
+  head-use-tensor-square:
+    values:
+      - false
+      - true
+  head-use-node-embeddings-for-self-edges:
+    values:
+      - false
+      - true
+  head-e3mlp-layers:
+    values:
+      - 1
+      - 2
+      - 3
+  internal-e3mlp-layers:
+    values:
+      - 0
+      - 1
+  head-e3mlp-variant:
+    values:
+      - gatemagnitudes
+      - gate
+      - normact
+      - resgatemagnitudes
+      - resnormact
+      - film
+  internal-e3mlp-variant:
+    values:
+      - resgatemagnitudes
+      - gatemagnitudes
+      - gate
+      - normact
+      - resnormact
+      - film
+  e3mlp-pre-norm:
+    value: true
+  e3mlp-output-scale:
+    values:
+      - 0.25
+      - 0.5
+      - 0.75
+  e3mlp-weight-init-scale:
+    values:
+      - 0.1
+      - 0.25
+      - 0.5
+  e3mlp-residual-scale:
+    values:
+      - 0.03
+      - 0.05
+      - 0.1
+  e3mlp-film-hidden-dim:
+    values:
+      - 64
+      - 128
+  head-diag-output-scale:
+    values:
+      - 0.75
+      - 1.0
+      - 1.25
+  head-offdiag-output-scale:
+    values:
+      - 0.03
+      - 0.05
+      - 0.1
+      - 0.2

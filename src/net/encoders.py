@@ -17,6 +17,7 @@ from e3nn.o3 import Irreps, FullyConnectedTensorProduct, TensorSquare
 from collections import OrderedDict
 
 from net.common import Config
+from net.layer_norm import E3LayerNorm
 
 
 def _magnitude_splits(
@@ -158,6 +159,7 @@ class EdgeEncoder(nn.Module):
                 f"Unknown edge_encoder_style '{self.cfg.edge_encoder_style}'. "
                 "Expected 'mandala' or 'deeph_e3'."
             )
+        self.norm = E3LayerNorm(self.irreps_out) if self.cfg.e3layernorm else None
 
     # ------------------------------------------------------------------
     def forward(
@@ -178,6 +180,9 @@ class EdgeEncoder(nn.Module):
             emb = self.tp(type_emb, disp_emb)
         else:
             emb = self.distance_proj(length_emb)
+
+        if self.norm is not None:
+            emb = self.norm(emb)
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_{self.info['name']}"

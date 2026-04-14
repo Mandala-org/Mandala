@@ -44,10 +44,12 @@ class Config:
     # -------------- representation shape --------------------------------
     l_max: int = 4
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
+    hidden_irreps: str | None = None  # explicit hidden irreps override
     edge_type_emb_dim: int = 32  # edge type embedding size
     emb_use_odd_features: bool = True  # use odd parity
     edge_encoder_style: str = "mandala"  # "mandala" | "deeph_e3"
     edge_encoder_use_sh_tensor_square: bool = False
+    e3layernorm: bool = True
 
     # node_type_emb_dim: int = 32  # node type embedding size
 
@@ -81,14 +83,20 @@ class Config:
 
     neck_depth: int = 1
     head_depth: int = 3
+    internal_e3mlp_layers: int = 0
+    head_e3mlp_layers: int = 1
     head_use_node_embeddings_for_self_edges: bool = True
     separate_shifted_self: bool = False
     head_use_tensor_square: bool = False
+    head_diag_output_scale: float = 1.0
+    head_offdiag_output_scale: float = 1.0
 
     head_log_scale_mlp_n_layers: int = 1
 
     # -------------- non-linearity & norm --------------------------------
     e3mlp_variant: str = "basic"  # "basic" or study-style variants
+    internal_e3mlp_variant: str | None = None
+    head_e3mlp_variant: str | None = None
     e3mlp_output_scale: float = 1.0
     e3mlp_weight_init_scale: float = 1.0
     e3mlp_residual_scale: float = 0.25
@@ -163,12 +171,19 @@ class Config:
     bench_verbosity: int = 1
     log_partial_gt_observables: bool = False
     log_per_irrep_metrics: bool = False
+    print_per_irrep_metrics: bool = False
     log_per_irrep_images: bool = False
     log_activation_mag: bool = False
     wandb_project: str | None = None
     log_every_n_steps: int = 1
     log_on_step: bool = False  # log metrics on step, not just epoch
     log_on_epoch: bool = True  # log metrics on epoch
+    log_data: bool = False
+    log_forward: bool = False
+    verbose_forward: bool = False
+    benchmark: bool = True
+    log_interval: int = 1
+    adaptive_log_interval: bool = False
 
     # -------------- misc ------------------------------------------------
     safety_checks: bool = False  # enable strict checks on input data
@@ -184,6 +199,9 @@ class Config:
     snapshot_cache_dir: str | None = None  # raw Snapshot .pt cache, if any
     seed: int = 42  # random seed for reproducibility
     precompute_edge_features: bool = True  # precompute edge features
+    radial_embedding_scale: str = "none"
+    apply_cutoff_to_targets: bool = True
+    require_exact_edge_match: bool = True
 
     # -------------------- hyperopt --------------------------------------
     tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
@@ -227,6 +245,16 @@ def build_hidden_irreps(
         if use_odd_features:
             parts.append(f"{mul}x{ell}o")
     return Irreps("+".join(parts)).simplify()
+
+
+def resolve_hidden_irreps(cfg: Config) -> Irreps:
+    if cfg.hidden_irreps is not None:
+        return Irreps(cfg.hidden_irreps).simplify()
+    return build_hidden_irreps(
+        cfg.l_max,
+        cfg.hidden_base_dim,
+        cfg.emb_use_odd_features,
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -415,6 +443,14 @@ class E3MLP(nn.Module):
         num_layers: int,
         cfg: Config,
         activate_last: bool = False,
+        *,
+        variant: str | None = None,
+        output_scale: float | None = None,
+        weight_init_scale: float | None = None,
+        residual_scale: float | None = None,
+        pre_norm: bool | None = None,
+        film_hidden_dim: int | None = None,
+        post_scale: float = 1.0,
     ):
         super().__init__()
         if num_layers < 1:
@@ -424,7 +460,7 @@ class E3MLP(nn.Module):
         self.irreps_hidden = hidden_irreps
         self.irreps_out = output_irreps
 
-        variant = cfg.e3mlp_variant.lower()
+        variant = (variant or cfg.e3mlp_variant).lower()
         if variant == "basic":
             from net.activations import make_nonlinearity  # Local import
 
@@ -442,6 +478,7 @@ class E3MLP(nn.Module):
                 layers.append(make_nonlinearity(output_irreps, cfg))
 
             self.net = nn.Sequential(*layers)
+            self.post_scale = float(post_scale)
             return
 
         from net.e3mlp_variants import (
@@ -452,15 +489,27 @@ class E3MLP(nn.Module):
         )
 
         variant_cfg = VariantConfig(
-            output_scale=cfg.e3mlp_output_scale,
-            weight_init_scale=cfg.e3mlp_weight_init_scale,
-            residual_scale=cfg.e3mlp_residual_scale,
+            output_scale=(
+                cfg.e3mlp_output_scale if output_scale is None else output_scale
+            ),
+            weight_init_scale=(
+                cfg.e3mlp_weight_init_scale
+                if weight_init_scale is None
+                else weight_init_scale
+            ),
+            residual_scale=(
+                cfg.e3mlp_residual_scale if residual_scale is None else residual_scale
+            ),
             scalar_activation=cfg.activation_scalar,
             odd_scalar_activation=cfg.activation_odd_scalar,
             gate_activation=cfg.activation_gate,
             odd_gate_activation=cfg.activation_odd_gate,
-            film_hidden_dim=cfg.e3mlp_film_hidden_dim,
-            pre_norm=cfg.e3mlp_pre_norm,
+            film_hidden_dim=(
+                cfg.e3mlp_film_hidden_dim
+                if film_hidden_dim is None
+                else film_hidden_dim
+            ),
+            pre_norm=(cfg.e3mlp_pre_norm if pre_norm is None else pre_norm),
             norm_eps=cfg.e3mlp_norm_eps,
         )
 
@@ -507,9 +556,13 @@ class E3MLP(nn.Module):
             )
 
         self.net = nn.Sequential(*layers)
+        self.post_scale = float(post_scale)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+        y = self.net(x)
+        if self.post_scale != 1.0:
+            y = y * self.post_scale
+        return y
 
 
 # ════════════════════════════════════════════════════════════════════════

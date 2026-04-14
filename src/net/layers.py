@@ -23,6 +23,7 @@ from e3nn.nn import Gate
 
 from net.common import Config, E3MLP, RadialMLP, SeparateWeightTensorProduct
 from net.activations import make_nonlinearity
+from net.layer_norm import E3LayerNorm
 
 
 def _magnitude_splits(
@@ -344,12 +345,27 @@ class EdgeUpdateBlock(nn.Module):
 
         # Normalization and activation
         self.norm_act = make_nonlinearity(self.conv.irreps_out, cfg)
+        self.layer_norm = E3LayerNorm(self.conv.irreps_out) if cfg.e3layernorm else None
 
         # Dropout
         if cfg.dropout > 0.0:
             self.dropout = Dropout(self.conv.irreps_out, p=cfg.dropout)
         else:
             self.dropout = None
+
+        internal_variant = cfg.internal_e3mlp_variant or cfg.e3mlp_variant
+        if cfg.internal_e3mlp_layers > 0:
+            self.refine = E3MLP(
+                self.conv.irreps_out,
+                edge_irreps_out,
+                edge_irreps_out,
+                cfg.internal_e3mlp_layers,
+                cfg,
+                activate_last=False,
+                variant=internal_variant,
+            )
+        else:
+            self.refine = nn.Identity()
 
         self.irreps_out = self.conv.irreps_out
 
@@ -399,10 +415,14 @@ class EdgeUpdateBlock(nn.Module):
 
         # Normalization and activation
         edge = self.norm_act(edge)
+        if self.layer_norm is not None:
+            edge = self.layer_norm(edge)
 
         # Dropout
         if self.dropout:
             edge = self.dropout(edge)
+
+        edge = self.refine(edge)
 
         # Residual connection
         if self.cfg.edge_update_residual and edge.shape == edge_old.shape:
@@ -493,12 +513,27 @@ class NodeUpdateBlock(nn.Module):
                 shared_weights=True,
             )  # Normalization and activation
         self.norm_act = make_nonlinearity(self.conv.irreps_out, cfg)
+        self.layer_norm = E3LayerNorm(self.conv.irreps_out) if cfg.e3layernorm else None
 
         # Dropout
         if cfg.dropout > 0.0:
             self.dropout = Dropout(self.conv.irreps_out, p=cfg.dropout)
         else:
             self.dropout = None
+
+        internal_variant = cfg.internal_e3mlp_variant or cfg.e3mlp_variant
+        if cfg.internal_e3mlp_layers > 0:
+            self.refine = E3MLP(
+                self.conv.irreps_out,
+                node_irreps_out,
+                node_irreps_out,
+                cfg.internal_e3mlp_layers,
+                cfg,
+                activate_last=False,
+                variant=internal_variant,
+            )
+        else:
+            self.refine = nn.Identity()
 
         self.irreps_out = self.conv.irreps_out
 
@@ -553,10 +588,14 @@ class NodeUpdateBlock(nn.Module):
 
         # Normalization and activation
         node = self.norm_act(node)
+        if self.layer_norm is not None:
+            node = self.layer_norm(node)
 
         # Dropout
         if self.dropout:
             node = self.dropout(node)
+
+        node = self.refine(node)
 
         # Residual connection (only if dimensions match)
         if self.cfg.node_update_residual and node.shape == node_old.shape:

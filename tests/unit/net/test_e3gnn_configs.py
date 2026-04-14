@@ -15,7 +15,7 @@ from e3nn.o3 import Irreps
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
-from net.common import Config
+from net.common import Config, resolve_hidden_irreps
 from net.e3gnn import E3GNN
 
 
@@ -68,6 +68,7 @@ HP_VARIANTS = [
         "node_update_residual": False,
     },
     {"l_max": 3, "hidden_base_dim": 32},
+    {"hidden_irreps": "8x0e+8x0o+4x1e+4x1o", "e3layernorm": True},
 ]
 
 orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
@@ -102,3 +103,10 @@ def test_e3gnn_forward_variants(hp_kwargs):
         vec = block.pair_vectors["H-H"]
         edges = block.pair_edges["H-H"]
         assert vec.shape[0] == edges.shape[1]
+
+
+@pytest.mark.unit
+def test_resolve_hidden_irreps_respects_explicit_override():
+    cfg = Config(hidden_irreps="8x0e+8x0o+4x1e+4x1o")
+    hidden = resolve_hidden_irreps(cfg)
+    assert str(hidden) == "8x0e+8x0o+4x1e+4x1o"

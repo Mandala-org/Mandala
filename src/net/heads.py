@@ -50,6 +50,8 @@ class DeepHead(nn.Module):
             self.cfg.head_use_node_embeddings_for_self_edges
         )
         self.use_tensor_square = bool(self.cfg.head_use_tensor_square)
+        head_variant = self.cfg.head_e3mlp_variant or self.cfg.e3mlp_variant
+        head_layers = int(self.cfg.head_e3mlp_layers)
 
         self.diag_trunk = E3MLP(
             self.irreps_diag_in,
@@ -101,26 +103,32 @@ class DeepHead(nn.Module):
                 self.irreps_neck,
                 self.irreps_neck,
                 mapper.get_pair_irreps(key),
-                self.cfg.head_depth,
+                head_layers,
                 self.cfg,
                 activate_last=False,
+                variant=head_variant,
+                post_scale=self.cfg.head_diag_output_scale,
             )
             self.offdiag_projs[key] = E3MLP(
                 self.irreps_neck,
                 self.irreps_neck,
                 mapper.get_pair_irreps(key),
-                self.cfg.head_depth,
+                head_layers,
                 self.cfg,
                 activate_last=False,
+                variant=head_variant,
+                post_scale=self.cfg.head_offdiag_output_scale,
             )
             if self.separate_shifted_self:
                 self.shifted_self_projs[key] = E3MLP(
                     self.irreps_neck,
                     self.irreps_neck,
                     mapper.get_pair_irreps(key),
-                    self.cfg.head_depth,
+                    head_layers,
                     self.cfg,
                     activate_last=False,
+                    variant=head_variant,
+                    post_scale=self.cfg.head_diag_output_scale,
                 )
 
         self.diag_log_scales = None

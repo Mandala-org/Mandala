@@ -27,6 +27,32 @@ def test_resolve_resume_checkpoint_prefers_named_file(tmp_path):
     assert mod._resolve_resume_checkpoint(str(latest), "best") == latest.resolve()
 
 
+def test_setup_argparse_accepts_hyphen_aliases_and_scalar_matrix_target(monkeypatch):
+    mod = _load_train_silicon_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train_silicon.py",
+            "--matrix-targets",
+            "density",
+            "--num-train",
+            "20",
+            "--num-val",
+            "5",
+            "--wandb-project",
+            "silicon-test",
+        ],
+    )
+
+    args = mod.setup_argparse()
+
+    assert args.matrix_targets == ["density"]
+    assert args.num_train == 20
+    assert args.num_val == 5
+    assert args.wandb_project == "silicon-test"
+
+
 @pytest.mark.integration
 def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
     mod = _load_train_silicon_module()
@@ -129,3 +155,77 @@ def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
     assert captured["fit_kwargs"]["ckpt_path"] == str(
         (run_dir / "latest_checkpoint.pt").resolve()
     )
+
+
+@pytest.mark.integration
+def test_train_silicon_global_split_mode(monkeypatch, tmp_path):
+    mod = _load_train_silicon_module()
+
+    data_root = tmp_path / "data"
+    for idx in range(3):
+        snap_root = data_root / f"300K/sample{idx}"
+        snap_root.mkdir(parents=True)
+        (snap_root / "Si_DM").write_text("matrix")
+        (snap_root / "info.dat").write_text("info")
+
+    captured = {}
+
+    class DummyDatasetFactory:
+        def __init__(self, cfg):
+            captured["dataset_cfg"] = cfg
+            self.snapshots = []
+
+        def add_snapshot(self, matrix_path, info_path, purpose="train"):
+            self.snapshots.append((matrix_path, info_path, purpose))
+
+        def create(self):
+            captured["snapshots"] = list(self.snapshots)
+            return [1], [2], object()
+
+    class DummyLogger:
+        def __init__(self, *args, **kwargs):
+            self.experiment = type("E", (), {"config": type("C", (), {})()})()
+
+    class DummyModel:
+        def __init__(self, mapper, cfg):
+            self.mapper = mapper
+            self.cfg = cfg
+
+    class DummyTrainer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def fit(self, *args, **kwargs):
+            captured["fit_called"] = True
+
+    monkeypatch.setattr(mod, "DatasetFactory", DummyDatasetFactory)
+    monkeypatch.setattr(mod, "WandbLogger", DummyLogger)
+    monkeypatch.setattr(mod, "ArtifactCheckpointCallback", lambda *a, **k: object())
+    monkeypatch.setattr(mod, "BenchmarkCallback", lambda *a, **k: object())
+    monkeypatch.setattr(mod, "E3GNN", DummyModel)
+    monkeypatch.setattr(mod.pl, "Trainer", DummyTrainer)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train_silicon.py",
+            "--data-path",
+            str(data_root),
+            "--num-train",
+            "2",
+            "--num-val",
+            "1",
+            "--apply-cutoff-to-targets",
+            "false",
+            "--benchmark",
+            "false",
+        ],
+    )
+
+    mod.main()
+
+    assert captured["fit_called"] is True
+    assert len(captured["snapshots"]) == 3
+    assert sum(1 for _, _, purpose in captured["snapshots"] if purpose == "train") == 2
+    assert sum(1 for _, _, purpose in captured["snapshots"] if purpose == "val") == 1
+    assert captured["dataset_cfg"].cutoff_radius is None

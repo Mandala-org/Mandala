@@ -213,6 +213,8 @@ def compute_graph_features(
         basis="gaussian",
         cutoff=False,
     )
+    if cfg.radial_embedding_scale == "sqrt_n_radial":
+        edge_length_emb = edge_length_emb * (cfg.n_radial**0.5)
 
     return (
         edge_index,
