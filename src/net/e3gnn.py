@@ -574,20 +574,23 @@ class E3GNN(pl.LightningModule):
                     forces_pred, forces_true
                 )
 
-        if self.cfg.log_per_irrep_metrics and "hamiltonian" in preds_irreps:
-            target_h_irreps = (
-                y["hamiltonian"]
-                if self.cfg.train_target == "irreps"
-                else y["hamiltonian"].to_vectors(self.mapper)
-            )
-            irrep_metrics = compute_irrep_metrics(
-                preds_irreps["hamiltonian"],
-                target_h_irreps,
-                self.all_irreps,
-                self.mapper,
-            )
-            for key, value in irrep_metrics.items():
-                metrics[f"{stage}/hamiltonian_{key}"] = value
+        if self.cfg.log_per_irrep_metrics:
+            for name in self.cfg.matrix_targets:
+                if name not in preds_irreps or name not in y:
+                    continue
+                target_irreps = (
+                    y[name]
+                    if self.cfg.train_target == "irreps"
+                    else y[name].to_vectors(self.mapper)
+                )
+                irrep_metrics = compute_irrep_metrics(
+                    preds_irreps[name],
+                    target_irreps,
+                    self.all_irreps,
+                    self.mapper,
+                )
+                for key, value in irrep_metrics.items():
+                    metrics[f"{stage}/{name}_irrep_{key}"] = value
 
         # Partial Ground Truth Observables
         if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
