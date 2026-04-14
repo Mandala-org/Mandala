@@ -53,6 +53,24 @@ def test_setup_argparse_accepts_hyphen_aliases_and_scalar_matrix_target(monkeypa
     assert args.wandb_project == "silicon-test"
 
 
+def test_setup_argparse_parses_optional_float_union(monkeypatch):
+    mod = _load_train_silicon_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train_silicon.py",
+            "--grad-clip-val",
+            "1.0",
+        ],
+    )
+
+    args = mod.setup_argparse()
+
+    assert isinstance(args.grad_clip_val, float)
+    assert args.grad_clip_val == pytest.approx(1.0)
+
+
 @pytest.mark.integration
 def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
     mod = _load_train_silicon_module()
