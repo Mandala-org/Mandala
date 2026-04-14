@@ -276,40 +276,6 @@ class E3GNN(pl.LightningModule):
             return ~is_diag
         raise RuntimeError(f"Unsupported partial_train value: {self.cfg.partial_train}")
 
-    def _edge_partition_metrics(
-        self,
-        stage: str,
-        metrics: dict[str, torch.Tensor],
-        x: Dict[str, Any],
-    ) -> None:
-        if "edge_index" not in x or "edge_shift" not in x:
-            return
-
-        edges_5d = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
-        sx, sy, sz, i, j = edges_5d
-        is_diag = (i == j) & (sx == 0) & (sy == 0) & (sz == 0)
-        is_shifted_self = (i == j) & ~((sx == 0) & (sy == 0) & (sz == 0))
-        is_offdiag = i != j
-
-        metrics[f"{stage}/edges_total"] = torch.tensor(
-            float(edges_5d.shape[1]), device=self.device
-        )
-        metrics[f"{stage}/edges_diag"] = torch.tensor(
-            float(is_diag.sum()), device=self.device
-        )
-        metrics[f"{stage}/edges_shifted_self"] = torch.tensor(
-            float(is_shifted_self.sum()), device=self.device
-        )
-        metrics[f"{stage}/edges_offdiag"] = torch.tensor(
-            float(is_offdiag.sum()), device=self.device
-        )
-        metrics[f"{stage}/edge_ratio_diag"] = is_diag.float().mean()
-        metrics[f"{stage}/edge_ratio_shifted_self"] = is_shifted_self.float().mean()
-        metrics[f"{stage}/edge_ratio_offdiag"] = is_offdiag.float().mean()
-        metrics[f"{stage}/nodes_total"] = torch.tensor(
-            float(x["node_type_idx"].shape[0]), device=self.device
-        )
-
     def _compute_irrep_part_losses(
         self,
         pred: IrrepsBlockData,
@@ -446,7 +412,6 @@ class E3GNN(pl.LightningModule):
         t_fwd_start = time.perf_counter()
         preds_irreps = self(x)
         t_fwd_end = time.perf_counter()
-        self._edge_partition_metrics(stage, metrics, x)
 
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
@@ -703,13 +668,20 @@ class E3GNN(pl.LightningModule):
         # --- Logging ------------------------------------------------------
         metrics[f"{stage}/loss_total"] = loss
         metrics[f"{stage}/loss_matrix_total"] = loss_matrix
+        metrics[f"{stage}/loss_block_total"] = loss_matrix
 
         if loss_E_weighted > 0:
             metrics[f"{stage}/loss_energy"] = loss_E_weighted
+            metrics[f"{stage}/loss_energy_weighted"] = loss_E_weighted
         if loss_N_weighted > 0:
             metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted
+            metrics[f"{stage}/loss_num_electrons_weighted"] = loss_N_weighted
         if loss_F_weighted > 0:
             metrics[f"{stage}/loss_forces"] = loss_F_weighted
+            metrics[f"{stage}/loss_forces_weighted"] = loss_F_weighted
+
+        for name, loss_val in combined_matrix_losses.items():
+            metrics[f"{stage}/loss_block_{name}"] = loss_val
 
         if stage == "train" and loss > 1e-12:
             for name, val in combined_matrix_losses.items():
@@ -754,6 +726,26 @@ class E3GNN(pl.LightningModule):
 
         lr = optimizer[0].param_groups[0]["lr"]
         self.log("lr", lr, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+    def on_before_optimizer_step(self, optimizer) -> None:
+        total_norm_sq = torch.tensor(0.0, device=self.device)
+        saw_grad = False
+        for param in self.parameters():
+            if param.grad is None:
+                continue
+            grad = param.grad.detach()
+            total_norm_sq = total_norm_sq + torch.sum(grad * grad)
+            saw_grad = True
+        if saw_grad:
+            self.log(
+                "grad_norm",
+                torch.sqrt(total_norm_sq),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=False,
+                logger=True,
+                batch_size=1,
+            )
 
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):

@@ -51,9 +51,15 @@ def _make_batch_and_module():
     class DummyModule:
         def __init__(self):
             self.cfg = SimpleNamespace(
-                matrix_targets=["hamiltonian", "overlap", "density"]
+                matrix_targets=["hamiltonian", "overlap", "density"],
+                print_per_irrep_metrics=False,
+                log_interval=1,
+                adaptive_log_interval=False,
+                enable_energy=False,
+                enable_num_electrons=False,
             )
             self.mapper = mapper
+            self.device = torch.device("cpu")
 
         def eval(self):
             return self
@@ -65,6 +71,12 @@ def _make_batch_and_module():
                 "density": pred.to_vectors(mapper),
             }
 
+        def transfer_batch_to_device(self, batch, device, dataloader_idx):
+            return batch
+
+        def on_after_batch_transfer(self, batch, dataloader_idx):
+            return batch
+
     return mapper, (x, y), DummyModule()
 
 
@@ -72,6 +84,14 @@ def test_checkpoint_callback_saves_artifacts(tmp_path):
     _, batch, module = _make_batch_and_module()
 
     saved = []
+    logged_payloads = []
+
+    class DummyExperiment:
+        def __init__(self):
+            self.summary = {}
+
+        def log(self, payload):
+            logged_payloads.append(payload)
 
     class DummyTrainer:
         def __init__(self):
@@ -79,7 +99,8 @@ def test_checkpoint_callback_saves_artifacts(tmp_path):
             self.sanity_checking = False
             self.callback_metrics = {"val/loss_total": torch.tensor(1.0)}
             self.val_dataloaders = [[batch]]
-            self.logger = SimpleNamespace(experiment=SimpleNamespace(summary={}))
+            self.logger = SimpleNamespace(experiment=DummyExperiment())
+            self.optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
 
         def save_checkpoint(self, path):
             saved.append(path)
@@ -102,10 +123,14 @@ def test_checkpoint_callback_saves_artifacts(tmp_path):
     assert str(tmp_path / "final_model.pt") in saved
     assert (tmp_path / "dos_comparison_final.png").exists()
     assert (tmp_path / "distance_error_curve_hamiltonian.png").exists()
+    assert (tmp_path / "distance_error_curve_hamiltonian.json").exists()
     assert (tmp_path / "per_irrep_images" / "hamiltonian" / "0e.png").exists()
     assert (tmp_path / "per_irrep_images" / "overlap" / "0e.png").exists()
     assert (tmp_path / "per_irrep_images" / "density" / "0e.png").exists()
-    assert (tmp_path / "training_progress_hamiltonian.gif").exists()
+    assert (tmp_path / "training_progress_hamiltonian.mp4").exists()
+    assert any("initial/mae_H" in payload for payload in logged_payloads)
+    assert any("mae_H_mod" in payload for payload in logged_payloads)
+    assert any("final/mae_H" in payload for payload in logged_payloads)
 
 
 def test_plot_helpers_write_files(tmp_path):
@@ -129,6 +154,15 @@ def test_plot_helpers_write_files(tmp_path):
         "l2_abs": [0.3, 0.4],
         "l1_rel": [0.5, 0.6],
         "l2_rel": [0.7, 0.8],
+        "l1_abs_min": [0.05, 0.1],
+        "l1_abs_max": [0.15, 0.25],
+        "l2_abs_min": [0.2, 0.3],
+        "l2_abs_max": [0.4, 0.5],
+        "l1_rel_min": [0.4, 0.5],
+        "l1_rel_max": [0.6, 0.7],
+        "l2_rel_min": [0.6, 0.7],
+        "l2_rel_max": [0.8, 0.9],
+        "n_bins": 2,
     }
     curve_path = tmp_path / "curve.png"
     save_distance_error_curve_plot(curve, curve_path)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -9,9 +10,27 @@ import torch
 import matplotlib.pyplot as plt
 from PIL import Image
 import pytorch_lightning as pl
+import imageio.v2 as imageio
 
 from data.block_matrix import BlockMatrix, IrrepsBlockData
-from net.irrep_tools import filter_irreps_block_data_by_irrep, get_all_irreps
+from net.irrep_tools import (
+    compute_irrep_metrics,
+    filter_irreps_block_data_by_irrep,
+    get_all_irreps,
+)
+from net.silicon_study_logging import (
+    MATRIX_ALIAS,
+    IRREP_PREFIX_BY_MATRIX,
+    build_wandb_detailed_metrics_log,
+    build_wandb_per_irrep_metrics_log,
+    log_detailed_training_metrics,
+    log_final_metrics,
+    log_per_irrep_metrics,
+    log_strict_checks_passed,
+    log_study_complete,
+    should_log_epoch,
+)
+from core.sparse_math import trace_matmul_sparse_block_matrix
 
 
 def _save_plot(fig: plt.Figure, path: Path) -> None:
@@ -40,6 +59,201 @@ def _compute_mu_h(H_pred: BlockMatrix, H_gt: BlockMatrix, S: BlockMatrix) -> flo
         numerator += torch.sum(diff * s_val).item()
         denominator += torch.sum(s_val * s_val).item()
     return numerator / denominator if denominator > 1e-10 else 0.0
+
+
+def _crop_dense_to_max_atoms(
+    dense: torch.Tensor,
+    atoms: tuple[str, ...],
+    orbital_cfg,
+    max_atoms: int | None,
+) -> torch.Tensor:
+    if max_atoms is None or int(max_atoms) <= 0:
+        return dense
+    atom_count = min(int(max_atoms), len(atoms))
+    orbital_dims = [orbital_cfg.element_to_irreps[a].dim for a in atoms]
+    cut_dim = int(sum(orbital_dims[:atom_count]))
+    return dense[:cut_dim, :cut_dim]
+
+
+def compute_basic_matrix_metrics_aligned(
+    pred: BlockMatrix,
+    target: BlockMatrix,
+) -> dict[str, float]:
+    mae = 0.0
+    mse = 0.0
+    total_elements = 0
+
+    for key in target.pair_blocks.keys():
+        pred_blocks = pred.pair_blocks[key]
+        gt_blocks = target.pair_blocks[key]
+        if pred_blocks.shape != gt_blocks.shape:
+            raise ValueError(
+                f"Aligned basic metrics require matching block shapes for key '{key}'"
+            )
+        diff = pred_blocks - gt_blocks
+        mae += torch.sum(torch.abs(diff)).item()
+        mse += torch.sum(diff**2).item()
+        total_elements += diff.numel()
+
+    if total_elements <= 0:
+        return {"mae": 0.0, "mse": 0.0}
+    return {"mae": mae / total_elements, "mse": mse / total_elements}
+
+
+def compute_detailed_metrics_aligned(
+    H_pred: BlockMatrix,
+    H_gt: BlockMatrix,
+    S: BlockMatrix,
+) -> dict[str, float]:
+    mae = 0.0
+    mse = 0.0
+    total_elements = 0
+
+    for key in H_gt.pair_blocks.keys():
+        pred_blocks = H_pred.pair_blocks[key]
+        gt_blocks = H_gt.pair_blocks[key]
+        if pred_blocks.shape != gt_blocks.shape:
+            raise ValueError(
+                f"Aligned detailed metrics require matching block shapes for key '{key}'"
+            )
+        diff = pred_blocks - gt_blocks
+        mae += torch.sum(torch.abs(diff)).item()
+        mse += torch.sum(diff**2).item()
+        total_elements += diff.numel()
+
+    if total_elements <= 0:
+        return {
+            "mae": 0.0,
+            "mse": 0.0,
+            "mae_mod": 0.0,
+            "mse_mod": 0.0,
+            "mu_H": 0.0,
+            "correction_mae": 0.0,
+            "correction_mse": 0.0,
+        }
+
+    mae /= total_elements
+    mse /= total_elements
+    mu_h = _compute_mu_h(H_pred, H_gt, S)
+
+    mae_mod = 0.0
+    mse_mod = 0.0
+    correction_mae = 0.0
+    correction_mse = 0.0
+    for key in H_gt.pair_blocks.keys():
+        pred_blocks = H_pred.pair_blocks[key]
+        gt_blocks = H_gt.pair_blocks[key]
+        s_blocks = S.pair_blocks[key]
+        correction = mu_h * s_blocks
+        diff_corrected = pred_blocks - gt_blocks - correction
+        mae_mod += torch.sum(torch.abs(diff_corrected)).item()
+        mse_mod += torch.sum(diff_corrected**2).item()
+        correction_mae += torch.sum(torch.abs(correction)).item()
+        correction_mse += torch.sum(correction**2).item()
+
+    return {
+        "mae": mae,
+        "mse": mse,
+        "mae_mod": mae_mod / total_elements,
+        "mse_mod": mse_mod / total_elements,
+        "mu_H": mu_h,
+        "correction_mae": correction_mae / total_elements,
+        "correction_mse": correction_mse / total_elements,
+    }
+
+
+def align_pred_block_matrix_to_target_edges(
+    pred_matrix: BlockMatrix,
+    target_matrix: BlockMatrix,
+) -> BlockMatrix:
+    pair_blocks: dict[str, torch.Tensor] = {}
+    pair_edges: dict[str, torch.Tensor] = {}
+    lookup: dict[tuple[int, int, int, int, int], tuple[str, int]] = {}
+
+    for key, target_edges in target_matrix.pair_edges.items():
+        if key not in pred_matrix.pair_blocks:
+            raise ValueError(f"Prediction is missing key '{key}' required by target")
+        pred_blocks = pred_matrix.pair_blocks[key]
+        gathered = []
+        for edge in target_edges.t().tolist():
+            edge_key = tuple(map(int, edge))
+            if edge_key not in pred_matrix.lookup:
+                raise ValueError(
+                    f"Prediction is missing target edge {edge_key} for key '{key}'"
+                )
+            pred_key, pred_idx = pred_matrix.lookup[edge_key]
+            if pred_key != key:
+                raise ValueError(
+                    f"Prediction edge {edge_key} mapped to wrong key "
+                    f"'{pred_key}' instead of '{key}'"
+                )
+            gathered.append(pred_blocks[pred_idx])
+        pair_blocks[key] = (
+            torch.stack(gathered, dim=0)
+            if gathered
+            else pred_blocks.new_zeros((0, *pred_blocks.shape[1:]))
+        )
+        pair_edges[key] = target_edges
+        for idx, (sx, sy, sz, i, j) in enumerate(target_edges.t().tolist()):
+            lookup[(sx, sy, sz, i, j)] = (key, idx)
+
+    return BlockMatrix(
+        atoms=pred_matrix.atoms,
+        atom_counts=pred_matrix.atom_counts,
+        pair_blocks=pair_blocks,
+        pair_edges=pair_edges,
+        lookup=lookup,
+        orbital_cfg=pred_matrix.orbital_cfg,
+        basis=pred_matrix.basis,
+    )
+
+
+def align_pred_irreps_to_target_edges(
+    pred_irreps: IrrepsBlockData,
+    target_irreps: IrrepsBlockData,
+) -> IrrepsBlockData:
+    pair_vectors: dict[str, torch.Tensor] = {}
+    pair_edges: dict[str, torch.Tensor] = {}
+    lookup: dict[tuple[int, int, int, int, int], tuple[str, int]] = {}
+
+    for key, target_edges in target_irreps.pair_edges.items():
+        if key not in pred_irreps.pair_vectors:
+            raise ValueError(
+                f"Prediction is missing irrep key '{key}' required by target"
+            )
+        pred_vectors = pred_irreps.pair_vectors[key]
+        gathered = []
+        for edge in target_edges.t().tolist():
+            edge_key = tuple(map(int, edge))
+            if edge_key not in pred_irreps.lookup:
+                raise ValueError(
+                    f"Prediction is missing target irrep edge {edge_key} for key '{key}'"
+                )
+            pred_key, pred_idx = pred_irreps.lookup[edge_key]
+            if pred_key != key:
+                raise ValueError(
+                    f"Prediction irrep edge {edge_key} mapped to wrong key "
+                    f"'{pred_key}' instead of '{key}'"
+                )
+            gathered.append(pred_vectors[pred_idx])
+        pair_vectors[key] = (
+            torch.stack(gathered, dim=0)
+            if gathered
+            else pred_vectors.new_zeros((0, pred_vectors.shape[-1]))
+        )
+        pair_edges[key] = target_edges
+        for idx, (sx, sy, sz, i, j) in enumerate(target_edges.t().tolist()):
+            lookup[(sx, sy, sz, i, j)] = (key, idx)
+
+    return IrrepsBlockData(
+        atoms=pred_irreps.atoms,
+        atom_counts=pred_irreps.atom_counts,
+        pair_vectors=pair_vectors,
+        pair_edges=pair_edges,
+        lookup=lookup,
+        orbital_cfg=pred_irreps.orbital_cfg,
+        basis=pred_irreps.basis,
+    )
 
 
 def compute_generalized_eigenvalues(H: BlockMatrix, S: BlockMatrix) -> torch.Tensor:
@@ -278,6 +492,14 @@ def compute_distance_error_curve(
     l2_abs = torch.full((n_bins,), float("nan"), dtype=torch.float64)
     l1_rel = torch.full((n_bins,), float("nan"), dtype=torch.float64)
     l2_rel = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_abs_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_abs_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_abs_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_abs_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_rel_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l1_rel_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_rel_min = torch.full((n_bins,), float("nan"), dtype=torch.float64)
+    l2_rel_max = torch.full((n_bins,), float("nan"), dtype=torch.float64)
     n_edges_per_bin = torch.zeros((n_bins,), dtype=torch.int64)
     n_elems_per_bin = torch.zeros((n_bins,), dtype=torch.int64)
 
@@ -286,10 +508,10 @@ def compute_distance_error_curve(
     gt_l1_sum_t = torch.tensor(gt_l1_sum, dtype=torch.float64)
     gt_l2_sum_t = torch.tensor(gt_l2_sum, dtype=torch.float64)
     elem_count_t = torch.tensor(elem_count, dtype=torch.int64)
-    # edge_l1_abs_t = torch.tensor(edge_l1_abs, dtype=torch.float64)
-    # edge_l2_abs_t = torch.tensor(edge_l2_abs, dtype=torch.float64)
-    # edge_l1_rel_t = torch.tensor(edge_l1_rel, dtype=torch.float64)
-    # edge_l2_rel_t = torch.tensor(edge_l2_rel, dtype=torch.float64)
+    edge_l1_abs_t = torch.tensor(edge_l1_abs, dtype=torch.float64)
+    edge_l2_abs_t = torch.tensor(edge_l2_abs, dtype=torch.float64)
+    edge_l1_rel_t = torch.tensor(edge_l1_rel, dtype=torch.float64)
+    edge_l2_rel_t = torch.tensor(edge_l2_rel, dtype=torch.float64)
 
     for b in range(n_bins):
         mask = bin_idx == b
@@ -310,13 +532,30 @@ def compute_distance_error_curve(
             l1_rel[b] = sum_abs_l1 / sum_gt_l1
         if sum_gt_l2 > 1e-14:
             l2_rel[b] = torch.sqrt(sum_abs_l2 / sum_gt_l2)
+        l1_abs_min[b] = edge_l1_abs_t[mask].min()
+        l1_abs_max[b] = edge_l1_abs_t[mask].max()
+        l2_abs_min[b] = edge_l2_abs_t[mask].min()
+        l2_abs_max[b] = edge_l2_abs_t[mask].max()
+        l1_rel_min[b] = edge_l1_rel_t[mask].min()
+        l1_rel_max[b] = edge_l1_rel_t[mask].max()
+        l2_rel_min[b] = edge_l2_rel_t[mask].min()
+        l2_rel_max[b] = edge_l2_rel_t[mask].max()
 
     return {
+        "bin_edges": bin_edges.tolist(),
         "bin_centers": bin_centers.tolist(),
         "l1_abs": l1_abs.tolist(),
         "l2_abs": l2_abs.tolist(),
         "l1_rel": l1_rel.tolist(),
         "l2_rel": l2_rel.tolist(),
+        "l1_abs_min": l1_abs_min.tolist(),
+        "l1_abs_max": l1_abs_max.tolist(),
+        "l2_abs_min": l2_abs_min.tolist(),
+        "l2_abs_max": l2_abs_max.tolist(),
+        "l1_rel_min": l1_rel_min.tolist(),
+        "l1_rel_max": l1_rel_max.tolist(),
+        "l2_rel_min": l2_rel_min.tolist(),
+        "l2_rel_max": l2_rel_max.tolist(),
         "n_edges": n_edges_per_bin.tolist(),
         "n_elements": n_elems_per_bin.tolist(),
         "d_min": d_min,
@@ -326,25 +565,93 @@ def compute_distance_error_curve(
 
 
 def save_distance_error_curve_plot(
-    curve_data: dict[str, Any], output_path: Path | str, title: str | None = None
+    curve_data: dict[str, Any],
+    output_path: Path | str,
+    title: str | None = None,
+    relative_log_scale: bool = True,
 ) -> None:
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    x = np.asarray(curve_data["bin_centers"], dtype=float)
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    plots = [
-        ("l1_abs", "Abs L1"),
-        ("l2_abs", "Abs L2"),
-        ("l1_rel", "Rel L1"),
-        ("l2_rel", "Rel L2"),
+    x = np.array(curve_data["bin_centers"], dtype=float)
+
+    def _interp_nans(x_vals: np.ndarray, y_vals: np.ndarray) -> np.ndarray:
+        y = y_vals.astype(float).copy()
+        valid = ~np.isnan(y)
+        if valid.sum() == 0:
+            return y
+        if valid.sum() == 1:
+            y[~valid] = y[valid][0]
+            return y
+        y[~valid] = np.interp(x_vals[~valid], x_vals[valid], y[valid])
+        return y
+
+    def _interp_nans_log(
+        x_vals: np.ndarray, y_vals: np.ndarray, eps: float = 1e-16
+    ) -> np.ndarray:
+        y = y_vals.astype(float).copy()
+        valid = np.isfinite(y) & (y > 0.0)
+        if valid.sum() == 0:
+            return y
+        if valid.sum() == 1:
+            y[~np.isfinite(y)] = y[valid][0]
+            return y
+        y_log = np.log10(y[valid])
+        missing = ~np.isfinite(y)
+        y_interp_log = np.interp(x_vals[missing], x_vals[valid], y_log)
+        y[missing] = np.power(10.0, y_interp_log)
+        y[(~np.isfinite(y)) | (y <= 0.0)] = eps
+        return y
+
+    def _make_log_safe(y_vals: np.ndarray, eps: float = 1e-16) -> np.ndarray:
+        y = y_vals.astype(float).copy()
+        finite = np.isfinite(y)
+        nonpos = finite & (y <= 0.0)
+        y[nonpos] = eps
+        return y
+
+    l1_abs = _interp_nans(x, np.array(curve_data["l1_abs"], dtype=float))
+    l2_abs = _interp_nans(x, np.array(curve_data["l2_abs"], dtype=float))
+    l1_rel = _interp_nans_log(x, np.array(curve_data["l1_rel"], dtype=float))
+    l2_rel = _interp_nans_log(x, np.array(curve_data["l2_rel"], dtype=float))
+    l1_abs_min = _interp_nans(x, np.array(curve_data["l1_abs_min"], dtype=float))
+    l1_abs_max = _interp_nans(x, np.array(curve_data["l1_abs_max"], dtype=float))
+    l2_abs_min = _interp_nans(x, np.array(curve_data["l2_abs_min"], dtype=float))
+    l2_abs_max = _interp_nans(x, np.array(curve_data["l2_abs_max"], dtype=float))
+    l1_rel_min = _interp_nans_log(x, np.array(curve_data["l1_rel_min"], dtype=float))
+    l1_rel_max = _interp_nans_log(x, np.array(curve_data["l1_rel_max"], dtype=float))
+    l2_rel_min = _interp_nans_log(x, np.array(curve_data["l2_rel_min"], dtype=float))
+    l2_rel_max = _interp_nans_log(x, np.array(curve_data["l2_rel_max"], dtype=float))
+    if relative_log_scale:
+        l1_rel = _make_log_safe(l1_rel)
+        l2_rel = _make_log_safe(l2_rel)
+        l1_rel_min = _make_log_safe(l1_rel_min)
+        l1_rel_max = _make_log_safe(l1_rel_max)
+        l2_rel_min = _make_log_safe(l2_rel_min)
+        l2_rel_max = _make_log_safe(l2_rel_max)
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+    fig.suptitle(
+        title or f"Distance Error Curves ({curve_data['n_bins']} bins)", fontsize=14
+    )
+    panels = [
+        (axes[0, 0], l1_abs, l1_abs_min, l1_abs_max, "Absolute L1"),
+        (axes[0, 1], l2_abs, l2_abs_min, l2_abs_max, "Absolute L2 (RMSE)"),
+        (axes[1, 0], l1_rel, l1_rel_min, l1_rel_max, "Relative L1"),
+        (axes[1, 1], l2_rel, l2_rel_min, l2_rel_max, "Relative L2"),
     ]
-    for ax, (key, label) in zip(axes.ravel(), plots):
-        y = np.asarray(curve_data[key], dtype=float)
-        ax.plot(x, y, marker="o", lw=1.4)
-        ax.set_title(label)
-        ax.grid(True, alpha=0.25)
-    if title:
-        fig.suptitle(title)
+    for ax, y, y_min, y_max, ttl in panels:
+        ax.plot(x, y, marker="o", linewidth=1.2, markersize=2.2, label="mean")
+        ax.plot(x, y_min, linewidth=0.9, linestyle="--", alpha=0.8, label="min")
+        ax.plot(x, y_max, linewidth=0.9, linestyle="--", alpha=0.8, label="max")
+        ax.fill_between(x, y_min, y_max, alpha=0.15)
+        ax.set_title(ttl)
+        ax.set_xlabel("Distance (A)")
+        ax.set_ylabel("Error")
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+    if relative_log_scale:
+        axes[1, 0].set_yscale("log")
+        axes[1, 1].set_yscale("log")
     _save_plot(fig, output_path)
 
 
@@ -355,14 +662,21 @@ def save_matrix_comparison_plot(
     *,
     reference: BlockMatrix | None = None,
     title: str = "",
+    max_atoms: int | None = None,
 ) -> None:
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    pred_dense = _as_dense(pred)
-    target_dense = _as_dense(target)
+    pred_dense = _crop_dense_to_max_atoms(
+        _as_dense(pred), pred.atoms, pred.orbital_cfg, max_atoms
+    )
+    target_dense = _crop_dense_to_max_atoms(
+        _as_dense(target), target.atoms, target.orbital_cfg, max_atoms
+    )
     diff = pred_dense - target_dense
     if reference is not None:
-        ref_dense = _as_dense(reference)
+        ref_dense = _crop_dense_to_max_atoms(
+            _as_dense(reference), reference.atoms, reference.orbital_cfg, max_atoms
+        )
         mu = float(
             torch.sum((pred_dense - target_dense) * ref_dense).item()
             / max(float(torch.sum(ref_dense * ref_dense).item()), 1e-12)
@@ -414,6 +728,20 @@ def compile_frames_to_gif(
         duration=duration_ms,
         loop=0,
     )
+
+
+def compile_frames_to_video(
+    frame_paths: Iterable[Path],
+    output_path: Path | str,
+    fps: int = 5,
+    format: str = "mp4",
+) -> None:
+    output_path = Path(output_path)
+    frames = [imageio.imread(str(path)) for path in sorted(frame_paths)]
+    if not frames:
+        return
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    imageio.mimsave(output_path, frames, fps=fps, format=format)
 
 
 def _get_logger_run(trainer: Any):
@@ -470,6 +798,8 @@ class ArtifactCheckpointCallback(pl.Callback):
         self.latest_path = self.output_dir / "latest_checkpoint.pt"
         self.best_path = self.output_dir / "best_model.pt"
         self.final_path = self.output_dir / "final_model.pt"
+        self._last_logged_epoch = -1
+        self._printed_strict_checks = False
 
     def _is_better(self, score: float) -> bool:
         if self.state.best_score is None:
@@ -483,6 +813,10 @@ class ArtifactCheckpointCallback(pl.Callback):
     def _get_reference_batch(self, trainer: Any):
         loaders = getattr(trainer, "val_dataloaders", None)
         if loaders is None:
+            loaders = getattr(trainer, "train_dataloader", None)
+            if callable(loaders):
+                loaders = loaders()
+        if loaders is None:
             return None
         if not isinstance(loaders, (list, tuple)):
             loaders = [loaders]
@@ -494,11 +828,27 @@ class ArtifactCheckpointCallback(pl.Callback):
         return None
 
     def _predict(self, pl_module, batch):
+        batch = pl_module.transfer_batch_to_device(batch, pl_module.device, 0)
+        batch = pl_module.on_after_batch_transfer(batch, 0)
         pl_module.eval()
         with torch.no_grad():
             x, y = batch
             preds = pl_module(x)
         return x, y, preds
+
+    def _iter_eval_batches(self, trainer: Any):
+        loaders = getattr(trainer, "val_dataloaders", None)
+        if loaders is None:
+            loaders = getattr(trainer, "train_dataloader", None)
+            if callable(loaders):
+                loaders = loaders()
+        if loaders is None:
+            return
+        if not isinstance(loaders, (list, tuple)):
+            loaders = [loaders]
+        for loader in loaders:
+            for batch in loader:
+                yield batch
 
     @staticmethod
     def _as_block_matrix(obj, mapper) -> BlockMatrix:
@@ -527,10 +877,189 @@ class ArtifactCheckpointCallback(pl.Callback):
             import wandb
 
             _maybe_log_wandb(
-                run, {key: wandb.Video(str(path), fps=self.video_fps, format="gif")}
+                run, {key: wandb.Video(str(path), fps=self.video_fps, format="mp4")}
             )
         except Exception:
             return
+
+    def _align_pred_matrices(
+        self, preds: dict[str, Any], y: dict[str, Any], mapper
+    ) -> dict[str, BlockMatrix]:
+        aligned: dict[str, BlockMatrix] = {}
+        for name, pred_obj in preds.items():
+            if name not in y:
+                continue
+            pred_mat = self._as_block_matrix(pred_obj, mapper)
+            target_mat = self._as_block_matrix(y[name], mapper)
+            aligned[name] = align_pred_block_matrix_to_target_edges(
+                pred_mat, target_mat
+            )
+        return aligned
+
+    def _evaluate_epoch_split(self, trainer: Any, pl_module) -> dict[str, Any] | None:
+        all_irreps = get_all_irreps(pl_module.mapper)
+        detailed_sum = {
+            "mae": 0.0,
+            "mse": 0.0,
+            "mae_mod": 0.0,
+            "mse_mod": 0.0,
+            "mu_H": 0.0,
+            "correction_mae": 0.0,
+            "correction_mse": 0.0,
+        }
+        basic_sum_by_name: dict[str, dict[str, float]] = {}
+        per_irrep_sum_by_name: dict[str, dict[str, float]] = {}
+        energy_mae_sum = 0.0
+        energy_count = 0
+        num_electrons_mae_sum = 0.0
+        num_electrons_count = 0
+        first_payload = None
+        n_batches = 0
+
+        for batch in self._iter_eval_batches(trainer):
+            x, y, preds = self._predict(pl_module, batch)
+            aligned_preds = self._align_pred_matrices(preds, y, pl_module.mapper)
+            if (
+                aligned_preds
+                and getattr(pl_module.cfg, "require_exact_edge_match", False)
+                and not self._printed_strict_checks
+            ):
+                log_strict_checks_passed()
+                self._printed_strict_checks = True
+
+            if "hamiltonian" in aligned_preds and "hamiltonian" in y and "overlap" in y:
+                detail = compute_detailed_metrics_aligned(
+                    aligned_preds["hamiltonian"],
+                    self._as_block_matrix(y["hamiltonian"], pl_module.mapper),
+                    self._as_block_matrix(y["overlap"], pl_module.mapper),
+                )
+                for key, value in detail.items():
+                    detailed_sum[key] += float(value)
+
+            for name, pred_mat in aligned_preds.items():
+                target_mat = self._as_block_matrix(y[name], pl_module.mapper)
+                basic = compute_basic_matrix_metrics_aligned(pred_mat, target_mat)
+                basic_acc = basic_sum_by_name.setdefault(name, {})
+                for key, value in basic.items():
+                    basic_acc[key] = basic_acc.get(key, 0.0) + float(value)
+
+                pred_ir = align_pred_irreps_to_target_edges(
+                    pred_mat.to_vectors(pl_module.mapper),
+                    target_mat.to_vectors(pl_module.mapper),
+                )
+                targ_ir = target_mat.to_vectors(pl_module.mapper)
+                per_irrep = compute_irrep_metrics(
+                    pred_ir,
+                    targ_ir,
+                    all_irreps,
+                    pl_module.mapper,
+                )
+                per_irrep_acc = per_irrep_sum_by_name.setdefault(name, {})
+                for key, value in per_irrep.items():
+                    per_irrep_acc[key] = per_irrep_acc.get(key, 0.0) + float(value)
+
+            if (
+                "hamiltonian" in aligned_preds
+                and "density" in aligned_preds
+                and pl_module.cfg.enable_energy
+                and "energy" in y
+            ):
+                e_pred = trace_matmul_sparse_block_matrix(
+                    aligned_preds["hamiltonian"], aligned_preds["density"]
+                )
+                energy_mae_sum += float(
+                    (torch.mean(torch.abs(e_pred - y["energy"])) * 27.2113845).item()
+                )
+                energy_count += 1
+            if (
+                "overlap" in aligned_preds
+                and "density" in aligned_preds
+                and pl_module.cfg.enable_num_electrons
+                and "num_electrons" in y
+            ):
+                n_pred = trace_matmul_sparse_block_matrix(
+                    aligned_preds["overlap"], aligned_preds["density"]
+                )
+                num_electrons_mae_sum += float(
+                    torch.mean(torch.abs(n_pred - y["num_electrons"])).item()
+                )
+                num_electrons_count += 1
+
+            if first_payload is None:
+                first_payload = {"x": x, "y": y, "preds": aligned_preds}
+            n_batches += 1
+
+        if n_batches == 0:
+            return None
+
+        return {
+            "detailed": {k: v / n_batches for k, v in detailed_sum.items()},
+            "basic_by_name": {
+                matrix_name: {k: v / n_batches for k, v in metrics.items()}
+                for matrix_name, metrics in basic_sum_by_name.items()
+            },
+            "per_irrep_by_name": {
+                matrix_name: {k: v / n_batches for k, v in metrics.items()}
+                for matrix_name, metrics in per_irrep_sum_by_name.items()
+            },
+            "energy_mae": (energy_mae_sum / energy_count) if energy_count > 0 else None,
+            "num_electrons_mae": (
+                num_electrons_mae_sum / num_electrons_count
+                if num_electrons_count > 0
+                else None
+            ),
+            "first_payload": first_payload,
+            "num_batches": n_batches,
+        }
+
+    def _build_epoch_wandb_payload(
+        self,
+        epoch_idx: int,
+        eval_result: dict[str, Any],
+        train_loss: float,
+        val_loss: float,
+        all_irreps,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"epoch": epoch_idx}
+        payload.update(
+            build_wandb_detailed_metrics_log(
+                epoch_zero_based=epoch_idx,
+                loss_value=train_loss,
+                detailed_metrics=eval_result["detailed"],
+            )
+        )
+        basic_by_name = eval_result["basic_by_name"]
+        if "hamiltonian" in basic_by_name:
+            payload["mae_H"] = basic_by_name["hamiltonian"]["mae"]
+            payload["mse_H"] = basic_by_name["hamiltonian"]["mse"]
+        if "overlap" in basic_by_name:
+            payload["mae_S"] = basic_by_name["overlap"]["mae"]
+            payload["mse_S"] = basic_by_name["overlap"]["mse"]
+        if "density" in basic_by_name:
+            payload["mae_D"] = basic_by_name["density"]["mae"]
+            payload["mse_D"] = basic_by_name["density"]["mse"]
+        if eval_result["energy_mae"] is not None:
+            payload["val/energy_mae_study"] = eval_result["energy_mae"]
+        if eval_result["num_electrons_mae"] is not None:
+            payload["val/num_electrons_mae_study"] = eval_result["num_electrons_mae"]
+        payload["val/loss"] = val_loss
+        for matrix_name, per_irrep in eval_result["per_irrep_by_name"].items():
+            payload.update(
+                build_wandb_per_irrep_metrics_log(
+                    epoch_zero_based=epoch_idx,
+                    all_irreps=all_irreps,
+                    per_irrep_metrics=per_irrep,
+                    metric_prefix=IRREP_PREFIX_BY_MATRIX.get(matrix_name, ""),
+                )
+            )
+        return payload
+
+    def _should_log_now(self, epoch_zero_based: int, pl_module) -> bool:
+        return should_log_epoch(
+            epoch_zero_based,
+            pl_module.cfg.log_interval,
+            pl_module.cfg.adaptive_log_interval,
+        )
 
     def on_fit_start(self, trainer, pl_module) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -545,6 +1074,73 @@ class ArtifactCheckpointCallback(pl.Callback):
                 run.summary["checkpoint/final_path"] = str(self.final_path.resolve())
             except Exception:
                 pass
+        initial_eval = self._evaluate_epoch_split(trainer, pl_module)
+        if initial_eval is not None:
+            log_detailed_training_metrics(
+                avg_epoch_time=0.0,
+                epochs_since_last_log=0,
+                time_elapsed=0.0,
+                loss_value=(
+                    float(
+                        trainer.callback_metrics.get(self.monitor, torch.tensor(0.0))
+                        .detach()
+                        .cpu()
+                        .item()
+                    )
+                    if self.monitor in trainer.callback_metrics
+                    else 0.0
+                ),
+                detailed_metrics=initial_eval["detailed"],
+            )
+        if initial_eval is not None and pl_module.cfg.print_per_irrep_metrics:
+            all_irreps = get_all_irreps(pl_module.mapper)
+            for matrix_name, per_irrep in initial_eval["per_irrep_by_name"].items():
+                log_per_irrep_metrics(
+                    f"Initial Per-Irrep Metrics ({matrix_name})",
+                    all_irreps,
+                    per_irrep,
+                    metric_prefix=IRREP_PREFIX_BY_MATRIX.get(matrix_name, ""),
+                )
+        if initial_eval is not None:
+            all_irreps = get_all_irreps(pl_module.mapper)
+            payload = {}
+            payload.update(
+                {
+                    f"initial/{k}": v
+                    for k, v in build_wandb_detailed_metrics_log(
+                        0, 0.0, initial_eval["detailed"]
+                    ).items()
+                    if k != "epoch"
+                }
+            )
+            payload["initial/loss_total"] = (
+                float(
+                    trainer.callback_metrics.get(self.monitor, torch.tensor(0.0))
+                    .detach()
+                    .cpu()
+                    .item()
+                )
+                if self.monitor in trainer.callback_metrics
+                else 0.0
+            )
+            for matrix_name, basic in initial_eval["basic_by_name"].items():
+                alias = MATRIX_ALIAS.get(matrix_name, matrix_name)
+                payload[f"initial/mae_{alias}"] = basic["mae"]
+                payload[f"initial/mse_{alias}"] = basic["mse"]
+                per_irrep_payload = build_wandb_per_irrep_metrics_log(
+                    0,
+                    all_irreps,
+                    initial_eval["per_irrep_by_name"].get(matrix_name, {}),
+                    metric_prefix=IRREP_PREFIX_BY_MATRIX.get(matrix_name, ""),
+                )
+                for key, value in per_irrep_payload.items():
+                    if key != "epoch":
+                        payload[f"initial/{alias}_{key}"] = value
+            if initial_eval["energy_mae"] is not None:
+                payload["initial/energy_mae"] = initial_eval["energy_mae"]
+            if initial_eval["num_electrons_mae"] is not None:
+                payload["initial/num_electrons_mae"] = initial_eval["num_electrons_mae"]
+            _maybe_log_wandb(run, payload)
 
     def on_validation_epoch_end(self, trainer, pl_module) -> None:
         if trainer.sanity_checking:
@@ -559,29 +1155,87 @@ class ArtifactCheckpointCallback(pl.Callback):
         if self.save_latest:
             trainer.save_checkpoint(str(self.latest_path))
 
-        if self.reference_batch is None:
+        if self.reference_batch is None or not self._should_log_now(
+            int(trainer.current_epoch), pl_module
+        ):
             return
-        x, y, preds = self._predict(pl_module, self.reference_batch)
-        self._save_epoch_frame(trainer, pl_module, x, y, preds)
+        eval_result = self._evaluate_epoch_split(trainer, pl_module)
+        if eval_result is None:
+            return
+        train_loss = float(
+            trainer.callback_metrics.get("train/loss_total", torch.tensor(0.0))
+            .detach()
+            .cpu()
+            .item()
+        )
+        val_loss = float(
+            trainer.callback_metrics.get(self.monitor, torch.tensor(0.0))
+            .detach()
+            .cpu()
+            .item()
+        )
+        current_epoch = int(trainer.current_epoch)
+        time_elapsed = 0.0
+        epochs_since_last_log = (
+            current_epoch - self._last_logged_epoch
+            if self._last_logged_epoch >= 0
+            else current_epoch + 1
+        )
+        avg_epoch_time = 0.0
+        self._last_logged_epoch = current_epoch
+        print(f"\n{'=' * 60}")
+        print(
+            f"EPOCH {current_epoch + 1}  |  lr={trainer.optimizers[0].param_groups[0]['lr']:.6e}"
+        )
+        print(f"{'=' * 60}")
+        log_detailed_training_metrics(
+            avg_epoch_time=avg_epoch_time,
+            epochs_since_last_log=epochs_since_last_log,
+            time_elapsed=time_elapsed,
+            loss_value=train_loss,
+            detailed_metrics=eval_result["detailed"],
+        )
+        if pl_module.cfg.print_per_irrep_metrics:
+            all_irreps = get_all_irreps(pl_module.mapper)
+            for matrix_name, per_irrep in eval_result["per_irrep_by_name"].items():
+                log_per_irrep_metrics(
+                    f"Validation Per-Irrep Metrics ({matrix_name})",
+                    all_irreps,
+                    per_irrep,
+                    metric_prefix=IRREP_PREFIX_BY_MATRIX.get(matrix_name, ""),
+                )
+        run = _get_logger_run(trainer)
+        payload = self._build_epoch_wandb_payload(
+            current_epoch,
+            eval_result,
+            train_loss,
+            val_loss,
+            get_all_irreps(pl_module.mapper),
+        )
+        _maybe_log_wandb(run, payload)
+        fp = eval_result["first_payload"]
+        if fp is not None:
+            self._save_epoch_frame(trainer, pl_module, fp["x"], fp["y"], fp["preds"])
 
     def _save_epoch_frame(self, trainer, pl_module, x, y, preds) -> None:
         epoch = int(trainer.current_epoch)
-        matrix_names = list(pl_module.cfg.matrix_targets)
-        for name in matrix_names:
-            if name not in preds or name not in y:
+        for name, pred_mat in preds.items():
+            if name not in y:
                 continue
-            pred_mat = self._as_block_matrix(preds[name], pl_module.mapper)
             target_mat = self._as_block_matrix(y[name], pl_module.mapper)
             ref = None
             if name == "hamiltonian" and "overlap" in y:
                 ref = self._as_block_matrix(y["overlap"], pl_module.mapper)
-            frame_path = self.frames_dir / name / f"epoch_{epoch:04d}.png"
+            frame_dir = self.frames_dir / name
+            frame_dir.mkdir(parents=True, exist_ok=True)
+            frame_path = frame_dir / f"frame_epoch_{epoch:06d}.png"
             save_matrix_comparison_plot(
                 pred_mat,
                 target_mat,
                 frame_path,
                 reference=ref,
-                title=f"{name} epoch {epoch}",
+                title=f"{MATRIX_ALIAS.get(name, name)} epoch {epoch}",
+                max_atoms=getattr(pl_module.cfg, "video_max_atoms", None),
             )
 
     def on_fit_end(self, trainer, pl_module) -> None:
@@ -590,13 +1244,39 @@ class ArtifactCheckpointCallback(pl.Callback):
 
         if self.reference_batch is None:
             return
-        x, y, preds = self._predict(pl_module, self.reference_batch)
+        eval_result = self._evaluate_epoch_split(trainer, pl_module)
+        if eval_result is None:
+            return
+        fp = eval_result["first_payload"]
+        if fp is None:
+            return
+        x, y, preds = fp["x"], fp["y"], fp["preds"]
+        final_detailed = eval_result["detailed"]
+        log_final_metrics(final_detailed)
+        run = _get_logger_run(trainer)
+        final_payload = {
+            "final/mae_H": final_detailed["mae"],
+            "final/mse_H": final_detailed["mse"],
+            "final/mae_H_mod": final_detailed["mae_mod"],
+            "final/mse_H_mod": final_detailed["mse_mod"],
+            "final/mu_H": final_detailed["mu_H"],
+            "final/correction_mae": final_detailed["correction_mae"],
+            "final/correction_mse": final_detailed["correction_mse"],
+        }
+        for matrix_name, basic in eval_result["basic_by_name"].items():
+            alias = MATRIX_ALIAS.get(matrix_name, matrix_name)
+            final_payload[f"final/mae_{alias}"] = basic["mae"]
+            final_payload[f"final/mse_{alias}"] = basic["mse"]
+        if eval_result["energy_mae"] is not None:
+            final_payload["final/energy_mae"] = eval_result["energy_mae"]
+        if eval_result["num_electrons_mae"] is not None:
+            final_payload["final/num_electrons_mae"] = eval_result["num_electrons_mae"]
 
         # final plots
         for name in pl_module.cfg.matrix_targets:
             if name not in preds or name not in y:
                 continue
-            pred_mat = self._as_block_matrix(preds[name], pl_module.mapper)
+            pred_mat = preds[name]
             target_mat = self._as_block_matrix(y[name], pl_module.mapper)
 
             ref = None
@@ -605,7 +1285,11 @@ class ArtifactCheckpointCallback(pl.Callback):
 
             if name == "hamiltonian" and "overlap" in y:
                 dos_path = self.output_dir / "dos_comparison_final.png"
-                save_dos_comparison_plot(pred_mat, target_mat, ref, dos_path)
+                dos_metrics = save_dos_comparison_plot(
+                    pred_mat, target_mat, ref, dos_path
+                )
+                for key, value in dos_metrics.items():
+                    final_payload[f"final/{key}"] = value
                 self._maybe_upload_image(trainer, "final/dos_comparison_plot", dos_path)
 
             curve = compute_distance_error_curve(
@@ -616,12 +1300,20 @@ class ArtifactCheckpointCallback(pl.Callback):
                 n_bins=self.distance_bins,
             )
             if curve is not None:
+                curve_json_path = self.output_dir / f"distance_error_curve_{name}.json"
                 curve_path = self.output_dir / f"distance_error_curve_{name}.png"
+                curve_json_path.write_text(
+                    json.dumps(curve, indent=2), encoding="utf-8"
+                )
                 save_distance_error_curve_plot(
-                    curve, curve_path, title=f"{name} distance error"
+                    curve,
+                    curve_path,
+                    title=f"Distance Error Curves ({name}, Final)",
                 )
                 self._maybe_upload_image(
-                    trainer, f"distance_curve/{name}_plot", curve_path
+                    trainer,
+                    f"distance_curve/{MATRIX_ALIAS.get(name, name)}_plot",
+                    curve_path,
                 )
 
             if self.log_per_irrep_images:
@@ -645,10 +1337,12 @@ class ArtifactCheckpointCallback(pl.Callback):
                         tgt_ir,
                         img_path,
                         reference=ref,
-                        title=f"{name} / {irrep}",
+                        title=f"{MATRIX_ALIAS.get(name, name)} / {irrep}",
                     )
                     self._maybe_upload_image(
-                        trainer, f"irrep_images/{name}/{irrep}", img_path
+                        trainer,
+                        f"irrep_images/{MATRIX_ALIAS.get(name, name)}/{irrep}",
+                        img_path,
                     )
 
         if self.generate_video:
@@ -656,11 +1350,46 @@ class ArtifactCheckpointCallback(pl.Callback):
                 frame_dir = self.frames_dir / name
                 if not frame_dir.exists():
                     continue
-                video_path = self.output_dir / f"training_progress_{name}.gif"
-                compile_frames_to_gif(
-                    frame_dir.glob("*.png"), video_path, fps=self.video_fps
+                video_path = self.output_dir / f"training_progress_{name}.mp4"
+                compile_frames_to_video(
+                    frame_dir.glob("*.png"),
+                    video_path,
+                    fps=self.video_fps,
+                    format="mp4",
                 )
                 if video_path.exists():
-                    self._maybe_upload_video(
-                        trainer, f"training_video_{name}", video_path
-                    )
+                    try:
+                        import wandb
+
+                        _maybe_log_wandb(
+                            run,
+                            {
+                                f"training_video_{MATRIX_ALIAS.get(name, name)}": wandb.Video(
+                                    str(video_path), fps=self.video_fps, format="mp4"
+                                )
+                            },
+                        )
+                    except Exception:
+                        pass
+
+        _maybe_log_wandb(run, final_payload)
+        log_study_complete(
+            run_name=getattr(run, "name", "run"),
+            total_training_epochs=int(trainer.current_epoch) + 1,
+            final_loss=float(
+                trainer.callback_metrics.get("train/loss_total", torch.tensor(0.0))
+                .detach()
+                .cpu()
+                .item()
+            ),
+            best_loss=(
+                self.state.best_score
+                if self.state.best_score is not None
+                else float("nan")
+            ),
+            best_epoch=(
+                (self.state.best_epoch + 1) if self.state.best_epoch is not None else -1
+            ),
+            run_checkpoint_dir=self.output_dir,
+            final_model_path=self.final_path,
+        )

@@ -11,7 +11,7 @@ python -u scripts/train_silicon.py \
   --precision 32-true \
   --gpus 1 \
   --num-workers 4 \
-  --wandb-project mandala-minimal-silicon-e3mlp-sweep \
+  --wandb-project mandala-silicon-main-study-port \
   --run-name silicon_integrity_stress \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache \
