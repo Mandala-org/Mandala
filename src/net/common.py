@@ -128,6 +128,7 @@ class Config:
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0
     l2_reg_coef: float = 0.0
+    init_weights_factor: float = 1.0
     grad_clip_val: float | None = 0.5
     accumulate_grad_batches: int = 1  # gradient accumulation steps
 

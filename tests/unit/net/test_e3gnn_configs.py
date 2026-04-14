@@ -110,3 +110,30 @@ def test_resolve_hidden_irreps_respects_explicit_override():
     cfg = Config(hidden_irreps="8x0e+8x0o+4x1e+4x1o")
     hidden = resolve_hidden_irreps(cfg)
     assert str(hidden) == "8x0e+8x0o+4x1e+4x1o"
+
+
+@pytest.mark.unit
+def test_init_weights_factor_scales_model_parameters():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+
+    torch.manual_seed(1234)
+    model_ref = E3GNN(mapper, Config(init_weights_factor=1.0, verbosity=0))
+
+    torch.manual_seed(1234)
+    model_scaled = E3GNN(mapper, Config(init_weights_factor=0.1, verbosity=0))
+
+    ref_params = dict(model_ref.named_parameters())
+    scaled_params = dict(model_scaled.named_parameters())
+    assert ref_params.keys() == scaled_params.keys()
+
+    checked_any = False
+    for name in ref_params:
+        ref = ref_params[name]
+        scaled = scaled_params[name]
+        if not ref.is_floating_point():
+            continue
+        assert torch.allclose(scaled, ref * 0.1, atol=1e-7, rtol=1e-6), name
+        checked_any = True
+
+    assert checked_any
