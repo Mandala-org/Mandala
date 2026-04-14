@@ -6,7 +6,7 @@ import random
 import sys
 from pathlib import Path
 from typing import get_type_hints, Union
-from types import NoneType
+from types import NoneType, UnionType
 import typing
 import ast
 
@@ -173,7 +173,7 @@ def setup_argparse():
         arg_type_callable = None
         origin = typing.get_origin(field_type)
 
-        if origin is Union or origin is typing.Union:
+        if origin is Union or origin is typing.Union or origin is UnionType:
             union_args = typing.get_args(field_type)
             non_none_args = [
                 t for t in union_args if t is not type(None) and t is not NoneType
