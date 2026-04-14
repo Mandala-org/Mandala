@@ -24,6 +24,13 @@ from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
 from net.benchmark import BenchmarkCallback  # noqa: E402
 from net.artifacts import ArtifactCheckpointCallback  # noqa: E402
+from net.silicon_study_logging import (  # noqa: E402
+    log_config,
+    log_graph,
+    log_mapper_info,
+    log_orbital_config,
+    log_snapshot_info,
+)
 
 
 def str_to_bool(value):
@@ -251,7 +258,7 @@ def main():
         args.wandb_project
         or cfg.wandb_project
         or os.getenv("WANDB_PROJECT")
-        or "mandala-silicon-sweep"
+        or "mandala-silicon-main-study-port"
     )
     run_name = (
         args.run_name or cfg.run_name or f"silicon_{random.randint(0, 10**9):09d}"
@@ -372,6 +379,27 @@ def main():
     print(
         f"Created dataloaders: train batches={len(train_loader)}, val batches={len(val_loader)}"
     )
+
+    run_dir = Path(args.checkpoint_dir) / run_name
+    frames_dir = run_dir / "frames"
+    if cfg.log_model or cfg.log_data:
+        log_config(
+            {
+                **dataclasses.asdict(cfg),
+                "hidden_irreps": cfg.hidden_irreps,
+                "device": str(cfg.device),
+            },
+            run_dir,
+            frames_dir,
+        )
+        if len(train_ds) > 0:
+            x0, y0 = train_ds[0]
+            if cfg.log_data:
+                log_snapshot_info(x0, y0)
+                log_graph(x0)
+            if cfg.log_model:
+                log_orbital_config(mapper.orbital_cfg)
+                log_mapper_info(mapper)
 
     # --- Model and Trainer Setup ---
     print("--- Setting up model and trainer ---")

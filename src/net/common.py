@@ -185,6 +185,7 @@ class Config:
     benchmark: bool = True
     log_interval: int = 1
     adaptive_log_interval: bool = False
+    video_max_atoms: int | None = 6
 
     # -------------- misc ------------------------------------------------
     safety_checks: bool = False  # enable strict checks on input data
