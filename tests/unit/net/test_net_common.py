@@ -22,5 +22,11 @@ def test_radial_mlp_arbitrary_layers():
 @pytest.mark.unit
 def test_hyperparams_defaults():
     cfg = Config(safety_checks=True)
-    assert cfg.nonlin_kind in {"gate", "normact", "s2act", "id"}
+    assert cfg.nonlin_kind in {
+        "normact",
+        "s2act",
+        "gate_scalars_mlp",
+        "gate_magnitudes",
+    }
+    assert cfg.e3mlp_variant == "basic"
     assert cfg.loss_coef_observables > 0

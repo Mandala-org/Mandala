@@ -413,9 +413,14 @@ class BenchmarkCallback(pl.Callback):
                         metrics[f"bench_train_{k}_mean"] = ts[k]["mean"]
                 # include activation magnitude means
                 if self.log_activation_mag and "activation_magnitudes" in report:
-                    for tag, summ in report["activation_magnitudes"]["train"].items():
-                        if "mean" in summ:
-                            metrics[f"bench_train_{tag}_mean"] = summ["mean"]
+                    for layer_name, layer_data in report["activation_magnitudes"][
+                        "train"
+                    ].items():
+                        for irrep_str, summ in layer_data.items():
+                            if "mean" in summ:
+                                metrics[
+                                    f"bench_train_{layer_name}_{irrep_str}_mean"
+                                ] = summ["mean"]
                 lm(metrics)
         except Exception:
             pass
