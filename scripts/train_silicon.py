@@ -23,6 +23,7 @@ from data.factory import DatasetFactory  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
 from net.benchmark import BenchmarkCallback  # noqa: E402
+from net.artifacts import ArtifactCheckpointCallback  # noqa: E402
 
 
 def str_to_bool(value):
@@ -85,6 +86,37 @@ def setup_argparse():
         default="32-true",
         help="PyTorch Lightning precision setting (e.g., '32-true', '16-mixed').",
     )
+    parser.add_argument(
+        "--checkpoint_dir",
+        type=str,
+        default="checkpoints/silicon",
+        help="Directory where run checkpoints and artifacts are stored.",
+    )
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        type=str,
+        default=None,
+        help="Resume from a checkpoint file or run directory (latest/best/final).",
+    )
+    parser.add_argument(
+        "--resume_mode",
+        type=str,
+        default="latest",
+        choices=["latest", "best", "final"],
+        help="When resuming from a directory, which checkpoint to load.",
+    )
+    parser.add_argument(
+        "--generate_video",
+        type=str_to_bool,
+        default=True,
+        help="Generate and upload training-progress videos.",
+    )
+    parser.add_argument(
+        "--log_artifacts",
+        type=str_to_bool,
+        default=True,
+        help="Enable DOS, distance-curve, and per-irrep artifact generation.",
+    )
 
     # --- Dynamically add Config fields as arguments ---
     config_fields = get_type_hints(Config)
@@ -138,6 +170,27 @@ def setup_argparse():
     return parser.parse_args()
 
 
+def _resolve_resume_checkpoint(path: str | None, resume_mode: str) -> Path | None:
+    if path is None:
+        return None
+    candidate = Path(path).expanduser()
+    if candidate.is_file():
+        return candidate.resolve()
+    if candidate.is_dir():
+        ckpt_name = {
+            "latest": "latest_checkpoint.pt",
+            "best": "best_model.pt",
+            "final": "final_model.pt",
+        }[resume_mode]
+        ckpt = candidate / ckpt_name
+        if ckpt.exists():
+            return ckpt.resolve()
+        raise FileNotFoundError(
+            f"No checkpoint matching mode={resume_mode!r} found in {candidate}"
+        )
+    raise FileNotFoundError(f"Checkpoint path does not exist: {candidate}")
+
+
 def main():
     """Main training loop."""
     args = setup_argparse()
@@ -152,8 +205,14 @@ def main():
     # --- Initialize W&B ---
     # Use environment variables for W&B project if available, otherwise use default
     wandb_project = os.getenv("WANDB_PROJECT", "mandala-silicon-sweep")
-    # Pass the final, correct config to W&B for logging
-    wandb_logger = WandbLogger(project=wandb_project, config=dataclasses.asdict(cfg))
+    run_name = (
+        args.run_name or cfg.run_name or f"silicon_{random.randint(0, 10**9):09d}"
+    )
+    cfg.run_name = run_name
+    cfg.save_dir = args.checkpoint_dir
+    resume_checkpoint = _resolve_resume_checkpoint(
+        args.resume_from_checkpoint, args.resume_mode
+    )
 
     # Post-process special types from argparse/wandb
     if isinstance(cfg.dtype, str):
@@ -175,6 +234,14 @@ def main():
             )
         else:
             print("--- Using CPU ---")
+
+    # Pass the final, correct config to W&B for logging
+    wandb_logger = WandbLogger(
+        project=wandb_project,
+        name=run_name,
+        config=dataclasses.asdict(cfg),
+        save_dir=str(Path(args.checkpoint_dir)),
+    )
 
     # --- Data Loading ---
     print("--- Setting up datasets ---")
@@ -248,6 +315,14 @@ def main():
             verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
         ),
     ]
+    if args.log_artifacts:
+        callbacks.append(
+            ArtifactCheckpointCallback(
+                output_dir=Path(args.checkpoint_dir) / run_name,
+                generate_video=args.generate_video,
+                log_per_irrep_images=args.log_per_irrep_images,
+            )
+        )
 
     trainer = pl.Trainer(
         max_epochs=cfg.max_epochs,
@@ -265,7 +340,12 @@ def main():
     # --- Start Training ---
     print("--- Starting training ---")
     torch.set_float32_matmul_precision("high")
-    trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+    trainer.fit(
+        model=model,
+        train_dataloaders=train_loader,
+        val_dataloaders=val_loader,
+        ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
+    )
 
 
 if __name__ == "__main__":

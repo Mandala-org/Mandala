@@ -248,6 +248,42 @@ class Snapshot:
         """Return *scalar* Tr(D·H)."""
         return trace_matmul_sparse_block_matrix(self.hamiltonian, self.density)
 
+    def symmetrize_matrices(
+        self,
+        *,
+        hamiltonian: bool = True,
+        overlap: bool = True,
+        density: bool = True,
+    ) -> "Snapshot":
+        """
+        Return a new snapshot with selected matrices symmetrized by 0.5 * (M + M^T).
+        """
+        ham = (
+            0.5 * (self.hamiltonian + self.hamiltonian.transpose())
+            if hamiltonian
+            else self.hamiltonian
+        )
+        ovl = (
+            0.5 * (self.overlap + self.overlap.transpose()) if overlap else self.overlap
+        )
+        den = (
+            0.5 * (self.density + self.density.transpose()) if density else self.density
+        )
+        return Snapshot(
+            ham,
+            ovl,
+            den,
+            positions=self.positions,
+            forces=self.forces,
+            box=self.box,
+            stress=self.stress,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
+            info=self.info,
+        )
+
     # ---------------------------------------------------------------- serialisation
     def _payload(self):
         return {
@@ -560,6 +596,22 @@ class Snapshot:
             info=self.info,
         )
 
+    def to_k_space(
+        self,
+        *,
+        kpoints_abs: torch.Tensor,
+        kmesh: tuple[int, int, int] | None = None,
+        shifts: torch.Tensor | None = None,
+    ):
+        from data.kspace_snapshot import KSpaceSnapshot
+
+        return KSpaceSnapshot.from_shift_space(
+            self,
+            kpoints_abs=kpoints_abs,
+            kmesh=kmesh,
+            shifts=shifts,
+        )
+
     @classmethod
     def _parse_orbital_selection(cls, spec: str) -> Dict[int, int]:
         """
@@ -799,6 +851,27 @@ class Snapshot:
 
         snap = snap._change_basis(convention)
         snap = snap.canonicalize_edges()
+        return snap
+
+    @staticmethod
+    def from_pyscf_kspace(
+        npz_path: str | os.PathLike,
+        json_path: str | os.PathLike | None = None,
+        *,
+        convention: str = "e3nn",
+        dtype: torch.dtype = torch.float32,
+        cfg: Config = None,
+    ):
+        from data.kspace_snapshot import load_pyscf_kspace_snapshot
+
+        snap = load_pyscf_kspace_snapshot(
+            npz_path=npz_path,
+            json_path=json_path,
+            dtype=dtype,
+            basis="pyscf",
+        )
+        snap.cfg = cfg
+        snap = snap.change_basis(convention)
         return snap
 
     @staticmethod

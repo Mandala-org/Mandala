@@ -478,8 +478,12 @@ def main() -> None:
     npz_payload: dict[str, np.ndarray] = {
         "hamiltonian_ao": hamiltonian_ao_ev.astype(np.float32),
         "hcore_ao": hcore_ao_ev.astype(np.float32),
+        "hamiltonian_k": np.asarray(hks_k * HARTREE_TO_EV, dtype=np.complex64),
+        "hcore_k": np.asarray(hcore_k * HARTREE_TO_EV, dtype=np.complex64),
         "overlap_ao": overlap_ao.astype(np.float32),
+        "overlap_k": np.asarray(overlap_k, dtype=np.complex64),
         "dm_ao": dm_ao.astype(np.float32),
+        "density_k": np.asarray(dm_k, dtype=np.complex64),
         "hamiltonian_shifted": hamiltonian_shifted_ev.astype(np.float32),
         "hcore_shifted": hcore_shifted_ev.astype(np.float32),
         "overlap_shifted": overlap_shifted.astype(np.float32),
@@ -577,6 +581,7 @@ def main() -> None:
             "num_electrons": int(num_electrons),
             "density_trace_num_electrons": float(density_trace_electrons),
             "one_body_trace_energy_ev": float(one_body_trace_energy_ev),
+            "kpts_abs": np.asarray(kpts, dtype=np.float64).tolist(),
             "forces_stress_status": forces_stress_status,
             "forces_ev_per_angstrom": (
                 None

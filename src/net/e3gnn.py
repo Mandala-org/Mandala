@@ -56,6 +56,7 @@ class E3GNN(pl.LightningModule):
         cfg: Config,
     ):
         super().__init__()
+        self.save_hyperparameters(ignore=["mapper"])
         self.cfg = cfg
         # The mapper is now an nn.Module and will be moved to the correct device
         # automatically by PyTorch Lightning.
@@ -155,6 +156,23 @@ class E3GNN(pl.LightningModule):
 
         # Print model summary if verbosity >= 1
         print_model_summary(self, verbosity=self.cfg.verbosity)
+
+    @classmethod
+    def load_from_checkpoint_with_mapper(
+        cls,
+        checkpoint_path: str,
+        mapper: BlockIrrepMapper,
+        map_location: str | torch.device | None = "cpu",
+        strict: bool = True,
+        **kwargs,
+    ) -> "E3GNN":
+        return cls.load_from_checkpoint(
+            checkpoint_path,
+            mapper=mapper,
+            map_location=map_location,
+            strict=strict,
+            **kwargs,
+        )
 
     # ------------------------ util helpers -----------------------------
     @staticmethod

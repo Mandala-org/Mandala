@@ -297,6 +297,12 @@ class BlockMatrix:
         new_blocks = {k: v * scalar for k, v in self.pair_blocks.items()}
         return self._replace_pair_blocks(new_blocks, basis=self.basis)
 
+    def __rmul__(self, scalar: float) -> "BlockMatrix":
+        """
+        Reflected scalar multiplication so ``scalar * BlockMatrix`` works.
+        """
+        return self.__mul__(scalar)
+
     # ------------------------------------------------------------------ edge reordering
     def reorder_edges(self, order_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
         """

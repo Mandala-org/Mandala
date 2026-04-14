@@ -9,6 +9,7 @@ from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from net.common import Config
+from data.openmx_parser import parse_openmx_scfout
 
 
 def _load_snapshot():
@@ -38,6 +39,30 @@ def test_energy_and_electron_count():
 
     assert torch.allclose(E, E_ref, atol=1e-6)
     assert torch.allclose(Ne, Ne_ref, atol=1e-6)
+
+
+@pytest.mark.unit
+def test_symmetrize_matrices_keeps_energy_and_electrons(h2o_orbital_cfg):
+    snap_raw = parse_openmx_scfout(
+        Path("./data/small/H2O/original/H2O.matrix"),
+        list("HHHHOO"),
+        h2o_orbital_cfg,
+        convention="e3nn",
+        symmetrize_density=False,
+    )
+    snap_sym = snap_raw.symmetrize_matrices()
+
+    assert torch.allclose(snap_raw.get_energy(), snap_sym.get_energy(), atol=1e-6)
+    assert torch.allclose(
+        snap_raw.get_number_of_electrons(),
+        snap_sym.get_number_of_electrons(),
+        atol=1e-6,
+    )
+    for name in ("overlap", "density"):
+        mat = getattr(snap_sym, name)
+        mat_t = mat.transpose()
+        for key in mat.keys():
+            assert torch.allclose(mat[key], mat_t[key], atol=1e-6)
 
 
 @pytest.mark.unit
