@@ -11,7 +11,7 @@ from typing import Dict, List
 
 import torch
 from torch import nn
-from e3nn.o3 import Irreps
+from e3nn.o3 import Irreps, TensorSquare
 
 from core.block_irrep_mapper import BlockIrrepMapper
 
@@ -49,6 +49,7 @@ class DeepHead(nn.Module):
         self.use_node_embeddings_for_self_edges = bool(
             self.cfg.head_use_node_embeddings_for_self_edges
         )
+        self.use_tensor_square = bool(self.cfg.head_use_tensor_square)
 
         self.diag_trunk = E3MLP(
             self.irreps_diag_in,
@@ -76,6 +77,21 @@ class DeepHead(nn.Module):
                 self.cfg,
                 activate_last=True,
             )
+
+        self.diag_tensor_square = None
+        self.offdiag_tensor_square = None
+        self.shifted_self_tensor_square = None
+        if self.use_tensor_square:
+            self.diag_tensor_square = TensorSquare(
+                self.irreps_neck, irreps_out=self.irreps_neck
+            )
+            self.offdiag_tensor_square = TensorSquare(
+                self.irreps_neck, irreps_out=self.irreps_neck
+            )
+            if self.separate_shifted_self:
+                self.shifted_self_tensor_square = TensorSquare(
+                    self.irreps_neck, irreps_out=self.irreps_neck
+                )
 
         self.diag_projs = nn.ModuleDict()
         self.offdiag_projs = nn.ModuleDict()
@@ -176,6 +192,8 @@ class DeepHead(nn.Module):
                     else:
                         diag_input = selected_edge_feat[is_diag]
                     diag_hidden = self.diag_trunk(diag_input)
+                    if self.diag_tensor_square is not None:
+                        diag_hidden = self.diag_tensor_square(diag_hidden)
                     diag_vectors = self.diag_projs[key](diag_hidden)
                     if self.diag_log_scales is not None:
                         diag_vectors = (
@@ -189,6 +207,8 @@ class DeepHead(nn.Module):
                     shifted_hidden = self.shifted_self_trunk(
                         selected_edge_feat[is_shifted_self]
                     )
+                    if self.shifted_self_tensor_square is not None:
+                        shifted_hidden = self.shifted_self_tensor_square(shifted_hidden)
                     shifted_vectors = self.shifted_self_projs[key](shifted_hidden)
                     if self.shifted_self_log_scales is not None:
                         shifted_vectors = (
@@ -200,6 +220,8 @@ class DeepHead(nn.Module):
 
                 if is_offdiag.any():
                     offdiag_hidden = self.offdiag_trunk(selected_edge_feat[is_offdiag])
+                    if self.offdiag_tensor_square is not None:
+                        offdiag_hidden = self.offdiag_tensor_square(offdiag_hidden)
                     offdiag_vectors = self.offdiag_projs[key](offdiag_hidden)
                     if self.offdiag_log_scales is not None:
                         offdiag_vectors = (

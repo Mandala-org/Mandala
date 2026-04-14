@@ -57,6 +57,8 @@ def make_dummy_graph(cfg):
 HP_VARIANTS = [
     {},  # default
     {"nonlin_kind": "gate_scalars_mlp"},
+    {"edge_encoder_use_sh_tensor_square": True},
+    {"head_use_tensor_square": True},
     {"edge_update_node_combine": "sum", "edge_update": "concat"},
     {"node_update_message_agg": "sum", "node_update": "replace"},
     {

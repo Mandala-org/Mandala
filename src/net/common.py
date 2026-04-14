@@ -47,6 +47,7 @@ class Config:
     edge_type_emb_dim: int = 32  # edge type embedding size
     emb_use_odd_features: bool = True  # use odd parity
     edge_encoder_style: str = "mandala"  # "mandala" | "deeph_e3"
+    edge_encoder_use_sh_tensor_square: bool = False
 
     # node_type_emb_dim: int = 32  # node type embedding size
 
@@ -82,10 +83,20 @@ class Config:
     head_depth: int = 3
     head_use_node_embeddings_for_self_edges: bool = True
     separate_shifted_self: bool = False
+    head_use_tensor_square: bool = False
 
     head_log_scale_mlp_n_layers: int = 1
 
     # -------------- non-linearity & norm --------------------------------
+    e3mlp_variant: str = "basic"  # "basic" or study-style variants
+    e3mlp_output_scale: float = 1.0
+    e3mlp_weight_init_scale: float = 1.0
+    e3mlp_residual_scale: float = 0.25
+    e3mlp_pre_norm: bool = False
+    e3mlp_norm_eps: float = 1e-8
+    e3mlp_film_hidden_dim: int = 128
+    activation_odd_scalar: str = "tanh"
+    activation_odd_gate: str = "tanh"
     nonlin_kind: str = (
         "normact"  # "normact" | "s2act" | "gate_scalars_mlp" | "gate_magnitudes"
     )
@@ -151,6 +162,8 @@ class Config:
     verbosity: int = 1
     bench_verbosity: int = 1
     log_partial_gt_observables: bool = False
+    log_per_irrep_metrics: bool = False
+    log_per_irrep_images: bool = False
     log_activation_mag: bool = False
     wandb_project: str | None = None
     log_every_n_steps: int = 1
@@ -174,6 +187,7 @@ class Config:
 
     # -------------------- hyperopt --------------------------------------
     tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
+    train_on_irrep_parts: bool = False
 
     # --- DeepH-E3 Specific Config ---
     num_block: int = 3
@@ -406,26 +420,91 @@ class E3MLP(nn.Module):
         if num_layers < 1:
             raise ValueError("E3MLP must have at least 1 layer.")
 
-        from net.activations import make_nonlinearity  # Local import
-
         self.irreps_in = input_irreps
         self.irreps_hidden = hidden_irreps
         self.irreps_out = output_irreps
 
+        variant = cfg.e3mlp_variant.lower()
+        if variant == "basic":
+            from net.activations import make_nonlinearity  # Local import
+
+            layers = []
+            current_irreps = input_irreps
+
+            for _ in range(num_layers - 1):
+                layers.append(Linear(current_irreps, hidden_irreps))
+                layers.append(make_nonlinearity(hidden_irreps, cfg))
+                current_irreps = hidden_irreps
+
+            layers.append(Linear(current_irreps, output_irreps))
+
+            if activate_last:
+                layers.append(make_nonlinearity(output_irreps, cfg))
+
+            self.net = nn.Sequential(*layers)
+            return
+
+        from net.e3mlp_variants import (
+            EquivariantRMSNorm,
+            ScaledLinear,
+            VariantConfig,
+            make_variant_block,
+        )
+
+        variant_cfg = VariantConfig(
+            output_scale=cfg.e3mlp_output_scale,
+            weight_init_scale=cfg.e3mlp_weight_init_scale,
+            residual_scale=cfg.e3mlp_residual_scale,
+            scalar_activation=cfg.activation_scalar,
+            odd_scalar_activation=cfg.activation_odd_scalar,
+            gate_activation=cfg.activation_gate,
+            odd_gate_activation=cfg.activation_odd_gate,
+            film_hidden_dim=cfg.e3mlp_film_hidden_dim,
+            pre_norm=cfg.e3mlp_pre_norm,
+            norm_eps=cfg.e3mlp_norm_eps,
+        )
+
+        def maybe_prenorm(irreps: Irreps, block: nn.Module) -> nn.Module:
+            if not variant_cfg.pre_norm:
+                return block
+            return nn.Sequential(
+                EquivariantRMSNorm(irreps, eps=variant_cfg.norm_eps),
+                block,
+            )
+
         layers = []
         current_irreps = input_irreps
 
-        # All layers except the last one map to hidden_irreps
         for _ in range(num_layers - 1):
-            layers.append(Linear(current_irreps, hidden_irreps))
-            layers.append(make_nonlinearity(hidden_irreps, cfg))
+            block = make_variant_block(
+                variant,
+                current_irreps,
+                hidden_irreps,
+                variant_cfg,
+            )
+            layers.append(maybe_prenorm(current_irreps, block))
             current_irreps = hidden_irreps
 
-        # The final layer maps to the output_irreps
-        layers.append(Linear(current_irreps, output_irreps))
+        final_linear = ScaledLinear(
+            current_irreps,
+            output_irreps,
+            output_scale=variant_cfg.output_scale,
+            weight_init_scale=variant_cfg.weight_init_scale,
+        )
+        layers.append(maybe_prenorm(current_irreps, final_linear))
 
         if activate_last:
-            layers.append(make_nonlinearity(output_irreps, cfg))
+            layers.append(
+                maybe_prenorm(
+                    output_irreps,
+                    make_variant_block(
+                        variant,
+                        output_irreps,
+                        output_irreps,
+                        variant_cfg,
+                    ),
+                )
+            )
 
         self.net = nn.Sequential(*layers)
 

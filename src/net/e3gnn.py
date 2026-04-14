@@ -28,6 +28,12 @@ from data.block_matrix import IrrepsBlockData
 from data.graph_features import compute_graph_features
 
 from net.common import Config, build_hidden_irreps
+from net.irrep_tools import (
+    build_irrep_projector_cache,
+    compute_irrep_metrics,
+    get_all_irreps,
+    project_irrep_vectors_to_blocks,
+)
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
 from net.heads import DeepHead
@@ -70,6 +76,10 @@ class E3GNN(pl.LightningModule):
         if cfg.partial_train not in (None, "diag", "shifted_self", "offdiag"):
             raise ValueError(
                 "partial_train must be one of None, 'diag', 'shifted_self', or 'offdiag'."
+            )
+        if cfg.train_on_irrep_parts and cfg.train_target == "irreps":
+            raise ValueError(
+                "train_on_irrep_parts expects matrix-space supervision and should not be combined with train_target='irreps'."
             )
 
         # ---------- shared irreps ---------------------------------------
@@ -115,6 +125,10 @@ class E3GNN(pl.LightningModule):
             edge_irreps = block.edge_irreps_out
         self.final_node_irreps = node_irreps
         self.final_edge_irreps = edge_irreps
+        self.all_irreps = get_all_irreps(self.mapper)
+        self.irrep_projectors = build_irrep_projector_cache(
+            self.mapper, self.all_irreps
+        )
 
         # ---------- heads ----------------------------------------------
         pair_keys = list(
@@ -239,6 +253,100 @@ class E3GNN(pl.LightningModule):
             return ~is_diag
         raise RuntimeError(f"Unsupported partial_train value: {self.cfg.partial_train}")
 
+    def _edge_partition_metrics(
+        self,
+        stage: str,
+        metrics: dict[str, torch.Tensor],
+        x: Dict[str, Any],
+    ) -> None:
+        if "edge_index" not in x or "edge_shift" not in x:
+            return
+
+        edges_5d = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
+        sx, sy, sz, i, j = edges_5d
+        is_diag = (i == j) & (sx == 0) & (sy == 0) & (sz == 0)
+        is_shifted_self = (i == j) & ~((sx == 0) & (sy == 0) & (sz == 0))
+        is_offdiag = i != j
+
+        metrics[f"{stage}/edges_total"] = torch.tensor(
+            float(edges_5d.shape[1]), device=self.device
+        )
+        metrics[f"{stage}/edges_diag"] = torch.tensor(
+            float(is_diag.sum()), device=self.device
+        )
+        metrics[f"{stage}/edges_shifted_self"] = torch.tensor(
+            float(is_shifted_self.sum()), device=self.device
+        )
+        metrics[f"{stage}/edges_offdiag"] = torch.tensor(
+            float(is_offdiag.sum()), device=self.device
+        )
+        metrics[f"{stage}/edge_ratio_diag"] = is_diag.float().mean()
+        metrics[f"{stage}/edge_ratio_shifted_self"] = is_shifted_self.float().mean()
+        metrics[f"{stage}/edge_ratio_offdiag"] = is_offdiag.float().mean()
+        metrics[f"{stage}/nodes_total"] = torch.tensor(
+            float(x["node_type_idx"].shape[0]), device=self.device
+        )
+
+    def _compute_irrep_part_losses(
+        self,
+        pred: IrrepsBlockData,
+        target: IrrepsBlockData,
+    ) -> tuple[torch.Tensor, torch.Tensor, dict[str, dict[str, torch.Tensor]]]:
+        total_mse = torch.tensor(0.0, device=self.device)
+        total_mae = torch.tensor(0.0, device=self.device)
+        per_irrep: dict[str, dict[str, torch.Tensor]] = {}
+
+        for irrep in self.all_irreps:
+            irrep_key = str(irrep)
+            irrep_mse = torch.tensor(0.0, device=self.device)
+            irrep_mae = torch.tensor(0.0, device=self.device)
+            saw_any = False
+
+            for pair_key, projector in self.irrep_projectors[irrep_key].items():
+                if (
+                    pair_key not in pred.pair_vectors
+                    or pair_key not in target.pair_vectors
+                ):
+                    continue
+
+                pred_blocks = project_irrep_vectors_to_blocks(
+                    pred.pair_vectors[pair_key], projector, self.mapper
+                )
+                target_blocks = project_irrep_vectors_to_blocks(
+                    target.pair_vectors[pair_key], projector, self.mapper
+                )
+
+                min_n = min(pred_blocks.shape[0], target_blocks.shape[0])
+                if min_n <= 0:
+                    continue
+
+                pred_edges = pred.pair_edges[pair_key][:, :min_n]
+                target_edges = target.pair_edges[pair_key][:, :min_n]
+                if self.cfg.safety_checks:
+                    assert torch.equal(
+                        pred_edges, target_edges
+                    ), f"Edge mismatch in irrep-part loss for key {pair_key}, irrep {irrep_key}."
+
+                partial_mask = self._partial_train_mask(target_edges)
+                if not partial_mask.any():
+                    continue
+
+                pred_selected = pred_blocks[:min_n][partial_mask]
+                target_selected = target_blocks[:min_n][partial_mask]
+                if pred_selected.shape[0] == 0:
+                    continue
+
+                irrep_mse = irrep_mse + self._mse(pred_selected, target_selected)
+                irrep_mae = irrep_mae + self._mae(pred_selected, target_selected)
+                saw_any = True
+
+            if saw_any:
+                per_irrep[irrep_key] = {"mse": irrep_mse, "mae": irrep_mae}
+                total_mse = total_mse + irrep_mse
+                total_mae = total_mae + irrep_mae
+
+        return total_mse, total_mae, per_irrep
+
     # ------------------------------------------------------------------ forward
     def forward(self, x: Dict[str, Any]):
         # initialize activation magnitudes storage
@@ -315,6 +423,7 @@ class E3GNN(pl.LightningModule):
         t_fwd_start = time.perf_counter()
         preds_irreps = self(x)
         t_fwd_end = time.perf_counter()
+        self._edge_partition_metrics(stage, metrics, x)
 
         # --- block mapping timing ---------------------------------------
         t_map_start = time.perf_counter()
@@ -328,59 +437,62 @@ class E3GNN(pl.LightningModule):
         matrix_mses = {}
         matrix_maes = {}
         combined_matrix_losses = {}
-        preds_for_loss = (
-            preds_irreps if self.cfg.train_target == "irreps" else preds_matrix
-        )
-
         # num_atoms = x["positions"].shape[0]
 
         for name in self.cfg.matrix_targets:
-            p = preds_for_loss[name]
-            t = y[name]
+            per_irrep_metrics: dict[str, dict[str, torch.Tensor]] = {}
 
-            if self.cfg.train_target == "matrix" and self.cfg.symmetrize_output:
-                p = (p + p.transpose()) * 0.5
+            if self.cfg.train_on_irrep_parts:
+                target_irreps = y[name].to_vectors(self.mapper)
+                mse_val, mae_val, per_irrep_metrics = self._compute_irrep_part_losses(
+                    preds_irreps[name], target_irreps
+                )
+            else:
+                p = (
+                    preds_irreps[name]
+                    if self.cfg.train_target == "irreps"
+                    else preds_matrix[name]
+                )
+                t = y[name]
 
-            p_items, t_items = (
-                (p.pair_vectors, t.pair_vectors)
-                if self.cfg.train_target == "irreps"
-                else (p.pair_blocks, t.pair_blocks)
-            )
+                if self.cfg.train_target == "matrix" and self.cfg.symmetrize_output:
+                    p = (p + p.transpose()) * 0.5
 
-            mse_val = torch.tensor(0.0, device=self.device)
-            mae_val = torch.tensor(0.0, device=self.device)
+                p_items, t_items = (
+                    (p.pair_vectors, t.pair_vectors)
+                    if self.cfg.train_target == "irreps"
+                    else (p.pair_blocks, t.pair_blocks)
+                )
 
-            # Vectorized loss calculation
-            for key in t_items.keys():
-                if key not in p_items.keys():
-                    raise ValueError(f"Key {key} not found in predicted items.")
-                preds = p_items[key]
-                targets = t_items[key]
+                mse_val = torch.tensor(0.0, device=self.device)
+                mae_val = torch.tensor(0.0, device=self.device)
 
-                # Handle size mismatch by truncating to the smaller size
-                # if preds.shape[0] > targets.shape[0] that means that cutoff_radius
-                # is bigger than maximum distance in the matrix
-                # if preds.shape[0] < targets.shape[0] that means that the maximum
-                # distance in the matrix is bigger than cutoff_radius
-                min_n = min(preds.shape[0], targets.shape[0])
-                preds = preds[:min_n]
-                targets = targets[:min_n]
-                pred_edges = p.pair_edges[key][:, :min_n]
-                target_edges = t.pair_edges[key][:, :min_n]
+                # Vectorized loss calculation
+                for key in t_items.keys():
+                    if key not in p_items.keys():
+                        raise ValueError(f"Key {key} not found in predicted items.")
+                    preds = p_items[key]
+                    targets = t_items[key]
 
-                if self.cfg.safety_checks:
-                    assert torch.equal(
-                        pred_edges, target_edges
-                    ), f"Edge mismatch in block loss for matrix {name}, key {key}."
+                    min_n = min(preds.shape[0], targets.shape[0])
+                    preds = preds[:min_n]
+                    targets = targets[:min_n]
+                    pred_edges = p.pair_edges[key][:, :min_n]
+                    target_edges = t.pair_edges[key][:, :min_n]
 
-                partial_mask = self._partial_train_mask(target_edges)
-                preds = preds[partial_mask]
-                targets = targets[partial_mask]
-                if preds.shape[0] == 0:
-                    continue
+                    if self.cfg.safety_checks:
+                        assert torch.equal(
+                            pred_edges, target_edges
+                        ), f"Edge mismatch in block loss for matrix {name}, key {key}."
 
-                mse_val += self._mse(preds, targets)
-                mae_val += self._mae(preds, targets)
+                    partial_mask = self._partial_train_mask(target_edges)
+                    preds = preds[partial_mask]
+                    targets = targets[partial_mask]
+                    if preds.shape[0] == 0:
+                        continue
+
+                    mse_val += self._mse(preds, targets)
+                    mae_val += self._mae(preds, targets)
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
@@ -395,6 +507,25 @@ class E3GNN(pl.LightningModule):
                 mae_val = mae_val * HARTREE_TO_EV
             metrics[f"{stage}/{name}_mae"] = mae_val
             metrics[f"{stage}/{name}_mse"] = mse_val
+            if self.cfg.log_per_irrep_metrics or self.cfg.train_on_irrep_parts:
+                for irrep_key, irrep_vals in per_irrep_metrics.items():
+                    irrep_mse = irrep_vals["mse"]
+                    irrep_mae = irrep_vals["mae"]
+                    irrep_loss = (
+                        1 - self.cfg.loss_l1_fraction
+                    ) * irrep_mse + self.cfg.loss_l1_fraction * irrep_mae
+                    if name == "hamiltonian":
+                        metrics[f"{stage}/{name}_irrep_{irrep_key}_mae"] = (
+                            irrep_mae * HARTREE_TO_EV
+                        )
+                        metrics[f"{stage}/{name}_irrep_{irrep_key}_mse"] = irrep_mse * (
+                            HARTREE_TO_EV**2
+                        )
+                    else:
+                        metrics[f"{stage}/{name}_irrep_{irrep_key}_mae"] = irrep_mae
+                        metrics[f"{stage}/{name}_irrep_{irrep_key}_mse"] = irrep_mse
+                    if self.cfg.train_on_irrep_parts:
+                        metrics[f"{stage}/{name}_irrep_{irrep_key}_loss"] = irrep_loss
 
             combined_matrix_losses[name] = (
                 1 - self.cfg.loss_l1_fraction
@@ -454,6 +585,21 @@ class E3GNN(pl.LightningModule):
                 loss_F_weighted = self.cfg.loss_coef_forces * self._mse(
                     forces_pred, forces_true
                 )
+
+        if self.cfg.log_per_irrep_metrics and "hamiltonian" in preds_irreps:
+            target_h_irreps = (
+                y["hamiltonian"]
+                if self.cfg.train_target == "irreps"
+                else y["hamiltonian"].to_vectors(self.mapper)
+            )
+            irrep_metrics = compute_irrep_metrics(
+                preds_irreps["hamiltonian"],
+                target_h_irreps,
+                self.all_irreps,
+                self.mapper,
+            )
+            for key, value in irrep_metrics.items():
+                metrics[f"{stage}/hamiltonian_{key}"] = value
 
         # Partial Ground Truth Observables
         if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:

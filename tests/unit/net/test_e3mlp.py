@@ -1,26 +1,44 @@
 import pytest
 import torch
-from e3nn.o3 import Irreps
-
-# # Add project root to the Python path
-# import sys
-# from pathlib import Path
-# project_root = Path(__file__).resolve().parents[3]
-# sys.path.append(str(project_root))
+from e3nn.o3 import Irreps, rand_matrix
 
 from net.common import Config, E3MLP
-from tests.equivariance.test_equivariance import (
-    random_rotation_matrix,
-    generate_equivariant_input,
-)
+
+VARIANTS = [
+    "basic",
+    "normact",
+    "gate",
+    "gatemagnitudes",
+    "film",
+    "resnormact",
+    "resgatemagnitudes",
+    "bilinear",
+]
+
+
+def _cfg_for_variant(variant: str) -> Config:
+    if variant == "basic":
+        return Config(
+            e3mlp_variant="basic", nonlin_kind="gate_magnitudes", safety_checks=True
+        )
+    return Config(e3mlp_variant=variant, safety_checks=True)
+
+
+def random_rotation_matrix() -> torch.Tensor:
+    return rand_matrix()
+
+
+def generate_equivariant_input(irreps: Irreps, batch_size: int = 1) -> torch.Tensor:
+    return irreps.randn(batch_size, -1)
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("variant", VARIANTS)
 @pytest.mark.parametrize("num_layers", [1, 2, 3])
 @pytest.mark.parametrize("activate_last", [True, False])
-def test_e3mlp_creation_and_forward(num_layers, activate_last):
+def test_e3mlp_creation_and_forward(variant, num_layers, activate_last):
     """Tests that the E3MLP is created and runs a forward pass with correct shapes."""
-    cfg = Config(safety_checks=True)
+    cfg = _cfg_for_variant(variant)
     input_irreps = Irreps("3x0e + 4x1o")
     hidden_irreps = Irreps("16x0e + 8x1o + 4x2e")
     output_irreps = Irreps("5x0e + 2x1o")
@@ -55,11 +73,12 @@ def test_e3mlp_min_layers_assertion():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("variant", VARIANTS)
 @pytest.mark.parametrize("num_layers", [1, 2, 3])
 @pytest.mark.parametrize("activate_last", [True, False])
-def test_e3mlp_equivariance(num_layers, activate_last):
+def test_e3mlp_equivariance(variant, num_layers, activate_last):
     """Tests the E3MLP for rotational equivariance."""
-    cfg = Config(safety_checks=True)
+    cfg = _cfg_for_variant(variant)
     input_irreps = Irreps("5x0e + 5x1o")
     hidden_irreps = Irreps("10x0e + 10x1o + 5x2e")
     output_irreps = Irreps("3x0e + 3x1o")
@@ -90,3 +109,16 @@ def test_e3mlp_equivariance(num_layers, activate_last):
 
     # 4. Check for equivariance
     assert torch.allclose(y_from_rotated_input, y_rotated_from_original, atol=1e-5)
+
+
+@pytest.mark.unit
+def test_e3mlp_invalid_variant():
+    cfg = Config(e3mlp_variant="not_a_variant", safety_checks=True)
+    with pytest.raises(ValueError, match="Unsupported E3MLP variant"):
+        E3MLP(
+            input_irreps=Irreps("1x0e"),
+            hidden_irreps=Irreps("2x0e"),
+            output_irreps=Irreps("1x0e"),
+            num_layers=2,
+            cfg=cfg,
+        )

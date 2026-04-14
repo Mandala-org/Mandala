@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import torch
 from torch import nn
-from e3nn.o3 import Irreps, FullyConnectedTensorProduct
+from e3nn.o3 import Irreps, FullyConnectedTensorProduct, TensorSquare
 from collections import OrderedDict
 
 from net.common import Config
@@ -130,9 +130,16 @@ class EdgeEncoder(nn.Module):
                 dtype=self.cfg.dtype,
             )
             nn.init.normal_(self.edge_emb.weight, std=0.2)
+            self.sh_tensor_square = None
+            sh_tp_irreps = self.sh_irreps
+            if self.cfg.edge_encoder_use_sh_tensor_square:
+                self.sh_tensor_square = TensorSquare(
+                    self.sh_irreps, irreps_out=self.irreps_out
+                )
+                sh_tp_irreps = self.sh_tensor_square.irreps_out
             self.tp = FullyConnectedTensorProduct(
                 Irreps(f"{self.cfg.edge_type_emb_dim}x0e"),
-                (Irreps(f"{self.cfg.n_radial}x0e") + self.sh_irreps).simplify(),
+                (Irreps(f"{self.cfg.n_radial}x0e") + sh_tp_irreps).simplify(),
                 self.irreps_out,
                 internal_weights=True,
             )
@@ -165,6 +172,8 @@ class EdgeEncoder(nn.Module):
         """
         if self.style == "mandala":
             type_emb = self.edge_emb(edge_type_idx)
+            if self.sh_tensor_square is not None:
+                sh = self.sh_tensor_square(sh)
             disp_emb = torch.cat([length_emb, sh], dim=-1)
             emb = self.tp(type_emb, disp_emb)
         else:

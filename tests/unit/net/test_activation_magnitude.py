@@ -18,13 +18,14 @@ def test_activation_magnitude_logging_rewrite(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     callback = BenchmarkCallback(verbosity=1, log_activation_mag=True)
+    logged_metrics = {}
     trainer = SimpleNamespace(
         train_dataloader=[],
         val_dataloaders=[],
         logger=SimpleNamespace(
             name="TESTRUN",
             experiment=SimpleNamespace(config={}),
-            log_metrics=lambda m: None,
+            log_metrics=lambda m: logged_metrics.update(m),
         ),
         devices=["cpu"],
         precision=32,
@@ -88,3 +89,4 @@ def test_activation_magnitude_logging_rewrite(tmp_path, monkeypatch):
     assert "node_encoding" in val_mags
     assert "32x0e" in val_mags["node_encoding"]
     np.testing.assert_allclose(val_mags["node_encoding"]["32x0e"]["mean"], 7.5)
+    assert logged_metrics["bench_train_node_encoding_32x0e_mean"] == pytest.approx(1.5)
