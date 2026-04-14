@@ -26,6 +26,7 @@ from net.benchmark import BenchmarkCallback  # noqa: E402
 from net.artifacts import ArtifactCheckpointCallback  # noqa: E402
 from net.silicon_study_logging import (  # noqa: E402
     log_config,
+    log_cutoff_application,
     log_graph,
     log_mapper_info,
     log_orbital_config,
@@ -396,6 +397,12 @@ def main():
             x0, y0 = train_ds[0]
             if cfg.log_data:
                 log_snapshot_info(x0, y0)
+                if cfg.apply_cutoff_to_targets and "target_edges_before_cutoff" in x0:
+                    log_cutoff_application(
+                        int(x0["target_edges_before_cutoff"]),
+                        int(x0["target_edges_after_cutoff"]),
+                        float(cfg.cutoff_radius),
+                    )
                 log_graph(x0)
             if cfg.log_model:
                 log_orbital_config(mapper.orbital_cfg)

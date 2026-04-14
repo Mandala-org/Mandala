@@ -831,7 +831,16 @@ class ArtifactCheckpointCallback(pl.Callback):
         batch = pl_module.transfer_batch_to_device(batch, pl_module.device, 0)
         batch = pl_module.on_after_batch_transfer(batch, 0)
         pl_module.eval()
-        with torch.no_grad():
+        x, y = batch
+        enable_force_eval = bool(
+            getattr(pl_module.cfg, "enable_forces", False)
+            and y.get("forces") is not None
+        )
+        if enable_force_eval:
+            x = dict(x)
+            x["positions"] = x["positions"].detach().clone().requires_grad_(True)
+            batch = (x, y)
+        with torch.set_grad_enabled(enable_force_eval):
             x, y = batch
             preds = pl_module(x)
         return x, y, preds
@@ -896,6 +905,41 @@ class ArtifactCheckpointCallback(pl.Callback):
             )
         return aligned
 
+    def _metric_prediction_matrices(
+        self,
+        aligned_preds: dict[str, BlockMatrix],
+        y: dict[str, Any],
+        pl_module,
+    ) -> tuple[dict[str, BlockMatrix], float | None]:
+        metrics_preds = dict(aligned_preds)
+        if not getattr(pl_module.cfg, "rescale_density_to_num_electrons", False):
+            return metrics_preds, None
+        if (
+            "density" not in metrics_preds
+            or "overlap" not in metrics_preds
+            or "num_electrons" not in y
+        ):
+            return metrics_preds, None
+
+        num_electrons_target = y["num_electrons"]
+        num_electrons_pred = trace_matmul_sparse_block_matrix(
+            metrics_preds["density"], metrics_preds["overlap"]
+        )
+        num_electrons_mae_pre_correction = float(
+            torch.mean(torch.abs(num_electrons_pred - num_electrons_target))
+            .detach()
+            .cpu()
+            .item()
+        )
+        pred_safe = torch.where(
+            torch.abs(num_electrons_pred) > 1e-12,
+            num_electrons_pred,
+            torch.full_like(num_electrons_pred, 1e-12),
+        )
+        density_scale = float((num_electrons_target / pred_safe).detach().cpu().item())
+        metrics_preds["density"] = metrics_preds["density"] * density_scale
+        return metrics_preds, num_electrons_mae_pre_correction
+
     def _evaluate_epoch_split(self, trainer: Any, pl_module) -> dict[str, Any] | None:
         all_irreps = get_all_irreps(pl_module.mapper)
         detailed_sum = {
@@ -909,16 +953,28 @@ class ArtifactCheckpointCallback(pl.Callback):
         }
         basic_sum_by_name: dict[str, dict[str, float]] = {}
         per_irrep_sum_by_name: dict[str, dict[str, float]] = {}
+        forces_mae_sum = 0.0
+        forces_mse_sum = 0.0
+        forces_count = 0
         energy_mae_sum = 0.0
         energy_count = 0
         num_electrons_mae_sum = 0.0
         num_electrons_count = 0
+        num_electrons_mae_pre_correction_sum = 0.0
+        num_electrons_pre_correction_count = 0
         first_payload = None
         n_batches = 0
 
         for batch in self._iter_eval_batches(trainer):
             x, y, preds = self._predict(pl_module, batch)
             aligned_preds = self._align_pred_matrices(preds, y, pl_module.mapper)
+            metrics_preds, num_electrons_mae_pre_correction = (
+                self._metric_prediction_matrices(
+                    aligned_preds,
+                    y,
+                    pl_module,
+                )
+            )
             if (
                 aligned_preds
                 and getattr(pl_module.cfg, "require_exact_edge_match", False)
@@ -927,16 +983,16 @@ class ArtifactCheckpointCallback(pl.Callback):
                 log_strict_checks_passed()
                 self._printed_strict_checks = True
 
-            if "hamiltonian" in aligned_preds and "hamiltonian" in y and "overlap" in y:
+            if "hamiltonian" in metrics_preds and "hamiltonian" in y and "overlap" in y:
                 detail = compute_detailed_metrics_aligned(
-                    aligned_preds["hamiltonian"],
+                    metrics_preds["hamiltonian"],
                     self._as_block_matrix(y["hamiltonian"], pl_module.mapper),
                     self._as_block_matrix(y["overlap"], pl_module.mapper),
                 )
                 for key, value in detail.items():
                     detailed_sum[key] += float(value)
 
-            for name, pred_mat in aligned_preds.items():
+            for name, pred_mat in metrics_preds.items():
                 target_mat = self._as_block_matrix(y[name], pl_module.mapper)
                 basic = compute_basic_matrix_metrics_aligned(pred_mat, target_mat)
                 basic_acc = basic_sum_by_name.setdefault(name, {})
@@ -959,34 +1015,54 @@ class ArtifactCheckpointCallback(pl.Callback):
                     per_irrep_acc[key] = per_irrep_acc.get(key, 0.0) + float(value)
 
             if (
-                "hamiltonian" in aligned_preds
-                and "density" in aligned_preds
+                getattr(pl_module.cfg, "enable_forces", False)
+                and y.get("forces") is not None
+                and "hamiltonian" in preds
+                and "density" in preds
+            ):
+                forces_pred = pl_module.get_forces(preds, x["positions"], x["box"])
+                forces_true = y["forces"]
+                force_diff = forces_pred - forces_true
+                forces_mae_sum += float(
+                    torch.mean(torch.abs(force_diff)).detach().cpu().item()
+                )
+                forces_mse_sum += float(torch.mean(force_diff**2).detach().cpu().item())
+                forces_count += 1
+
+            if (
+                "hamiltonian" in metrics_preds
+                and "density" in metrics_preds
                 and pl_module.cfg.enable_energy
                 and "energy" in y
             ):
                 e_pred = trace_matmul_sparse_block_matrix(
-                    aligned_preds["hamiltonian"], aligned_preds["density"]
+                    metrics_preds["hamiltonian"], metrics_preds["density"]
                 )
                 energy_mae_sum += float(
                     (torch.mean(torch.abs(e_pred - y["energy"])) * 27.2113845).item()
                 )
                 energy_count += 1
             if (
-                "overlap" in aligned_preds
-                and "density" in aligned_preds
+                "overlap" in metrics_preds
+                and "density" in metrics_preds
                 and pl_module.cfg.enable_num_electrons
                 and "num_electrons" in y
             ):
                 n_pred = trace_matmul_sparse_block_matrix(
-                    aligned_preds["overlap"], aligned_preds["density"]
+                    metrics_preds["overlap"], metrics_preds["density"]
                 )
                 num_electrons_mae_sum += float(
                     torch.mean(torch.abs(n_pred - y["num_electrons"])).item()
                 )
                 num_electrons_count += 1
+                if num_electrons_mae_pre_correction is not None:
+                    num_electrons_mae_pre_correction_sum += (
+                        num_electrons_mae_pre_correction
+                    )
+                    num_electrons_pre_correction_count += 1
 
             if first_payload is None:
-                first_payload = {"x": x, "y": y, "preds": aligned_preds}
+                first_payload = {"x": x, "y": y, "preds": metrics_preds}
             n_batches += 1
 
         if n_batches == 0:
@@ -1002,10 +1078,18 @@ class ArtifactCheckpointCallback(pl.Callback):
                 matrix_name: {k: v / n_batches for k, v in metrics.items()}
                 for matrix_name, metrics in per_irrep_sum_by_name.items()
             },
+            "forces_mae": (forces_mae_sum / forces_count) if forces_count > 0 else None,
+            "forces_mse": (forces_mse_sum / forces_count) if forces_count > 0 else None,
             "energy_mae": (energy_mae_sum / energy_count) if energy_count > 0 else None,
             "num_electrons_mae": (
                 num_electrons_mae_sum / num_electrons_count
                 if num_electrons_count > 0
+                else None
+            ),
+            "num_electrons_mae_pre_correction": (
+                num_electrons_mae_pre_correction_sum
+                / num_electrons_pre_correction_count
+                if num_electrons_pre_correction_count > 0
                 else None
             ),
             "first_payload": first_payload,
@@ -1042,6 +1126,16 @@ class ArtifactCheckpointCallback(pl.Callback):
             payload["val/energy_mae_study"] = eval_result["energy_mae"]
         if eval_result["num_electrons_mae"] is not None:
             payload["val/num_electrons_mae_study"] = eval_result["num_electrons_mae"]
+        if eval_result["num_electrons_mae_pre_correction"] is not None:
+            payload["val/num_electrons_mae_pre_correction"] = eval_result[
+                "num_electrons_mae_pre_correction"
+            ]
+        if (
+            eval_result["forces_mae"] is not None
+            and eval_result["forces_mse"] is not None
+        ):
+            payload["mae_F"] = eval_result["forces_mae"]
+            payload["mse_F"] = eval_result["forces_mse"]
         payload["val/loss"] = val_loss
         for matrix_name, per_irrep in eval_result["per_irrep_by_name"].items():
             payload.update(
@@ -1140,6 +1234,16 @@ class ArtifactCheckpointCallback(pl.Callback):
                 payload["initial/energy_mae"] = initial_eval["energy_mae"]
             if initial_eval["num_electrons_mae"] is not None:
                 payload["initial/num_electrons_mae"] = initial_eval["num_electrons_mae"]
+            if initial_eval["num_electrons_mae_pre_correction"] is not None:
+                payload["initial/num_electrons_mae_pre_correction"] = initial_eval[
+                    "num_electrons_mae_pre_correction"
+                ]
+            if (
+                initial_eval["forces_mae"] is not None
+                and initial_eval["forces_mse"] is not None
+            ):
+                payload["initial/mae_F"] = initial_eval["forces_mae"]
+                payload["initial/mse_F"] = initial_eval["forces_mse"]
             _maybe_log_wandb(run, payload)
 
     def on_validation_epoch_end(self, trainer, pl_module) -> None:
@@ -1271,6 +1375,16 @@ class ArtifactCheckpointCallback(pl.Callback):
             final_payload["final/energy_mae"] = eval_result["energy_mae"]
         if eval_result["num_electrons_mae"] is not None:
             final_payload["final/num_electrons_mae"] = eval_result["num_electrons_mae"]
+        if eval_result["num_electrons_mae_pre_correction"] is not None:
+            final_payload["final/num_electrons_mae_pre_correction"] = eval_result[
+                "num_electrons_mae_pre_correction"
+            ]
+        if (
+            eval_result["forces_mae"] is not None
+            and eval_result["forces_mse"] is not None
+        ):
+            final_payload["final/mae_F"] = eval_result["forces_mae"]
+            final_payload["final/mse_F"] = eval_result["forces_mse"]
 
         # final plots
         for name in pl_module.cfg.matrix_targets:

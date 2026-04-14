@@ -53,8 +53,8 @@ This inventory tracks the study logging / visualization surface and the current 
     Status: implemented.
 
 13. Console message for cutoff application to GT matrices.
-    Status: not auto-emitted yet.
-    Notes: helper exists in `src/net/silicon_study_logging.py`, but main code does not currently surface before/after edge counts during dataset prep.
+    Status: implemented.
+    Notes: emitted from `scripts/train_silicon.py` using edge counts captured during dataset preprocessing.
 
 14. Console message for strict edge-alignment checks passing.
     Status: implemented.
@@ -101,13 +101,12 @@ This inventory tracks the study logging / visualization surface and the current 
     Main path: `src/net/e3gnn.py`
 
 25. Force MAE / MSE mirrored into the artifact callback’s study-style initial/final payloads.
-    Status: not implemented yet.
-    Notes: current artifact callback evaluation path is matrix/observable-focused and does not run the grad-enabled force evaluation.
+    Status: implemented.
 
 26. Pre-correction electron-count MAE:
     `num_electrons_mae_pre_correction`.
-    Status: not implemented.
-    Notes: the corresponding density-rescaling correction path from the study is not present in main code, so this metric has no faithful source yet.
+    Status: implemented.
+    Notes: backed by the new `rescale_density_to_num_electrons` metrics-only correction path.
 
 27. Per-irrep WandB metrics with matrix prefixes (`H_`, `S_`, `D_`) for:
     `l1_elem`, `l2_elem`, `l1_block`, `l1_block_rel`, `l2_block`, `l2_block_rel`, `l1_full_rel`, `l2_full_rel`.
@@ -206,6 +205,4 @@ Implemented now:
 - removal of the noisy edge-count / edge-ratio metrics
 
 Still missing:
-- automatic console messages for cutoff-application counts
-- force metrics inside the artifact callback’s initial/final evaluation payload
-- pre-correction electron-count metric, because the corresponding density-rescaling feature is not yet in main code
+- none from the originally identified silicon-study logging / visualization gap list
