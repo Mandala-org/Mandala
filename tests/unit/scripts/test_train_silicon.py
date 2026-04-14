@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+
+def _load_train_silicon_module():
+    path = Path("scripts/train_silicon.py").resolve()
+    spec = importlib.util.spec_from_file_location("train_silicon_script", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_resolve_resume_checkpoint_prefers_named_file(tmp_path):
+    mod = _load_train_silicon_module()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    latest = run_dir / "latest_checkpoint.pt"
+    latest.write_text("x")
+    assert mod._resolve_resume_checkpoint(str(run_dir), "latest") == latest.resolve()
+    assert mod._resolve_resume_checkpoint(str(latest), "best") == latest.resolve()
+
+
+@pytest.mark.integration
+def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
+    mod = _load_train_silicon_module()
+
+    data_root = tmp_path / "data"
+    snap_root = data_root / "300K" / "sample0"
+    snap_root.mkdir(parents=True)
+    (snap_root / "Si_DM").write_text("matrix")
+    (snap_root / "info.dat").write_text("info")
+    ckpt_dir = tmp_path / "checkpoints"
+    run_name = "silicon_test_run"
+    run_dir = ckpt_dir / run_name
+    run_dir.mkdir(parents=True)
+    (run_dir / "latest_checkpoint.pt").write_text("ckpt")
+
+    class DummyDatasetFactory:
+        def __init__(self, cfg):
+            self.cfg = cfg
+            self.snapshots = []
+
+        def add_snapshot(self, matrix_path, info_path, purpose="train"):
+            self.snapshots.append((matrix_path, info_path, purpose))
+
+        def create(self):
+            return [1], [2], object()
+
+    class DummyLogger:
+        def __init__(self, *args, **kwargs):
+            self.experiment = type("E", (), {"config": type("C", (), {})()})()
+
+    captured = {}
+
+    class DummyArtifactCallback:
+        def __init__(self, *args, **kwargs):
+            captured["artifact_kwargs"] = kwargs
+
+    class DummyBenchmarkCallback:
+        def __init__(self, *args, **kwargs):
+            captured["benchmark_kwargs"] = kwargs
+
+    class DummyModel:
+        def __init__(self, mapper, cfg):
+            self.mapper = mapper
+            self.cfg = cfg
+
+    class DummyTrainer:
+        def __init__(self, *args, **kwargs):
+            captured["trainer_kwargs"] = kwargs
+            self.logger = kwargs.get("logger")
+
+        def fit(self, *args, **kwargs):
+            captured["fit_kwargs"] = kwargs
+
+    monkeypatch.setattr(mod, "DatasetFactory", DummyDatasetFactory)
+    monkeypatch.setattr(mod, "WandbLogger", DummyLogger)
+    monkeypatch.setattr(mod, "ArtifactCheckpointCallback", DummyArtifactCallback)
+    monkeypatch.setattr(mod, "BenchmarkCallback", DummyBenchmarkCallback)
+    monkeypatch.setattr(mod, "E3GNN", DummyModel)
+    monkeypatch.setattr(mod.pl, "Trainer", DummyTrainer)
+    monkeypatch.setattr(mod.glob, "glob", lambda pattern: [str(snap_root / "Si_DM")])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train_silicon.py",
+            "--data_path",
+            str(data_root),
+            "--min_temp",
+            "300",
+            "--max_temp",
+            "300",
+            "--temp_step",
+            "300",
+            "--n_snapshots_per_temp",
+            "1",
+            "--val_temp",
+            "300",
+            "--val_n_snapshots",
+            "1",
+            "--checkpoint_dir",
+            str(ckpt_dir),
+            "--run_name",
+            run_name,
+            "--resume_from_checkpoint",
+            str(run_dir),
+            "--generate_video",
+            "false",
+            "--log_per_irrep_images",
+            "true",
+            "--log_artifacts",
+            "true",
+        ],
+    )
+
+    mod.main()
+
+    assert captured["artifact_kwargs"]["output_dir"] == run_dir
+    assert captured["artifact_kwargs"]["generate_video"] is False
+    assert captured["artifact_kwargs"]["log_per_irrep_images"] is True
+    assert captured["fit_kwargs"]["ckpt_path"] == str(
+        (run_dir / "latest_checkpoint.pt").resolve()
+    )
