@@ -159,6 +159,7 @@ class Config:
     train_observables_on_gt: bool = False
     symmetrize_output: bool = True  # symmetrize matrix outputs
     symmetrize_hamiltonian_targets: bool = True
+    rescale_density_to_num_electrons: bool = False
 
     # -------------- loss weighting --------------------------------------
     loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1

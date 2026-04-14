@@ -105,6 +105,7 @@ class E3GNNDataset(Dataset):
                 str(info_path.resolve()),
                 self.convention,
                 str(self.cfg.cutoff_radius),
+                str(self.cfg.apply_cutoff_to_targets),
                 str(self.dtype),
                 str(mat_stat.st_mtime_ns),
                 str(mat_stat.st_size),
@@ -130,12 +131,15 @@ class E3GNNDataset(Dataset):
                 pass
 
         self.snapshot_cache_misses += 1
+        snapshot_cutoff = None
+        if not self.cfg.apply_cutoff_to_targets:
+            snapshot_cutoff = self.cfg.cutoff_radius
         if matrix_path.suffix == ".npz" or info_path.suffix == ".json":
             snapshot = Snapshot.from_pyscf(
                 npz_path=matrix_path,
                 json_path=info_path,
                 convention=self.convention,
-                cutoff_radius=self.cfg.cutoff_radius,
+                cutoff_radius=snapshot_cutoff,
                 dtype=self.dtype,
                 cfg=self.cfg,
             )
@@ -145,7 +149,7 @@ class E3GNNDataset(Dataset):
                 info_path=info_path,
                 convention=self.convention,
                 symmetrize_density=True,
-                cutoff_radius=self.cfg.cutoff_radius,
+                cutoff_radius=snapshot_cutoff,
                 cfg=self.cfg,
             )
         if cache_file is not None:
@@ -224,6 +228,16 @@ class E3GNNDataset(Dataset):
             x["num_self_edges"] = num_self_edges
 
         with torch.no_grad():
+            target_edges_before_cutoff = sum(
+                edges.shape[1] for edges in snap.hamiltonian.pair_edges.values()
+            )
+            target_edges_after_cutoff = target_edges_before_cutoff
+            if self.cfg.apply_cutoff_to_targets and self.cfg.cutoff_radius is not None:
+                snap = snap.filter_by_distance(self.cfg.cutoff_radius)
+                target_edges_after_cutoff = sum(
+                    edges.shape[1] for edges in snap.hamiltonian.pair_edges.values()
+                )
+
             snap = snap.symmetrize_matrices(
                 hamiltonian=self.cfg.symmetrize_hamiltonian_targets,
                 overlap=True,
@@ -254,6 +268,8 @@ class E3GNNDataset(Dataset):
                 "forces": snap.forces,
                 "stress": snap.stress,
             }
+            x["target_edges_before_cutoff"] = target_edges_before_cutoff
+            x["target_edges_after_cutoff"] = target_edges_after_cutoff
         return x, y
 
     # ------------------- torch Dataset interface ---------------------------

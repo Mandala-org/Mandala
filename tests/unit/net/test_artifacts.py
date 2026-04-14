@@ -167,3 +167,109 @@ def test_plot_helpers_write_files(tmp_path):
     curve_path = tmp_path / "curve.png"
     save_distance_error_curve_plot(curve, curve_path)
     assert curve_path.exists()
+
+
+def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
+    orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})
+    mapper = BlockIrrepMapper(
+        orbital_cfg, diagonal=False, device="cpu", dtype=torch.float32
+    )
+    target = _make_tiny_block(1.0)
+    pred_h = _make_tiny_block(1.0)
+    pred_s = _make_tiny_block(1.0)
+    pred_d = _make_tiny_block(2.0)
+    x = {
+        "positions": torch.tensor([[0.0, 0.0, 0.0]]),
+        "box": torch.eye(3),
+        "atoms": ("H",),
+        "node_type_idx": torch.tensor([0], dtype=torch.long),
+    }
+    y = {
+        "hamiltonian": target,
+        "overlap": target,
+        "density": target,
+        "num_electrons": torch.tensor(1.0),
+        "forces": torch.ones(1, 3),
+    }
+
+    logged_payloads = []
+
+    class DummyExperiment:
+        def __init__(self):
+            self.summary = {}
+
+        def log(self, payload):
+            logged_payloads.append(payload)
+
+    class DummyModule:
+        def __init__(self):
+            self.cfg = SimpleNamespace(
+                matrix_targets=["hamiltonian", "overlap", "density"],
+                print_per_irrep_metrics=False,
+                log_interval=1,
+                adaptive_log_interval=False,
+                enable_energy=False,
+                enable_num_electrons=True,
+                enable_forces=True,
+                rescale_density_to_num_electrons=True,
+                require_exact_edge_match=False,
+            )
+            self.mapper = mapper
+            self.device = torch.device("cpu")
+
+        def eval(self):
+            return self
+
+        def __call__(self, batch_x):
+            return {
+                "hamiltonian": pred_h.to_vectors(mapper),
+                "overlap": pred_s.to_vectors(mapper),
+                "density": pred_d.to_vectors(mapper),
+            }
+
+        def get_forces(self, predictions, positions, box):
+            return torch.zeros_like(positions)
+
+        def transfer_batch_to_device(self, batch, device, dataloader_idx):
+            return batch
+
+        def on_after_batch_transfer(self, batch, dataloader_idx):
+            return batch
+
+    class DummyTrainer:
+        def __init__(self):
+            self.current_epoch = 0
+            self.sanity_checking = False
+            self.callback_metrics = {"val/loss_total": torch.tensor(0.0)}
+            self.val_dataloaders = [[(x, y)]]
+            self.logger = SimpleNamespace(experiment=DummyExperiment())
+            self.optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
+
+        def save_checkpoint(self, path):
+            torch.save({"path": path}, path)
+
+    trainer = DummyTrainer()
+    callback = ArtifactCheckpointCallback(tmp_path, generate_video=False)
+    module = DummyModule()
+
+    callback.on_fit_start(trainer, module)
+    callback.on_validation_epoch_end(trainer, module)
+    callback.on_fit_end(trainer, module)
+
+    def _find_value(key: str):
+        for payload in logged_payloads:
+            if key in payload:
+                return payload[key]
+        raise AssertionError(f"Missing logged key {key!r}")
+
+    assert _find_value("initial/num_electrons_mae_pre_correction") == 1.0
+    assert _find_value("initial/num_electrons_mae") == 0.0
+    assert _find_value("initial/mae_F") == 1.0
+    assert _find_value("initial/mse_F") == 1.0
+    assert _find_value("val/num_electrons_mae_pre_correction") == 1.0
+    assert _find_value("mae_F") == 1.0
+    assert _find_value("mse_F") == 1.0
+    assert _find_value("final/num_electrons_mae_pre_correction") == 1.0
+    assert _find_value("final/num_electrons_mae") == 0.0
+    assert _find_value("final/mae_F") == 1.0
+    assert _find_value("final/mse_F") == 1.0
