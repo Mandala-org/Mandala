@@ -171,6 +171,11 @@ parameters:
     values:
       - 64
       - 128
+  init-weights-factor:
+    values:
+      - 1
+      - 0.1
+      - 0.01
   head-diag-output-scale:
     values:
       - 0.75

@@ -148,6 +148,8 @@ class E3GNN(pl.LightningModule):
             }
         )
 
+        self._apply_init_weights_factor()
+
         # Print model summary if verbosity >= 1
         print_model_summary(self, verbosity=self.cfg.verbosity)
 
@@ -167,6 +169,15 @@ class E3GNN(pl.LightningModule):
             strict=strict,
             **kwargs,
         )
+
+    def _apply_init_weights_factor(self) -> None:
+        factor = float(self.cfg.init_weights_factor)
+        if factor == 1.0:
+            return
+        with torch.no_grad():
+            for param in self.parameters():
+                if param.is_floating_point():
+                    param.mul_(factor)
 
     # ------------------------ util helpers -----------------------------
     @staticmethod
