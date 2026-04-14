@@ -27,7 +27,7 @@ from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
 from data.graph_features import compute_graph_features
 
-from net.common import Config, build_hidden_irreps
+from net.common import Config, resolve_hidden_irreps
 from net.irrep_tools import (
     build_irrep_projector_cache,
     compute_irrep_metrics,
@@ -84,14 +84,8 @@ class E3GNN(pl.LightningModule):
             )
 
         # ---------- shared irreps ---------------------------------------
-        self.hidden_irreps: Irreps = build_hidden_irreps(
-            self.cfg.l_max, self.cfg.hidden_base_dim, self.cfg.emb_use_odd_features
-        )
-        self.neck_irreps: Irreps = build_hidden_irreps(
-            self.cfg.l_max,
-            self.cfg.hidden_base_dim,
-            self.cfg.emb_use_odd_features,
-        )
+        self.hidden_irreps: Irreps = resolve_hidden_irreps(self.cfg)
+        self.neck_irreps: Irreps = resolve_hidden_irreps(self.cfg)
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
 
         # ---------- encoders -------------------------------------------

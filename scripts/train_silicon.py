@@ -45,7 +45,34 @@ def str_to_list(value):
     try:
         return ast.literal_eval(value)
     except (ValueError, SyntaxError):
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if "," in raw:
+                return [part.strip() for part in raw.split(",") if part.strip()]
+            return [raw]
         raise argparse.ArgumentTypeError(f"Failed to parse '{value}' as a list.")
+
+
+def _arg_names(name: str) -> tuple[str, ...]:
+    primary = f"--{name}"
+    alias = f"--{name.replace('_', '-')}"
+    if alias == primary:
+        return (primary,)
+    return (primary, alias)
+
+
+def discover_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
+    pairs: list[tuple[Path, Path]] = []
+    for matrix_path in sorted(root.rglob("Si_DM")):
+        if not matrix_path.is_file():
+            continue
+        info_path = matrix_path.parent / "info.dat"
+        if not info_path.exists():
+            continue
+        pairs.append((matrix_path.resolve(), info_path.resolve()))
+    return pairs
 
 
 def setup_argparse():
@@ -55,64 +82,76 @@ def setup_argparse():
 
     # --- Dataset Arguments ---
     parser.add_argument(
-        "--data_path",
+        *_arg_names("data_path"),
         type=str,
         default="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A",
     )
-    parser.add_argument("--min_temp", type=int, default=300)
-    parser.add_argument("--max_temp", type=int, default=3000)
-    parser.add_argument("--temp_step", type=int, default=300)
+    parser.add_argument(*_arg_names("min_temp"), type=int, default=300)
+    parser.add_argument(*_arg_names("max_temp"), type=int, default=3000)
+    parser.add_argument(*_arg_names("temp_step"), type=int, default=300)
     parser.add_argument(
-        "--n_snapshots_per_temp",
+        *_arg_names("n_snapshots_per_temp"),
         type=int,
         default=50,
         help="Number of snapshots to use for training per temperature.",
     )
     parser.add_argument(
-        "--val_temp",
+        *_arg_names("val_temp"),
         type=int,
         default=1500,
         help="Temperature to use for the validation set.",
     )
     parser.add_argument(
-        "--val_n_snapshots",
+        *_arg_names("val_n_snapshots"),
         type=int,
         default=None,
         help="Number of snapshots to use for validation. If None, uses the same as training.",
     )
     parser.add_argument(
-        "--precision",
+        *_arg_names("num_train"),
+        type=int,
+        default=None,
+        help="If set together with --num-val, use a global train/val split over all snapshots.",
+    )
+    parser.add_argument(
+        *_arg_names("num_val"),
+        type=int,
+        default=None,
+        help="Validation count for global split mode.",
+    )
+    parser.add_argument(
+        *_arg_names("precision"),
         type=str,
         default="32-true",
         help="PyTorch Lightning precision setting (e.g., '32-true', '16-mixed').",
     )
     parser.add_argument(
-        "--checkpoint_dir",
+        *_arg_names("checkpoint_dir"),
         type=str,
         default="checkpoints/silicon",
         help="Directory where run checkpoints and artifacts are stored.",
     )
     parser.add_argument(
-        "--resume_from_checkpoint",
+        *_arg_names("resume_from_checkpoint"),
         type=str,
         default=None,
         help="Resume from a checkpoint file or run directory (latest/best/final).",
     )
     parser.add_argument(
-        "--resume_mode",
+        *_arg_names("resume_mode"),
         type=str,
         default="latest",
         choices=["latest", "best", "final"],
         help="When resuming from a directory, which checkpoint to load.",
     )
     parser.add_argument(
-        "--generate_video",
+        *_arg_names("generate_video"),
         type=str_to_bool,
         default=True,
         help="Generate and upload training-progress videos.",
     )
     parser.add_argument(
-        "--log_artifacts",
+        *_arg_names("log_artifacts"),
         type=str_to_bool,
         default=True,
         help="Enable DOS, distance-curve, and per-irrep artifact generation.",
@@ -126,7 +165,9 @@ def setup_argparse():
 
         # Use the new boolean handling for bool types
         if field_type is bool:
-            parser.add_argument(f"--{name}", type=str_to_bool, default=default_value)
+            parser.add_argument(
+                *_arg_names(name), type=str_to_bool, default=default_value
+            )
             continue
 
         arg_type_callable = None
@@ -159,12 +200,14 @@ def setup_argparse():
             pass
 
         if is_sequence:
-            parser.add_argument(f"--{name}", type=str_to_list, default=default_value)
+            parser.add_argument(
+                *_arg_names(name), type=str_to_list, default=default_value
+            )
         else:
             if not callable(arg_type_callable):
                 arg_type_callable = str
             parser.add_argument(
-                f"--{name}", type=arg_type_callable, default=default_value
+                *_arg_names(name), type=arg_type_callable, default=default_value
             )
 
     return parser.parse_args()
@@ -203,8 +246,13 @@ def main():
             setattr(cfg, key, value)
 
     # --- Initialize W&B ---
-    # Use environment variables for W&B project if available, otherwise use default
-    wandb_project = os.getenv("WANDB_PROJECT", "mandala-silicon-sweep")
+    # Prefer explicit config/CLI project; fall back to environment only if omitted.
+    wandb_project = (
+        args.wandb_project
+        or cfg.wandb_project
+        or os.getenv("WANDB_PROJECT")
+        or "mandala-silicon-sweep"
+    )
     run_name = (
         args.run_name or cfg.run_name or f"silicon_{random.randint(0, 10**9):09d}"
     )
@@ -245,43 +293,62 @@ def main():
 
     # --- Data Loading ---
     print("--- Setting up datasets ---")
-    all_temps = range(args.min_temp, args.max_temp + 1, args.temp_step)
-    train_temps = [
-        t
-        for t in all_temps
-        if t != args.val_temp or args.min_temp == args.max_temp == args.val_temp
-    ]
+    if args.num_train is not None or args.num_val is not None:
+        if args.num_train is None or args.num_val is None:
+            raise ValueError(
+                "Global split mode requires both --num_train and --num_val."
+            )
+        if args.num_train <= 0:
+            raise ValueError("--num_train must be > 0")
+        if args.num_val < 0:
+            raise ValueError("--num_val must be >= 0")
+        all_pairs = discover_snapshot_pairs(Path(args.data_path))
+        random.Random(cfg.seed).shuffle(all_pairs)
+        if len(all_pairs) < args.num_train + args.num_val:
+            raise ValueError(
+                f"Requested train+val={args.num_train + args.num_val} but found only {len(all_pairs)} snapshots under {args.data_path}"
+            )
+        train_pairs = all_pairs[: args.num_train]
+        val_pairs = all_pairs[args.num_train : args.num_train + args.num_val]
+    else:
+        all_temps = range(args.min_temp, args.max_temp + 1, args.temp_step)
+        train_temps = [
+            t
+            for t in all_temps
+            if t != args.val_temp or args.min_temp == args.max_temp == args.val_temp
+        ]
 
-    train_pairs = []
-    for temp in train_temps:
-        temp_path = Path(args.data_path) / f"{temp}K"
-        snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
-        # Ensure we don't request more samples than available
-        num_to_sample = min(len(snapshot_paths), args.n_snapshots_per_temp)
-        selected_paths = random.sample(snapshot_paths, num_to_sample)
-        for matrix_path in selected_paths:
+        train_pairs = []
+        for temp in train_temps:
+            temp_path = Path(args.data_path) / f"{temp}K"
+            snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
+            num_to_sample = min(len(snapshot_paths), args.n_snapshots_per_temp)
+            selected_paths = random.sample(snapshot_paths, num_to_sample)
+            for matrix_path in selected_paths:
+                info_path = Path(matrix_path).parent / "info.dat"
+                if info_path.exists():
+                    train_pairs.append((matrix_path, info_path))
+
+        val_pairs = []
+        val_path = Path(args.data_path) / f"{args.val_temp}K"
+        val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
+        num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
+        if args.val_n_snapshots is not None:
+            num_val_to_sample = min(num_val_to_sample, args.val_n_snapshots)
+        selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
+        for matrix_path in selected_val_paths:
             info_path = Path(matrix_path).parent / "info.dat"
             if info_path.exists():
-                train_pairs.append((matrix_path, info_path))
-
-    val_pairs = []
-    val_path = Path(args.data_path) / f"{args.val_temp}K"
-    val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
-    # Limit validation snapshots as well
-    num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
-    if args.val_n_snapshots is not None:
-        num_val_to_sample = min(num_val_to_sample, args.val_n_snapshots)
-    selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
-    for matrix_path in selected_val_paths:
-        info_path = Path(matrix_path).parent / "info.dat"
-        if info_path.exists():
-            val_pairs.append((matrix_path, info_path))
+                val_pairs.append((matrix_path, info_path))
 
     print(
         f"Found {len(train_pairs)} training snapshots and {len(val_pairs)} validation snapshots."
     )
 
-    fac = DatasetFactory(cfg)
+    cfg_ds = dataclasses.replace(cfg)
+    if not cfg.apply_cutoff_to_targets:
+        cfg_ds.cutoff_radius = None
+    fac = DatasetFactory(cfg_ds)
 
     for m, i in train_pairs:
         fac.add_snapshot(m, i, purpose="train")
@@ -310,11 +377,13 @@ def main():
     print("--- Setting up model and trainer ---")
     model = E3GNN(mapper=mapper, cfg=cfg)
 
-    callbacks = [
-        BenchmarkCallback(
-            verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
-        ),
-    ]
+    callbacks = []
+    if cfg.benchmark:
+        callbacks.append(
+            BenchmarkCallback(
+                verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
+            )
+        )
     if args.log_artifacts:
         callbacks.append(
             ArtifactCheckpointCallback(

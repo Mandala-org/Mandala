@@ -87,3 +87,30 @@ def test_deep_head_splits_diag_shifted_self_and_offdiag():
     returned_edges = {tuple(edge.tolist()) for edge in out["H-H"]["edges"].t()}
     expected_edges = {tuple(edge.tolist()) for edge in edges_5d.t()}
     assert returned_edges == expected_edges
+
+
+@pytest.mark.unit
+def test_deep_head_uses_head_specific_variant_and_branch_scales():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+    cfg = Config(
+        neck_depth=1,
+        head_e3mlp_layers=2,
+        head_e3mlp_variant="film",
+        head_diag_output_scale=0.75,
+        head_offdiag_output_scale=0.1,
+        separate_shifted_self=True,
+        safety_checks=True,
+    )
+    head = DeepHead(
+        irreps_diag_in=Irreps("2x0e"),
+        irreps_edge_in=Irreps("2x0e"),
+        irreps_neck=Irreps("2x0e"),
+        pair_keys=["H-H"],
+        mapper=mapper,
+        cfg=cfg,
+    )
+
+    assert head.diag_projs["H-H"].post_scale == pytest.approx(0.75)
+    assert head.offdiag_projs["H-H"].post_scale == pytest.approx(0.1)
+    assert head.shifted_self_projs["H-H"].post_scale == pytest.approx(0.75)
