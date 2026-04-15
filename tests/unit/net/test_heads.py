@@ -3,6 +3,7 @@ import torch
 from e3nn.o3 import Irreps
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from data.edge_alignment import build_prediction_edge_metadata
 from net.common import Config, build_hidden_irreps
 from net.heads import DeepHead
 from core.block_irrep_mapper import BlockIrrepMapper
@@ -32,16 +33,27 @@ def test_deep_head_shapes_and_device():
     edge_type_idx = torch.zeros(E, dtype=torch.long)  # all "H-H"
     edge_index = torch.vstack([torch.arange(E), torch.flip(torch.arange(E), dims=[0])])
     edge_shift = torch.zeros(3, E, dtype=torch.long)
-    edges_5d = torch.cat([edge_shift, edge_index], dim=0)
+    metadata = build_prediction_edge_metadata(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms=("H",) * E,
+        edge_types=mapper.edge_types,
+        edge_type2idx=mapper.edge_type2idx,
+        separate_shifted_self=False,
+    )
 
-    out = head(edge_feat, edge_feat, edge_type_idx, edges_5d)
+    out = head(
+        edge_feat,
+        edge_feat,
+        metadata["pred_pair_edges_static"],
+        metadata["edge_partitions"],
+    )
     assert "H-H" in out
-    vec = out["H-H"]["vectors"]
-    edges = out["H-H"]["edges"]
+    vec = out["H-H"]
 
     # correct shapes
     assert vec.shape[0] == E
-    assert edges.shape == (5, E)
     # device consistency
     assert vec.device == torch.device("cpu")
 
@@ -67,26 +79,37 @@ def test_deep_head_splits_diag_shifted_self_and_offdiag():
     )
 
     node_feat = torch.randn(2, 1)
-    edge_feat = torch.randn(3, 2)
-    edge_type_idx = torch.zeros(3, dtype=torch.long)
+    edge_feat = torch.randn(6, 2)
+    edge_type_idx = torch.zeros(6, dtype=torch.long)
     edges_5d = torch.tensor(
         [
-            [0, 1, 0],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 1, 0],
-            [0, 1, 1],
+            [0, 0, 1, -1, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 1, 1, 1, 0, 1],
+            [0, 1, 1, 1, 1, 0],
         ],
         dtype=torch.long,
     )
+    metadata = build_prediction_edge_metadata(
+        edge_index=edges_5d[3:],
+        edge_shift=edges_5d[:3],
+        edge_type_idx=edge_type_idx,
+        atoms=("H", "H"),
+        edge_types=mapper.edge_types,
+        edge_type2idx=mapper.edge_type2idx,
+        separate_shifted_self=True,
+    )
 
-    out = head(node_feat, edge_feat, edge_type_idx, edges_5d)
+    out = head(
+        node_feat,
+        edge_feat,
+        metadata["pred_pair_edges_static"],
+        metadata["edge_partitions"],
+    )
 
     assert "H-H" in out
-    assert out["H-H"]["vectors"].shape[0] == 3
-    returned_edges = {tuple(edge.tolist()) for edge in out["H-H"]["edges"].t()}
-    expected_edges = {tuple(edge.tolist()) for edge in edges_5d.t()}
-    assert returned_edges == expected_edges
+    assert out["H-H"].shape[0] == 6
 
 
 @pytest.mark.unit

@@ -35,6 +35,7 @@ from net.heads import DeepHead  # noqa: E402
 from net.activations import make_nonlinearity  # noqa: E402
 from core.orbital_irrep_config import OrbitalIrrepConfig  # noqa: E402
 from core.block_irrep_mapper import BlockIrrepMapper  # noqa: E402
+from data.edge_alignment import build_prediction_edge_metadata  # noqa: E402
 
 # --- Test Helpers ---
 
@@ -307,10 +308,25 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     N = 10
     node_feat = generate_equivariant_input(hidden_irreps, batch_size=N)
     edge_feat = generate_equivariant_input(hidden_irreps, batch_size=E)
-    edge_type_idx = torch.randint(0, len(pair_keys), (E,))
     edge_index = torch.randint(0, N, (2, E))  # Dummy node indices
     edge_shift = torch.zeros(3, E, dtype=torch.long)
-    edges_5d = torch.cat([edge_shift, edge_index], dim=0)
+    atoms = tuple("H" if i % 2 == 0 else "O" for i in range(N))
+    edge_type_idx = torch.tensor(
+        [
+            mapper.edge_type2idx[f"{atoms[i]}-{atoms[j]}"]
+            for i, j in edge_index.t().tolist()
+        ],
+        dtype=torch.long,
+    )
+    metadata = build_prediction_edge_metadata(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms=atoms,
+        edge_types=mapper.edge_types,
+        edge_type2idx=mapper.edge_type2idx,
+        separate_shifted_self=bool(cfg.separate_shifted_self),
+    )
     rot = random_rotation_matrix()
     D_in = hidden_irreps.D_from_matrix(rot)
 
@@ -319,15 +335,23 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     edge_feat_rotated = edge_feat @ D_in.T
 
     # Apply layer
-    y_dict = layer(node_feat, edge_feat, edge_type_idx, edges_5d)
+    y_dict = layer(
+        node_feat,
+        edge_feat,
+        metadata["pred_pair_edges_static"],
+        metadata["edge_partitions"],
+    )
     y_dict_rotated_input = layer(
-        node_feat_rotated, edge_feat_rotated, edge_type_idx, edges_5d
+        node_feat_rotated,
+        edge_feat_rotated,
+        metadata["pred_pair_edges_static"],
+        metadata["edge_partitions"],
     )
 
     # Check equivariance for each output pair
     for key in y_dict:
-        y_vec = y_dict[key]["vectors"]
-        y_vec_rotated_input = y_dict_rotated_input[key]["vectors"]
+        y_vec = y_dict[key]
+        y_vec_rotated_input = y_dict_rotated_input[key]
 
         out_irreps = mapper.get_pair_irreps(key)
         D_out = out_irreps.D_from_matrix(rot)

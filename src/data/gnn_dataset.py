@@ -14,6 +14,7 @@ helpers.
 
 from __future__ import annotations
 import hashlib
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -21,6 +22,7 @@ import tempfile
 from typing import Dict, List, Sequence, Tuple
 
 import torch
+import torch.nn.functional as F
 import time  # needed for __getitem__ timing
 from torch.utils.data import Dataset
 from e3nn.o3 import Irreps
@@ -28,9 +30,25 @@ from e3nn.o3 import Irreps
 from core.block_irrep_mapper import BlockIrrepMapper
 from net.common import Config
 
+from data.edge_alignment import (
+    build_prediction_edge_metadata,
+    reconcile_graph_edges_to_target,
+    strict_edge_alignment_check,
+    strict_reverse_edge_check,
+)
+from data.graph_features import (
+    compute_edge_geometry_from_static_edges,
+    compute_graph_features,
+)
 from data.snapshot import Snapshot
-from data.graph_features import compute_graph_features
 from tqdm.auto import tqdm
+
+
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v1"
+
+
+def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
+    return json.dumps(mapper.orbital_cfg.to_dict(), sort_keys=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -68,16 +86,26 @@ class E3GNNDataset(Dataset):
         self.mapper: BlockIrrepMapper = mapper
         self.orbital_cfg = mapper.orbital_cfg
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
+        self.device = torch.device("cpu")
 
         # preprocess all snapshots
         self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
         self.snapshot_cache_hits = 0
         self.snapshot_cache_misses = 0
+        self.preprocessed_cache_hits = 0
+        self.preprocessed_cache_misses = 0
         for matrix_path, info_path in tqdm(
             self.snapshot_paths, desc="Loading snapshots"
         ):
             snapshot = self._load_snapshot(matrix_path, info_path)
-            sample = self._process_snapshot_to_sample(snapshot)
+            try:
+                sample = self._load_or_build_preprocessed_sample(
+                    matrix_path, info_path, snapshot
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to preprocess snapshot matrix={matrix_path} info={info_path}: {exc}"
+                ) from exc
             self.snapshots.append(sample)
         if getattr(self.cfg, "snapshot_cache_dir", None) is None:
             print(
@@ -88,6 +116,17 @@ class E3GNNDataset(Dataset):
             print(
                 "[CACHE] Snapshot loading: "
                 f"{self.snapshot_cache_hits} hit(s), {self.snapshot_cache_misses} miss(es), "
+                f"{total} total"
+            )
+        if getattr(self.cfg, "snapshot_cache_dir", None) is None:
+            print(
+                f"[CACHE] Preprocessed samples: cache disabled, built {len(self.snapshot_paths)} sample(s)"
+            )
+        else:
+            total = self.preprocessed_cache_hits + self.preprocessed_cache_misses
+            print(
+                "[CACHE] Preprocessed samples: "
+                f"{self.preprocessed_cache_hits} hit(s), {self.preprocessed_cache_misses} miss(es), "
                 f"{total} total"
             )
 
@@ -115,6 +154,97 @@ class E3GNNDataset(Dataset):
         )
         key_hash = hashlib.md5(key.encode("utf-8")).hexdigest()
         return cache_dir / f"{matrix_path.stem}_{key_hash}.pt"
+
+    def _preprocessed_sample_cache_file(
+        self,
+        matrix_path: Path,
+        info_path: Path,
+    ) -> Path | None:
+        snapshot_cache_dir = getattr(self.cfg, "snapshot_cache_dir", None)
+        if snapshot_cache_dir is None:
+            return None
+        cache_root = Path(snapshot_cache_dir).expanduser() / "preprocessed_samples"
+        mat_stat = matrix_path.stat()
+        info_stat = info_path.stat()
+        key_payload = {
+            "version": PREPROCESSED_SAMPLE_CACHE_VERSION,
+            "matrix_path": str(matrix_path.resolve()),
+            "info_path": str(info_path.resolve()),
+            "matrix_mtime_ns": mat_stat.st_mtime_ns,
+            "matrix_size": mat_stat.st_size,
+            "info_mtime_ns": info_stat.st_mtime_ns,
+            "info_size": info_stat.st_size,
+            "orbital_cfg": _serialize_orbital_cfg_key(self.mapper),
+            "convention": self.convention,
+            "l_max": int(self.cfg.l_max),
+            "n_radial": int(self.cfg.n_radial),
+            "radial_embedding_scale": self.cfg.radial_embedding_scale,
+            "cutoff_radius": float(self.cfg.cutoff_radius),
+            "apply_cutoff_to_targets": bool(self.cfg.apply_cutoff_to_targets),
+            "matrix_targets": list(self.cfg.matrix_targets),
+            "train_target": self.cfg.train_target,
+            "dtype": str(self.dtype),
+            "symmetrize_hamiltonian_targets": bool(
+                self.cfg.symmetrize_hamiltonian_targets
+            ),
+            "require_exact_edge_match": bool(self.cfg.require_exact_edge_match),
+            "precompute_edge_features": bool(self.cfg.precompute_edge_features),
+            "separate_shifted_self": bool(self.cfg.separate_shifted_self),
+        }
+        key_hash = hashlib.md5(
+            json.dumps(key_payload, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        return cache_root / f"{matrix_path.stem}_{key_hash}.pt"
+
+    def _load_preprocessed_sample(self, cache_file: Path) -> tuple[dict, dict] | None:
+        try:
+            return torch.load(cache_file, map_location="cpu")
+        except Exception:
+            try:
+                cache_file.unlink()
+            except Exception:
+                pass
+            return None
+
+    def _save_preprocessed_sample(
+        self, cache_file: Path, sample: tuple[dict, dict]
+    ) -> None:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            dir=cache_file.parent,
+            prefix=f"{cache_file.stem}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            torch.save(sample, tmp_path)
+            os.replace(tmp_path, cache_file)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+    def _load_or_build_preprocessed_sample(
+        self,
+        matrix_path: Path,
+        info_path: Path,
+        snapshot: Snapshot,
+    ) -> tuple[dict, dict]:
+        cache_file = self._preprocessed_sample_cache_file(matrix_path, info_path)
+        if cache_file is not None and cache_file.exists():
+            cached = self._load_preprocessed_sample(cache_file)
+            if cached is not None:
+                self.preprocessed_cache_hits += 1
+                return cached
+
+        self.preprocessed_cache_misses += 1
+        sample = self._process_snapshot_to_sample(
+            snapshot,
+            snapshot_label=matrix_path.name,
+        )
+        if cache_file is not None and not cache_file.exists():
+            self._save_preprocessed_sample(cache_file, sample)
+        return sample
 
     def _load_snapshot(
         self,
@@ -174,59 +304,14 @@ class E3GNNDataset(Dataset):
 
     # ---------- main per-snapshot routine -----------------------------------
     def _process_snapshot_to_sample(
-        self, snap: Snapshot
+        self,
+        snap: Snapshot,
+        *,
+        snapshot_label: str = "snapshot",
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         """
         Build graph inputs and targets from one Snapshot.
         """
-        # snap.positions = snap.positions.to(self.dtype)
-        # snap.box = snap.box.to(self.dtype)
-        # snap.forces = snap.forces.to(self.dtype)
-        # snap.stress = snap.stress.to(self.dtype)
-
-        if self.cfg.enable_forces:
-            snap.positions.requires_grad_()
-        if self.cfg.enable_stress:
-            snap.box.requires_grad_()
-        if self.cfg.train_on_forces:
-            snap.forces.requires_grad_()
-        if self.cfg.train_on_stress:
-            snap.stress.requires_grad_()
-
-        atoms = snap.density.atoms
-        elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
-        node_type_idx = torch.tensor([elem2idx[el] for el in atoms], dtype=torch.long)
-
-        x = {
-            "node_type_idx": node_type_idx,
-            "positions": snap.positions,
-            "box": snap.box,
-            "atoms": atoms,
-        }
-
-        if self.cfg.precompute_edge_features:
-            (
-                edge_index,
-                edge_shift,
-                edge_type_idx,
-                edge_length_emb,
-                edge_sh,
-                num_self_edges,
-            ) = compute_graph_features(
-                positions=snap.positions,
-                box=snap.box,
-                atoms=snap.density.atoms,
-                cfg=self.cfg,
-                sh_irreps=self.sh_irreps,
-                edge_type2idx=self.mapper.edge_type2idx,
-            )
-            x["edge_index"] = edge_index
-            x["edge_shift"] = edge_shift
-            x["edge_type_idx"] = edge_type_idx
-            x["edge_length_emb"] = edge_length_emb
-            x["edge_sh"] = edge_sh
-            x["num_self_edges"] = num_self_edges
-
         with torch.no_grad():
             target_edges_before_cutoff = sum(
                 edges.shape[1] for edges in snap.hamiltonian.pair_edges.values()
@@ -259,6 +344,109 @@ class E3GNNDataset(Dataset):
                     f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
                 )
 
+            if self.cfg.enable_forces:
+                snap.positions.requires_grad_()
+            if self.cfg.enable_stress and snap.box is not None:
+                snap.box.requires_grad_()
+            if self.cfg.train_on_forces and snap.forces is not None:
+                snap.forces.requires_grad_()
+            if self.cfg.train_on_stress and snap.stress is not None:
+                snap.stress.requires_grad_()
+
+            atoms = snap.density.atoms
+            atoms_tuple = tuple(atoms)
+            atom_counts = dict(snap.density.atom_counts)
+            elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
+            node_type_idx = torch.tensor(
+                [elem2idx[el] for el in atoms], dtype=torch.long
+            )
+
+            (
+                edge_index,
+                edge_shift,
+                edge_type_idx,
+                edge_length_emb,
+                edge_sh,
+                num_self_edges,
+            ) = compute_graph_features(
+                positions=snap.positions,
+                box=snap.box,
+                atoms=snap.density.atoms,
+                cfg=self.cfg,
+                sh_irreps=self.sh_irreps,
+                edge_type2idx=self.mapper.edge_type2idx,
+            )
+
+            if self.cfg.require_exact_edge_match:
+                edge_index, edge_shift, _ = reconcile_graph_edges_to_target(
+                    edge_index=edge_index,
+                    edge_shift=edge_shift,
+                    reference_matrix=snap.hamiltonian,
+                    atoms_list=list(atoms),
+                    mapper=self.mapper,
+                    positions=snap.positions,
+                    box=snap.box,
+                    snapshot_label=snapshot_label,
+                )
+                edge_type_idx = torch.tensor(
+                    [
+                        self.mapper.edge_type2idx[f"{atoms[i]}-{atoms[j]}"]
+                        for i, j in zip(edge_index[0].tolist(), edge_index[1].tolist())
+                    ],
+                    dtype=torch.long,
+                )
+                edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
+                    positions=snap.positions,
+                    box=snap.box,
+                    edge_index=edge_index,
+                    edge_shift=edge_shift,
+                    sh_irreps=self.sh_irreps,
+                    cutoff_radius=self.cfg.cutoff_radius,
+                    n_radial=self.cfg.n_radial,
+                    radial_embedding_scale=self.cfg.radial_embedding_scale,
+                )
+                num_self_edges = int(
+                    ((edge_index[0] == edge_index[1]) & (edge_shift == 0).all(dim=0))
+                    .sum()
+                    .item()
+                )
+
+            strict_reverse_edge_check(edge_index, edge_shift, edge_set_name="graph")
+            for matrix_name, matrix_target in (
+                ("hamiltonian", snap.hamiltonian),
+                ("overlap", snap.overlap),
+                ("density", snap.density),
+            ):
+                strict_edge_alignment_check(
+                    matrix_target,
+                    edge_index=edge_index,
+                    edge_shift=edge_shift,
+                    edge_type_idx=edge_type_idx,
+                    atoms_list=list(atoms),
+                    edge_types=self.mapper.edge_types,
+                    matrix_name=matrix_name,
+                    require_exact=self.cfg.require_exact_edge_match,
+                )
+
+            num_species = len(self.orbital_cfg.elements())
+            node_one_hot = F.one_hot(node_type_idx, num_classes=num_species).to(
+                dtype=self.dtype
+            )
+            src_type = node_type_idx[edge_index[0]]
+            dst_type = node_type_idx[edge_index[1]]
+            edge_one_hot = F.one_hot(
+                src_type * num_species + dst_type, num_classes=num_species * num_species
+            ).to(dtype=self.dtype)
+            pred_metadata = build_prediction_edge_metadata(
+                edge_index=edge_index,
+                edge_shift=edge_shift,
+                edge_type_idx=edge_type_idx,
+                atoms=atoms_tuple,
+                edge_types=self.mapper.edge_types,
+                edge_type2idx=self.mapper.edge_type2idx,
+                separate_shifted_self=bool(self.cfg.separate_shifted_self),
+            )
+
             y = {
                 "hamiltonian": hamiltonian_target,
                 "overlap": overlap_target,
@@ -268,8 +456,27 @@ class E3GNNDataset(Dataset):
                 "forces": snap.forces,
                 "stress": snap.stress,
             }
-            x["target_edges_before_cutoff"] = target_edges_before_cutoff
-            x["target_edges_after_cutoff"] = target_edges_after_cutoff
+
+            x = {
+                "node_type_idx": node_type_idx,
+                "node_one_hot": node_one_hot,
+                "positions": snap.positions,
+                "box": snap.box,
+                "atoms": atoms,
+                "atoms_tuple": atoms_tuple,
+                "atom_counts": atom_counts,
+                "edge_index": edge_index,
+                "edge_shift": edge_shift,
+                "edge_type_idx": edge_type_idx,
+                "edge_one_hot": edge_one_hot,
+                "num_self_edges": num_self_edges,
+                "target_edges_before_cutoff": target_edges_before_cutoff,
+                "target_edges_after_cutoff": target_edges_after_cutoff,
+                **pred_metadata,
+            }
+            if self.cfg.precompute_edge_features:
+                x["edge_length_emb"] = edge_length_emb
+                x["edge_sh"] = edge_sh
         return x, y
 
     # ------------------- torch Dataset interface ---------------------------
@@ -303,16 +510,34 @@ class E3GNNDataset(Dataset):
             # x
             if "node_type_idx" in x:
                 x["node_type_idx"] = x["node_type_idx"].to(device)
+            if "node_one_hot" in x:
+                x["node_one_hot"] = x["node_one_hot"].to(device)
             if "edge_index" in x:
                 x["edge_index"] = x["edge_index"].to(device)
             if "edge_shift" in x:
                 x["edge_shift"] = x["edge_shift"].to(device)
             if "edge_type_idx" in x:
                 x["edge_type_idx"] = x["edge_type_idx"].to(device)
+            if "edge_one_hot" in x:
+                x["edge_one_hot"] = x["edge_one_hot"].to(device)
             if "edge_length_emb" in x:
                 x["edge_length_emb"] = x["edge_length_emb"].to(device)
             if "edge_sh" in x:
                 x["edge_sh"] = x["edge_sh"].to(device)
+            if "pred_pair_edges_static" in x:
+                x["pred_pair_edges_static"] = {
+                    k: v.to(device) for k, v in x["pred_pair_edges_static"].items()
+                }
+            if "pred_trace_alignment" in x:
+                x["pred_trace_alignment"] = {
+                    k: (rev_key, idx.to(device))
+                    for k, (rev_key, idx) in x["pred_trace_alignment"].items()
+                }
+            if "edge_partitions" in x:
+                x["edge_partitions"] = {
+                    key: {name: value.to(device) for name, value in parts.items()}
+                    for key, parts in x["edge_partitions"].items()
+                }
 
             # y targets
             y["hamiltonian"] = y["hamiltonian"].to(device)
@@ -320,6 +545,10 @@ class E3GNNDataset(Dataset):
             y["density"] = y["density"].to(device)
             y["energy"] = y["energy"].to(device)
             y["num_electrons"] = y["num_electrons"].to(device)
+            if y["forces"] is not None:
+                y["forces"] = y["forces"].to(device)
+            if y["stress"] is not None:
+                y["stress"] = y["stress"].to(device)
 
             self.snapshots[idx] = (x, y)
         return self

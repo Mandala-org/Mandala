@@ -30,6 +30,50 @@ def _minimal_disp(
     return frac @ box
 
 
+def compute_edge_geometry_from_static_edges(
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+    edge_index: torch.Tensor,
+    edge_shift: torch.Tensor,
+    sh_irreps: Irreps,
+    cutoff_radius: float,
+    n_radial: int,
+    radial_embedding_scale: str,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if box is not None:
+        shift_float = edge_shift.T.to(dtype=positions.dtype)
+        edge_disp = (
+            positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
+        )
+    else:
+        edge_disp = positions[edge_index[1]] - positions[edge_index[0]]
+
+    edge_lengths = torch.linalg.norm(edge_disp, dim=-1)
+    edge_sh = spherical_harmonics(
+        sh_irreps, edge_disp, normalize=True, normalization="component"
+    )
+    is_zero_shift_self_edge = (edge_index[0] == edge_index[1]) & (edge_shift == 0).all(
+        dim=0
+    )
+    sh_non_scalar_slices = _non_scalar_sh_slices(sh_irreps)
+    if is_zero_shift_self_edge.any() and sh_non_scalar_slices:
+        edge_sh = edge_sh.clone()
+        for slc in sh_non_scalar_slices:
+            edge_sh[is_zero_shift_self_edge, slc] = 0.0
+    edge_length_emb = soft_one_hot_linspace(
+        edge_lengths,
+        start=0.0,
+        end=cutoff_radius,
+        number=n_radial,
+        basis="gaussian",
+        cutoff=False,
+    )
+    if radial_embedding_scale == "sqrt_n_radial":
+        edge_length_emb = edge_length_emb * (n_radial**0.5)
+    return edge_length_emb, edge_sh, edge_lengths
+
+
 def compute_graph_features(
     positions: torch.Tensor,
     box: torch.Tensor | None,
@@ -118,8 +162,6 @@ def compute_graph_features(
             torch.linalg.norm(diffs, dim=-1) < 1e-4
         ), "Displacement vectors do not lead to correct destination positions."
 
-    self_disp = torch.zeros((num_atoms, 3), device=positions.device)
-
     # 6. Sort off-diagonal edges
     # Match the sorting logic in Snapshot.canonicalize_edges:
     # Primary key: distance
@@ -161,18 +203,12 @@ def compute_graph_features(
     offdiag_edge_src = offdiag_edge_src_unsorted[sorted_indices]
     offdiag_edge_dst = offdiag_edge_dst_unsorted[sorted_indices]
     offdiag_edge_shift = offdiag_edge_shift_unsorted[:, sorted_indices]
-    offdiag_disp = offdiag_disp_unsorted[sorted_indices]
-    offdiag_lengths = offdiag_lengths_unsorted[sorted_indices]
 
     # 7. Combine all edges and features
     edge_src = torch.cat([self_edge_src, offdiag_edge_src])
     edge_dst = torch.cat([self_edge_dst, offdiag_edge_dst])
     edge_shift = torch.cat([self_edge_shift, offdiag_edge_shift], dim=1)
     edge_index = torch.stack([edge_src, edge_dst]).to(positions.device)
-    edge_disp = torch.cat([self_disp, offdiag_disp], dim=0)
-    edge_lengths = torch.cat(
-        [torch.zeros(num_atoms, device=positions.device), offdiag_lengths]
-    )
 
     # 8. Create edge_type_idx
     self_edge_keys = [f"{atoms[i]}-{atoms[i]}" for i in range(num_atoms)]
@@ -196,25 +232,16 @@ def compute_graph_features(
     )
 
     # 9. Calculate geometric features for the final edge order
-    edge_sh = spherical_harmonics(
-        sh_irreps, edge_disp, normalize=True, normalization="component"
+    edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
+        positions=positions,
+        box=box,
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        sh_irreps=sh_irreps,
+        cutoff_radius=cfg.cutoff_radius,
+        n_radial=cfg.n_radial,
+        radial_embedding_scale=cfg.radial_embedding_scale,
     )
-    is_zero_shift_self_edge = (edge_src == edge_dst) & (edge_shift == 0).all(dim=0)
-    sh_non_scalar_slices = _non_scalar_sh_slices(sh_irreps)
-    if is_zero_shift_self_edge.any() and sh_non_scalar_slices:
-        edge_sh = edge_sh.clone()
-        for slc in sh_non_scalar_slices:
-            edge_sh[is_zero_shift_self_edge, slc] = 0.0
-    edge_length_emb = soft_one_hot_linspace(
-        edge_lengths,
-        start=0.0,
-        end=cfg.cutoff_radius,
-        number=cfg.n_radial,
-        basis="gaussian",
-        cutoff=False,
-    )
-    if cfg.radial_embedding_scale == "sqrt_n_radial":
-        edge_length_emb = edge_length_emb * (cfg.n_radial**0.5)
 
     return (
         edge_index,

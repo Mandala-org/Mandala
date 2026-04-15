@@ -9,10 +9,9 @@ E3GNN – PyTorch-Lightning implementation
 """
 
 from __future__ import annotations
-from typing import Dict, Tuple, Any
+from typing import Dict, Any
 
 import torch
-import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch import nn
 
@@ -22,10 +21,12 @@ from e3nn.o3 import Irreps
 import time
 
 from core.block_irrep_mapper import BlockIrrepMapper
-from core.sparse_math import trace_matmul_sparse_block_matrix
+from core.sparse_math import (
+    trace_matmul_sparse_block_matrix_aligned,
+)
 from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
-from data.graph_features import compute_graph_features
+from data.graph_features import compute_edge_geometry_from_static_edges
 
 from net.common import Config, resolve_hidden_irreps
 from net.irrep_tools import (
@@ -198,29 +199,18 @@ class E3GNN(pl.LightningModule):
 
     def _wrap_head_output(
         self,
-        raw: Dict[str, Dict[str, torch.Tensor]],
-        atoms: Tuple[str, ...],
+        raw: Dict[str, torch.Tensor],
+        x: Dict[str, Any],
     ) -> IrrepsBlockData:
         """
         Convert DeepHead raw dict -> IrrepsBlockData with mapper.
         """
-        from collections import Counter
-
-        pair_vec, pair_edges, lookup = {}, {}, {}
-        for key, payload in raw.items():
-            vec = payload["vectors"]
-            edges = payload["edges"]
-            pair_vec[key] = vec
-            pair_edges[key] = edges
-            for idx, (sx, sy, sz, i, j) in enumerate(edges.t().tolist()):
-                lookup[(sx, sy, sz, i, j)] = (key, idx)
-
         irreps_blocks = IrrepsBlockData(
-            atoms=atoms,
-            atom_counts=Counter(atoms),
-            pair_vectors=pair_vec,
-            pair_edges=pair_edges,
-            lookup=lookup,
+            atoms=x["atoms_tuple"],
+            atom_counts=x["atom_counts"],
+            pair_vectors=raw,
+            pair_edges=x["pred_pair_edges_static"],
+            lookup=x["pred_lookup_static"],
             orbital_cfg=self.mapper.orbital_cfg,
         )
         return irreps_blocks
@@ -235,27 +225,18 @@ class E3GNN(pl.LightningModule):
         return False
 
     def _populate_edge_features(self, x: Dict[str, Any]) -> None:
-        (
-            edge_index,
-            edge_shift,
-            edge_type_idx,
-            edge_length_emb,
-            edge_sh,
-            num_self_edges,
-        ) = compute_graph_features(
+        edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
             positions=x["positions"],
             box=x["box"],
-            atoms=x["atoms"],
-            cfg=self.cfg,
+            edge_index=x["edge_index"],
+            edge_shift=x["edge_shift"],
             sh_irreps=self.sh_irreps,
-            edge_type2idx=self.mapper.edge_type2idx,
+            cutoff_radius=self.cfg.cutoff_radius,
+            n_radial=self.cfg.n_radial,
+            radial_embedding_scale=self.cfg.radial_embedding_scale,
         )
-        x["edge_index"] = edge_index
-        x["edge_shift"] = edge_shift
-        x["edge_type_idx"] = edge_type_idx
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh
-        x["num_self_edges"] = num_self_edges
 
     def _partial_train_mask(self, edges_5d: torch.Tensor) -> torch.Tensor:
         mask = torch.ones(edges_5d.shape[1], dtype=torch.bool, device=edges_5d.device)
@@ -356,18 +337,6 @@ class E3GNN(pl.LightningModule):
             assert node.requires_grad, "Gradients not flowing through node encoder!"
             assert edge.requires_grad, "Gradients not flowing through edge encoder!"
 
-        # ---- message-passing -------------------------------------------
-        # Prepare one-hot encodings for self-connections
-        num_species = len(self.mapper.orbital_cfg.elements())
-        node_one_hot = F.one_hot(x["node_type_idx"], num_classes=num_species).float()
-
-        # Edge one-hot: encode pairs of node types
-        src_type = x["node_type_idx"][x["edge_index"][0]]
-        dst_type = x["node_type_idx"][x["edge_index"][1]]
-        edge_one_hot = F.one_hot(
-            src_type * num_species + dst_type, num_classes=num_species * num_species
-        ).float()
-
         # Single unified message-passing loop
         for idx, blk in enumerate(self.mp_blocks):
             node, edge = blk(
@@ -376,23 +345,19 @@ class E3GNN(pl.LightningModule):
                 edge_index=x["edge_index"],
                 edge_sh=x["edge_sh"],
                 edge_length_emb=x["edge_length_emb"],
-                node_one_hot=node_one_hot,
-                edge_one_hot=edge_one_hot,
+                node_one_hot=x["node_one_hot"],
+                edge_one_hot=x["edge_one_hot"],
                 activation_mags=self._activation_mags,
             )
 
         # ---- heads -----------------------------------------------------
-        head_edges_5d = torch.cat([x["edge_shift"], x["edge_index"]], dim=0)
-        head_edge_type_idx = x["edge_type_idx"]
-
         preds_raw = {
-            name: head(node, edge, head_edge_type_idx, head_edges_5d)
+            name: head(node, edge, x["pred_pair_edges_static"], x["edge_partitions"])
             for name, head in self.heads.items()
         }
 
         preds_wrapped = {
-            name: self._wrap_head_output(raw, tuple(x["atoms"]))
-            for name, raw in preds_raw.items()
+            name: self._wrap_head_output(raw, x) for name, raw in preds_raw.items()
         }
 
         # expose activation magnitudes for callbacks
@@ -407,6 +372,7 @@ class E3GNN(pl.LightningModule):
         """
         x, y = batch
         metrics = {}
+        pred_trace_alignment = x["pred_trace_alignment"]
 
         # --- forward timing (message-passing + heads) -------------------
         t_fwd_start = time.perf_counter()
@@ -552,16 +518,18 @@ class E3GNN(pl.LightningModule):
             and "hamiltonian" in preds_matrix
             and "density" in preds_matrix
         ):
-            E_pred = trace_matmul_sparse_block_matrix(
-                preds_matrix["hamiltonian"], preds_matrix["density"]
+            E_pred = trace_matmul_sparse_block_matrix_aligned(
+                preds_matrix["hamiltonian"],
+                preds_matrix["density"],
+                pred_trace_alignment,
             )
             E_true = y["energy"]
             metrics[f"{stage}/energy_mae"] = (
                 torch.mean(torch.abs(E_pred - E_true)) * HARTREE_TO_EV
             )
             if H_true is not None:
-                E_gt_H = trace_matmul_sparse_block_matrix(
-                    H_true, preds_matrix["density"]
+                E_gt_H = trace_matmul_sparse_block_matrix_aligned(
+                    H_true, preds_matrix["density"], pred_trace_alignment
                 )
                 metrics[f"{stage}/energy_mae_gt_hamiltonian"] = (
                     torch.mean(torch.abs(E_gt_H - E_true)) * HARTREE_TO_EV
@@ -576,8 +544,10 @@ class E3GNN(pl.LightningModule):
             and "overlap" in preds_matrix
             and "density" in preds_matrix
         ):
-            N_pred = trace_matmul_sparse_block_matrix(
-                preds_matrix["overlap"], preds_matrix["density"]
+            N_pred = trace_matmul_sparse_block_matrix_aligned(
+                preds_matrix["density"],
+                preds_matrix["overlap"],
+                pred_trace_alignment,
             )
             N_true = y["num_electrons"]
             metrics[f"{stage}/num_electrons_mae"] = torch.mean(
@@ -620,12 +590,18 @@ class E3GNN(pl.LightningModule):
 
         # Partial Ground Truth Observables
         if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
-            E_gt_D = trace_matmul_sparse_block_matrix(
-                preds_matrix["hamiltonian"], D_true
+            E_gt_D = trace_matmul_sparse_block_matrix_aligned(
+                preds_matrix["hamiltonian"], D_true, pred_trace_alignment
             )
-            E_gt_H = trace_matmul_sparse_block_matrix(H_true, preds_matrix["density"])
-            N_gt_S = trace_matmul_sparse_block_matrix(preds_matrix["density"], S_true)
-            N_gt_D = trace_matmul_sparse_block_matrix(S_true, preds_matrix["density"])
+            E_gt_H = trace_matmul_sparse_block_matrix_aligned(
+                H_true, preds_matrix["density"], pred_trace_alignment
+            )
+            N_gt_S = trace_matmul_sparse_block_matrix_aligned(
+                preds_matrix["density"], S_true, pred_trace_alignment
+            )
+            N_gt_D = trace_matmul_sparse_block_matrix_aligned(
+                S_true, preds_matrix["density"], pred_trace_alignment
+            )
 
             if self.cfg.log_partial_gt_observables:
                 metrics[f"{stage}/energy_mae_gt_density"] = (

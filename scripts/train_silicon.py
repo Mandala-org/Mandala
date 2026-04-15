@@ -366,12 +366,15 @@ def main():
     train_ds, val_ds, mapper = fac.create()
 
     def _dl(ds, shuffle=False):
+        use_pin_memory = accelerator == "gpu"
+        use_persistent_workers = cfg.num_workers > 0
         return DataLoader(
             ds or [],
             batch_size=1,
             shuffle=shuffle,
             num_workers=cfg.num_workers,
-            pin_memory=cfg.gpus == 0,  # Pin memory only if not using GPU
+            pin_memory=use_pin_memory,
+            persistent_workers=use_persistent_workers,
             collate_fn=lambda b: b[0],
         )
 
