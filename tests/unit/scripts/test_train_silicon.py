@@ -170,6 +170,10 @@ def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
     assert captured["artifact_kwargs"]["output_dir"] == run_dir
     assert captured["artifact_kwargs"]["generate_video"] is False
     assert captured["artifact_kwargs"]["log_per_irrep_images"] is True
+    train_loader = captured["fit_kwargs"]["train_dataloaders"]
+    assert train_loader.persistent_workers is True
+    assert train_loader.pin_memory is False
+    assert train_loader.num_workers == 16
     assert captured["fit_kwargs"]["ckpt_path"] == str(
         (run_dir / "latest_checkpoint.pt").resolve()
     )

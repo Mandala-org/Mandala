@@ -70,6 +70,8 @@ parameters:
     value: true
   require-exact-edge-match:
     value: true
+  precompute-edge-features:
+    value: true
   dtype:
     value: float32
   device:

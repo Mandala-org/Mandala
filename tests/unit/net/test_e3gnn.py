@@ -4,12 +4,69 @@ from torch import nn
 from collections import Counter
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from data.edge_alignment import build_prediction_edge_metadata
 from net.common import Config
 from core.block_irrep_mapper import BlockIrrepMapper
 from net.e3gnn import E3GNN
 from e3nn.o3 import Irreps
 from data.factory import DatasetFactory
 from data.block_matrix import IrrepsBlockData
+from data.graph_features import compute_graph_features
+
+
+def _build_static_graph_x(
+    *,
+    node_type_idx: torch.Tensor,
+    edge_index: torch.Tensor,
+    edge_shift: torch.Tensor,
+    edge_type_idx: torch.Tensor,
+    atoms: tuple[str, ...],
+    mapper: BlockIrrepMapper,
+    cfg: Config,
+    edge_length_emb: torch.Tensor | None = None,
+    edge_sh: torch.Tensor | None = None,
+    positions: torch.Tensor | None = None,
+    box: torch.Tensor | None = None,
+) -> dict:
+    num_species = len(mapper.orbital_cfg.elements())
+    metadata = build_prediction_edge_metadata(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms=atoms,
+        edge_types=mapper.edge_types,
+        edge_type2idx=mapper.edge_type2idx,
+        separate_shifted_self=bool(cfg.separate_shifted_self),
+    )
+    x = {
+        "node_type_idx": node_type_idx,
+        "node_one_hot": torch.nn.functional.one_hot(
+            node_type_idx, num_classes=num_species
+        ).to(dtype=cfg.dtype),
+        "edge_index": edge_index,
+        "edge_shift": edge_shift,
+        "edge_type_idx": edge_type_idx,
+        "edge_one_hot": torch.nn.functional.one_hot(
+            node_type_idx[edge_index[0]] * num_species + node_type_idx[edge_index[1]],
+            num_classes=num_species * num_species,
+        ).to(dtype=cfg.dtype),
+        "atoms": atoms,
+        "atoms_tuple": atoms,
+        "atom_counts": Counter(atoms),
+        "num_self_edges": int(
+            (
+                ((edge_index[0] == edge_index[1]) & (edge_shift == 0).all(dim=0)).sum()
+            ).item()
+        ),
+        "positions": positions,
+        "box": box,
+        **metadata,
+    }
+    if edge_length_emb is not None:
+        x["edge_length_emb"] = edge_length_emb
+    if edge_sh is not None:
+        x["edge_sh"] = edge_sh
+    return x
 
 
 class MockHead(nn.Module):
@@ -36,26 +93,32 @@ def test_forward_smoke(edge_encoder_style):
     model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
 
     # ------- fake batch ----------------------------
-    N, E = 4, 7
+    N = 4
     node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 0, 1, 1, 2], [0, 1, 2, 3, 1, 0, 2, 1]], dtype=torch.long
+    )
+    E = edge_index.shape[1]
     edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
     edge_len = torch.randn(E, cfg.n_radial)
     sh = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh.dim)  # random SH features
-
-    x = {
-        "node_type_idx": node_type_idx,
-        "edge_type_idx": edge_type_idx,
-        "edge_length_emb": edge_len,
-        "edge_sh": edge_sh,
-        "edge_index": torch.tensor([[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]]),
-        "edge_shift": torch.zeros(3, E, dtype=torch.long),
-        "atoms": ("H", "H", "H", "H"),
-        "num_self_edges": N,
-        "index_gnn_cutoff": E,
-        "box": torch.eye(3),
-    }
+    edge_shift = torch.zeros(3, E, dtype=torch.long)
     atoms = ("H", "H", "H", "H")
+
+    x = _build_static_graph_x(
+        node_type_idx=node_type_idx,
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms=atoms,
+        mapper=model.mapper,
+        cfg=cfg,
+        edge_length_emb=edge_len,
+        edge_sh=edge_sh,
+        positions=torch.zeros(N, 3, dtype=cfg.dtype),
+        box=torch.eye(3, dtype=cfg.dtype),
+    )
 
     preds = model(x)
     assert set(preds.keys()) == {"hamiltonian", "overlap", "density"}
@@ -76,14 +139,33 @@ def test_forward_smoke_onthefly_deeph_e3():
     )
     model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
 
+    positions = torch.tensor(
+        [[0.0, 0.0, 0.0], [0.0, 0.0, 0.8], [0.0, 0.7, 0.0]],
+        dtype=cfg.dtype,
+    )
+    edge_index, edge_shift, edge_type_idx, _, _, num_self_edges = (
+        compute_graph_features(
+            positions=positions,
+            box=None,
+            atoms=("H", "H", "H"),
+            cfg=cfg,
+            sh_irreps=Irreps.spherical_harmonics(cfg.l_max),
+            edge_type2idx=model.mapper.edge_type2idx,
+        )
+    )
     x = {
-        "positions": torch.tensor(
-            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.8], [0.0, 0.7, 0.0]],
-            dtype=cfg.dtype,
+        **_build_static_graph_x(
+            node_type_idx=torch.zeros(3, dtype=torch.long),
+            edge_index=edge_index,
+            edge_shift=edge_shift,
+            edge_type_idx=edge_type_idx,
+            atoms=("H", "H", "H"),
+            mapper=model.mapper,
+            cfg=cfg,
+            positions=positions,
+            box=None,
         ),
-        "box": None,
-        "atoms": ("H", "H", "H"),
-        "node_type_idx": torch.zeros(3, dtype=torch.long),
+        "num_self_edges": num_self_edges,
     }
 
     preds = model(x)
@@ -193,6 +275,7 @@ def test_irrep_part_loss_zero_on_matching_target():
         "node_type_idx": torch.zeros(2, dtype=torch.long),
         "edge_index": edges_5d[3:],
         "edge_shift": edges_5d[:3],
+        "pred_trace_alignment": {key: (key, torch.arange(edges_5d.shape[1]))},
     }
     y = {
         "hamiltonian": target_irreps.to_blocks(mapper),
@@ -260,6 +343,7 @@ def test_irrep_metrics_logged_for_all_matrix_targets():
         "node_type_idx": torch.zeros(2, dtype=torch.long),
         "edge_index": edges_5d[3:],
         "edge_shift": edges_5d[:3],
+        "pred_trace_alignment": {key: (key, torch.arange(edges_5d.shape[1]))},
     }
     y = {
         "hamiltonian": target_irreps.to_blocks(mapper),
@@ -323,6 +407,15 @@ def test_energy_mae_gt_hamiltonian_logged():
         "node_type_idx": torch.zeros(1, dtype=torch.long),
         "edge_index": torch.tensor([[0], [0]], dtype=torch.long),
         "edge_shift": torch.zeros(3, 1, dtype=torch.long),
+        "pred_trace_alignment": build_prediction_edge_metadata(
+            edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+            edge_shift=torch.zeros(3, 1, dtype=torch.long),
+            edge_type_idx=torch.zeros(1, dtype=torch.long),
+            atoms=("H",),
+            edge_types=mapper.edge_types,
+            edge_type2idx=mapper.edge_type2idx,
+            separate_shifted_self=False,
+        )["pred_trace_alignment"],
     }
     y = {
         "hamiltonian": block.to_blocks(mapper),

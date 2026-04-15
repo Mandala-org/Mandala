@@ -24,7 +24,12 @@ def test_process_snapshot_to_sample():
                 train_on_stress=False,
             )
             self.sh_irreps = Irreps("1x0e")
-            self.mapper = type("MockMapper", (), {"edge_type2idx": {"H-H": 0}})()
+            self.dtype = self.cfg.dtype
+            self.mapper = type(
+                "MockMapper",
+                (),
+                {"edge_type2idx": {"H-H": 0}, "edge_types": ["H-H"]},
+            )()
             self.orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})
 
         def _process_snapshot_to_sample(self, snap):
@@ -38,24 +43,21 @@ def test_process_snapshot_to_sample():
     orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})
 
     # BlockMatrix edges:
-    # 0. (0,0,0, 0, 1) - Off-diag
-    # 1. (0,0,0, 1, 0) - Off-diag (symmetric to 0)
-    # 2. (1,0,0, 0, 1) - Off-diag, shifted
-    # 3. (-1,0,0, 1, 0) - Off-diag, shifted (symmetric to 2)
-    # 4. (0,0,0, 0, 0) - Diag
-    # 5. (0,0,0, 1, 1) - Diag
+    # Match the graph ordering used by compute_graph_features:
+    # 0. (0,0,0, 0, 0) - Diag
+    # 1. (0,0,0, 1, 1) - Diag
+    # 2. (0,0,0, 0, 1) - Off-diag
+    # 3. (0,0,0, 1, 0) - Off-diag (symmetric to 2)
 
     edges = torch.tensor(
         [
-            [0, 0, 0, 0, 1],
-            [0, 0, 0, 1, 0],
-            [1, 0, 0, 0, 1],
-            [-1, 0, 0, 1, 0],
             [0, 0, 0, 0, 0],
             [0, 0, 0, 1, 1],
+            [0, 0, 0, 0, 1],
+            [0, 0, 0, 1, 0],
         ]
     ).t()
-    blocks = torch.randn(6, 1, 1)
+    blocks = torch.randn(4, 1, 1)
 
     pair_blocks = {"H-H": blocks}
     pair_edges = {"H-H": edges}
@@ -72,3 +74,18 @@ def test_process_snapshot_to_sample():
 
     # Run processing
     x, y = ds._process_snapshot_to_sample(snap)
+
+    assert "pred_trace_alignment" in x
+    assert "pred_pair_edges_static" in x
+    assert "pred_lookup_static" in x
+    assert "edge_partitions" in x
+    assert "node_one_hot" in x
+    assert "edge_one_hot" in x
+    assert x["pred_pair_edges_static"]["H-H"].shape[0] == 5
+    assert x["node_one_hot"].shape == (2, 1)
+    assert x["edge_one_hot"].shape[0] == x["edge_index"].shape[1]
+    assert x["pred_trace_alignment"]["H-H"][0] == "H-H"
+    assert torch.equal(
+        x["pred_pair_edges_static"]["H-H"],
+        torch.cat([x["edge_shift"], x["edge_index"]], dim=0),
+    )
