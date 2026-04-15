@@ -527,6 +527,25 @@ class E3GNN(pl.LightningModule):
         loss_N_weighted = torch.tensor(0.0, device=self.device)
         loss_F_weighted = torch.tensor(0.0, device=self.device)
 
+        H_true = None
+        D_true = None
+        S_true = None
+        needs_gt_observables = (
+            self.cfg.enable_energy
+            or self.cfg.enable_num_electrons
+            or self.cfg.log_partial_gt_observables
+            or self.cfg.train_observables_on_gt
+        )
+        if needs_gt_observables and {"hamiltonian", "density", "overlap"}.issubset(y):
+            if self.cfg.train_target == "irreps":
+                H_true = y["hamiltonian"].to_blocks(self.mapper)
+                D_true = y["density"].to_blocks(self.mapper)
+                S_true = y["overlap"].to_blocks(self.mapper)
+            else:
+                H_true = y["hamiltonian"]
+                D_true = y["density"]
+                S_true = y["overlap"]
+
         # Standard observables
         if (
             self.cfg.enable_energy
@@ -540,6 +559,13 @@ class E3GNN(pl.LightningModule):
             metrics[f"{stage}/energy_mae"] = (
                 torch.mean(torch.abs(E_pred - E_true)) * HARTREE_TO_EV
             )
+            if H_true is not None:
+                E_gt_H = trace_matmul_sparse_block_matrix(
+                    H_true, preds_matrix["density"]
+                )
+                metrics[f"{stage}/energy_mae_gt_hamiltonian"] = (
+                    torch.mean(torch.abs(E_gt_H - E_true)) * HARTREE_TO_EV
+                )
             if self.cfg.train_on_energy and not self.cfg.train_observables_on_gt:
                 loss_E_weighted = self.cfg.loss_coef_observables * self._mse(
                     E_pred, E_true
@@ -594,15 +620,6 @@ class E3GNN(pl.LightningModule):
 
         # Partial Ground Truth Observables
         if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
-            if self.cfg.train_target == "irreps":
-                H_true = y["hamiltonian"].to_blocks(self.mapper)
-                D_true = y["density"].to_blocks(self.mapper)
-                S_true = y["overlap"].to_blocks(self.mapper)
-            else:
-                H_true = y["hamiltonian"]
-                D_true = y["density"]
-                S_true = y["overlap"]
-
             E_gt_D = trace_matmul_sparse_block_matrix(
                 preds_matrix["hamiltonian"], D_true
             )

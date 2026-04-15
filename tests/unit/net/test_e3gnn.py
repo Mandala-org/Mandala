@@ -196,8 +196,6 @@ def test_irrep_part_loss_zero_on_matching_target():
     }
     y = {
         "hamiltonian": target_irreps.to_blocks(mapper),
-        "energy": torch.tensor(0.0),
-        "num_electrons": torch.tensor(0.0),
         "forces": None,
         "stress": None,
     }
@@ -267,8 +265,6 @@ def test_irrep_metrics_logged_for_all_matrix_targets():
         "hamiltonian": target_irreps.to_blocks(mapper),
         "overlap": target_irreps.to_blocks(mapper),
         "density": target_irreps.to_blocks(mapper),
-        "energy": torch.tensor(0.0),
-        "num_electrons": torch.tensor(0.0),
         "forces": None,
         "stress": None,
     }
@@ -295,4 +291,60 @@ def test_irrep_metrics_logged_for_all_matrix_targets():
     assert any(
         key.startswith("train/density_irrep_") and key.endswith("_l1_elem")
         for key in logged_metrics
+    )
+
+
+@pytest.mark.unit
+def test_energy_mae_gt_hamiltonian_logged():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+    cfg = Config(
+        matrix_targets=["hamiltonian", "overlap", "density"],
+        enable_energy=True,
+        enable_num_electrons=False,
+        train_on_energy=False,
+        train_on_num_electrons=False,
+        log_per_irrep_metrics=False,
+        symmetrize_output=False,
+        safety_checks=True,
+        verbosity=0,
+    )
+    model = E3GNN(mapper, cfg)
+
+    block = IrrepsBlockData(
+        atoms=("H",),
+        atom_counts=Counter(("H",)),
+        pair_vectors={"H-H": torch.tensor([[1.0]])},
+        pair_edges={"H-H": torch.tensor([[0], [0], [0], [0], [0]], dtype=torch.long)},
+        lookup={(0, 0, 0, 0, 0): ("H-H", 0)},
+        orbital_cfg=mapper.orbital_cfg,
+    )
+    x = {
+        "node_type_idx": torch.zeros(1, dtype=torch.long),
+        "edge_index": torch.tensor([[0], [0]], dtype=torch.long),
+        "edge_shift": torch.zeros(3, 1, dtype=torch.long),
+    }
+    y = {
+        "hamiltonian": block.to_blocks(mapper),
+        "overlap": block.to_blocks(mapper),
+        "density": block.to_blocks(mapper),
+        "energy": torch.tensor(1.0),
+        "forces": None,
+        "stress": None,
+    }
+
+    logged_metrics = {}
+    model.forward = lambda batch_x: {
+        "hamiltonian": block,
+        "overlap": block,
+        "density": block,
+    }
+    model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
+
+    loss = model._shared_step((x, y), batch_idx=0, stage="train")
+
+    assert loss.item() == pytest.approx(0.0, abs=1e-7)
+    assert "train/energy_mae_gt_hamiltonian" in logged_metrics
+    assert logged_metrics["train/energy_mae_gt_hamiltonian"].item() == pytest.approx(
+        0.0, abs=1e-7
     )
