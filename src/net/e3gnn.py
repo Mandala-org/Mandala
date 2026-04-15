@@ -88,6 +88,7 @@ class E3GNN(pl.LightningModule):
         self.hidden_irreps: Irreps = resolve_hidden_irreps(self.cfg)
         self.neck_irreps: Irreps = resolve_hidden_irreps(self.cfg)
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
+        self._compiled_forward_core = None
 
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(
@@ -150,6 +151,7 @@ class E3GNN(pl.LightningModule):
         )
 
         self._apply_init_weights_factor()
+        self._setup_compiled_forward()
 
         # Print model summary if verbosity >= 1
         print_model_summary(self, verbosity=self.cfg.verbosity)
@@ -179,6 +181,24 @@ class E3GNN(pl.LightningModule):
             for param in self.parameters():
                 if param.is_floating_point():
                     param.mul_(factor)
+
+    def _setup_compiled_forward(self) -> None:
+        if not self.cfg.compile_model:
+            return
+        if self.cfg.log_activation_mag:
+            raise ValueError(
+                "compile_model=True is not supported together with log_activation_mag=True."
+            )
+        if not hasattr(torch, "compile"):
+            raise RuntimeError(
+                "compile_model=True requested, but torch.compile is not available."
+            )
+        self._compiled_forward_core = torch.compile(
+            self._forward_core,
+            mode=self.cfg.compile_mode,
+            fullgraph=bool(self.cfg.compile_fullgraph),
+            dynamic=False,
+        )
 
     # ------------------------ util helpers -----------------------------
     @staticmethod
@@ -317,21 +337,18 @@ class E3GNN(pl.LightningModule):
 
         return total_mse, total_mae, per_irrep
 
-    # ------------------------------------------------------------------ forward
-    def forward(self, x: Dict[str, Any]):
-        # initialize activation magnitudes storage
-        self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
-
+    def _forward_core(self, x: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         if self._should_recompute_edge_features(x):
             self._populate_edge_features(x)
 
         # ---- encode ----------------------------------------------------
-        node = self.node_enc(x["node_type_idx"], activation_mags=self._activation_mags)
+        activation_mags = getattr(self, "_activation_mags", None)
+        node = self.node_enc(x["node_type_idx"], activation_mags=activation_mags)
         edge = self.edge_enc(
             x["edge_type_idx"],
             x["edge_length_emb"],
             x["edge_sh"],
-            activation_mags=self._activation_mags,
+            activation_mags=activation_mags,
         )
         if self.cfg.safety_checks and torch.is_grad_enabled():
             assert node.requires_grad, "Gradients not flowing through node encoder!"
@@ -347,14 +364,24 @@ class E3GNN(pl.LightningModule):
                 edge_length_emb=x["edge_length_emb"],
                 node_one_hot=x["node_one_hot"],
                 edge_one_hot=x["edge_one_hot"],
-                activation_mags=self._activation_mags,
+                activation_mags=activation_mags,
             )
 
-        # ---- heads -----------------------------------------------------
-        preds_raw = {
+        return {
             name: head(node, edge, x["pred_pair_edges_static"], x["edge_partitions"])
             for name, head in self.heads.items()
         }
+
+    # ------------------------------------------------------------------ forward
+    def forward(self, x: Dict[str, Any]):
+        # initialize activation magnitudes storage
+        self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
+
+        preds_raw = (
+            self._compiled_forward_core(x)
+            if self._compiled_forward_core is not None
+            else self._forward_core(x)
+        )
 
         preds_wrapped = {
             name: self._wrap_head_output(raw, x) for name, raw in preds_raw.items()
