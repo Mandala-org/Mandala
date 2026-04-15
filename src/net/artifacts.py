@@ -957,7 +957,9 @@ class ArtifactCheckpointCallback(pl.Callback):
         forces_mse_sum = 0.0
         forces_count = 0
         energy_mae_sum = 0.0
+        energy_mae_gt_hamiltonian_sum = 0.0
         energy_count = 0
+        energy_gt_h_count = 0
         num_electrons_mae_sum = 0.0
         num_electrons_count = 0
         num_electrons_mae_pre_correction_sum = 0.0
@@ -1038,10 +1040,18 @@ class ArtifactCheckpointCallback(pl.Callback):
                 e_pred = trace_matmul_sparse_block_matrix(
                     metrics_preds["hamiltonian"], metrics_preds["density"]
                 )
+                e_gt_h = trace_matmul_sparse_block_matrix(
+                    self._as_block_matrix(y["hamiltonian"], pl_module.mapper),
+                    metrics_preds["density"],
+                )
                 energy_mae_sum += float(
                     (torch.mean(torch.abs(e_pred - y["energy"])) * 27.2113845).item()
                 )
+                energy_mae_gt_hamiltonian_sum += float(
+                    (torch.mean(torch.abs(e_gt_h - y["energy"])) * 27.2113845).item()
+                )
                 energy_count += 1
+                energy_gt_h_count += 1
             if (
                 "overlap" in metrics_preds
                 and "density" in metrics_preds
@@ -1081,6 +1091,11 @@ class ArtifactCheckpointCallback(pl.Callback):
             "forces_mae": (forces_mae_sum / forces_count) if forces_count > 0 else None,
             "forces_mse": (forces_mse_sum / forces_count) if forces_count > 0 else None,
             "energy_mae": (energy_mae_sum / energy_count) if energy_count > 0 else None,
+            "energy_mae_gt_hamiltonian": (
+                energy_mae_gt_hamiltonian_sum / energy_gt_h_count
+                if energy_gt_h_count > 0
+                else None
+            ),
             "num_electrons_mae": (
                 num_electrons_mae_sum / num_electrons_count
                 if num_electrons_count > 0
@@ -1124,6 +1139,10 @@ class ArtifactCheckpointCallback(pl.Callback):
             payload["mse_D"] = basic_by_name["density"]["mse"]
         if eval_result["energy_mae"] is not None:
             payload["val/energy_mae_study"] = eval_result["energy_mae"]
+        if eval_result["energy_mae_gt_hamiltonian"] is not None:
+            payload["val/energy_mae_gt_hamiltonian"] = eval_result[
+                "energy_mae_gt_hamiltonian"
+            ]
         if eval_result["num_electrons_mae"] is not None:
             payload["val/num_electrons_mae_study"] = eval_result["num_electrons_mae"]
         if eval_result["num_electrons_mae_pre_correction"] is not None:
@@ -1232,6 +1251,10 @@ class ArtifactCheckpointCallback(pl.Callback):
                         payload[f"initial/{alias}_{key}"] = value
             if initial_eval["energy_mae"] is not None:
                 payload["initial/energy_mae"] = initial_eval["energy_mae"]
+            if initial_eval["energy_mae_gt_hamiltonian"] is not None:
+                payload["initial/energy_mae_gt_hamiltonian"] = initial_eval[
+                    "energy_mae_gt_hamiltonian"
+                ]
             if initial_eval["num_electrons_mae"] is not None:
                 payload["initial/num_electrons_mae"] = initial_eval["num_electrons_mae"]
             if initial_eval["num_electrons_mae_pre_correction"] is not None:
@@ -1373,6 +1396,10 @@ class ArtifactCheckpointCallback(pl.Callback):
             final_payload[f"final/mse_{alias}"] = basic["mse"]
         if eval_result["energy_mae"] is not None:
             final_payload["final/energy_mae"] = eval_result["energy_mae"]
+        if eval_result["energy_mae_gt_hamiltonian"] is not None:
+            final_payload["final/energy_mae_gt_hamiltonian"] = eval_result[
+                "energy_mae_gt_hamiltonian"
+            ]
         if eval_result["num_electrons_mae"] is not None:
             final_payload["final/num_electrons_mae"] = eval_result["num_electrons_mae"]
         if eval_result["num_electrons_mae_pre_correction"] is not None:

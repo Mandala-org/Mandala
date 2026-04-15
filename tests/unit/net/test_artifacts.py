@@ -188,6 +188,7 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
         "hamiltonian": target,
         "overlap": target,
         "density": target,
+        "energy": torch.tensor(1.0),
         "num_electrons": torch.tensor(1.0),
         "forces": torch.ones(1, 3),
     }
@@ -208,7 +209,7 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
                 print_per_irrep_metrics=False,
                 log_interval=1,
                 adaptive_log_interval=False,
-                enable_energy=False,
+                enable_energy=True,
                 enable_num_electrons=True,
                 enable_forces=True,
                 rescale_density_to_num_electrons=True,
@@ -263,12 +264,15 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
         raise AssertionError(f"Missing logged key {key!r}")
 
     assert _find_value("initial/num_electrons_mae_pre_correction") == 1.0
+    assert _find_value("initial/energy_mae_gt_hamiltonian") == 0.0
     assert _find_value("initial/num_electrons_mae") == 0.0
     assert _find_value("initial/mae_F") == 1.0
     assert _find_value("initial/mse_F") == 1.0
+    assert _find_value("val/energy_mae_gt_hamiltonian") == 0.0
     assert _find_value("val/num_electrons_mae_pre_correction") == 1.0
     assert _find_value("mae_F") == 1.0
     assert _find_value("mse_F") == 1.0
+    assert _find_value("final/energy_mae_gt_hamiltonian") == 0.0
     assert _find_value("final/num_electrons_mae_pre_correction") == 1.0
     assert _find_value("final/num_electrons_mae") == 0.0
     assert _find_value("final/mae_F") == 1.0
