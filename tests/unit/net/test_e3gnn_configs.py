@@ -15,6 +15,7 @@ from e3nn.o3 import Irreps
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
+from data.edge_alignment import build_prediction_edge_metadata
 from net.common import Config, resolve_hidden_irreps
 from net.e3gnn import E3GNN
 
@@ -22,31 +23,51 @@ from net.e3gnn import E3GNN
 # ──────────────────────────────────────────────────────────────────────
 # helper to fabricate a minimal synthetic batch
 # ──────────────────────────────────────────────────────────────────────
-def make_dummy_graph(cfg):
-    N, E = 4, 7
+def make_dummy_graph(cfg, mapper):
+    N = 4
     node_type_idx = torch.zeros(N, dtype=torch.long)  # all H
-    edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
 
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 0, 1, 1, 2], [0, 1, 2, 3, 1, 0, 2, 1]], dtype=torch.long
+    )
+    E = edge_index.shape[1]
+    edge_type_idx = torch.zeros(E, dtype=torch.long)  # H-H
+    edge_shift = torch.zeros(3, E, dtype=torch.long)
     edge_len = torch.randn(E, cfg.n_radial)
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh_irreps.dim)
-
-    edge_index = torch.tensor(
-        [[0, 1, 2, 3, 0, 1, 2], [0, 1, 2, 3, 1, 2, 3]], dtype=torch.long
+    pred_meta = build_prediction_edge_metadata(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=edge_type_idx,
+        atoms=("H", "H", "H", "H"),
+        edge_types=mapper.edge_types,
+        edge_type2idx=mapper.edge_type2idx,
+        separate_shifted_self=bool(cfg.separate_shifted_self),
     )
-    edge_shift = torch.zeros(3, E, dtype=torch.long)
+    node_one_hot = torch.nn.functional.one_hot(node_type_idx, num_classes=1).to(
+        dtype=cfg.dtype
+    )
+    edge_one_hot = torch.nn.functional.one_hot(edge_type_idx, num_classes=1).to(
+        dtype=cfg.dtype
+    )
 
     x = {
         "node_type_idx": node_type_idx,
+        "node_one_hot": node_one_hot,
         "edge_type_idx": edge_type_idx,
+        "edge_one_hot": edge_one_hot,
         "edge_length_emb": edge_len,
         "edge_sh": edge_sh,
         "edge_index": edge_index,
         "edge_shift": edge_shift,
         "atoms": ("H", "H", "H", "H"),
-        "index_gnn_cutoff": E,
+        "atoms_tuple": ("H", "H", "H", "H"),
+        "atom_counts": {"H": 4},
         "num_self_edges": N,
-        "overlap_vectors": torch.randn(E, 1),
+        "positions": torch.zeros(N, 3, dtype=cfg.dtype),
+        "box": torch.eye(3, dtype=cfg.dtype),
+        **pred_meta,
     }
     return x
 
@@ -86,7 +107,7 @@ def test_e3gnn_forward_variants(hp_kwargs):
         cfg,
     )
 
-    x = make_dummy_graph(cfg)
+    x = make_dummy_graph(cfg, mapper)
     atoms = ("H",) * 4
 
     preds = model(x)
@@ -137,3 +158,24 @@ def test_init_weights_factor_scales_model_parameters():
         checked_any = True
 
     assert checked_any
+
+
+@pytest.mark.unit
+def test_compile_model_uses_torch_compile(monkeypatch):
+    calls = {}
+
+    def fake_compile(fn, **kwargs):
+        calls["fn"] = fn
+        calls["kwargs"] = kwargs
+        return fn
+
+    monkeypatch.setattr(torch, "compile", fake_compile)
+
+    model = E3GNN(
+        mapper,
+        Config(compile_model=True, compile_mode="reduce-overhead", verbosity=0),
+    )
+
+    assert model._compiled_forward_core is not None
+    assert calls["kwargs"]["mode"] == "reduce-overhead"
+    assert calls["kwargs"]["dynamic"] is False

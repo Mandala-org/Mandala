@@ -30,7 +30,7 @@ from net.silicon_study_logging import (
     log_study_complete,
     should_log_epoch,
 )
-from core.sparse_math import trace_matmul_sparse_block_matrix
+from core.sparse_math import trace_matmul_sparse_block_matrix_aligned
 
 
 def _save_plot(fig: plt.Figure, path: Path) -> None:
@@ -909,6 +909,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         self,
         aligned_preds: dict[str, BlockMatrix],
         y: dict[str, Any],
+        x: dict[str, Any],
         pl_module,
     ) -> tuple[dict[str, BlockMatrix], float | None]:
         metrics_preds = dict(aligned_preds)
@@ -922,8 +923,10 @@ class ArtifactCheckpointCallback(pl.Callback):
             return metrics_preds, None
 
         num_electrons_target = y["num_electrons"]
-        num_electrons_pred = trace_matmul_sparse_block_matrix(
-            metrics_preds["density"], metrics_preds["overlap"]
+        num_electrons_pred = trace_matmul_sparse_block_matrix_aligned(
+            metrics_preds["density"],
+            metrics_preds["overlap"],
+            x["pred_trace_alignment"],
         )
         num_electrons_mae_pre_correction = float(
             torch.mean(torch.abs(num_electrons_pred - num_electrons_target))
@@ -974,6 +977,7 @@ class ArtifactCheckpointCallback(pl.Callback):
                 self._metric_prediction_matrices(
                     aligned_preds,
                     y,
+                    x,
                     pl_module,
                 )
             )
@@ -1037,12 +1041,15 @@ class ArtifactCheckpointCallback(pl.Callback):
                 and pl_module.cfg.enable_energy
                 and "energy" in y
             ):
-                e_pred = trace_matmul_sparse_block_matrix(
-                    metrics_preds["hamiltonian"], metrics_preds["density"]
+                e_pred = trace_matmul_sparse_block_matrix_aligned(
+                    metrics_preds["hamiltonian"],
+                    metrics_preds["density"],
+                    x["pred_trace_alignment"],
                 )
-                e_gt_h = trace_matmul_sparse_block_matrix(
+                e_gt_h = trace_matmul_sparse_block_matrix_aligned(
                     self._as_block_matrix(y["hamiltonian"], pl_module.mapper),
                     metrics_preds["density"],
+                    x["pred_trace_alignment"],
                 )
                 energy_mae_sum += float(
                     (torch.mean(torch.abs(e_pred - y["energy"])) * 27.2113845).item()
@@ -1058,8 +1065,10 @@ class ArtifactCheckpointCallback(pl.Callback):
                 and pl_module.cfg.enable_num_electrons
                 and "num_electrons" in y
             ):
-                n_pred = trace_matmul_sparse_block_matrix(
-                    metrics_preds["overlap"], metrics_preds["density"]
+                n_pred = trace_matmul_sparse_block_matrix_aligned(
+                    metrics_preds["density"],
+                    metrics_preds["overlap"],
+                    x["pred_trace_alignment"],
                 )
                 num_electrons_mae_sum += float(
                     torch.mean(torch.abs(n_pred - y["num_electrons"])).item()

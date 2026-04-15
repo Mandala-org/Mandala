@@ -36,11 +36,13 @@ def _make_batch_and_module():
     )
     target = _make_tiny_block(1.0)
     pred = _make_tiny_block(2.0)
+    pred_trace_alignment = {"H-H": ("H-H", torch.tensor([0], dtype=torch.long))}
     x = {
         "positions": torch.tensor([[0.0, 0.0, 0.0]]),
         "box": torch.eye(3),
         "atoms": ("H",),
         "node_type_idx": torch.tensor([0], dtype=torch.long),
+        "pred_trace_alignment": pred_trace_alignment,
     }
     y = {
         "hamiltonian": target,
@@ -183,6 +185,7 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
         "box": torch.eye(3),
         "atoms": ("H",),
         "node_type_idx": torch.tensor([0], dtype=torch.long),
+        "pred_trace_alignment": {"H-H": ("H-H", torch.tensor([0], dtype=torch.long))},
     }
     y = {
         "hamiltonian": target,
