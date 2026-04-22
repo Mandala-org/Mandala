@@ -1,217 +1,323 @@
-# src/scripts/train.py
-# ---------------------------------------------------------------------
-#  Train an E3GNN on OpenMX snapshots with a single shared BlockIrrepMapper.
-#
-#  Usage examples:
-#    python scripts/train.py --config-name debug_cpu
-#
-#  Logging:   WandB by default   (WANDB_API_KEY must be in the env)
-#  Sweeps:    tune: 'wandb' -> WandB Sweep Agent
-#             tune: 'ray'   -> Ray Tune HPO
-# ---------------------------------------------------------------------
-
 from __future__ import annotations
-import datetime as dt
+
+import argparse
+import dataclasses
+import os
+import random
+import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
-import hydra
-from omegaconf import DictConfig, OmegaConf
-from hydra.utils import to_absolute_path
-
-import torch
-from torch.utils.data import DataLoader
 import pytorch_lightning as pl
-import numpy as np
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+import torch
 from pytorch_lightning.loggers import WandbLogger
+from torch.utils.data import DataLoader
 
-from net.benchmark import BenchmarkCallback
-from data.factory import DatasetFactory
-from net.common import Config, get_torch_dtype
-from net.e3gnn import E3GNN
+# Add project root to the Python path
+project_root = Path(__file__).resolve().parents[1]
+sys.path.append(str(project_root))
+
+from net.artifacts import ArtifactCheckpointCallback  # noqa: E402
+from net.benchmark import BenchmarkCallback  # noqa: E402
+from net.common import Config  # noqa: E402
+from net.e3gnn import E3GNN  # noqa: E402
+from net.silicon_study_logging import (  # noqa: E402
+    log_config,
+    log_cutoff_application,
+    log_graph,
+    log_mapper_info,
+    log_orbital_config,
+    log_snapshot_info,
+)
+from scripts.dataset import (  # noqa: E402
+    build_datasets_from_yaml,
+    build_silicon_datasets,
+    build_siox_datasets,
+)
 
 
-@hydra.main(config_path="../conf", version_base="1.1")
-def main(omega_cfg: DictConfig) -> None:
-    # Extract grouped config settings
-    cfg = Config(**omega_cfg.config)
-    cfg.dtype = get_torch_dtype(cfg.dtype)
+def run_training(
+    run_args: argparse.Namespace | SimpleNamespace | dict[str, Any],
+    *,
+    parsed_yaml: dict[str, Any] | None = None,
+    extra_callbacks: list[Any] | None = None,
+    objective_metric: str | None = None,
+) -> dict[str, float]:
+    args = _as_namespace(run_args)
+    cfg = _populate_config_from_args(args)
+    run_name = getattr(args, "run_name", None) or cfg.run_name or _random_run_name()
+    cfg.run_name = run_name
+    cfg.save_dir = str(getattr(args, "checkpoint_dir", cfg.save_dir))
+    resume_checkpoint = _resolve_resume_checkpoint(
+        getattr(args, "resume_from_checkpoint", None),
+        getattr(args, "resume_mode", "latest"),
+    )
+    accelerator, devices = _resolve_accelerator_and_device(cfg)
+    logger = _build_logger(args, cfg, run_name)
 
-    def vprint(msg: str) -> None:
-        if cfg.verbosity >= 1:
-            ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"{ts} {msg}")
+    dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
+    train_ds, val_ds, mapper = dataset_bundle
+    train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
 
-    def vprint_detail(msg: str) -> None:
-        if cfg.verbosity >= 2:
-            ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"{ts} {msg}")
+    run_dir = Path(getattr(args, "checkpoint_dir", cfg.save_dir)) / run_name
+    _log_dataset_and_model_context(cfg, run_dir, train_ds, mapper)
 
-    vprint("Starting training script")
-    torch.manual_seed(cfg.seed)
+    model = E3GNN(mapper=mapper, cfg=cfg)
+    callbacks = _build_callbacks(args, cfg, run_dir, extra_callbacks)
+    trainer = pl.Trainer(
+        max_epochs=cfg.max_epochs,
+        logger=logger,
+        callbacks=callbacks,
+        devices=devices,
+        accelerator=accelerator,
+        log_every_n_steps=cfg.log_every_n_steps,
+        gradient_clip_val=cfg.grad_clip_val,
+        gradient_clip_algorithm="value",
+        accumulate_grad_batches=cfg.accumulate_grad_batches,
+        precision=getattr(args, "precision", "32-true"),
+    )
 
-    # ------------------------------------------------------------------
-    # 1. Dataset construction
-    # ------------------------------------------------------------------
-    fact = DatasetFactory(cfg)
-    for entry in omega_cfg.dataset.snapshots:
-        matrix_path = to_absolute_path(entry.matrix)
-        info_path = to_absolute_path(entry.info)
-        fact.add_snapshot(Path(matrix_path), Path(info_path), entry.purpose)
-    ds_train, ds_val, mapper = fact.create()
-    vprint(f"Created datasets: train={len(ds_train)}, val={len(ds_val or [])}")
+    print("--- Starting training ---")
+    torch.set_float32_matmul_precision("high")
+    trainer.fit(
+        model=model,
+        train_dataloaders=train_loader,
+        val_dataloaders=val_loader,
+        ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
+    )
+    metrics = _extract_metrics(trainer)
+    if objective_metric is not None and objective_metric not in metrics:
+        raise RuntimeError(
+            f"Objective metric {objective_metric!r} was not found in trainer.callback_metrics."
+        )
+    return metrics
 
-    # ------------------------------------------------------------------
-    # 2. DataLoaders
-    # ------------------------------------------------------------------
-    def _dl(ds, shuffle=False):
+
+def _as_namespace(
+    run_args: argparse.Namespace | SimpleNamespace | dict[str, Any],
+) -> argparse.Namespace:
+    if isinstance(run_args, argparse.Namespace):
+        return run_args
+    if isinstance(run_args, SimpleNamespace):
+        return argparse.Namespace(**vars(run_args))
+    if isinstance(run_args, dict):
+        return argparse.Namespace(**run_args)
+    raise TypeError(f"Unsupported run_args type: {type(run_args)!r}")
+
+
+def _random_run_name() -> str:
+    return f"run_{random.randint(0, 10**9):09d}"
+
+
+def _populate_config_from_args(args: argparse.Namespace) -> Config:
+    cfg = Config()
+    print("--- Populating Config from args ---")
+    for key, value in vars(args).items():
+        if hasattr(cfg, key):
+            setattr(cfg, key, value)
+    if isinstance(cfg.dtype, str):
+        cfg.dtype = getattr(torch, cfg.dtype)
+    return cfg
+
+
+def _resolve_resume_checkpoint(path: str | None, resume_mode: str) -> Path | None:
+    if path is None:
+        return None
+    candidate = Path(path).expanduser()
+    if candidate.is_file():
+        return candidate.resolve()
+    if candidate.is_dir():
+        ckpt_name = {
+            "latest": "latest_checkpoint.pt",
+            "best": "best_model.pt",
+            "final": "final_model.pt",
+        }[resume_mode]
+        ckpt = candidate / ckpt_name
+        if ckpt.exists():
+            return ckpt.resolve()
+        raise FileNotFoundError(
+            f"No checkpoint matching mode={resume_mode!r} found in {candidate}"
+        )
+    raise FileNotFoundError(f"Checkpoint path does not exist: {candidate}")
+
+
+def _resolve_accelerator_and_device(cfg: Config) -> tuple[str, int | str]:
+    if cfg.gpus > 0 and torch.cuda.is_available():
+        accelerator = "gpu"
+        devices: int | str = cfg.gpus
+        cfg.device = torch.device("cuda:0")
+        print(f"--- Using {devices} GPU(s) ---")
+        return accelerator, devices
+    accelerator = "cpu"
+    devices = "auto"
+    cfg.device = torch.device("cpu")
+    if cfg.gpus > 0:
+        print("--- Warning: --gpus was > 0 but CUDA is not available. Using CPU. ---")
+    else:
+        print("--- Using CPU ---")
+    return accelerator, devices
+
+
+def _build_logger(
+    args: argparse.Namespace, cfg: Config, run_name: str
+) -> WandbLogger | None:
+    wandb_mode = getattr(args, "wandb_mode", None)
+    if wandb_mode is None:
+        wandb_mode = os.getenv("WANDB_MODE", "online")
+    if wandb_mode == "disabled":
+        return None
+    os.environ["WANDB_MODE"] = wandb_mode
+    wandb_project = (
+        getattr(args, "wandb_project", None)
+        or cfg.wandb_project
+        or os.getenv("WANDB_PROJECT")
+        or "mandala-silicon-main-study-port"
+    )
+    if wandb_project is None:
+        return None
+    return WandbLogger(
+        project=wandb_project,
+        name=run_name,
+        config=dataclasses.asdict(cfg),
+        save_dir=str(Path(getattr(args, "checkpoint_dir", cfg.save_dir))),
+    )
+
+
+def _build_dataset_bundle(
+    args: argparse.Namespace,
+    cfg: Config,
+    parsed_yaml: dict[str, Any] | None,
+):
+    convention = getattr(args, "convention", "e3nn")
+    if parsed_yaml is not None:
+        return build_datasets_from_yaml(
+            parsed_yaml, cfg, overrides=vars(args), convention=convention
+        )
+
+    dataset_kind = getattr(args, "dataset_kind", "silicon")
+    if dataset_kind == "silicon":
+        return build_silicon_datasets(
+            data_path=getattr(args, "data_path"),
+            cfg=cfg,
+            min_temp=getattr(args, "min_temp", 300),
+            max_temp=getattr(args, "max_temp", 3000),
+            temp_step=getattr(args, "temp_step", 300),
+            n_snapshots_per_temp=getattr(args, "n_snapshots_per_temp", 50),
+            val_temp=getattr(args, "val_temp", 1500),
+            val_n_snapshots=getattr(args, "val_n_snapshots", None),
+            num_train=getattr(args, "num_train", None),
+            num_val=getattr(args, "num_val", None),
+            seed=cfg.seed,
+            convention=convention,
+        )
+    if dataset_kind == "siox":
+        return build_siox_datasets(
+            data_path=getattr(args, "data_path"),
+            cfg=cfg,
+            num_train=getattr(args, "num_train", None),
+            num_val=getattr(args, "num_val", None),
+            val_fraction=getattr(args, "val_fraction", 0.2),
+            seed=cfg.seed,
+            convention=convention,
+        )
+    raise ValueError(f"Unsupported dataset_kind: {dataset_kind!r}")
+
+
+def _build_dataloaders(
+    train_ds: Any, val_ds: Any, accelerator: str, cfg: Config
+) -> tuple[DataLoader, DataLoader]:
+    def _dl(ds, shuffle: bool = False):
+        use_pin_memory = accelerator == "gpu"
+        use_persistent_workers = cfg.num_workers > 0
         return DataLoader(
             ds or [],
             batch_size=1,
             shuffle=shuffle,
             num_workers=cfg.num_workers,
-            pin_memory=True,
+            pin_memory=use_pin_memory,
+            persistent_workers=use_persistent_workers,
             collate_fn=lambda b: b[0],
         )
 
-    dl_train = _dl(ds_train, shuffle=True)
-    dl_val = _dl(ds_val, shuffle=False)
-    vprint(
-        f"Created dataloaders: train batches={len(dl_train)}, val batches={len(dl_val)}"
+    train_loader = _dl(train_ds, shuffle=True)
+    val_loader = _dl(val_ds, shuffle=False)
+    print(
+        f"Created dataloaders: train batches={len(train_loader)}, val batches={len(val_loader)}"
     )
+    return train_loader, val_loader
 
-    # ------------------------------------------------------------------
-    # 3. Model instantiation
-    # ------------------------------------------------------------------
-    # Hardware setup: interpret training.gpus as "cpu" or a GPU count
-    if isinstance(cfg.gpus, str) and cfg.gpus.lower() == "cpu":
-        accelerator = "cpu"
-        devices = 1
-    if isinstance(cfg.gpus, str) and cfg.gpus.lower() == "mps":
-        accelerator = "mps"
-        devices = 1
-    else:
-        # parse GPU count
-        try:
-            count = int(cfg.gpus) if isinstance(cfg.gpus, str) else cfg.gpus
-        except Exception:
-            raise ValueError(f"Invalid training.gpus value: {cfg.gpus}")
-        if count <= 0:
-            accelerator = "cpu"
-            devices = 1
+
+def _log_dataset_and_model_context(
+    cfg: Config,
+    run_dir: Path,
+    train_ds: Any,
+    mapper: Any,
+) -> None:
+    frames_dir = run_dir / "frames"
+    if not (cfg.log_model or cfg.log_data):
+        return
+    log_config(
+        {
+            **dataclasses.asdict(cfg),
+            "hidden_irreps": cfg.hidden_irreps,
+            "device": str(cfg.device),
+        },
+        run_dir,
+        frames_dir,
+    )
+    if len(train_ds) == 0:
+        return
+    x0, y0 = train_ds[0]
+    if cfg.log_data:
+        log_snapshot_info(x0, y0)
+        if cfg.apply_cutoff_to_targets and "target_edges_before_cutoff" in x0:
+            log_cutoff_application(
+                int(x0["target_edges_before_cutoff"]),
+                int(x0["target_edges_after_cutoff"]),
+                float(cfg.cutoff_radius),
+            )
+        log_graph(x0)
+    if cfg.log_model:
+        log_orbital_config(mapper.orbital_cfg)
+        log_mapper_info(mapper)
+
+
+def _build_callbacks(
+    args: argparse.Namespace,
+    cfg: Config,
+    run_dir: Path,
+    extra_callbacks: list[Any] | None,
+) -> list[Any]:
+    callbacks: list[Any] = []
+    if cfg.benchmark:
+        callbacks.append(
+            BenchmarkCallback(
+                verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
+            )
+        )
+    if getattr(args, "log_artifacts", True):
+        callbacks.append(
+            ArtifactCheckpointCallback(
+                output_dir=run_dir,
+                generate_video=getattr(args, "generate_video", True),
+                log_per_irrep_images=cfg.log_per_irrep_images,
+            )
+        )
+    if extra_callbacks:
+        callbacks.extend(extra_callbacks)
+    return callbacks
+
+
+def _extract_metrics(trainer: pl.Trainer) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for key, value in trainer.callback_metrics.items():
+        if torch.is_tensor(value):
+            if value.numel() == 1:
+                metrics[str(key)] = float(value.detach().cpu().item())
         else:
-            accelerator = "gpu"
-            devices = list(range(count))
-    model = E3GNN(
-        mapper=mapper,
-        cfg=cfg,
-    )
-    vprint(
-        f"Built model: l_max={cfg.l_max}, hidden_base_dim={cfg.hidden_base_dim}, "
-        f"num layers{cfg.num_layers_gnn}"
-    )
-
-    # ------------------------------------------------------------------
-    # 4. Logger setup
-    # ------------------------------------------------------------------
-    run_name = cfg.run_name or f"e3gnn_{dt.datetime.now():%Y%m%d_%H%M%S}"
-    if cfg.wandb_project:
-        logger = WandbLogger(
-            project=cfg.wandb_project,
-            name=run_name,
-            log_model=cfg.log_model,
-            save_dir=to_absolute_path(cfg.save_dir),
-        )
-        logger.experiment.config.update(
-            OmegaConf.to_container(cfg, resolve=True), allow_val_change=True
-        )
-        vprint(f"Initialized WandB logger '{run_name}'")
-    else:
-        logger = None
-        vprint("Not using a logger")
-
-    # ------------------------------------------------------------------
-    # 5. Callbacks
-    # ------------------------------------------------------------------
-    bench_cb = None
-    callbacks = [
-        ModelCheckpoint(
-            monitor="val/loss_total",
-            mode="min",
-            save_top_k=3,
-            dirpath=to_absolute_path(f"checkpoints/{run_name}"),
-            filename="{epoch:03d}-{val_loss:.4f}",
-        ),
-        LearningRateMonitor(logging_interval="step"),
-    ]
-    if cfg.verbosity > 0:
-        bench_cb = BenchmarkCallback(
-            verbosity=cfg.verbosity,
-            log_activation_mag=cfg.log_activation_mag,
-        )
-        callbacks.append(bench_cb)
-    vprint("Configured callbacks")
-
-    # ------------------------------------------------------------------
-    # 6. Trainer
-    # ------------------------------------------------------------------
-    if cfg.smoke_test:
-        vprint("Smoke test mode enabled: running one batch of train and val.")
-        trainer = pl.Trainer(
-            accelerator=accelerator,
-            devices=devices,
-            fast_dev_run=True,
-            deterministic=True,
-        )
-    else:
-        trainer = pl.Trainer(
-            logger=logger,
-            accelerator=accelerator,
-            devices=devices,
-            max_epochs=cfg.max_epochs,
-            # precision=cfg.precision,
-            callbacks=callbacks,
-            deterministic=True,
-            log_every_n_steps=cfg.log_every_n_steps,
-            gradient_clip_val=cfg.grad_clip_val,
-        )
-
-    # ------------------------------------------------------------------
-    # 7. HPO integration
-    # ------------------------------------------------------------------
-    if cfg.tune == "wandb":
-        import wandb
-
-        wandb.finish()
-
-    # ------------------------------------------------------------------
-    # 8. Training
-    # ------------------------------------------------------------------
-    vprint("Starting training")
-    trainer.fit(model, dl_train, dl_val)
-    vprint("Training complete")
-
-    # 9. Detailed benchmark summary
-    if cfg.verbosity >= 2 and bench_cb is not None:
-        lt = np.array(bench_cb.loader_times) if bench_cb.loader_times else np.array([])
-        if lt.size:
-            vprint_detail(
-                f"Loader times (s): mean={lt.mean():.4f}, median={np.median(lt):.4f}, "
-                f"std={lt.std():.4f}, min={lt.min():.4f}, max={lt.max():.4f}"
-            )
-        train_sum = bench_cb._summarize(bench_cb.train_stats)
-        for k, s in train_sum.items():
-            vprint_detail(
-                f"Train {k} (s): mean={s['mean']:.4f}, median={s['median']:.4f}, "
-                f"std={s['std']:.4f}, min={s['min']:.4f}, max={s['max']:.4f}"
-            )
-        val_sum = bench_cb._summarize(bench_cb.val_stats)
-        for k, s in val_sum.items():
-            vprint_detail(
-                f"Val {k} (s): mean={s['mean']:.4f}, median={s['median']:.4f}, "
-                f"std={s['std']:.4f}, min={s['min']:.4f}, max={s['max']:.4f}"
-            )
-
-
-if __name__ == "__main__":
-    main()
+            try:
+                metrics[str(key)] = float(value)
+            except (TypeError, ValueError):
+                continue
+    return metrics

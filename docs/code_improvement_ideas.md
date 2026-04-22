@@ -9,3 +9,4 @@
 - [ ] Same for IrrepsBlockData
 - [ ] Put the k-space functions into BlockMatrix
 - [ ] Rename Factory.add_snapshot() to Factory.add_openmx_snapshot()
+- [ ] Combine datasets (train, val, [test]) and mapper into one thing (DataModule)

@@ -5,7 +5,7 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import get_type_hints, Union
+from typing import Any, get_type_hints, Union
 from types import NoneType, UnionType
 import typing
 import ast
@@ -242,64 +242,55 @@ def _resolve_resume_checkpoint(path: str | None, resume_mode: str) -> Path | Non
     raise FileNotFoundError(f"Checkpoint path does not exist: {candidate}")
 
 
-def main():
-    """Main training loop."""
-    args = setup_argparse()
-
+def _populate_config_from_args(args: argparse.Namespace) -> Config:
     # Create Config object and update it from the parsed arguments
     cfg = Config()
     print("--- Populating Config from args ---")
     for key, value in vars(args).items():
         if hasattr(cfg, key):
             setattr(cfg, key, value)
+    if isinstance(cfg.dtype, str):
+        cfg.dtype = getattr(torch, cfg.dtype)
+    return cfg
 
-    # --- Initialize W&B ---
-    # Prefer explicit config/CLI project; fall back to environment only if omitted.
+
+def _resolve_accelerator_and_device(cfg: Config) -> tuple[str, int | str]:
+    if cfg.gpus > 0 and torch.cuda.is_available():
+        accelerator = "gpu"
+        devices: int | str = cfg.gpus
+        cfg.device = torch.device("cuda:0")
+        print(f"--- Using {devices} GPU(s) ---")
+        return accelerator, devices
+    accelerator = "cpu"
+    devices = "auto"
+    cfg.device = torch.device("cpu")
+    if cfg.gpus > 0:
+        print("--- Warning: --gpus was > 0 but CUDA is not available. Using CPU. ---")
+    else:
+        print("--- Using CPU ---")
+    return accelerator, devices
+
+
+def _build_wandb_logger(
+    args: argparse.Namespace, cfg: Config, run_name: str
+) -> WandbLogger:
     wandb_project = (
         args.wandb_project
         or cfg.wandb_project
         or os.getenv("WANDB_PROJECT")
         or "mandala-silicon-main-study-port"
     )
-    run_name = (
-        args.run_name or cfg.run_name or f"silicon_{random.randint(0, 10**9):09d}"
-    )
-    cfg.run_name = run_name
-    cfg.save_dir = args.checkpoint_dir
-    resume_checkpoint = _resolve_resume_checkpoint(
-        args.resume_from_checkpoint, args.resume_mode
-    )
-
-    # Post-process special types from argparse/wandb
-    if isinstance(cfg.dtype, str):
-        cfg.dtype = getattr(torch, cfg.dtype)
-
-    # --- Determine accelerator and devices ---
-    if cfg.gpus > 0 and torch.cuda.is_available():
-        accelerator = "gpu"
-        devices = cfg.gpus
-        cfg.device = torch.device("cuda:0")
-        print(f"--- Using {devices} GPU(s) ---")
-    else:
-        accelerator = "cpu"
-        devices = "auto"
-        cfg.device = torch.device("cpu")
-        if cfg.gpus > 0:
-            print(
-                "--- Warning: --gpus was > 0 but CUDA is not available. Using CPU. ---"
-            )
-        else:
-            print("--- Using CPU ---")
-
-    # Pass the final, correct config to W&B for logging
-    wandb_logger = WandbLogger(
+    return WandbLogger(
         project=wandb_project,
         name=run_name,
         config=dataclasses.asdict(cfg),
         save_dir=str(Path(args.checkpoint_dir)),
     )
 
-    # --- Data Loading ---
+
+def _build_train_val_pairs(
+    args: argparse.Namespace, cfg: Config
+) -> tuple[list[tuple[Path, Path]], list[tuple[Path, Path]]]:
     print("--- Setting up datasets ---")
     if args.num_train is not None or args.num_val is not None:
         if args.num_train is None or args.num_val is None:
@@ -318,54 +309,44 @@ def main():
             )
         train_pairs = all_pairs[: args.num_train]
         val_pairs = all_pairs[args.num_train : args.num_train + args.num_val]
-    else:
-        all_temps = range(args.min_temp, args.max_temp + 1, args.temp_step)
-        train_temps = [
-            t
-            for t in all_temps
-            if t != args.val_temp or args.min_temp == args.max_temp == args.val_temp
-        ]
+        return train_pairs, val_pairs
 
-        train_pairs = []
-        for temp in train_temps:
-            temp_path = Path(args.data_path) / f"{temp}K"
-            snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
-            num_to_sample = min(len(snapshot_paths), args.n_snapshots_per_temp)
-            selected_paths = random.sample(snapshot_paths, num_to_sample)
-            for matrix_path in selected_paths:
-                info_path = Path(matrix_path).parent / "info.dat"
-                if info_path.exists():
-                    train_pairs.append((matrix_path, info_path))
+    all_temps = range(args.min_temp, args.max_temp + 1, args.temp_step)
+    train_temps = [
+        t
+        for t in all_temps
+        if t != args.val_temp or args.min_temp == args.max_temp == args.val_temp
+    ]
 
-        val_pairs = []
-        val_path = Path(args.data_path) / f"{args.val_temp}K"
-        val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
-        num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
-        if args.val_n_snapshots is not None:
-            num_val_to_sample = min(num_val_to_sample, args.val_n_snapshots)
-        selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
-        for matrix_path in selected_val_paths:
+    train_pairs: list[tuple[Path, Path]] = []
+    for temp in train_temps:
+        temp_path = Path(args.data_path) / f"{temp}K"
+        snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
+        num_to_sample = min(len(snapshot_paths), args.n_snapshots_per_temp)
+        selected_paths = random.sample(snapshot_paths, num_to_sample)
+        for matrix_path in selected_paths:
             info_path = Path(matrix_path).parent / "info.dat"
             if info_path.exists():
-                val_pairs.append((matrix_path, info_path))
+                train_pairs.append((Path(matrix_path), info_path))
 
-    print(
-        f"Found {len(train_pairs)} training snapshots and {len(val_pairs)} validation snapshots."
-    )
+    val_pairs: list[tuple[Path, Path]] = []
+    val_path = Path(args.data_path) / f"{args.val_temp}K"
+    val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
+    num_val_to_sample = min(len(val_snapshot_paths), args.n_snapshots_per_temp)
+    if args.val_n_snapshots is not None:
+        num_val_to_sample = min(num_val_to_sample, args.val_n_snapshots)
+    selected_val_paths = random.sample(val_snapshot_paths, num_val_to_sample)
+    for matrix_path in selected_val_paths:
+        info_path = Path(matrix_path).parent / "info.dat"
+        if info_path.exists():
+            val_pairs.append((Path(matrix_path), info_path))
+    return train_pairs, val_pairs
 
-    cfg_ds = dataclasses.replace(cfg)
-    if not cfg.apply_cutoff_to_targets:
-        cfg_ds.cutoff_radius = None
-    fac = DatasetFactory(cfg_ds)
 
-    for m, i in train_pairs:
-        fac.add_snapshot(m, i, purpose="train")
-    for m, i in val_pairs:
-        fac.add_snapshot(m, i, purpose="val")
-
-    train_ds, val_ds, mapper = fac.create()
-
-    def _dl(ds, shuffle=False):
+def _build_dataloaders(
+    train_ds: Any, val_ds: Any, accelerator: str, cfg: Config
+) -> tuple[DataLoader, DataLoader]:
+    def _dl(ds, shuffle: bool = False):
         use_pin_memory = accelerator == "gpu"
         use_persistent_workers = cfg.num_workers > 0
         return DataLoader(
@@ -383,33 +364,80 @@ def main():
     print(
         f"Created dataloaders: train batches={len(train_loader)}, val batches={len(val_loader)}"
     )
+    return train_loader, val_loader
+
+
+def _log_dataset_and_model_context(
+    cfg: Config,
+    run_dir: Path,
+    train_ds: Any,
+    mapper: Any,
+) -> None:
+    frames_dir = run_dir / "frames"
+    if not (cfg.log_model or cfg.log_data):
+        return
+    log_config(
+        {
+            **dataclasses.asdict(cfg),
+            "hidden_irreps": cfg.hidden_irreps,
+            "device": str(cfg.device),
+        },
+        run_dir,
+        frames_dir,
+    )
+    if len(train_ds) == 0:
+        return
+    x0, y0 = train_ds[0]
+    if cfg.log_data:
+        log_snapshot_info(x0, y0)
+        if cfg.apply_cutoff_to_targets and "target_edges_before_cutoff" in x0:
+            log_cutoff_application(
+                int(x0["target_edges_before_cutoff"]),
+                int(x0["target_edges_after_cutoff"]),
+                float(cfg.cutoff_radius),
+            )
+        log_graph(x0)
+    if cfg.log_model:
+        log_orbital_config(mapper.orbital_cfg)
+        log_mapper_info(mapper)
+
+
+def run_single_training(
+    args: argparse.Namespace,
+) -> None:
+    cfg = _populate_config_from_args(args)
+
+    run_name = (
+        args.run_name or cfg.run_name or f"silicon_{random.randint(0, 10**9):09d}"
+    )
+    cfg.run_name = run_name
+    cfg.save_dir = args.checkpoint_dir
+    resume_checkpoint = _resolve_resume_checkpoint(
+        args.resume_from_checkpoint, args.resume_mode
+    )
+    accelerator, devices = _resolve_accelerator_and_device(cfg)
+    wandb_logger = _build_wandb_logger(args, cfg, run_name)
+    train_pairs, val_pairs = _build_train_val_pairs(args, cfg)
+
+    print(
+        f"Found {len(train_pairs)} training snapshots and {len(val_pairs)} validation snapshots."
+    )
+
+    cfg_ds = dataclasses.replace(cfg)
+    if not cfg.apply_cutoff_to_targets:
+        cfg_ds.cutoff_radius = None
+    fac = DatasetFactory(cfg_ds)
+
+    for m, i in train_pairs:
+        fac.add_snapshot(m, i, purpose="train")
+    for m, i in val_pairs:
+        fac.add_snapshot(m, i, purpose="val")
+
+    train_ds, val_ds, mapper = fac.create()
+    train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
 
     run_dir = Path(args.checkpoint_dir) / run_name
-    frames_dir = run_dir / "frames"
-    if cfg.log_model or cfg.log_data:
-        log_config(
-            {
-                **dataclasses.asdict(cfg),
-                "hidden_irreps": cfg.hidden_irreps,
-                "device": str(cfg.device),
-            },
-            run_dir,
-            frames_dir,
-        )
-        if len(train_ds) > 0:
-            x0, y0 = train_ds[0]
-            if cfg.log_data:
-                log_snapshot_info(x0, y0)
-                if cfg.apply_cutoff_to_targets and "target_edges_before_cutoff" in x0:
-                    log_cutoff_application(
-                        int(x0["target_edges_before_cutoff"]),
-                        int(x0["target_edges_after_cutoff"]),
-                        float(cfg.cutoff_radius),
-                    )
-                log_graph(x0)
-            if cfg.log_model:
-                log_orbital_config(mapper.orbital_cfg)
-                log_mapper_info(mapper)
+    _log_dataset_and_model_context(cfg, run_dir, train_ds, mapper)
 
     # --- Model and Trainer Setup ---
     print("--- Setting up model and trainer ---")
@@ -453,6 +481,12 @@ def main():
         val_dataloaders=val_loader,
         ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
     )
+
+
+def main():
+    """Main training loop."""
+    args = setup_argparse()
+    run_single_training(args)
 
 
 if __name__ == "__main__":
