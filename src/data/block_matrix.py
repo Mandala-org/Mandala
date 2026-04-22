@@ -1,8 +1,8 @@
 """
-snapshot_block.py
+block_matrix.py
 =================
 
-In-memory containers for a *single* snapshot:
+In-memory containers for a *single* block matrix:
 
 * **BlockMatrix** - raw sparse blocks (H, D, S, …) grouped by element pair.
 * **IrrepsBlockData** - same data after change-of-basis to irrep vectors.
@@ -190,7 +190,6 @@ class BlockMatrix:
     def transpose(self) -> "BlockMatrix":
         """
         Return a **new** snapshot representing the transposed matrix.
-        Edge order is preserved from the original matrix where possible.
         """
         # 1. Perform a simple transpose, flipping keys and edges.
         transposed_blocks = {}
@@ -456,7 +455,7 @@ class BlockMatrix:
         return self.add_aligned(self.transpose_aligned(reverse_alignment)) * 0.5
 
     def __rsub__(self, other):
-        # allow (0 - snapshot)
+        # allow (0 - BlockMatrix)
         if other == 0:
             return -self
         return NotImplemented
@@ -522,7 +521,7 @@ class BlockMatrix:
 
         payload = torch.load(path, map_location="cpu")
         if payload.get("type") != "block":
-            raise ValueError("file does not contain block snapshot")
+            raise ValueError("file does not contain block matrix")
 
         orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
 
@@ -624,7 +623,7 @@ class BlockMatrix:
 
     def change_basis(self, d_dict: Dict[str, torch.Tensor]) -> "BlockMatrix":
         """
-        Change the basis of the snapshot using a dictionary of transformation matrices.
+        Change the basis of the block matrix using a dictionary of transformation matrices.
         Each key in `d_dict` corresponds to an element symbol, and the value is a
         transformation matrix that will be applied to the blocks associated with that element.
         The transformation is applied as follows:

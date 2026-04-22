@@ -2,11 +2,8 @@
 basis_converter.py
 ==================
 
-Tools to convert matrix blocks between **OpenMX real‑SH ordering** and the
-ordering expected by **E3NN** (Wikipedia real SH ordering, l≤3).
-
-The conversion is *purely a permutation plus possible sign flip*, so it is
-implemented with constant orthogonal matrices Uₗ (one per ℓ).
+Tools to convert matrix blocks between different codes' spherical harmonics conventions
+and the ordering expected by **E3NN** (Wikipedia real SH ordering).
 
 Usage
 -----
@@ -171,7 +168,7 @@ def _orbital_types_from_irreps(irreps: Irreps) -> List[int]:
 # --------------------------------------------------------------------- converter
 class OpenMXE3NNConverter:
     """
-    Converts *all blocks in a snapshot* between ``basis="openmx"`` and
+    Converts *all blocks in a BlockMatrix* between ``basis="openmx"`` and
     ``basis="e3nn"``.  Requires the *same* `OrbitalIrrepConfig` used to build
     the snapshot's BlockIrrepMapper (so it knows orbital ordering per element).
     """

@@ -31,7 +31,7 @@ Runs analyzed: 4 (all finished)
 ## Most likely remaining discrepancy (after this ablation)
 
 1. Metric mismatch in comparisons (MAE vs MSE, and potentially meV-vs-eV reporting) is likely the dominant apparent gap.
-2. Residual gap in `mse_H` (roughly 2x–7x from 1e-6) is more likely due to pipeline differences outside this 2x2:
+2. Residual gap in `mse_H` (roughly 2x-7x from 1e-6) is more likely due to pipeline differences outside this 2x2:
    - output decomposition/readout differences vs DeepH-E3 `e3TensorDecomp`,
    - symmetry handling and evaluation policy differences,
    - objective weighting/masking parity differences.

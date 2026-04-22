@@ -58,7 +58,7 @@ class DatasetFactory:
         purpose: Purpose = "train",
     ) -> None:
         """
-        Register one **(matrix, info)** file pair.
+        Register one OpenMX **(matrix, info)** file pair.
 
         Parameters
         ----------

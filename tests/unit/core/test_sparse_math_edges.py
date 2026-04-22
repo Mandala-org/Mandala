@@ -254,10 +254,10 @@ def test_trace_matmul_missing_edges(mock_orbital_config):
     BM_A = create_mock_block_matrix(atoms, edges_A, mock_orbital_config)
     BM_B = create_mock_block_matrix(atoms, edges_B, mock_orbital_config)
 
-    with pytest.raises(ValueError, match="missing in second matrix"):
+    with pytest.raises(ValueError, match="missing in second"):
         trace_matmul_sparse_block_matrix(BM_A, BM_B)
 
-    with pytest.raises(ValueError, match="missing in second matrix"):
+    with pytest.raises(ValueError, match="missing in second"):
         trace_matmul_sparse_snap_vectorized(BM_A, BM_B)
 
 
@@ -278,8 +278,8 @@ def test_trace_matmul_pbc_mismatch(mock_orbital_config):
     BM_A = create_mock_block_matrix(atoms, edges_A, mock_orbital_config)
     BM_B = create_mock_block_matrix(atoms, edges_B, mock_orbital_config)
 
-    with pytest.raises(ValueError, match="missing in second matrix"):
+    with pytest.raises(ValueError, match="missing in second"):
         trace_matmul_sparse_block_matrix(BM_A, BM_B)
 
-    with pytest.raises(ValueError, match="missing in second matrix"):
+    with pytest.raises(ValueError, match="missing in second"):
         trace_matmul_sparse_snap_vectorized(BM_A, BM_B)

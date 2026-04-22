@@ -8,7 +8,7 @@ Light-weight utilities that are shared by *all* network sub-modules:
 * Hidden-width Irreps constructor : :func:`build_hidden_irreps`
 * A flexible N-layer radial MLP   : :class:`RadialMLP`
 
-**No activation / norm helpers live here anymore** – those have been moved
+**No activation / norm helpers live here anymore** - those have been moved
 to :pymod:`net.activations` so we avoid a circular import between files.
 """
 

@@ -2,18 +2,14 @@
 sparse_math.py
 ==============
 
-Sparse-matrix utilities **independent** of message-passing.
-
-Only `trace_matmul_sparse` remains a free function; vector/block mapping
-is now routed through :class:`core.block_irrep_mapper.BlockIrrepMapper`.
+Sparse-matrix utilities.
 """
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple
 
 import torch
-from core.block_irrep_mapper import BlockIrrepMapper
 from data.block_matrix import BlockMatrix
 
 TraceAlignment = Dict[str, Tuple[str, torch.Tensor]]
@@ -27,6 +23,7 @@ def trace_matmul_sparse(
     """
     Compute ``Tr( A · B )`` without ever materialising the dense matrix.
     """
+    print("WARNING! Using inefficient trace matmul implementation")
     if blocks_a.shape != blocks_b.shape:
         raise ValueError("blocks_a and blocks_b must have same shape")
 
@@ -44,25 +41,6 @@ def trace_matmul_sparse(
             continue
         out = out + torch.trace(blocks_a[k] @ blocks_b[rev_k])
     return out
-
-
-# thin wrappers kept for convenience --------------------------------------- #
-def blocks_to_vectors(
-    mapper: BlockIrrepMapper, pair: Union[Tuple[str, str], str], blocks: torch.Tensor
-) -> torch.Tensor:
-    """
-    Convenience shim -> delegates to :class:`BlockIrrepMapper`.
-    """
-    return mapper.blocks_to_vectors(pair, blocks)
-
-
-def vectors_to_blocks(
-    mapper: BlockIrrepMapper, pair: Union[Tuple[str, str], str], vectors: torch.Tensor
-) -> torch.Tensor:
-    """
-    Inverse shim.
-    """
-    return mapper.vectors_to_blocks(pair, vectors)
 
 
 # ---------------------------------------------------------------------------
@@ -181,14 +159,13 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
     For each key ``A-B`` we fetch the reverse key ``B-A`` from ``B``.
     This matches the mathematical trace:  Σ_{i,j} Tr( A_{ij} · B_{ji} ).
     """
+    print("Warning! [opt] Building trace alignment on the fly")
     alignment = build_trace_alignment(A, B)
     return trace_matmul_sparse_block_matrix_aligned(A, B, alignment)
 
 
 __all__: Tuple[str, ...] = (
     "trace_matmul_sparse",
-    "blocks_to_vectors",
-    "vectors_to_blocks",
     "build_trace_alignment_from_pair_edges",
     "build_trace_alignment",
     "trace_matmul_sparse_block_matrix",
