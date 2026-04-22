@@ -33,7 +33,7 @@ def test_dataset_lengths(factory_results):
 def test_orbital_irrep_config_union(factory_results):
     _, _, mapper = factory_results
     elems = set(mapper.orbital_cfg.elements())
-    assert {"H", "O", "Si"} <= elems, f"missing elements – got {elems}"
+    assert {"H", "O", "Si"} <= elems, f"missing elements - got {elems}"
     # quick sanity: highest ℓ not outrageous
     assert mapper.orbital_cfg.max_l() <= 10
 

@@ -1,5 +1,5 @@
 """
-E3GNN – PyTorch-Lightning implementation
+E3GNN - PyTorch-Lightning implementation
 ----------------------------------------
 
 *  encoders.py         -> NodeEncoder / EdgeEncoder

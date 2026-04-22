@@ -4,7 +4,7 @@ Additional coverage for E3GNN:
 We instantiate the model under five **categorically different**
 Config settings and run a bare `forward` pass on a dummy mini-batch.
 
-The test does **not** back-prop or call Lightning’s training loop – it is
+The test does **not** back-prop or call Lightning’s training loop - it is
 meant to guard against shape / device / construction regressions for the
 most important architecture flags.
 """
@@ -73,7 +73,7 @@ def make_dummy_graph(cfg, mapper):
 
 
 # ─────────────────────────────────────────────────────────────────────
-# parameter sets – each dict overrides defaults
+# parameter sets - each dict overrides defaults
 # ──────────────────────────────────────────────────────────────────────
 HP_VARIANTS = [
     {},  # default

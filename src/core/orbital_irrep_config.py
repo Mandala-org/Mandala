@@ -17,8 +17,6 @@ orbitals:
     - 1x2e
 """
 
-# ! Add: block_dims
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -147,9 +145,9 @@ class OrbitalIrrepConfig:
 
             # ---------- sanity: ℓ limit -----------------------------------
             l_max_seen = max(ir.l for _, ir in irreps)
-            if l_max_seen > 10:
+            if l_max_seen > 3:
                 raise OrbitalIrrepConfigError(
-                    f"Element '{element}': l={l_max_seen} orbitals not supported (max 10)"
+                    f"Element '{element}': l={l_max_seen} orbitals not supported (max 3)"
                 )
 
             element_to_irreps[element] = irreps
@@ -184,15 +182,15 @@ class OrbitalIrrepConfig:
         return f"OrbitalIrrepConfig(\n{tbl}\n)"
 
     # ──────────────────────────────────────────────────────────────────
-    # NEW STATIC HELPERS
+    # STATIC HELPERS
     # ──────────────────────────────────────────────────────────────────
     @staticmethod
     def merge(configs: Sequence["OrbitalIrrepConfig"]) -> "OrbitalIrrepConfig":
         """
-        Union-merge several configs **without duplicating BlockIrrepMappers**.
+        Union-merge several configs.
 
         * If an element appears in more than one config its irreps must be
-          *identical* – otherwise we raise to avoid silent mismatches.
+        *identical* - otherwise we raise to avoid silent mismatches.
         """
         if len(configs) == 0:
             raise ValueError("merge() needs at least one OrbitalIrrepConfig")
@@ -212,7 +210,7 @@ class OrbitalIrrepConfig:
     @staticmethod
     def from_info_list(info_list: Sequence["InfoOutData"]) -> "OrbitalIrrepConfig":
         """
-        Convenience helper – derive a **project-wide** config directly from a
+        Convenience helper - derive a **project-wide** config directly from a
         collection of :class:`data.openmx_info_parser.InfoOutData` objects.
         """
         collected: Dict[str, Sequence[str] | str] = {}
@@ -229,8 +227,8 @@ class OrbitalIrrepConfig:
     # ------------------------------------------------------------------ dim helper
     def block_dims(self, pair: Tuple[str, str] | str) -> Tuple[int, int]:
         """
-        Return ``(d_i, d_j)`` – the orbital dimensions of the two atoms
-        that form *one* matrix block.
+        Return ``(d_i, d_j)`` - the orbital dimensions of the two atoms
+        that form its matrix block.
 
         Parameters
         ----------

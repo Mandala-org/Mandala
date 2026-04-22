@@ -7,8 +7,8 @@ small* set of user hyper-parameters.
 
 Purpose
 -------
-* Centralise how hidden widths are computed (so the same rule is used by the
-  model, the head registry, and unit-tests).
+* Centralise how hidden widths are computed (so the same rule is used
+  everywhere in the model, the head registry, and unit-tests).
 * Provide quick **sanity checks** that required Wigner paths exist.
 
 Rules implemented here

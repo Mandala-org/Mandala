@@ -15,9 +15,10 @@ Example
 >>> from core.orbital_irrep_config import OrbitalIrrepConfig
 >>> cfg = OrbitalIrrepConfig.from_dict({"H": ["1x0e"], "Si": ["2x0e","2x1o","1x2e"]})
 >>> mapper = BlockIrrepMapper(cfg)
->>> vec = mapper.blocks_to_vectors(("Si","Si"), torch.randn(4,13,13))
+>>> mat = torch.randn(4,13,13)
+>>> vec = mapper.blocks_to_vectors(("Si","Si"), mat)
 >>> rec = mapper.vectors_to_blocks(("Si","Si"), vec)
->>> torch.allclose(rec, rec.transpose(-1,-2))   # symmetry not enforced here
+>>> torch.allclose(mat, rec)
 """
 
 from __future__ import annotations
@@ -101,7 +102,7 @@ class BlockIrrepMapper(nn.Module):
         If **True** and *only* for *same* element pairs, use ``"ij=ji"``
         (symmetric) reduced tensor product.
     device
-        Where the Q matrices live (CPU by default - they are tiny).
+        Where the Q matrices live (CPU by default).
     """
 
     def __init__(
@@ -204,8 +205,13 @@ class BlockIrrepMapper(nn.Module):
                 raise MappingKeyError("String key must look like 'Si-H'")
             a, b = pair.split("-", 1)
             return (a.strip(), b.strip())
-        if isinstance(pair, tuple) and len(pair) == 2:
-            return pair  # type: ignore[return-value]
+        if (
+            isinstance(pair, tuple)
+            and len(pair) == 2
+            and isinstance(pair[0], str)
+            and isinstance(pair[1], str)
+        ):
+            return pair
         raise MappingKeyError("pair must be tuple(str,str) or 'A-B' string")
 
     def _lookup(self, pair: Tuple[str, str] | str) -> _IrrepToMatrix:
