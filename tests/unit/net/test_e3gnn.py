@@ -603,3 +603,61 @@ def test_invalid_observable_training_configs_raise():
                 verbosity=0,
             ),
         )
+
+
+@pytest.mark.unit
+def test_energy_half_gt_training_accepts_length_one_energy_target():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+    cfg = Config(
+        matrix_targets=["hamiltonian"],
+        enable_energy=True,
+        enable_num_electrons=False,
+        train_on_energy=True,
+        train_on_num_electrons=False,
+        train_observables_on_gt=True,
+        log_partial_gt_observables=True,
+        loss_coef_observables=1.0,
+        verbosity=0,
+    )
+    model = E3GNN(mapper, cfg)
+
+    block = IrrepsBlockData(
+        atoms=("H",),
+        atom_counts=Counter(("H",)),
+        pair_vectors={"H-H": torch.tensor([[1.0]])},
+        pair_edges={"H-H": torch.tensor([[0], [0], [0], [0], [0]], dtype=torch.long)},
+        lookup={(0, 0, 0, 0, 0): ("H-H", 0)},
+        orbital_cfg=mapper.orbital_cfg,
+    )
+    x = {
+        "node_type_idx": torch.zeros(1, dtype=torch.long),
+        "edge_index": torch.tensor([[0], [0]], dtype=torch.long),
+        "edge_shift": torch.zeros(3, 1, dtype=torch.long),
+        "pred_trace_alignment": build_prediction_edge_metadata(
+            edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+            edge_shift=torch.zeros(3, 1, dtype=torch.long),
+            edge_type_idx=torch.zeros(1, dtype=torch.long),
+            atoms=("H",),
+            edge_types=mapper.edge_types,
+            edge_type2idx=mapper.edge_type2idx,
+            separate_shifted_self=False,
+        )["pred_trace_alignment"],
+    }
+    y = {
+        "hamiltonian": block.to_blocks(mapper),
+        "overlap": block.to_blocks(mapper),
+        "density": block.to_blocks(mapper),
+        "energy": torch.tensor([1.0]),
+        "forces": None,
+        "stress": None,
+    }
+
+    logged_metrics = {}
+    model.forward = lambda batch_x: {"hamiltonian": block}
+    model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
+
+    loss = model._shared_step((x, y), batch_idx=0, stage="val")
+
+    assert torch.isfinite(loss)
+    assert "val/energy_mae_gt_density" in logged_metrics

@@ -9,6 +9,24 @@ from data.block_matrix import BlockMatrix
 from utils.units import HARTREE_TO_EV
 
 
+def _normalize_scalar_target(
+    target: torch.Tensor | None,
+    *,
+    name: str,
+) -> torch.Tensor | None:
+    if target is None:
+        return None
+    if not torch.is_tensor(target):
+        return torch.as_tensor(target)
+    if target.ndim == 0:
+        return target
+    if target.numel() == 1:
+        return target.reshape(())
+    raise ValueError(
+        f"{name} target must be scalar or length-1 tensor, got shape={tuple(target.shape)}"
+    )
+
+
 def validate_observable_config(cfg) -> None:
     targets = set(cfg.matrix_targets)
 
@@ -99,6 +117,11 @@ def add_observable_metrics(
     energy_target: torch.Tensor | None,
     num_electrons_target: torch.Tensor | None,
 ) -> None:
+    energy_target = _normalize_scalar_target(energy_target, name="energy")
+    num_electrons_target = _normalize_scalar_target(
+        num_electrons_target, name="num_electrons"
+    )
+
     if cfg.enable_energy and energy_target is not None:
         if "energy" in observable_values:
             metrics[f"{stage}/energy_mae"] = (
@@ -158,6 +181,10 @@ def observable_loss(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     loss_E_weighted = torch.tensor(0.0, device=device)
     loss_N_weighted = torch.tensor(0.0, device=device)
+    energy_target = _normalize_scalar_target(energy_target, name="energy")
+    num_electrons_target = _normalize_scalar_target(
+        num_electrons_target, name="num_electrons"
+    )
 
     if cfg.train_on_energy and energy_target is not None:
         if cfg.train_observables_on_gt:
