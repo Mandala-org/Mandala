@@ -46,6 +46,7 @@ import sys
 from pathlib import Path
 
 from omegaconf import OmegaConf
+import torch
 
 ROOT = Path.cwd()
 sys.path.append(str(ROOT))
@@ -64,6 +65,21 @@ def value_from_spec(spec):
             return spec["value"]
         return None
     return spec
+
+
+def coerce_list_value(value):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return []
+        if "," in raw:
+            return [part.strip() for part in raw.split(",") if part.strip()]
+        return [raw]
+    return [value]
 
 
 def count_files(path: Path) -> int:
@@ -92,6 +108,13 @@ for raw_name, spec in params.items():
     fixed_args[name] = value
     if hasattr(cfg, name):
         setattr(cfg, name, value)
+
+if isinstance(cfg.matrix_targets, str):
+    cfg.matrix_targets = coerce_list_value(cfg.matrix_targets)
+if isinstance(cfg.radial_layers, str):
+    cfg.radial_layers = coerce_list_value(cfg.radial_layers)
+if isinstance(cfg.dtype, str):
+    cfg.dtype = getattr(torch, cfg.dtype)
 
 print("=== Resolved dataset-relevant config ===")
 for key in (
