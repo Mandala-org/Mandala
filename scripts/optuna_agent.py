@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import math
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -96,14 +97,7 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
     )
     print(f"--- Connecting to Optuna study: {study_name} ---")
     print(f"--- Storage URL: {args.storage} ---")
-    study = optuna.create_study(
-        study_name=study_name,
-        storage=storage,
-        direction=_get_metric_goal(study_cfg),
-        sampler=_build_sampler(optuna, study_cfg),
-        pruner=_build_pruner(optuna, study_cfg),
-        load_if_exists=True,
-    )
+    study = _get_or_create_study(optuna, study_name, storage, study_cfg)
     metric_name = _get_metric_name(study_cfg)
     count = args.count if args.count is not None else study_cfg.get("n_trials")
     print(f"--- Objective metric: {metric_name} ---")
@@ -163,6 +157,48 @@ def _build_storage(optuna: Any, url: str, heartbeat_interval: int, grace_period:
             url=url,
             engine_kwargs={"pool_pre_ping": True},
         )
+
+
+def _get_or_create_study(
+    optuna: Any,
+    study_name: str,
+    storage: Any,
+    study_cfg: dict[str, Any],
+):
+    goal = _get_metric_goal(study_cfg)
+    sampler = _build_sampler(optuna, study_cfg)
+    pruner = _build_pruner(optuna, study_cfg)
+    for attempt in range(10):
+        try:
+            return optuna.create_study(
+                study_name=study_name,
+                storage=storage,
+                direction=goal,
+                sampler=sampler,
+                pruner=pruner,
+                load_if_exists=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            message = str(exc).lower()
+            if any(
+                token in message
+                for token in (
+                    "already exists",
+                    "duplicate key value violates unique constraint",
+                    "ix_studies_study_name",
+                )
+            ):
+                print(
+                    f"--- Study {study_name} already exists or raced during creation; loading existing study ---"
+                )
+                return optuna.load_study(study_name=study_name, storage=storage)
+            if attempt == 9:
+                raise
+            sleep_s = min(2.0 * (attempt + 1), 10.0)
+            print(
+                f"--- Study creation attempt {attempt + 1} failed: {exc!r}; retrying in {sleep_s:.1f}s ---"
+            )
+            time.sleep(sleep_s)
 
 
 def _build_sampler(optuna: Any, study_cfg: dict[str, Any]):

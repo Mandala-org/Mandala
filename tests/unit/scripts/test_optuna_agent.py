@@ -187,3 +187,49 @@ parameters:
     assert captured["objective_metric"] == "val/energy_mae"
     assert captured["train_args"].dataset_kind == "silicon"
     assert captured["train_args"].num_train == 2
+
+
+def test_get_or_create_study_loads_existing_on_duplicate_key(monkeypatch):
+    mod = _load_module()
+    captured = {}
+
+    class FakeStudy:
+        pass
+
+    class FakeOptuna:
+        class samplers:
+            class TPESampler:
+                def __init__(self, seed):
+                    pass
+
+        class pruners:
+            class HyperbandPruner:
+                def __init__(self, **kwargs):
+                    pass
+
+        @staticmethod
+        def create_study(**kwargs):
+            raise RuntimeError(
+                'duplicate key value violates unique constraint "ix_studies_study_name"'
+            )
+
+        @staticmethod
+        def load_study(**kwargs):
+            captured["load_study"] = kwargs
+            return FakeStudy()
+
+    study_cfg = {
+        "study_name": "demo",
+        "metric": {"name": "val/loss", "goal": "minimize"},
+        "parameters": {},
+    }
+
+    study = mod._get_or_create_study(
+        FakeOptuna,
+        "demo",
+        storage=object(),
+        study_cfg=study_cfg,
+    )
+
+    assert isinstance(study, FakeStudy)
+    assert captured["load_study"]["study_name"] == "demo"
