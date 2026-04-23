@@ -45,6 +45,7 @@ def run_training(
     objective_metric: str | None = None,
 ) -> dict[str, float]:
     args = _as_namespace(run_args)
+    print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
     run_name = getattr(args, "run_name", None) or cfg.run_name or _random_run_name()
     cfg.run_name = run_name
@@ -55,6 +56,7 @@ def run_training(
     )
     accelerator, devices = _resolve_accelerator_and_device(cfg)
     logger = _build_logger(args, cfg, run_name)
+    _print_run_summary(args, cfg, run_name, resume_checkpoint, accelerator, devices)
 
     dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
     train_ds, val_ds, mapper = dataset_bundle
@@ -90,6 +92,11 @@ def run_training(
     if objective_metric is not None and objective_metric not in metrics:
         raise RuntimeError(
             f"Objective metric {objective_metric!r} was not found in trainer.callback_metrics."
+        )
+    print("--- Training finished ---")
+    if objective_metric is not None:
+        print(
+            f"Objective metric {objective_metric} = {metrics.get(objective_metric, 'MISSING')}"
         )
     return metrics
 
@@ -135,6 +142,7 @@ def _resolve_resume_checkpoint(path: str | None, resume_mode: str) -> Path | Non
         }[resume_mode]
         ckpt = candidate / ckpt_name
         if ckpt.exists():
+            print(f"--- Resuming from checkpoint: {ckpt.resolve()} ---")
             return ckpt.resolve()
         raise FileNotFoundError(
             f"No checkpoint matching mode={resume_mode!r} found in {candidate}"
@@ -166,6 +174,7 @@ def _build_logger(
     if wandb_mode is None:
         wandb_mode = os.getenv("WANDB_MODE", "online")
     if wandb_mode == "disabled":
+        print("--- WandB disabled ---")
         return None
     os.environ["WANDB_MODE"] = wandb_mode
     wandb_project = (
@@ -175,7 +184,11 @@ def _build_logger(
         or "mandala-silicon-main-study-port"
     )
     if wandb_project is None:
+        print("--- No WandB project set; logger disabled ---")
         return None
+    print(
+        f"--- WandB logger: mode={wandb_mode}, project={wandb_project}, run_name={run_name} ---"
+    )
     return WandbLogger(
         project=wandb_project,
         name=run_name,
@@ -190,12 +203,16 @@ def _build_dataset_bundle(
     parsed_yaml: dict[str, Any] | None,
 ):
     convention = getattr(args, "convention", "e3nn")
+    dataset_kind = getattr(args, "dataset_kind", "silicon")
+    print(
+        f"--- Preparing datasets: dataset_kind={dataset_kind}, convention={convention} ---"
+    )
     if parsed_yaml is not None:
+        print("--- Dataset configuration sourced from parsed YAML ---")
         return build_datasets_from_yaml(
             parsed_yaml, cfg, overrides=vars(args), convention=convention
         )
 
-    dataset_kind = getattr(args, "dataset_kind", "silicon")
     if dataset_kind == "silicon":
         return build_silicon_datasets(
             data_path=getattr(args, "data_path"),
@@ -306,6 +323,7 @@ def _build_callbacks(
         )
     if extra_callbacks:
         callbacks.extend(extra_callbacks)
+    print(f"--- Built callbacks: {[type(cb).__name__ for cb in callbacks]} ---")
     return callbacks
 
 
@@ -321,3 +339,27 @@ def _extract_metrics(trainer: pl.Trainer) -> dict[str, float]:
             except (TypeError, ValueError):
                 continue
     return metrics
+
+
+def _print_run_summary(
+    args: argparse.Namespace,
+    cfg: Config,
+    run_name: str,
+    resume_checkpoint: Path | None,
+    accelerator: str,
+    devices: int | str,
+) -> None:
+    checkpoint_dir = Path(getattr(args, "checkpoint_dir", cfg.save_dir))
+    print("--- Run summary ---")
+    print(f"run_name={run_name}")
+    print(f"checkpoint_dir={checkpoint_dir}")
+    print(f"resume_checkpoint={resume_checkpoint}")
+    print(f"dataset_kind={getattr(args, 'dataset_kind', 'silicon')}")
+    print(f"data_path={getattr(args, 'data_path', None)}")
+    print(f"max_epochs={cfg.max_epochs}")
+    print(f"matrix_targets={cfg.matrix_targets}")
+    print(f"accelerator={accelerator}")
+    print(f"devices={devices}")
+    print(
+        f"precompute_edge_features={cfg.precompute_edge_features}, compile_model={cfg.compile_model}"
+    )

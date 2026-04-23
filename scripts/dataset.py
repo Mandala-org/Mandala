@@ -17,6 +17,7 @@ from net.common import Config  # noqa: E402
 
 
 def discover_silicon_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
+    print(f"--- Discovering silicon snapshots under {root} ---")
     pairs: list[tuple[Path, Path]] = []
     for matrix_path in sorted(root.rglob("Si_DM")):
         if not matrix_path.is_file():
@@ -25,10 +26,12 @@ def discover_silicon_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
         if not info_path.exists():
             continue
         pairs.append((matrix_path.resolve(), info_path.resolve()))
+    print(f"--- Found {len(pairs)} silicon snapshot pairs ---")
     return pairs
 
 
 def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
+    print(f"--- Discovering SiOx snapshots under {root} ---")
     pairs: list[tuple[Path, Path]] = []
     for sample_dir in sorted(path for path in root.iterdir() if path.is_dir()):
         matrix_path = sample_dir / "HS.out"
@@ -38,6 +41,7 @@ def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
         if info_path is None:
             continue
         pairs.append((matrix_path.resolve(), info_path.resolve()))
+    print(f"--- Found {len(pairs)} SiOx snapshot pairs ---")
     return pairs
 
 
@@ -65,6 +69,13 @@ def _create_datasets_from_pairs(
     *,
     convention: str = "e3nn",
 ):
+    print(
+        f"--- Creating datasets from pairs: train={len(train_pairs)}, val={len(val_pairs)}, convention={convention} ---"
+    )
+    if train_pairs:
+        print(f"train[0]={train_pairs[0][0]} | {train_pairs[0][1]}")
+    if val_pairs:
+        print(f"val[0]={val_pairs[0][0]} | {val_pairs[0][1]}")
     cfg_ds = dataclasses.replace(cfg)
     if not cfg.apply_cutoff_to_targets:
         cfg_ds.cutoff_radius = None
@@ -93,6 +104,9 @@ def build_silicon_datasets(
 ):
     data_root = Path(data_path)
     rng = random.Random(seed)
+    print(
+        f"--- Silicon dataset builder: data_path={data_root}, seed={seed}, num_train={num_train}, num_val={num_val}, min_temp={min_temp}, max_temp={max_temp}, val_temp={val_temp} ---"
+    )
 
     if num_train is not None or num_val is not None:
         if num_train is None or num_val is None:
@@ -109,6 +123,9 @@ def build_silicon_datasets(
             )
         train_pairs = all_pairs[:num_train]
         val_pairs = all_pairs[num_train : num_train + num_val]
+        print(
+            f"--- Silicon global split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+        )
         return _create_datasets_from_pairs(
             train_pairs, val_pairs, cfg, convention=convention
         )
@@ -125,6 +142,9 @@ def build_silicon_datasets(
         temp_path = data_root / f"{temp}K"
         snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
         num_to_sample = min(len(snapshot_paths), n_snapshots_per_temp)
+        print(
+            f"--- Silicon temp {temp}K: discovered={len(snapshot_paths)}, sampled={num_to_sample} ---"
+        )
         selected_paths = rng.sample(snapshot_paths, num_to_sample)
         for matrix_path in selected_paths:
             info_path = Path(matrix_path).parent / "info.dat"
@@ -137,6 +157,9 @@ def build_silicon_datasets(
     num_val_to_sample = min(len(val_snapshot_paths), n_snapshots_per_temp)
     if val_n_snapshots is not None:
         num_val_to_sample = min(num_val_to_sample, val_n_snapshots)
+    print(
+        f"--- Silicon val temp {val_temp}K: discovered={len(val_snapshot_paths)}, sampled={num_val_to_sample} ---"
+    )
     selected_val_paths = rng.sample(val_snapshot_paths, num_val_to_sample)
     for matrix_path in selected_val_paths:
         info_path = Path(matrix_path).parent / "info.dat"
@@ -158,6 +181,9 @@ def build_siox_datasets(
     seed: int = 42,
     convention: str = "e3nn",
 ):
+    print(
+        f"--- SiOx dataset builder: data_path={data_path}, seed={seed}, num_train={num_train}, num_val={num_val}, val_fraction={val_fraction} ---"
+    )
     if val_fraction < 0.0 or val_fraction >= 1.0:
         raise ValueError("val_fraction must be in [0, 1).")
     all_pairs = discover_siox_snapshot_pairs(Path(data_path))
@@ -189,6 +215,9 @@ def build_siox_datasets(
         )
     train_pairs = all_pairs[:num_train]
     val_pairs = all_pairs[num_train : num_train + num_val]
+    print(
+        f"--- SiOx split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+    )
     return _create_datasets_from_pairs(
         train_pairs, val_pairs, cfg, convention=convention
     )
@@ -203,6 +232,7 @@ def build_datasets_from_yaml(
 ):
     if overrides is None:
         overrides = {}
+    print("--- Building datasets from parsed YAML ---")
     parameters = parsed_yaml.get("parameters", {})
     if not isinstance(parameters, dict):
         raise ValueError("Expected parsed_yaml['parameters'] to be a mapping.")
@@ -210,6 +240,7 @@ def build_datasets_from_yaml(
     dataset_kind = _get_dataset_value(
         parameters, overrides, "dataset_kind", default="silicon"
     )
+    print(f"--- YAML dataset_kind resolved to {dataset_kind} ---")
     if dataset_kind == "silicon":
         return build_silicon_datasets(
             data_path=_require_dataset_value(parameters, overrides, "data_path"),

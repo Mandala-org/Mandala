@@ -63,6 +63,17 @@ def setup_argparse() -> argparse.Namespace:
 
 def main() -> None:
     args = setup_argparse()
+    print("=== optuna_agent.py starting ===")
+    print(f"study_yaml={args.study_yaml}")
+    print(f"storage={args.storage}")
+    print(f"study_name={args.study_name}")
+    print(f"count={args.count}")
+    print(f"timeout={args.timeout}")
+    print(f"wandb_mode={args.wandb_mode}")
+    print(f"checkpoint_dir={args.checkpoint_dir}")
+    print(f"heartbeat_interval={args.heartbeat_interval}")
+    print(f"grace_period={args.grace_period}")
+    print(f"agent_label={args.agent_label}")
     run_optuna_agent(args)
 
 
@@ -75,12 +86,16 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
         ) from exc
 
     study_cfg = _load_yaml(args.study_yaml)
+    print(f"--- Loaded study YAML: {args.study_yaml} ---")
+    print(f"--- Study YAML keys: {sorted(study_cfg.keys())} ---")
     storage = _build_storage(
         optuna, args.storage, args.heartbeat_interval, args.grace_period
     )
     study_name = (
         args.study_name or study_cfg.get("study_name") or Path(args.study_yaml).stem
     )
+    print(f"--- Connecting to Optuna study: {study_name} ---")
+    print(f"--- Storage URL: {args.storage} ---")
     study = optuna.create_study(
         study_name=study_name,
         storage=storage,
@@ -91,8 +106,11 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
     )
     metric_name = _get_metric_name(study_cfg)
     count = args.count if args.count is not None else study_cfg.get("n_trials")
+    print(f"--- Objective metric: {metric_name} ---")
+    print(f"--- Trial count for this worker: {count} (None means indefinite) ---")
 
     def objective(trial: Any) -> float:
+        print(f"=== Starting Optuna trial {trial.number} ===")
         run_args = _build_run_args_from_trial(
             trial,
             study_cfg,
@@ -106,6 +124,9 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
             parsed_yaml=study_cfg,
             extra_callbacks=[OptunaPruningCallback(trial, metric_name)],
             objective_metric=metric_name,
+        )
+        print(
+            f"=== Finished Optuna trial {trial.number}: {metric_name}={metric_log.get(metric_name)} ==="
         )
         for key, value in metric_log.items():
             trial.set_user_attr(key, value)
@@ -127,6 +148,9 @@ def _load_yaml(path: str) -> dict[str, Any]:
 
 
 def _build_storage(optuna: Any, url: str, heartbeat_interval: int, grace_period: int):
+    print(
+        f"--- Building Optuna storage: heartbeat_interval={heartbeat_interval}, grace_period={grace_period} ---"
+    )
     try:
         return optuna.storages.RDBStorage(
             url=url,
@@ -220,6 +244,9 @@ def _build_run_args_from_trial(
     if agent_label:
         run_name = f"{run_name}-{agent_label}"
     run_args["run_name"] = run_name
+    print(
+        f"--- Trial {trial.number} resolved run args: run_name={run_name}, data_path={run_args.get('data_path')}, dataset_kind={run_args.get('dataset_kind', 'silicon')}, checkpoint_dir={checkpoint_dir} ---"
+    )
     return argparse.Namespace(**run_args)
 
 

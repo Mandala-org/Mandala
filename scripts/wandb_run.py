@@ -112,8 +112,16 @@ def setup_argparse() -> argparse.Namespace:
 
 def main() -> None:
     args = setup_argparse()
+    print("=== wandb_run.py starting ===")
+    print(f"dataset_kind={args.dataset_kind}")
+    print(f"data_path={args.data_path}")
+    print(f"sweep_yaml={args.sweep_yaml}")
+    print(f"checkpoint_dir={args.checkpoint_dir}")
+    print(f"wandb_mode={args.wandb_mode}")
+    print(f"resume_from_checkpoint={args.resume_from_checkpoint}")
     parsed_yaml = None
     if args.sweep_yaml is not None:
+        print(f"--- Loading sweep YAML: {args.sweep_yaml} ---")
         parsed_yaml = OmegaConf.to_container(
             OmegaConf.load(args.sweep_yaml), resolve=True
         )
@@ -121,6 +129,7 @@ def main() -> None:
             raise ValueError(
                 f"Sweep YAML must contain a top-level mapping: {args.sweep_yaml}"
             )
+        print(f"--- Loaded sweep YAML with keys: {sorted(parsed_yaml.keys())} ---")
     run_training(args, parsed_yaml=parsed_yaml)
 
 

@@ -17,7 +17,7 @@ parameters:
   wandb-project:
     value: mandala-minimal-silicon-e3mlp-sweep-short-optuna
   data-path:
-    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
+    value: /p/project1/hai_1270/silicon/1500K
   snapshot-cache-dir:
     value: ${oc.env:SCRATCH}/cache
   checkpoint-dir:
