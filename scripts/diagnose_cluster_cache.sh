@@ -19,12 +19,21 @@ echo "SLURM_JOB_ID=${SLURM_JOB_ID:-<unset>}"
 echo "SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK:-<unset>}"
 echo
 
-if [[ -f "mandala-venv/bin/activate" ]]; then
+PRIMARY_VENV="$HOME/casus/mandala-venv/bin/activate"
+LOCAL_VENV="$ROOT_DIR/mandala-venv/bin/activate"
+
+if [[ -f "$PRIMARY_VENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$PRIMARY_VENV"
+  echo "Activated venv: $HOME/casus/mandala-venv"
+elif [[ -f "$LOCAL_VENV" ]]; then
   # shellcheck disable=SC1091
-  source mandala-venv/bin/activate
+  source "$LOCAL_VENV"
   echo "Activated venv: $ROOT_DIR/mandala-venv"
 else
-  echo "WARNING: mandala-venv/bin/activate not found"
+  echo "WARNING: no venv activate script found at:"
+  echo "  $PRIMARY_VENV"
+  echo "  $LOCAL_VENV"
 fi
 
 python - <<'PY' "$STUDY_YAML"
