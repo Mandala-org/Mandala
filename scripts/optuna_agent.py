@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import math
-import signal
 import sys
 from contextlib import contextmanager
 import fcntl
@@ -19,6 +18,11 @@ project_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(project_root))
 
 from scripts.train import run_training  # noqa: E402
+from scripts.graceful_interrupt import (  # noqa: E402
+    clear_interrupt_request,
+    install_signal_handlers,
+    interrupt_requested,
+)
 
 
 class OptunaPruningCallback(pl.Callback):
@@ -67,7 +71,8 @@ def setup_argparse() -> argparse.Namespace:
 
 def main() -> None:
     args = setup_argparse()
-    _install_signal_handlers()
+    clear_interrupt_request()
+    install_signal_handlers("Optuna agent")
     print("=== optuna_agent.py starting ===")
     print(f"study_yaml={args.study_yaml}")
     print(f"storage={args.storage}")
@@ -80,16 +85,6 @@ def main() -> None:
     print(f"grace_period={args.grace_period}")
     print(f"agent_label={args.agent_label}")
     run_optuna_agent(args)
-
-
-def _install_signal_handlers() -> None:
-    def _handle_signal(signum, frame):  # noqa: ARG001
-        sig_name = signal.Signals(signum).name
-        print(f"--- Optuna agent received {sig_name}; shutting down ---", flush=True)
-        raise KeyboardInterrupt
-
-    signal.signal(signal.SIGINT, _handle_signal)
-    signal.signal(signal.SIGTERM, _handle_signal)
 
 
 def run_optuna_agent(args: argparse.Namespace) -> None:
@@ -125,6 +120,8 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
     print(f"--- Trial count for this worker: {count} (None means indefinite) ---")
 
     def objective(trial: Any) -> float:
+        if interrupt_requested():
+            raise KeyboardInterrupt
         print(f"=== Starting Optuna trial {trial.number} ===")
         run_args = _build_run_args_from_trial(
             trial,
@@ -145,17 +142,32 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
         )
         for key, value in metric_log.items():
             trial.set_user_attr(key, value)
+        if interrupt_requested():
+            raise KeyboardInterrupt
         return float(metric_log[metric_name])
 
+    def _stop_if_interrupted(study, trial):  # noqa: ARG001
+        if interrupt_requested():
+            study.stop()
+
     try:
-        study.optimize(
-            objective,
+        optimize_kwargs = dict(
             n_trials=count,
             timeout=args.timeout,
             gc_after_trial=bool(study_cfg.get("gc_after_trial", True)),
         )
+        try:
+            study.optimize(
+                objective, callbacks=[_stop_if_interrupted], **optimize_kwargs
+            )
+        except TypeError as exc:
+            if "callbacks" not in str(exc):
+                raise
+            study.optimize(objective, **optimize_kwargs)
     except KeyboardInterrupt:
-        print("--- Optuna agent interrupted by Ctrl+C; stopping cleanly ---")
+        print(
+            "--- Optuna agent stopped after interrupt; finalization completed normally ---"
+        )
         raise
 
 
