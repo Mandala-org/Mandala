@@ -76,6 +76,8 @@ parameters:
     value: float32
   device:
     value: cuda
+  gpus:
+    value: 1
   grad-clip-val:
     value: 1.0
   accumulate-grad-batches:
