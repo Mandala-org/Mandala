@@ -268,16 +268,25 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
 
     assert _find_value("initial/num_electrons_mae_pre_correction") == 1.0
     assert _find_value("initial/energy_mae_gt_hamiltonian") == 0.0
+    assert _find_value("initial/energy_mae_gt_density") == 0.0
     assert _find_value("initial/num_electrons_mae") == 0.0
+    assert _find_value("initial/num_electrons_mae_gt_overlap") == 0.0
+    assert _find_value("initial/num_electrons_mae_gt_density") == 0.0
     assert _find_value("initial/mae_F") == 1.0
     assert _find_value("initial/mse_F") == 1.0
     assert _find_value("val/energy_mae_gt_hamiltonian") == 0.0
+    assert _find_value("val/energy_mae_gt_density") == 0.0
     assert _find_value("val/num_electrons_mae_pre_correction") == 1.0
+    assert _find_value("val/num_electrons_mae_gt_overlap") == 0.0
+    assert _find_value("val/num_electrons_mae_gt_density") == 0.0
     assert _find_value("mae_F") == 1.0
     assert _find_value("mse_F") == 1.0
     assert _find_value("final/energy_mae_gt_hamiltonian") == 0.0
+    assert _find_value("final/energy_mae_gt_density") == 0.0
     assert _find_value("final/num_electrons_mae_pre_correction") == 1.0
     assert _find_value("final/num_electrons_mae") == 0.0
+    assert _find_value("final/num_electrons_mae_gt_overlap") == 0.0
+    assert _find_value("final/num_electrons_mae_gt_density") == 0.0
     assert _find_value("final/mae_F") == 1.0
     assert _find_value("final/mse_F") == 1.0
 
