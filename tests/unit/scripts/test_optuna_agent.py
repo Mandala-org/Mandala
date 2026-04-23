@@ -52,6 +52,32 @@ def test_build_run_args_from_trial_uses_sampled_and_fixed_values():
     assert args.run_name == "silicon-study-trial-00007-node01"
 
 
+def test_build_run_args_from_trial_normalizes_list_values():
+    mod = _load_module()
+
+    class FakeTrial:
+        number = 0
+
+    study_cfg = {
+        "parameters": {
+            "data-path": {"value": "/tmp/data"},
+            "dataset-kind": {"value": "silicon"},
+            "matrix-targets": {"value": "density"},
+        }
+    }
+
+    args = mod._build_run_args_from_trial(
+        FakeTrial(),
+        study_cfg,
+        checkpoint_dir="checkpoints/optuna",
+        wandb_mode="offline",
+        study_name="silicon-study",
+        agent_label=None,
+    )
+
+    assert args.matrix_targets == ["density"]
+
+
 def test_run_optuna_agent_uses_study_and_calls_training(monkeypatch, tmp_path):
     mod = _load_module()
     study_yaml = tmp_path / "study.yaml"

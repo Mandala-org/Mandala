@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import ast
 import os
 import random
 import sys
@@ -123,9 +124,36 @@ def _populate_config_from_args(args: argparse.Namespace) -> Config:
     for key, value in vars(args).items():
         if hasattr(cfg, key):
             setattr(cfg, key, value)
+    if isinstance(cfg.matrix_targets, str):
+        cfg.matrix_targets = _coerce_list_value(cfg.matrix_targets)
+    if isinstance(cfg.radial_layers, str):
+        cfg.radial_layers = _coerce_list_value(cfg.radial_layers)
     if isinstance(cfg.dtype, str):
         cfg.dtype = getattr(torch, cfg.dtype)
     return cfg
+
+
+def _coerce_list_value(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return []
+        if raw.startswith("[") or raw.startswith("("):
+            try:
+                parsed = ast.literal_eval(raw)
+            except (ValueError, SyntaxError):
+                parsed = None
+            else:
+                if isinstance(parsed, (list, tuple)):
+                    return list(parsed)
+        if "," in raw:
+            return [part.strip() for part in raw.split(",") if part.strip()]
+        return [raw]
+    return [value]
 
 
 def _resolve_resume_checkpoint(path: str | None, resume_mode: str) -> Path | None:
