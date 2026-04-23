@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 
 
 def _load_train_silicon_module():
@@ -76,10 +77,11 @@ def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
     mod = _load_train_silicon_module()
 
     data_root = tmp_path / "data"
-    snap_root = data_root / "300K" / "sample0"
-    snap_root.mkdir(parents=True)
-    (snap_root / "Si_DM").write_text("matrix")
-    (snap_root / "info.dat").write_text("info")
+    for idx in range(2):
+        snap_root = data_root / "300K" / f"sample{idx}"
+        snap_root.mkdir(parents=True)
+        (snap_root / "Si_DM").write_text("matrix")
+        (snap_root / "info.dat").write_text("info")
     ckpt_dir = tmp_path / "checkpoints"
     run_name = "silicon_test_run"
     run_dir = ckpt_dir / run_name
@@ -331,3 +333,115 @@ def test_train_silicon_splits_workers_by_sample_ratio(monkeypatch, tmp_path):
     val_loader = captured["fit_kwargs"]["val_dataloaders"]
     assert train_loader.num_workers == 6
     assert val_loader.num_workers == 2
+
+
+@pytest.mark.integration
+def test_train_silicon_moves_dataset_to_gpu_and_disables_workers(monkeypatch, tmp_path):
+    mod = _load_train_silicon_module()
+
+    data_root = tmp_path / "data"
+    for idx in range(2):
+        snap_root = data_root / "300K" / f"sample{idx}"
+        snap_root.mkdir(parents=True)
+        (snap_root / "Si_DM").write_text("matrix")
+        (snap_root / "info.dat").write_text("info")
+    ckpt_dir = tmp_path / "checkpoints"
+    run_name = "silicon_gpu_dataset_run"
+
+    class DummyDataset:
+        def __init__(self):
+            self.device = "cpu"
+
+        def __len__(self):
+            return 1
+
+        def __getitem__(self, idx):
+            return {"x": idx}, {"y": idx}
+
+        def to(self, device):
+            self.device = torch.device(device)
+            return self
+
+    class DummyDatasetFactory:
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def add_snapshot(self, matrix_path, info_path, purpose="train"):
+            pass
+
+        def create(self):
+            return DummyDataset(), DummyDataset(), object()
+
+    class DummyLogger:
+        def __init__(self, *args, **kwargs):
+            self.experiment = type("E", (), {"config": type("C", (), {})()})()
+
+    class DummyModel:
+        def __init__(self, mapper, cfg):
+            self.mapper = mapper
+            self.cfg = cfg
+
+    class DummyTrainer:
+        def __init__(self, *args, **kwargs):
+            captured["trainer_kwargs"] = kwargs
+
+        def fit(self, *args, **kwargs):
+            captured["fit_kwargs"] = kwargs
+
+    class DummyLoader:
+        def __init__(self, ds, *, num_workers=0, **kwargs):
+            captured.setdefault("loader_kwargs", []).append(
+                (num_workers, kwargs.get("pin_memory", False))
+            )
+            self.num_workers = num_workers
+            self.persistent_workers = kwargs.get("persistent_workers", False)
+            self.pin_memory = kwargs.get("pin_memory", False)
+            self._len = len(ds)
+
+        def __len__(self):
+            return self._len
+
+    captured = {}
+    monkeypatch.setattr(mod, "DatasetFactory", DummyDatasetFactory)
+    monkeypatch.setattr(mod, "WandbLogger", DummyLogger)
+    monkeypatch.setattr(mod, "ArtifactCheckpointCallback", lambda *a, **k: object())
+    monkeypatch.setattr(mod, "BenchmarkCallback", lambda *a, **k: object())
+    monkeypatch.setattr(mod, "E3GNN", DummyModel)
+    monkeypatch.setattr(mod.pl, "Trainer", DummyTrainer)
+    monkeypatch.setattr(mod, "DataLoader", DummyLoader)
+    monkeypatch.setattr(mod, "_log_dataset_and_model_context", lambda *a, **k: None)
+    monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train_silicon.py",
+            "--data-path",
+            str(data_root),
+            "--num-train",
+            "1",
+            "--num-val",
+            "1",
+            "--dataset-device",
+            "cuda",
+            "--checkpoint-dir",
+            str(ckpt_dir),
+            "--run-name",
+            run_name,
+            "--benchmark",
+            "false",
+            "--log-artifacts",
+            "false",
+        ],
+    )
+
+    mod.main()
+
+    train_loader = captured["fit_kwargs"]["train_dataloaders"]
+    val_loader = captured["fit_kwargs"]["val_dataloaders"]
+    assert train_loader.num_workers == 0
+    assert val_loader.num_workers == 0
+    assert train_loader.pin_memory is False
+    assert val_loader.pin_memory is False
+    assert train_loader.persistent_workers is False
+    assert val_loader.persistent_workers is False

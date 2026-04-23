@@ -94,3 +94,40 @@ def test_build_dataloaders_splits_workers_by_sample_ratio(monkeypatch):
     assert val_loader.num_workers == 2
     assert train_loader.persistent_workers is True
     assert val_loader.persistent_workers is True
+
+
+def test_build_dataloaders_disables_workers_for_gpu_dataset(monkeypatch):
+    mod = _load_module()
+
+    class DummyDataset(list):
+        def __init__(self, *args):
+            super().__init__(*args)
+            self.device = "cuda"
+
+    train_ds = DummyDataset([1, 2, 3])
+    val_ds = DummyDataset([4])
+    captured = []
+
+    class DummyLoader:
+        def __init__(self, ds, *, num_workers=0, **kwargs):
+            captured.append((num_workers, kwargs.get("pin_memory", False)))
+            self.num_workers = num_workers
+            self._len = len(ds)
+            self.persistent_workers = kwargs.get("persistent_workers", False)
+            self.pin_memory = kwargs.get("pin_memory", False)
+
+        def __len__(self):
+            return self._len
+
+    monkeypatch.setattr(mod, "DataLoader", DummyLoader)
+    monkeypatch.setattr(mod, "_resolve_total_workers", lambda num_workers: 8)
+
+    train_loader, val_loader = mod._build_dataloaders(
+        train_ds, val_ds, accelerator="gpu", cfg=mod.Config(num_workers=None)
+    )
+
+    assert captured == [(0, False), (0, False)]
+    assert train_loader.num_workers == 0
+    assert val_loader.num_workers == 0
+    assert train_loader.persistent_workers is False
+    assert val_loader.persistent_workers is False
