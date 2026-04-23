@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import math
 import sys
-import time
+from contextlib import contextmanager
+import fcntl
 from pathlib import Path
 from typing import Any
 
@@ -97,7 +99,14 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
     )
     print(f"--- Connecting to Optuna study: {study_name} ---")
     print(f"--- Storage URL: {args.storage} ---")
-    study = _get_or_create_study(optuna, study_name, storage, study_cfg)
+    study = _get_or_create_study(
+        optuna,
+        study_name,
+        storage,
+        study_cfg,
+        study_yaml_path=args.study_yaml,
+        storage_url=args.storage,
+    )
     metric_name = _get_metric_name(study_cfg)
     count = args.count if args.count is not None else study_cfg.get("n_trials")
     print(f"--- Objective metric: {metric_name} ---")
@@ -168,12 +177,30 @@ def _get_or_create_study(
     study_name: str,
     storage: Any,
     study_cfg: dict[str, Any],
+    *,
+    study_yaml_path: str,
+    storage_url: str,
 ):
     goal = _get_metric_goal(study_cfg)
     sampler = _build_sampler(optuna, study_cfg)
     pruner = _build_pruner(optuna, study_cfg)
-    for attempt in range(10):
+    with _study_init_lock(study_yaml_path, study_name, storage_url):
         try:
+            print(f"--- Loading existing study if present: {study_name} ---")
+            return optuna.load_study(study_name=study_name, storage=storage)
+        except Exception as exc:  # noqa: BLE001
+            message = str(exc).lower()
+            if not any(
+                token in message
+                for token in (
+                    "record does not exist",
+                    "not exist",
+                    "no such study",
+                    "keyerror",
+                )
+            ):
+                raise
+            print(f"--- Study {study_name} not found; creating it under lock ---")
             return optuna.create_study(
                 study_name=study_name,
                 storage=storage,
@@ -182,27 +209,35 @@ def _get_or_create_study(
                 pruner=pruner,
                 load_if_exists=True,
             )
-        except Exception as exc:  # noqa: BLE001
-            message = str(exc).lower()
-            if any(
-                token in message
-                for token in (
-                    "already exists",
-                    "duplicate key value violates unique constraint",
-                    "ix_studies_study_name",
-                )
-            ):
-                print(
-                    f"--- Study {study_name} already exists or raced during creation; loading existing study ---"
-                )
-                return optuna.load_study(study_name=study_name, storage=storage)
-            if attempt == 9:
-                raise
-            sleep_s = min(2.0 * (attempt + 1), 10.0)
-            print(
-                f"--- Study creation attempt {attempt + 1} failed: {exc!r}; retrying in {sleep_s:.1f}s ---"
-            )
-            time.sleep(sleep_s)
+
+
+def _study_init_lock_file(
+    study_yaml_path: str,
+    study_name: str,
+    storage_url: str,
+) -> Path:
+    yaml_path = Path(study_yaml_path).resolve()
+    key = f"{yaml_path}|{study_name}|{storage_url}"
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    return yaml_path.parent / f".optuna-study-init-{digest}.lock"
+
+
+@contextmanager
+def _study_init_lock(
+    study_yaml_path: str,
+    study_name: str,
+    storage_url: str,
+):
+    lock_path = _study_init_lock_file(study_yaml_path, study_name, storage_url)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_handle:
+        print(f"--- Waiting for study init lock: {lock_path} ---")
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        print(f"--- Acquired study init lock: {lock_path} ---")
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
 def _build_sampler(optuna: Any, study_cfg: dict[str, Any]):

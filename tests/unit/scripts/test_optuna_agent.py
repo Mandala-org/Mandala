@@ -150,6 +150,10 @@ parameters:
             pass
 
         @staticmethod
+        def load_study(**kwargs):
+            raise RuntimeError("record does not exist")
+
+        @staticmethod
         def create_study(**kwargs):
             captured["create_study"] = kwargs
             return FakeStudy()
@@ -165,6 +169,7 @@ parameters:
 
     monkeypatch.setitem(sys.modules, "optuna", FakeOptuna)
     monkeypatch.setattr(mod, "run_training", fake_run_training)
+    monkeypatch.setattr(mod, "_study_init_lock", lambda *args, **kwargs: _null_ctx())
 
     args = mod.argparse.Namespace(
         study_yaml=str(study_yaml),
@@ -208,12 +213,6 @@ def test_get_or_create_study_loads_existing_on_duplicate_key(monkeypatch):
                     pass
 
         @staticmethod
-        def create_study(**kwargs):
-            raise RuntimeError(
-                'duplicate key value violates unique constraint "ix_studies_study_name"'
-            )
-
-        @staticmethod
         def load_study(**kwargs):
             captured["load_study"] = kwargs
             return FakeStudy()
@@ -224,12 +223,72 @@ def test_get_or_create_study_loads_existing_on_duplicate_key(monkeypatch):
         "parameters": {},
     }
 
+    monkeypatch.setattr(mod, "_study_init_lock", lambda *args, **kwargs: _null_ctx())
+
     study = mod._get_or_create_study(
         FakeOptuna,
         "demo",
         storage=object(),
         study_cfg=study_cfg,
+        study_yaml_path="study.yaml",
+        storage_url="postgresql://example",
     )
 
     assert isinstance(study, FakeStudy)
     assert captured["load_study"]["study_name"] == "demo"
+
+
+def test_get_or_create_study_creates_when_missing(monkeypatch):
+    mod = _load_module()
+    captured = {}
+
+    class FakeStudy:
+        pass
+
+    class FakeOptuna:
+        class samplers:
+            class TPESampler:
+                def __init__(self, seed):
+                    pass
+
+        class pruners:
+            class HyperbandPruner:
+                def __init__(self, **kwargs):
+                    pass
+
+        @staticmethod
+        def load_study(**kwargs):
+            raise RuntimeError("record does not exist")
+
+        @staticmethod
+        def create_study(**kwargs):
+            captured["create_study"] = kwargs
+            return FakeStudy()
+
+    study_cfg = {
+        "study_name": "demo",
+        "metric": {"name": "val/loss", "goal": "minimize"},
+        "parameters": {},
+    }
+
+    monkeypatch.setattr(mod, "_study_init_lock", lambda *args, **kwargs: _null_ctx())
+
+    study = mod._get_or_create_study(
+        FakeOptuna,
+        "demo",
+        storage=object(),
+        study_cfg=study_cfg,
+        study_yaml_path="study.yaml",
+        storage_url="postgresql://example",
+    )
+
+    assert isinstance(study, FakeStudy)
+    assert captured["create_study"]["study_name"] == "demo"
+
+
+class _null_ctx:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
