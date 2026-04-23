@@ -383,11 +383,12 @@ def test_energy_mae_gt_hamiltonian_logged():
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
     mapper = BlockIrrepMapper(orb_cfg)
     cfg = Config(
-        matrix_targets=["hamiltonian", "overlap", "density"],
+        matrix_targets=["density"],
         enable_energy=True,
         enable_num_electrons=False,
         train_on_energy=False,
         train_on_num_electrons=False,
+        log_partial_gt_observables=True,
         log_per_irrep_metrics=False,
         symmetrize_output=False,
         safety_checks=True,
@@ -427,11 +428,7 @@ def test_energy_mae_gt_hamiltonian_logged():
     }
 
     logged_metrics = {}
-    model.forward = lambda batch_x: {
-        "hamiltonian": block,
-        "overlap": block,
-        "density": block,
-    }
+    model.forward = lambda batch_x: {"density": block}
     model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
 
     loss = model._shared_step((x, y), batch_idx=0, stage="train")
@@ -441,3 +438,168 @@ def test_energy_mae_gt_hamiltonian_logged():
     assert logged_metrics["train/energy_mae_gt_hamiltonian"].item() == pytest.approx(
         0.0, abs=1e-7
     )
+
+
+@pytest.mark.unit
+def test_energy_mae_gt_density_logged():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+    cfg = Config(
+        matrix_targets=["hamiltonian"],
+        enable_energy=True,
+        enable_num_electrons=False,
+        train_on_energy=False,
+        train_on_num_electrons=False,
+        log_partial_gt_observables=True,
+        log_per_irrep_metrics=False,
+        symmetrize_output=False,
+        safety_checks=True,
+        verbosity=0,
+    )
+    model = E3GNN(mapper, cfg)
+
+    block = IrrepsBlockData(
+        atoms=("H",),
+        atom_counts=Counter(("H",)),
+        pair_vectors={"H-H": torch.tensor([[1.0]])},
+        pair_edges={"H-H": torch.tensor([[0], [0], [0], [0], [0]], dtype=torch.long)},
+        lookup={(0, 0, 0, 0, 0): ("H-H", 0)},
+        orbital_cfg=mapper.orbital_cfg,
+    )
+    x = {
+        "node_type_idx": torch.zeros(1, dtype=torch.long),
+        "edge_index": torch.tensor([[0], [0]], dtype=torch.long),
+        "edge_shift": torch.zeros(3, 1, dtype=torch.long),
+        "pred_trace_alignment": build_prediction_edge_metadata(
+            edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+            edge_shift=torch.zeros(3, 1, dtype=torch.long),
+            edge_type_idx=torch.zeros(1, dtype=torch.long),
+            atoms=("H",),
+            edge_types=mapper.edge_types,
+            edge_type2idx=mapper.edge_type2idx,
+            separate_shifted_self=False,
+        )["pred_trace_alignment"],
+    }
+    y = {
+        "hamiltonian": block.to_blocks(mapper),
+        "overlap": block.to_blocks(mapper),
+        "density": block.to_blocks(mapper),
+        "energy": torch.tensor(1.0),
+        "forces": None,
+        "stress": None,
+    }
+
+    logged_metrics = {}
+    model.forward = lambda batch_x: {"hamiltonian": block}
+    model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
+
+    loss = model._shared_step((x, y), batch_idx=0, stage="train")
+
+    assert loss.item() == pytest.approx(0.0, abs=1e-7)
+    assert "train/energy_mae_gt_density" in logged_metrics
+    assert logged_metrics["train/energy_mae_gt_density"].item() == pytest.approx(
+        0.0, abs=1e-7
+    )
+
+
+@pytest.mark.unit
+def test_num_electrons_half_gt_metrics_logged():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+    x = {
+        "node_type_idx": torch.zeros(1, dtype=torch.long),
+        "edge_index": torch.tensor([[0], [0]], dtype=torch.long),
+        "edge_shift": torch.zeros(3, 1, dtype=torch.long),
+        "pred_trace_alignment": build_prediction_edge_metadata(
+            edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+            edge_shift=torch.zeros(3, 1, dtype=torch.long),
+            edge_type_idx=torch.zeros(1, dtype=torch.long),
+            atoms=("H",),
+            edge_types=mapper.edge_types,
+            edge_type2idx=mapper.edge_type2idx,
+            separate_shifted_self=False,
+        )["pred_trace_alignment"],
+    }
+    block = IrrepsBlockData(
+        atoms=("H",),
+        atom_counts=Counter(("H",)),
+        pair_vectors={"H-H": torch.tensor([[1.0]])},
+        pair_edges={"H-H": torch.tensor([[0], [0], [0], [0], [0]], dtype=torch.long)},
+        lookup={(0, 0, 0, 0, 0): ("H-H", 0)},
+        orbital_cfg=mapper.orbital_cfg,
+    )
+    y = {
+        "hamiltonian": block.to_blocks(mapper),
+        "overlap": block.to_blocks(mapper),
+        "density": block.to_blocks(mapper),
+        "num_electrons": torch.tensor(1.0),
+        "forces": None,
+        "stress": None,
+    }
+
+    cfg_density = Config(
+        matrix_targets=["density"],
+        enable_energy=False,
+        enable_num_electrons=True,
+        train_on_energy=False,
+        train_on_num_electrons=False,
+        log_partial_gt_observables=True,
+        verbosity=0,
+    )
+    model_density = E3GNN(mapper, cfg_density)
+    logged_density = {}
+    model_density.forward = lambda batch_x: {"density": block}
+    model_density.log_dict = lambda metrics, **kwargs: logged_density.update(metrics)
+    model_density._shared_step((x, y), batch_idx=0, stage="train")
+    assert "train/num_electrons_mae_gt_overlap" in logged_density
+
+    cfg_overlap = Config(
+        matrix_targets=["overlap"],
+        enable_energy=False,
+        enable_num_electrons=True,
+        train_on_energy=False,
+        train_on_num_electrons=False,
+        log_partial_gt_observables=True,
+        verbosity=0,
+    )
+    model_overlap = E3GNN(mapper, cfg_overlap)
+    logged_overlap = {}
+    model_overlap.forward = lambda batch_x: {"overlap": block}
+    model_overlap.log_dict = lambda metrics, **kwargs: logged_overlap.update(metrics)
+    model_overlap._shared_step((x, y), batch_idx=0, stage="train")
+    assert "train/num_electrons_mae_gt_density" in logged_overlap
+
+
+@pytest.mark.unit
+def test_invalid_observable_training_configs_raise():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+
+    with pytest.raises(
+        ValueError, match="train_on_energy=True requires predicting both"
+    ):
+        E3GNN(
+            mapper,
+            Config(
+                matrix_targets=["density"],
+                train_on_energy=True,
+                train_observables_on_gt=False,
+                loss_coef_observables=1.0,
+                verbosity=0,
+            ),
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="train_on_num_electrons=True with train_observables_on_gt=True",
+    ):
+        E3GNN(
+            mapper,
+            Config(
+                matrix_targets=["hamiltonian"],
+                train_on_num_electrons=True,
+                train_observables_on_gt=True,
+                loss_coef_observables=1.0,
+                verbosity=0,
+            ),
+        )

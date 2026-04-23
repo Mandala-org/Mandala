@@ -12,12 +12,14 @@ from PIL import Image
 import pytorch_lightning as pl
 import imageio.v2 as imageio
 
+from core.sparse_math import trace_matmul_sparse_block_matrix_aligned
 from data.block_matrix import BlockMatrix, IrrepsBlockData
 from net.irrep_tools import (
     compute_irrep_metrics,
     filter_irreps_block_data_by_irrep,
     get_all_irreps,
 )
+from net.observable_metrics import build_observable_predictions
 from net.silicon_study_logging import (
     MATRIX_ALIAS,
     IRREP_PREFIX_BY_MATRIX,
@@ -30,7 +32,6 @@ from net.silicon_study_logging import (
     log_study_complete,
     should_log_epoch,
 )
-from core.sparse_math import trace_matmul_sparse_block_matrix_aligned
 
 
 def _save_plot(fig: plt.Figure, path: Path) -> None:
@@ -959,12 +960,26 @@ class ArtifactCheckpointCallback(pl.Callback):
         forces_mae_sum = 0.0
         forces_mse_sum = 0.0
         forces_count = 0
-        energy_mae_sum = 0.0
-        energy_mae_gt_hamiltonian_sum = 0.0
-        energy_count = 0
-        energy_gt_h_count = 0
-        num_electrons_mae_sum = 0.0
-        num_electrons_count = 0
+        energy_metric_sums = {
+            "energy_mae": 0.0,
+            "energy_mae_gt_hamiltonian": 0.0,
+            "energy_mae_gt_density": 0.0,
+        }
+        energy_metric_counts = {
+            "energy_mae": 0,
+            "energy_mae_gt_hamiltonian": 0,
+            "energy_mae_gt_density": 0,
+        }
+        num_metric_sums = {
+            "num_electrons_mae": 0.0,
+            "num_electrons_mae_gt_overlap": 0.0,
+            "num_electrons_mae_gt_density": 0.0,
+        }
+        num_metric_counts = {
+            "num_electrons_mae": 0,
+            "num_electrons_mae_gt_overlap": 0,
+            "num_electrons_mae_gt_density": 0,
+        }
         num_electrons_mae_pre_correction_sum = 0.0
         num_electrons_pre_correction_count = 0
         first_payload = None
@@ -1035,45 +1050,79 @@ class ArtifactCheckpointCallback(pl.Callback):
                 forces_mse_sum += float(torch.mean(force_diff**2).detach().cpu().item())
                 forces_count += 1
 
-            if (
-                "hamiltonian" in metrics_preds
-                and "density" in metrics_preds
-                and pl_module.cfg.enable_energy
-                and "energy" in y
-            ):
-                e_pred = trace_matmul_sparse_block_matrix_aligned(
-                    metrics_preds["hamiltonian"],
-                    metrics_preds["density"],
-                    x["pred_trace_alignment"],
-                )
-                e_gt_h = trace_matmul_sparse_block_matrix_aligned(
-                    self._as_block_matrix(y["hamiltonian"], pl_module.mapper),
-                    metrics_preds["density"],
-                    x["pred_trace_alignment"],
-                )
-                energy_mae_sum += float(
-                    (torch.mean(torch.abs(e_pred - y["energy"])) * 27.2113845).item()
-                )
-                energy_mae_gt_hamiltonian_sum += float(
-                    (torch.mean(torch.abs(e_gt_h - y["energy"])) * 27.2113845).item()
-                )
-                energy_count += 1
-                energy_gt_h_count += 1
-            if (
-                "overlap" in metrics_preds
-                and "density" in metrics_preds
-                and pl_module.cfg.enable_num_electrons
-                and "num_electrons" in y
-            ):
-                n_pred = trace_matmul_sparse_block_matrix_aligned(
-                    metrics_preds["density"],
-                    metrics_preds["overlap"],
-                    x["pred_trace_alignment"],
-                )
-                num_electrons_mae_sum += float(
-                    torch.mean(torch.abs(n_pred - y["num_electrons"])).item()
-                )
-                num_electrons_count += 1
+            observable_values = build_observable_predictions(
+                metrics_preds,
+                pred_trace_alignment=x["pred_trace_alignment"],
+                H_true=self._as_block_matrix(y["hamiltonian"], pl_module.mapper),
+                D_true=self._as_block_matrix(y["density"], pl_module.mapper),
+                S_true=self._as_block_matrix(y["overlap"], pl_module.mapper),
+            )
+            if pl_module.cfg.enable_energy and "energy" in y:
+                if "energy" in observable_values:
+                    energy_metric_sums["energy_mae"] += float(
+                        (
+                            torch.mean(
+                                torch.abs(observable_values["energy"] - y["energy"])
+                            )
+                            * 27.2113845
+                        ).item()
+                    )
+                    energy_metric_counts["energy_mae"] += 1
+                if "energy_gt_hamiltonian" in observable_values:
+                    energy_metric_sums["energy_mae_gt_hamiltonian"] += float(
+                        (
+                            torch.mean(
+                                torch.abs(
+                                    observable_values["energy_gt_hamiltonian"]
+                                    - y["energy"]
+                                )
+                            )
+                            * 27.2113845
+                        ).item()
+                    )
+                    energy_metric_counts["energy_mae_gt_hamiltonian"] += 1
+                if "energy_gt_density" in observable_values:
+                    energy_metric_sums["energy_mae_gt_density"] += float(
+                        (
+                            torch.mean(
+                                torch.abs(
+                                    observable_values["energy_gt_density"] - y["energy"]
+                                )
+                            )
+                            * 27.2113845
+                        ).item()
+                    )
+                    energy_metric_counts["energy_mae_gt_density"] += 1
+            if pl_module.cfg.enable_num_electrons and "num_electrons" in y:
+                if "num_electrons" in observable_values:
+                    num_metric_sums["num_electrons_mae"] += float(
+                        torch.mean(
+                            torch.abs(
+                                observable_values["num_electrons"] - y["num_electrons"]
+                            )
+                        ).item()
+                    )
+                    num_metric_counts["num_electrons_mae"] += 1
+                if "num_electrons_gt_overlap" in observable_values:
+                    num_metric_sums["num_electrons_mae_gt_overlap"] += float(
+                        torch.mean(
+                            torch.abs(
+                                observable_values["num_electrons_gt_overlap"]
+                                - y["num_electrons"]
+                            )
+                        ).item()
+                    )
+                    num_metric_counts["num_electrons_mae_gt_overlap"] += 1
+                if "num_electrons_gt_density" in observable_values:
+                    num_metric_sums["num_electrons_mae_gt_density"] += float(
+                        torch.mean(
+                            torch.abs(
+                                observable_values["num_electrons_gt_density"]
+                                - y["num_electrons"]
+                            )
+                        ).item()
+                    )
+                    num_metric_counts["num_electrons_mae_gt_density"] += 1
                 if num_electrons_mae_pre_correction is not None:
                     num_electrons_mae_pre_correction_sum += (
                         num_electrons_mae_pre_correction
@@ -1099,15 +1148,39 @@ class ArtifactCheckpointCallback(pl.Callback):
             },
             "forces_mae": (forces_mae_sum / forces_count) if forces_count > 0 else None,
             "forces_mse": (forces_mse_sum / forces_count) if forces_count > 0 else None,
-            "energy_mae": (energy_mae_sum / energy_count) if energy_count > 0 else None,
+            "energy_mae": (
+                energy_metric_sums["energy_mae"] / energy_metric_counts["energy_mae"]
+                if energy_metric_counts["energy_mae"] > 0
+                else None
+            ),
             "energy_mae_gt_hamiltonian": (
-                energy_mae_gt_hamiltonian_sum / energy_gt_h_count
-                if energy_gt_h_count > 0
+                energy_metric_sums["energy_mae_gt_hamiltonian"]
+                / energy_metric_counts["energy_mae_gt_hamiltonian"]
+                if energy_metric_counts["energy_mae_gt_hamiltonian"] > 0
+                else None
+            ),
+            "energy_mae_gt_density": (
+                energy_metric_sums["energy_mae_gt_density"]
+                / energy_metric_counts["energy_mae_gt_density"]
+                if energy_metric_counts["energy_mae_gt_density"] > 0
                 else None
             ),
             "num_electrons_mae": (
-                num_electrons_mae_sum / num_electrons_count
-                if num_electrons_count > 0
+                num_metric_sums["num_electrons_mae"]
+                / num_metric_counts["num_electrons_mae"]
+                if num_metric_counts["num_electrons_mae"] > 0
+                else None
+            ),
+            "num_electrons_mae_gt_overlap": (
+                num_metric_sums["num_electrons_mae_gt_overlap"]
+                / num_metric_counts["num_electrons_mae_gt_overlap"]
+                if num_metric_counts["num_electrons_mae_gt_overlap"] > 0
+                else None
+            ),
+            "num_electrons_mae_gt_density": (
+                num_metric_sums["num_electrons_mae_gt_density"]
+                / num_metric_counts["num_electrons_mae_gt_density"]
+                if num_metric_counts["num_electrons_mae_gt_density"] > 0
                 else None
             ),
             "num_electrons_mae_pre_correction": (
@@ -1152,8 +1225,18 @@ class ArtifactCheckpointCallback(pl.Callback):
             payload["val/energy_mae_gt_hamiltonian"] = eval_result[
                 "energy_mae_gt_hamiltonian"
             ]
+        if eval_result["energy_mae_gt_density"] is not None:
+            payload["val/energy_mae_gt_density"] = eval_result["energy_mae_gt_density"]
         if eval_result["num_electrons_mae"] is not None:
             payload["val/num_electrons_mae_study"] = eval_result["num_electrons_mae"]
+        if eval_result["num_electrons_mae_gt_overlap"] is not None:
+            payload["val/num_electrons_mae_gt_overlap"] = eval_result[
+                "num_electrons_mae_gt_overlap"
+            ]
+        if eval_result["num_electrons_mae_gt_density"] is not None:
+            payload["val/num_electrons_mae_gt_density"] = eval_result[
+                "num_electrons_mae_gt_density"
+            ]
         if eval_result["num_electrons_mae_pre_correction"] is not None:
             payload["val/num_electrons_mae_pre_correction"] = eval_result[
                 "num_electrons_mae_pre_correction"
@@ -1264,8 +1347,20 @@ class ArtifactCheckpointCallback(pl.Callback):
                 payload["initial/energy_mae_gt_hamiltonian"] = initial_eval[
                     "energy_mae_gt_hamiltonian"
                 ]
+            if initial_eval["energy_mae_gt_density"] is not None:
+                payload["initial/energy_mae_gt_density"] = initial_eval[
+                    "energy_mae_gt_density"
+                ]
             if initial_eval["num_electrons_mae"] is not None:
                 payload["initial/num_electrons_mae"] = initial_eval["num_electrons_mae"]
+            if initial_eval["num_electrons_mae_gt_overlap"] is not None:
+                payload["initial/num_electrons_mae_gt_overlap"] = initial_eval[
+                    "num_electrons_mae_gt_overlap"
+                ]
+            if initial_eval["num_electrons_mae_gt_density"] is not None:
+                payload["initial/num_electrons_mae_gt_density"] = initial_eval[
+                    "num_electrons_mae_gt_density"
+                ]
             if initial_eval["num_electrons_mae_pre_correction"] is not None:
                 payload["initial/num_electrons_mae_pre_correction"] = initial_eval[
                     "num_electrons_mae_pre_correction"
@@ -1409,8 +1504,20 @@ class ArtifactCheckpointCallback(pl.Callback):
             final_payload["final/energy_mae_gt_hamiltonian"] = eval_result[
                 "energy_mae_gt_hamiltonian"
             ]
+        if eval_result["energy_mae_gt_density"] is not None:
+            final_payload["final/energy_mae_gt_density"] = eval_result[
+                "energy_mae_gt_density"
+            ]
         if eval_result["num_electrons_mae"] is not None:
             final_payload["final/num_electrons_mae"] = eval_result["num_electrons_mae"]
+        if eval_result["num_electrons_mae_gt_overlap"] is not None:
+            final_payload["final/num_electrons_mae_gt_overlap"] = eval_result[
+                "num_electrons_mae_gt_overlap"
+            ]
+        if eval_result["num_electrons_mae_gt_density"] is not None:
+            final_payload["final/num_electrons_mae_gt_density"] = eval_result[
+                "num_electrons_mae_gt_density"
+            ]
         if eval_result["num_electrons_mae_pre_correction"] is not None:
             final_payload["final/num_electrons_mae_pre_correction"] = eval_result[
                 "num_electrons_mae_pre_correction"

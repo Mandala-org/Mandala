@@ -4,7 +4,7 @@ study_name: train_silicon_density_energy_bayes_high_lr_smaller_main
 storage: sqlite:///optuna/train_silicon_density_energy_bayes_high_lr_smaller_main.db
 method: bayes
 metric:
-  name: val/energy_mae
+  name: val/energy_mae_gt_hamiltonian
   goal: minimize
 early_terminate:
   type: hyperband
@@ -34,6 +34,8 @@ parameters:
     value: false
   train-on-num-electrons:
     value: false
+  log-partial-gt-observables:
+    value: true
   loss-coef-observables:
     value: 0.0
   enable-forces:

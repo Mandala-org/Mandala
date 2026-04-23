@@ -21,9 +21,6 @@ from e3nn.o3 import Irreps
 import time
 
 from core.block_irrep_mapper import BlockIrrepMapper
-from core.sparse_math import (
-    trace_matmul_sparse_block_matrix_aligned,
-)
 from data.snapshot import Snapshot
 from data.block_matrix import IrrepsBlockData
 from data.graph_features import compute_edge_geometry_from_static_edges
@@ -34,6 +31,12 @@ from net.irrep_tools import (
     compute_irrep_metrics,
     get_all_irreps,
     project_irrep_vectors_to_blocks,
+)
+from net.observable_metrics import (
+    add_observable_metrics,
+    build_observable_predictions,
+    observable_loss,
+    validate_observable_config,
 )
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
@@ -83,6 +86,7 @@ class E3GNN(pl.LightningModule):
             raise ValueError(
                 "train_on_irrep_parts expects matrix-space supervision and should not be combined with train_target='irreps'."
             )
+        validate_observable_config(cfg)
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = resolve_hidden_irreps(self.cfg)
@@ -515,51 +519,31 @@ class E3GNN(pl.LightningModule):
                 D_true = y["density"]
                 S_true = y["overlap"]
 
-        # Standard observables
-        if (
-            self.cfg.enable_energy
-            and "hamiltonian" in preds_matrix
-            and "density" in preds_matrix
-        ):
-            E_pred = trace_matmul_sparse_block_matrix_aligned(
-                preds_matrix["hamiltonian"],
-                preds_matrix["density"],
-                pred_trace_alignment,
-            )
-            E_true = y["energy"]
-            metrics[f"{stage}/energy_mae"] = (
-                torch.mean(torch.abs(E_pred - E_true)) * HARTREE_TO_EV
-            )
-            if H_true is not None:
-                E_gt_H = trace_matmul_sparse_block_matrix_aligned(
-                    H_true, preds_matrix["density"], pred_trace_alignment
-                )
-                metrics[f"{stage}/energy_mae_gt_hamiltonian"] = (
-                    torch.mean(torch.abs(E_gt_H - E_true)) * HARTREE_TO_EV
-                )
-            if self.cfg.train_on_energy and not self.cfg.train_observables_on_gt:
-                loss_E_weighted = self.cfg.loss_coef_observables * self._mse(
-                    E_pred, E_true
-                )
-
-        if (
-            self.cfg.enable_num_electrons
-            and "overlap" in preds_matrix
-            and "density" in preds_matrix
-        ):
-            N_pred = trace_matmul_sparse_block_matrix_aligned(
-                preds_matrix["density"],
-                preds_matrix["overlap"],
-                pred_trace_alignment,
-            )
-            N_true = y["num_electrons"]
-            metrics[f"{stage}/num_electrons_mae"] = torch.mean(
-                torch.abs(N_pred - N_true)
-            )
-            if self.cfg.train_on_num_electrons and not self.cfg.train_observables_on_gt:
-                loss_N_weighted = self.cfg.loss_coef_observables * self._mse(
-                    N_pred, N_true
-                )
+        E_true = y.get("energy")
+        N_true = y.get("num_electrons")
+        observable_values = build_observable_predictions(
+            preds_matrix,
+            pred_trace_alignment=pred_trace_alignment,
+            H_true=H_true,
+            D_true=D_true,
+            S_true=S_true,
+        )
+        add_observable_metrics(
+            metrics,
+            stage=stage,
+            cfg=self.cfg,
+            observable_values=observable_values,
+            energy_target=E_true,
+            num_electrons_target=N_true,
+        )
+        loss_E_weighted, loss_N_weighted = observable_loss(
+            cfg=self.cfg,
+            observable_values=observable_values,
+            energy_target=E_true,
+            num_electrons_target=N_true,
+            mse_fn=self._mse,
+            device=self.device,
+        )
 
         if self.cfg.enable_forces and y.get("forces") is not None:
             forces_pred = self.get_forces(preds_irreps, x["positions"], x["box"])
@@ -590,49 +574,6 @@ class E3GNN(pl.LightningModule):
                 )
                 for key, value in irrep_metrics.items():
                     metrics[f"{stage}/{name}_irrep_{key}"] = value
-
-        # Partial Ground Truth Observables
-        if self.cfg.log_partial_gt_observables or self.cfg.train_observables_on_gt:
-            E_gt_D = trace_matmul_sparse_block_matrix_aligned(
-                preds_matrix["hamiltonian"], D_true, pred_trace_alignment
-            )
-            E_gt_H = trace_matmul_sparse_block_matrix_aligned(
-                H_true, preds_matrix["density"], pred_trace_alignment
-            )
-            N_gt_S = trace_matmul_sparse_block_matrix_aligned(
-                preds_matrix["density"], S_true, pred_trace_alignment
-            )
-            N_gt_D = trace_matmul_sparse_block_matrix_aligned(
-                S_true, preds_matrix["density"], pred_trace_alignment
-            )
-
-            if self.cfg.log_partial_gt_observables:
-                metrics[f"{stage}/energy_mae_gt_density"] = (
-                    torch.mean(torch.abs(E_gt_D - E_true)) * HARTREE_TO_EV
-                )
-                metrics[f"{stage}/energy_mae_gt_hamiltonian"] = (
-                    torch.mean(torch.abs(E_gt_H - E_true)) * HARTREE_TO_EV
-                )
-                metrics[f"{stage}/num_electrons_mae_gt_overlap"] = torch.mean(
-                    torch.abs(N_gt_S - N_true)
-                )
-                metrics[f"{stage}/num_electrons_mae_gt_density"] = torch.mean(
-                    torch.abs(N_gt_D - N_true)
-                )
-
-            if self.cfg.train_on_energy and self.cfg.train_observables_on_gt:
-                loss_E_gt_D = self._mse(E_gt_D, E_true)
-                loss_E_gt_H = self._mse(E_gt_H, E_true)
-                loss_E_weighted = (
-                    self.cfg.loss_coef_observables * (loss_E_gt_D + loss_E_gt_H) * 0.5
-                )
-
-            if self.cfg.train_on_num_electrons and self.cfg.train_observables_on_gt:
-                loss_N_gt_S = self._mse(N_gt_S, N_true)
-                loss_N_gt_D = self._mse(N_gt_D, N_true)
-                loss_N_weighted = (
-                    self.cfg.loss_coef_observables * (loss_N_gt_S + loss_N_gt_D) * 0.5
-                )
 
         t_obs_end = time.perf_counter()
 
