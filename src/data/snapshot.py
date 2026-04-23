@@ -333,7 +333,7 @@ class Snapshot:
     # public classmethod ----------------------------------------------------
     @classmethod
     def load(cls, path: str | os.PathLike, *, device="cpu") -> "Snapshot":
-        payload_top = torch.load(path, map_location="cpu")
+        payload_top = torch.load(path, map_location="cpu", weights_only=False)
         mats = {
             name: cls._matrix_from_payload(pld, device)
             for name, pld in payload_top["mats"].items()
