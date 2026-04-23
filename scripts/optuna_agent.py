@@ -120,8 +120,6 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
     print(f"--- Trial count for this worker: {count} (None means indefinite) ---")
 
     def objective(trial: Any) -> float:
-        if interrupt_requested():
-            raise KeyboardInterrupt
         print(f"=== Starting Optuna trial {trial.number} ===")
         run_args = _build_run_args_from_trial(
             trial,
@@ -143,7 +141,7 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
         for key, value in metric_log.items():
             trial.set_user_attr(key, value)
         if interrupt_requested():
-            raise KeyboardInterrupt
+            study.stop()
         return float(metric_log[metric_name])
 
     def _stop_if_interrupted(study, trial):  # noqa: ARG001
@@ -164,11 +162,11 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
             if "callbacks" not in str(exc):
                 raise
             study.optimize(objective, **optimize_kwargs)
-    except KeyboardInterrupt:
-        print(
-            "--- Optuna agent stopped after interrupt; finalization completed normally ---"
-        )
-        raise
+    finally:
+        if interrupt_requested():
+            print(
+                "--- Optuna agent stopped after interrupt; finalization completed normally ---"
+            )
 
 
 def _load_yaml(path: str) -> dict[str, Any]:
