@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import ast
+import dataclasses
 import os
 import random
 import sys
@@ -12,6 +12,7 @@ from typing import Any
 
 import pytorch_lightning as pl
 import torch
+from pytorch_lightning.callbacks import TQDMProgressBar
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
@@ -341,6 +342,7 @@ def _build_callbacks(
                 verbosity=cfg.bench_verbosity, log_activation_mag=cfg.log_activation_mag
             )
         )
+    callbacks.append(_build_progress_bar())
     if getattr(args, "log_artifacts", True):
         callbacks.append(
             ArtifactCheckpointCallback(
@@ -353,6 +355,21 @@ def _build_callbacks(
         callbacks.extend(extra_callbacks)
     print(f"--- Built callbacks: {[type(cb).__name__ for cb in callbacks]} ---")
     return callbacks
+
+
+def _build_progress_bar() -> TQDMProgressBar:
+    class _FilteredProgressBar(TQDMProgressBar):
+        _allowed_keys = {"train/loss_total", "val/loss_total"}
+
+        def get_metrics(self, trainer, pl_module):
+            metrics = super().get_metrics(trainer, pl_module)
+            return {
+                key: value
+                for key, value in metrics.items()
+                if key in self._allowed_keys or key in {"epoch", "step", "v_num"}
+            }
+
+    return _FilteredProgressBar()
 
 
 def _extract_metrics(trainer: pl.Trainer) -> dict[str, float]:
