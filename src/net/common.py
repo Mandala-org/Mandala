@@ -192,7 +192,9 @@ class Config:
     dtype: torch.dtype = torch.float32  # default data type for all layers
     device: str = "cpu"  # default device for all layers
     gpus: int = 0  # number of GPUs
-    num_workers: int = 16  # DataLoader workers, 0 for no parallelism
+    num_workers: int | None = (
+        None  # auto: allocated cores - 1, or explicit total workers
+    )
     save_dir: str = "checkpoints"  # directory to save model checkpoints
     log_model: bool = False  # whether to log the model to WandB
 

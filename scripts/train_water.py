@@ -164,13 +164,18 @@ def main():
 
     train_ds, _, mapper = fac.create()
 
+    total_workers = _resolve_total_workers(cfg.num_workers)
+    print(f"--- DataLoader workers: total={total_workers} ---")
+
     def _dl(ds, shuffle=False):
+        use_persistent_workers = total_workers > 0
         return DataLoader(
             ds or [],
             batch_size=1,
             shuffle=shuffle,
-            num_workers=cfg.num_workers,
+            num_workers=total_workers,
             pin_memory=cfg.gpus == 0,  # Pin memory only if not using GPU
+            persistent_workers=use_persistent_workers,
             collate_fn=lambda b: b[0],
         )
 
@@ -204,6 +209,17 @@ def main():
     print("--- Starting training ---")
     torch.set_float32_matmul_precision("high")
     trainer.fit(model=model, train_dataloaders=train_loader)
+
+
+def _resolve_total_workers(num_workers: int | None) -> int:
+    if num_workers is not None:
+        return max(0, int(num_workers))
+    try:
+        affinity = os.sched_getaffinity(0)
+        available_cores = len(affinity)
+    except (AttributeError, OSError):
+        available_cores = os.cpu_count() or 1
+    return max(0, int(available_cores) - 1)
 
 
 if __name__ == "__main__":
