@@ -172,7 +172,7 @@ parameters:
       - resnormact
       - film
   e3mlp-pre-norm:
-    value:
+    values:
      - true
      - false
   e3mlp-output-scale:
