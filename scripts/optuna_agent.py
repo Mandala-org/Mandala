@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import math
+import signal
 import sys
 from contextlib import contextmanager
 import fcntl
@@ -66,6 +67,7 @@ def setup_argparse() -> argparse.Namespace:
 
 def main() -> None:
     args = setup_argparse()
+    _install_signal_handlers()
     print("=== optuna_agent.py starting ===")
     print(f"study_yaml={args.study_yaml}")
     print(f"storage={args.storage}")
@@ -78,6 +80,16 @@ def main() -> None:
     print(f"grace_period={args.grace_period}")
     print(f"agent_label={args.agent_label}")
     run_optuna_agent(args)
+
+
+def _install_signal_handlers() -> None:
+    def _handle_signal(signum, frame):  # noqa: ARG001
+        sig_name = signal.Signals(signum).name
+        print(f"--- Optuna agent received {sig_name}; shutting down ---", flush=True)
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
 
 
 def run_optuna_agent(args: argparse.Namespace) -> None:

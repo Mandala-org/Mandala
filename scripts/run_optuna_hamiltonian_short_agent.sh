@@ -33,7 +33,7 @@ source ~/casus/mandala-venv/bin/activate
 
 mkdir -p "${CHECKPOINT_DIR}" "${SCRATCH_DIR}/cache"
 
-python -u scripts/optuna_agent.py \
+exec python -u scripts/optuna_agent.py \
   --study-yaml "${STUDY_YAML}" \
   --storage "${STORAGE_URL}" \
   --wandb-mode "${WANDB_MODE_VALUE}" \
