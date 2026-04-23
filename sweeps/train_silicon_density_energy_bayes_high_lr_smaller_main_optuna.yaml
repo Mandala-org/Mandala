@@ -17,7 +17,9 @@ parameters:
   wandb-project:
     value: mandala-minimal-silicon-e3mlp-sweep
   data-path:
-    value: /p/project1/hai_1270/silicon/1500K
+    value: /p/project1/hai_1270/siox
+  dataset-kind:
+    value: siox
   snapshot-cache-dir:
     value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
   checkpoint-dir:
