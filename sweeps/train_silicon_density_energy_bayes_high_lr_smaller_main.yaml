@@ -72,10 +72,6 @@ parameters:
     value: true
   precompute-edge-features:
     value: true
-  compile-model:
-    value: true
-  compile-mode:
-    value: reduce-overhead
   dtype:
     value: float32
   device:

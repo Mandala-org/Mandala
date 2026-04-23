@@ -11,8 +11,8 @@ def test_e3layernorm_forward_does_not_depend_on_irreps_runtime_object():
     batch = torch.tensor([0, 0, 1, 1, 1], dtype=torch.long)
 
     # Forward should use the cached plain-Python field specs, not iterate the
-    # runtime Irreps object. This guards the torch.compile path against e3nn's
-    # custom container semantics.
+    # runtime Irreps object. This keeps the runtime path independent from
+    # e3nn's custom container semantics.
     norm.irreps_in = object()  # type: ignore[assignment]
 
     out = norm(x, batch)

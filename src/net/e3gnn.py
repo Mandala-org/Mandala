@@ -88,7 +88,6 @@ class E3GNN(pl.LightningModule):
         self.hidden_irreps: Irreps = resolve_hidden_irreps(self.cfg)
         self.neck_irreps: Irreps = resolve_hidden_irreps(self.cfg)
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
-        self._compiled_forward_core = None
 
         # ---------- encoders -------------------------------------------
         self.node_enc = NodeEncoder(
@@ -151,7 +150,6 @@ class E3GNN(pl.LightningModule):
         )
 
         self._apply_init_weights_factor()
-        self._setup_compiled_forward()
 
         # Print model summary if verbosity >= 1
         print_model_summary(self, verbosity=self.cfg.verbosity)
@@ -181,24 +179,6 @@ class E3GNN(pl.LightningModule):
             for param in self.parameters():
                 if param.is_floating_point():
                     param.mul_(factor)
-
-    def _setup_compiled_forward(self) -> None:
-        if not self.cfg.compile_model:
-            return
-        if self.cfg.log_activation_mag:
-            raise ValueError(
-                "compile_model=True is not supported together with log_activation_mag=True."
-            )
-        if not hasattr(torch, "compile"):
-            raise RuntimeError(
-                "compile_model=True requested, but torch.compile is not available."
-            )
-        self._compiled_forward_core = torch.compile(
-            self._forward_core,
-            mode=self.cfg.compile_mode,
-            fullgraph=bool(self.cfg.compile_fullgraph),
-            dynamic=False,
-        )
 
     # ------------------------ util helpers -----------------------------
     @staticmethod
@@ -377,11 +357,7 @@ class E3GNN(pl.LightningModule):
         # initialize activation magnitudes storage
         self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
 
-        preds_raw = (
-            self._compiled_forward_core(x)
-            if self._compiled_forward_core is not None
-            else self._forward_core(x)
-        )
+        preds_raw = self._forward_core(x)
 
         preds_wrapped = {
             name: self._wrap_head_output(raw, x) for name, raw in preds_raw.items()
