@@ -158,24 +158,3 @@ def test_init_weights_factor_scales_model_parameters():
         checked_any = True
 
     assert checked_any
-
-
-@pytest.mark.unit
-def test_compile_model_uses_torch_compile(monkeypatch):
-    calls = {}
-
-    def fake_compile(fn, **kwargs):
-        calls["fn"] = fn
-        calls["kwargs"] = kwargs
-        return fn
-
-    monkeypatch.setattr(torch, "compile", fake_compile)
-
-    model = E3GNN(
-        mapper,
-        Config(compile_model=True, compile_mode="reduce-overhead", verbosity=0),
-    )
-
-    assert model._compiled_forward_core is not None
-    assert calls["kwargs"]["mode"] == "reduce-overhead"
-    assert calls["kwargs"]["dynamic"] is False

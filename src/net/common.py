@@ -123,10 +123,6 @@ class Config:
     lr_scheduler_patience: int = 60
     lr_scheduler_min_lr: float = 1e-8
     lr_scheduler_target: str = "val/loss_total"
-    compile_model: bool = False
-    compile_mode: str = "default"
-    compile_fullgraph: bool = False
-
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0

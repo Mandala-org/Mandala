@@ -360,6 +360,4 @@ def _print_run_summary(
     print(f"matrix_targets={cfg.matrix_targets}")
     print(f"accelerator={accelerator}")
     print(f"devices={devices}")
-    print(
-        f"precompute_edge_features={cfg.precompute_edge_features}, compile_model={cfg.compile_model}"
-    )
+    print(f"precompute_edge_features={cfg.precompute_edge_features}")
