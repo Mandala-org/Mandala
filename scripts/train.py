@@ -6,7 +6,6 @@ import dataclasses
 import os
 import random
 import math
-import signal
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,6 +38,12 @@ from scripts.dataset import (  # noqa: E402
     build_silicon_datasets,
     build_siox_datasets,
 )
+from scripts.graceful_interrupt import (  # noqa: E402
+    GracefulInterruptCallback,
+    clear_interrupt_request,
+    install_signal_handlers,
+    interrupt_requested,
+)
 
 
 def run_training(
@@ -48,7 +53,8 @@ def run_training(
     extra_callbacks: list[Any] | None = None,
     objective_metric: str | None = None,
 ) -> dict[str, float]:
-    _install_signal_handlers()
+    clear_interrupt_request()
+    install_signal_handlers("Training")
     args = _as_namespace(run_args)
     print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
@@ -87,18 +93,12 @@ def run_training(
 
     print("--- Starting training ---")
     torch.set_float32_matmul_precision("high")
-    try:
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-            ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
-        )
-    except KeyboardInterrupt:
-        print(
-            "--- Training interrupted by Ctrl+C; latest checkpoint should have been saved by callbacks ---"
-        )
-        raise
+    trainer.fit(
+        model=model,
+        train_dataloaders=train_loader,
+        val_dataloaders=val_loader,
+        ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
+    )
     metrics = _extract_metrics(trainer)
     if objective_metric is not None and objective_metric not in metrics:
         raise RuntimeError(
@@ -109,21 +109,11 @@ def run_training(
         print(
             f"Objective metric {objective_metric} = {metrics.get(objective_metric, 'MISSING')}"
         )
+    if interrupt_requested():
+        print(
+            "--- Training stopped after interrupt; finalization completed normally ---"
+        )
     return metrics
-
-
-def _install_signal_handlers() -> None:
-    if getattr(_install_signal_handlers, "_installed", False):
-        return
-
-    def _handle_signal(signum, frame):  # noqa: ARG001
-        sig_name = signal.Signals(signum).name
-        print(f"--- Training received {sig_name}; shutting down ---", flush=True)
-        raise KeyboardInterrupt
-
-    signal.signal(signal.SIGINT, _handle_signal)
-    signal.signal(signal.SIGTERM, _handle_signal)
-    _install_signal_handlers._installed = True  # type: ignore[attr-defined]
 
 
 def _as_namespace(
@@ -391,7 +381,7 @@ def _build_callbacks(
     run_dir: Path,
     extra_callbacks: list[Any] | None,
 ) -> list[Any]:
-    callbacks: list[Any] = []
+    callbacks: list[Any] = [GracefulInterruptCallback("Training")]
     if cfg.benchmark:
         callbacks.append(
             BenchmarkCallback(
