@@ -25,12 +25,14 @@ class E3LayerNorm(nn.Module):
         self.irreps_in = Irreps(irreps_in)
         self.eps = float(eps)
         self.normalization = normalization
+        self.field_specs: list[tuple[int, int, bool, int]] = []
 
         if affine:
             ib, iw = 0, 0
             weight_slices: list[slice] = []
             bias_slices: list[slice | None] = []
             for mul, ir in self.irreps_in:
+                self.field_specs.append((mul, ir.dim, ir.is_scalar(), ir.l))
                 if ir.is_scalar():
                     bias_slices.append(slice(ib, ib + mul))
                     ib += mul
@@ -43,6 +45,8 @@ class E3LayerNorm(nn.Module):
             self.weight_slices = weight_slices
             self.bias_slices = bias_slices
         else:
+            for mul, ir in self.irreps_in:
+                self.field_specs.append((mul, ir.dim, ir.is_scalar(), ir.l))
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
             self.weight_slices = []
@@ -65,10 +69,10 @@ class E3LayerNorm(nn.Module):
 
         out = []
         ix = 0
-        for index, (mul, ir) in enumerate(self.irreps_in):
-            field = x[:, ix : ix + mul * ir.dim].reshape(-1, mul, ir.dim)
+        for index, (mul, ir_dim, is_scalar, l_value) in enumerate(self.field_specs):
+            field = x[:, ix : ix + mul * ir_dim].reshape(-1, mul, ir_dim)
 
-            if ir.l == 0:
+            if l_value == 0:
                 mean = (
                     scatter(
                         field, batch, dim=0, dim_size=batch_size, reduce="add"
@@ -85,7 +89,7 @@ class E3LayerNorm(nn.Module):
                 reduce="mean",
             ).mean(dim=[1, 2], keepdim=True)
             if self.normalization == "norm":
-                norm = norm * ir.dim
+                norm = norm * ir_dim
 
             safe_norm = torch.sqrt(norm + self.eps)
             field = field / (safe_norm[batch] + self.eps)
@@ -93,13 +97,13 @@ class E3LayerNorm(nn.Module):
             if self.weight is not None:
                 weight = self.weight[self.weight_slices[index]]
                 field = field * weight[None, :, None]
-            if self.bias is not None and ir.is_scalar():
+            if self.bias is not None and is_scalar:
                 bias_slice = self.bias_slices[index]
                 assert bias_slice is not None
                 bias = self.bias[bias_slice]
                 field = field + bias[None, :, None]
 
-            out.append(field.reshape(-1, mul * ir.dim))
-            ix += mul * ir.dim
+            out.append(field.reshape(-1, mul * ir_dim))
+            ix += mul * ir_dim
 
         return torch.cat(out, dim=-1)
