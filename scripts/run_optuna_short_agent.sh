@@ -20,6 +20,15 @@ fi
 
 STORAGE_URL="$(cat "${URL_FILE}")"
 
+echo "Optuna short agent starting"
+echo "HOSTNAME=$(hostname -f 2>/dev/null || hostname)"
+echo "STUDY_YAML=${STUDY_YAML}"
+echo "URL_FILE=${URL_FILE}"
+echo "STORAGE_URL=${STORAGE_URL}"
+echo "CHECKPOINT_DIR=${CHECKPOINT_DIR}"
+echo "WANDB_MODE_VALUE=${WANDB_MODE_VALUE}"
+echo "AGENT_LABEL=${AGENT_LABEL}"
+
 source mandala-venv/bin/activate
 
 mkdir -p "${CHECKPOINT_DIR}" "${SCRATCH_DIR}/cache"

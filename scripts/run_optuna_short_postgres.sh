@@ -33,6 +33,7 @@ STORAGE_URL="postgresql://${USER}@${HOST_FQDN}:${PGPORT}/postgres"
 echo "${STORAGE_URL}" > "${URL_FILE}"
 
 echo "Optuna PostgreSQL service starting"
+echo "HOSTNAME=$(hostname -f 2>/dev/null || hostname)"
 echo "PGDATA_DIR=${PGDATA_DIR}"
 echo "PGPORT=${PGPORT}"
 echo "STORAGE_URL=${STORAGE_URL}"
