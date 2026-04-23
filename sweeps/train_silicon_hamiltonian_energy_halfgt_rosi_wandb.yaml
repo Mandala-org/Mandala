@@ -25,7 +25,7 @@ parameters:
   dataset-device:
     value: cpu
   num-workers:
-    value: 0
+    value: 8
   min-temp:
     value: 3000
   max-temp:
