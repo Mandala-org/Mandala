@@ -251,11 +251,11 @@ def _build_run_args_from_trial(
 
 
 def _sample_parameter(trial: Any, name: str, spec: Any) -> Any:
-    if not isinstance(spec, dict):
-        return spec
     param_name = _canonical_name(name)
+    if not isinstance(spec, dict):
+        return _normalize_trial_value(name, spec)
     if "value" in spec:
-        return spec["value"]
+        return _normalize_trial_value(name, spec["value"])
     if "values" in spec:
         values = list(spec["values"])
         if not values:
@@ -308,6 +308,28 @@ def _sample_parameter(trial: Any, name: str, spec: Any) -> Any:
     raise ValueError(
         f"Unsupported parameter spec for {name!r}. Expected value, values, distribution, or min/max."
     )
+
+
+def _normalize_trial_value(name: str, value: Any) -> Any:
+    if _canonical_name(name) in {"matrix_targets", "radial_layers"}:
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("[") or raw.startswith("("):
+                try:
+                    parsed = OmegaConf.to_container(OmegaConf.create(raw), resolve=True)
+                except Exception:
+                    parsed = None
+                else:
+                    if isinstance(parsed, list):
+                        return parsed
+            if "," in raw:
+                return [part.strip() for part in raw.split(",") if part.strip()]
+            return [raw]
+        if isinstance(value, tuple):
+            return list(value)
+    return value
 
 
 def _canonical_name(name: str) -> str:
