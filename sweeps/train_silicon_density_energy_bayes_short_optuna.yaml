@@ -13,11 +13,11 @@ gc_after_trial: true
 sampler_seed: 42
 parameters:
   dataset-kind:
-    value: silicon
+    value: siox
   wandb-project:
     value: mandala-minimal-silicon-e3mlp-sweep-short-optuna
   data-path:
-    value: /p/project1/hai_1270/silicon/1500K
+    value: /p/project1/hai_1270/siox
   snapshot-cache-dir:
     value: ${oc.env:SCRATCH}/cache
   checkpoint-dir:
