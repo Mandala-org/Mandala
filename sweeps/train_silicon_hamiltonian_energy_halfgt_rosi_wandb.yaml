@@ -22,6 +22,18 @@ parameters:
     value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
   checkpoint-dir:
     value: checkpoints/silicon
+  min-temp:
+    value: 3000
+  max-temp:
+    value: 3000
+  temp-step:
+    value: 300
+  n-snapshots-per-temp:
+    value: 12
+  val-temp:
+    value: 3000
+  val-n-snapshots:
+    value: 2
   matrix-targets:
     value: hamiltonian
   enable-energy:
@@ -67,7 +79,7 @@ parameters:
   edge-encoder-style:
     values:
       - mandala
-      - deeph-e3
+      - deeph_e3
   e3layernorm:
     values:
       - true

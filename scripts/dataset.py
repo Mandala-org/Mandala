@@ -115,7 +115,18 @@ def build_silicon_datasets(
             raise ValueError("num_train must be > 0")
         if num_val < 0:
             raise ValueError("num_val must be >= 0")
-        all_pairs = discover_silicon_snapshot_pairs(data_root)
+        if min_temp == max_temp == val_temp:
+            temp_path = data_root / f"{val_temp}K"
+            all_pairs = []
+            for matrix_path in sorted(glob.glob(str(temp_path / "*/Si_DM"))):
+                info_path = Path(matrix_path).parent / "info.dat"
+                if info_path.exists():
+                    all_pairs.append((Path(matrix_path), info_path))
+            print(
+                f"--- Silicon single-temp split selected: temp={val_temp}K, discovered={len(all_pairs)} ---"
+            )
+        else:
+            all_pairs = discover_silicon_snapshot_pairs(data_root)
         rng.shuffle(all_pairs)
         if len(all_pairs) < num_train + num_val:
             raise ValueError(
