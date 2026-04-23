@@ -79,6 +79,59 @@ def test_save_load_roundtrip(tmp_path):
 
 
 @pytest.mark.unit
+def test_snapshot_load_uses_weights_only_false(monkeypatch, tmp_path):
+    file = tmp_path / "snapshot.pt"
+    file.write_bytes(b"placeholder")
+
+    captured = {}
+
+    def fake_torch_load(path, map_location=None, weights_only=None, **kwargs):
+        captured["path"] = path
+        captured["map_location"] = map_location
+        captured["weights_only"] = weights_only
+        return {
+            "mats": {
+                "hamiltonian": {
+                    "atoms": ("H",),
+                    "atom_counts": {"H": 1},
+                    "pair_blocks": {"H-H": torch.ones(1, 1, 1)},
+                    "pair_edges": {"H-H": torch.tensor([[0], [0], [0], [0], [0]])},
+                    "lookup": {(0, 0, 0, 0, 0): ("H-H", 0)},
+                    "orbital_cfg": {"H": "1s"},
+                    "basis": "e3nn",
+                },
+                "overlap": {
+                    "atoms": ("H",),
+                    "atom_counts": {"H": 1},
+                    "pair_blocks": {"H-H": torch.ones(1, 1, 1)},
+                    "pair_edges": {"H-H": torch.tensor([[0], [0], [0], [0], [0]])},
+                    "lookup": {(0, 0, 0, 0, 0): ("H-H", 0)},
+                    "orbital_cfg": {"H": "1s"},
+                    "basis": "e3nn",
+                },
+                "density": {
+                    "atoms": ("H",),
+                    "atom_counts": {"H": 1},
+                    "pair_blocks": {"H-H": torch.ones(1, 1, 1)},
+                    "pair_edges": {"H-H": torch.tensor([[0], [0], [0], [0], [0]])},
+                    "lookup": {(0, 0, 0, 0, 0): ("H-H", 0)},
+                    "orbital_cfg": {"H": "1s"},
+                    "basis": "e3nn",
+                },
+            }
+        }
+
+    monkeypatch.setattr(torch, "load", fake_torch_load)
+
+    snap = Snapshot.load(file)
+
+    assert captured["path"] == file
+    assert captured["map_location"] == "cpu"
+    assert captured["weights_only"] is False
+    assert snap.density.atoms == ("H",)
+
+
+@pytest.mark.unit
 def test_stress_transforms_under_basis_change_and_rotation():
     atoms = ("H",)
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})

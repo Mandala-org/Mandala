@@ -89,7 +89,7 @@ parameters:
   lr-scheduler-patience:
     value: 100
   max-epochs:
-    value: 100
+    value: 20
   log-interval:
     value: 10
   adaptive-log-interval:

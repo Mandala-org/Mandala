@@ -198,8 +198,12 @@ class E3GNNDataset(Dataset):
 
     def _load_preprocessed_sample(self, cache_file: Path) -> tuple[dict, dict] | None:
         try:
-            return torch.load(cache_file, map_location="cpu")
-        except Exception:
+            return torch.load(cache_file, map_location="cpu", weights_only=False)
+        except Exception as exc:
+            print(
+                f"[CACHE] Failed to load preprocessed sample cache {cache_file}: {exc!r}. "
+                "Deleting cache entry and rebuilding."
+            )
             try:
                 cache_file.unlink()
             except Exception:
