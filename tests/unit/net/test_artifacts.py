@@ -280,3 +280,36 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
     assert _find_value("final/num_electrons_mae") == 0.0
     assert _find_value("final/mae_F") == 1.0
     assert _find_value("final/mse_F") == 1.0
+
+
+def test_checkpoint_callback_saves_latest_on_exception(tmp_path):
+    _, batch, module = _make_batch_and_module()
+
+    saved = []
+
+    class DummyExperiment:
+        def __init__(self):
+            self.summary = {}
+
+        def log(self, payload):
+            pass
+
+    class DummyTrainer:
+        def __init__(self):
+            self.current_epoch = 0
+            self.sanity_checking = False
+            self.callback_metrics = {"val/loss_total": torch.tensor(1.0)}
+            self.val_dataloaders = [[batch]]
+            self.logger = SimpleNamespace(experiment=DummyExperiment())
+            self.optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
+
+        def save_checkpoint(self, path):
+            saved.append(path)
+            torch.save({"path": path}, path)
+
+    trainer = DummyTrainer()
+    callback = ArtifactCheckpointCallback(tmp_path, generate_video=False)
+    callback.on_exception(trainer, module, KeyboardInterrupt())
+
+    assert str(tmp_path / "latest_checkpoint.pt") in saved
+    assert (tmp_path / "latest_checkpoint.pt").exists()

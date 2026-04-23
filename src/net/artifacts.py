@@ -1543,3 +1543,14 @@ class ArtifactCheckpointCallback(pl.Callback):
             run_checkpoint_dir=self.output_dir,
             final_model_path=self.final_path,
         )
+
+    def on_exception(self, trainer, pl_module, exception) -> None:
+        if not self.save_latest:
+            return
+        try:
+            trainer.save_checkpoint(str(self.latest_path))
+            print(
+                f"--- Saved latest checkpoint after interrupt/exception: {self.latest_path} ---"
+            )
+        except Exception:
+            pass

@@ -126,12 +126,16 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
             trial.set_user_attr(key, value)
         return float(metric_log[metric_name])
 
-    study.optimize(
-        objective,
-        n_trials=count,
-        timeout=args.timeout,
-        gc_after_trial=bool(study_cfg.get("gc_after_trial", True)),
-    )
+    try:
+        study.optimize(
+            objective,
+            n_trials=count,
+            timeout=args.timeout,
+            gc_after_trial=bool(study_cfg.get("gc_after_trial", True)),
+        )
+    except KeyboardInterrupt:
+        print("--- Optuna agent interrupted by Ctrl+C; stopping cleanly ---")
+        raise
 
 
 def _load_yaml(path: str) -> dict[str, Any]:

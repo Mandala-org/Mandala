@@ -85,12 +85,18 @@ def run_training(
 
     print("--- Starting training ---")
     torch.set_float32_matmul_precision("high")
-    trainer.fit(
-        model=model,
-        train_dataloaders=train_loader,
-        val_dataloaders=val_loader,
-        ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
-    )
+    try:
+        trainer.fit(
+            model=model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+            ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
+        )
+    except KeyboardInterrupt:
+        print(
+            "--- Training interrupted by Ctrl+C; latest checkpoint should have been saved by callbacks ---"
+        )
+        raise
     metrics = _extract_metrics(trainer)
     if objective_metric is not None and objective_metric not in metrics:
         raise RuntimeError(
