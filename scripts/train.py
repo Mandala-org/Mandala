@@ -6,6 +6,7 @@ import dataclasses
 import os
 import random
 import math
+import signal
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,6 +48,7 @@ def run_training(
     extra_callbacks: list[Any] | None = None,
     objective_metric: str | None = None,
 ) -> dict[str, float]:
+    _install_signal_handlers()
     args = _as_namespace(run_args)
     print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
@@ -108,6 +110,20 @@ def run_training(
             f"Objective metric {objective_metric} = {metrics.get(objective_metric, 'MISSING')}"
         )
     return metrics
+
+
+def _install_signal_handlers() -> None:
+    if getattr(_install_signal_handlers, "_installed", False):
+        return
+
+    def _handle_signal(signum, frame):  # noqa: ARG001
+        sig_name = signal.Signals(signum).name
+        print(f"--- Training received {sig_name}; shutting down ---", flush=True)
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+    _install_signal_handlers._installed = True  # type: ignore[attr-defined]
 
 
 def _as_namespace(
