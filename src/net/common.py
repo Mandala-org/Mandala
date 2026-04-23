@@ -201,6 +201,7 @@ class Config:
     # ----------------- caching ------------------------------------------
     cache_root: str | None = None  # legacy unused cache setting
     snapshot_cache_dir: str | None = None  # raw Snapshot .pt cache, if any
+    dataset_device: str | None = None  # keep processed dataset on this device
     seed: int = 42  # random seed for reproducibility
     precompute_edge_features: bool = True  # precompute edge features
     radial_embedding_scale: str = "none"

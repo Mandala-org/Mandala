@@ -22,6 +22,10 @@ parameters:
     value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
   checkpoint-dir:
     value: checkpoints/silicon
+  dataset-device:
+    value: cuda
+  num-workers:
+    value: 0
   min-temp:
     value: 3000
   max-temp:

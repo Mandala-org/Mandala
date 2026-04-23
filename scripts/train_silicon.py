@@ -347,7 +347,14 @@ def _build_train_val_pairs(
 def _build_dataloaders(
     train_ds: Any, val_ds: Any, accelerator: str, cfg: Config
 ) -> tuple[DataLoader, DataLoader]:
-    total_workers = _resolve_total_workers(cfg.num_workers)
+    dataset_on_device = _dataset_is_on_device(train_ds) or _dataset_is_on_device(val_ds)
+    if dataset_on_device:
+        print(
+            "--- Dataset already moved to its target device; disabling DataLoader workers and pin_memory ---"
+        )
+        total_workers = 0
+    else:
+        total_workers = _resolve_total_workers(cfg.num_workers)
     train_workers, val_workers = _split_worker_budget(
         total_workers, len(train_ds or []), len(val_ds or [])
     )
@@ -356,7 +363,7 @@ def _build_dataloaders(
     )
 
     def _dl(ds, shuffle: bool = False, num_workers: int = 0):
-        use_pin_memory = accelerator == "gpu"
+        use_pin_memory = accelerator == "gpu" and not dataset_on_device
         use_persistent_workers = num_workers > 0
         return DataLoader(
             ds or [],
@@ -374,6 +381,35 @@ def _build_dataloaders(
         f"Created dataloaders: train batches={len(train_loader)}, val batches={len(val_loader)}"
     )
     return train_loader, val_loader
+
+
+def _maybe_move_datasets_to_device(
+    train_ds: Any, val_ds: Any, cfg: Config
+) -> tuple[Any, Any]:
+    dataset_device = getattr(cfg, "dataset_device", None)
+    if dataset_device in (None, "", "cpu"):
+        return train_ds, val_ds
+    device = torch.device(dataset_device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError(
+            f"dataset_device={dataset_device!r} was requested but CUDA is not available"
+        )
+    print(f"--- Moving processed datasets to {device} ---")
+    if hasattr(train_ds, "to"):
+        train_ds = train_ds.to(device)
+    if val_ds is not None and hasattr(val_ds, "to"):
+        val_ds = val_ds.to(device)
+    return train_ds, val_ds
+
+
+def _dataset_is_on_device(ds: Any) -> bool:
+    device = getattr(ds, "device", None)
+    if device is None:
+        return False
+    try:
+        return torch.device(device).type != "cpu"
+    except Exception:
+        return False
 
 
 def _resolve_total_workers(num_workers: int | None) -> int:
@@ -468,10 +504,10 @@ def run_single_training(
         fac.add_snapshot(m, i, purpose="val")
 
     train_ds, val_ds, mapper = fac.create()
-    train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
-
     run_dir = Path(args.checkpoint_dir) / run_name
     _log_dataset_and_model_context(cfg, run_dir, train_ds, mapper)
+    train_ds, val_ds = _maybe_move_datasets_to_device(train_ds, val_ds, cfg)
+    train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
 
     # --- Model and Trainer Setup ---
     print("--- Setting up model and trainer ---")
