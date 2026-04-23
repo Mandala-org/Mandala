@@ -1,6 +1,7 @@
 import argparse
 import dataclasses
 import glob
+import math
 import os
 import random
 import sys
@@ -346,25 +347,58 @@ def _build_train_val_pairs(
 def _build_dataloaders(
     train_ds: Any, val_ds: Any, accelerator: str, cfg: Config
 ) -> tuple[DataLoader, DataLoader]:
-    def _dl(ds, shuffle: bool = False):
+    total_workers = _resolve_total_workers(cfg.num_workers)
+    train_workers, val_workers = _split_worker_budget(
+        total_workers, len(train_ds or []), len(val_ds or [])
+    )
+    print(
+        f"--- DataLoader workers: total={total_workers}, train={train_workers}, val={val_workers} ---"
+    )
+
+    def _dl(ds, shuffle: bool = False, num_workers: int = 0):
         use_pin_memory = accelerator == "gpu"
-        use_persistent_workers = cfg.num_workers > 0
+        use_persistent_workers = num_workers > 0
         return DataLoader(
             ds or [],
             batch_size=1,
             shuffle=shuffle,
-            num_workers=cfg.num_workers,
+            num_workers=num_workers,
             pin_memory=use_pin_memory,
             persistent_workers=use_persistent_workers,
             collate_fn=lambda b: b[0],
         )
 
-    train_loader = _dl(train_ds, shuffle=True)
-    val_loader = _dl(val_ds, shuffle=False)
+    train_loader = _dl(train_ds, shuffle=True, num_workers=train_workers)
+    val_loader = _dl(val_ds, shuffle=False, num_workers=val_workers)
     print(
         f"Created dataloaders: train batches={len(train_loader)}, val batches={len(val_loader)}"
     )
     return train_loader, val_loader
+
+
+def _resolve_total_workers(num_workers: int | None) -> int:
+    if num_workers is not None:
+        return max(0, int(num_workers))
+    try:
+        affinity = os.sched_getaffinity(0)
+        available_cores = len(affinity)
+    except (AttributeError, OSError):
+        available_cores = os.cpu_count() or 1
+    return max(0, int(available_cores) - 1)
+
+
+def _split_worker_budget(
+    total_workers: int, train_count: int, val_count: int
+) -> tuple[int, int]:
+    if total_workers <= 0:
+        return 0, 0
+    total_count = train_count + val_count
+    if total_count <= 0:
+        return 0, 0
+    train_workers = math.floor(total_workers * train_count / total_count)
+    train_workers = max(0, min(total_workers, train_workers))
+    val_workers = total_workers - train_workers
+    return train_workers, val_workers
 
 
 def _log_dataset_and_model_context(

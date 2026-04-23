@@ -131,6 +131,7 @@ def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "E3GNN", DummyModel)
     monkeypatch.setattr(mod.pl, "Trainer", DummyTrainer)
     monkeypatch.setattr(mod.glob, "glob", lambda pattern: [str(snap_root / "Si_DM")])
+    monkeypatch.setattr(mod, "_resolve_total_workers", lambda num_workers: 8)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -173,7 +174,7 @@ def test_train_silicon_wires_checkpoints_and_artifacts(monkeypatch, tmp_path):
     train_loader = captured["fit_kwargs"]["train_dataloaders"]
     assert train_loader.persistent_workers is True
     assert train_loader.pin_memory is False
-    assert train_loader.num_workers == 16
+    assert train_loader.num_workers == 4
     assert captured["fit_kwargs"]["ckpt_path"] == str(
         (run_dir / "latest_checkpoint.pt").resolve()
     )
@@ -251,3 +252,82 @@ def test_train_silicon_global_split_mode(monkeypatch, tmp_path):
     assert sum(1 for _, _, purpose in captured["snapshots"] if purpose == "train") == 2
     assert sum(1 for _, _, purpose in captured["snapshots"] if purpose == "val") == 1
     assert captured["dataset_cfg"].cutoff_radius is None
+
+
+def test_train_silicon_splits_workers_by_sample_ratio(monkeypatch, tmp_path):
+    mod = _load_train_silicon_module()
+
+    class DummyDatasetFactory:
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def add_snapshot(self, matrix_path, info_path, purpose="train"):
+            pass
+
+        def create(self):
+            return [1, 2, 3], [4], object()
+
+    class DummyLoader:
+        def __init__(self, ds, *, num_workers=0, **kwargs):
+            self.num_workers = num_workers
+            self.persistent_workers = kwargs.get("persistent_workers", False)
+            self.pin_memory = kwargs.get("pin_memory", False)
+            self._len = len(ds)
+
+        def __len__(self):
+            return self._len
+
+    class DummyLogger:
+        def __init__(self, *args, **kwargs):
+            self.experiment = type("E", (), {"config": type("C", (), {})()})()
+
+    class DummyModel:
+        def __init__(self, mapper, cfg):
+            self.mapper = mapper
+            self.cfg = cfg
+
+    class DummyTrainer:
+        def __init__(self, *args, **kwargs):
+            captured["trainer_kwargs"] = kwargs
+
+        def fit(self, *args, **kwargs):
+            captured["fit_kwargs"] = kwargs
+
+    captured = {}
+    monkeypatch.setattr(mod, "DatasetFactory", DummyDatasetFactory)
+    monkeypatch.setattr(mod, "DataLoader", DummyLoader)
+    monkeypatch.setattr(mod, "WandbLogger", DummyLogger)
+    monkeypatch.setattr(mod, "ArtifactCheckpointCallback", lambda *a, **k: object())
+    monkeypatch.setattr(mod, "BenchmarkCallback", lambda *a, **k: object())
+    monkeypatch.setattr(mod, "E3GNN", DummyModel)
+    monkeypatch.setattr(mod.pl, "Trainer", DummyTrainer)
+    monkeypatch.setattr(
+        mod,
+        "discover_snapshot_pairs",
+        lambda root: [
+            (tmp_path / f"matrix{i}", tmp_path / f"info{i}") for i in range(4)
+        ],
+    )
+    monkeypatch.setattr(mod, "_resolve_total_workers", lambda num_workers: 8)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train_silicon.py",
+            "--data-path",
+            str(tmp_path / "data"),
+            "--num-train",
+            "3",
+            "--num-val",
+            "1",
+            "--benchmark",
+            "false",
+        ],
+    )
+
+    mod.main()
+
+    train_loader = captured["fit_kwargs"]["train_dataloaders"]
+    val_loader = captured["fit_kwargs"]["val_dataloaders"]
+    assert train_loader.num_workers == 6
+    assert val_loader.num_workers == 2

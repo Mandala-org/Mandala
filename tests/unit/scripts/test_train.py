@@ -59,3 +59,38 @@ def test_build_progress_bar_filters_metrics(monkeypatch):
         "train/loss_total": 0.1,
         "val/loss_total": 0.2,
     }
+
+
+def test_build_dataloaders_splits_workers_by_sample_ratio(monkeypatch):
+    mod = _load_module()
+
+    class DummyDataset(list):
+        pass
+
+    train_ds = DummyDataset([1, 2, 3])
+    val_ds = DummyDataset([4])
+    captured = []
+
+    class DummyLoader:
+        def __init__(self, ds, *, num_workers=0, **kwargs):
+            captured.append(num_workers)
+            self.num_workers = num_workers
+            self._len = len(ds)
+            self.persistent_workers = kwargs.get("persistent_workers", False)
+            self.pin_memory = kwargs.get("pin_memory", False)
+
+        def __len__(self):
+            return self._len
+
+    monkeypatch.setattr(mod, "DataLoader", DummyLoader)
+    monkeypatch.setattr(mod, "_resolve_total_workers", lambda num_workers: 8)
+
+    train_loader, val_loader = mod._build_dataloaders(
+        train_ds, val_ds, accelerator="cpu", cfg=mod.Config(num_workers=None)
+    )
+
+    assert captured == [6, 2]
+    assert train_loader.num_workers == 6
+    assert val_loader.num_workers == 2
+    assert train_loader.persistent_workers is True
+    assert val_loader.persistent_workers is True
