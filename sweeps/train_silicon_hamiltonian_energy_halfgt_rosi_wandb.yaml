@@ -23,7 +23,7 @@ parameters:
   checkpoint-dir:
     value: checkpoints/silicon
   dataset-device:
-    value: cuda
+    value: cpu
   num-workers:
     value: 0
   min-temp:
