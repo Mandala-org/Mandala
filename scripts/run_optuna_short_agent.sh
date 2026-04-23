@@ -29,11 +29,11 @@ echo "CHECKPOINT_DIR=${CHECKPOINT_DIR}"
 echo "WANDB_MODE_VALUE=${WANDB_MODE_VALUE}"
 echo "AGENT_LABEL=${AGENT_LABEL}"
 
-source mandala-venv/bin/activate
+source ~/casus/mandala-venv/bin/activate
 
 mkdir -p "${CHECKPOINT_DIR}" "${SCRATCH_DIR}/cache"
 
-python scripts/optuna_agent.py \
+python -u scripts/optuna_agent.py \
   --study-yaml "${STUDY_YAML}" \
   --storage "${STORAGE_URL}" \
   --wandb-mode "${WANDB_MODE_VALUE}" \
