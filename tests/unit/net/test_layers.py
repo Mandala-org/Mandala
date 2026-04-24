@@ -102,3 +102,31 @@ def test_message_block_roundtrip():
 
     assert n2.shape == node.shape
     assert e2.shape == edge.shape
+
+
+@pytest.mark.unit
+def test_message_block_tracks_post_refine_irreps():
+    """Downstream edge blocks must be built against the post-refine node irreps."""
+    cfg = Config(
+        safety_checks=True,
+        l_max=4,
+        hidden_base_dim=32,
+        hidden_irreps="32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e",
+        internal_e3mlp_layers=1,
+        e3layernorm=False,
+        edge_encoder_style="deeph_e3",
+    )
+    hid = Irreps(cfg.hidden_irreps)
+    num_species = 2
+
+    blk = MessageBlock(
+        node_irreps=Irreps("32x0e"),
+        edge_irreps=Irreps("32x0e"),
+        num_species=num_species,
+        cfg=cfg,
+        node_irreps_out=hid,
+        edge_irreps_out=hid,
+    )
+
+    assert blk.node_upd.irreps_out == hid
+    assert blk.edge_upd.node_irreps == hid
