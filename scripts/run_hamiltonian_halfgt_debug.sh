@@ -71,7 +71,6 @@ python scripts/wandb_run.py \
   --log-data true \
   --log-model true \
   --log-forward true \
-  --verbose-forward true \
   --log-per-irrep-metrics true \
   --print-per-irrep-metrics true \
   --log-per-irrep-images true \
