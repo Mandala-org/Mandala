@@ -54,10 +54,10 @@ parameters:
     value: true
   loss-coef-observables:
     values:
+      - 1.0e-9
+      - 1.0e-8
+      - 1.0e-7
       - 1.0e-6
-      - 1.0e-5
-      - 1.0e-4
-      - 1.0e-3
   enable-forces:
     value: false
   train-on-forces:
