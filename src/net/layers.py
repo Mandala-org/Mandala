@@ -117,8 +117,6 @@ class EquiConv(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.info = info or {}
-        self.verbose_forward = bool(self.cfg.verbose_forward)
-        self._printed_debug = False
 
         irreps_in1 = Irreps(irreps_in1)
         irreps_in2 = Irreps(irreps_in2)
@@ -190,13 +188,7 @@ class EquiConv(nn.Module):
 
         # Create tensor product
         if cfg.tp_type == "separate_weight":
-            self.tp = SeparateWeightTensorProduct(
-                irreps_in1,
-                irreps_in2,
-                irreps_tp_out,
-                debug_name=self._debug_name("tp"),
-                verbose_forward=self.verbose_forward,
-            )
+            self.tp = SeparateWeightTensorProduct(irreps_in1, irreps_in2, irreps_tp_out)
         elif cfg.tp_type == "fully_connected":
             self.tp = FullyConnectedTensorProduct(
                 irreps_in1,
@@ -224,31 +216,6 @@ class EquiConv(nn.Module):
             dtype=self.cfg.dtype,
         )
 
-    def _debug_name(self, suffix: str) -> str:
-        if self.info:
-            parts = [f"{k}={v}" for k, v in sorted(self.info.items())]
-            return f"EquiConv[{', '.join(parts)}].{suffix}"
-        return f"EquiConv.{suffix}"
-
-    def _debug_forward(
-        self,
-        fea_in1: torch.Tensor,
-        fea_in2: torch.Tensor,
-        edge_length_emb: torch.Tensor,
-    ) -> None:
-        if not self.verbose_forward and self._printed_debug:
-            return
-        self._printed_debug = True
-        print(
-            f"[TP DEBUG] {self._debug_name('conv')}: "
-            f"fea_in1.shape={tuple(fea_in1.shape)} fea_in2.shape={tuple(fea_in2.shape)} "
-            f"edge_length_emb.shape={tuple(edge_length_emb.shape)} "
-            f"tp_type={type(self.tp).__name__} "
-            f"expected_in1_dim={getattr(getattr(self.tp, 'irreps_in1', None), 'dim', 'n/a')} "
-            f"expected_in2_dim={getattr(getattr(self.tp, 'irreps_in2', None), 'dim', 'n/a')} "
-            f"out={self.irreps_out.dim}"
-        )
-
     def forward(
         self,
         fea_in1: torch.Tensor,
@@ -264,7 +231,6 @@ class EquiConv(nn.Module):
         Returns:
             Tensor of shape (batch, irreps_out.dim)
         """
-        self._debug_forward(fea_in1, fea_in2, edge_length_emb)
         # Tensor product
         z = self.tp(fea_in1, fea_in2)
 

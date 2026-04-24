@@ -181,7 +181,6 @@ class Config:
     log_on_epoch: bool = True  # log metrics on epoch
     log_data: bool = False
     log_forward: bool = False
-    verbose_forward: bool = False
     benchmark: bool = True
     log_interval: int = 1
     adaptive_log_interval: bool = False
@@ -588,15 +587,9 @@ class SeparateWeightTensorProduct(nn.Module):
         irreps_in1,
         irreps_in2,
         irreps_out,
-        *,
-        debug_name: str | None = None,
-        verbose_forward: bool = False,
         **kwargs,
     ):
         super().__init__()
-        self.debug_name = debug_name or "SeparateWeightTensorProduct"
-        self.verbose_forward = verbose_forward
-        self._printed_debug = False
 
         # Ensure proper usage
         if kwargs.pop("internal_weights", False):
@@ -634,18 +627,6 @@ class SeparateWeightTensorProduct(nn.Module):
         self.weights1 = nn.ParameterList(weights1)
         self.weights2 = nn.ParameterList(weights2)
 
-    def _debug_forward(self, x1: torch.Tensor, x2: torch.Tensor) -> None:
-        if not self.verbose_forward and self._printed_debug:
-            return
-        self._printed_debug = True
-        print(
-            f"[TP DEBUG] {self.debug_name}: "
-            f"x1.shape={tuple(x1.shape)} x2.shape={tuple(x2.shape)} "
-            f"expected_in1={self.tp.irreps_in1.dim} expected_in2={self.tp.irreps_in2.dim} "
-            f"out={self.tp.irreps_out.dim} "
-            f"paths={len(self.weights1)} weights_numel={getattr(self.tp, 'weight_numel', 'n/a')}"
-        )
-
     def forward(self, x1, x2):
         """
         Compute tensor product with separate weights.
@@ -661,7 +642,6 @@ class SeparateWeightTensorProduct(nn.Module):
             # No valid tensor product paths - return empty tensor
             batch_size = x1.shape[0]
             return torch.zeros(batch_size, 0, dtype=x1.dtype, device=x1.device)
-        self._debug_forward(x1, x2)
 
         weights = []
         for weight1, weight2 in zip(self.weights1, self.weights2):
