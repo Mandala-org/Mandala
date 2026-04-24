@@ -82,6 +82,21 @@ def _tp_path_exists(irreps_in1: Irreps, irreps_in2: Irreps, ir_out) -> bool:
     return False
 
 
+def _tensor_product_expected_dims(tp: nn.Module) -> tuple[int, int]:
+    """
+    Return the input feature dimensions expected by a tensor-product module.
+
+    This works for both e3nn's native tensor products and the
+    SeparateWeightTensorProduct wrapper used in this codebase.
+    """
+    inner_tp = getattr(tp, "tp", tp)
+    in1_dim = getattr(inner_tp, "_in1_dim", None)
+    in2_dim = getattr(inner_tp, "_in2_dim", None)
+    if in1_dim is None or in2_dim is None:
+        return -1, -1
+    return int(in1_dim), int(in2_dim)
+
+
 # ════════════════════════════════════════════════════════════════════════
 # EquiConv - E(3)-equivariant convolution with radial weighting
 # ════════════════════════════════════════════════════════════════════════
@@ -231,6 +246,37 @@ class EquiConv(nn.Module):
         Returns:
             Tensor of shape (batch, irreps_out.dim)
         """
+        expected_in1_dim, expected_in2_dim = _tensor_product_expected_dims(self.tp)
+        if expected_in1_dim >= 0 and fea_in1.shape[-1] != expected_in1_dim:
+            print(
+                "[TP SHAPE MISMATCH] "
+                f"{self.info=} "
+                f"fea_in1.shape={tuple(fea_in1.shape)} "
+                f"fea_in2.shape={tuple(fea_in2.shape)} "
+                f"edge_length_emb.shape={tuple(edge_length_emb.shape)} "
+                f"expected_in1_dim={expected_in1_dim} "
+                f"expected_in2_dim={expected_in2_dim} "
+                f"tp={type(self.tp).__name__} "
+                f"irreps_in1={self.tp.tp.irreps_in1 if hasattr(self.tp, 'tp') else self.tp.irreps_in1} "
+                f"irreps_in2={self.tp.tp.irreps_in2 if hasattr(self.tp, 'tp') else self.tp.irreps_in2} "
+                f"irreps_out={self.tp.tp.irreps_out if hasattr(self.tp, 'tp') else self.tp.irreps_out}",
+                flush=True,
+            )
+        elif expected_in2_dim >= 0 and fea_in2.shape[-1] != expected_in2_dim:
+            print(
+                "[TP SHAPE MISMATCH] "
+                f"{self.info=} "
+                f"fea_in1.shape={tuple(fea_in1.shape)} "
+                f"fea_in2.shape={tuple(fea_in2.shape)} "
+                f"edge_length_emb.shape={tuple(edge_length_emb.shape)} "
+                f"expected_in1_dim={expected_in1_dim} "
+                f"expected_in2_dim={expected_in2_dim} "
+                f"tp={type(self.tp).__name__} "
+                f"irreps_in1={self.tp.tp.irreps_in1 if hasattr(self.tp, 'tp') else self.tp.irreps_in1} "
+                f"irreps_in2={self.tp.tp.irreps_in2 if hasattr(self.tp, 'tp') else self.tp.irreps_in2} "
+                f"irreps_out={self.tp.tp.irreps_out if hasattr(self.tp, 'tp') else self.tp.irreps_out}",
+                flush=True,
+            )
         # Tensor product
         z = self.tp(fea_in1, fea_in2)
 
