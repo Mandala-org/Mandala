@@ -132,8 +132,6 @@ parameters:
     value: true
   log-forward:
     value: false
-  verbose-forward:
-    value: false
   log-per-irrep-metrics:
     value: true
   print-per-irrep-metrics:
