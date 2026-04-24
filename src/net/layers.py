@@ -416,7 +416,10 @@ class EdgeUpdateBlock(nn.Module):
         else:
             self.refine = nn.Identity()
 
-        self.irreps_out = self.conv.irreps_out
+        # Downstream blocks consume the post-refine representation, not the raw
+        # convolution output. Using the pre-refine irreps here causes later
+        # tensor products to be built for the wrong input width.
+        self.irreps_out = edge_irreps_out
 
     def forward(
         self,
@@ -585,7 +588,10 @@ class NodeUpdateBlock(nn.Module):
         else:
             self.refine = nn.Identity()
 
-        self.irreps_out = self.conv.irreps_out
+        # Downstream blocks consume the post-refine representation, not the raw
+        # convolution output. Using the pre-refine irreps here causes later
+        # tensor products to be built for the wrong input width.
+        self.irreps_out = node_irreps_out
 
     def forward(
         self,
