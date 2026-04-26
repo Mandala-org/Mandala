@@ -21,7 +21,10 @@ from torch.utils.data import DataLoader
 project_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(project_root))
 
-from net.artifacts import ArtifactCheckpointCallback  # noqa: E402
+from net.artifacts import (
+    ArtifactCheckpointCallback,
+    RevertOnSpikeCallback,
+)  # noqa: E402
 from net.benchmark import BenchmarkCallback  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
@@ -432,6 +435,16 @@ def _build_callbacks(
                 output_dir=run_dir,
                 generate_video=getattr(args, "generate_video", True),
                 log_per_irrep_images=cfg.log_per_irrep_images,
+            )
+        )
+    if cfg.revert_on_spike:
+        callbacks.append(
+            RevertOnSpikeCallback(
+                output_dir=run_dir,
+                monitor=cfg.revert_monitor or cfg.lr_scheduler_target,
+                patience=cfg.revert_decay_patience,
+                decay_rate=cfg.revert_decay_rate,
+                spike_factor=cfg.revert_spike_factor,
             )
         )
     if extra_callbacks:

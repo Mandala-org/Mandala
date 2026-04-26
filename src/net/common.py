@@ -123,6 +123,11 @@ class Config:
     lr_scheduler_patience: int = 60
     lr_scheduler_min_lr: float = 1e-8
     lr_scheduler_target: str = "val/loss_total"
+    revert_on_spike: bool = False
+    revert_monitor: str | None = None
+    revert_decay_patience: int = 20
+    revert_decay_rate: float = 0.8
+    revert_spike_factor: float = 2.0
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0

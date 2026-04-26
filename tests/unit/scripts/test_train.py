@@ -131,3 +131,33 @@ def test_build_dataloaders_disables_workers_for_gpu_dataset(monkeypatch):
     assert val_loader.num_workers == 0
     assert train_loader.persistent_workers is False
     assert val_loader.persistent_workers is False
+
+
+def test_build_callbacks_adds_revert_on_spike(monkeypatch, tmp_path):
+    mod = _load_module()
+
+    monkeypatch.setattr(
+        mod, "GracefulInterruptCallback", lambda label: ("grace", label)
+    )
+    monkeypatch.setattr(mod, "_build_progress_bar", lambda: "progress")
+    monkeypatch.setattr(
+        mod,
+        "ArtifactCheckpointCallback",
+        lambda **kwargs: ("artifact", kwargs),
+    )
+    monkeypatch.setattr(
+        mod,
+        "RevertOnSpikeCallback",
+        lambda **kwargs: ("revert", kwargs),
+    )
+
+    args = mod.argparse.Namespace(log_artifacts=True, generate_video=False)
+    cfg = mod.Config(benchmark=False, revert_on_spike=True, revert_monitor=None)
+
+    callbacks = mod._build_callbacks(args, cfg, tmp_path, extra_callbacks=None)
+
+    assert callbacks[0] == ("grace", "Training")
+    assert callbacks[1] == "progress"
+    assert callbacks[2][0] == "artifact"
+    assert callbacks[3][0] == "revert"
+    assert callbacks[3][1]["monitor"] == cfg.lr_scheduler_target
