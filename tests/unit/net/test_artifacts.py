@@ -3,12 +3,14 @@ from __future__ import annotations
 from collections import Counter
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.block_matrix import BlockMatrix
 from net.artifacts import ArtifactCheckpointCallback
+from net.artifacts import RevertOnSpikeCallback
 from net.artifacts import save_distance_error_curve_plot, save_dos_comparison_plot
 
 
@@ -322,3 +324,90 @@ def test_checkpoint_callback_saves_latest_on_exception(tmp_path):
 
     assert str(tmp_path / "latest_checkpoint.pt") in saved
     assert (tmp_path / "latest_checkpoint.pt").exists()
+
+
+def test_revert_on_spike_callback_reverts_best_and_decays_lr(tmp_path):
+    class TinyModule(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.tensor([1.0], dtype=torch.float32))
+
+    module = TinyModule()
+    optimizer = torch.optim.Adam(module.parameters(), lr=0.1)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        factor=0.5,
+        patience=3,
+        cooldown=4,
+    )
+
+    class DummyStrategy:
+        def __init__(self, mod, opt):
+            self.lightning_module = mod
+            self.optimizers = [opt]
+
+        def load_checkpoint(self, checkpoint_path, weights_only=None):
+            return torch.load(checkpoint_path, weights_only=False)
+
+        def load_model_state_dict(self, checkpoint, strict=True):
+            self.lightning_module.load_state_dict(
+                checkpoint["state_dict"], strict=strict
+            )
+
+        def load_optimizer_state_dict(self, checkpoint):
+            for optimizer_, state in zip(
+                self.optimizers, checkpoint["optimizer_states"]
+            ):
+                optimizer_.load_state_dict(state)
+
+    class DummyTrainer:
+        def __init__(self):
+            self.current_epoch = 0
+            self.sanity_checking = False
+            self.callback_metrics = {"val/loss_total": torch.tensor(1.0)}
+            self.optimizers = [optimizer]
+            self.lr_scheduler_configs = [SimpleNamespace(scheduler=scheduler)]
+            self.strategy = DummyStrategy(module, optimizer)
+
+        def save_checkpoint(self, path):
+            torch.save(
+                {
+                    "state_dict": module.state_dict(),
+                    "optimizer_states": [optimizer.state_dict()],
+                    "lr_schedulers": [scheduler.state_dict()],
+                },
+                path,
+            )
+
+    trainer = DummyTrainer()
+    callback = RevertOnSpikeCallback(
+        tmp_path,
+        patience=2,
+        decay_rate=0.8,
+        spike_factor=2.0,
+    )
+
+    callback.on_fit_start(trainer, module)
+    callback.on_validation_end(trainer, module)
+    assert (tmp_path / "best_model.pt").exists()
+    assert callback.state.best_score == 1.0
+
+    with torch.no_grad():
+        module.weight.fill_(9.0)
+    trainer.current_epoch = 1
+    trainer.callback_metrics["val/loss_total"] = torch.tensor(2.5)
+    callback.on_validation_end(trainer, module)
+    assert callback.state.bad_epochs == 1
+    assert float(module.weight.item()) == 9.0
+
+    with torch.no_grad():
+        module.weight.fill_(11.0)
+    trainer.current_epoch = 2
+    trainer.callback_metrics["val/loss_total"] = torch.tensor(2.8)
+    callback.on_validation_end(trainer, module)
+
+    assert callback.state.bad_epochs == 0
+    assert callback.state.revert_count == 1
+    assert float(module.weight.item()) == 1.0
+    assert optimizer.param_groups[0]["lr"] == pytest.approx(0.08)
+    assert scheduler.cooldown_counter == scheduler.cooldown

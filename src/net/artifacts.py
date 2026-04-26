@@ -767,6 +767,183 @@ class ArtifactCheckpointState:
     best_epoch: int | None = None
 
 
+@dataclass
+class RevertOnSpikeState:
+    best_score: float | None = None
+    best_epoch: int | None = None
+    bad_epochs: int = 0
+    revert_count: int = 0
+
+
+class RevertOnSpikeCallback(pl.Callback):
+    def __init__(
+        self,
+        output_dir: str | Path,
+        *,
+        monitor: str = "val/loss_total",
+        mode: str = "min",
+        patience: int = 20,
+        decay_rate: float = 0.8,
+        spike_factor: float = 2.0,
+        restore_optimizer_state: bool = True,
+        restore_lr_schedulers: bool = True,
+    ) -> None:
+        if patience < 1:
+            raise ValueError("patience must be >= 1")
+        if decay_rate <= 0.0:
+            raise ValueError("decay_rate must be > 0")
+        if spike_factor <= 1.0:
+            raise ValueError("spike_factor must be > 1")
+        self.output_dir = Path(output_dir)
+        self.monitor = monitor
+        self.mode = mode
+        self.patience = int(patience)
+        self.decay_rate = float(decay_rate)
+        self.spike_factor = float(spike_factor)
+        self.restore_optimizer_state = restore_optimizer_state
+        self.restore_lr_schedulers = restore_lr_schedulers
+        self.best_path = self.output_dir / "best_model.pt"
+        self.state = RevertOnSpikeState()
+
+    @property
+    def state_key(self) -> str:
+        return (
+            f"{self.__class__.__qualname__}"
+            f"[monitor={self.monitor},best_path={self.best_path}]"
+        )
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "best_score": self.state.best_score,
+            "best_epoch": self.state.best_epoch,
+            "bad_epochs": self.state.bad_epochs,
+            "revert_count": self.state.revert_count,
+        }
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        self.state = RevertOnSpikeState(
+            best_score=state_dict.get("best_score"),
+            best_epoch=state_dict.get("best_epoch"),
+            bad_epochs=int(state_dict.get("bad_epochs", 0)),
+            revert_count=int(state_dict.get("revert_count", 0)),
+        )
+
+    def _metric_to_float(self, metric: Any) -> float:
+        if torch.is_tensor(metric):
+            return float(metric.detach().cpu().item())
+        return float(metric)
+
+    def _is_better(self, score: float) -> bool:
+        if self.state.best_score is None:
+            return True
+        if self.mode == "min":
+            return score < self.state.best_score
+        if self.mode == "max":
+            return score > self.state.best_score
+        raise ValueError(f"Unsupported mode={self.mode!r}")
+
+    def _is_spike(self, score: float) -> bool:
+        if self.state.best_score is None:
+            return False
+        best_score = float(self.state.best_score)
+        if self.mode == "min":
+            return score > self.spike_factor * max(best_score, 1e-12)
+        if self.mode == "max":
+            return score * self.spike_factor < best_score
+        raise ValueError(f"Unsupported mode={self.mode!r}")
+
+    def _save_best_checkpoint(self, trainer: Any) -> None:
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        trainer.save_checkpoint(str(self.best_path))
+
+    def _restore_best_checkpoint(self, trainer: Any) -> bool:
+        if not self.best_path.exists():
+            print(
+                f"--- RevertOnSpike: best checkpoint not found at {self.best_path}; "
+                "skipping revert. ---"
+            )
+            return False
+
+        checkpoint = trainer.strategy.load_checkpoint(str(self.best_path), False)
+        trainer.strategy.load_model_state_dict(checkpoint, strict=True)
+        if self.restore_optimizer_state and "optimizer_states" in checkpoint:
+            trainer.strategy.load_optimizer_state_dict(checkpoint)
+        if self.restore_lr_schedulers and "lr_schedulers" in checkpoint:
+            for config, state in zip(
+                getattr(trainer, "lr_scheduler_configs", []),
+                checkpoint["lr_schedulers"],
+            ):
+                config.scheduler.load_state_dict(state)
+
+        print(
+            "--- RevertOnSpike: restored "
+            f"{self.best_path.name} from epoch {self.state.best_epoch} "
+            f"(best {self.monitor}={self.state.best_score:.6g}). ---"
+        )
+        return True
+
+    def _decay_learning_rates(self, trainer: Any) -> None:
+        for optimizer_idx, optimizer in enumerate(getattr(trainer, "optimizers", [])):
+            for group_idx, param_group in enumerate(optimizer.param_groups):
+                old_lr = float(param_group["lr"])
+                new_lr = old_lr * self.decay_rate
+                param_group["lr"] = new_lr
+                print(
+                    "--- RevertOnSpike: decayed "
+                    f"optimizer {optimizer_idx} group {group_idx} lr "
+                    f"from {old_lr:.6e} to {new_lr:.6e}. ---"
+                )
+
+        for config in getattr(trainer, "lr_scheduler_configs", []):
+            scheduler = config.scheduler
+            if hasattr(scheduler, "cooldown") and hasattr(
+                scheduler, "cooldown_counter"
+            ):
+                scheduler.cooldown_counter = scheduler.cooldown
+            if hasattr(scheduler, "_last_lr") and hasattr(scheduler, "optimizer"):
+                scheduler._last_lr = [
+                    group["lr"] for group in scheduler.optimizer.param_groups
+                ]
+
+    def on_fit_start(self, trainer, pl_module) -> None:
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def on_validation_end(self, trainer, pl_module) -> None:
+        if trainer.sanity_checking:
+            return
+        metric = trainer.callback_metrics.get(self.monitor)
+        if metric is None:
+            return
+
+        score = self._metric_to_float(metric)
+        if self._is_better(score):
+            self.state.best_score = score
+            self.state.best_epoch = int(trainer.current_epoch)
+            self.state.bad_epochs = 0
+            self._save_best_checkpoint(trainer)
+            return
+
+        if self._is_spike(score):
+            self.state.bad_epochs += 1
+        else:
+            self.state.bad_epochs = 0
+
+        if self.state.bad_epochs < self.patience:
+            return
+
+        print(
+            "--- RevertOnSpike: "
+            f"{self.monitor}={score:.6g} exceeded {self.spike_factor:.3g}x "
+            f"the best score {self.state.best_score:.6g} for "
+            f"{self.patience} consecutive validation epochs. ---"
+        )
+        reverted = self._restore_best_checkpoint(trainer)
+        if reverted:
+            self._decay_learning_rates(trainer)
+            self.state.revert_count += 1
+        self.state.bad_epochs = 0
+
+
 class ArtifactCheckpointCallback(pl.Callback):
     def __init__(
         self,

@@ -24,7 +24,10 @@ from data.factory import DatasetFactory  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
 from net.benchmark import BenchmarkCallback  # noqa: E402
-from net.artifacts import ArtifactCheckpointCallback  # noqa: E402
+from net.artifacts import (
+    ArtifactCheckpointCallback,
+    RevertOnSpikeCallback,
+)  # noqa: E402
 from net.silicon_study_logging import (  # noqa: E402
     log_config,
     log_cutoff_application,
@@ -526,6 +529,16 @@ def run_single_training(
                 output_dir=Path(args.checkpoint_dir) / run_name,
                 generate_video=args.generate_video,
                 log_per_irrep_images=args.log_per_irrep_images,
+            )
+        )
+    if cfg.revert_on_spike:
+        callbacks.append(
+            RevertOnSpikeCallback(
+                output_dir=Path(args.checkpoint_dir) / run_name,
+                monitor=cfg.revert_monitor or cfg.lr_scheduler_target,
+                patience=cfg.revert_decay_patience,
+                decay_rate=cfg.revert_decay_rate,
+                spike_factor=cfg.revert_spike_factor,
             )
         )
 
