@@ -44,6 +44,23 @@ def test_setup_argparse_accepts_dataset_kind_and_aliases(monkeypatch):
     assert args.matrix_targets == ["density"]
 
 
+def test_setup_argparse_leaves_run_name_unset_by_default(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "wandb_run.py",
+            "--data-path",
+            "/tmp/data",
+        ],
+    )
+
+    args = mod.setup_argparse()
+
+    assert args.run_name is None
+
+
 def test_main_passes_parsed_yaml_to_run_training(monkeypatch, tmp_path):
     mod = _load_module()
     sweep_yaml = tmp_path / "sweep.yaml"

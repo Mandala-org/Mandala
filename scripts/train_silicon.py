@@ -176,6 +176,8 @@ def setup_argparse():
     for name, field_type in config_fields.items():
         # Get default value from the instance, not the class
         default_value = getattr(default_config, name)
+        if name == "run_name":
+            default_value = None
 
         # Use the new boolean handling for bool types
         if field_type is bool:
