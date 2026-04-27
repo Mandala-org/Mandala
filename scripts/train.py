@@ -4,7 +4,6 @@ import argparse
 import ast
 import dataclasses
 import os
-import random
 import math
 import sys
 from pathlib import Path
@@ -20,6 +19,7 @@ from torch.utils.data import DataLoader
 # Add project root to the Python path
 project_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(project_root))
+sys.path.append(str(Path(__file__).resolve().parent))
 
 from net.artifacts import (
     ArtifactCheckpointCallback,
@@ -47,6 +47,7 @@ from scripts.graceful_interrupt import (  # noqa: E402
     install_signal_handlers,
     interrupt_requested,
 )
+from run_name import resolve_run_name  # noqa: E402
 
 
 def run_training(
@@ -61,20 +62,26 @@ def run_training(
     args = _as_namespace(run_args)
     print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
-    run_name = getattr(args, "run_name", None) or cfg.run_name or _random_run_name()
-    cfg.run_name = run_name
+    requested_run_name = getattr(args, "run_name", None)
     cfg.save_dir = str(getattr(args, "checkpoint_dir", cfg.save_dir))
     resume_checkpoint = _resolve_resume_checkpoint(
         getattr(args, "resume_from_checkpoint", None),
         getattr(args, "resume_mode", "latest"),
     )
     accelerator, devices = _resolve_accelerator_and_device(cfg)
-    logger = _build_logger(args, cfg, run_name)
+    logger = _build_logger(args, cfg, requested_run_name)
+    run_name = resolve_run_name(requested_run_name, logger)
+    setattr(args, "run_name", run_name)
+    cfg.run_name = run_name
     _print_run_summary(args, cfg, run_name, resume_checkpoint, accelerator, devices)
 
     dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
     train_ds, val_ds, mapper = dataset_bundle
     run_dir = Path(getattr(args, "checkpoint_dir", cfg.save_dir)) / run_name
+    if run_dir.exists() and resume_checkpoint is None:
+        raise FileExistsError(
+            f"Run directory already exists: {run_dir}. Use a unique run name or resume explicitly."
+        )
     _log_dataset_and_model_context(cfg, run_dir, train_ds, mapper)
 
     train_ds, val_ds = _maybe_move_datasets_to_device(train_ds, val_ds, cfg)
@@ -130,10 +137,6 @@ def _as_namespace(
     if isinstance(run_args, dict):
         return argparse.Namespace(**run_args)
     raise TypeError(f"Unsupported run_args type: {type(run_args)!r}")
-
-
-def _random_run_name() -> str:
-    return f"run_{random.randint(0, 10**9):09d}"
 
 
 def _populate_config_from_args(args: argparse.Namespace) -> Config:
@@ -214,7 +217,7 @@ def _resolve_accelerator_and_device(cfg: Config) -> tuple[str, int | str]:
 
 
 def _build_logger(
-    args: argparse.Namespace, cfg: Config, run_name: str
+    args: argparse.Namespace, cfg: Config, run_name: str | None
 ) -> WandbLogger | None:
     wandb_mode = getattr(args, "wandb_mode", None)
     if wandb_mode is None:
@@ -233,7 +236,7 @@ def _build_logger(
         print("--- No WandB project set; logger disabled ---")
         return None
     print(
-        f"--- WandB logger: mode={wandb_mode}, project={wandb_project}, run_name={run_name} ---"
+        f"--- WandB logger: mode={wandb_mode}, project={wandb_project}, run_name={run_name or '<wandb-assigned>'} ---"
     )
     return WandbLogger(
         project=wandb_project,

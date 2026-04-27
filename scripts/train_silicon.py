@@ -19,6 +19,7 @@ from pytorch_lightning.loggers import WandbLogger
 # Add project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
+sys.path.append(str(Path(__file__).resolve().parent))
 
 from data.factory import DatasetFactory  # noqa: E402
 from net.common import Config  # noqa: E402
@@ -36,6 +37,7 @@ from net.silicon_study_logging import (  # noqa: E402
     log_orbital_config,
     log_snapshot_info,
 )
+from run_name import resolve_run_name  # noqa: E402
 
 
 def str_to_bool(value):
@@ -276,7 +278,7 @@ def _resolve_accelerator_and_device(cfg: Config) -> tuple[str, int | str]:
 
 
 def _build_wandb_logger(
-    args: argparse.Namespace, cfg: Config, run_name: str
+    args: argparse.Namespace, cfg: Config, run_name: str | None
 ) -> WandbLogger:
     wandb_project = (
         args.wandb_project
@@ -480,16 +482,16 @@ def run_single_training(
 ) -> None:
     cfg = _populate_config_from_args(args)
 
-    run_name = (
-        args.run_name or cfg.run_name or f"silicon_{random.randint(0, 10**9):09d}"
-    )
-    cfg.run_name = run_name
+    requested_run_name = getattr(args, "run_name", None)
     cfg.save_dir = args.checkpoint_dir
     resume_checkpoint = _resolve_resume_checkpoint(
         args.resume_from_checkpoint, args.resume_mode
     )
     accelerator, devices = _resolve_accelerator_and_device(cfg)
-    wandb_logger = _build_wandb_logger(args, cfg, run_name)
+    wandb_logger = _build_wandb_logger(args, cfg, requested_run_name)
+    run_name = resolve_run_name(requested_run_name, wandb_logger)
+    setattr(args, "run_name", run_name)
+    cfg.run_name = run_name
     train_pairs, val_pairs = _build_train_val_pairs(args, cfg)
 
     print(
@@ -508,6 +510,10 @@ def run_single_training(
 
     train_ds, val_ds, mapper = fac.create()
     run_dir = Path(args.checkpoint_dir) / run_name
+    if run_dir.exists() and resume_checkpoint is None:
+        raise FileExistsError(
+            f"Run directory already exists: {run_dir}. Use a unique run name or resume explicitly."
+        )
     _log_dataset_and_model_context(cfg, run_dir, train_ds, mapper)
     train_ds, val_ds = _maybe_move_datasets_to_device(train_ds, val_ds, cfg)
     train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
