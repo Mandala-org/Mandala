@@ -66,6 +66,8 @@ def setup_argparse() -> argparse.Namespace:
     config_fields = get_type_hints(Config)
     for name, field_type in config_fields.items():
         default_value = getattr(default_config, name)
+        if name == "run_name":
+            default_value = None
         if field_type is bool:
             parser.add_argument(
                 *_arg_names(name), type=str_to_bool, default=default_value
