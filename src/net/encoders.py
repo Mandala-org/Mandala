@@ -123,7 +123,7 @@ class EdgeEncoder(nn.Module):
         self.sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
         self.info = info
 
-        if self.style == "mandala":
+        if self.style == "rich":
             self.irreps_out = irreps_out
             self.edge_emb = nn.Embedding(
                 n_edge_types,
@@ -145,7 +145,7 @@ class EdgeEncoder(nn.Module):
                 internal_weights=True,
             )
             self.distance_proj = None
-        elif self.style == "deeph_e3":
+        elif self.style == "distance":
             self.irreps_out = Irreps(f"{self.cfg.hidden_base_dim}x0e")
             self.edge_emb = None
             self.tp = None
@@ -157,7 +157,7 @@ class EdgeEncoder(nn.Module):
         else:
             raise ValueError(
                 f"Unknown edge_encoder_style '{self.cfg.edge_encoder_style}'. "
-                "Expected 'mandala' or 'deeph_e3'."
+                "Expected 'rich' or 'distance'."
             )
         self.norm = E3LayerNorm(self.irreps_out) if self.cfg.e3layernorm else None
 
@@ -172,7 +172,7 @@ class EdgeEncoder(nn.Module):
         """
         Return hidden edge features: Tensor[E, irreps_out.dim].
         """
-        if self.style == "mandala":
+        if self.style == "rich":
             type_emb = self.edge_emb(edge_type_idx)
             if self.sh_tensor_square is not None:
                 sh = self.sh_tensor_square(sh)

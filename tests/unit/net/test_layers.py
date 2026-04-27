@@ -114,7 +114,7 @@ def test_message_block_tracks_post_refine_irreps():
         hidden_irreps="32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e",
         internal_e3mlp_layers=1,
         e3layernorm=False,
-        edge_encoder_style="deeph_e3",
+        edge_encoder_style="distance",
     )
     hid = Irreps(cfg.hidden_irreps)
     num_species = 2

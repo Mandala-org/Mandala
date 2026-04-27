@@ -32,7 +32,7 @@ python -u scripts/train_silicon.py \
   --num-layers-gnn 3 \
   --n-radial 64 \
   --cutoff-radius 7.0 \
-  --edge-encoder-style mandala \
+  --edge-encoder-style rich \
   --e3layernorm true \
   --separate-shifted-self false \
   --edge-encoder-use-sh-tensor-square false \
