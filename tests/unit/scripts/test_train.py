@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import torch
+
 
 def _load_module():
     path = Path("scripts/train.py").resolve()
@@ -161,3 +163,71 @@ def test_build_callbacks_adds_revert_on_spike(monkeypatch, tmp_path):
     assert callbacks[2][0] == "artifact"
     assert callbacks[3][0] == "revert"
     assert callbacks[3][1]["monitor"] == cfg.lr_scheduler_target
+
+
+def test_run_training_uses_wandb_run_name_for_run_dir(monkeypatch, tmp_path):
+    mod = _load_module()
+
+    captured = {}
+
+    class DummyLogger:
+        def __init__(self, *args, **kwargs):
+            self.experiment = type(
+                "Experiment",
+                (),
+                {"name": "vibran-sweep-14", "id": "abc123"},
+            )()
+
+    class DummyTrainer:
+        def __init__(self, *args, **kwargs):
+            captured["trainer_kwargs"] = kwargs
+            self.callback_metrics = {"val/loss_total": torch.tensor(1.0)}
+            self.optimizers = [type("Opt", (), {"param_groups": [{"lr": 1e-3}]})()]
+
+        def fit(self, *args, **kwargs):
+            captured["fit_kwargs"] = kwargs
+
+    def fake_build_dataset_bundle(args, cfg, parsed_yaml):
+        return [1], [2], object()
+
+    def fake_build_dataloaders(train_ds, val_ds, accelerator, cfg):
+        return [1], [2]
+
+    def fake_build_callbacks(args, cfg, run_dir, extra_callbacks):
+        captured["run_dir"] = run_dir
+        captured["cfg_run_name"] = cfg.run_name
+        return []
+
+    monkeypatch.setattr(mod, "WandbLogger", DummyLogger)
+    monkeypatch.setattr(mod.pl, "Trainer", DummyTrainer)
+    monkeypatch.setattr(mod, "_build_dataset_bundle", fake_build_dataset_bundle)
+    monkeypatch.setattr(mod, "_maybe_move_datasets_to_device", lambda a, b, c: (a, b))
+    monkeypatch.setattr(mod, "_build_dataloaders", fake_build_dataloaders)
+    monkeypatch.setattr(mod, "_build_callbacks", fake_build_callbacks)
+    monkeypatch.setattr(mod, "E3GNN", lambda mapper, cfg: object())
+    monkeypatch.setattr(mod, "_log_dataset_and_model_context", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_resolve_resume_checkpoint", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mod, "_resolve_accelerator_and_device", lambda cfg: ("cpu", "auto")
+    )
+    monkeypatch.setattr(
+        mod,
+        "_build_logger",
+        lambda args, cfg, run_name: DummyLogger(),
+    )
+
+    args = mod.argparse.Namespace(
+        checkpoint_dir=str(tmp_path),
+        run_name=None,
+        wandb_mode="offline",
+        wandb_project="test-project",
+        resume_from_checkpoint=None,
+        resume_mode="latest",
+        precision="32-true",
+    )
+
+    mod.run_training(args)
+
+    assert captured["run_dir"] == tmp_path / "vibran-sweep-14"
+    assert captured["cfg_run_name"] == "vibran-sweep-14"
+    assert args.run_name == "vibran-sweep-14"
