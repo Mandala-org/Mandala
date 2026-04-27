@@ -59,7 +59,7 @@ parameters:
   cutoff-radius:
     value: 7.0
   edge-encoder-style:
-    value: mandala
+    value: rich
   e3layernorm:
     value: true
   separate-shifted-self:

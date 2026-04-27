@@ -47,7 +47,7 @@ class Config:
     hidden_irreps: str | None = None  # explicit hidden irreps override
     edge_type_emb_dim: int = 32  # edge type embedding size
     emb_use_odd_features: bool = True  # use odd parity
-    edge_encoder_style: str = "mandala"  # "mandala" | "deeph_e3"
+    edge_encoder_style: str = "rich"  # "rich" | "distance"
     edge_encoder_use_sh_tensor_square: bool = False
     e3layernorm: bool = True
 

@@ -80,8 +80,8 @@ parameters:
     value: 7.5
   edge-encoder-style:
     values:
-      - mandala
-      - deeph_e3
+      - rich
+      - distance
   e3layernorm:
     values:
       - false

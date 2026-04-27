@@ -49,7 +49,7 @@ python scripts/wandb_run.py \
   --num-layers-gnn 3 \
   --n-radial 64 \
   --cutoff-radius 7.5 \
-  --edge-encoder-style deeph_e3 \
+  --edge-encoder-style distance \
   --e3layernorm false \
   --separate-shifted-self true \
   --edge-encoder-use-sh-tensor-square false \

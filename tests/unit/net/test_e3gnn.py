@@ -78,7 +78,7 @@ class MockHead(nn.Module):
         return self.mock_impl(*args, **kwargs)
 
 
-@pytest.mark.parametrize("edge_encoder_style", ["mandala", "deeph_e3"])
+@pytest.mark.parametrize("edge_encoder_style", ["rich", "distance"])
 @pytest.mark.unit
 def test_forward_smoke(edge_encoder_style):
     # ------- dummy orbital config ------------------
@@ -131,7 +131,7 @@ def test_forward_smoke_onthefly_deeph_e3():
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
     cfg = Config(
         num_layers_gnn=1,
-        edge_encoder_style="deeph_e3",
+        edge_encoder_style="distance",
         precompute_edge_features=False,
         cutoff_radius=3.0,
         safety_checks=True,

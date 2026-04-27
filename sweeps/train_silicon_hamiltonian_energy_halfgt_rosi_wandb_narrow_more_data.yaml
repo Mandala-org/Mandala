@@ -1,41 +1,59 @@
-framework: optuna
-program: scripts/optuna_agent.py
-study_name: train_silicon_density_energy_bayes_short
+program: scripts/wandb_run.py
+name: sweep_more_data
 method: bayes
 metric:
-  name: val/energy_mae_gt_hamiltonian
+  name: val/energy_mae_gt_density
   goal: minimize
-early_terminate:
-  type: hyperband
-  min_iter: 40
-  eta: 3
-gc_after_trial: true
-sampler_seed: 42
+command:
+  - ${env}
+  - python
+  - -u
+  - ${program}
+  - ${args}
 parameters:
-  dataset-kind:
-    value: siox
   wandb-project:
-    value: mandala-minimal-silicon-e3mlp-sweep-short-optuna
+    value: mandala-minimal-silicon-hamiltonian-energy-halfgt-rosi
   data-path:
-    value: /p/project1/hai_1270/siox
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
   snapshot-cache-dir:
-    value: ${oc.env:SCRATCH}/cache
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
   checkpoint-dir:
-    value: ${oc.env:SCRATCH}/mandala_optuna_short/checkpoints
+    value: checkpoints/silicon
+  dataset-device:
+    value: cuda
+  num-workers:
+    value: 8
+  min-temp:
+    value: 3000
+  max-temp:
+    value: 3000
+  temp-step:
+    value: 300
+  n-snapshots-per-temp:
+    value: 120
+  val-temp:
+    value: 3000
+  val-n-snapshots:
+    value: 20
   matrix-targets:
-    value: density
+    value: hamiltonian
   enable-energy:
     value: true
   enable-num-electrons:
-    value: true
-  train-on-energy:
     value: false
+  train-on-energy:
+    value: true
   train-on-num-electrons:
     value: false
+  train-observables-on-gt:
+    value: true
   log-partial-gt-observables:
     value: true
   loss-coef-observables:
-    value: 0.0
+    values:
+      - 1.0e-10
+      - 1.0e-9
+      - 1.0e-8
   enable-forces:
     value: false
   train-on-forces:
@@ -53,19 +71,23 @@ parameters:
   num-layers-gnn:
     values:
       - 2
-      - 3
   n-radial:
     value: 64
   cutoff-radius:
-    value: 7.0
+    value: 7.5
   edge-encoder-style:
-    value: rich
+    values:
+      - rich
+      - distance
   e3layernorm:
-    value: true
+    values:
+      - false
   separate-shifted-self:
-    value: false
+    value: true
   edge-encoder-use-sh-tensor-square:
-    value: false
+    values:
+      - true
+      - false
   radial-embedding-scale:
     value: none
   apply-cutoff-to-targets:
@@ -81,15 +103,17 @@ parameters:
   gpus:
     value: 1
   grad-clip-val:
-    value: 1.0
+    values:
+      - 1.0
+      - 0.0
   accumulate-grad-batches:
     value: 1
   lr-scheduler-factor:
     value: 0.2
   lr-scheduler-patience:
-    value: 100
-  max-epochs:
     value: 20
+  max-epochs:
+    value: 100
   log-interval:
     value: 10
   adaptive-log-interval:
@@ -111,13 +135,11 @@ parameters:
   generate-video:
     value: true
   num-train:
-    value: 5
+    value: 100
   num-val:
-    value: 2
+    value: 20
   lr:
     values:
-      - 0.0003
-      - 0.001
       - 0.003
       - 0.01
       - 0.03
@@ -127,7 +149,6 @@ parameters:
       - true
   head-use-node-embeddings-for-self-edges:
     values:
-      - false
       - true
   head-e3mlp-layers:
     values:
@@ -136,13 +157,12 @@ parameters:
       - 3
   internal-e3mlp-layers:
     values:
-      - 0
       - 1
+      - 2
+      - 3
   head-e3mlp-variant:
     values:
       - gatemagnitudes
-      - gate
-      - normact
       - resgatemagnitudes
       - resnormact
       - film
@@ -155,39 +175,35 @@ parameters:
       - resnormact
       - film
   e3mlp-pre-norm:
-    value: true
+    values:
+     - false
   e3mlp-output-scale:
     values:
-      - 0.25
-      - 0.5
-      - 0.75
+      - 1.0
   e3mlp-weight-init-scale:
     values:
-      - 0.1
-      - 0.25
       - 0.5
+      - 1.0
   e3mlp-residual-scale:
     values:
-      - 0.03
-      - 0.05
       - 0.1
+      - 0.2
+      - 0.5
+      - 1.0
   e3mlp-film-hidden-dim:
-    values:
-      - 64
-      - 128
+    value: 64
   init-weights-factor:
     values:
       - 1
-      - 0.1
-      - 0.01
+      - 0.3
   head-diag-output-scale:
     values:
-      - 0.75
       - 1.0
-      - 1.25
+      - 2.0
+      - 5.0
   head-offdiag-output-scale:
     values:
-      - 0.03
-      - 0.05
       - 0.1
       - 0.2
+      - 0.5
+      - 1.0
