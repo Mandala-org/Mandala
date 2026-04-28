@@ -26,7 +26,6 @@ config:
   tune: None
   seed: 42
   log_every_n_steps: 1
-  smoke_test: false
 
   # model:
   hidden_base_dim: 32
