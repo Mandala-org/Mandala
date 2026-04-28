@@ -82,7 +82,6 @@ class Config:
     node_update_post_lin_mlp_n_layers: int = 1
 
     neck_depth: int = 1
-    head_depth: int = 3
     internal_e3mlp_layers: int = 0
     head_e3mlp_layers: int = 1
     head_use_node_embeddings_for_self_edges: bool = True
@@ -117,7 +116,6 @@ class Config:
     lr: float = 3e-4
     max_epochs: int = 100
     batch_size: int = 1
-    smoke_test: bool = False
     use_lr_scheduler: bool = True
     lr_scheduler_factor: float = 0.5
     lr_scheduler_patience: int = 60
@@ -141,7 +139,6 @@ class Config:
     radial_layers: Sequence[int] = field(
         default_factory=lambda: (128,)
     )  # e.g. (128,) -> 2-layer MLP
-    share_radial: bool = True
 
     # -------------- output head ----------------------------------------
     # --------- additional outputs --------------------------------------
@@ -203,7 +200,6 @@ class Config:
     log_model: bool = False  # whether to log the model to WandB
 
     # ----------------- caching ------------------------------------------
-    cache_root: str | None = None  # legacy unused cache setting
     snapshot_cache_dir: str | None = None  # raw Snapshot .pt cache, if any
     dataset_device: str | None = None  # keep processed dataset on this device
     seed: int = 42  # random seed for reproducibility
