@@ -42,9 +42,6 @@ def test_edge_update_block():
     # Test EdgeUpdateBlock edge unpacking
     cfg = Config(
         edge_update_node_combine="concat",
-        edge_update="concat",
-        edge_update_pre_lin_mlp_n_layers=1,
-        edge_update_post_lin_mlp_n_layers=1,
         dropout=0.0,
         edge_update_residual=False,
         l_max=2,
@@ -72,9 +69,6 @@ def test_node_update_block():
     # Test NodeUpdateBlock edge unpacking
     cfg = Config(
         node_update_message_agg="sum",
-        node_update="concat",
-        node_update_pre_lin_mlp_n_layers=1,
-        node_update_post_lin_mlp_n_layers=1,
         dropout=0.0,
         node_update_residual=False,
         l_max=2,

@@ -26,6 +26,11 @@ from net.activations import make_nonlinearity
 from net.layer_norm import E3LayerNorm
 
 
+def _assert_irreps_equal(a: Irreps, b: Irreps, *, what: str) -> None:
+    if Irreps(a).simplify() != Irreps(b).simplify():
+        raise AssertionError(f"{what} requires matching irreps, got {a} vs {b}")
+
+
 def _magnitude_splits(
     features: torch.Tensor,
     irreps: Irreps,
@@ -336,9 +341,15 @@ class EdgeUpdateBlock(nn.Module):
         self.info = info
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
+        self.node_combine_mode = str(cfg.edge_update_node_combine).lower()
         if edge_irreps_out is None:
             edge_irreps_out = edge_irreps
         self.edge_irreps_out = edge_irreps_out
+        if self.node_combine_mode not in {"concat", "sum", "tensor_product"}:
+            raise ValueError(
+                "edge_update_node_combine must be one of 'concat', 'sum', or "
+                f"'tensor_product', got {cfg.edge_update_node_combine!r}."
+            )
 
         # Resolve sh_irreps and n_radial from config
         sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
@@ -354,8 +365,33 @@ class EdgeUpdateBlock(nn.Module):
             activate_last=False,
         )
 
-        # Concatenated input: node[i] + node[j] + edge
-        irreps_in1 = (node_irreps + node_irreps + edge_irreps).simplify()
+        self.node_pair_tp = None
+        if self.node_combine_mode == "concat":
+            self.node_context_irreps = (node_irreps + node_irreps).simplify()
+        elif self.node_combine_mode == "sum":
+            _assert_irreps_equal(
+                node_irreps,
+                node_irreps,
+                what="edge_update_node_combine='sum'",
+            )
+            self.node_context_irreps = Irreps(node_irreps).simplify()
+        else:
+            self.node_pair_tp = FullyConnectedTensorProduct(
+                node_irreps,
+                node_irreps,
+                node_irreps,
+                internal_weights=True,
+                shared_weights=True,
+            )
+            self.node_context_irreps = Irreps(node_irreps).simplify()
+            _assert_irreps_equal(
+                self.node_context_irreps,
+                node_irreps,
+                what="edge_update_node_combine='tensor_product'",
+            )
+
+        # Edge convolution always sees edge features plus a node-pair context.
+        irreps_in1 = (self.node_context_irreps + edge_irreps).simplify()
         irreps_in2 = sh_irreps
 
         # EquiConv: main tensor product with radial weighting
@@ -453,7 +489,13 @@ class EdgeUpdateBlock(nn.Module):
 
         # Concatenate node features
         src, dst = edge_index
-        fea_in = torch.cat([node[src], node[dst], edge], dim=-1)
+        if self.node_combine_mode == "concat":
+            node_context = torch.cat([node[src], node[dst]], dim=-1)
+        elif self.node_combine_mode == "sum":
+            node_context = node[src] + node[dst]
+        else:
+            node_context = self.node_pair_tp(node[src], node[dst])
+        fea_in = torch.cat([node_context, edge], dim=-1)
 
         # EquiConv
         edge = self.conv(fea_in, edge_sh, edge_length_emb)
@@ -511,6 +553,22 @@ class NodeUpdateBlock(nn.Module):
         self.info = info
         self.node_irreps = node_irreps
         self.edge_irreps = edge_irreps
+        self.message_agg_mode = str(cfg.node_update_message_agg).lower()
+        if self.message_agg_mode not in {"sum", "average", "attention"}:
+            raise ValueError(
+                "node_update_message_agg must be one of 'sum', 'average', or "
+                f"'attention', got {cfg.node_update_message_agg!r}."
+            )
+        self.attn_scalar_dim = int(cfg.node_update_attention_scalar_dim)
+        if int(cfg.node_update_attention_heads) <= 0:
+            raise ValueError("node_update_attention_heads must be > 0.")
+        if self.attn_scalar_dim <= 0:
+            raise ValueError("node_update_attention_scalar_dim must be > 0.")
+        if self.attn_scalar_dim % int(cfg.node_update_attention_heads) != 0:
+            raise ValueError(
+                "node_update_attention_scalar_dim must be divisible by "
+                "node_update_attention_heads."
+            )
 
         # Default: output nodes with same irreps as edges
         if node_irreps_out is None:
@@ -574,6 +632,43 @@ class NodeUpdateBlock(nn.Module):
         else:
             self.dropout = None
 
+        self.attn_num_heads = int(cfg.node_update_attention_heads)
+        self.attn_head_dim = self.attn_scalar_dim // self.attn_num_heads
+        self.query_proj = None
+        self.key_proj = None
+        self.value_projs = None
+        if self.message_agg_mode == "attention":
+            attn_irreps = Irreps(f"{self.attn_scalar_dim}x0e")
+            self.query_proj = E3MLP(
+                node_irreps,
+                Irreps("64x0e"),
+                attn_irreps,
+                1,
+                cfg,
+                activate_last=False,
+            )
+            self.key_proj = E3MLP(
+                edge_irreps,
+                Irreps("64x0e"),
+                attn_irreps,
+                1,
+                cfg,
+                activate_last=False,
+            )
+            self.value_projs = nn.ModuleList(
+                [
+                    E3MLP(
+                        edge_irreps,
+                        edge_irreps,
+                        self.conv.irreps_out,
+                        1,
+                        cfg,
+                        activate_last=False,
+                    )
+                    for _ in range(self.attn_num_heads)
+                ]
+            )
+
         internal_variant = cfg.internal_e3mlp_variant or cfg.e3mlp_variant
         if cfg.internal_e3mlp_layers > 0:
             self.refine = E3MLP(
@@ -631,9 +726,41 @@ class NodeUpdateBlock(nn.Module):
         edge_messages = self.conv(fea_in, edge_sh, edge_length_emb)
 
         # Aggregate messages to nodes
-        node = scatter(
-            edge_messages, dst, dim=0, dim_size=node_old.size(0), reduce="sum"
-        )
+        if self.message_agg_mode == "sum":
+            node = scatter(
+                edge_messages, dst, dim=0, dim_size=node_old.size(0), reduce="sum"
+            )
+        elif self.message_agg_mode == "average":
+            node = scatter(
+                edge_messages, dst, dim=0, dim_size=node_old.size(0), reduce="mean"
+            )
+        else:
+            query = self.query_proj(node).reshape(
+                node.shape[0], self.attn_num_heads, self.attn_head_dim
+            )
+            key = self.key_proj(edge).reshape(
+                edge.shape[0], self.attn_num_heads, self.attn_head_dim
+            )
+            values = torch.stack([proj(edge) for proj in self.value_projs], dim=1)
+            scores = (query[dst] * key).sum(dim=-1) / float(self.attn_head_dim) ** 0.5
+            max_per_dst = scatter(
+                scores, dst, dim=0, dim_size=node_old.size(0), reduce="max"
+            )
+            scores = scores - max_per_dst.index_select(0, dst)
+            exp_scores = torch.exp(scores)
+            denom = scatter(
+                exp_scores, dst, dim=0, dim_size=node_old.size(0), reduce="sum"
+            )
+            weights = exp_scores / denom.index_select(0, dst).clamp_min(1e-12)
+            weighted_values = values * weights.unsqueeze(-1)
+            head_outputs = scatter(
+                weighted_values,
+                dst,
+                dim=0,
+                dim_size=node_old.size(0),
+                reduce="sum",
+            )
+            node = head_outputs.mean(dim=1)
 
         # Post-linear
         node = self.lin_post(node)

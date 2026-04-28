@@ -90,6 +90,8 @@ def test_message_block_edge_and_node_update():
     node2, edge2 = blk(node, edge, idx, edge_sh, edge_length_emb)
     assert node2.shape == (N, hid_ir.dim)
     assert edge2.shape == (E, hid_ir.dim)
+    assert blk.node_upd.value_projs is not None
+    assert len(blk.node_upd.value_projs) == cfg.node_update_attention_heads
 
 
 @pytest.mark.unit

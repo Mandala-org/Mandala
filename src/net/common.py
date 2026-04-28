@@ -63,23 +63,15 @@ class Config:
     # use self-connection (element-specific features)
     use_self_connection: bool = True
 
-    edge_update_node_combine: str = "concat"  # "sum" | "concat"
-    edge_update_linear: str = "post"  # "pre" | "post" | "none"
-    edge_update: str = "tensor_product"  # "tensor_product" | "concat" | "replace"
+    edge_update_node_combine: str = "concat"  # "concat" | "sum" | "tensor_product"
     edge_update_residual: bool = True  # use residual connections in edge update
 
-    node_update_message_agg: str = "sum"  # "attention" | "sum"
-    node_update: str = "concat"  # "concat" | "replace" | "sum"
+    node_update_message_agg: str = "sum"  # "sum" | "average" | "attention"
+    node_update_attention_scalar_dim: int = 64
+    node_update_attention_heads: int = 4
     node_update_residual: bool = True  # use residual connections in node update
 
     head_use_mlp_log_scale: bool = False  # whether to use MLP log scaling in the head
-
-    # -------------- MLP Layers Configuration -----------------------------
-    edge_update_pre_lin_mlp_n_layers: int = 1
-    edge_update_post_lin_mlp_n_layers: int = 1
-    node_update_pre_lin_mlp_n_layers: int = 1
-    node_update_attention_mlp_n_layers: int = 1
-    node_update_post_lin_mlp_n_layers: int = 1
 
     neck_depth: int = 1
     internal_e3mlp_layers: int = 0

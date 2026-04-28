@@ -16,23 +16,21 @@ def make_dummy_graph(E=10, N=5, hid_dim=32):
 
 EDGE_UPDATE_CONFIGS = list(
     product(
-        ["sum", "concat"],  # edge_update_node_combine
-        ["tensor_product", "concat", "replace"],  # edge_update
+        ["concat", "sum", "tensor_product"],  # edge_update_node_combine
         [True, False],  # edge_update_residual
     )
 )
 
 
 @pytest.mark.parametrize(
-    "node_combine, edge_update, residual",
+    "node_combine, residual",
     EDGE_UPDATE_CONFIGS,
 )
 @pytest.mark.unit
-def test_edge_update_block_variants(node_combine, edge_update, residual):
+def test_edge_update_block_variants(node_combine, residual):
     """Tests the EdgeUpdateBlock with various configurations."""
     cfg = Config(
         edge_update_node_combine=node_combine,
-        edge_update=edge_update,
         edge_update_residual=residual,
         safety_checks=True,
         l_max=2,
@@ -52,23 +50,21 @@ def test_edge_update_block_variants(node_combine, edge_update, residual):
 
 NODE_UPDATE_CONFIGS = list(
     product(
-        ["attention", "sum"],  # node_update_message_agg
-        ["tensor_product", "concat", "replace", "sum"],  # node_update
+        ["sum", "average", "attention"],  # node_update_message_agg
         [True, False],  # node_update_residual
     )
 )
 
 
 @pytest.mark.parametrize(
-    "message_agg, node_update, residual",
+    "message_agg, residual",
     NODE_UPDATE_CONFIGS,
 )
 @pytest.mark.unit
-def test_node_update_block_variants(message_agg, node_update, residual):
+def test_node_update_block_variants(message_agg, residual):
     """Tests the NodeUpdateBlock with various configurations."""
     cfg = Config(
         node_update_message_agg=message_agg,
-        node_update=node_update,
         node_update_residual=residual,
         safety_checks=True,
         l_max=2,
