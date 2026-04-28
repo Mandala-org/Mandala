@@ -18,11 +18,6 @@ project_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(project_root))
 
 from scripts.train import run_training  # noqa: E402
-from scripts.graceful_interrupt import (  # noqa: E402
-    clear_interrupt_request,
-    install_signal_handlers,
-    interrupt_requested,
-)
 
 
 class OptunaPruningCallback(pl.Callback):
@@ -71,8 +66,6 @@ def setup_argparse() -> argparse.Namespace:
 
 def main() -> None:
     args = setup_argparse()
-    clear_interrupt_request()
-    install_signal_handlers("Optuna agent")
     print("=== optuna_agent.py starting ===")
     print(f"study_yaml={args.study_yaml}")
     print(f"storage={args.storage}")
@@ -140,13 +133,16 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
         )
         for key, value in metric_log.items():
             trial.set_user_attr(key, value)
-        if interrupt_requested():
+        if getattr(run_args, "interrupted", False):
             study.stop()
-        return float(metric_log[metric_name])
-
-    def _stop_if_interrupted(study, trial):  # noqa: ARG001
-        if interrupt_requested():
-            study.stop()
+        metric_value = metric_log.get(metric_name)
+        if metric_value is None:
+            if getattr(run_args, "interrupted", False):
+                return float("nan")
+            raise RuntimeError(
+                f"Objective metric {metric_name!r} was not returned by run_training."
+            )
+        return float(metric_value)
 
     try:
         optimize_kwargs = dict(
@@ -155,18 +151,16 @@ def run_optuna_agent(args: argparse.Namespace) -> None:
             gc_after_trial=bool(study_cfg.get("gc_after_trial", True)),
         )
         try:
-            study.optimize(
-                objective, callbacks=[_stop_if_interrupted], **optimize_kwargs
-            )
+            study.optimize(objective, **optimize_kwargs)
         except TypeError as exc:
             if "callbacks" not in str(exc):
                 raise
             study.optimize(objective, **optimize_kwargs)
+    except KeyboardInterrupt:
+        print("--- Optuna agent interrupted by Ctrl+C; stopping study ---", flush=True)
+        study.stop()
     finally:
-        if interrupt_requested():
-            print(
-                "--- Optuna agent stopped after interrupt; finalization completed normally ---"
-            )
+        print("--- Optuna agent shutdown complete ---")
 
 
 def _load_yaml(path: str) -> dict[str, Any]:

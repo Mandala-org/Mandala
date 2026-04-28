@@ -575,7 +575,7 @@ class E3MLP(nn.Module):
 
 
 # ════════════════════════════════════════════════════════════════════════
-# 5.  SeparateWeightTensorProduct (from DeepH-E3)
+# 5.  SeparateWeightTensorProduct (taken from the DeepH-E3 implementation)
 # ════════════════════════════════════════════════════════════════════════
 class SeparateWeightTensorProduct(nn.Module):
     """

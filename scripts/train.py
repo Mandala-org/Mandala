@@ -19,7 +19,6 @@ from torch.utils.data import DataLoader
 # Add project root to the Python path
 project_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(project_root))
-sys.path.append(str(Path(__file__).resolve().parent))
 
 from net.artifacts import (
     ArtifactCheckpointCallback,
@@ -41,13 +40,7 @@ from scripts.dataset import (  # noqa: E402
     build_silicon_datasets,
     build_siox_datasets,
 )
-from scripts.graceful_interrupt import (  # noqa: E402
-    GracefulInterruptCallback,
-    clear_interrupt_request,
-    install_signal_handlers,
-    interrupt_requested,
-)
-from run_name import resolve_run_name  # noqa: E402
+from utils.run_name import resolve_run_name  # noqa: E402
 
 
 def run_training(
@@ -57,8 +50,6 @@ def run_training(
     extra_callbacks: list[Any] | None = None,
     objective_metric: str | None = None,
 ) -> dict[str, float]:
-    clear_interrupt_request()
-    install_signal_handlers("Training")
     args = _as_namespace(run_args)
     print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
@@ -104,23 +95,34 @@ def run_training(
 
     print("--- Starting training ---")
     torch.set_float32_matmul_precision("high")
-    trainer.fit(
-        model=model,
-        train_dataloaders=train_loader,
-        val_dataloaders=val_loader,
-        ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
-    )
+    interrupted = False
+    try:
+        trainer.fit(
+            model=model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+            ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
+        )
+    except KeyboardInterrupt:
+        interrupted = True
+        setattr(args, "interrupted", True)
+        print("--- Training interrupted by Ctrl+C; finishing shutdown ---", flush=True)
     metrics = _extract_metrics(trainer)
     if objective_metric is not None and objective_metric not in metrics:
-        raise RuntimeError(
-            f"Objective metric {objective_metric!r} was not found in trainer.callback_metrics."
-        )
-    print("--- Training finished ---")
-    if objective_metric is not None:
+        if interrupted:
+            print(
+                f"--- Objective metric {objective_metric!r} was not available after interrupt; continuing ---"
+            )
+        else:
+            raise RuntimeError(
+                f"Objective metric {objective_metric!r} was not found in trainer.callback_metrics."
+            )
+    elif objective_metric is not None:
         print(
             f"Objective metric {objective_metric} = {metrics.get(objective_metric, 'MISSING')}"
         )
-    if interrupt_requested():
+    print("--- Training finished ---")
+    if interrupted:
         print(
             "--- Training stopped after interrupt; finalization completed normally ---"
         )
@@ -235,13 +237,16 @@ def _build_logger(
     if wandb_project is None:
         print("--- No WandB project set; logger disabled ---")
         return None
+    logger_config = dataclasses.asdict(cfg)
+    if run_name is None:
+        logger_config.pop("run_name", None)
     print(
         f"--- WandB logger: mode={wandb_mode}, project={wandb_project}, run_name={run_name or '<wandb-assigned>'} ---"
     )
     return WandbLogger(
         project=wandb_project,
         name=run_name,
-        config=dataclasses.asdict(cfg),
+        config=logger_config,
         save_dir=str(Path(getattr(args, "checkpoint_dir", cfg.save_dir))),
     )
 
@@ -424,7 +429,7 @@ def _build_callbacks(
     run_dir: Path,
     extra_callbacks: list[Any] | None,
 ) -> list[Any]:
-    callbacks: list[Any] = [GracefulInterruptCallback("Training")]
+    callbacks: list[Any] = []
     if cfg.benchmark:
         callbacks.append(
             BenchmarkCallback(

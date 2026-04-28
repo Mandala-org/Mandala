@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+_PLACEHOLDER_RUN_NAMES = {"", "run", "mandala-run"}
+
 
 def sanitize_run_name(name: str) -> str:
     cleaned = str(name).strip()
@@ -22,13 +24,14 @@ def resolve_run_name(requested_run_name: str | None, logger: Any | None) -> str:
     if logger is not None:
         experiment = getattr(logger, "experiment", None)
         if experiment is not None:
-            candidate = getattr(experiment, "name", None) or getattr(
-                experiment, "id", None
-            )
-            if candidate:
+            for attr in ("name", "id"):
+                candidate = getattr(experiment, attr, None)
+                if not candidate:
+                    continue
                 resolved = sanitize_run_name(str(candidate))
-                _sync_logger_run_name(logger, resolved)
-                return resolved
+                if resolved and resolved not in _PLACEHOLDER_RUN_NAMES:
+                    _sync_logger_run_name(logger, resolved)
+                    return resolved
 
     return f"run_{uuid.uuid4().hex[:10]}"
 

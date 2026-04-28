@@ -19,7 +19,6 @@ from pytorch_lightning.loggers import WandbLogger
 # Add project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
-sys.path.append(str(Path(__file__).resolve().parent))
 
 from data.factory import DatasetFactory  # noqa: E402
 from net.common import Config  # noqa: E402
@@ -37,7 +36,7 @@ from net.silicon_study_logging import (  # noqa: E402
     log_orbital_config,
     log_snapshot_info,
 )
-from run_name import resolve_run_name  # noqa: E402
+from utils.run_name import resolve_run_name  # noqa: E402
 
 
 def str_to_bool(value):
@@ -288,10 +287,13 @@ def _build_wandb_logger(
         or os.getenv("WANDB_PROJECT")
         or "mandala-silicon-main-study-port"
     )
+    logger_config = dataclasses.asdict(cfg)
+    if run_name is None:
+        logger_config.pop("run_name", None)
     return WandbLogger(
         project=wandb_project,
         name=run_name,
-        config=dataclasses.asdict(cfg),
+        config=logger_config,
         save_dir=str(Path(args.checkpoint_dir)),
     )
 
@@ -566,12 +568,16 @@ def run_single_training(
     # --- Start Training ---
     print("--- Starting training ---")
     torch.set_float32_matmul_precision("high")
-    trainer.fit(
-        model=model,
-        train_dataloaders=train_loader,
-        val_dataloaders=val_loader,
-        ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
-    )
+    try:
+        trainer.fit(
+            model=model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+            ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
+        )
+    except KeyboardInterrupt:
+        setattr(args, "interrupted", True)
+        print("--- Training interrupted by Ctrl+C; finishing shutdown ---", flush=True)
 
 
 def main():
