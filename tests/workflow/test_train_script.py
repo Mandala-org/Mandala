@@ -109,7 +109,7 @@ def test_train_script_full_run(monkeypatch):
     monkeypatch.setattr(train_script, "WandbLogger", DummyLogger)
     # Set args and environment
     monkeypatch.setenv("WANDB_MODE", "offline")
-    # Use grouped debug_cpu config and enable smoke_test
+    # Use grouped debug_cpu config
     monkeypatch.setattr(
         sys,
         "argv",
@@ -117,7 +117,6 @@ def test_train_script_full_run(monkeypatch):
             "train.py",
             "--config-name",
             "debug_cpu",
-            "config.smoke_test=true",
             "config.run_name=test_full_run",
             "config.wandb_project=null",
         ],

@@ -33,7 +33,7 @@ python3 -u scripts/train_silicon.py \
   --n_radial=64 \
   --radial_layers="[128]" \
   --neck_depth=1 \
-  --head_depth=1 \
+  --head_e3mlp_layers=1 \
   --head_use_mlp_log_scale=False \
   --nonlin_kind="normact" \
   --activation_scalar="silu" \

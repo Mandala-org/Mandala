@@ -29,7 +29,7 @@ def test_full_training_workflow(train_target, tmp_path):
         hidden_base_dim=32,
         num_layers_gnn=1,
         neck_depth=1,
-        head_depth=1,
+        head_e3mlp_layers=1,
         # Training
         train_target=train_target,
         max_epochs=1,

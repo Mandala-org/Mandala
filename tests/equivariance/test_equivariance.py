@@ -278,7 +278,7 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     cfg = Config(
         head_use_mlp_log_scale=head_use_mlp_log_scale,
         neck_depth=mlp_layers,
-        head_depth=mlp_layers,
+        head_e3mlp_layers=mlp_layers,
         head_log_scale_mlp_n_layers=mlp_layers,
         l_max=3,
         hidden_base_dim=16,

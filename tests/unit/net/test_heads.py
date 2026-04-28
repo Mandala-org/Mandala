@@ -64,7 +64,6 @@ def test_deep_head_splits_diag_shifted_self_and_offdiag():
     mapper = BlockIrrepMapper(orb_cfg)
     cfg = Config(
         neck_depth=1,
-        head_depth=1,
         head_use_node_embeddings_for_self_edges=True,
         separate_shifted_self=True,
         safety_checks=True,
