@@ -136,21 +136,19 @@ def test_activations_equivariance(nonlin_kind, irreps_str):
     assert torch.allclose(y_rotated_input, y_rotated_output, atol=2e-4)
 
 
-@pytest.mark.parametrize("edge_update_node_combine", ["concat", "sum"])
-@pytest.mark.parametrize("edge_update", ["tensor_product", "concat", "replace"])
+@pytest.mark.parametrize(
+    "edge_update_node_combine", ["concat", "sum", "tensor_product"]
+)
 @pytest.mark.parametrize("edge_update_residual", [True, False])
 @pytest.mark.parametrize("mlp_layers", [1, 2])
 def test_edge_update_block_equivariance(
-    edge_update_node_combine, edge_update, edge_update_residual, mlp_layers
+    edge_update_node_combine, edge_update_residual, mlp_layers
 ):
     """Tests the EdgeUpdateBlock in isolation."""
     N, E = 10, 20
     cfg = Config(
         edge_update_node_combine=edge_update_node_combine,
-        edge_update=edge_update,
         edge_update_residual=edge_update_residual,
-        edge_update_pre_lin_mlp_n_layers=mlp_layers,
-        edge_update_post_lin_mlp_n_layers=mlp_layers,
         safety_checks=True,
         l_max=2,
     )
@@ -185,22 +183,17 @@ def test_edge_update_block_equivariance(
     assert torch.allclose(y_rotated_input, y_rotated_output, atol=2e-4)
 
 
-@pytest.mark.parametrize("node_update_message_agg", ["attention", "sum"])
-@pytest.mark.parametrize("node_update", ["tensor_product", "concat", "replace", "sum"])
+@pytest.mark.parametrize("node_update_message_agg", ["sum", "average", "attention"])
 @pytest.mark.parametrize("node_update_residual", [True, False])
 @pytest.mark.parametrize("mlp_layers", [1, 2])
 def test_node_update_block_equivariance(
-    node_update_message_agg, node_update, node_update_residual, mlp_layers
+    node_update_message_agg, node_update_residual, mlp_layers
 ):
     """Tests the NodeUpdateBlock in isolation."""
     N, E = 10, 20
     cfg = Config(
         node_update_message_agg=node_update_message_agg,
-        node_update=node_update,
         node_update_residual=node_update_residual,
-        node_update_pre_lin_mlp_n_layers=mlp_layers,
-        node_update_attention_mlp_n_layers=mlp_layers,
-        node_update_post_lin_mlp_n_layers=mlp_layers,
         safety_checks=True,
         l_max=2,
     )
