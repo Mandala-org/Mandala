@@ -1,15 +1,11 @@
 # Mandala Appendix Planning and Exhaustive Config Inventory
 
-This document is a source-of-truth draft for a future appendix describing the Mandala configuration surface.
-It is based primarily on the current `src/` implementation, with notes on compatibility placeholders and study-only options where that distinction matters.
+This document is a source-of-truth draft for the paper appendix describing the Mandala configuration surface.
+It mirrors the live appendix in `paper/appendix.tex` and is based primarily on the current `src/` implementation.
 
 ## Scope
 
-This inventory covers:
-
-1. The stable `Config` dataclass in `src/net/common.py`.
-2. Closely related top-level runtime settings that are not fields on `Config` but are part of the effective user-facing setup.
-3. Important interactions, constraints, and current implementation status where the code defines an option but does not yet fully consume it.
+This inventory covers the stable `Config` dataclass in `src/net/common.py`
 
 This inventory does not treat the older study scripts as the primary API.
 Where a feature still exists only in studies or only as a compatibility placeholder, that is marked explicitly.
@@ -26,7 +22,7 @@ The cleanest appendix structure for the paper would be:
 6. Prediction targets, observable guidance, and physics-aware postprocessing
 7. Optimization, regularization, and training stability
 8. Logging, artifacts, benchmarking, and reproducibility
-9. Compatibility and legacy options
+9. Constraints and appendix notes
 
 ## Primary Source Files
 
@@ -155,16 +151,16 @@ These settings determine what the model predicts, how supervision is defined, an
 | `enable_energy` | `bool = True` | `True`, `False` | Enable energy observable evaluation and logging. | Requires energy targets in the dataset if you want metrics. |
 | `enable_num_electrons` | `bool = True` | `True`, `False` | Enable electron-count observable evaluation and logging. | Uses `Tr(DS)` with trace-aligned sparse matrices. |
 | `enable_forces` | `bool = False` | `True`, `False` | Enable force evaluation and logging. | Forces are computed by autodiff through `Snapshot.get_energy()`. |
-| `enable_stress` | `bool = False` | `True`, `False` | Enable stress staging and prediction support. | Current `src/` has `get_stress(...)` and `predict_stress(...)`, but stress metrics/loss are not yet integrated into `_shared_step(...)`. Treat as partially wired. |
+| `enable_stress` | `bool = False` | `True`, `False` | Enable stress staging and prediction support. | Stress is computed by autodiff through `Snapshot.get_stress()`. |
 | `train_on_energy` | `bool = True` | `True`, `False` | Add energy loss term. | Requires `loss_coef_observables != 0`. Also requires `hamiltonian` and `density` prediction unless `train_observables_on_gt=True`. |
 | `train_on_num_electrons` | `bool = True` | `True`, `False` | Add electron-count loss term. | Requires `loss_coef_observables != 0`. Also requires `overlap` and `density` prediction unless `train_observables_on_gt=True`. |
 | `train_on_forces` | `bool = False` | `True`, `False` | Add force loss term. | Requires `loss_coef_forces != 0`. |
-| `train_on_stress` | `bool = False` | `True`, `False` | Intended to add stress loss term. | The model validates that `loss_coef_stress != 0`, and `predict_stress(...)` exists, but the current shared loss path does not yet add a stress loss term. Treat as partially wired. |
+| `train_on_stress` | `bool = False` | `True`, `False` | Add stress loss term. | Requires `loss_coef_stress != 0` |
 | `train_observables_on_gt` | `bool = False` | `True`, `False` | For observable losses, combine one predicted operator with the complementary ground-truth operator instead of using only predictions. | Energy supports `H_pred D_gt` and `H_gt D_pred`; electron count supports `D_pred S_gt` and `D_gt S_pred`. |
 | `log_partial_gt_observables` | `bool = False` | `True`, `False` | Log hybrid observable diagnostics even when not training on them. | Useful for ablation and interpretability. |
 | `symmetrize_output` | `bool = True` | `True`, `False` | Symmetrize predicted block matrices before matrix-space loss computation. | Only affects `train_target="matrix"`. |
 | `symmetrize_hamiltonian_targets` | `bool = True` | `True`, `False` | Symmetrize Hamiltonian targets during dataset preprocessing. | Applied when building matrix targets from snapshots. |
-| `rescale_density_to_num_electrons` | `bool = False` | `True`, `False` | Rescale predicted density matrices to match the target number of electrons before artifact evaluation. | In current `src/`, this is implemented in artifact/metric evaluation rather than the core training loss path. |
+| `rescale_density_to_num_electrons` | `bool = False` | `True`, `False` | Rescale predicted density matrices to match the target number of electrons before artifact evaluation. | This is used in artifact/metric evaluation rather than the training loss path. |
 
 ## 6. Optimization, Regularization, and Training Stability
 
@@ -200,7 +196,6 @@ These settings determine what the model predicts, how supervision is defined, an
 | --- | --- | --- | --- | --- |
 | `run_name` | `str = "mandala-run"` | arbitrary string | Human-readable run name. | Typically propagated to checkpointing/logging wrappers. |
 | `verbosity` | `int = 1` | integer | Controls summary-print verbosity. | Used by dataset and model summary helpers. |
-| `bench_verbosity` | `int = 1` | integer | Compatibility verbosity flag for benchmarking. | Present in `Config`, but not directly consumed by the current `src/net` training code. |
 | `wandb_project` | `str \| None = None` | string or `None` | Weights and Biases project name. | Used by outer training harness / logger setup. |
 | `log_on_step` | `bool = False` | `True`, `False` | Log metrics on each training step. | Passed to `self.log_dict(...)`. |
 | `log_on_epoch` | `bool = True` | `True`, `False` | Log metrics on epoch aggregation. | Passed to `self.log_dict(...)`. |
@@ -214,7 +209,6 @@ These settings determine what the model predicts, how supervision is defined, an
 | `benchmark` | `bool = True` | `True`, `False` | Enable timing/benchmark reporting paths. | Used by benchmarking / artifact-side tooling. |
 | `log_interval` | `int = 1` | positive integer | Epoch interval for detailed artifact logging. | Used by `ArtifactCheckpointCallback` through `should_log_epoch(...)`. |
 | `adaptive_log_interval` | `bool = False` | `True`, `False` | Use adaptive epoch logging cadence rather than a fixed interval. | Implemented in `src/net/silicon_study_logging.py`. |
-| `log_every_n_steps` | `int = 1` | positive integer | Compatibility placeholder for step-based logging cadence. | Present in `Config`, but the current `src/net` model code does not read it directly. |
 | `video_max_atoms` | `int \| None = 6` | positive integer or `None` | Max atom count to include when rendering matrix/video artifacts. | Consumed by artifact plotting/video generation. |
 | `log_model` | `bool = False` | `True`, `False` | Whether to log the full model artifact to WandB. | Outer logger / trainer setup concern. |
 
@@ -232,45 +226,7 @@ These settings determine what the model predicts, how supervision is defined, an
 | `dataset_device` | `str \| None = None` | torch device string or `None` | Optional target device for processed dataset payloads. | Dataset-side placement knob. |
 | `seed` | `int = 42` | integer | Global random seed for reproducibility. | Typically consumed by the outer training script. |
 | `tune` | `str \| None = None` | `None`, `"ray"`, `"wandb"`, or other harness-defined names | Hyperparameter tuning backend selector. | Harness-side option. |
-## 9. Compatibility and Legacy Fields
-
-These fields exist in the stable `Config` dataclass, but they are either compatibility placeholders or are not currently consumed by the main `src/` model path.
-
-| Option | Current status | Notes |
-| --- | --- | --- |
-| `bench_verbosity` | compatibility / harness flag | Not directly consumed by the current core model path. |
-| `log_every_n_steps` | compatibility / harness flag | Present but not directly used by the current `self.log_dict(...)` path. |
-
-## 10. DeepH-E3 Compatibility Fields
-
-These are present in `Config` for comparison studies and compatibility work, but they are not part of the current main `src/net` architecture path.
-
-| Option | Type / default | Intended meaning | Current status |
-| --- | --- | --- | --- |
-| `num_block` | `int = 3` | DeepH-E3-style block count | Compatibility placeholder in current `src/`. |
-| `r_max` | `float = 8.0` | DeepH-E3 radial cutoff scale | Compatibility placeholder in current `src/`. |
-| `num_basis` | `int = 128` | DeepH-E3 basis size | Compatibility placeholder in current `src/`. |
-| `use_sc` | `bool = True` | DeepH-E3 self-connection toggle | Compatibility placeholder in current `src/`. |
-| `use_sbf` | `bool = False` | DeepH-E3 spherical-basis flag | Compatibility placeholder in current `src/`. |
-
-## 11. Study-Only or Not-Yet-Stable Options Observed Outside `src/Config`
-
-These options appear in studies, analysis scripts, or older sweeps, but are not part of the current stable `src/net/common.py::Config` dataclass.
-They should not be described as stable Mandala appendix options unless they are promoted into `src/`.
-
-| Option | Where seen | Notes |
-| --- | --- | --- |
-| `orbital-selection` | study scripts | Basis/orbital reduction choice used in older experiments, not part of current stable `Config`. |
-| `sh-mode` | study scripts | Older SH-feature convention toggle, not part of current stable `Config`. |
-| `xyz_permutation` | study scripts | Older coordinate-permutation testing knob, not part of current stable `Config`. |
-| `change_box` | study scripts | Older box transformation convention knob, not part of current stable `Config`. |
-| `box_convention` | study scripts | Older box-storage interpretation knob, not part of current stable `Config`. |
-| `magnitude_factorization` | study scripts | Older experimental head variant, not part of current stable `Config`. |
-| `head_mlp_for_scalars` | study scripts | Older experimental head variant, not part of current stable `Config`. |
-| `generate_video` | study scripts / callback wiring | The callback supports video generation, but this is not a field on the stable `Config` dataclass. |
-| `log_activations_wandb` | study scripts | Study-specific logging option, not in current stable `Config`. |
-
-## 12. Constraints and Recommended Appendix Notes
+## 9. Constraints and Recommended Appendix Notes
 
 These constraints are important enough that the appendix should likely state them explicitly rather than leaving them implicit.
 
@@ -278,18 +234,7 @@ These constraints are important enough that the appendix should likely state the
 2. `train_on_num_electrons=True` with `train_observables_on_gt=False` requires `matrix_targets` to include both `density` and `overlap`.
 3. `train_on_energy=True` or `train_on_num_electrons=True` requires `loss_coef_observables != 0`.
 4. `train_on_forces=True` requires `loss_coef_forces != 0`.
-5. `train_on_stress=True` currently validates `loss_coef_stress != 0`, but the stress loss is not yet integrated into the main `_shared_step(...)` loss aggregation path.
+5. `train_on_stress=True` requires `loss_coef_stress != 0`.
 6. `train_on_irrep_parts=True` cannot be combined with `train_target="irreps"`.
 7. `partial_train="offdiag"` behaves differently depending on `separate_shifted_self`.
 8. `hidden_irreps` overrides the automatic `build_hidden_irreps(l_max, hidden_base_dim, emb_use_odd_features)` logic completely.
-9. `rescale_density_to_num_electrons=True` currently affects artifact-side evaluation rather than the core training loss path.
-10. Several `Config` fields are retained for compatibility with older studies and should be labeled accordingly in the paper to avoid overselling them as active runtime controls.
-
-## 13. Suggested Next Step
-
-The next useful transformation of this document would be:
-
-1. split it into a concise paper appendix and a fuller developer appendix,
-2. convert the option tables into LaTeX longtables,
-3. add a one-line mathematical description wherever an option changes the actual computation,
-4. trim or footnote compatibility-only fields so the paper appendix remains readable.
