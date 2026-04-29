@@ -24,9 +24,8 @@ python -u scripts/wandb_run.py \
   --max-temp 3000 \
   --temp-step 300 \
   --val-temp 3000 \
-  --val-n-snapshots 20 \
-  --num-train 200 \
-  --num-val 40 \
+  --num-train 140 \
+  --num-val 25 \
   --seed 42 \
   --precision 32-true \
   --resume-mode latest \
