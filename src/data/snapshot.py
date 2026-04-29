@@ -612,6 +612,77 @@ class Snapshot:
             shifts=shifts,
         )
 
+    def get_translation_shifts(self) -> torch.Tensor:
+        shift_set: set[tuple[int, int, int]] = set()
+        for mat in self._mats.values():
+            for edges in mat.pair_edges.values():
+                for sx, sy, sz in edges[:3].t().tolist():
+                    shift_set.add((int(sx), int(sy), int(sz)))
+        if not shift_set:
+            return torch.zeros((0, 3), dtype=torch.long)
+        return torch.tensor(sorted(shift_set), dtype=torch.long)
+
+    def get_band_structure(
+        self,
+        *,
+        path: str | None = None,
+        special_points: (
+            dict[str, list[float] | tuple[float, float, float]] | None
+        ) = None,
+        npoints: int = 200,
+        kpoints_abs: torch.Tensor | None = None,
+        fractional_kpoints: torch.Tensor | None = None,
+        shifts: torch.Tensor | None = None,
+    ):
+        if self.box is None:
+            raise ValueError("Snapshot needs a periodic box to compute band structure.")
+
+        from data.kspace_snapshot import build_band_path
+
+        fractional_kpoints_t = fractional_kpoints
+        linear_k = None
+        tick_positions = None
+        tick_labels = None
+        if kpoints_abs is None:
+            if fractional_kpoints_t is not None:
+                reciprocal = 2 * torch.pi * torch.linalg.inv(self.box).T
+                kpoints_abs = (
+                    fractional_kpoints_t.to(
+                        device=self.box.device,
+                        dtype=self.box.dtype,
+                    )
+                    @ reciprocal
+                )
+            else:
+                (
+                    fractional_kpoints_t,
+                    kpoints_abs,
+                    linear_k,
+                    tick_positions,
+                    tick_labels,
+                ) = build_band_path(
+                    self.box,
+                    path=path,
+                    special_points=special_points,
+                    npoints=npoints,
+                )
+        if kpoints_abs is None:
+            raise ValueError("Could not resolve kpoints for band structure.")
+        shift_t = self.get_translation_shifts() if shifts is None else shifts
+        if shift_t.numel() == 0:
+            raise ValueError("Snapshot does not contain any translation shifts.")
+        shift_t = shift_t.to(device=self.box.device)
+        kspace_snapshot = self.to_k_space(
+            kpoints_abs=kpoints_abs.to(device=self.box.device, dtype=self.box.dtype),
+            shifts=shift_t,
+        )
+        return kspace_snapshot.get_band_structure(
+            fractional_kpoints=fractional_kpoints_t,
+            linear_k=linear_k,
+            tick_positions=tick_positions,
+            tick_labels=tick_labels,
+        )
+
     @classmethod
     def _parse_orbital_selection(cls, spec: str) -> Dict[int, int]:
         """
