@@ -1,1 +1,0 @@
-RUN_NAME=batch3_silicon_hamiltonian_mean_zoo_prenorm_01 bash studies/e3mlp_investigation/scripts/batch3_run04_silicon_hamiltonian_mean_zoo_prenorm.sh 2>&1 | tee studies/e3mlp_investigation/artifacts/batch3_silicon_hamiltonian_mean_zoo_prenorm_01.log
