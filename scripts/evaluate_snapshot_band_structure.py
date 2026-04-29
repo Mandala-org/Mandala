@@ -1,0 +1,234 @@
+#!/usr/bin/env python
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+from typing import Any
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import torch
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from data.snapshot import Snapshot  # noqa: E402
+from utils.units import HARTREE_TO_EV  # noqa: E402
+
+
+def setup_argparse() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Evaluate and plot the ground-truth band structure for a snapshot."
+    )
+    parser.add_argument(
+        "--snapshot-path",
+        type=Path,
+        default=Path("data/big/silicon/300K"),
+        help="Snapshot directory containing Si_DM and info.dat.",
+    )
+    parser.add_argument(
+        "--matrix-path",
+        type=Path,
+        default=None,
+        help="Optional explicit matrix path. Overrides --snapshot-path discovery.",
+    )
+    parser.add_argument(
+        "--info-path",
+        type=Path,
+        default=None,
+        help="Optional explicit info path. Overrides --snapshot-path discovery.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("eval_outputs/ground_truth_silicon_300K_band_structure"),
+        help="Directory for the plot and serialized band-structure payload.",
+    )
+    parser.add_argument(
+        "--convention",
+        type=str,
+        default="e3nn",
+        help="Matrix convention used when loading the snapshot.",
+    )
+    parser.add_argument(
+        "--num-points",
+        type=int,
+        default=240,
+        help="Number of interpolated k-points along the path.",
+    )
+    parser.add_argument(
+        "--path-string",
+        type=str,
+        default="GXWKGLUWLK,UX",
+        help="Band path string in fractional reciprocal coordinates.",
+    )
+    parser.add_argument(
+        "--plot-title",
+        type=str,
+        default="Ground-truth band structure: Silicon 300K",
+        help="Figure title.",
+    )
+    parser.add_argument(
+        "--emin-ev",
+        type=float,
+        default=-8.0,
+        help="Lower plot bound in eV after subtracting the Fermi level.",
+    )
+    parser.add_argument(
+        "--emax-ev",
+        type=float,
+        default=8.0,
+        help="Upper plot bound in eV after subtracting the Fermi level.",
+    )
+    return parser.parse_args()
+
+
+def _discover_snapshot_paths(
+    snapshot_path: Path, matrix_path: Path | None, info_path: Path | None
+) -> tuple[Path, Path]:
+    if matrix_path is not None and info_path is not None:
+        return matrix_path, info_path
+    if matrix_path is not None or info_path is not None:
+        raise ValueError("Provide both --matrix-path and --info-path together.")
+    matrix_candidate = snapshot_path / "Si_DM"
+    info_candidate = snapshot_path / "info.dat"
+    if not matrix_candidate.exists():
+        raise FileNotFoundError(f"Matrix file not found: {matrix_candidate}")
+    if not info_candidate.exists():
+        raise FileNotFoundError(f"Info file not found: {info_candidate}")
+    return matrix_candidate, info_candidate
+
+
+def _silicon_fcc_special_points() -> dict[str, list[float]]:
+    return {
+        "G": [0.0, 0.0, 0.0],
+        "X": [0.0, 0.5, 0.5],
+        "W": [0.25, 0.75, 0.5],
+        "K": [0.375, 0.75, 0.375],
+        "L": [0.5, 0.5, 0.5],
+        "U": [0.25, 0.625, 0.625],
+    }
+
+
+def _save_band_structure_plot(
+    payload: Any,
+    output_path: Path,
+    *,
+    title: str,
+    emin_ev: float,
+    emax_ev: float,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    energies_ev = payload.eigenvalues.detach().cpu() * HARTREE_TO_EV
+    fermi_level_ev = None
+    if payload.fermi_level is not None:
+        fermi_level_ev = float(
+            payload.fermi_level.detach().cpu().item() * HARTREE_TO_EV
+        )
+        energies_ev = energies_ev - fermi_level_ev
+
+    linear_k = payload.linear_k.detach().cpu()
+    tick_positions = payload.tick_positions.detach().cpu()
+
+    fig, ax = plt.subplots(1, 1, figsize=(8.5, 6.0))
+    for band_idx in range(energies_ev.shape[1]):
+        ax.plot(
+            linear_k.numpy(),
+            energies_ev[:, band_idx].numpy(),
+            color="#1f5aa6",
+            lw=1.1,
+        )
+    for xpos in tick_positions.tolist():
+        ax.axvline(xpos, color="0.80", lw=0.8, zorder=0)
+    ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+    ax.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
+    ax.set_ylim(emin_ev, emax_ev)
+    ax.set_xticks(tick_positions.numpy())
+    ax.set_xticklabels(payload.tick_labels, fontsize=11)
+    ax.set_ylabel(r"$E - E_F$ (eV)")
+    ax.set_title(title)
+    ax.grid(True, axis="y", alpha=0.2)
+    if fermi_level_ev is not None:
+        ax.text(
+            0.98,
+            0.03,
+            f"Fermi level = {fermi_level_ev:.3f} eV",
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+
+
+def main() -> None:
+    args = setup_argparse()
+    matrix_path, info_path = _discover_snapshot_paths(
+        args.snapshot_path,
+        args.matrix_path,
+        args.info_path,
+    )
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    snapshot = Snapshot.from_openmx(
+        matrix_path,
+        info_path,
+        convention=args.convention,
+    )
+    band_structure = snapshot.get_band_structure(
+        path=args.path_string,
+        special_points=_silicon_fcc_special_points(),
+        npoints=args.num_points,
+    )
+    plot_path = output_dir / "band_structure.png"
+    _save_band_structure_plot(
+        band_structure,
+        plot_path,
+        title=args.plot_title,
+        emin_ev=args.emin_ev,
+        emax_ev=args.emax_ev,
+    )
+
+    torch.save(
+        {
+            "eigenvalues": band_structure.eigenvalues.detach().cpu(),
+            "kpoints_abs": band_structure.kpoints_abs.detach().cpu(),
+            "linear_k": band_structure.linear_k.detach().cpu(),
+            "tick_positions": band_structure.tick_positions.detach().cpu(),
+            "tick_labels": list(band_structure.tick_labels),
+            "fractional_kpoints": (
+                None
+                if band_structure.fractional_kpoints is None
+                else band_structure.fractional_kpoints.detach().cpu()
+            ),
+            "fermi_level": (
+                None
+                if band_structure.fermi_level is None
+                else band_structure.fermi_level.detach().cpu()
+            ),
+            "matrix_path": str(matrix_path),
+            "info_path": str(info_path),
+            "path_string": args.path_string,
+        },
+        output_dir / "band_structure.pt",
+    )
+
+    print("matrix_path:", matrix_path)
+    print("info_path:", info_path)
+    print("output_dir:", output_dir)
+    print("plot_path:", plot_path)
+    print("num_kpoints:", int(band_structure.eigenvalues.shape[0]))
+    print("num_bands:", int(band_structure.eigenvalues.shape[1]))
+
+
+if __name__ == "__main__":
+    main()
