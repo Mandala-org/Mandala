@@ -125,18 +125,66 @@ def build_silicon_datasets(
             print(
                 f"--- Silicon single-temp split selected: temp={val_temp}K, discovered={len(all_pairs)} ---"
             )
-        else:
-            all_pairs = discover_silicon_snapshot_pairs(data_root)
-        rng.shuffle(all_pairs)
-        if len(all_pairs) < num_train + num_val:
-            raise ValueError(
-                f"Requested train+val={num_train + num_val} but found only {len(all_pairs)} snapshots under {data_root}"
+            rng.shuffle(all_pairs)
+            if len(all_pairs) < num_train + num_val:
+                raise ValueError(
+                    f"Requested train+val={num_train + num_val} but found only {len(all_pairs)} snapshots under {data_root}"
+                )
+            train_pairs = all_pairs[:num_train]
+            val_pairs = all_pairs[num_train : num_train + num_val]
+            print(
+                f"--- Silicon single-temp global split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
             )
-        train_pairs = all_pairs[:num_train]
-        val_pairs = all_pairs[num_train : num_train + num_val]
+            return _create_datasets_from_pairs(
+                train_pairs, val_pairs, cfg, convention=convention
+            )
+
+        all_temps = list(range(min_temp, max_temp + 1, temp_step))
+        if not all_temps:
+            raise ValueError(
+                f"No temperatures selected by min_temp={min_temp}, max_temp={max_temp}, temp_step={temp_step}"
+            )
+        if num_train % len(all_temps) != 0 or num_val % len(all_temps) != 0:
+            raise ValueError(
+                "Balanced silicon split requires num_train and num_val to be divisible "
+                f"by the number of temperatures ({len(all_temps)}). Got num_train={num_train}, num_val={num_val}."
+            )
+
+        train_per_temp = num_train // len(all_temps)
+        val_per_temp = num_val // len(all_temps)
+        train_pairs = []
+        val_pairs = []
         print(
-            f"--- Silicon global split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+            "--- Silicon balanced split selected: "
+            f"temps={len(all_temps)}, train_per_temp={train_per_temp}, val_per_temp={val_per_temp} ---"
         )
+        for temp in all_temps:
+            temp_path = data_root / f"{temp}K"
+            snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
+            if len(snapshot_paths) < train_per_temp + val_per_temp:
+                raise ValueError(
+                    f"Requested train+val per temp={train_per_temp + val_per_temp} "
+                    f"but found only {len(snapshot_paths)} snapshots under {temp_path}"
+                )
+            shuffled_paths = list(snapshot_paths)
+            rng.shuffle(shuffled_paths)
+            selected_train = shuffled_paths[:train_per_temp]
+            selected_val = shuffled_paths[
+                train_per_temp : train_per_temp + val_per_temp
+            ]
+            print(
+                f"--- Silicon temp {temp}K: discovered={len(snapshot_paths)}, "
+                f"train={len(selected_train)}, val={len(selected_val)} ---"
+            )
+            for matrix_path in selected_train:
+                info_path = Path(matrix_path).parent / "info.dat"
+                if info_path.exists():
+                    train_pairs.append((Path(matrix_path), info_path))
+            for matrix_path in selected_val:
+                info_path = Path(matrix_path).parent / "info.dat"
+                if info_path.exists():
+                    val_pairs.append((Path(matrix_path), info_path))
+
         return _create_datasets_from_pairs(
             train_pairs, val_pairs, cfg, convention=convention
         )

@@ -34,13 +34,13 @@ parameters:
   min-temp:
     value: 300
   max-temp:
-    value: 300
-  val-temp:
+    value: 3000
+  temp-step:
     value: 300
   num-train:
     value: 400
   num-val:
-    value: 50
+    value: 40
 
   # Optimization
   lr:
@@ -222,8 +222,6 @@ parameters:
     value: true
   radial-embedding-scale:
     value: none
-  temp-step:
-    value: 300
 
   # Loss spike recovery
   revert-on-spike:
