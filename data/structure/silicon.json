@@ -1,0 +1,27 @@
+{
+  "crystal_structure": {
+    "atomic_positions": [
+      {
+        "wyckoff": "8a",
+        "element": "Si",
+        "x": "3/4",
+        "y": "3/4",
+        "z": "1/4"
+      }
+    ],
+    "symmetry": {
+      "crystal_system": "Cubic",
+      "lattice_system": "Cubic",
+      "hall_number": "F 4d 2 3 -1d",
+      "international_number": 227,
+      "symbol": "Fd3̅m",
+      "point_group": "m3̅m"
+    },
+    "structure_meta": {
+      "number_of_atoms": 8,
+      "density": "2.31 g·cm⁻³",
+      "dimensionality": "",
+      "possible_oxidation_states": "Si⁰⁺"
+    }
+  }
+}
