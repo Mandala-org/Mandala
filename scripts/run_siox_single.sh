@@ -53,7 +53,6 @@ python -u scripts/wandb_run.py \
   --use-self-connection true \
   --edge-update-node-combine concat \
   --edge-update-linear post \
-  --edge-update tensor_product \
   --edge-update-residual true \
   --node-update-message-agg sum \
   --node-update concat \
@@ -102,7 +101,6 @@ python -u scripts/wandb_run.py \
   --accumulate-grad-batches 1 \
   --n-radial 64 \
   --radial-layers '[64,64]' \
-  --share-radial true \
   --device cuda \
   --gpus 1 \
   --num-workers 8 \
