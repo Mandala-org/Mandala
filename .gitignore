@@ -6,7 +6,7 @@ __pycache__/
 # Virtual env
 mandala-venv/
 
-# Data & model artefacts
+# Data & model artifacts
 .hydra/
 runs/
 checkpoints/
@@ -14,6 +14,7 @@ wandb/
 benchmarks/
 lightning_logs/
 outputs/
+eval_outputs/
 slurm-*.out
 
 # PyTest + coverage
