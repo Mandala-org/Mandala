@@ -1,0 +1,239 @@
+program: scripts/wandb_run.py
+method: bayes
+metric:
+  name: val/energy_mae_gt_density
+  goal: minimize
+command:
+  - ${env}
+  - python
+  - -u
+  - ${program}
+  - ${args}
+parameters:
+  # Experiment metadata
+  wandb-project:
+    value: mandala-minimal-silicon-hamiltonian-energy-halfgt-rosi
+  checkpoint-dir:
+    value: checkpoints/silicon
+  resume-mode:
+    value: latest
+  wandb-mode:
+    value: online
+
+  # Dataset
+  dataset-kind:
+    value: silicon
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache
+  dataset-device:
+    value: cuda
+  num-workers:
+    value: 8
+  min-temp:
+    value: 300
+  max-temp:
+    value: 300
+  val-temp:
+    value: 300
+  num-train:
+    value: 400
+  num-val:
+    value: 50
+
+  # Model architecture
+  precision:
+    value: 32-true
+  convention:
+    value: e3nn
+  smoke-test:
+    value: false
+  use-lr-scheduler:
+    value: true
+  cutoff-radius:
+    value: 7.5
+  l-max:
+    value: 4
+  hidden-base-dim:
+    value: 32
+  hidden-irreps:
+    value: 32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e
+  edge-type-emb-dim:
+    value: 32
+  emb-use-odd-features:
+    value: true
+  edge-encoder-style:
+    value: distance
+  edge-encoder-use-sh-tensor-square:
+    value: false
+  e3layernorm:
+    value: false
+  num-layers-gnn:
+    value: 2
+  tp-type:
+    value: separate_weight
+  use-self-connection:
+    value: true
+  edge-update-node-combine:
+    value: concat
+  edge-update-linear:
+    value: post
+  edge-update:
+    value: tensor_product
+  edge-update-residual:
+    value: true
+  node-update-message-agg:
+    value: sum
+  node-update:
+    value: concat
+  node-update-residual:
+    value: true
+  head-use-mlp-log-scale:
+    value: false
+  edge-update-pre-lin-mlp-n-layers:
+    value: 1
+  edge-update-post-lin-mlp-n-layers:
+    value: 1
+  node-update-pre-lin-mlp-n-layers:
+    value: 1
+  node-update-attention-mlp-n-layers:
+    value: 1
+  node-update-post-lin-mlp-n-layers:
+    value: 1
+  neck-depth:
+    value: 1
+  head-depth:
+    value: 3
+  internal-e3mlp-layers:
+    value: 1
+  head-e3mlp-layers:
+    value: 2
+  head-use-node-embeddings-for-self-edges:
+    value: true
+  separate-shifted-self:
+    value: true
+  head-use-tensor-square:
+    value: false
+  head-diag-output-scale:
+    value: 2
+  head-offdiag-output-scale:
+    value: 1
+  head-log-scale-mlp-n-layers:
+    value: 1
+  e3mlp-variant:
+    value: film
+  internal-e3mlp-variant:
+    value: normact
+  head-e3mlp-variant:
+    value: film
+  e3mlp-output-scale:
+    value: 1
+  e3mlp-weight-init-scale:
+    value: 0.5
+  e3mlp-residual-scale:
+    value: 1
+  e3mlp-pre-norm:
+    value: false
+  e3mlp-norm-eps:
+    value: 1e-8
+  e3mlp-film-hidden-dim:
+    value: 64
+  activation-odd-scalar:
+    value: tanh
+  activation-odd-gate:
+    value: tanh
+  nonlin-kind:
+    value: normact
+  activation-scalar:
+    value: leakyrelu
+  activation-gate:
+    value: softplus
+  s2act-res:
+    value: 128
+  norm-kind:
+    value: component
+  dropout:
+    value: 0.0
+  l1-reg-coef:
+    value: 0.0
+  l2-reg-coef:
+    value: 0.0
+  init-weights-factor:
+    value: 1
+  grad-clip-val:
+    value: 1
+  accumulate-grad-batches:
+    value: 1
+  n-radial:
+    value: 64
+  radial-layers:
+    value: [64, 64]
+  device:
+    value: cuda
+  gpus:
+    value: 1
+  benchmark:
+    value: true
+  adaptive-log-interval:
+    value: true
+  log-interval:
+    value: 10
+  log-data:
+    value: true
+  log-model:
+    value: true
+  log-forward:
+    value: false
+  log-per-irrep-metrics:
+    value: true
+  print-per-irrep-metrics:
+    value: true
+  log-per-irrep-images:
+    value: true
+  matrix-targets:
+    value: hamiltonian,density,overlap
+  enable-energy:
+    value: true
+  enable-num-electrons:
+    value: true
+  enable-forces:
+    value: false
+  train-on-energy:
+    value: false
+  train-on-num-electrons:
+    value: false
+  train-on-forces:
+    value: false
+  train-observables-on-gt:
+    value: false
+  log-partial-gt-observables:
+    value: true
+  loss-coef-observables:
+    value: 0.0
+  loss-coef-forces:
+    value: 0.0
+  symmetrize-output:
+    value: false
+  apply-cutoff-to-targets:
+    value: true
+  require-exact-edge-match:
+    value: true
+  precompute-edge-features:
+    value: true
+  radial-embedding-scale:
+    value: none
+  temp-step:
+    value: 300
+
+  # Loss spike recovery
+  revert-on-spike:
+    value: true
+  revert-monitor:
+    value: val/loss_total
+  revert-decay-patience:
+    value: 4
+  revert-decay-rate:
+    value: 0.8
+  revert-spike-factor:
+    value: 2.0
