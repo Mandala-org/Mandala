@@ -7,6 +7,8 @@ from typing import Any, Dict, Sequence
 
 import numpy as np
 import torch
+from ase.cell import Cell
+from ase.dft.kpoints import BandPath
 
 from core.basis_converter import (
     _U_FHIAIMS_TO_WIKI,
@@ -23,6 +25,7 @@ from core.periodic_fourier import (
 from data.block_matrix import BlockMatrix
 
 __all__ = [
+    "BandStructure",
     "KSpaceMatrix",
     "KSpaceSnapshot",
     "load_pyscf_kspace_snapshot",
@@ -35,6 +38,97 @@ _TO_E3NN = {
     "fhi-aims": _U_FHIAIMS_TO_WIKI,
     "e3nn": None,
 }
+
+
+@dataclass(slots=True)
+class BandStructure:
+    eigenvalues: torch.Tensor
+    kpoints_abs: torch.Tensor
+    linear_k: torch.Tensor
+    tick_positions: torch.Tensor
+    tick_labels: list[str]
+    fractional_kpoints: torch.Tensor | None = None
+    fermi_level: torch.Tensor | None = None
+
+
+def _fractional_to_cartesian_kpoints(
+    fractional_kpoints: torch.Tensor,
+    box: torch.Tensor,
+) -> torch.Tensor:
+    reciprocal = 2 * torch.pi * torch.linalg.inv(box).T
+    return fractional_kpoints @ reciprocal
+
+
+def _linear_k_axis(kpoints_abs: torch.Tensor) -> torch.Tensor:
+    if kpoints_abs.ndim != 2 or kpoints_abs.shape[1] != 3:
+        raise ValueError("kpoints_abs must have shape (Nk,3)")
+    if kpoints_abs.shape[0] == 0:
+        return torch.zeros(0, dtype=kpoints_abs.dtype, device=kpoints_abs.device)
+    if kpoints_abs.shape[0] == 1:
+        return torch.zeros(1, dtype=kpoints_abs.dtype, device=kpoints_abs.device)
+    deltas = torch.linalg.norm(kpoints_abs[1:] - kpoints_abs[:-1], dim=-1)
+    return torch.cat(
+        [
+            torch.zeros(1, dtype=kpoints_abs.dtype, device=kpoints_abs.device),
+            torch.cumsum(deltas, dim=0),
+        ]
+    )
+
+
+def _format_k_label(label: str) -> str:
+    return r"$\Gamma$" if label == "G" else label
+
+
+def build_band_path(
+    box: torch.Tensor,
+    *,
+    path: str | None = None,
+    special_points: dict[str, Sequence[float]] | None = None,
+    npoints: int = 200,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str]]:
+    cell = Cell(box.detach().cpu().numpy())
+    if special_points is None:
+        band_path = cell.bandpath(path=path, npoints=npoints)
+    else:
+        band_path = BandPath(
+            cell, path=path, special_points=special_points
+        ).interpolate(npoints=npoints)
+
+    fractional_kpoints = torch.tensor(
+        np.asarray(band_path.kpts),
+        dtype=box.dtype,
+        device=box.device,
+    )
+    kpoints_abs = torch.tensor(
+        np.asarray(band_path.cartesian_kpts()),
+        dtype=box.dtype,
+        device=box.device,
+    )
+    linear_k_np, tick_positions_np, tick_labels_raw = band_path.get_linear_kpoint_axis()
+    linear_k = torch.tensor(linear_k_np, dtype=box.dtype, device=box.device)
+    tick_positions = torch.tensor(
+        tick_positions_np,
+        dtype=box.dtype,
+        device=box.device,
+    )
+    tick_labels = [_format_k_label(str(label)) for label in tick_labels_raw]
+    return fractional_kpoints, kpoints_abs, linear_k, tick_positions, tick_labels
+
+
+def _generalized_eigenvalues_kspace(
+    hamiltonian_k: torch.Tensor,
+    overlap_k: torch.Tensor | None,
+) -> torch.Tensor:
+    H = 0.5 * (hamiltonian_k + hamiltonian_k.transpose(-1, -2).conj())
+    if overlap_k is None:
+        return torch.linalg.eigvalsh(H)
+
+    S = 0.5 * (overlap_k + overlap_k.transpose(-1, -2).conj())
+    L = torch.linalg.cholesky(S)
+    tmp = torch.linalg.solve(L, H)
+    A = torch.linalg.solve(L, tmp.transpose(-1, -2).conj()).transpose(-1, -2).conj()
+    A = 0.5 * (A + A.transpose(-1, -2).conj())
+    return torch.linalg.eigvalsh(A)
 
 
 def _global_offsets(
@@ -329,6 +423,73 @@ class KSpaceMatrix:
             basis=self.basis,
         )
 
+    def get_band_structure(
+        self,
+        *,
+        overlap: "KSpaceMatrix | None" = None,
+        fractional_kpoints: torch.Tensor | None = None,
+        linear_k: torch.Tensor | None = None,
+        tick_positions: torch.Tensor | None = None,
+        tick_labels: Sequence[str] | None = None,
+        fermi_level: torch.Tensor | None = None,
+    ) -> BandStructure:
+        if overlap is not None:
+            if overlap.matrices_k.shape != self.matrices_k.shape:
+                raise ValueError(
+                    "Hamiltonian and overlap must have matching k-space shapes."
+                )
+            if not torch.allclose(overlap.kpoints_abs, self.kpoints_abs):
+                raise ValueError("Hamiltonian and overlap must share kpoints.")
+
+        eigenvalues = _generalized_eigenvalues_kspace(
+            self.matrices_k,
+            None if overlap is None else overlap.matrices_k,
+        )
+        linear_axis = (
+            _linear_k_axis(self.kpoints_abs)
+            if linear_k is None
+            else linear_k.to(
+                device=self.kpoints_abs.device, dtype=self.kpoints_abs.dtype
+            )
+        )
+        if tick_positions is None:
+            tick_positions_t = torch.tensor(
+                [float(linear_axis[0].item()), float(linear_axis[-1].item())],
+                dtype=linear_axis.dtype,
+                device=linear_axis.device,
+            )
+        else:
+            tick_positions_t = tick_positions.to(
+                device=linear_axis.device,
+                dtype=linear_axis.dtype,
+            )
+        tick_labels_list = (
+            [_format_k_label("G"), _format_k_label("X")]
+            if tick_labels is None
+            else [str(label) for label in tick_labels]
+        )
+        fractional = None
+        if fractional_kpoints is not None:
+            fractional = fractional_kpoints.to(
+                device=self.kpoints_abs.device,
+                dtype=self.kpoints_abs.dtype,
+            )
+        fermi = None
+        if fermi_level is not None:
+            fermi = fermi_level.to(
+                device=eigenvalues.device,
+                dtype=eigenvalues.real.dtype,
+            )
+        return BandStructure(
+            eigenvalues=eigenvalues,
+            kpoints_abs=self.kpoints_abs,
+            linear_k=linear_axis,
+            tick_positions=tick_positions_t,
+            tick_labels=tick_labels_list,
+            fractional_kpoints=fractional,
+            fermi_level=fermi,
+        )
+
     @classmethod
     def from_shiftspace_dense(
         cls,
@@ -504,6 +665,26 @@ class KSpaceSnapshot:
             info=self.info,
         )
         return snap
+
+    def get_band_structure(
+        self,
+        *,
+        fractional_kpoints: torch.Tensor | None = None,
+        linear_k: torch.Tensor | None = None,
+        tick_positions: torch.Tensor | None = None,
+        tick_labels: Sequence[str] | None = None,
+    ) -> BandStructure:
+        fermi_level = None
+        if getattr(self.info, "fermi_level", None) is not None:
+            fermi_level = self.info.fermi_level
+        return self.hamiltonian.get_band_structure(
+            overlap=self.overlap,
+            fractional_kpoints=fractional_kpoints,
+            linear_k=linear_k,
+            tick_positions=tick_positions,
+            tick_labels=tick_labels,
+            fermi_level=fermi_level,
+        )
 
     @classmethod
     def from_shift_space(
