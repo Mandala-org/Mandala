@@ -6,6 +6,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import matplotlib
@@ -87,6 +88,23 @@ def setup_argparse() -> argparse.Namespace:
         default=8.0,
         help="Upper plot bound in eV after subtracting the Fermi level.",
     )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=8,
+        help="Number of k-points processed per chunk during the band calculation.",
+    )
+    parser.add_argument(
+        "--line-alpha",
+        type=float,
+        default=0.8,
+        help="Opacity of the band lines in the plot.",
+    )
+    parser.add_argument(
+        "--force-recompute",
+        action="store_true",
+        help="Ignore cached band_structure.pt and recompute the expensive band structure.",
+    )
     return parser.parse_args()
 
 
@@ -124,6 +142,7 @@ def _save_band_structure_plot(
     title: str,
     emin_ev: float,
     emax_ev: float,
+    line_alpha: float,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -145,6 +164,7 @@ def _save_band_structure_plot(
             energies_ev[:, band_idx].numpy(),
             color="#1f5aa6",
             lw=1.1,
+            alpha=line_alpha,
         )
     for xpos in tick_positions.tolist():
         ax.axvline(xpos, color="0.80", lw=0.8, zorder=0)
@@ -183,6 +203,47 @@ def _format_seconds(seconds: float) -> str:
     return f"{minutes}m {remainder:.1f}s"
 
 
+def _band_structure_to_payload(
+    band_structure: Any,
+    *,
+    matrix_path: Path,
+    info_path: Path,
+    path_string: str,
+) -> dict[str, Any]:
+    return {
+        "eigenvalues": band_structure.eigenvalues.detach().cpu(),
+        "kpoints_abs": band_structure.kpoints_abs.detach().cpu(),
+        "linear_k": band_structure.linear_k.detach().cpu(),
+        "tick_positions": band_structure.tick_positions.detach().cpu(),
+        "tick_labels": list(band_structure.tick_labels),
+        "fractional_kpoints": (
+            None
+            if band_structure.fractional_kpoints is None
+            else band_structure.fractional_kpoints.detach().cpu()
+        ),
+        "fermi_level": (
+            None
+            if band_structure.fermi_level is None
+            else band_structure.fermi_level.detach().cpu()
+        ),
+        "matrix_path": str(matrix_path),
+        "info_path": str(info_path),
+        "path_string": path_string,
+    }
+
+
+def _band_structure_from_payload(payload: dict[str, Any]) -> Any:
+    return SimpleNamespace(
+        eigenvalues=payload["eigenvalues"],
+        kpoints_abs=payload["kpoints_abs"],
+        linear_k=payload["linear_k"],
+        tick_positions=payload["tick_positions"],
+        tick_labels=list(payload["tick_labels"]),
+        fractional_kpoints=payload.get("fractional_kpoints"),
+        fermi_level=payload.get("fermi_level"),
+    )
+
+
 def main() -> None:
     t0 = time.perf_counter()
     args = setup_argparse()
@@ -200,6 +261,8 @@ def main() -> None:
     _log(f"output_dir: {output_dir}")
     _log(f"path_string: {args.path_string}")
     _log(f"num_points: {args.num_points}")
+    _log(f"chunk_size: {args.chunk_size}")
+    _log(f"line_alpha: {args.line_alpha}")
 
     t_load = time.perf_counter()
     _log("[1/6] Loading snapshot ...")
@@ -211,7 +274,7 @@ def main() -> None:
     _log(
         "[1/6] Loaded snapshot in "
         f"{_format_seconds(time.perf_counter() - t_load)} "
-        f"(atoms={len(snapshot.atoms)}, basis={snapshot.hamiltonian.basis})"
+        f"(atoms={len(snapshot.hamiltonian.atoms)}, basis={snapshot.hamiltonian.basis})"
     )
 
     t_path = time.perf_counter()
@@ -243,67 +306,58 @@ def main() -> None:
         f"(num_shifts={shifts.shape[0]})"
     )
 
-    t_fourier = time.perf_counter()
-    _log("[4/6] Converting shift-space matrices to k-space ...")
-    kspace_snapshot = snapshot.to_k_space(
-        kpoints_abs=kpoints_abs,
-        shifts=shifts,
-    )
-    _log(
-        "[4/6] Built k-space snapshot in "
-        f"{_format_seconds(time.perf_counter() - t_fourier)} "
-        f"(ham_shape={tuple(kspace_snapshot.hamiltonian.matrices_k.shape)})"
-    )
-
-    t_eig = time.perf_counter()
-    _log("[5/6] Solving generalized eigenproblems along the path ...")
-    band_structure = kspace_snapshot.get_band_structure(
-        fractional_kpoints=fractional_kpoints,
-        linear_k=linear_k,
-        tick_positions=tick_positions,
-        tick_labels=tick_labels,
-    )
-    _log(
-        "[5/6] Computed eigenvalues in "
-        f"{_format_seconds(time.perf_counter() - t_eig)} "
-        f"(num_bands={band_structure.eigenvalues.shape[1]})"
-    )
+    cache_path = output_dir / "band_structure.pt"
+    if cache_path.exists() and not args.force_recompute:
+        t_cache = time.perf_counter()
+        _log("[4/6] Loading cached band structure ...")
+        cache_payload = torch.load(cache_path, map_location="cpu", weights_only=False)
+        band_structure = _band_structure_from_payload(cache_payload)
+        _log(
+            "[4/6] Loaded cached band structure in "
+            f"{_format_seconds(time.perf_counter() - t_cache)} "
+            f"(num_bands={band_structure.eigenvalues.shape[1]})"
+        )
+    else:
+        t_band = time.perf_counter()
+        _log("[4/6] Computing chunked band structure ...")
+        band_structure = snapshot.get_band_structure(
+            kpoints_abs=kpoints_abs,
+            fractional_kpoints=fractional_kpoints,
+            linear_k=linear_k,
+            tick_positions=tick_positions,
+            tick_labels=tick_labels,
+            shifts=shifts,
+            chunk_size=args.chunk_size,
+            show_progress=True,
+        )
+        _log(
+            "[4/6] Computed chunked band structure in "
+            f"{_format_seconds(time.perf_counter() - t_band)} "
+            f"(num_bands={band_structure.eigenvalues.shape[1]})"
+        )
+        torch.save(
+            _band_structure_to_payload(
+                band_structure,
+                matrix_path=matrix_path,
+                info_path=info_path,
+                path_string=args.path_string,
+            ),
+            cache_path,
+        )
+        _log(f"[4/6] Cached band structure at {cache_path}")
 
     plot_path = output_dir / "band_structure.png"
     t_plot = time.perf_counter()
-    _log("[6/6] Saving plot and serialized payload ...")
+    _log("[5/6] Saving plot and serialized payload ...")
     _save_band_structure_plot(
         band_structure,
         plot_path,
         title=args.plot_title,
         emin_ev=args.emin_ev,
         emax_ev=args.emax_ev,
+        line_alpha=args.line_alpha,
     )
-
-    torch.save(
-        {
-            "eigenvalues": band_structure.eigenvalues.detach().cpu(),
-            "kpoints_abs": band_structure.kpoints_abs.detach().cpu(),
-            "linear_k": band_structure.linear_k.detach().cpu(),
-            "tick_positions": band_structure.tick_positions.detach().cpu(),
-            "tick_labels": list(band_structure.tick_labels),
-            "fractional_kpoints": (
-                None
-                if band_structure.fractional_kpoints is None
-                else band_structure.fractional_kpoints.detach().cpu()
-            ),
-            "fermi_level": (
-                None
-                if band_structure.fermi_level is None
-                else band_structure.fermi_level.detach().cpu()
-            ),
-            "matrix_path": str(matrix_path),
-            "info_path": str(info_path),
-            "path_string": args.path_string,
-        },
-        output_dir / "band_structure.pt",
-    )
-    _log("[6/6] Saved outputs in " f"{_format_seconds(time.perf_counter() - t_plot)}")
+    _log("[5/6] Saved outputs in " f"{_format_seconds(time.perf_counter() - t_plot)}")
 
     _log("=== Band structure evaluation finished ===")
     _log(f"plot_path: {plot_path}")

@@ -28,6 +28,8 @@ __all__ = [
     "BandStructure",
     "KSpaceMatrix",
     "KSpaceSnapshot",
+    "build_band_path",
+    "block_matrix_to_shiftspace_dense",
     "load_pyscf_kspace_snapshot",
 ]
 
@@ -129,6 +131,37 @@ def _generalized_eigenvalues_kspace(
     A = torch.linalg.solve(L, tmp.transpose(-1, -2).conj()).transpose(-1, -2).conj()
     A = 0.5 * (A + A.transpose(-1, -2).conj())
     return torch.linalg.eigvalsh(A)
+
+
+def block_matrix_to_shiftspace_dense(
+    mat: BlockMatrix,
+    *,
+    shifts: torch.Tensor,
+) -> torch.Tensor:
+    total_dim = sum(mat.orbital_cfg.block_dims(f"{el}-{el}")[0] for el in mat.atoms)
+    device = next(iter(mat.pair_blocks.values())).device
+    out = torch.zeros(
+        shifts.shape[0],
+        total_dim,
+        total_dim,
+        dtype=next(iter(mat.pair_blocks.values())).dtype,
+        device=device,
+    )
+    offsets = _global_offsets(mat.atoms, mat.orbital_cfg, device=device)
+    shift_to_idx = {tuple(map(int, s.tolist())): idx for idx, s in enumerate(shifts)}
+    for key, edges in mat.pair_edges.items():
+        blocks = mat.pair_blocks[key]
+        for idx, edge in enumerate(edges.t().tolist()):
+            sx, sy, sz, i, j = edge
+            s_idx = shift_to_idx.get((int(sx), int(sy), int(sz)))
+            if s_idx is None:
+                continue
+            di = mat.orbital_cfg.block_dims(f"{mat.atoms[i]}-{mat.atoms[i]}")[0]
+            dj = mat.orbital_cfg.block_dims(f"{mat.atoms[j]}-{mat.atoms[j]}")[0]
+            r0 = int(offsets[i])
+            c0 = int(offsets[j])
+            out[s_idx, r0 : r0 + di, c0 : c0 + dj] = blocks[idx]
+    return out
 
 
 def _global_offsets(
@@ -432,6 +465,7 @@ class KSpaceMatrix:
         tick_positions: torch.Tensor | None = None,
         tick_labels: Sequence[str] | None = None,
         fermi_level: torch.Tensor | None = None,
+        chunk_size: int | None = None,
     ) -> BandStructure:
         if overlap is not None:
             if overlap.matrices_k.shape != self.matrices_k.shape:
@@ -441,10 +475,26 @@ class KSpaceMatrix:
             if not torch.allclose(overlap.kpoints_abs, self.kpoints_abs):
                 raise ValueError("Hamiltonian and overlap must share kpoints.")
 
-        eigenvalues = _generalized_eigenvalues_kspace(
-            self.matrices_k,
-            None if overlap is None else overlap.matrices_k,
-        )
+        if (
+            chunk_size is None
+            or chunk_size <= 0
+            or chunk_size >= self.matrices_k.shape[0]
+        ):
+            eigenvalues = _generalized_eigenvalues_kspace(
+                self.matrices_k,
+                None if overlap is None else overlap.matrices_k,
+            )
+        else:
+            chunks = []
+            for start in range(0, self.matrices_k.shape[0], int(chunk_size)):
+                stop = min(start + int(chunk_size), self.matrices_k.shape[0])
+                chunks.append(
+                    _generalized_eigenvalues_kspace(
+                        self.matrices_k[start:stop],
+                        None if overlap is None else overlap.matrices_k[start:stop],
+                    )
+                )
+            eigenvalues = torch.cat(chunks, dim=0)
         linear_axis = (
             _linear_k_axis(self.kpoints_abs)
             if linear_k is None
@@ -673,6 +723,7 @@ class KSpaceSnapshot:
         linear_k: torch.Tensor | None = None,
         tick_positions: torch.Tensor | None = None,
         tick_labels: Sequence[str] | None = None,
+        chunk_size: int | None = None,
     ) -> BandStructure:
         fermi_level = None
         if getattr(self.info, "fermi_level", None) is not None:
@@ -684,6 +735,7 @@ class KSpaceSnapshot:
             tick_positions=tick_positions,
             tick_labels=tick_labels,
             fermi_level=fermi_level,
+            chunk_size=chunk_size,
         )
 
     @classmethod
@@ -703,38 +755,11 @@ class KSpaceSnapshot:
                 raise ValueError("Need shifts or kmesh for shift->k conversion")
             shift_t = translation_shifts_for_kmesh(kmesh, device=snapshot.box.device)
 
-        def _matrix_to_shift_dense(mat: BlockMatrix) -> torch.Tensor:
-            total_dim = sum(
-                snapshot.density.orbital_cfg.block_dims(f"{el}-{el}")[0]
-                for el in snapshot.density.atoms
-            )
-            device = next(iter(mat.pair_blocks.values())).device
-            out = torch.zeros(
-                shift_t.shape[0],
-                total_dim,
-                total_dim,
-                dtype=next(iter(mat.pair_blocks.values())).dtype,
-                device=device,
-            )
-            offsets = _global_offsets(mat.atoms, mat.orbital_cfg, device=device)
-            shift_to_idx = {tuple(s.tolist()): idx for idx, s in enumerate(shift_t)}
-            for key, edges in mat.pair_edges.items():
-                blocks = mat.pair_blocks[key]
-                for idx, edge in enumerate(edges.t().tolist()):
-                    sx, sy, sz, i, j = edge
-                    s_idx = shift_to_idx.get((sx, sy, sz))
-                    if s_idx is None:
-                        continue
-                    di = mat.orbital_cfg.block_dims(f"{mat.atoms[i]}-{mat.atoms[i]}")[0]
-                    dj = mat.orbital_cfg.block_dims(f"{mat.atoms[j]}-{mat.atoms[j]}")[0]
-                    r0 = int(offsets[i])
-                    c0 = int(offsets[j])
-                    out[s_idx, r0 : r0 + di, c0 : c0 + dj] = blocks[idx]
-            return out
-
-        ham_shift = _matrix_to_shift_dense(snapshot.hamiltonian)
-        ovl_shift = _matrix_to_shift_dense(snapshot.overlap)
-        den_shift = _matrix_to_shift_dense(snapshot.density)
+        ham_shift = block_matrix_to_shiftspace_dense(
+            snapshot.hamiltonian, shifts=shift_t
+        )
+        ovl_shift = block_matrix_to_shiftspace_dense(snapshot.overlap, shifts=shift_t)
+        den_shift = block_matrix_to_shiftspace_dense(snapshot.density, shifts=shift_t)
 
         ham = KSpaceMatrix.from_shiftspace_dense(
             ham_shift,

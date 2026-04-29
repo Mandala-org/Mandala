@@ -64,6 +64,7 @@ def test_kspace_snapshot_get_band_structure_generalized_eigenvalues():
     payload = snap.get_band_structure(
         tick_labels=["G", "X"],
         tick_positions=torch.tensor([0.0, 0.5], dtype=torch.float32),
+        chunk_size=1,
     )
 
     assert payload.eigenvalues.shape == (2, 1)
