@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from data.kspace_snapshot import build_band_path  # noqa: E402
 from data.snapshot import Snapshot  # noqa: E402
 from utils.units import HARTREE_TO_EV  # noqa: E402
 
@@ -169,7 +171,20 @@ def _save_band_structure_plot(
     plt.close(fig)
 
 
+def _log(message: str) -> None:
+    print(message, flush=True)
+
+
+def _format_seconds(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.2f}s"
+    minutes = int(seconds // 60)
+    remainder = seconds - 60 * minutes
+    return f"{minutes}m {remainder:.1f}s"
+
+
 def main() -> None:
+    t0 = time.perf_counter()
     args = setup_argparse()
     matrix_path, info_path = _discover_snapshot_paths(
         args.snapshot_path,
@@ -179,17 +194,84 @@ def main() -> None:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    _log("=== Band structure evaluation starting ===")
+    _log(f"matrix_path: {matrix_path}")
+    _log(f"info_path: {info_path}")
+    _log(f"output_dir: {output_dir}")
+    _log(f"path_string: {args.path_string}")
+    _log(f"num_points: {args.num_points}")
+
+    t_load = time.perf_counter()
+    _log("[1/6] Loading snapshot ...")
     snapshot = Snapshot.from_openmx(
         matrix_path,
         info_path,
         convention=args.convention,
     )
-    band_structure = snapshot.get_band_structure(
+    _log(
+        "[1/6] Loaded snapshot in "
+        f"{_format_seconds(time.perf_counter() - t_load)} "
+        f"(atoms={len(snapshot.atoms)}, basis={snapshot.hamiltonian.basis})"
+    )
+
+    t_path = time.perf_counter()
+    _log("[2/6] Building k-path ...")
+    (
+        fractional_kpoints,
+        kpoints_abs,
+        linear_k,
+        tick_positions,
+        tick_labels,
+    ) = build_band_path(
+        snapshot.box,
         path=args.path_string,
         special_points=_silicon_fcc_special_points(),
         npoints=args.num_points,
     )
+    _log(
+        "[2/6] Built k-path in "
+        f"{_format_seconds(time.perf_counter() - t_path)} "
+        f"(num_kpoints={kpoints_abs.shape[0]}, labels={tick_labels})"
+    )
+
+    t_shifts = time.perf_counter()
+    _log("[3/6] Collecting translation shifts ...")
+    shifts = snapshot.get_translation_shifts().to(device=snapshot.box.device)
+    _log(
+        "[3/6] Collected shifts in "
+        f"{_format_seconds(time.perf_counter() - t_shifts)} "
+        f"(num_shifts={shifts.shape[0]})"
+    )
+
+    t_fourier = time.perf_counter()
+    _log("[4/6] Converting shift-space matrices to k-space ...")
+    kspace_snapshot = snapshot.to_k_space(
+        kpoints_abs=kpoints_abs,
+        shifts=shifts,
+    )
+    _log(
+        "[4/6] Built k-space snapshot in "
+        f"{_format_seconds(time.perf_counter() - t_fourier)} "
+        f"(ham_shape={tuple(kspace_snapshot.hamiltonian.matrices_k.shape)})"
+    )
+
+    t_eig = time.perf_counter()
+    _log("[5/6] Solving generalized eigenproblems along the path ...")
+    band_structure = kspace_snapshot.get_band_structure(
+        fractional_kpoints=fractional_kpoints,
+        linear_k=linear_k,
+        tick_positions=tick_positions,
+        tick_labels=tick_labels,
+    )
+    _log(
+        "[5/6] Computed eigenvalues in "
+        f"{_format_seconds(time.perf_counter() - t_eig)} "
+        f"(num_bands={band_structure.eigenvalues.shape[1]})"
+    )
+
     plot_path = output_dir / "band_structure.png"
+    t_plot = time.perf_counter()
+    _log("[6/6] Saving plot and serialized payload ...")
     _save_band_structure_plot(
         band_structure,
         plot_path,
@@ -221,13 +303,13 @@ def main() -> None:
         },
         output_dir / "band_structure.pt",
     )
+    _log("[6/6] Saved outputs in " f"{_format_seconds(time.perf_counter() - t_plot)}")
 
-    print("matrix_path:", matrix_path)
-    print("info_path:", info_path)
-    print("output_dir:", output_dir)
-    print("plot_path:", plot_path)
-    print("num_kpoints:", int(band_structure.eigenvalues.shape[0]))
-    print("num_bands:", int(band_structure.eigenvalues.shape[1]))
+    _log("=== Band structure evaluation finished ===")
+    _log(f"plot_path: {plot_path}")
+    _log(f"num_kpoints: {int(band_structure.eigenvalues.shape[0])}")
+    _log(f"num_bands: {int(band_structure.eigenvalues.shape[1])}")
+    _log(f"total_runtime: {_format_seconds(time.perf_counter() - t0)}")
 
 
 if __name__ == "__main__":
