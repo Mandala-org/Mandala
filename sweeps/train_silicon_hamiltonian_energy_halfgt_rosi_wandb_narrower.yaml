@@ -42,6 +42,12 @@ parameters:
   num-val:
     value: 50
 
+  # Optimization
+  lr:
+    distribution: log_uniform_values
+    min: 0.0001
+    max: 0.1
+
   # Model architecture
   precision:
     value: 32-true
@@ -101,14 +107,16 @@ parameters:
     value: 1
   node-update-post-lin-mlp-n-layers:
     value: 1
-  neck-depth:
-    value: 1
-  head-depth:
-    value: 3
   internal-e3mlp-layers:
-    value: 1
+    values:
+      - 1
+      - 2
+      - 3
   head-e3mlp-layers:
-    value: 2
+    values:
+      - 1
+      - 2
+      - 3
   head-use-node-embeddings-for-self-edges:
     value: true
   separate-shifted-self:
@@ -122,11 +130,20 @@ parameters:
   head-log-scale-mlp-n-layers:
     value: 1
   e3mlp-variant:
-    value: film
+    values:
+      - film
+      - normact
+      - resnormact
   internal-e3mlp-variant:
-    value: normact
+    values:
+      - film
+      - normact
+      - resnormact
   head-e3mlp-variant:
-    value: film
+    values:
+      - film
+      - normact
+      - resnormact
   e3mlp-output-scale:
     value: 1
   e3mlp-weight-init-scale:
