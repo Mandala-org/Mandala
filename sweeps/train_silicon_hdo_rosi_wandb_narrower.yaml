@@ -53,8 +53,6 @@ parameters:
     value: 32-true
   convention:
     value: e3nn
-  smoke-test:
-    value: false
   use-lr-scheduler:
     value: true
   cutoff-radius:
@@ -83,30 +81,14 @@ parameters:
     value: true
   edge-update-node-combine:
     value: concat
-  edge-update-linear:
-    value: post
-  edge-update:
-    value: tensor_product
   edge-update-residual:
     value: true
   node-update-message-agg:
     value: sum
-  node-update:
-    value: concat
   node-update-residual:
     value: true
   head-use-mlp-log-scale:
     value: false
-  edge-update-pre-lin-mlp-n-layers:
-    value: 1
-  edge-update-post-lin-mlp-n-layers:
-    value: 1
-  node-update-pre-lin-mlp-n-layers:
-    value: 1
-  node-update-attention-mlp-n-layers:
-    value: 1
-  node-update-post-lin-mlp-n-layers:
-    value: 1
   internal-e3mlp-layers:
     values:
       - 1
