@@ -48,6 +48,7 @@ from core.basis_converter import (
 )
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from net.common import Config
+from core.periodic_fourier import shiftspace_to_kspace_dense
 
 __all__ = ["Snapshot"]
 
@@ -632,12 +633,32 @@ class Snapshot:
         npoints: int = 200,
         kpoints_abs: torch.Tensor | None = None,
         fractional_kpoints: torch.Tensor | None = None,
+        linear_k: torch.Tensor | None = None,
+        tick_positions: torch.Tensor | None = None,
+        tick_labels: list[str] | tuple[str, ...] | None = None,
         shifts: torch.Tensor | None = None,
+        chunk_size: int | None = None,
+        show_progress: bool = False,
     ):
         if self.box is None:
             raise ValueError("Snapshot needs a periodic box to compute band structure.")
 
-        from data.kspace_snapshot import build_band_path
+        from data.kspace_snapshot import (
+            BandStructure,
+            _linear_k_axis,
+            _generalized_eigenvalues_kspace,
+            block_matrix_to_shiftspace_dense,
+            build_band_path,
+        )
+
+        progress = None
+        if show_progress:
+            try:
+                from tqdm.auto import tqdm
+            except ImportError:  # pragma: no cover - optional dependency
+                tqdm = None
+            if tqdm is not None:
+                progress = tqdm
 
         fractional_kpoints_t = fractional_kpoints
         linear_k = None
@@ -672,15 +693,76 @@ class Snapshot:
         if shift_t.numel() == 0:
             raise ValueError("Snapshot does not contain any translation shifts.")
         shift_t = shift_t.to(device=self.box.device)
-        kspace_snapshot = self.to_k_space(
-            kpoints_abs=kpoints_abs.to(device=self.box.device, dtype=self.box.dtype),
-            shifts=shift_t,
+
+        kpoints_abs = kpoints_abs.to(device=self.box.device, dtype=self.box.dtype)
+
+        ham_shift = block_matrix_to_shiftspace_dense(self.hamiltonian, shifts=shift_t)
+        ovl_shift = block_matrix_to_shiftspace_dense(self.overlap, shifts=shift_t)
+
+        nk = int(kpoints_abs.shape[0])
+        effective_chunk = (
+            nk if chunk_size is None or chunk_size <= 0 else int(chunk_size)
         )
-        return kspace_snapshot.get_band_structure(
+        iterator = range(0, nk, effective_chunk)
+        if progress is not None and nk > effective_chunk:
+            iterator = progress(
+                iterator,
+                total=(nk + effective_chunk - 1) // effective_chunk,
+                desc="Band chunks",
+            )
+
+        eigen_chunks = []
+        for start in iterator:
+            stop = min(start + effective_chunk, nk)
+            k_chunk = kpoints_abs[start:stop]
+            ham_k = shiftspace_to_kspace_dense(
+                ham_shift,
+                kpoints_abs=k_chunk,
+                shifts=shift_t,
+                box=self.box,
+            )
+            ovl_k = shiftspace_to_kspace_dense(
+                ovl_shift,
+                kpoints_abs=k_chunk,
+                shifts=shift_t,
+                box=self.box,
+            )
+            eigen_chunks.append(_generalized_eigenvalues_kspace(ham_k, ovl_k))
+
+        eigenvalues = torch.cat(eigen_chunks, dim=0)
+        linear_axis = (
+            linear_k.to(device=kpoints_abs.device, dtype=kpoints_abs.dtype)
+            if linear_k is not None
+            else _linear_k_axis(kpoints_abs)
+        )
+
+        fermi_level = None
+        if getattr(self.info, "fermi_level", None) is not None:
+            fermi_level = self.info.fermi_level.to(
+                device=eigenvalues.device,
+                dtype=eigenvalues.real.dtype,
+            )
+
+        return BandStructure(
+            eigenvalues=eigenvalues,
+            kpoints_abs=kpoints_abs,
+            linear_k=linear_axis,
+            tick_positions=(
+                tick_positions.to(device=kpoints_abs.device, dtype=kpoints_abs.dtype)
+                if tick_positions is not None
+                else torch.tensor(
+                    [float(linear_axis[0].item()), float(linear_axis[-1].item())],
+                    device=kpoints_abs.device,
+                    dtype=kpoints_abs.dtype,
+                )
+            ),
+            tick_labels=(
+                ["X0", "X1"]
+                if tick_labels is None
+                else [str(label) for label in tick_labels]
+            ),
             fractional_kpoints=fractional_kpoints_t,
-            linear_k=linear_k,
-            tick_positions=tick_positions,
-            tick_labels=tick_labels,
+            fermi_level=fermi_level,
         )
 
     @classmethod
