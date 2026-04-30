@@ -1,5 +1,7 @@
 import pytest
 import torch
+from pathlib import Path
+from types import SimpleNamespace
 
 from data.gnn_dataset import E3GNNDataset
 
@@ -47,3 +49,73 @@ def test_load_preprocessed_sample_reports_and_deletes_bad_cache(
     captured = capsys.readouterr()
     assert "Failed to load preprocessed sample cache" in captured.out
     assert "bad cache payload" in captured.out
+
+
+@pytest.mark.unit
+def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
+    monkeypatch,
+):
+    ds = object.__new__(E3GNNDataset)
+    cfg = SimpleNamespace(
+        dtype=torch.float32,
+        train_on_forces=False,
+        train_on_stress=False,
+        enable_forces=False,
+        enable_stress=False,
+        l_max=4,
+        verbosity=0,
+        snapshot_cache_dir=None,
+        cutoff_radius=7.0,
+        apply_cutoff_to_targets=True,
+        matrix_targets=["hamiltonian", "overlap", "density"],
+        train_target="matrix",
+        symmetrize_hamiltonian_targets=True,
+        require_exact_edge_match=True,
+        precompute_edge_features=True,
+        separate_shifted_self=True,
+        shuffle_snapshot_load_order=True,
+    )
+    mapper = SimpleNamespace(
+        orbital_cfg=SimpleNamespace(to_dict=lambda: {}),
+    )
+    ds.cfg = cfg
+    ds.mapper = mapper
+    ds.convention = "e3nn"
+    ds.dtype = torch.float32
+    ds.sh_irreps = object()
+    ds.device = torch.device("cpu")
+    ds.snapshot_paths = [
+        (Path(f"/tmp/mat{i}"), Path(f"/tmp/info{i}")) for i in range(5)
+    ]
+    ds.snapshots = []
+    ds.snapshot_cache_hits = 0
+    ds.snapshot_cache_misses = 0
+    ds.preprocessed_cache_hits = 0
+    ds.preprocessed_cache_misses = 0
+    call_order = []
+
+    monkeypatch.setattr("data.gnn_dataset.secrets.randbits", lambda _: 1)
+
+    def fake_load_snapshot(self, matrix_path, info_path):
+        call_order.append(matrix_path.name)
+        return object()
+
+    def fake_load_or_build(self, matrix_path, info_path, snapshot):
+        return ({"matrix": matrix_path.name}, {"info": info_path.name})
+
+    monkeypatch.setattr(E3GNNDataset, "_load_snapshot", fake_load_snapshot)
+    monkeypatch.setattr(
+        E3GNNDataset, "_load_or_build_preprocessed_sample", fake_load_or_build
+    )
+
+    E3GNNDataset.__init__(ds, ds.snapshot_paths, mapper, cfg, "e3nn")
+
+    assert [sample[0]["matrix"] for sample in ds.snapshots] == [
+        "mat0",
+        "mat1",
+        "mat2",
+        "mat3",
+        "mat4",
+    ]
+    assert sorted(call_order) == ["mat0", "mat1", "mat2", "mat3", "mat4"]
+    assert call_order != ["mat0", "mat1", "mat2", "mat3", "mat4"]

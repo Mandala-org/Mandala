@@ -194,6 +194,7 @@ class Config:
     # ----------------- caching ------------------------------------------
     snapshot_cache_dir: str | None = None  # raw Snapshot .pt cache, if any
     dataset_device: str | None = None  # keep processed dataset on this device
+    shuffle_snapshot_load_order: bool = True  # randomize cache warmup order
     seed: int = 42  # random seed for reproducibility
     precompute_edge_features: bool = True  # precompute edge features
     radial_embedding_scale: str = "none"
