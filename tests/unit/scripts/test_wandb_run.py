@@ -51,8 +51,6 @@ def test_setup_argparse_accepts_resume_from_wandb(monkeypatch):
         "argv",
         [
             "wandb_run.py",
-            "--data-path",
-            "/tmp/data",
             "--resume-from-wandb",
             "https://wandb.ai/acme/project/runs/abc123",
         ],
@@ -125,6 +123,11 @@ def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch):
 
     class DummyRun:
         name = "blooming-oath-3"
+        config = {
+            "data_path": "/tmp/siox",
+            "lr": 0.01,
+            "matrix-targets": "hamiltonian,density,overlap",
+        }
         summary = {
             "checkpoint/latest_path": "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt",
             "checkpoint/best_path": "checkpoints/siox/blooming-oath-3/best_model.pt",
@@ -154,6 +157,9 @@ def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch):
     )
     assert resolved["run_name"] == "blooming-oath-3"
     assert resolved["checkpoint_dir"] == "checkpoints/siox"
+    assert resolved["config"]["data_path"] == "/tmp/siox"
+    assert resolved["config"]["lr"] == 0.01
+    assert resolved["config"]["matrix_targets"] == "hamiltonian,density,overlap"
 
 
 def test_apply_wandb_resume_metadata_sets_checkpoint_and_run_dir(monkeypatch):
@@ -165,6 +171,10 @@ def test_apply_wandb_resume_metadata_sets_checkpoint_and_run_dir(monkeypatch):
         run_name=None,
         checkpoint_dir="checkpoints/main",
         wandb_project=None,
+        data_path=None,
+        lr=3e-4,
+        matrix_targets=["density"],
+        _explicit_args=set(),
     )
 
     monkeypatch.setattr(
@@ -175,6 +185,11 @@ def test_apply_wandb_resume_metadata_sets_checkpoint_and_run_dir(monkeypatch):
             "run_name": "blooming-oath-3",
             "checkpoint_dir": "checkpoints/siox",
             "project": "project",
+            "config": {
+                "data_path": "/tmp/siox",
+                "lr": 0.01,
+                "matrix_targets": "hamiltonian,density,overlap",
+            },
         },
     )
 
@@ -187,3 +202,61 @@ def test_apply_wandb_resume_metadata_sets_checkpoint_and_run_dir(monkeypatch):
     assert args.run_name == "blooming-oath-3"
     assert args.checkpoint_dir == "checkpoints/siox"
     assert args.wandb_project == "project"
+    assert args.data_path == "/tmp/siox"
+    assert args.lr == 0.01
+    assert args.matrix_targets == "hamiltonian,density,overlap"
+
+
+def test_apply_wandb_resume_metadata_keeps_explicit_overrides(monkeypatch):
+    mod = _load_module()
+    args = mod.argparse.Namespace(
+        resume_from_wandb="https://wandb.ai/acme/project/runs/abc123",
+        resume_from_checkpoint=None,
+        resume_mode="latest",
+        run_name="manual-name",
+        checkpoint_dir="manual/checkpoints",
+        wandb_project="manual-project",
+        data_path="/manual/data",
+        lr=0.002,
+        _explicit_args={
+            "run_name",
+            "checkpoint_dir",
+            "wandb_project",
+            "data_path",
+            "lr",
+        },
+    )
+
+    monkeypatch.setattr(
+        mod,
+        "_resolve_wandb_resume",
+        lambda url, mode: {
+            "checkpoint_path": "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt",
+            "run_name": "blooming-oath-3",
+            "checkpoint_dir": "checkpoints/siox",
+            "project": "project",
+            "config": {
+                "data_path": "/tmp/siox",
+                "lr": 0.01,
+            },
+        },
+    )
+
+    mod._apply_wandb_resume_metadata(args)
+
+    assert (
+        args.resume_from_checkpoint
+        == "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt"
+    )
+    assert args.run_name == "manual-name"
+    assert args.checkpoint_dir == "manual/checkpoints"
+    assert args.wandb_project == "manual-project"
+    assert args.data_path == "/manual/data"
+    assert args.lr == 0.002
+
+
+def test_validate_required_args_accepts_wandb_filled_data_path():
+    mod = _load_module()
+    args = mod.argparse.Namespace(data_path="/tmp/data")
+
+    mod._validate_required_args(args)
