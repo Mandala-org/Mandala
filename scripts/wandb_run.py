@@ -7,6 +7,7 @@ import typing
 from pathlib import Path
 from types import NoneType, UnionType
 from typing import get_type_hints, Union
+from urllib.parse import urlparse
 
 import torch
 from omegaconf import OmegaConf
@@ -46,6 +47,7 @@ def setup_argparse() -> argparse.Namespace:
         default="checkpoints/main",
     )
     parser.add_argument(*_arg_names("resume_from_checkpoint"), type=str, default=None)
+    parser.add_argument(*_arg_names("resume_from_wandb"), type=str, default=None)
     parser.add_argument(
         *_arg_names("resume_mode"),
         type=str,
@@ -114,6 +116,8 @@ def setup_argparse() -> argparse.Namespace:
 
 def main() -> None:
     args = setup_argparse()
+    if args.resume_from_wandb is not None:
+        _apply_wandb_resume_metadata(args)
     print("=== wandb_run.py starting ===")
     print(f"dataset_kind={args.dataset_kind}")
     print(f"data_path={args.data_path}")
@@ -121,6 +125,7 @@ def main() -> None:
     print(f"checkpoint_dir={args.checkpoint_dir}")
     print(f"wandb_mode={args.wandb_mode}")
     print(f"resume_from_checkpoint={args.resume_from_checkpoint}")
+    print(f"resume_from_wandb={args.resume_from_wandb}")
     parsed_yaml = None
     if args.sweep_yaml is not None:
         print(f"--- Loading sweep YAML: {args.sweep_yaml} ---")
@@ -168,6 +173,74 @@ def _arg_names(name: str) -> tuple[str, ...]:
     if alias == primary:
         return (primary,)
     return (primary, alias)
+
+
+def _apply_wandb_resume_metadata(args: argparse.Namespace) -> None:
+    if args.resume_from_checkpoint is not None:
+        raise ValueError(
+            "--resume-from-wandb and --resume-from-checkpoint are mutually exclusive"
+        )
+    resolved = _resolve_wandb_resume(args.resume_from_wandb, args.resume_mode)
+    args.resume_from_checkpoint = resolved["checkpoint_path"]
+    if getattr(args, "run_name", None) in (None, "", "mandala-run"):
+        args.run_name = resolved["run_name"]
+    args.checkpoint_dir = resolved["checkpoint_dir"]
+    if getattr(args, "wandb_project", None) in (None, ""):
+        args.wandb_project = resolved["project"]
+
+
+def _resolve_wandb_resume(run_url: str, resume_mode: str) -> dict[str, str]:
+    entity, project, run_id = _parse_wandb_run_url(run_url)
+    try:
+        import wandb
+    except Exception as exc:  # pragma: no cover - depends on environment
+        raise RuntimeError(
+            "wandb is required for --resume-from-wandb but could not be imported"
+        ) from exc
+
+    api = wandb.Api()
+    run = api.run(f"{entity}/{project}/{run_id}")
+    summary = getattr(run, "summary", {})
+    summary_get = summary.get if hasattr(summary, "get") else dict(summary).get
+    key_by_mode = {
+        "latest": "checkpoint/latest_path",
+        "best": "checkpoint/best_path",
+        "final": "checkpoint/final_path",
+    }
+    summary_key = key_by_mode[resume_mode]
+    checkpoint_path = summary_get(summary_key)
+    if not checkpoint_path:
+        raise ValueError(
+            f"W&B run {entity}/{project}/{run_id} does not expose {summary_key!r} in its summary"
+        )
+    checkpoint_path = str(checkpoint_path)
+    checkpoint_parent = Path(checkpoint_path).expanduser().parent
+    run_name = checkpoint_parent.name or getattr(run, "name", None) or run_id
+    checkpoint_dir = str(checkpoint_parent.parent)
+    return {
+        "entity": entity,
+        "project": project,
+        "run_id": run_id,
+        "run_name": str(run_name),
+        "checkpoint_path": checkpoint_path,
+        "checkpoint_dir": checkpoint_dir,
+    }
+
+
+def _parse_wandb_run_url(run_url: str) -> tuple[str, str, str]:
+    parsed = urlparse(run_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(f"Invalid W&B run URL: {run_url!r}")
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 4 or parts[2] != "runs":
+        raise ValueError(
+            "Expected W&B run URL like "
+            "'https://wandb.ai/<entity>/<project>/runs/<run_id>'"
+        )
+    entity, project, _, run_id = parts[:4]
+    if not entity or not project or not run_id:
+        raise ValueError(f"Invalid W&B run URL: {run_url!r}")
+    return entity, project, run_id
 
 
 if __name__ == "__main__":
