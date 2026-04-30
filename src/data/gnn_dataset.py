@@ -16,6 +16,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
+import random
 from pathlib import Path
 import tempfile
 
@@ -94,9 +96,20 @@ class E3GNNDataset(Dataset):
         self.snapshot_cache_misses = 0
         self.preprocessed_cache_hits = 0
         self.preprocessed_cache_misses = 0
-        for matrix_path, info_path in tqdm(
-            self.snapshot_paths, desc="Loading snapshots"
-        ):
+        load_indices = list(range(len(self.snapshot_paths)))
+        if getattr(self.cfg, "shuffle_snapshot_load_order", True):
+            warmup_seed = secrets.randbits(64)
+            random.Random(warmup_seed).shuffle(load_indices)
+            print(
+                f"--- Snapshot warmup order shuffled with ephemeral seed={warmup_seed} ---"
+            )
+        else:
+            print("--- Snapshot warmup order preserved ---")
+        loaded_samples: list[tuple[dict, dict] | None] = [None] * len(
+            self.snapshot_paths
+        )
+        for idx in tqdm(load_indices, desc="Loading snapshots"):
+            matrix_path, info_path = self.snapshot_paths[idx]
             snapshot = self._load_snapshot(matrix_path, info_path)
             try:
                 sample = self._load_or_build_preprocessed_sample(
@@ -106,7 +119,10 @@ class E3GNNDataset(Dataset):
                 raise RuntimeError(
                     f"Failed to preprocess snapshot matrix={matrix_path} info={info_path}: {exc}"
                 ) from exc
-            self.snapshots.append(sample)
+            loaded_samples[idx] = sample
+        if any(sample is None for sample in loaded_samples):
+            raise RuntimeError("Internal error: some snapshots failed to load.")
+        self.snapshots = [sample for sample in loaded_samples if sample is not None]
         if getattr(self.cfg, "snapshot_cache_dir", None) is None:
             print(
                 f"[CACHE] Snapshot loading: cache disabled, loaded {len(self.snapshot_paths)} snapshot(s)"
