@@ -227,3 +227,16 @@ def test_run_training_uses_wandb_run_name_for_run_dir(monkeypatch, tmp_path):
     assert captured["run_dir"] == tmp_path / "vibran-sweep-14"
     assert captured["cfg_run_name"] == "vibran-sweep-14"
     assert args.run_name == "vibran-sweep-14"
+
+
+def test_populate_config_from_args_accepts_torch_prefixed_dtype():
+    mod = _load_module()
+    args = mod.argparse.Namespace(
+        dtype="torch.float32",
+        matrix_targets=["hamiltonian"],
+        radial_layers=[64, 64],
+    )
+
+    cfg = mod._populate_config_from_args(args)
+
+    assert cfg.dtype == torch.float32

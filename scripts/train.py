@@ -152,7 +152,7 @@ def _populate_config_from_args(args: argparse.Namespace) -> Config:
     if isinstance(cfg.radial_layers, str):
         cfg.radial_layers = _coerce_list_value(cfg.radial_layers)
     if isinstance(cfg.dtype, str):
-        cfg.dtype = getattr(torch, cfg.dtype)
+        cfg.dtype = _resolve_torch_dtype(cfg.dtype)
     return cfg
 
 
@@ -177,6 +177,16 @@ def _coerce_list_value(value: Any) -> list[Any]:
             return [part.strip() for part in raw.split(",") if part.strip()]
         return [raw]
     return [value]
+
+
+def _resolve_torch_dtype(value: str) -> torch.dtype:
+    candidate = value.strip()
+    if candidate.startswith("torch."):
+        candidate = candidate.split(".", 1)[1]
+    dtype = getattr(torch, candidate, None)
+    if not isinstance(dtype, torch.dtype):
+        raise AttributeError(f"module 'torch' has no dtype named {value!r}")
+    return dtype
 
 
 def _resolve_resume_checkpoint(path: str | None, resume_mode: str) -> Path | None:
