@@ -44,6 +44,25 @@ def test_setup_argparse_accepts_dataset_kind_and_aliases(monkeypatch):
     assert args.matrix_targets == ["density"]
 
 
+def test_setup_argparse_accepts_resume_from_wandb(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "wandb_run.py",
+            "--data-path",
+            "/tmp/data",
+            "--resume-from-wandb",
+            "https://wandb.ai/acme/project/runs/abc123",
+        ],
+    )
+
+    args = mod.setup_argparse()
+
+    assert args.resume_from_wandb == "https://wandb.ai/acme/project/runs/abc123"
+
+
 def test_setup_argparse_leaves_run_name_unset_by_default(monkeypatch):
     mod = _load_module()
     monkeypatch.setattr(
@@ -99,3 +118,72 @@ parameters:
 
     assert captured["args"].data_path == "/tmp/data"
     assert captured["parsed_yaml"]["parameters"]["dataset-kind"]["value"] == "silicon"
+
+
+def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch):
+    mod = _load_module()
+
+    class DummyRun:
+        name = "blooming-oath-3"
+        summary = {
+            "checkpoint/latest_path": "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt",
+            "checkpoint/best_path": "checkpoints/siox/blooming-oath-3/best_model.pt",
+        }
+
+    class DummyApi:
+        def run(self, path):
+            assert (
+                path
+                == "b-brzoza/mandala-minimal-siox-hamiltonian-energy-halfgt-rosi/9onx8a88"
+            )
+            return DummyRun()
+
+    class DummyWandb:
+        Api = DummyApi
+
+    monkeypatch.setitem(sys.modules, "wandb", DummyWandb)
+
+    resolved = mod._resolve_wandb_resume(
+        "https://wandb.ai/b-brzoza/mandala-minimal-siox-hamiltonian-energy-halfgt-rosi/runs/9onx8a88",
+        "latest",
+    )
+
+    assert (
+        resolved["checkpoint_path"]
+        == "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt"
+    )
+    assert resolved["run_name"] == "blooming-oath-3"
+    assert resolved["checkpoint_dir"] == "checkpoints/siox"
+
+
+def test_apply_wandb_resume_metadata_sets_checkpoint_and_run_dir(monkeypatch):
+    mod = _load_module()
+    args = mod.argparse.Namespace(
+        resume_from_wandb="https://wandb.ai/acme/project/runs/abc123",
+        resume_from_checkpoint=None,
+        resume_mode="latest",
+        run_name=None,
+        checkpoint_dir="checkpoints/main",
+        wandb_project=None,
+    )
+
+    monkeypatch.setattr(
+        mod,
+        "_resolve_wandb_resume",
+        lambda url, mode: {
+            "checkpoint_path": "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt",
+            "run_name": "blooming-oath-3",
+            "checkpoint_dir": "checkpoints/siox",
+            "project": "project",
+        },
+    )
+
+    mod._apply_wandb_resume_metadata(args)
+
+    assert (
+        args.resume_from_checkpoint
+        == "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt"
+    )
+    assert args.run_name == "blooming-oath-3"
+    assert args.checkpoint_dir == "checkpoints/siox"
+    assert args.wandb_project == "project"

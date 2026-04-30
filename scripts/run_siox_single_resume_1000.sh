@@ -19,14 +19,9 @@ python -u scripts/wandb_run.py \
   --dataset-kind siox \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/SiOx \
   --checkpoint-dir checkpoints/siox \
-  --resume-from-checkpoint checkpoints/siox/mandala-minimal-siox-hamiltonian-energy-halfgt-rosi/9onx8a88/checkpoints/epoch=199-step=12000.ckpt \
+  --resume-from-wandb https://wandb.ai/b-brzoza/mandala-minimal-siox-hamiltonian-energy-halfgt-rosi/runs/9onx8a88 \
   --resume-mode latest \
-  --run-name 9onx8a88 \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/SiOx/snapshot_cache \
-  --min-temp 3000 \
-  --max-temp 3000 \
-  --temp-step 300 \
-  --val-temp 3000 \
   --num-train 60 \
   --num-val 10 \
   --seed 42 \
@@ -64,8 +59,6 @@ python -u scripts/wandb_run.py \
   --head-use-tensor-square false \
   --head-diag-output-scale 2 \
   --head-offdiag-output-scale 1 \
-  --head-log-scale-mlp-n-layers 1 \
-  --e3mlp-variant basic \
   --internal-e3mlp-variant normact \
   --head-e3mlp-variant film \
   --e3mlp-output-scale 1 \
@@ -95,7 +88,6 @@ python -u scripts/wandb_run.py \
   --radial-layers '[64,64]' \
   --device cuda \
   --gpus 1 \
-  --num-workers 8 \
   --dataset-device cuda \
   --benchmark true \
   --adaptive-log-interval true \
@@ -113,14 +105,10 @@ python -u scripts/wandb_run.py \
   --train-on-energy false \
   --train-on-num-electrons false \
   --train-on-forces false \
-  --train-observables-on-gt true \
   --log-partial-gt-observables true \
-  --loss-coef-observables 0.0 \
-  --loss-coef-forces 0.0 \
   --symmetrize-output false \
   --apply-cutoff-to-targets true \
   --require-exact-edge-match true \
   --precompute-edge-features true \
   --radial-embedding-scale none \
-  --temp-step 300 \
   --wandb-project mandala-minimal-siox-hamiltonian-energy-halfgt-rosi
