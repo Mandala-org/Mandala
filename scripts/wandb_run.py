@@ -253,12 +253,18 @@ def _parse_wandb_run_url(run_url: str) -> tuple[str, str, str]:
     if not parsed.scheme or not parsed.netloc:
         raise ValueError(f"Invalid W&B run URL: {run_url!r}")
     parts = [part for part in parsed.path.split("/") if part]
-    if len(parts) < 4 or parts[2] != "runs":
+    if len(parts) >= 4 and parts[2] == "runs":
+        entity, project, _, run_id = parts[:4]
+    elif len(parts) >= 6 and parts[2] == "sweeps" and parts[4] == "runs":
+        entity, project = parts[:2]
+        run_id = parts[5]
+    else:
         raise ValueError(
             "Expected W&B run URL like "
-            "'https://wandb.ai/<entity>/<project>/runs/<run_id>'"
+            "'https://wandb.ai/<entity>/<project>/runs/<run_id>' "
+            "or "
+            "'https://wandb.ai/<entity>/<project>/sweeps/<sweep_id>/runs/<run_id>'"
         )
-    entity, project, _, run_id = parts[:4]
     if not entity or not project or not run_id:
         raise ValueError(f"Invalid W&B run URL: {run_url!r}")
     return entity, project, run_id

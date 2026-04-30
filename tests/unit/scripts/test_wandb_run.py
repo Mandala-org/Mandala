@@ -61,6 +61,18 @@ def test_setup_argparse_accepts_resume_from_wandb(monkeypatch):
     assert args.resume_from_wandb == "https://wandb.ai/acme/project/runs/abc123"
 
 
+def test_parse_wandb_run_url_accepts_sweep_run_url():
+    mod = _load_module()
+
+    entity, project, run_id = mod._parse_wandb_run_url(
+        "https://wandb.ai/b-brzoza/mandala-matrices/sweeps/xqqtet2h/runs/e9yo3gkj"
+    )
+
+    assert entity == "b-brzoza"
+    assert project == "mandala-matrices"
+    assert run_id == "e9yo3gkj"
+
+
 def test_setup_argparse_leaves_run_name_unset_by_default(monkeypatch):
     mod = _load_module()
     monkeypatch.setattr(
