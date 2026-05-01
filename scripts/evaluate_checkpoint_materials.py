@@ -75,9 +75,17 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--dos-energy-max", type=float, default=10.0)
     parser.add_argument("--num-points", type=int, default=240)
     parser.add_argument("--path-string", type=str, default="GXWKGLUWLK,UX")
+    parser.add_argument(
+        "--use-gt-overlap-for-eigs",
+        action="store_true",
+        help="Use the ground-truth overlap matrix for DOS and band-structure eigensolves in snapshot mode.",
+    )
     parser.add_argument("--band-emin-ev", type=float, default=-8.0)
     parser.add_argument("--band-emax-ev", type=float, default=8.0)
     parser.add_argument("--band-line-alpha", type=float, default=0.2)
+    parser.add_argument("--correlation-max-points", type=int, default=250000)
+    parser.add_argument("--correlation-alpha", type=float, default=0.03)
+    parser.add_argument("--correlation-sample-seed", type=int, default=0)
     parser.add_argument("--chunk-size", type=int, default=4)
     parser.add_argument("--force-recompute-bands", action="store_true")
     parser.add_argument("--save-input", action="store_true")
@@ -374,6 +382,67 @@ def _save_prediction_plot(
     plt.close(fig)
 
 
+def _save_correlation_plot(
+    pred,
+    target,
+    output_path: Path,
+    *,
+    title: str,
+    max_points: int,
+    alpha: float,
+    seed: int,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pred_dense = _as_dense(pred).flatten()
+    target_dense = _as_dense(target).flatten()
+    if pred_dense.numel() != target_dense.numel():
+        raise ValueError(
+            f"Correlation plot requires matching element counts, got {pred_dense.numel()} vs {target_dense.numel()}"
+        )
+    n = pred_dense.numel()
+    if max_points > 0 and n > max_points:
+        generator = torch.Generator(device="cpu")
+        generator.manual_seed(int(seed))
+        perm = torch.randperm(n, generator=generator)[: int(max_points)]
+        pred_dense = pred_dense.index_select(0, perm)
+        target_dense = target_dense.index_select(0, perm)
+    pred_np = pred_dense.cpu().numpy()
+    target_np = target_dense.cpu().numpy()
+    lo = float(min(pred_np.min(), target_np.min()))
+    hi = float(max(pred_np.max(), target_np.max()))
+    corr = float(torch.corrcoef(torch.stack([target_dense, pred_dense]))[0, 1].item())
+
+    fig, ax = plt.subplots(1, 1, figsize=(6.0, 6.0))
+    ax.scatter(
+        target_np,
+        pred_np,
+        s=3,
+        alpha=alpha,
+        color="#1f5aa6",
+        edgecolors="none",
+        rasterized=True,
+    )
+    ax.plot([lo, hi], [lo, hi], color="black", lw=1.2, ls="--", alpha=0.8)
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_xlabel("Ground truth")
+    ax.set_ylabel("Prediction")
+    ax.set_title(title)
+    ax.grid(True, alpha=0.2)
+    ax.text(
+        0.02,
+        0.98,
+        f"r = {corr:.4f}\nN = {pred_np.size}",
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+    )
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _band_structure_to_payload(
     band_structure: Any,
     *,
@@ -448,6 +517,16 @@ def _compute_or_load_band_structure(
         _band_structure_to_payload(band_structure, path_string=path_string), cache_path
     )
     return band_structure
+
+
+def _band_cache_path(
+    output_dir: Path,
+    *,
+    kind: str,
+    use_gt_overlap_for_eigs: bool,
+) -> Path:
+    suffix = "_gt_overlap" if use_gt_overlap_for_eigs else ""
+    return output_dir / f"band_structure_{kind}{suffix}.pt"
 
 
 def _save_band_structure_comparison_plot(
@@ -774,11 +853,26 @@ def _run_snapshot_case(
     info = parse_info_out(info_path)
     positions = x["positions"]
     box = x["box"]
-    pred_snapshot = _build_snapshot_from_matrices(
-        pred_mats, positions=positions, box=box, info=info
-    )
     gt_snapshot = _build_snapshot_from_matrices(
         gt_mats, positions=positions, box=box, info=info
+    )
+    overlap_for_eigs = (
+        gt_mats["overlap"] if args.use_gt_overlap_for_eigs else pred_mats.get("overlap")
+    )
+    if overlap_for_eigs is None:
+        raise ValueError(
+            "Checkpoint does not predict overlap and --use-gt-overlap-for-eigs was not set."
+        )
+    density_for_eigs = pred_mats.get("density", gt_mats["density"])
+    pred_band_snapshot = _build_snapshot_from_matrices(
+        {
+            "hamiltonian": pred_mats["hamiltonian"],
+            "density": density_for_eigs,
+            "overlap": overlap_for_eigs,
+        },
+        positions=positions,
+        box=box,
+        info=info,
     )
 
     title = args.plot_title or matrix_path.parent.name
@@ -800,27 +894,64 @@ def _run_snapshot_case(
         max_atoms=args.max_atoms,
         clim=ham_clim,
     )
-    _save_comparison_plot(
-        pred_mats["density"],
-        gt_mats["density"],
-        output_dir / "density_first_atoms_comparison.png",
-        title=f"Density comparison: {title}",
-        max_atoms=args.max_atoms,
-        clim=density_clim,
+    _save_correlation_plot(
+        pred_mats["hamiltonian"],
+        gt_mats["hamiltonian"],
+        output_dir / "hamiltonian_correlation.png",
+        title=f"Hamiltonian correlation: {title}",
+        max_points=args.correlation_max_points,
+        alpha=args.correlation_alpha,
+        seed=args.correlation_sample_seed,
     )
+    if "density" in pred_mats:
+        _save_comparison_plot(
+            pred_mats["density"],
+            gt_mats["density"],
+            output_dir / "density_first_atoms_comparison.png",
+            title=f"Density comparison: {title}",
+            max_atoms=args.max_atoms,
+            clim=density_clim,
+        )
+        _save_correlation_plot(
+            pred_mats["density"],
+            gt_mats["density"],
+            output_dir / "density_correlation.png",
+            title=f"Density correlation: {title}",
+            max_points=args.correlation_max_points,
+            alpha=args.correlation_alpha,
+            seed=args.correlation_sample_seed,
+        )
+    else:
+        print(
+            "--- Density prediction unavailable; skipping density comparison plot ---"
+        )
+    if "overlap" in pred_mats:
+        _save_correlation_plot(
+            pred_mats["overlap"],
+            gt_mats["overlap"],
+            output_dir / "overlap_correlation.png",
+            title=f"Overlap correlation: {title}",
+            max_points=args.correlation_max_points,
+            alpha=args.correlation_alpha,
+            seed=args.correlation_sample_seed,
+        )
     num_electrons_true = (
         float(gt_snapshot.get_number_of_electrons().item())
         if hasattr(gt_snapshot, "get_number_of_electrons")
         else (float(y["num_electrons"].item()) if "num_electrons" in y else None)
     )
     num_electrons_pred = (
-        float(pred_snapshot.get_number_of_electrons().item())
-        if hasattr(pred_snapshot, "get_number_of_electrons")
-        else None
+        num_electrons_true
+        if args.use_gt_overlap_for_eigs
+        else (
+            float(pred_band_snapshot.get_number_of_electrons().item())
+            if hasattr(pred_band_snapshot, "get_number_of_electrons")
+            else None
+        )
     )
     dos_metrics = _save_dos_comparison_plot(
         pred_mats["hamiltonian"],
-        pred_mats["overlap"],
+        overlap_for_eigs,
         gt_mats["hamiltonian"],
         gt_mats["overlap"],
         num_electrons_true,
@@ -835,15 +966,23 @@ def _run_snapshot_case(
 
     gt_band = _compute_or_load_band_structure(
         gt_snapshot,
-        output_dir / "band_structure_gt.pt",
+        _band_cache_path(
+            output_dir,
+            kind="gt",
+            use_gt_overlap_for_eigs=args.use_gt_overlap_for_eigs,
+        ),
         path_string=args.path_string,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
         force_recompute=args.force_recompute_bands,
     )
     pred_band = _compute_or_load_band_structure(
-        pred_snapshot,
-        output_dir / "band_structure_pred.pt",
+        pred_band_snapshot,
+        _band_cache_path(
+            output_dir,
+            kind="pred",
+            use_gt_overlap_for_eigs=args.use_gt_overlap_for_eigs,
+        ),
         path_string=args.path_string,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
@@ -912,9 +1051,6 @@ def _run_cif_case(
             for name, pred in predictions_irreps.items()
         }
 
-    pred_snapshot = _build_snapshot_from_matrices(
-        pred_mats, positions=positions, box=box
-    )
     title = args.plot_title or args.cif_path.stem
     ham_clim = (
         args.hamiltonian_clim
@@ -933,17 +1069,35 @@ def _run_cif_case(
         max_atoms=args.cif_max_atoms,
         clim=ham_clim,
     )
-    _save_prediction_plot(
-        pred_mats["density"],
-        output_dir / "density_first_atoms_prediction.png",
-        title=f"Density prediction: {title}",
-        max_atoms=args.cif_max_atoms,
-        clim=density_clim,
+    if "density" in pred_mats:
+        _save_prediction_plot(
+            pred_mats["density"],
+            output_dir / "density_first_atoms_prediction.png",
+            title=f"Density prediction: {title}",
+            max_atoms=args.cif_max_atoms,
+            clim=density_clim,
+        )
+    else:
+        raise ValueError(
+            "CIF evaluation currently requires a predicted density matrix for DOS/band plots."
+        )
+    pred_snapshot_for_eigs = _build_snapshot_from_matrices(
+        {
+            "hamiltonian": pred_mats["hamiltonian"],
+            "density": pred_mats["density"],
+            "overlap": pred_mats.get("overlap"),
+        },
+        positions=positions,
+        box=box,
     )
-    num_electrons_pred = float(pred_snapshot.get_number_of_electrons().item())
+    if pred_snapshot_for_eigs.overlap is None:
+        raise ValueError(
+            "CIF evaluation needs a predicted overlap matrix for DOS/band plots."
+        )
+    num_electrons_pred = float(pred_snapshot_for_eigs.get_number_of_electrons().item())
     _save_dos_prediction_plot(
         pred_mats["hamiltonian"],
-        pred_mats["overlap"],
+        pred_snapshot_for_eigs.overlap,
         output_dir / "dos_prediction.png",
         sigma=args.dos_sigma,
         bin_width=args.dos_bin_width,
@@ -953,7 +1107,7 @@ def _run_cif_case(
         title=f"DOS prediction: {title}",
     )
     pred_band = _compute_or_load_band_structure(
-        pred_snapshot,
+        pred_snapshot_for_eigs,
         output_dir / "band_structure_pred.pt",
         path_string=args.path_string,
         num_points=args.num_points,
@@ -997,10 +1151,9 @@ def main() -> None:
     cfg.dataset_device = None
     cfg.snapshot_cache_dir = None
 
-    required = {"hamiltonian", "density", "overlap"}
-    if not required.issubset(set(cfg.matrix_targets)):
+    if "hamiltonian" not in set(cfg.matrix_targets):
         raise ValueError(
-            f"Checkpoint matrix_targets={cfg.matrix_targets!r} do not include all of {sorted(required)}."
+            f"Checkpoint matrix_targets={cfg.matrix_targets!r} do not include hamiltonian."
         )
 
     if args.mode == "snapshot":
