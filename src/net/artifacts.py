@@ -76,6 +76,28 @@ def _crop_dense_to_max_atoms(
     return dense[:cut_dim, :cut_dim]
 
 
+def _project_overlap_to_psd(
+    overlap_dense: torch.Tensor,
+    *,
+    eig_floor: float = 1.0e-6,
+) -> torch.Tensor:
+    overlap_dense = 0.5 * (overlap_dense + overlap_dense.T)
+    evals, evecs = torch.linalg.eigh(overlap_dense)
+    evals_real = evals.real
+    finite = torch.isfinite(evals_real)
+    if not bool(finite.all()):
+        evals_real = torch.where(finite, evals_real, torch.zeros_like(evals_real))
+    positive = evals_real[evals_real > eig_floor]
+    if positive.numel() > 0:
+        upper = float(torch.quantile(positive, 0.995).item()) * 10.0
+        upper = max(upper, eig_floor)
+    else:
+        upper = eig_floor * 10.0
+    evals_real = torch.clamp(evals_real, min=eig_floor, max=upper)
+    overlap_clean = evecs @ torch.diag(evals_real.to(dtype=evecs.dtype)) @ evecs.T
+    return 0.5 * (overlap_clean + overlap_clean.T)
+
+
 def compute_basic_matrix_metrics_aligned(
     pred: BlockMatrix,
     target: BlockMatrix,
@@ -261,10 +283,25 @@ def compute_generalized_eigenvalues(H: BlockMatrix, S: BlockMatrix) -> torch.Ten
     H_dense = _as_dense(H)
     S_dense = _as_dense(S)
     H_dense = 0.5 * (H_dense + H_dense.T)
-    S_dense = 0.5 * (S_dense + S_dense.T)
-    L = torch.linalg.cholesky(S_dense)
-    tmp = torch.linalg.solve(L, H_dense)
-    A = torch.linalg.solve(L, tmp.T).T
+    S_dense = _project_overlap_to_psd(S_dense)
+    n = S_dense.shape[-1]
+    eye = torch.eye(n, dtype=S_dense.dtype, device=S_dense.device)
+    for jitter in (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2):
+        try:
+            S_reg = S_dense if jitter == 0.0 else S_dense + jitter * eye
+            L = torch.linalg.cholesky(S_reg)
+            tmp = torch.linalg.solve(L, H_dense)
+            A = torch.linalg.solve(L, tmp.T).T
+            A = 0.5 * (A + A.T)
+            return torch.linalg.eigvalsh(A)
+        except torch.linalg.LinAlgError:
+            continue
+
+    evals_S, evecs_S = torch.linalg.eigh(S_dense)
+    floor = evals_S.new_tensor(1.0e-6)
+    evals_S = torch.clamp(evals_S.real, min=floor)
+    inv_sqrt = evecs_S @ torch.diag(evals_S.rsqrt()).to(evecs_S.dtype) @ evecs_S.T
+    A = inv_sqrt @ H_dense @ inv_sqrt
     A = 0.5 * (A + A.T)
     return torch.linalg.eigvalsh(A)
 

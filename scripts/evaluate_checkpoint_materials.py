@@ -1,0 +1,1013 @@
+#!/usr/bin/env python
+
+from __future__ import annotations
+
+import argparse
+import copy
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import torch
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from core.block_irrep_mapper import BlockIrrepMapper  # noqa: E402
+from core.orbital_irrep_config import OrbitalIrrepConfig  # noqa: E402
+from data.factory import DatasetFactory  # noqa: E402
+from data.openmx_info_parser import parse_info_out  # noqa: E402
+from data.block_matrix import IrrepsBlockData  # noqa: E402
+from data.snapshot import Snapshot  # noqa: E402
+from data.structure_inference import (  # noqa: E402
+    build_model_input_from_structure,
+    load_orbital_cfg_from_reference_info,
+    load_structure_from_cif,
+)
+from data.kspace_snapshot import build_band_path  # noqa: E402
+from net.artifacts import _as_dense, _crop_dense_to_max_atoms  # noqa: E402
+from net.common import Config  # noqa: E402
+from net.e3gnn import E3GNN  # noqa: E402
+from utils.units import HARTREE_TO_EV  # noqa: E402
+import yaml  # noqa: E402
+
+
+def setup_argparse() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Evaluate a checkpoint on a snapshot or CIF structure with matrix, DOS, and band plots."
+    )
+    parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument(
+        "--mode",
+        type=str,
+        required=True,
+        choices=["snapshot", "cif"],
+        help="Use a ground-truth snapshot comparison or prediction-only CIF evaluation.",
+    )
+    parser.add_argument("--snapshot-path", type=Path, default=None)
+    parser.add_argument("--matrix-path", type=Path, default=None)
+    parser.add_argument("--info-path", type=Path, default=None)
+    parser.add_argument("--cif-path", type=Path, default=None)
+    parser.add_argument("--reference-info-path", type=Path, default=None)
+    parser.add_argument("--orbital-set", type=str, default=None)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cpu", "cuda"],
+    )
+    parser.add_argument("--convention", type=str, default="e3nn")
+    parser.add_argument("--max-atoms", type=int, default=6)
+    parser.add_argument("--cif-max-atoms", type=int, default=8)
+    parser.add_argument("--plot-clim", type=float, default=None)
+    parser.add_argument("--hamiltonian-clim", type=float, default=0.05)
+    parser.add_argument("--density-clim", type=float, default=0.1)
+    parser.add_argument("--dos-sigma", type=float, default=0.2)
+    parser.add_argument("--dos-bin-width", type=float, default=0.1)
+    parser.add_argument("--dos-energy-min", type=float, default=-5.0)
+    parser.add_argument("--dos-energy-max", type=float, default=10.0)
+    parser.add_argument("--num-points", type=int, default=240)
+    parser.add_argument("--path-string", type=str, default="GXWKGLUWLK,UX")
+    parser.add_argument("--band-emin-ev", type=float, default=-8.0)
+    parser.add_argument("--band-emax-ev", type=float, default=8.0)
+    parser.add_argument("--band-line-alpha", type=float, default=0.2)
+    parser.add_argument("--chunk-size", type=int, default=4)
+    parser.add_argument("--force-recompute-bands", action="store_true")
+    parser.add_argument("--save-input", action="store_true")
+    parser.add_argument("--plot-title", type=str, default=None)
+    return parser.parse_args()
+
+
+def _patch_config_unpickling() -> None:
+    if getattr(Config, "_mandala_legacy_unpickle_patch", False):
+        return
+
+    def __setstate__(self, state: Any) -> None:
+        state_map: dict[str, Any] = {}
+        if isinstance(state, tuple) and len(state) == 2:
+            dict_state, slot_state = state
+            if isinstance(dict_state, dict):
+                state_map.update(dict_state)
+            if isinstance(slot_state, dict):
+                state_map.update(slot_state)
+        elif isinstance(state, dict):
+            state_map.update(state)
+
+        defaults = Config()
+        for name in Config.__dataclass_fields__:
+            if name in state_map:
+                object.__setattr__(self, name, state_map[name])
+            else:
+                object.__setattr__(self, name, getattr(defaults, name))
+
+    Config.__setstate__ = __setstate__  # type: ignore[attr-defined]
+    Config._mandala_legacy_unpickle_patch = True  # type: ignore[attr-defined]
+
+
+def _load_checkpoint(checkpoint_path: Path) -> dict[str, Any]:
+    _patch_config_unpickling()
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if not isinstance(checkpoint, dict):
+        raise TypeError(f"Unexpected checkpoint payload type: {type(checkpoint)!r}")
+    return checkpoint
+
+
+def _restore_config(checkpoint: dict[str, Any]) -> Config:
+    hyper_parameters = checkpoint.get("hyper_parameters", {})
+    cfg = hyper_parameters.get("cfg")
+    if not isinstance(cfg, Config):
+        raise ValueError(
+            "Checkpoint does not contain a Config instance in hyper_parameters['cfg']."
+        )
+    cfg = copy.deepcopy(cfg)
+    if isinstance(cfg.dtype, str):
+        cfg.dtype = getattr(torch, cfg.dtype)
+    if isinstance(cfg.matrix_targets, str):
+        cfg.matrix_targets = [cfg.matrix_targets]
+    return cfg
+
+
+def _resolve_snapshot_cache_dir(cfg: Config, output_dir: Path) -> str | None:
+    cache_dir = getattr(cfg, "snapshot_cache_dir", None)
+    if not cache_dir:
+        fallback = output_dir / "snapshot_cache"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return str(fallback)
+
+    cache_path = Path(cache_dir)
+    try:
+        cache_path.mkdir(parents=True, exist_ok=True)
+        test_file = cache_path / ".mandala_write_test"
+        test_file.write_text("ok")
+        test_file.unlink()
+        return str(cache_path)
+    except OSError:
+        fallback = output_dir / "snapshot_cache"
+        fallback.mkdir(parents=True, exist_ok=True)
+        print(
+            f"--- snapshot_cache_dir={cache_path} is not writable here; using local cache {fallback} ---"
+        )
+        return str(fallback)
+
+
+def _resolve_device(device_arg: str) -> torch.device:
+    if device_arg == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device_arg == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available.")
+    return torch.device(device_arg)
+
+
+def _move_to_device(obj: Any, device: torch.device) -> Any:
+    if isinstance(obj, dict):
+        return {key: _move_to_device(value, device) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        moved = [_move_to_device(value, device) for value in obj]
+        return type(obj)(moved)
+    if hasattr(obj, "to"):
+        try:
+            return obj.to(device)
+        except TypeError:
+            return obj.to(device=device)
+    return obj
+
+
+def _cpu_copy(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _cpu_copy(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        copied = [_cpu_copy(val) for val in value]
+        return type(value)(copied)
+    if torch.is_tensor(value):
+        return value.detach().cpu()
+    return value
+
+
+def _discover_snapshot_paths(
+    snapshot_path: Path | None, matrix_path: Path | None, info_path: Path | None
+) -> tuple[Path, Path]:
+    if matrix_path is not None and info_path is not None:
+        return matrix_path, info_path
+    if matrix_path is not None or info_path is not None:
+        raise ValueError("Provide both --matrix-path and --info-path together.")
+    if snapshot_path is None:
+        raise ValueError("--snapshot-path is required in snapshot mode.")
+    matrix_candidate = snapshot_path / "Si_DM"
+    info_candidate = snapshot_path / "info.dat"
+    if not matrix_candidate.exists():
+        raise FileNotFoundError(f"Matrix file not found: {matrix_candidate}")
+    if not info_candidate.exists():
+        raise FileNotFoundError(f"Info file not found: {info_candidate}")
+    return matrix_candidate, info_candidate
+
+
+def _resolve_orbital_cfg(args: argparse.Namespace, cfg: Config) -> OrbitalIrrepConfig:
+    if args.reference_info_path is not None:
+        return load_orbital_cfg_from_reference_info(
+            args.reference_info_path, dtype=cfg.dtype
+        )
+    if args.orbital_set is not None:
+        payload = yaml.safe_load(args.orbital_set)
+        if not isinstance(payload, dict):
+            raise ValueError(
+                "--orbital-set must parse to a mapping like '{Si: 2s2p1d}'"
+            )
+        return OrbitalIrrepConfig.from_dict(payload)
+    raise ValueError(
+        "Need either --reference-info-path or --orbital-set to define the orbital basis."
+    )
+
+
+def _silicon_fcc_special_points() -> dict[str, list[float]]:
+    return {
+        "G": [0.0, 0.0, 0.0],
+        "X": [0.0, 0.5, 0.5],
+        "W": [0.25, 0.75, 0.5],
+        "K": [0.375, 0.75, 0.375],
+        "L": [0.5, 0.5, 0.5],
+        "U": [0.25, 0.625, 0.625],
+    }
+
+
+def _display_k_label(label: str) -> str:
+    label_str = str(label).strip()
+    if label_str in {"G", "Gamma", r"$\Gamma$", "$\\Gamma$"}:
+        return r"$\Gamma$"
+    return label_str
+
+
+def _symmetrize_block_matrix(mat):
+    return 0.5 * (mat + mat.transpose())
+
+
+def _clean_predicted_overlap_irreps(
+    overlap_irreps: IrrepsBlockData, mapper: BlockIrrepMapper
+) -> IrrepsBlockData:
+    zero_labels = {"1e", "2o", "3e"}
+    cleaned_vectors: dict[str, torch.Tensor] = {}
+    for key, vec in overlap_irreps.pair_vectors.items():
+        pair_irreps = mapper.get_pair_irreps(key)
+        vec_clean = vec.clone()
+        for slc, (_, ir) in zip(pair_irreps.slices(), pair_irreps):
+            label = f"{ir.l}{'e' if ir.p == 1 else 'o'}"
+            if label in zero_labels:
+                vec_clean[..., slc] = 0
+        cleaned_vectors[key] = vec_clean
+    return IrrepsBlockData(
+        atoms=overlap_irreps.atoms,
+        atom_counts=overlap_irreps.atom_counts,
+        pair_vectors=cleaned_vectors,
+        pair_edges=overlap_irreps.pair_edges,
+        lookup=overlap_irreps.lookup,
+        orbital_cfg=overlap_irreps.orbital_cfg,
+        basis=overlap_irreps.basis,
+    )
+
+
+def _project_eigenvalues_to_window(
+    eigenvalues_ev: torch.Tensor,
+    *,
+    e_min: float,
+    e_max: float,
+) -> torch.Tensor:
+    mask = (eigenvalues_ev >= e_min) & (eigenvalues_ev <= e_max)
+    if bool(mask.any()):
+        return eigenvalues_ev[mask]
+    return eigenvalues_ev
+
+
+def _fermi_level_from_dos(
+    grid: torch.Tensor,
+    dos: torch.Tensor,
+    num_electrons: float | None,
+) -> float | None:
+    if num_electrons is None:
+        return None
+    if grid.numel() == 0:
+        return None
+    if grid.numel() == 1:
+        return float(grid[0].item())
+    cumulative = torch.zeros_like(grid)
+    cumulative[1:] = torch.cumsum(
+        0.5 * (dos[:-1] + dos[1:]) * (grid[1:] - grid[:-1]), dim=0
+    )
+    target = float(num_electrons)
+    if target <= float(cumulative[0].item()):
+        return float(grid[0].item())
+    if target >= float(cumulative[-1].item()):
+        return float(grid[-1].item())
+    idx = int(
+        torch.searchsorted(cumulative, torch.tensor(target, device=grid.device)).item()
+    )
+    lo = max(idx - 1, 0)
+    hi = min(idx, grid.numel() - 1)
+    if hi == lo:
+        return float(grid[lo].item())
+    lo_c = float(cumulative[lo].item())
+    hi_c = float(cumulative[hi].item())
+    if abs(hi_c - lo_c) < 1e-12:
+        return float(grid[lo].item())
+    t = (target - lo_c) / (hi_c - lo_c)
+    return float((grid[lo] + t * (grid[hi] - grid[lo])).item())
+
+
+def _save_comparison_plot(
+    pred,
+    target,
+    output_path: Path,
+    *,
+    title: str,
+    max_atoms: int,
+    clim: float,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pred_dense = _crop_dense_to_max_atoms(
+        _as_dense(pred), pred.atoms, pred.orbital_cfg, max_atoms
+    )
+    target_dense = _crop_dense_to_max_atoms(
+        _as_dense(target), target.atoms, target.orbital_cfg, max_atoms
+    )
+    diff = pred_dense - target_dense
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    for ax, (mat, label) in zip(
+        axes,
+        [
+            (target_dense, "Ground Truth"),
+            (pred_dense, "Prediction"),
+            (diff, "Difference"),
+        ],
+    ):
+        im = ax.imshow(mat.cpu().numpy(), cmap="bwr", vmin=-clim, vmax=clim)
+        ax.set_title(label)
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _save_prediction_plot(
+    mat,
+    output_path: Path,
+    *,
+    title: str,
+    max_atoms: int,
+    clim: float,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    dense = _crop_dense_to_max_atoms(
+        _as_dense(mat), mat.atoms, mat.orbital_cfg, max_atoms
+    )
+    fig, ax = plt.subplots(1, 1, figsize=(5.5, 5.0))
+    im = ax.imshow(dense.cpu().numpy(), cmap="bwr", vmin=-clim, vmax=clim)
+    ax.set_title(title)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _band_structure_to_payload(
+    band_structure: Any,
+    *,
+    path_string: str,
+) -> dict[str, Any]:
+    return {
+        "eigenvalues": band_structure.eigenvalues.detach().cpu(),
+        "kpoints_abs": band_structure.kpoints_abs.detach().cpu(),
+        "linear_k": band_structure.linear_k.detach().cpu(),
+        "tick_positions": band_structure.tick_positions.detach().cpu(),
+        "tick_labels": list(band_structure.tick_labels),
+        "fractional_kpoints": (
+            None
+            if band_structure.fractional_kpoints is None
+            else band_structure.fractional_kpoints.detach().cpu()
+        ),
+        "fermi_level": (
+            None
+            if band_structure.fermi_level is None
+            else band_structure.fermi_level.detach().cpu()
+        ),
+        "path_string": path_string,
+    }
+
+
+def _band_structure_from_payload(payload: dict[str, Any]) -> Any:
+    return SimpleNamespace(
+        eigenvalues=payload["eigenvalues"],
+        kpoints_abs=payload["kpoints_abs"],
+        linear_k=payload["linear_k"],
+        tick_positions=payload["tick_positions"],
+        tick_labels=list(payload["tick_labels"]),
+        fractional_kpoints=payload.get("fractional_kpoints"),
+        fermi_level=payload.get("fermi_level"),
+    )
+
+
+def _compute_or_load_band_structure(
+    snapshot: Snapshot,
+    cache_path: Path,
+    *,
+    path_string: str,
+    num_points: int,
+    chunk_size: int,
+    force_recompute: bool,
+) -> Any:
+    if cache_path.exists() and not force_recompute:
+        payload = torch.load(cache_path, map_location="cpu", weights_only=False)
+        return _band_structure_from_payload(payload)
+
+    fractional_kpoints, kpoints_abs, linear_k, tick_positions, tick_labels = (
+        build_band_path(
+            snapshot.box,
+            path=path_string,
+            special_points=_silicon_fcc_special_points(),
+            npoints=num_points,
+        )
+    )
+    shifts = snapshot.get_translation_shifts().to(device=snapshot.box.device)
+    band_structure = snapshot.get_band_structure(
+        kpoints_abs=kpoints_abs,
+        fractional_kpoints=fractional_kpoints,
+        linear_k=linear_k,
+        tick_positions=tick_positions,
+        tick_labels=tick_labels,
+        shifts=shifts,
+        chunk_size=chunk_size,
+        show_progress=True,
+    )
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        _band_structure_to_payload(band_structure, path_string=path_string), cache_path
+    )
+    return band_structure
+
+
+def _save_band_structure_comparison_plot(
+    gt_band: Any,
+    pred_band: Any,
+    output_path: Path,
+    *,
+    title: str,
+    emin_ev: float,
+    emax_ev: float,
+    line_alpha: float,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    gt_e = gt_band.eigenvalues.detach().cpu() * HARTREE_TO_EV
+    pred_e = pred_band.eigenvalues.detach().cpu() * HARTREE_TO_EV
+    if gt_band.fermi_level is not None:
+        gt_e = gt_e - float(gt_band.fermi_level.detach().cpu().item() * HARTREE_TO_EV)
+    if pred_band.fermi_level is not None:
+        pred_e = pred_e - float(
+            pred_band.fermi_level.detach().cpu().item() * HARTREE_TO_EV
+        )
+    linear_k = gt_band.linear_k.detach().cpu()
+    tick_positions = gt_band.tick_positions.detach().cpu()
+    tick_labels = [_display_k_label(label) for label in gt_band.tick_labels]
+
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.8), sharey=True)
+    for ax, energies, color, subtitle in [
+        (axes[0], gt_e, "black", "Ground truth"),
+        (axes[1], pred_e, "#1f5aa6", "Prediction"),
+    ]:
+        for idx in range(energies.shape[1]):
+            ax.plot(
+                linear_k.numpy(),
+                energies[:, idx].numpy(),
+                color=color,
+                lw=1.0 if color != "black" else 1.2,
+                alpha=line_alpha,
+            )
+        for xpos in tick_positions.tolist():
+            ax.axvline(xpos, color="0.82", lw=0.8, zorder=0)
+        ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+        ax.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
+        ax.set_ylim(emin_ev, emax_ev)
+        ax.set_xticks(tick_positions.numpy())
+        ax.set_xticklabels(tick_labels, fontsize=11)
+        ax.set_title(subtitle)
+        ax.grid(True, axis="y", alpha=0.2)
+    axes[0].set_ylabel(r"$E - E_F$ (eV)")
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _save_band_structure_prediction_plot(
+    band: Any,
+    output_path: Path,
+    *,
+    title: str,
+    emin_ev: float,
+    emax_ev: float,
+    line_alpha: float,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    energies = band.eigenvalues.detach().cpu() * HARTREE_TO_EV
+    if band.fermi_level is not None:
+        energies = energies - float(
+            band.fermi_level.detach().cpu().item() * HARTREE_TO_EV
+        )
+    linear_k = band.linear_k.detach().cpu()
+    tick_positions = band.tick_positions.detach().cpu()
+    tick_labels = [_display_k_label(label) for label in band.tick_labels]
+    fig, ax = plt.subplots(1, 1, figsize=(8.5, 6.0))
+    for idx in range(energies.shape[1]):
+        ax.plot(
+            linear_k.numpy(),
+            energies[:, idx].numpy(),
+            color="#1f5aa6",
+            lw=1.1,
+            alpha=line_alpha,
+        )
+    for xpos in tick_positions.tolist():
+        ax.axvline(xpos, color="0.80", lw=0.8, zorder=0)
+    ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+    ax.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
+    ax.set_ylim(emin_ev, emax_ev)
+    ax.set_xticks(tick_positions.numpy())
+    ax.set_xticklabels(tick_labels, fontsize=11)
+    ax.set_ylabel(r"$E - E_F$ (eV)")
+    ax.set_title(title)
+    ax.grid(True, axis="y", alpha=0.2)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _compute_dos_data(
+    h_mat,
+    s_mat,
+    *,
+    sigma: float,
+    bin_width: float,
+    energy_min: float,
+    energy_max: float,
+):
+    from net.artifacts import (
+        compute_dos_from_eigenvalues,
+        compute_generalized_eigenvalues,
+    )
+
+    eig = compute_generalized_eigenvalues(h_mat, s_mat).detach().cpu() * HARTREE_TO_EV
+    eig_window = _project_eigenvalues_to_window(
+        eig, e_min=float(energy_min), e_max=float(energy_max)
+    )
+    grid, dos = compute_dos_from_eigenvalues(
+        eig_window,
+        sigma=sigma,
+        bin_width=bin_width,
+        e_min=float(energy_min),
+        e_max=float(energy_max),
+    )
+    return eig, eig_window, grid, dos
+
+
+def _save_dos_comparison_plot(
+    h_pred,
+    s_pred,
+    h_true,
+    s_true,
+    num_electrons_true: float | None,
+    num_electrons_pred: float | None,
+    output_path: Path,
+    *,
+    sigma: float,
+    bin_width: float,
+    energy_min: float,
+    energy_max: float,
+    title: str,
+) -> dict[str, float]:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    eig_pred, _eig_pred_window, grid_pred, dos_pred = _compute_dos_data(
+        h_pred,
+        s_pred,
+        sigma=sigma,
+        bin_width=bin_width,
+        energy_min=energy_min,
+        energy_max=energy_max,
+    )
+    eig_true, _eig_true_window, grid_true, dos_true = _compute_dos_data(
+        h_true,
+        s_true,
+        sigma=sigma,
+        bin_width=bin_width,
+        energy_min=energy_min,
+        energy_max=energy_max,
+    )
+
+    min_len = min(eig_pred.numel(), eig_true.numel())
+    abs_err = torch.abs(eig_pred[:min_len] - eig_true[:min_len])
+    rel_err = abs_err / (torch.abs(eig_true[:min_len]) + 1e-12)
+    fermi_true = _fermi_level_from_dos(grid_true, dos_true, num_electrons_true)
+    fermi_pred = _fermi_level_from_dos(grid_pred, dos_pred, num_electrons_pred)
+
+    fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
+    ax.plot(
+        grid_true.cpu().numpy(), dos_true.cpu().numpy(), label="Ground Truth", lw=1.8
+    )
+    ax.plot(grid_pred.cpu().numpy(), dos_pred.cpu().numpy(), label="Prediction", lw=1.4)
+    if fermi_true is not None:
+        ax.axvline(
+            fermi_true,
+            color="black",
+            ls="--",
+            lw=1.2,
+            alpha=0.85,
+            label=f"GT $E_F$ = {fermi_true:.3f} eV",
+        )
+    if fermi_pred is not None:
+        ax.axvline(
+            fermi_pred,
+            color="#1f5aa6",
+            ls=":",
+            lw=1.4,
+            alpha=0.9,
+            label=f"Pred $E_F$ = {fermi_pred:.3f} eV",
+        )
+    ax.set_title(title)
+    ax.set_xlabel("Energy (eV)")
+    ax.set_ylabel("DOS")
+    ax.grid(True, alpha=0.25)
+    ax.set_xlim(left=energy_min, right=energy_max)
+    text_lines = []
+    if num_electrons_true is not None:
+        text_lines.append(f"GT N_e = {num_electrons_true:.3f}")
+    if num_electrons_pred is not None:
+        text_lines.append(f"Pred N_e = {num_electrons_pred:.3f}")
+    if text_lines:
+        ax.text(
+            0.02,
+            0.98,
+            "\n".join(text_lines),
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return {
+        "eig_abs_mean": float(abs_err.mean().item()),
+        "eig_abs_max": float(abs_err.max().item()),
+        "eig_rel_mean": float(rel_err.mean().item()),
+        "eig_rel_max": float(rel_err.max().item()),
+        "fermi_gt_ev": float(fermi_true) if fermi_true is not None else float("nan"),
+        "fermi_pred_ev": float(fermi_pred) if fermi_pred is not None else float("nan"),
+    }
+
+
+def _save_dos_prediction_plot(
+    h_pred,
+    s_pred,
+    output_path: Path,
+    *,
+    sigma: float,
+    bin_width: float,
+    energy_min: float,
+    energy_max: float,
+    num_electrons: float | None,
+    title: str,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _, _, grid, dos = _compute_dos_data(
+        h_pred,
+        s_pred,
+        sigma=sigma,
+        bin_width=bin_width,
+        energy_min=energy_min,
+        energy_max=energy_max,
+    )
+    fermi = _fermi_level_from_dos(grid, dos, num_electrons)
+    fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
+    ax.plot(grid.cpu().numpy(), dos.cpu().numpy(), lw=1.6, color="#1f5aa6")
+    if fermi is not None:
+        ax.axvline(
+            fermi,
+            color="#1f5aa6",
+            ls=":",
+            lw=1.4,
+            alpha=0.9,
+            label=f"$E_F$ = {fermi:.3f} eV",
+        )
+    ax.set_title(title)
+    ax.set_xlabel("Energy (eV)")
+    ax.set_ylabel("DOS")
+    ax.grid(True, alpha=0.25)
+    ax.set_xlim(left=energy_min, right=energy_max)
+    if num_electrons is not None:
+        ax.text(
+            0.02,
+            0.98,
+            f"N_e = {num_electrons:.3f}",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    if fermi is not None:
+        ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _build_snapshot_from_matrices(
+    mats: dict[str, Any], *, positions, box, info=None
+) -> Snapshot:
+    return Snapshot(
+        mats["hamiltonian"],
+        mats["overlap"],
+        mats["density"],
+        positions=positions,
+        box=box,
+        info=info,
+    )
+
+
+def _run_snapshot_case(
+    args: argparse.Namespace, checkpoint: dict[str, Any], cfg: Config
+) -> None:
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    matrix_path, info_path = _discover_snapshot_paths(
+        args.snapshot_path, args.matrix_path, args.info_path
+    )
+
+    cfg.dataset_device = None
+    cfg.snapshot_cache_dir = _resolve_snapshot_cache_dir(cfg, output_dir)
+    factory = DatasetFactory(cfg, convention=args.convention)
+    factory.add_snapshot(matrix_path, info_path, purpose="train")
+    dataset, _, mapper = factory.create()
+    x, y = dataset[0]
+    device = _resolve_device(args.device)
+    x = _move_to_device(x, device)
+    y = _move_to_device(y, device)
+
+    model = E3GNN(mapper=mapper, cfg=cfg)
+    model.load_state_dict(checkpoint["state_dict"], strict=True)
+    model.to(device)
+    model.eval()
+    with torch.no_grad():
+        predictions_irreps = model(x)
+        if "overlap" in predictions_irreps:
+            predictions_irreps["overlap"] = _clean_predicted_overlap_irreps(
+                predictions_irreps["overlap"], model.mapper
+            )
+        pred_mats = {
+            name: _symmetrize_block_matrix(pred.to_blocks(model.mapper))
+            for name, pred in predictions_irreps.items()
+        }
+
+    gt_mats = {name: y[name] for name in ("hamiltonian", "density", "overlap")}
+    info = parse_info_out(info_path)
+    positions = x["positions"]
+    box = x["box"]
+    pred_snapshot = _build_snapshot_from_matrices(
+        pred_mats, positions=positions, box=box, info=info
+    )
+    gt_snapshot = _build_snapshot_from_matrices(
+        gt_mats, positions=positions, box=box, info=info
+    )
+
+    title = args.plot_title or matrix_path.parent.name
+    ham_clim = (
+        args.hamiltonian_clim
+        if args.hamiltonian_clim is not None
+        else (args.plot_clim if args.plot_clim is not None else 0.05)
+    )
+    density_clim = (
+        args.density_clim
+        if args.density_clim is not None
+        else (args.plot_clim if args.plot_clim is not None else 0.1)
+    )
+    _save_comparison_plot(
+        pred_mats["hamiltonian"],
+        gt_mats["hamiltonian"],
+        output_dir / "hamiltonian_first_atoms_comparison.png",
+        title=f"Hamiltonian comparison: {title}",
+        max_atoms=args.max_atoms,
+        clim=ham_clim,
+    )
+    _save_comparison_plot(
+        pred_mats["density"],
+        gt_mats["density"],
+        output_dir / "density_first_atoms_comparison.png",
+        title=f"Density comparison: {title}",
+        max_atoms=args.max_atoms,
+        clim=density_clim,
+    )
+    num_electrons_true = (
+        float(gt_snapshot.get_number_of_electrons().item())
+        if hasattr(gt_snapshot, "get_number_of_electrons")
+        else (float(y["num_electrons"].item()) if "num_electrons" in y else None)
+    )
+    num_electrons_pred = (
+        float(pred_snapshot.get_number_of_electrons().item())
+        if hasattr(pred_snapshot, "get_number_of_electrons")
+        else None
+    )
+    dos_metrics = _save_dos_comparison_plot(
+        pred_mats["hamiltonian"],
+        pred_mats["overlap"],
+        gt_mats["hamiltonian"],
+        gt_mats["overlap"],
+        num_electrons_true,
+        num_electrons_pred,
+        output_dir / "dos_comparison.png",
+        sigma=args.dos_sigma,
+        bin_width=args.dos_bin_width,
+        energy_min=args.dos_energy_min,
+        energy_max=args.dos_energy_max,
+        title=f"DOS comparison: {title}",
+    )
+
+    gt_band = _compute_or_load_band_structure(
+        gt_snapshot,
+        output_dir / "band_structure_gt.pt",
+        path_string=args.path_string,
+        num_points=args.num_points,
+        chunk_size=args.chunk_size,
+        force_recompute=args.force_recompute_bands,
+    )
+    pred_band = _compute_or_load_band_structure(
+        pred_snapshot,
+        output_dir / "band_structure_pred.pt",
+        path_string=args.path_string,
+        num_points=args.num_points,
+        chunk_size=args.chunk_size,
+        force_recompute=args.force_recompute_bands,
+    )
+    _save_band_structure_comparison_plot(
+        gt_band,
+        pred_band,
+        output_dir / "band_structure_comparison.png",
+        title=f"Band structure comparison: {title}",
+        emin_ev=args.band_emin_ev,
+        emax_ev=args.band_emax_ev,
+        line_alpha=args.band_line_alpha,
+    )
+
+    for name, block in pred_mats.items():
+        block.save(output_dir / f"pred_{name}.pt")
+    print("mode: snapshot")
+    print("checkpoint:", args.checkpoint)
+    print("matrix_path:", matrix_path)
+    print("info_path:", info_path)
+    print("output_dir:", output_dir)
+    print("dos_metrics:", dos_metrics)
+
+
+def _run_cif_case(
+    args: argparse.Namespace, checkpoint: dict[str, Any], cfg: Config
+) -> None:
+    if args.cif_path is None:
+        raise ValueError("--cif-path is required in cif mode.")
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    device = _resolve_device(args.device)
+    orbital_cfg = _resolve_orbital_cfg(args, cfg)
+    mapper = BlockIrrepMapper(
+        orbital_cfg,
+        diagonal=False,
+        device="cpu",
+        dtype=cfg.dtype,
+    )
+    atoms, positions, box = load_structure_from_cif(
+        args.cif_path,
+        dtype=cfg.dtype,
+        device=device,
+    )
+    x = build_model_input_from_structure(
+        atoms=atoms,
+        positions=positions,
+        box=box,
+        cfg=cfg,
+        mapper=mapper,
+    )
+    model = E3GNN(mapper=mapper, cfg=cfg)
+    model.load_state_dict(checkpoint["state_dict"], strict=True)
+    model.to(device)
+    model.eval()
+    with torch.no_grad():
+        predictions_irreps = model(x)
+        if "overlap" in predictions_irreps:
+            predictions_irreps["overlap"] = _clean_predicted_overlap_irreps(
+                predictions_irreps["overlap"], model.mapper
+            )
+        pred_mats = {
+            name: _symmetrize_block_matrix(pred.to_blocks(model.mapper))
+            for name, pred in predictions_irreps.items()
+        }
+
+    pred_snapshot = _build_snapshot_from_matrices(
+        pred_mats, positions=positions, box=box
+    )
+    title = args.plot_title or args.cif_path.stem
+    ham_clim = (
+        args.hamiltonian_clim
+        if args.hamiltonian_clim is not None
+        else (args.plot_clim if args.plot_clim is not None else 0.05)
+    )
+    density_clim = (
+        args.density_clim
+        if args.density_clim is not None
+        else (args.plot_clim if args.plot_clim is not None else 0.1)
+    )
+    _save_prediction_plot(
+        pred_mats["hamiltonian"],
+        output_dir / "hamiltonian_first_atoms_prediction.png",
+        title=f"Hamiltonian prediction: {title}",
+        max_atoms=args.cif_max_atoms,
+        clim=ham_clim,
+    )
+    _save_prediction_plot(
+        pred_mats["density"],
+        output_dir / "density_first_atoms_prediction.png",
+        title=f"Density prediction: {title}",
+        max_atoms=args.cif_max_atoms,
+        clim=density_clim,
+    )
+    num_electrons_pred = float(pred_snapshot.get_number_of_electrons().item())
+    _save_dos_prediction_plot(
+        pred_mats["hamiltonian"],
+        pred_mats["overlap"],
+        output_dir / "dos_prediction.png",
+        sigma=args.dos_sigma,
+        bin_width=args.dos_bin_width,
+        energy_min=args.dos_energy_min,
+        energy_max=args.dos_energy_max,
+        num_electrons=num_electrons_pred,
+        title=f"DOS prediction: {title}",
+    )
+    pred_band = _compute_or_load_band_structure(
+        pred_snapshot,
+        output_dir / "band_structure_pred.pt",
+        path_string=args.path_string,
+        num_points=args.num_points,
+        chunk_size=args.chunk_size,
+        force_recompute=args.force_recompute_bands,
+    )
+    _save_band_structure_prediction_plot(
+        pred_band,
+        output_dir / "band_structure_prediction.png",
+        title=f"Band structure prediction: {title}",
+        emin_ev=args.band_emin_ev,
+        emax_ev=args.band_emax_ev,
+        line_alpha=args.band_line_alpha,
+    )
+    torch.save(
+        {
+            "atoms": list(atoms),
+            "positions": positions.detach().cpu(),
+            "box": box.detach().cpu(),
+            "orbital_cfg": orbital_cfg.to_dict(),
+            "checkpoint": str(args.checkpoint),
+            "cif_path": str(args.cif_path),
+            "matrix_targets": list(cfg.matrix_targets),
+        },
+        output_dir / "structure_metadata.pt",
+    )
+    if args.save_input:
+        torch.save(_cpu_copy(x), output_dir / "model_input.pt")
+    for name, block in pred_mats.items():
+        block.save(output_dir / f"pred_{name}.pt")
+    print("mode: cif")
+    print("checkpoint:", args.checkpoint)
+    print("cif_path:", args.cif_path)
+    print("output_dir:", output_dir)
+
+
+def main() -> None:
+    args = setup_argparse()
+    checkpoint = _load_checkpoint(args.checkpoint)
+    cfg = _restore_config(checkpoint)
+    cfg.dataset_device = None
+    cfg.snapshot_cache_dir = None
+
+    required = {"hamiltonian", "density", "overlap"}
+    if not required.issubset(set(cfg.matrix_targets)):
+        raise ValueError(
+            f"Checkpoint matrix_targets={cfg.matrix_targets!r} do not include all of {sorted(required)}."
+        )
+
+    if args.mode == "snapshot":
+        _run_snapshot_case(args, checkpoint, cfg)
+    else:
+        _run_cif_case(args, checkpoint, cfg)
+
+
+if __name__ == "__main__":
+    main()

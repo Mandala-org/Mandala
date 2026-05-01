@@ -126,9 +126,49 @@ def _generalized_eigenvalues_kspace(
         return torch.linalg.eigvalsh(H)
 
     S = 0.5 * (overlap_k + overlap_k.transpose(-1, -2).conj())
-    L = torch.linalg.cholesky(S)
-    tmp = torch.linalg.solve(L, H)
-    A = torch.linalg.solve(L, tmp.transpose(-1, -2).conj()).transpose(-1, -2).conj()
+    evals_S, evecs_S = torch.linalg.eigh(S)
+    evals_real = evals_S.real
+    finite = torch.isfinite(evals_real)
+    if not bool(finite.all()):
+        evals_real = torch.where(finite, evals_real, torch.zeros_like(evals_real))
+    positive = evals_real[evals_real > 1.0e-6]
+    if positive.numel() > 0:
+        upper = float(torch.quantile(positive, 0.995).item()) * 10.0
+        upper = max(upper, 1.0e-6)
+    else:
+        upper = 1.0e-5
+    evals_real = torch.clamp(evals_real, min=1.0e-6, max=upper)
+    S = (
+        evecs_S
+        @ torch.diag_embed(evals_real.to(dtype=evecs_S.dtype))
+        @ evecs_S.transpose(-1, -2).conj()
+    )
+    n = S.shape[-1]
+    eye = torch.eye(n, dtype=S.dtype, device=S.device)
+    for jitter in (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4):
+        try:
+            S_reg = S if jitter == 0.0 else S + jitter * eye
+            L = torch.linalg.cholesky(S_reg)
+            tmp = torch.linalg.solve(L, H)
+            A = (
+                torch.linalg.solve(L, tmp.transpose(-1, -2).conj())
+                .transpose(-1, -2)
+                .conj()
+            )
+            A = 0.5 * (A + A.transpose(-1, -2).conj())
+            return torch.linalg.eigvalsh(A)
+        except torch.linalg.LinAlgError:
+            continue
+
+    evals_S, evecs_S = torch.linalg.eigh(S)
+    floor = evals_S.new_tensor(1.0e-6)
+    evals_S = torch.clamp(evals_S.real, min=floor)
+    inv_sqrt = (
+        evecs_S
+        @ torch.diag_embed(evals_S.rsqrt()).to(evecs_S.dtype)
+        @ evecs_S.transpose(-1, -2).conj()
+    )
+    A = inv_sqrt @ H @ inv_sqrt
     A = 0.5 * (A + A.transpose(-1, -2).conj())
     return torch.linalg.eigvalsh(A)
 
