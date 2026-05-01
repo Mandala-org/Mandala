@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import multiprocessing as mp
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,11 +32,15 @@ from data.structure_inference import (  # noqa: E402
     load_structure_from_cif,
 )
 from data.kspace_snapshot import build_band_path  # noqa: E402
+from data.kspace_snapshot import shiftspace_to_kspace_dense  # noqa: E402
 from net.artifacts import _as_dense, _crop_dense_to_max_atoms  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
 from utils.units import HARTREE_TO_EV  # noqa: E402
 import yaml  # noqa: E402
+
+
+_BAND_MP_STATE: dict[str, Any] | None = None
 
 
 def setup_argparse() -> argparse.Namespace:
@@ -71,8 +76,8 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--density-clim", type=float, default=0.1)
     parser.add_argument("--dos-sigma", type=float, default=0.2)
     parser.add_argument("--dos-bin-width", type=float, default=0.1)
-    parser.add_argument("--dos-energy-min", type=float, default=-5.0)
-    parser.add_argument("--dos-energy-max", type=float, default=10.0)
+    parser.add_argument("--dos-energy-min", type=float, default=-10.0)
+    parser.add_argument("--dos-energy-max", type=float, default=15.0)
     parser.add_argument("--num-points", type=int, default=240)
     parser.add_argument("--path-string", type=str, default="GXWKGLUWLK,UX")
     parser.add_argument(
@@ -87,6 +92,7 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--correlation-alpha", type=float, default=0.03)
     parser.add_argument("--correlation-sample-seed", type=int, default=0)
     parser.add_argument("--chunk-size", type=int, default=4)
+    parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument("--force-recompute-bands", action="store_true")
     parser.add_argument("--save-input", action="store_true")
     parser.add_argument("--plot-title", type=str, default=None)
@@ -480,18 +486,16 @@ def _band_structure_from_payload(payload: dict[str, Any]) -> Any:
     )
 
 
-def _compute_or_load_band_structure(
+def _build_band_structure_from_chunks(
     snapshot: Snapshot,
-    cache_path: Path,
     *,
     path_string: str,
     num_points: int,
     chunk_size: int,
-    force_recompute: bool,
+    num_workers: int,
 ) -> Any:
-    if cache_path.exists() and not force_recompute:
-        payload = torch.load(cache_path, map_location="cpu", weights_only=False)
-        return _band_structure_from_payload(payload)
+    from data.kspace_snapshot import BandStructure, _generalized_eigenvalues_kspace
+    from data.kspace_snapshot import block_matrix_to_shiftspace_dense
 
     fractional_kpoints, kpoints_abs, linear_k, tick_positions, tick_labels = (
         build_band_path(
@@ -501,16 +505,188 @@ def _compute_or_load_band_structure(
             npoints=num_points,
         )
     )
-    shifts = snapshot.get_translation_shifts().to(device=snapshot.box.device)
-    band_structure = snapshot.get_band_structure(
-        kpoints_abs=kpoints_abs,
-        fractional_kpoints=fractional_kpoints,
-        linear_k=linear_k,
-        tick_positions=tick_positions,
-        tick_labels=tick_labels,
-        shifts=shifts,
+    shift_t = snapshot.get_translation_shifts().to(device=snapshot.box.device)
+    if shift_t.numel() == 0:
+        raise ValueError("Snapshot does not contain any translation shifts.")
+
+    kpoints_abs = kpoints_abs.to(device=snapshot.box.device, dtype=snapshot.box.dtype)
+    ham_shift = block_matrix_to_shiftspace_dense(snapshot.hamiltonian, shifts=shift_t)
+    ovl_shift = block_matrix_to_shiftspace_dense(snapshot.overlap, shifts=shift_t)
+
+    nk = int(kpoints_abs.shape[0])
+    effective_chunk = nk if chunk_size <= 0 else min(int(chunk_size), nk)
+    tasks = [
+        (start, min(start + effective_chunk, nk))
+        for start in range(0, nk, effective_chunk)
+    ]
+
+    if num_workers <= 1 or len(tasks) <= 1:
+        eig_chunks = []
+        try:
+            from tqdm.auto import tqdm
+        except ImportError:  # pragma: no cover - optional dependency
+            tqdm = None
+        task_iter = tasks
+        if tqdm is not None and len(tasks) > 1:
+            task_iter = tqdm(tasks, total=len(tasks), desc="Band chunks")
+        for start, stop in task_iter:
+            k_chunk = kpoints_abs[start:stop]
+            ham_k = shiftspace_to_kspace_dense(
+                ham_shift,
+                kpoints_abs=k_chunk,
+                shifts=shift_t,
+                box=snapshot.box,
+            )
+            ovl_k = shiftspace_to_kspace_dense(
+                ovl_shift,
+                kpoints_abs=k_chunk,
+                shifts=shift_t,
+                box=snapshot.box,
+            )
+            eig_chunks.append(_generalized_eigenvalues_kspace(ham_k, ovl_k).cpu())
+    else:
+        eig_chunks = _compute_band_chunks_parallel(
+            ham_shift=ham_shift.detach().cpu(),
+            ovl_shift=ovl_shift.detach().cpu(),
+            shift_t=shift_t.detach().cpu(),
+            box=snapshot.box.detach().cpu(),
+            kpoints_abs=kpoints_abs.detach().cpu(),
+            tasks=tasks,
+            num_workers=num_workers,
+        )
+
+    eigenvalues = torch.cat(eig_chunks, dim=0).to(dtype=ham_shift.dtype)
+    linear_axis = linear_k.to(dtype=kpoints_abs.dtype)
+
+    fermi_level = None
+    if getattr(snapshot.info, "fermi_level", None) is not None:
+        fermi_level = snapshot.info.fermi_level.to(dtype=eigenvalues.real.dtype).cpu()
+
+    return BandStructure(
+        eigenvalues=eigenvalues,
+        kpoints_abs=kpoints_abs.detach().cpu(),
+        linear_k=linear_axis.detach().cpu(),
+        tick_positions=tick_positions.to(dtype=kpoints_abs.dtype).detach().cpu(),
+        tick_labels=list(tick_labels),
+        fractional_kpoints=fractional_kpoints.detach().cpu(),
+        fermi_level=fermi_level,
+    )
+
+
+def _band_worker_init() -> None:
+    torch.set_num_threads(1)
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        pass
+
+
+def _band_chunk_worker(task: tuple[int, int]) -> torch.Tensor:
+    from data.kspace_snapshot import _generalized_eigenvalues_kspace
+
+    if _BAND_MP_STATE is None:
+        raise RuntimeError("Band worker state is not initialized.")
+    start, stop = task
+    k_chunk = _BAND_MP_STATE["kpoints_abs"][start:stop]
+    ham_k = shiftspace_to_kspace_dense(
+        _BAND_MP_STATE["ham_shift"],
+        kpoints_abs=k_chunk,
+        shifts=_BAND_MP_STATE["shift_t"],
+        box=_BAND_MP_STATE["box"],
+    )
+    ovl_k = shiftspace_to_kspace_dense(
+        _BAND_MP_STATE["ovl_shift"],
+        kpoints_abs=k_chunk,
+        shifts=_BAND_MP_STATE["shift_t"],
+        box=_BAND_MP_STATE["box"],
+    )
+    return _generalized_eigenvalues_kspace(ham_k, ovl_k).cpu()
+
+
+def _compute_band_chunks_parallel(
+    *,
+    ham_shift: torch.Tensor,
+    ovl_shift: torch.Tensor,
+    shift_t: torch.Tensor,
+    box: torch.Tensor,
+    kpoints_abs: torch.Tensor,
+    tasks: list[tuple[int, int]],
+    num_workers: int,
+) -> list[torch.Tensor]:
+    global _BAND_MP_STATE
+
+    worker_count = max(1, min(int(num_workers), len(tasks)))
+    if worker_count == 1:
+        _BAND_MP_STATE = {
+            "ham_shift": ham_shift,
+            "ovl_shift": ovl_shift,
+            "shift_t": shift_t,
+            "box": box,
+            "kpoints_abs": kpoints_abs,
+        }
+        try:
+            return [_band_chunk_worker(task) for task in tasks]
+        finally:
+            _BAND_MP_STATE = None
+
+    try:
+        ctx = mp.get_context("fork")
+    except ValueError:
+        print(
+            "--- multiprocessing fork context unavailable; falling back to serial band chunks ---"
+        )
+        _BAND_MP_STATE = {
+            "ham_shift": ham_shift,
+            "ovl_shift": ovl_shift,
+            "shift_t": shift_t,
+            "box": box,
+            "kpoints_abs": kpoints_abs,
+        }
+        try:
+            return [_band_chunk_worker(task) for task in tasks]
+        finally:
+            _BAND_MP_STATE = None
+
+    _BAND_MP_STATE = {
+        "ham_shift": ham_shift,
+        "ovl_shift": ovl_shift,
+        "shift_t": shift_t,
+        "box": box,
+        "kpoints_abs": kpoints_abs,
+    }
+    try:
+        try:
+            from tqdm.auto import tqdm
+        except ImportError:  # pragma: no cover - optional dependency
+            tqdm = None
+        with ctx.Pool(worker_count, initializer=_band_worker_init) as pool:
+            result_iter = pool.imap(_band_chunk_worker, tasks, chunksize=1)
+            if tqdm is not None and len(tasks) > 1:
+                result_iter = tqdm(result_iter, total=len(tasks), desc="Band chunks")
+            return list(result_iter)
+    finally:
+        _BAND_MP_STATE = None
+
+
+def _compute_or_load_band_structure(
+    snapshot: Snapshot,
+    cache_path: Path,
+    *,
+    path_string: str,
+    num_points: int,
+    chunk_size: int,
+    num_workers: int,
+    force_recompute: bool,
+) -> Any:
+    if cache_path.exists() and not force_recompute:
+        payload = torch.load(cache_path, map_location="cpu", weights_only=False)
+        return _band_structure_from_payload(payload)
+    band_structure = _build_band_structure_from_chunks(
+        snapshot,
+        path_string=path_string,
+        num_points=num_points,
         chunk_size=chunk_size,
-        show_progress=True,
+        num_workers=num_workers,
     )
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -665,6 +841,7 @@ def _save_dos_comparison_plot(
     energy_min: float,
     energy_max: float,
     title: str,
+    error_output_path: Path | None = None,
 ) -> dict[str, float]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     eig_pred, _eig_pred_window, grid_pred, dos_pred = _compute_dos_data(
@@ -737,6 +914,27 @@ def _save_dos_comparison_plot(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    if error_output_path is not None:
+        error_output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig, ax = plt.subplots(1, 1, figsize=(9, 4.8))
+        dos_error = dos_pred - dos_true
+        ax.plot(
+            grid_true.cpu().numpy(),
+            dos_error.cpu().numpy(),
+            color="#b23a48",
+            lw=1.4,
+            label="Prediction - Ground Truth",
+        )
+        ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+        ax.set_title(title.replace("comparison", "error"))
+        ax.set_xlabel("Energy (eV)")
+        ax.set_ylabel("DOS Error")
+        ax.grid(True, alpha=0.25)
+        ax.set_xlim(left=energy_min, right=energy_max)
+        ax.legend(loc="best")
+        fig.tight_layout()
+        fig.savefig(error_output_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
     return {
         "eig_abs_mean": float(abs_err.mean().item()),
         "eig_abs_max": float(abs_err.max().item()),
@@ -962,6 +1160,7 @@ def _run_snapshot_case(
         energy_min=args.dos_energy_min,
         energy_max=args.dos_energy_max,
         title=f"DOS comparison: {title}",
+        error_output_path=output_dir / "dos_error.png",
     )
 
     gt_band = _compute_or_load_band_structure(
@@ -974,6 +1173,7 @@ def _run_snapshot_case(
         path_string=args.path_string,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
+        num_workers=args.num_workers,
         force_recompute=args.force_recompute_bands,
     )
     pred_band = _compute_or_load_band_structure(
@@ -986,6 +1186,7 @@ def _run_snapshot_case(
         path_string=args.path_string,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
+        num_workers=args.num_workers,
         force_recompute=args.force_recompute_bands,
     )
     _save_band_structure_comparison_plot(
@@ -1112,6 +1313,7 @@ def _run_cif_case(
         path_string=args.path_string,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
+        num_workers=args.num_workers,
         force_recompute=args.force_recompute_bands,
     )
     _save_band_structure_prediction_plot(
