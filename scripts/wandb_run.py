@@ -49,6 +49,15 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(*_arg_names("resume_from_checkpoint"), type=str, default=None)
     parser.add_argument(*_arg_names("resume_from_wandb"), type=str, default=None)
     parser.add_argument(
+        *_arg_names("fork_run"),
+        type=str_to_bool,
+        default=False,
+        help=(
+            "Resume training state from a checkpoint or W&B run, but continue as a "
+            "fresh run with a newly assigned run name unless one is set explicitly."
+        ),
+    )
+    parser.add_argument(
         *_arg_names("resume_mode"),
         type=str,
         default="latest",
@@ -132,6 +141,7 @@ def main() -> None:
     print(f"wandb_mode={args.wandb_mode}")
     print(f"resume_from_checkpoint={args.resume_from_checkpoint}")
     print(f"resume_from_wandb={args.resume_from_wandb}")
+    print(f"fork_run={args.fork_run}")
     parsed_yaml = None
     if args.sweep_yaml is not None:
         print(f"--- Loading sweep YAML: {args.sweep_yaml} ---")
@@ -194,10 +204,11 @@ def _apply_wandb_resume_metadata(args: argparse.Namespace) -> None:
         if hasattr(args, key):
             setattr(args, key, value)
     args.resume_from_checkpoint = resolved["checkpoint_path"]
-    if "run_name" not in explicit_args and getattr(args, "run_name", None) in (
-        None,
-        "",
-        "mandala-run",
+    inherit_source_run_name = not bool(getattr(args, "fork_run", False))
+    if (
+        inherit_source_run_name
+        and "run_name" not in explicit_args
+        and getattr(args, "run_name", None) in (None, "", "mandala-run")
     ):
         args.run_name = resolved["run_name"]
     if "checkpoint_dir" not in explicit_args:
@@ -206,6 +217,12 @@ def _apply_wandb_resume_metadata(args: argparse.Namespace) -> None:
         args, "wandb_project", None
     ) in (None, ""):
         args.wandb_project = resolved["project"]
+    if (
+        bool(getattr(args, "fork_run", False))
+        and "run_name" not in explicit_args
+        and getattr(args, "run_name", None) in ("", "mandala-run")
+    ):
+        args.run_name = None
 
 
 def _resolve_wandb_resume(run_url: str, resume_mode: str) -> dict[str, str]:

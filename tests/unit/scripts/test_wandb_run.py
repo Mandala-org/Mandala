@@ -61,6 +61,23 @@ def test_setup_argparse_accepts_resume_from_wandb(monkeypatch):
     assert args.resume_from_wandb == "https://wandb.ai/acme/project/runs/abc123"
 
 
+def test_setup_argparse_accepts_fork_run(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "wandb_run.py",
+            "--fork-run",
+            "true",
+        ],
+    )
+
+    args = mod.setup_argparse()
+
+    assert args.fork_run is True
+
+
 def test_parse_wandb_run_url_accepts_sweep_run_url():
     mod = _load_module()
 
@@ -179,6 +196,7 @@ def test_apply_wandb_resume_metadata_sets_checkpoint_and_run_dir(monkeypatch):
     args = mod.argparse.Namespace(
         resume_from_wandb="https://wandb.ai/acme/project/runs/abc123",
         resume_from_checkpoint=None,
+        fork_run=False,
         resume_mode="latest",
         run_name=None,
         checkpoint_dir="checkpoints/main",
@@ -224,6 +242,7 @@ def test_apply_wandb_resume_metadata_keeps_explicit_overrides(monkeypatch):
     args = mod.argparse.Namespace(
         resume_from_wandb="https://wandb.ai/acme/project/runs/abc123",
         resume_from_checkpoint=None,
+        fork_run=False,
         resume_mode="latest",
         run_name="manual-name",
         checkpoint_dir="manual/checkpoints",
@@ -265,6 +284,49 @@ def test_apply_wandb_resume_metadata_keeps_explicit_overrides(monkeypatch):
     assert args.wandb_project == "manual-project"
     assert args.data_path == "/manual/data"
     assert args.lr == 0.002
+
+
+def test_apply_wandb_resume_metadata_fork_run_keeps_new_run_name_unset(monkeypatch):
+    mod = _load_module()
+    args = mod.argparse.Namespace(
+        resume_from_wandb="https://wandb.ai/acme/project/runs/abc123",
+        resume_from_checkpoint=None,
+        fork_run=True,
+        resume_mode="latest",
+        run_name=None,
+        checkpoint_dir="checkpoints/main",
+        wandb_project=None,
+        data_path=None,
+        lr=3e-4,
+        _explicit_args=set(),
+    )
+
+    monkeypatch.setattr(
+        mod,
+        "_resolve_wandb_resume",
+        lambda url, mode: {
+            "checkpoint_path": "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt",
+            "run_name": "blooming-oath-3",
+            "checkpoint_dir": "checkpoints/siox",
+            "project": "project",
+            "config": {
+                "data_path": "/tmp/siox",
+                "lr": 0.01,
+            },
+        },
+    )
+
+    mod._apply_wandb_resume_metadata(args)
+
+    assert (
+        args.resume_from_checkpoint
+        == "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt"
+    )
+    assert args.run_name is None
+    assert args.checkpoint_dir == "checkpoints/siox"
+    assert args.wandb_project == "project"
+    assert args.data_path == "/tmp/siox"
+    assert args.lr == 0.01
 
 
 def test_validate_required_args_accepts_wandb_filled_data_path():
