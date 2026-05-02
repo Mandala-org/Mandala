@@ -80,19 +80,19 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument(
         "--plot-title",
         type=str,
-        default="Ground-truth band structure: Silicon 300K",
+        default="Ground-truth band structure",
         help="Figure title.",
     )
     parser.add_argument(
         "--emin-ev",
         type=float,
-        default=-8.0,
+        default=-10.0,
         help="Lower plot bound in eV after subtracting the Fermi level.",
     )
     parser.add_argument(
         "--emax-ev",
         type=float,
-        default=8.0,
+        default=10.0,
         help="Upper plot bound in eV after subtracting the Fermi level.",
     )
     parser.add_argument(

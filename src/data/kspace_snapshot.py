@@ -103,11 +103,12 @@ def build_band_path(
         dtype=box.dtype,
         device=box.device,
     )
-    kpoints_abs = torch.tensor(
-        np.asarray(band_path.cartesian_kpts()),
-        dtype=box.dtype,
-        device=box.device,
-    )
+    # kpoints_abs = torch.tensor(
+    #     np.asarray(band_path.cartesian_kpts()),
+    #     dtype=box.dtype,
+    #     device=box.device,
+    # )
+    kpoints_abs = _fractional_to_cartesian_kpoints(fractional_kpoints, box)
     linear_k_np, tick_positions_np, tick_labels_raw = band_path.get_linear_kpoint_axis()
     linear_k = torch.tensor(linear_k_np, dtype=box.dtype, device=box.device)
     tick_positions = torch.tensor(
