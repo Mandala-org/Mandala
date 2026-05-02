@@ -30,6 +30,7 @@ HARTREE_PER_EV = 1.0 / HARTREE_TO_EV
 class OpenMXBandReference:
     labels: list[str]
     tick_positions: list[float]
+    x_values: torch.Tensor
     spectra_by_position: dict[float, torch.Tensor]
 
 
@@ -70,6 +71,7 @@ def setup_argparse() -> argparse.Namespace:
             "reference",
             "units",
             "gamma",
+            "path_compare",
             "overlap",
             "hermiticity",
             "phase_sign",
@@ -250,14 +252,14 @@ def load_openmx_reference(
     grouped = _parse_banddat_raw(banddat_path)
     specials = _parse_special_point_blocks(banddat_path)
     spectra_by_position: dict[float, torch.Tensor] = {}
-    for pos in tick_positions:
-        key = round(float(pos), 12)
-        if key not in grouped:
-            continue
+    x_values = torch.tensor(sorted(grouped.keys()), dtype=torch.float64)
+    for key_t in x_values.tolist():
+        key = round(float(key_t), 12)
         spectra_by_position[key] = _spectrum_from_group(grouped[key], specials.get(key))
     return OpenMXBandReference(
         labels=labels,
         tick_positions=tick_positions,
+        x_values=x_values,
         spectra_by_position=spectra_by_position,
     )
 
@@ -266,6 +268,7 @@ def _reference_to_payload(reference: OpenMXBandReference) -> dict[str, Any]:
     return {
         "labels": list(reference.labels),
         "tick_positions": list(reference.tick_positions),
+        "x_values": reference.x_values.detach().cpu(),
         "spectra_by_position": {
             str(k): v.detach().cpu() for k, v in reference.spectra_by_position.items()
         },
@@ -276,6 +279,7 @@ def _reference_from_payload(payload: dict[str, Any]) -> OpenMXBandReference:
     return OpenMXBandReference(
         labels=list(payload["labels"]),
         tick_positions=[float(x) for x in payload["tick_positions"]],
+        x_values=payload["x_values"],
         spectra_by_position={
             float(k): v for k, v in payload["spectra_by_position"].items()
         },
@@ -541,10 +545,11 @@ def run_reference(
     _log(f"OpenMX labels: {reference.labels}")
     _log(f"OpenMX tick positions: {reference.tick_positions}")
     counts = {
-        pos: int(spec.numel())
-        for pos, spec in sorted(reference.spectra_by_position.items())
+        pos: int(reference.spectra_by_position[round(float(pos), 12)].numel())
+        for pos in reference.tick_positions
     }
     _log(f"OpenMX reference band counts at ticks: {counts}")
+    _log(f"OpenMX unique x positions: {int(reference.x_values.numel())}")
 
 
 def run_units(
@@ -692,6 +697,20 @@ def _special_point_map(info_path: Path) -> dict[str, torch.Tensor]:
     return points
 
 
+def _openmx_path_kpoints(info_path: Path) -> torch.Tensor:
+    segments = _parse_band_segments(info_path)
+    if not segments:
+        raise ValueError(f"No OpenMX band path found in {info_path}")
+    chunks: list[torch.Tensor] = []
+    for seg_idx, (npts, start, end, _start_label, _end_label) in enumerate(segments):
+        t = torch.linspace(0.0, 1.0, npts, dtype=torch.float64).unsqueeze(1)
+        pts = (1.0 - t) * start.unsqueeze(0) + t * end.unsqueeze(0)
+        if seg_idx > 0:
+            pts = pts[1:]
+        chunks.append(pts)
+    return torch.cat(chunks, dim=0)
+
+
 def run_phase_sign(
     args: argparse.Namespace, snapshot: Snapshot, reference: OpenMXBandReference
 ) -> None:
@@ -737,6 +756,55 @@ def run_phase_sign(
                 f"raw_MAE={raw['mae_ev']:.6f} eV raw_max={raw['max_abs_ev']:.6f} eV "
                 f"shifted_MAE={shifted['mae_ev']:.6f} eV shifted_max={shifted['max_abs_ev']:.6f} eV"
             )
+
+
+def run_path_compare(
+    args: argparse.Namespace, snapshot: Snapshot, reference: OpenMXBandReference
+) -> None:
+    _print_header("Path Compare")
+    fermi_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
+    kpoints_frac = _openmx_path_kpoints(args.info_path)
+    if kpoints_frac.shape[0] != reference.x_values.numel():
+        raise ValueError(
+            f"k-point count mismatch: built {kpoints_frac.shape[0]} points but "
+            f"reference has {reference.x_values.numel()} x-values"
+        )
+    reciprocal = 2.0 * torch.pi * torch.linalg.inv(snapshot.box).T.to(torch.float64)
+    kpoints_abs = (kpoints_frac @ reciprocal).to(snapshot.box.dtype)
+    band = snapshot.get_band_structure(
+        kpoints_abs=kpoints_abs,
+        fractional_kpoints=kpoints_frac.to(snapshot.box.dtype),
+        shifts=snapshot.get_translation_shifts().to(snapshot.box.device),
+        chunk_size=32,
+        show_progress=False,
+        psd_cleanup=False,
+        allow_jitter=False,
+    )
+    eigs_all = (
+        band.eigenvalues.detach().cpu().to(torch.float64) * HARTREE_TO_EV - fermi_ev
+    )
+    ref_all = torch.stack(
+        [
+            _reference_eigs_at_position(reference, x)
+            for x in reference.x_values.tolist()
+        ],
+        dim=0,
+    )
+    err = torch.abs(eigs_all[:, : ref_all.shape[1]] - ref_all)
+    maes_t = err.mean(dim=1)
+    maxes_t = err.max(dim=1).values
+    worst_idx = int(torch.argmax(maxes_t).item())
+    worst_x = float(reference.x_values[worst_idx].item())
+    _log(f"path points compared: {int(reference.x_values.numel())}")
+    _log(
+        f"shifted path MAE stats (eV): min={float(maes_t.min().item()):.6f} "
+        f"mean={float(maes_t.mean().item()):.6f} max={float(maes_t.max().item()):.6f}"
+    )
+    _log(
+        f"shifted path max-abs stats (eV): min={float(maxes_t.min().item()):.6f} "
+        f"mean={float(maxes_t.mean().item()):.6f} max={float(maxes_t.max().item()):.6f}"
+    )
+    _log(f"worst x position: {worst_x:.6f}")
 
 
 def run_phase_units(
@@ -835,6 +903,7 @@ def main() -> None:
         "reference": run_reference,
         "units": run_units,
         "gamma": run_gamma,
+        "path_compare": run_path_compare,
         "overlap": run_overlap,
         "hermiticity": run_hermiticity,
         "phase_sign": run_phase_sign,
@@ -847,6 +916,7 @@ def main() -> None:
             "reference",
             "units",
             "gamma",
+            "path_compare",
             "overlap",
             "hermiticity",
             "shift_pairs",
