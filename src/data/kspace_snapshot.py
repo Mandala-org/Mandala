@@ -51,6 +51,8 @@ class BandStructure:
     tick_labels: list[str]
     fractional_kpoints: torch.Tensor | None = None
     fermi_level: torch.Tensor | None = None
+    overlap_psd_cleanup: bool = False
+    overlap_jitter: bool = False
 
 
 def _fractional_to_cartesian_kpoints(
@@ -120,41 +122,46 @@ def build_band_path(
 def _generalized_eigenvalues_kspace(
     hamiltonian_k: torch.Tensor,
     overlap_k: torch.Tensor | None,
+    *,
+    psd_cleanup: bool = False,
+    allow_jitter: bool = False,
 ) -> torch.Tensor:
     H = 0.5 * (hamiltonian_k + hamiltonian_k.transpose(-1, -2).conj())
     if overlap_k is None:
         return torch.linalg.eigvalsh(H)
 
     S = 0.5 * (overlap_k + overlap_k.transpose(-1, -2).conj())
-    evals_S, evecs_S = torch.linalg.eigh(S)
-    evals_real = evals_S.real
-    min_eval = float(torch.min(evals_real).item())
-    max_eval = float(torch.max(evals_real).item())
-    if min_eval < 1.0e-6 or not bool(torch.isfinite(evals_real).all()):
-        print(
-            f"[OVERLAP] k-space PSD projection needed: shape={tuple(S.shape)} "
-            f"eig_min={min_eval:.6e} eig_max={max_eval:.6e} floor=1.0e-6"
+    if psd_cleanup:
+        evals_S, evecs_S = torch.linalg.eigh(S)
+        evals_real = evals_S.real
+        min_eval = float(torch.min(evals_real).item())
+        max_eval = float(torch.max(evals_real).item())
+        if min_eval < 1.0e-6 or not bool(torch.isfinite(evals_real).all()):
+            print(
+                f"[OVERLAP] k-space PSD projection needed: shape={tuple(S.shape)} "
+                f"eig_min={min_eval:.6e} eig_max={max_eval:.6e} floor=1.0e-6"
+            )
+        finite = torch.isfinite(evals_real)
+        if not bool(finite.all()):
+            n_bad = int((~finite).sum().item())
+            print(f"[OVERLAP] k-space replacing {n_bad} non-finite overlap eigenvalues")
+            evals_real = torch.where(finite, evals_real, torch.zeros_like(evals_real))
+        positive = evals_real[evals_real > 1.0e-6]
+        if positive.numel() > 0:
+            upper = float(torch.quantile(positive, 0.995).item()) * 10.0
+            upper = max(upper, 1.0e-6)
+        else:
+            upper = 1.0e-5
+        evals_real = torch.clamp(evals_real, min=1.0e-6, max=upper)
+        S = (
+            evecs_S
+            @ torch.diag_embed(evals_real.to(dtype=evecs_S.dtype))
+            @ evecs_S.transpose(-1, -2).conj()
         )
-    finite = torch.isfinite(evals_real)
-    if not bool(finite.all()):
-        n_bad = int((~finite).sum().item())
-        print(f"[OVERLAP] k-space replacing {n_bad} non-finite overlap eigenvalues")
-        evals_real = torch.where(finite, evals_real, torch.zeros_like(evals_real))
-    positive = evals_real[evals_real > 1.0e-6]
-    if positive.numel() > 0:
-        upper = float(torch.quantile(positive, 0.995).item()) * 10.0
-        upper = max(upper, 1.0e-6)
-    else:
-        upper = 1.0e-5
-    evals_real = torch.clamp(evals_real, min=1.0e-6, max=upper)
-    S = (
-        evecs_S
-        @ torch.diag_embed(evals_real.to(dtype=evecs_S.dtype))
-        @ evecs_S.transpose(-1, -2).conj()
-    )
     n = S.shape[-1]
     eye = torch.eye(n, dtype=S.dtype, device=S.device)
-    for jitter in (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4):
+    jitters = (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4) if allow_jitter else (0.0,)
+    for jitter in jitters:
         try:
             S_reg = S if jitter == 0.0 else S + jitter * eye
             if jitter > 0.0:
@@ -172,20 +179,10 @@ def _generalized_eigenvalues_kspace(
             print(f"[OVERLAP] k-space Cholesky failed at jitter={jitter:.1e}")
             continue
 
-    print(
-        "[OVERLAP] k-space Cholesky failed for all jitters; using eigendecomposition fallback"
+    raise torch.linalg.LinAlgError(
+        "k-space generalized eigensolve failed: overlap Cholesky did not succeed"
+        + (" even after jitter retries." if allow_jitter else ".")
     )
-    evals_S, evecs_S = torch.linalg.eigh(S)
-    floor = evals_S.new_tensor(1.0e-6)
-    evals_S = torch.clamp(evals_S.real, min=floor)
-    inv_sqrt = (
-        evecs_S
-        @ torch.diag_embed(evals_S.rsqrt()).to(evecs_S.dtype)
-        @ evecs_S.transpose(-1, -2).conj()
-    )
-    A = inv_sqrt @ H @ inv_sqrt
-    A = 0.5 * (A + A.transpose(-1, -2).conj())
-    return torch.linalg.eigvalsh(A)
 
 
 def block_matrix_to_shiftspace_dense(
@@ -521,6 +518,8 @@ class KSpaceMatrix:
         tick_labels: Sequence[str] | None = None,
         fermi_level: torch.Tensor | None = None,
         chunk_size: int | None = None,
+        psd_cleanup: bool = False,
+        allow_jitter: bool = False,
     ) -> BandStructure:
         if overlap is not None:
             if overlap.matrices_k.shape != self.matrices_k.shape:
@@ -538,6 +537,8 @@ class KSpaceMatrix:
             eigenvalues = _generalized_eigenvalues_kspace(
                 self.matrices_k,
                 None if overlap is None else overlap.matrices_k,
+                psd_cleanup=psd_cleanup,
+                allow_jitter=allow_jitter,
             )
         else:
             chunks = []
@@ -547,6 +548,8 @@ class KSpaceMatrix:
                     _generalized_eigenvalues_kspace(
                         self.matrices_k[start:stop],
                         None if overlap is None else overlap.matrices_k[start:stop],
+                        psd_cleanup=psd_cleanup,
+                        allow_jitter=allow_jitter,
                     )
                 )
             eigenvalues = torch.cat(chunks, dim=0)
@@ -593,6 +596,8 @@ class KSpaceMatrix:
             tick_labels=tick_labels_list,
             fractional_kpoints=fractional,
             fermi_level=fermi,
+            overlap_psd_cleanup=bool(psd_cleanup),
+            overlap_jitter=bool(allow_jitter),
         )
 
     @classmethod
@@ -779,6 +784,8 @@ class KSpaceSnapshot:
         tick_positions: torch.Tensor | None = None,
         tick_labels: Sequence[str] | None = None,
         chunk_size: int | None = None,
+        psd_cleanup: bool = False,
+        allow_jitter: bool = False,
     ) -> BandStructure:
         fermi_level = None
         if getattr(self.info, "fermi_level", None) is not None:
@@ -791,6 +798,8 @@ class KSpaceSnapshot:
             tick_labels=tick_labels,
             fermi_level=fermi_level,
             chunk_size=chunk_size,
+            psd_cleanup=psd_cleanup,
+            allow_jitter=allow_jitter,
         )
 
     @classmethod

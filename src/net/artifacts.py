@@ -288,14 +288,26 @@ def align_pred_irreps_to_target_edges(
     )
 
 
-def compute_generalized_eigenvalues(H: BlockMatrix, S: BlockMatrix) -> torch.Tensor:
+def compute_generalized_eigenvalues(
+    H: BlockMatrix,
+    S: BlockMatrix,
+    *,
+    psd_cleanup: bool = False,
+    allow_jitter: bool = False,
+) -> torch.Tensor:
     H_dense = _as_dense(H)
     S_dense = _as_dense(S)
     H_dense = 0.5 * (H_dense + H_dense.T)
-    S_dense = _project_overlap_to_psd(S_dense)
+    if psd_cleanup:
+        S_dense = _project_overlap_to_psd(S_dense)
     n = S_dense.shape[-1]
     eye = torch.eye(n, dtype=S_dense.dtype, device=S_dense.device)
-    for jitter in (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2):
+    jitters = (
+        (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2)
+        if allow_jitter
+        else (0.0,)
+    )
+    for jitter in jitters:
         try:
             S_reg = S_dense if jitter == 0.0 else S_dense + jitter * eye
             if jitter > 0.0:
@@ -309,16 +321,10 @@ def compute_generalized_eigenvalues(H: BlockMatrix, S: BlockMatrix) -> torch.Ten
             print(f"[OVERLAP] Cholesky failed at jitter={jitter:.1e}")
             continue
 
-    print(
-        "[OVERLAP] Cholesky failed for all jitters; using eigendecomposition fallback"
+    raise torch.linalg.LinAlgError(
+        "Generalized eigensolve failed: overlap Cholesky did not succeed"
+        + (" even after jitter retries." if allow_jitter else ".")
     )
-    evals_S, evecs_S = torch.linalg.eigh(S_dense)
-    floor = evals_S.new_tensor(1.0e-6)
-    evals_S = torch.clamp(evals_S.real, min=floor)
-    inv_sqrt = evecs_S @ torch.diag(evals_S.rsqrt()).to(evecs_S.dtype) @ evecs_S.T
-    A = inv_sqrt @ H_dense @ inv_sqrt
-    A = 0.5 * (A + A.T)
-    return torch.linalg.eigvalsh(A)
 
 
 def compute_dos_from_eigenvalues(

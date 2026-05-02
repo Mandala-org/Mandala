@@ -639,6 +639,8 @@ class Snapshot:
         shifts: torch.Tensor | None = None,
         chunk_size: int | None = None,
         show_progress: bool = False,
+        psd_cleanup: bool = False,
+        allow_jitter: bool = False,
     ):
         if self.box is None:
             raise ValueError("Snapshot needs a periodic box to compute band structure.")
@@ -661,9 +663,9 @@ class Snapshot:
                 progress = tqdm
 
         fractional_kpoints_t = fractional_kpoints
-        linear_k = None
-        tick_positions = None
-        tick_labels = None
+        linear_k_t = linear_k
+        tick_positions_t = tick_positions
+        tick_labels_t = tick_labels
         if kpoints_abs is None:
             if fractional_kpoints_t is not None:
                 reciprocal = 2 * torch.pi * torch.linalg.inv(self.box).T
@@ -678,9 +680,9 @@ class Snapshot:
                 (
                     fractional_kpoints_t,
                     kpoints_abs,
-                    linear_k,
-                    tick_positions,
-                    tick_labels,
+                    linear_k_t,
+                    tick_positions_t,
+                    tick_labels_t,
                 ) = build_band_path(
                     self.box,
                     path=path,
@@ -727,12 +729,19 @@ class Snapshot:
                 shifts=shift_t,
                 box=self.box,
             )
-            eigen_chunks.append(_generalized_eigenvalues_kspace(ham_k, ovl_k))
+            eigen_chunks.append(
+                _generalized_eigenvalues_kspace(
+                    ham_k,
+                    ovl_k,
+                    psd_cleanup=psd_cleanup,
+                    allow_jitter=allow_jitter,
+                )
+            )
 
         eigenvalues = torch.cat(eigen_chunks, dim=0)
         linear_axis = (
-            linear_k.to(device=kpoints_abs.device, dtype=kpoints_abs.dtype)
-            if linear_k is not None
+            linear_k_t.to(device=kpoints_abs.device, dtype=kpoints_abs.dtype)
+            if linear_k_t is not None
             else _linear_k_axis(kpoints_abs)
         )
 
@@ -748,8 +757,8 @@ class Snapshot:
             kpoints_abs=kpoints_abs,
             linear_k=linear_axis,
             tick_positions=(
-                tick_positions.to(device=kpoints_abs.device, dtype=kpoints_abs.dtype)
-                if tick_positions is not None
+                tick_positions_t.to(device=kpoints_abs.device, dtype=kpoints_abs.dtype)
+                if tick_positions_t is not None
                 else torch.tensor(
                     [float(linear_axis[0].item()), float(linear_axis[-1].item())],
                     device=kpoints_abs.device,
@@ -758,8 +767,8 @@ class Snapshot:
             ),
             tick_labels=(
                 ["X0", "X1"]
-                if tick_labels is None
-                else [str(label) for label in tick_labels]
+                if tick_labels_t is None
+                else [str(label) for label in tick_labels_t]
             ),
             fractional_kpoints=fractional_kpoints_t,
             fermi_level=fermi_level,
