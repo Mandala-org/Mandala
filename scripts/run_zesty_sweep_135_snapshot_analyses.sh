@@ -27,7 +27,7 @@ if [[ -z "${TEMPERATURE}" ]]; then
 fi
 
 NUM_WORKERS="${NUM_WORKERS:-24}"
-CHUNK_SIZE="${CHUNK_SIZE:-4}"
+CHUNK_SIZE="${CHUNK_SIZE:-12}"
 NUM_POINTS="${NUM_POINTS:-240}"
 
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
@@ -62,8 +62,8 @@ python -u scripts/evaluate_checkpoint_materials.py \
   --device cpu \
   --plot-title "Silicon ${TEMPERATURE} snapshot ${SNAPSHOT_INDEX}" \
   --use-gt-overlap-for-eigs \
-  --dos-energy-min -10 \
-  --dos-energy-max 15 \
+  --dos-energy-min -15 \
+  --dos-energy-max 20 \
   --num-points "${NUM_POINTS}" \
   --chunk-size "${CHUNK_SIZE}" \
   --num-workers "${NUM_WORKERS}" \
