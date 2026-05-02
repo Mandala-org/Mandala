@@ -14,6 +14,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -414,7 +415,10 @@ def _save_correlation_plot(
         target_dense = target_dense.index_select(0, perm)
     pred_np = pred_dense.cpu().numpy()
     target_np = target_dense.cpu().numpy()
-    bound = float(max(abs(pred_np).max(), abs(target_np).max()))
+    stacked = np.concatenate([pred_np, target_np], axis=0)
+    bound = float(np.quantile(np.abs(stacked), 0.9999))
+    if not np.isfinite(bound) or bound <= 0.0:
+        bound = float(max(abs(pred_np).max(), abs(target_np).max()))
     lo = -bound
     hi = bound
     corr = float(torch.corrcoef(torch.stack([target_dense, pred_dense]))[0, 1].item())
