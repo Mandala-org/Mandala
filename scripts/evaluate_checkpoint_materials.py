@@ -94,6 +94,16 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--correlation-sample-seed", type=int, default=0)
     parser.add_argument("--chunk-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=1)
+    parser.add_argument(
+        "--overlap-psd-cleanup",
+        action="store_true",
+        help="Enable overlap PSD cleanup before generalized eigensolves.",
+    )
+    parser.add_argument(
+        "--overlap-jitter",
+        action="store_true",
+        help="Allow diagonal jitter retries if overlap Cholesky fails.",
+    )
     parser.add_argument("--force-recompute-bands", action="store_true")
     parser.add_argument("--save-input", action="store_true")
     parser.add_argument("--plot-title", type=str, default=None)
@@ -476,6 +486,10 @@ def _band_structure_to_payload(
             else band_structure.fermi_level.detach().cpu()
         ),
         "path_string": path_string,
+        "overlap_psd_cleanup": bool(
+            getattr(band_structure, "overlap_psd_cleanup", False)
+        ),
+        "overlap_jitter": bool(getattr(band_structure, "overlap_jitter", False)),
     }
 
 
@@ -491,6 +505,22 @@ def _band_structure_from_payload(payload: dict[str, Any]) -> Any:
     )
 
 
+def _band_cache_matches_options(
+    payload: dict[str, Any],
+    *,
+    path_string: str,
+    overlap_psd_cleanup: bool,
+    overlap_jitter: bool,
+) -> bool:
+    if str(payload.get("path_string", "") or "") != path_string:
+        return False
+    if bool(payload.get("overlap_psd_cleanup", False)) != bool(overlap_psd_cleanup):
+        return False
+    if bool(payload.get("overlap_jitter", False)) != bool(overlap_jitter):
+        return False
+    return True
+
+
 def _build_band_structure_from_chunks(
     snapshot: Snapshot,
     *,
@@ -498,6 +528,8 @@ def _build_band_structure_from_chunks(
     num_points: int,
     chunk_size: int,
     num_workers: int,
+    overlap_psd_cleanup: bool,
+    overlap_jitter: bool,
 ) -> Any:
     from data.kspace_snapshot import BandStructure, _generalized_eigenvalues_kspace
     from data.kspace_snapshot import block_matrix_to_shiftspace_dense
@@ -548,7 +580,14 @@ def _build_band_structure_from_chunks(
                 shifts=shift_t,
                 box=snapshot.box,
             )
-            eig_chunks.append(_generalized_eigenvalues_kspace(ham_k, ovl_k).cpu())
+            eig_chunks.append(
+                _generalized_eigenvalues_kspace(
+                    ham_k,
+                    ovl_k,
+                    psd_cleanup=overlap_psd_cleanup,
+                    allow_jitter=overlap_jitter,
+                ).cpu()
+            )
     else:
         eig_chunks = _compute_band_chunks_parallel(
             ham_shift=ham_shift.detach().cpu(),
@@ -558,6 +597,8 @@ def _build_band_structure_from_chunks(
             kpoints_abs=kpoints_abs.detach().cpu(),
             tasks=tasks,
             num_workers=num_workers,
+            overlap_psd_cleanup=overlap_psd_cleanup,
+            overlap_jitter=overlap_jitter,
         )
 
     eigenvalues = torch.cat(eig_chunks, dim=0).to(dtype=ham_shift.dtype)
@@ -605,7 +646,12 @@ def _band_chunk_worker(task: tuple[int, int]) -> torch.Tensor:
         shifts=_BAND_MP_STATE["shift_t"],
         box=_BAND_MP_STATE["box"],
     )
-    return _generalized_eigenvalues_kspace(ham_k, ovl_k).cpu()
+    return _generalized_eigenvalues_kspace(
+        ham_k,
+        ovl_k,
+        psd_cleanup=bool(_BAND_MP_STATE["overlap_psd_cleanup"]),
+        allow_jitter=bool(_BAND_MP_STATE["overlap_jitter"]),
+    ).cpu()
 
 
 def _compute_band_chunks_parallel(
@@ -617,6 +663,8 @@ def _compute_band_chunks_parallel(
     kpoints_abs: torch.Tensor,
     tasks: list[tuple[int, int]],
     num_workers: int,
+    overlap_psd_cleanup: bool,
+    overlap_jitter: bool,
 ) -> list[torch.Tensor]:
     global _BAND_MP_STATE
 
@@ -628,6 +676,8 @@ def _compute_band_chunks_parallel(
             "shift_t": shift_t,
             "box": box,
             "kpoints_abs": kpoints_abs,
+            "overlap_psd_cleanup": overlap_psd_cleanup,
+            "overlap_jitter": overlap_jitter,
         }
         try:
             return [_band_chunk_worker(task) for task in tasks]
@@ -646,6 +696,8 @@ def _compute_band_chunks_parallel(
             "shift_t": shift_t,
             "box": box,
             "kpoints_abs": kpoints_abs,
+            "overlap_psd_cleanup": overlap_psd_cleanup,
+            "overlap_jitter": overlap_jitter,
         }
         try:
             return [_band_chunk_worker(task) for task in tasks]
@@ -658,6 +710,8 @@ def _compute_band_chunks_parallel(
         "shift_t": shift_t,
         "box": box,
         "kpoints_abs": kpoints_abs,
+        "overlap_psd_cleanup": overlap_psd_cleanup,
+        "overlap_jitter": overlap_jitter,
     }
     try:
         try:
@@ -681,18 +735,30 @@ def _compute_or_load_band_structure(
     num_points: int,
     chunk_size: int,
     num_workers: int,
+    overlap_psd_cleanup: bool,
+    overlap_jitter: bool,
     force_recompute: bool,
 ) -> Any:
     if cache_path.exists() and not force_recompute:
         payload = torch.load(cache_path, map_location="cpu", weights_only=False)
-        return _band_structure_from_payload(payload)
+        if _band_cache_matches_options(
+            payload,
+            path_string=path_string,
+            overlap_psd_cleanup=overlap_psd_cleanup,
+            overlap_jitter=overlap_jitter,
+        ):
+            return _band_structure_from_payload(payload)
     band_structure = _build_band_structure_from_chunks(
         snapshot,
         path_string=path_string,
         num_points=num_points,
         chunk_size=chunk_size,
         num_workers=num_workers,
+        overlap_psd_cleanup=overlap_psd_cleanup,
+        overlap_jitter=overlap_jitter,
     )
+    band_structure.overlap_psd_cleanup = bool(overlap_psd_cleanup)
+    band_structure.overlap_jitter = bool(overlap_jitter)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         _band_structure_to_payload(band_structure, path_string=path_string), cache_path
@@ -812,13 +878,25 @@ def _compute_dos_data(
     bin_width: float,
     energy_min: float,
     energy_max: float,
+    overlap_psd_cleanup: bool,
+    overlap_jitter: bool,
 ):
     from net.artifacts import (
         compute_dos_from_eigenvalues,
         compute_generalized_eigenvalues,
     )
 
-    eig = compute_generalized_eigenvalues(h_mat, s_mat).detach().cpu() * HARTREE_TO_EV
+    eig = (
+        compute_generalized_eigenvalues(
+            h_mat,
+            s_mat,
+            psd_cleanup=overlap_psd_cleanup,
+            allow_jitter=overlap_jitter,
+        )
+        .detach()
+        .cpu()
+        * HARTREE_TO_EV
+    )
     eig_window = _project_eigenvalues_to_window(
         eig, e_min=float(energy_min), e_max=float(energy_max)
     )
@@ -847,6 +925,8 @@ def _save_dos_comparison_plot(
     energy_max: float,
     title: str,
     error_output_path: Path | None = None,
+    overlap_psd_cleanup: bool = False,
+    overlap_jitter: bool = False,
 ) -> dict[str, float]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     eig_pred, _eig_pred_window, grid_pred, dos_pred = _compute_dos_data(
@@ -856,6 +936,8 @@ def _save_dos_comparison_plot(
         bin_width=bin_width,
         energy_min=energy_min,
         energy_max=energy_max,
+        overlap_psd_cleanup=overlap_psd_cleanup,
+        overlap_jitter=overlap_jitter,
     )
     eig_true, _eig_true_window, grid_true, dos_true = _compute_dos_data(
         h_true,
@@ -864,6 +946,8 @@ def _save_dos_comparison_plot(
         bin_width=bin_width,
         energy_min=energy_min,
         energy_max=energy_max,
+        overlap_psd_cleanup=overlap_psd_cleanup,
+        overlap_jitter=overlap_jitter,
     )
 
     min_len = min(eig_pred.numel(), eig_true.numel())
@@ -961,6 +1045,8 @@ def _save_dos_prediction_plot(
     energy_max: float,
     num_electrons: float | None,
     title: str,
+    overlap_psd_cleanup: bool = False,
+    overlap_jitter: bool = False,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _, _, grid, dos = _compute_dos_data(
@@ -970,6 +1056,8 @@ def _save_dos_prediction_plot(
         bin_width=bin_width,
         energy_min=energy_min,
         energy_max=energy_max,
+        overlap_psd_cleanup=overlap_psd_cleanup,
+        overlap_jitter=overlap_jitter,
     )
     fermi = _fermi_level_from_dos(grid, dos, num_electrons)
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
@@ -1166,6 +1254,8 @@ def _run_snapshot_case(
         energy_max=args.dos_energy_max,
         title=f"DOS comparison: {title}",
         error_output_path=output_dir / "dos_error.png",
+        overlap_psd_cleanup=args.overlap_psd_cleanup,
+        overlap_jitter=args.overlap_jitter,
     )
 
     gt_band = _compute_or_load_band_structure(
@@ -1179,6 +1269,8 @@ def _run_snapshot_case(
         num_points=args.num_points,
         chunk_size=args.chunk_size,
         num_workers=args.num_workers,
+        overlap_psd_cleanup=args.overlap_psd_cleanup,
+        overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
     )
     pred_band = _compute_or_load_band_structure(
@@ -1192,6 +1284,8 @@ def _run_snapshot_case(
         num_points=args.num_points,
         chunk_size=args.chunk_size,
         num_workers=args.num_workers,
+        overlap_psd_cleanup=args.overlap_psd_cleanup,
+        overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
     )
     _save_band_structure_comparison_plot(
@@ -1311,6 +1405,8 @@ def _run_cif_case(
         energy_max=args.dos_energy_max,
         num_electrons=num_electrons_pred,
         title=f"DOS prediction: {title}",
+        overlap_psd_cleanup=args.overlap_psd_cleanup,
+        overlap_jitter=args.overlap_jitter,
     )
     pred_band = _compute_or_load_band_structure(
         pred_snapshot_for_eigs,
@@ -1319,6 +1415,8 @@ def _run_cif_case(
         num_points=args.num_points,
         chunk_size=args.chunk_size,
         num_workers=args.num_workers,
+        overlap_psd_cleanup=args.overlap_psd_cleanup,
+        overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
     )
     _save_band_structure_prediction_plot(

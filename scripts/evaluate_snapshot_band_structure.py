@@ -21,6 +21,10 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from data.kspace_snapshot import build_band_path  # noqa: E402
 from data.snapshot import Snapshot  # noqa: E402
+from net.artifacts import (  # noqa: E402
+    compute_dos_from_eigenvalues,
+    compute_generalized_eigenvalues,
+)
 from utils.units import HARTREE_TO_EV  # noqa: E402
 
 
@@ -61,7 +65,7 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument(
         "--num-points",
         type=int,
-        default=240,
+        default=1200,
         help="Number of interpolated k-points along the path.",
     )
     parser.add_argument(
@@ -101,9 +105,25 @@ def setup_argparse() -> argparse.Namespace:
         help="Opacity of the band lines in the plot.",
     )
     parser.add_argument(
+        "--dos-sigma",
+        type=float,
+        default=0.5,
+        help="Gaussian broadening sigma in eV for the DOS plot.",
+    )
+    parser.add_argument(
         "--force-recompute",
         action="store_true",
         help="Ignore cached band_structure.pt and recompute the expensive band structure.",
+    )
+    parser.add_argument(
+        "--overlap-psd-cleanup",
+        action="store_true",
+        help="Enable overlap PSD cleanup before the generalized eigensolve.",
+    )
+    parser.add_argument(
+        "--overlap-jitter",
+        action="store_true",
+        help="Allow diagonal jitter retries if the overlap Cholesky fails.",
     )
     return parser.parse_args()
 
@@ -156,6 +176,7 @@ def _save_band_structure_plot(
 
     linear_k = payload.linear_k.detach().cpu()
     tick_positions = payload.tick_positions.detach().cpu()
+    tick_labels = [_display_k_label(label) for label in payload.tick_labels]
 
     fig, ax = plt.subplots(1, 1, figsize=(8.5, 6.0))
     for band_idx in range(energies_ev.shape[1]):
@@ -172,7 +193,7 @@ def _save_band_structure_plot(
     ax.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
     ax.set_ylim(emin_ev, emax_ev)
     ax.set_xticks(tick_positions.numpy())
-    ax.set_xticklabels(payload.tick_labels, fontsize=11)
+    ax.set_xticklabels(tick_labels, fontsize=11)
     ax.set_ylabel(r"$E - E_F$ (eV)")
     ax.set_title(title)
     ax.grid(True, axis="y", alpha=0.2)
@@ -191,8 +212,88 @@ def _save_band_structure_plot(
     plt.close(fig)
 
 
+def _save_dos_plot(
+    grid_ev: torch.Tensor,
+    dos: torch.Tensor,
+    *,
+    output_path: Path,
+    title: str,
+    num_electrons: float | None,
+    fermi_level_ev: float | None,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cumulative = torch.zeros_like(grid_ev)
+    if grid_ev.numel() > 1:
+        cumulative[1:] = torch.cumsum(
+            0.5 * (dos[:-1] + dos[1:]) * (grid_ev[1:] - grid_ev[:-1]), dim=0
+        )
+
+    fig, ax = plt.subplots(1, 1, figsize=(9.0, 5.8))
+    ax.plot(grid_ev.cpu().numpy(), dos.cpu().numpy(), color="#1f5aa6", lw=1.8)
+    ax.set_title(title)
+    ax.set_xlabel("Energy (eV)")
+    ax.set_ylabel("DOS")
+    ax.grid(True, alpha=0.25)
+
+    ax2 = ax.twinx()
+    ax2.plot(
+        grid_ev.cpu().numpy(),
+        cumulative.cpu().numpy(),
+        color="tab:green",
+        lw=1.2,
+        ls="--",
+        label="Integrated DOS",
+    )
+    ax2.set_ylabel("Integrated DOS / electrons")
+
+    if fermi_level_ev is not None:
+        ax.axvline(fermi_level_ev, color="black", ls=":", lw=1.5, label="Fermi level")
+        idx = int(
+            torch.argmin(torch.abs(grid_ev - grid_ev.new_tensor(fermi_level_ev))).item()
+        )
+        ax2.scatter(
+            [fermi_level_ev],
+            [float(cumulative[idx].item())],
+            color="black",
+            s=36,
+            zorder=5,
+        )
+    if num_electrons is not None:
+        ax2.axhline(float(num_electrons), color="tab:green", ls=":", lw=1.0, alpha=0.8)
+        ax2.text(
+            0.02,
+            0.95,
+            f"N_e = {num_electrons:.3f}",
+            transform=ax2.transAxes,
+            ha="left",
+            va="top",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    if fermi_level_ev is not None:
+        ax.text(
+            0.98,
+            0.03,
+            f"Fermi level = {fermi_level_ev:.3f} eV",
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _log(message: str) -> None:
     print(message, flush=True)
+
+
+def _display_k_label(label: str) -> str:
+    label_str = str(label).strip()
+    if label_str in {"G", "Gamma", r"$\Gamma$", "$\\Gamma$"}:
+        return r"$\Gamma$"
+    return label_str
 
 
 def _format_seconds(seconds: float) -> str:
@@ -229,6 +330,11 @@ def _band_structure_to_payload(
         "matrix_path": str(matrix_path),
         "info_path": str(info_path),
         "path_string": path_string,
+        "fermi_level_source": "dos",
+        "overlap_psd_cleanup": bool(
+            getattr(band_structure, "overlap_psd_cleanup", False)
+        ),
+        "overlap_jitter": bool(getattr(band_structure, "overlap_jitter", False)),
     }
 
 
@@ -242,6 +348,100 @@ def _band_structure_from_payload(payload: dict[str, Any]) -> Any:
         fractional_kpoints=payload.get("fractional_kpoints"),
         fermi_level=payload.get("fermi_level"),
     )
+
+
+def _cache_payload_is_compatible(
+    payload: dict[str, Any],
+    *,
+    path_string: str,
+    overlap_psd_cleanup: bool,
+    overlap_jitter: bool,
+) -> bool:
+    cached_path = str(payload.get("path_string", "") or "")
+    cached_labels = list(payload.get("tick_labels", []) or [])
+    if cached_path != path_string:
+        return False
+    # Older cache payloads used placeholder labels like X0/X1. Recompute those.
+    if cached_labels == ["X0", "X1"]:
+        return False
+    if bool(payload.get("overlap_psd_cleanup", False)) != bool(overlap_psd_cleanup):
+        return False
+    if bool(payload.get("overlap_jitter", False)) != bool(overlap_jitter):
+        return False
+    if str(payload.get("fermi_level_source", "") or "") != "dos":
+        return False
+    return True
+
+
+def _fermi_level_from_dos(
+    grid_ev: torch.Tensor,
+    dos: torch.Tensor,
+    num_electrons: float | None,
+) -> float | None:
+    if num_electrons is None:
+        return None
+    if grid_ev.numel() == 0:
+        return None
+    if grid_ev.numel() == 1:
+        return float(grid_ev[0].item())
+
+    cumulative = torch.zeros_like(grid_ev)
+    cumulative[1:] = torch.cumsum(
+        0.5 * (dos[:-1] + dos[1:]) * (grid_ev[1:] - grid_ev[:-1]), dim=0
+    )
+    target = float(num_electrons)
+    if target <= float(cumulative[0].item()):
+        return float(grid_ev[0].item())
+    if target >= float(cumulative[-1].item()):
+        return float(grid_ev[-1].item())
+
+    idx = int(
+        torch.searchsorted(
+            cumulative, torch.tensor(target, device=grid_ev.device)
+        ).item()
+    )
+    lo = max(idx - 1, 0)
+    hi = min(idx, grid_ev.numel() - 1)
+    if hi == lo:
+        return float(grid_ev[lo].item())
+    lo_c = float(cumulative[lo].item())
+    hi_c = float(cumulative[hi].item())
+    if abs(hi_c - lo_c) < 1e-12:
+        return float(grid_ev[lo].item())
+    t = (target - lo_c) / (hi_c - lo_c)
+    return float((grid_ev[lo] + t * (grid_ev[hi] - grid_ev[lo])).item())
+
+
+def _compute_dos_and_fermi(
+    snapshot: Snapshot,
+    *,
+    psd_cleanup: bool,
+    allow_jitter: bool,
+    dos_sigma_ev: float,
+) -> tuple[torch.Tensor, torch.Tensor, float | None, float | None]:
+    eigenvalues = compute_generalized_eigenvalues(
+        snapshot.hamiltonian,
+        snapshot.overlap,
+        psd_cleanup=psd_cleanup,
+        allow_jitter=allow_jitter,
+    )
+    eigenvalues_ev = eigenvalues * HARTREE_TO_EV
+    eig_min = float(torch.min(eigenvalues_ev).item())
+    eig_max = float(torch.max(eigenvalues_ev).item())
+    span = max(eig_max - eig_min, 1e-6)
+    margin = 0.1 * span + 0.05
+    e_min = eig_min - margin
+    e_max = eig_max + margin
+    grid_ev, dos = compute_dos_from_eigenvalues(
+        eigenvalues_ev,
+        sigma=dos_sigma_ev,
+        bin_width=0.1,
+        e_min=e_min,
+        e_max=e_max,
+    )
+    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
+    fermi_level_ev = _fermi_level_from_dos(grid_ev, dos, num_electrons)
+    return grid_ev, dos, num_electrons, fermi_level_ev
 
 
 def main() -> None:
@@ -263,6 +463,7 @@ def main() -> None:
     _log(f"num_points: {args.num_points}")
     _log(f"chunk_size: {args.chunk_size}")
     _log(f"line_alpha: {args.line_alpha}")
+    _log(f"dos_sigma_ev: {args.dos_sigma}")
 
     t_load = time.perf_counter()
     _log("[1/6] Loading snapshot ...")
@@ -306,20 +507,61 @@ def main() -> None:
         f"(num_shifts={shifts.shape[0]})"
     )
 
+    t_dos = time.perf_counter()
+    _log("[4/6] Computing DOS and Fermi level ...")
+    grid_ev, dos, num_electrons, fermi_level_ev = _compute_dos_and_fermi(
+        snapshot,
+        psd_cleanup=args.overlap_psd_cleanup,
+        allow_jitter=args.overlap_jitter,
+        dos_sigma_ev=args.dos_sigma,
+    )
+    dos_path = output_dir / "dos.png"
+    _save_dos_plot(
+        grid_ev,
+        dos,
+        output_path=dos_path,
+        title=f"DOS: {args.plot_title}",
+        num_electrons=num_electrons,
+        fermi_level_ev=fermi_level_ev,
+    )
+    _log(
+        "[4/6] Computed DOS in "
+        f"{_format_seconds(time.perf_counter() - t_dos)} "
+        f"(N_e={num_electrons:.3f}, E_F={fermi_level_ev:.3f} eV)"
+    )
+
     cache_path = output_dir / "band_structure.pt"
     if cache_path.exists() and not args.force_recompute:
         t_cache = time.perf_counter()
-        _log("[4/6] Loading cached band structure ...")
+        _log("[5/6] Loading cached band structure ...")
         cache_payload = torch.load(cache_path, map_location="cpu", weights_only=False)
-        band_structure = _band_structure_from_payload(cache_payload)
-        _log(
-            "[4/6] Loaded cached band structure in "
-            f"{_format_seconds(time.perf_counter() - t_cache)} "
-            f"(num_bands={band_structure.eigenvalues.shape[1]})"
-        )
+        if _cache_payload_is_compatible(
+            cache_payload,
+            path_string=args.path_string,
+            overlap_psd_cleanup=args.overlap_psd_cleanup,
+            overlap_jitter=args.overlap_jitter,
+        ):
+            band_structure = _band_structure_from_payload(cache_payload)
+            if fermi_level_ev is not None:
+                band_structure.fermi_level = torch.tensor(
+                    fermi_level_ev / HARTREE_TO_EV,
+                    dtype=band_structure.eigenvalues.dtype,
+                    device=band_structure.eigenvalues.device,
+                )
+            _log(
+                "[5/6] Loaded cached band structure in "
+                f"{_format_seconds(time.perf_counter() - t_cache)} "
+                f"(num_bands={band_structure.eigenvalues.shape[1]})"
+            )
+        else:
+            _log("[5/6] Cached band structure is stale; recomputing ...")
+            band_structure = None
     else:
+        band_structure = None
+
+    if band_structure is None:
         t_band = time.perf_counter()
-        _log("[4/6] Computing chunked band structure ...")
+        _log("[5/6] Computing chunked band structure ...")
         band_structure = snapshot.get_band_structure(
             kpoints_abs=kpoints_abs,
             fractional_kpoints=fractional_kpoints,
@@ -329,9 +571,20 @@ def main() -> None:
             shifts=shifts,
             chunk_size=args.chunk_size,
             show_progress=True,
+            psd_cleanup=args.overlap_psd_cleanup,
+            allow_jitter=args.overlap_jitter,
+        )
+        band_structure.fermi_level = (
+            None
+            if fermi_level_ev is None
+            else torch.tensor(
+                fermi_level_ev / HARTREE_TO_EV,
+                dtype=band_structure.eigenvalues.dtype,
+                device=band_structure.eigenvalues.device,
+            )
         )
         _log(
-            "[4/6] Computed chunked band structure in "
+            "[5/6] Computed chunked band structure in "
             f"{_format_seconds(time.perf_counter() - t_band)} "
             f"(num_bands={band_structure.eigenvalues.shape[1]})"
         )
@@ -344,11 +597,11 @@ def main() -> None:
             ),
             cache_path,
         )
-        _log(f"[4/6] Cached band structure at {cache_path}")
+        _log(f"[5/6] Cached band structure at {cache_path}")
 
     plot_path = output_dir / "band_structure.png"
     t_plot = time.perf_counter()
-    _log("[5/6] Saving plot and serialized payload ...")
+    _log("[6/6] Saving plot and serialized payload ...")
     _save_band_structure_plot(
         band_structure,
         plot_path,
@@ -357,12 +610,16 @@ def main() -> None:
         emax_ev=args.emax_ev,
         line_alpha=args.line_alpha,
     )
-    _log("[5/6] Saved outputs in " f"{_format_seconds(time.perf_counter() - t_plot)}")
+    _log("[6/6] Saved outputs in " f"{_format_seconds(time.perf_counter() - t_plot)}")
 
     _log("=== Band structure evaluation finished ===")
     _log(f"plot_path: {plot_path}")
+    _log(f"dos_path: {dos_path}")
     _log(f"num_kpoints: {int(band_structure.eigenvalues.shape[0])}")
     _log(f"num_bands: {int(band_structure.eigenvalues.shape[1])}")
+    if fermi_level_ev is not None:
+        _log(f"fermi_level_ev: {fermi_level_ev:.6f}")
+    _log(f"num_electrons: {num_electrons:.6f}")
     _log(f"total_runtime: {_format_seconds(time.perf_counter() - t0)}")
 
 
