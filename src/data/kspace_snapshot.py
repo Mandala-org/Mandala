@@ -128,8 +128,17 @@ def _generalized_eigenvalues_kspace(
     S = 0.5 * (overlap_k + overlap_k.transpose(-1, -2).conj())
     evals_S, evecs_S = torch.linalg.eigh(S)
     evals_real = evals_S.real
+    min_eval = float(torch.min(evals_real).item())
+    max_eval = float(torch.max(evals_real).item())
+    if min_eval < 1.0e-6 or not bool(torch.isfinite(evals_real).all()):
+        print(
+            f"[OVERLAP] k-space PSD projection needed: shape={tuple(S.shape)} "
+            f"eig_min={min_eval:.6e} eig_max={max_eval:.6e} floor=1.0e-6"
+        )
     finite = torch.isfinite(evals_real)
     if not bool(finite.all()):
+        n_bad = int((~finite).sum().item())
+        print(f"[OVERLAP] k-space replacing {n_bad} non-finite overlap eigenvalues")
         evals_real = torch.where(finite, evals_real, torch.zeros_like(evals_real))
     positive = evals_real[evals_real > 1.0e-6]
     if positive.numel() > 0:
@@ -148,6 +157,8 @@ def _generalized_eigenvalues_kspace(
     for jitter in (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4):
         try:
             S_reg = S if jitter == 0.0 else S + jitter * eye
+            if jitter > 0.0:
+                print(f"[OVERLAP] k-space retrying Cholesky with jitter={jitter:.1e}")
             L = torch.linalg.cholesky(S_reg)
             tmp = torch.linalg.solve(L, H)
             A = (
@@ -158,8 +169,12 @@ def _generalized_eigenvalues_kspace(
             A = 0.5 * (A + A.transpose(-1, -2).conj())
             return torch.linalg.eigvalsh(A)
         except torch.linalg.LinAlgError:
+            print(f"[OVERLAP] k-space Cholesky failed at jitter={jitter:.1e}")
             continue
 
+    print(
+        "[OVERLAP] k-space Cholesky failed for all jitters; using eigendecomposition fallback"
+    )
     evals_S, evecs_S = torch.linalg.eigh(S)
     floor = evals_S.new_tensor(1.0e-6)
     evals_S = torch.clamp(evals_S.real, min=floor)
