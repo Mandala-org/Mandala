@@ -412,13 +412,33 @@ def _fermi_level_from_dos(
     return float((grid_ev[lo] + t * (grid_ev[hi] - grid_ev[lo])).item())
 
 
+def _effective_dos_electron_target(snapshot: Snapshot) -> float | None:
+    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
+    occupancies = getattr(getattr(snapshot, "info", None), "occupancies", None)
+    if occupancies is None or not isinstance(occupancies, torch.Tensor):
+        return num_electrons
+    if occupancies.ndim != 2 or occupancies.shape[1] != 2:
+        return num_electrons
+
+    occ_cpu = occupancies.detach().cpu()
+    if occ_cpu.numel() == 0:
+        return num_electrons
+
+    # OpenMX non-spin-polarized output stores identical up/down occupancies,
+    # while the generalized eigensolve here works on the spatial-orbital problem.
+    # In that case, integrating the DOS to N_e/2 gives the correct chemical potential.
+    if torch.allclose(occ_cpu[:, 0], occ_cpu[:, 1], atol=1e-6, rtol=1e-6):
+        return 0.5 * num_electrons
+    return num_electrons
+
+
 def _compute_dos_and_fermi(
     snapshot: Snapshot,
     *,
     psd_cleanup: bool,
     allow_jitter: bool,
     dos_sigma_ev: float,
-) -> tuple[torch.Tensor, torch.Tensor, float | None, float | None]:
+) -> tuple[torch.Tensor, torch.Tensor, float | None, float | None, float | None]:
     eigenvalues = compute_generalized_eigenvalues(
         snapshot.hamiltonian,
         snapshot.overlap,
@@ -440,8 +460,9 @@ def _compute_dos_and_fermi(
         e_max=e_max,
     )
     num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
-    fermi_level_ev = _fermi_level_from_dos(grid_ev, dos, num_electrons)
-    return grid_ev, dos, num_electrons, fermi_level_ev
+    dos_electron_target = _effective_dos_electron_target(snapshot)
+    fermi_level_ev = _fermi_level_from_dos(grid_ev, dos, dos_electron_target)
+    return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
 
 
 def main() -> None:
@@ -509,11 +530,13 @@ def main() -> None:
 
     t_dos = time.perf_counter()
     _log("[4/6] Computing DOS and Fermi level ...")
-    grid_ev, dos, num_electrons, fermi_level_ev = _compute_dos_and_fermi(
-        snapshot,
-        psd_cleanup=args.overlap_psd_cleanup,
-        allow_jitter=args.overlap_jitter,
-        dos_sigma_ev=args.dos_sigma,
+    grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
+        _compute_dos_and_fermi(
+            snapshot,
+            psd_cleanup=args.overlap_psd_cleanup,
+            allow_jitter=args.overlap_jitter,
+            dos_sigma_ev=args.dos_sigma,
+        )
     )
     dos_path = output_dir / "dos.png"
     _save_dos_plot(
@@ -527,7 +550,7 @@ def main() -> None:
     _log(
         "[4/6] Computed DOS in "
         f"{_format_seconds(time.perf_counter() - t_dos)} "
-        f"(N_e={num_electrons:.3f}, E_F={fermi_level_ev:.3f} eV)"
+        f"(N_e={num_electrons:.3f}, DOS_target={dos_electron_target:.3f}, E_F={fermi_level_ev:.3f} eV)"
     )
 
     cache_path = output_dir / "band_structure.pt"
@@ -620,6 +643,8 @@ def main() -> None:
     if fermi_level_ev is not None:
         _log(f"fermi_level_ev: {fermi_level_ev:.6f}")
     _log(f"num_electrons: {num_electrons:.6f}")
+    if dos_electron_target is not None:
+        _log(f"dos_electron_target: {dos_electron_target:.6f}")
     _log(f"total_runtime: {_format_seconds(time.perf_counter() - t0)}")
 
 
