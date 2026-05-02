@@ -84,8 +84,17 @@ def _project_overlap_to_psd(
     overlap_dense = 0.5 * (overlap_dense + overlap_dense.T)
     evals, evecs = torch.linalg.eigh(overlap_dense)
     evals_real = evals.real
+    min_eval = float(torch.min(evals_real).item())
+    max_eval = float(torch.max(evals_real).item())
+    if min_eval < eig_floor or not bool(torch.isfinite(evals_real).all()):
+        print(
+            f"[OVERLAP] PSD projection needed: shape={tuple(overlap_dense.shape)} "
+            f"eig_min={min_eval:.6e} eig_max={max_eval:.6e} floor={eig_floor:.1e}"
+        )
     finite = torch.isfinite(evals_real)
     if not bool(finite.all()):
+        n_bad = int((~finite).sum().item())
+        print(f"[OVERLAP] Replacing {n_bad} non-finite overlap eigenvalues with zero")
         evals_real = torch.where(finite, evals_real, torch.zeros_like(evals_real))
     positive = evals_real[evals_real > eig_floor]
     if positive.numel() > 0:
@@ -289,14 +298,20 @@ def compute_generalized_eigenvalues(H: BlockMatrix, S: BlockMatrix) -> torch.Ten
     for jitter in (0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2):
         try:
             S_reg = S_dense if jitter == 0.0 else S_dense + jitter * eye
+            if jitter > 0.0:
+                print(f"[OVERLAP] Retrying Cholesky with jitter={jitter:.1e}")
             L = torch.linalg.cholesky(S_reg)
             tmp = torch.linalg.solve(L, H_dense)
             A = torch.linalg.solve(L, tmp.T).T
             A = 0.5 * (A + A.T)
             return torch.linalg.eigvalsh(A)
         except torch.linalg.LinAlgError:
+            print(f"[OVERLAP] Cholesky failed at jitter={jitter:.1e}")
             continue
 
+    print(
+        "[OVERLAP] Cholesky failed for all jitters; using eigendecomposition fallback"
+    )
     evals_S, evecs_S = torch.linalg.eigh(S_dense)
     floor = evals_S.new_tensor(1.0e-6)
     evals_S = torch.clamp(evals_S.real, min=floor)
