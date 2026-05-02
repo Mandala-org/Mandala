@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 from pathlib import Path
@@ -26,6 +27,8 @@ from net.artifacts import (  # noqa: E402
     compute_generalized_eigenvalues,
 )
 from utils.units import HARTREE_TO_EV  # noqa: E402
+
+DEFAULT_PATH_STRING = "GXWKGLUWLK,UX"
 
 
 def setup_argparse() -> argparse.Namespace:
@@ -71,7 +74,7 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument(
         "--path-string",
         type=str,
-        default="GXWKGLUWLK,UX",
+        default=DEFAULT_PATH_STRING,
         help="Band path string in fractional reciprocal coordinates.",
     )
     parser.add_argument(
@@ -153,6 +156,55 @@ def _silicon_fcc_special_points() -> dict[str, list[float]]:
         "L": [0.5, 0.5, 0.5],
         "U": [0.25, 0.625, 0.625],
     }
+
+
+def _openmx_band_segments(
+    info_path: Path,
+) -> list[tuple[int, torch.Tensor, torch.Tensor, str, str]]:
+    text = info_path.read_text(errors="ignore")
+    m = re.search(r"<Band\.kpath(.*?)Band\.kpath>", text, re.S)
+    if m is None:
+        return []
+    segments: list[tuple[int, torch.Tensor, torch.Tensor, str, str]] = []
+    for raw in m.group(1).strip().splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 9:
+            continue
+        npts = int(parts[0])
+        start = torch.tensor(
+            [float(parts[1]), float(parts[2]), float(parts[3])], dtype=torch.float64
+        )
+        end = torch.tensor(
+            [float(parts[4]), float(parts[5]), float(parts[6])], dtype=torch.float64
+        )
+        start_label = str(parts[7])
+        end_label = str(parts[8])
+        segments.append((npts, start, end, start_label, end_label))
+    return segments
+
+
+def _band_path_from_openmx_info(
+    info_path: Path,
+) -> tuple[str, dict[str, list[float]]] | None:
+    segments = _openmx_band_segments(info_path)
+    if not segments:
+        return None
+
+    labels: list[str] = []
+    special_points: dict[str, list[float]] = {}
+    for _npts, start, end, start_label, end_label in segments:
+        if not labels:
+            labels.append(start_label)
+        elif labels[-1] != start_label:
+            labels.append(start_label)
+        labels.append(end_label)
+        special_points[start_label] = [float(x) for x in start.tolist()]
+        special_points[end_label] = [float(x) for x in end.tolist()]
+
+    return "".join(labels), special_points
 
 
 def _save_band_structure_plot(
@@ -501,6 +553,17 @@ def main() -> None:
 
     t_path = time.perf_counter()
     _log("[2/6] Building k-path ...")
+    openmx_path = _band_path_from_openmx_info(info_path)
+    path_string = args.path_string
+    special_points = _silicon_fcc_special_points()
+    path_source = "hardcoded silicon FCC points"
+    if openmx_path is not None:
+        openmx_path_string, openmx_special_points = openmx_path
+        special_points = openmx_special_points
+        path_source = "OpenMX Band.kpath points"
+        if args.path_string == DEFAULT_PATH_STRING:
+            path_string = openmx_path_string
+
     (
         fractional_kpoints,
         kpoints_abs,
@@ -509,14 +572,14 @@ def main() -> None:
         tick_labels,
     ) = build_band_path(
         snapshot.box,
-        path=args.path_string,
-        special_points=_silicon_fcc_special_points(),
+        path=path_string,
+        special_points=special_points,
         npoints=args.num_points,
     )
     _log(
         "[2/6] Built k-path in "
         f"{_format_seconds(time.perf_counter() - t_path)} "
-        f"(num_kpoints={kpoints_abs.shape[0]}, labels={tick_labels})"
+        f"(num_kpoints={kpoints_abs.shape[0]}, labels={tick_labels}, source={path_source})"
     )
 
     t_shifts = time.perf_counter()
@@ -560,7 +623,7 @@ def main() -> None:
         cache_payload = torch.load(cache_path, map_location="cpu", weights_only=False)
         if _cache_payload_is_compatible(
             cache_payload,
-            path_string=args.path_string,
+            path_string=path_string,
             overlap_psd_cleanup=args.overlap_psd_cleanup,
             overlap_jitter=args.overlap_jitter,
         ):
@@ -616,7 +679,7 @@ def main() -> None:
                 band_structure,
                 matrix_path=matrix_path,
                 info_path=info_path,
-                path_string=args.path_string,
+                path_string=path_string,
             ),
             cache_path,
         )

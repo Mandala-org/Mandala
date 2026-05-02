@@ -108,4 +108,4 @@ def shiftspace_to_kspace_dense(
     phase = _phase_matrix(kpoints_abs, shifts, box)
     mats = matrices_shift.to(phase.dtype)
     out = torch.einsum("rk,rij->kij", phase, mats)
-    return out.real if not torch.is_complex(matrices_shift) else out
+    return out
