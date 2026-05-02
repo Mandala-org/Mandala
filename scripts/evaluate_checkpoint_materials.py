@@ -414,8 +414,9 @@ def _save_correlation_plot(
         target_dense = target_dense.index_select(0, perm)
     pred_np = pred_dense.cpu().numpy()
     target_np = target_dense.cpu().numpy()
-    lo = float(min(pred_np.min(), target_np.min()))
-    hi = float(max(pred_np.max(), target_np.max()))
+    bound = float(max(abs(pred_np).max(), abs(target_np).max()))
+    lo = -bound
+    hi = bound
     corr = float(torch.corrcoef(torch.stack([target_dense, pred_dense]))[0, 1].item())
 
     fig, ax = plt.subplots(1, 1, figsize=(6.0, 6.0))
