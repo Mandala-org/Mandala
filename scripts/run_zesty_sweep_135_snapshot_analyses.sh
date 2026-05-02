@@ -28,7 +28,7 @@ fi
 
 NUM_WORKERS="${NUM_WORKERS:-24}"
 CHUNK_SIZE="${CHUNK_SIZE:-12}"
-NUM_POINTS="${NUM_POINTS:-240}"
+NUM_POINTS="${NUM_POINTS:-480}"
 
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
@@ -62,8 +62,8 @@ python -u scripts/evaluate_checkpoint_materials.py \
   --device cpu \
   --plot-title "Silicon ${TEMPERATURE} snapshot ${SNAPSHOT_INDEX}" \
   --use-gt-overlap-for-eigs \
-  --dos-energy-min -18 \
-  --dos-energy-max 28 \
+  --dos-energy-min -22 \
+  --dos-energy-max 33 \
   --num-points "${NUM_POINTS}" \
   --chunk-size "${CHUNK_SIZE}" \
   --num-workers "${NUM_WORKERS}" \
