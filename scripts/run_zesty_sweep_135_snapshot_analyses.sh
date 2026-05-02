@@ -19,7 +19,8 @@ CHECKPOINT="${CHECKPOINT:-/home/brzoza73/casus/mandala/checkpoints/silicon/zesty
 DATA_ROOT="${DATA_ROOT:-/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${ROOT_DIR}/eval_outputs/zesty-sweep-135_snapshot0_gt_overlap}"
 SNAPSHOT_INDEX="${SNAPSHOT_INDEX:-0}"
-TEMPERATURES=(${TEMPERATURES:-300K 900K 2700K 3000K})
+# TEMPERATURES=(${TEMPERATURES:-300K 900K 2700K 3000K})
+TEMPERATURES=(${TEMPERATURES:-300K 900K})
 
 NUM_WORKERS="${NUM_WORKERS:-24}"
 CHUNK_SIZE="${CHUNK_SIZE:-4}"
