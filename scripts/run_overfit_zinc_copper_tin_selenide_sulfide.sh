@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-source "${HOME}/casus/mandala-venv/bin/activate"
+source "${HOME}/casus/mandala/mandala-venv/bin/activate"
 
 cd "${ROOT_DIR}"
 
