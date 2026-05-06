@@ -15,9 +15,9 @@ import imageio.v2 as imageio
 from core.sparse_math import trace_matmul_sparse_block_matrix_aligned
 from data.block_matrix import BlockMatrix, IrrepsBlockData
 from net.irrep_tools import (
+    build_irrep_block_matrix_cache,
     compute_irrep_metrics,
     compute_hamiltonian_mae_contributions,
-    filter_irreps_block_data_by_irrep,
     get_all_irreps,
 )
 from net.observable_metrics import (
@@ -1253,6 +1253,9 @@ class ArtifactCheckpointCallback(pl.Callback):
         hamiltonian_contrib_count = 0
         hamiltonian_contrib_irrep_sums: dict[str, float] = {}
         hamiltonian_contrib_pair_sums: dict[str, float] = {}
+        irrep_block_cache_by_name: dict[
+            str, tuple[dict[str, BlockMatrix], dict[str, BlockMatrix]]
+        ] = {}
         first_payload = None
         n_batches = 0
 
@@ -1304,19 +1307,26 @@ class ArtifactCheckpointCallback(pl.Callback):
                 for key, value in basic.items():
                     basic_acc[key] = basic_acc.get(key, 0.0) + float(value)
 
-                pred_ir = align_pred_irreps_to_target_edges(
-                    pred_mat.to_vectors(pl_module.mapper),
-                    target_mat.to_vectors(pl_module.mapper),
-                    require_exact_prefix=bool(
-                        getattr(pl_module.cfg, "require_exact_edge_match", False)
-                    ),
-                )
-                targ_ir = target_mat.to_vectors(pl_module.mapper)
+                cache = irrep_block_cache_by_name.get(name)
+                if cache is None:
+                    cache = (
+                        build_irrep_block_matrix_cache(
+                            pred_mat, pl_module.mapper, all_irreps
+                        ),
+                        build_irrep_block_matrix_cache(
+                            target_mat, pl_module.mapper, all_irreps
+                        ),
+                    )
+                    irrep_block_cache_by_name[name] = cache
+                pred_irrep_blocks, target_irrep_blocks = cache
+
                 per_irrep = compute_irrep_metrics(
-                    pred_ir,
-                    targ_ir,
+                    pred_mat,
+                    target_mat,
                     all_irreps,
                     pl_module.mapper,
+                    pred_irrep_blocks=pred_irrep_blocks,
+                    target_irrep_blocks=target_irrep_blocks,
                 )
                 per_irrep_acc = per_irrep_sum_by_name.setdefault(name, {})
                 for key, value in per_irrep.items():
@@ -1331,10 +1341,26 @@ class ArtifactCheckpointCallback(pl.Callback):
                     )
                 ):
                     h_contribs = compute_hamiltonian_mae_contributions(
-                        pred_mat.to_vectors(pl_module.mapper),
-                        target_mat.to_vectors(pl_module.mapper),
+                        pred_mat,
+                        target_mat,
                         pl_module.mapper,
                         all_irreps=all_irreps,
+                        compute_irrep_sums=bool(
+                            getattr(
+                                pl_module.cfg,
+                                "log_hamiltonian_irrep_contrib_metrics",
+                                False,
+                            )
+                        ),
+                        compute_pair_sums=bool(
+                            getattr(
+                                pl_module.cfg,
+                                "log_hamiltonian_pair_contrib_metrics",
+                                False,
+                            )
+                        ),
+                        pred_irrep_blocks=pred_irrep_blocks,
+                        target_irrep_blocks=target_irrep_blocks,
                     )
                     hamiltonian_contrib_abs_sum += float(h_contribs["total_abs_sum"])
                     hamiltonian_contrib_count += int(h_contribs["total_count"])
@@ -1946,16 +1972,19 @@ class ArtifactCheckpointCallback(pl.Callback):
             if self.log_per_irrep_images:
                 per_irrep_subdir = self.per_irrep_dir / name
                 per_irrep_subdir.mkdir(parents=True, exist_ok=True)
-                target_irreps = target_mat.to_vectors(pl_module.mapper)
-                pred_irreps = pred_mat.to_vectors(pl_module.mapper)
                 all_irreps = get_all_irreps(pl_module.mapper)
+                cache = (
+                    build_irrep_block_matrix_cache(
+                        pred_mat, pl_module.mapper, all_irreps
+                    ),
+                    build_irrep_block_matrix_cache(
+                        target_mat, pl_module.mapper, all_irreps
+                    ),
+                )
+                pred_irrep_blocks, target_irrep_blocks = cache
                 for irrep in all_irreps:
-                    pred_ir = filter_irreps_block_data_by_irrep(
-                        pred_irreps, irrep, pl_module.mapper
-                    ).to_blocks(pl_module.mapper)
-                    tgt_ir = filter_irreps_block_data_by_irrep(
-                        target_irreps, irrep, pl_module.mapper
-                    ).to_blocks(pl_module.mapper)
+                    pred_ir = pred_irrep_blocks[str(irrep)]
+                    tgt_ir = target_irrep_blocks[str(irrep)]
                     if not pred_ir.pair_blocks or not tgt_ir.pair_blocks:
                         continue
                     img_path = per_irrep_subdir / f"{irrep}.png"
