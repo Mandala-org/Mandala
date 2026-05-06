@@ -4,14 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ -f "${HOME}/casus/mandala-venv/bin/activate" ]]; then
-  source "${HOME}/casus/mandala-venv/bin/activate"
-elif [[ -f "${ROOT_DIR}/mandala-venv/bin/activate" ]]; then
-  source "${ROOT_DIR}/mandala-venv/bin/activate"
-else
-  echo "Could not find mandala virtualenv." >&2
-  exit 1
-fi
+source "${HOME}/casus/mandala-venv/bin/activate"
 
 cd "${ROOT_DIR}"
 
@@ -20,10 +13,7 @@ python -u scripts/wandb_run.py \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/SiOx \
   --checkpoint-dir checkpoints/siox \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/SiOx/snapshot_cache \
-  --min-temp 3000 \
-  --max-temp 3000 \
-  --temp-step 300 \
-  --val-temp 3000 \
+
   --num-train 60 \
   --num-val 10 \
   --seed 42 \

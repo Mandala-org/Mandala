@@ -4,14 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ -f "${HOME}/casus/mandala-venv/bin/activate" ]]; then
-  source "${HOME}/casus/mandala-venv/bin/activate"
-elif [[ -f "${ROOT_DIR}/mandala-venv/bin/activate" ]]; then
-  source "${ROOT_DIR}/mandala-venv/bin/activate"
-else
-  echo "Could not find mandala virtualenv." >&2
-  exit 1
-fi
+source "${HOME}/casus/mandala-venv/bin/activate"
 
 export WANDB_MODE="${WANDB_MODE:-offline}"
 
