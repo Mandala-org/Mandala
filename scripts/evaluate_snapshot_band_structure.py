@@ -54,7 +54,7 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument(
         "--num-points",
         type=int,
-        default=1200,
+        default=240,
         help="Number of interpolated k-points along the path.",
     )
     parser.add_argument(
@@ -88,6 +88,12 @@ def setup_argparse() -> argparse.Namespace:
         help="Number of k-points processed per chunk during the band calculation.",
     )
     parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=4,
+        help="Number of worker processes used for band-structure chunk solving.",
+    )
+    parser.add_argument(
         "--line-alpha",
         type=float,
         default=0.8,
@@ -100,10 +106,16 @@ def setup_argparse() -> argparse.Namespace:
         help="Gaussian broadening sigma in eV for the DOS plot.",
     )
     parser.add_argument(
+        "--dos-bin-width",
+        type=float,
+        default=0.05,
+        help="Energy grid spacing in eV for the tetrahedron DOS.",
+    )
+    parser.add_argument(
         "--dos-method",
         type=str,
-        default="kmesh-average",
-        choices=["kmesh-average", "gaussian"],
+        default="tetrahedron",
+        choices=["tetrahedron", "kmesh-average", "gaussian"],
         help="DOS construction method.",
     )
     parser.add_argument(
@@ -176,10 +188,12 @@ def main() -> None:
     _log(f"path_string: {args.path_string}")
     _log(f"num_points: {args.num_points}")
     _log(f"chunk_size: {args.chunk_size}")
+    _log(f"num_workers: {args.num_workers}")
     _log(f"line_alpha: {args.line_alpha}")
     _log(f"dos_method: {args.dos_method}")
     _log(f"dos_kmesh: {args.dos_kmesh}")
     _log(f"dos_sigma_ev: {args.dos_sigma}")
+    _log(f"dos_bin_width_ev: {args.dos_bin_width}")
 
     t_load = time.perf_counter()
     _log("[1/6] Loading snapshot ...")
@@ -228,12 +242,26 @@ def main() -> None:
 
     t_dos = time.perf_counter()
     _log("[4/6] Computing DOS and Fermi level ...")
-    if args.dos_method == "kmesh-average":
+    if args.dos_method == "tetrahedron":
+        grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
+            analysis_eval.compute_tetrahedron_dos_and_fermi(
+                snapshot,
+                kmesh_spec=args.dos_kmesh,
+                chunk_size=args.chunk_size,
+                num_workers=args.num_workers,
+                psd_cleanup=args.overlap_psd_cleanup,
+                allow_jitter=args.overlap_jitter,
+                bin_width=args.dos_bin_width,
+            )
+        )
+        _log("[4/6] Using tetrahedron DOS on a uniform k-mesh.")
+    elif args.dos_method == "kmesh-average":
         grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
             analysis_eval.compute_kmesh_average_dos_and_fermi(
                 snapshot,
                 kmesh_spec=args.dos_kmesh,
                 chunk_size=args.chunk_size,
+                num_workers=args.num_workers,
                 psd_cleanup=args.overlap_psd_cleanup,
                 allow_jitter=args.overlap_jitter,
                 dos_sigma_ev=args.dos_sigma,
@@ -282,7 +310,7 @@ def main() -> None:
         special_points=special_points,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
-        num_workers=1,
+        num_workers=args.num_workers,
         overlap_psd_cleanup=args.overlap_psd_cleanup,
         overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute,
