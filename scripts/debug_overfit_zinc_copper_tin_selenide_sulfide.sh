@@ -61,7 +61,7 @@ python -u -Xfrozen_modules=off -m debugpy --listen 5678 --wait-for-client script
   --e3mlp-film-hidden-dim 64 \
   --activation-odd-scalar tanh \
   --activation-odd-gate tanh \
-  --nonlin-kind film \
+  --nonlin-kind normact \
   --activation-scalar leakyrelu \
   --activation-gate softplus \
   --s2act-res 128 \
