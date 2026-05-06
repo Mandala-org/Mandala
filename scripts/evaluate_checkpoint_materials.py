@@ -64,6 +64,12 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--dos-sigma", type=float, default=0.2)
     parser.add_argument("--dos-bin-width", type=float, default=0.1)
     parser.add_argument(
+        "--tetra-batch-size",
+        type=int,
+        default=256,
+        help="Number of tetrahedra processed per DOS batch.",
+    )
+    parser.add_argument(
         "--dos-method",
         type=str,
         default="tetrahedron",
@@ -405,6 +411,7 @@ def _run_snapshot_case(
             overlap_psd_cleanup=args.overlap_psd_cleanup,
             overlap_jitter=args.overlap_jitter,
             bin_width=args.dos_bin_width,
+            tetra_batch_size=args.tetra_batch_size,
         )
     else:
         dos_metrics = analysis_eval.save_dos_comparison_plot(
@@ -590,6 +597,7 @@ def _run_cif_case(
             overlap_psd_cleanup=args.overlap_psd_cleanup,
             overlap_jitter=args.overlap_jitter,
             bin_width=args.dos_bin_width,
+            tetra_batch_size=args.tetra_batch_size,
         )
     else:
         analysis_eval.save_dos_prediction_plot(
