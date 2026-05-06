@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import copy
 import multiprocessing as mp
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -250,15 +251,65 @@ def _resolve_orbital_cfg(args: argparse.Namespace, cfg: Config) -> OrbitalIrrepC
     )
 
 
-def _silicon_fcc_special_points() -> dict[str, list[float]]:
-    return {
-        "G": [0.0, 0.0, 0.0],
-        "X": [0.0, 0.5, 0.5],
-        "W": [0.25, 0.75, 0.5],
-        "K": [0.375, 0.75, 0.375],
-        "L": [0.5, 0.5, 0.5],
-        "U": [0.25, 0.625, 0.625],
-    }
+def _openmx_band_segments(
+    info_path: Path,
+) -> list[tuple[int, torch.Tensor, torch.Tensor, str, str]]:
+    text = info_path.read_text(errors="ignore")
+    m = re.search(r"<Band\.kpath(.*?)Band\.kpath>", text, re.S)
+    if m is None:
+        return []
+    segments: list[tuple[int, torch.Tensor, torch.Tensor, str, str]] = []
+    for raw in m.group(1).strip().splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 9:
+            continue
+        npts = int(parts[0])
+        start = torch.tensor(
+            [float(parts[1]), float(parts[2]), float(parts[3])], dtype=torch.float64
+        )
+        end = torch.tensor(
+            [float(parts[4]), float(parts[5]), float(parts[6])], dtype=torch.float64
+        )
+        start_label = str(parts[7])
+        end_label = str(parts[8])
+        segments.append((npts, start, end, start_label, end_label))
+    return segments
+
+
+def _band_path_from_openmx_info(
+    info_path: Path,
+) -> tuple[str, dict[str, list[float]]] | None:
+    segments = _openmx_band_segments(info_path)
+    if not segments:
+        return None
+
+    labels: list[str] = []
+    special_points: dict[str, list[float]] = {}
+    for _npts, start, end, start_label, end_label in segments:
+        if not labels:
+            labels.append(start_label)
+        elif labels[-1] != start_label:
+            labels.append(start_label)
+        labels.append(end_label)
+        special_points[start_label] = [float(x) for x in start.tolist()]
+        special_points[end_label] = [float(x) for x in end.tolist()]
+
+    return "".join(labels), special_points
+
+
+def _resolve_band_path(
+    info_path: Path, requested_path_string: str
+) -> tuple[str, dict[str, list[float]]]:
+    resolved = _band_path_from_openmx_info(info_path)
+    if resolved is None:
+        raise ValueError(
+            f"No OpenMX Band.kpath found in {info_path}; the hardcoded silicon FCC fallback was removed."
+        )
+    openmx_path_string, special_points = resolved
+    return requested_path_string, special_points
 
 
 def _display_k_label(label: str) -> str:
@@ -294,18 +345,6 @@ def _clean_predicted_overlap_irreps(
         orbital_cfg=overlap_irreps.orbital_cfg,
         basis=overlap_irreps.basis,
     )
-
-
-def _project_eigenvalues_to_window(
-    eigenvalues_ev: torch.Tensor,
-    *,
-    e_min: float,
-    e_max: float,
-) -> torch.Tensor:
-    mask = (eigenvalues_ev >= e_min) & (eigenvalues_ev <= e_max)
-    if bool(mask.any()):
-        return eigenvalues_ev[mask]
-    return eigenvalues_ev
 
 
 def _fermi_level_from_dos(
@@ -525,6 +564,7 @@ def _build_band_structure_from_chunks(
     snapshot: Snapshot,
     *,
     path_string: str,
+    special_points: dict[str, list[float]],
     num_points: int,
     chunk_size: int,
     num_workers: int,
@@ -538,7 +578,7 @@ def _build_band_structure_from_chunks(
         build_band_path(
             snapshot.box,
             path=path_string,
-            special_points=_silicon_fcc_special_points(),
+            special_points=special_points,
             npoints=num_points,
         )
     )
@@ -732,6 +772,7 @@ def _compute_or_load_band_structure(
     cache_path: Path,
     *,
     path_string: str,
+    special_points: dict[str, list[float]],
     num_points: int,
     chunk_size: int,
     num_workers: int,
@@ -751,6 +792,7 @@ def _compute_or_load_band_structure(
     band_structure = _build_band_structure_from_chunks(
         snapshot,
         path_string=path_string,
+        special_points=special_points,
         num_points=num_points,
         chunk_size=chunk_size,
         num_workers=num_workers,
@@ -897,17 +939,14 @@ def _compute_dos_data(
         .cpu()
         * HARTREE_TO_EV
     )
-    eig_window = _project_eigenvalues_to_window(
-        eig, e_min=float(energy_min), e_max=float(energy_max)
-    )
     grid, dos = compute_dos_from_eigenvalues(
-        eig_window,
+        eig,
         sigma=sigma,
         bin_width=bin_width,
         e_min=float(energy_min),
         e_max=float(energy_max),
     )
-    return eig, eig_window, grid, dos
+    return eig, eig, grid, dos
 
 
 def _save_dos_comparison_plot(
@@ -1147,6 +1186,9 @@ def _run_snapshot_case(
     gt_snapshot = _build_snapshot_from_matrices(
         gt_mats, positions=positions, box=box, info=info
     )
+    resolved_path_string, special_points = _resolve_band_path(
+        info_path, args.path_string
+    )
     overlap_for_eigs = (
         gt_mats["overlap"] if args.use_gt_overlap_for_eigs else pred_mats.get("overlap")
     )
@@ -1265,7 +1307,8 @@ def _run_snapshot_case(
             kind="gt",
             use_gt_overlap_for_eigs=args.use_gt_overlap_for_eigs,
         ),
-        path_string=args.path_string,
+        path_string=resolved_path_string,
+        special_points=special_points,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
         num_workers=args.num_workers,
@@ -1280,7 +1323,8 @@ def _run_snapshot_case(
             kind="pred",
             use_gt_overlap_for_eigs=args.use_gt_overlap_for_eigs,
         ),
-        path_string=args.path_string,
+        path_string=resolved_path_string,
+        special_points=special_points,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
         num_workers=args.num_workers,
@@ -1328,6 +1372,13 @@ def _run_cif_case(
         args.cif_path,
         dtype=cfg.dtype,
         device=device,
+    )
+    if args.reference_info_path is None:
+        raise ValueError(
+            "CIF mode now requires --reference-info-path so the OpenMX Band.kpath can be reused; the hardcoded silicon FCC fallback was removed."
+        )
+    resolved_path_string, special_points = _resolve_band_path(
+        args.reference_info_path, args.path_string
     )
     x = build_model_input_from_structure(
         atoms=atoms,
@@ -1411,7 +1462,8 @@ def _run_cif_case(
     pred_band = _compute_or_load_band_structure(
         pred_snapshot_for_eigs,
         output_dir / "band_structure_pred.pt",
-        path_string=args.path_string,
+        path_string=resolved_path_string,
+        special_points=special_points,
         num_points=args.num_points,
         chunk_size=args.chunk_size,
         num_workers=args.num_workers,
