@@ -39,6 +39,7 @@ from scripts.dataset import (  # noqa: E402
     build_datasets_from_yaml,
     build_silicon_datasets,
     build_siox_datasets,
+    build_zncusnses_small_datasets,
 )
 from utils.run_name import resolve_run_name  # noqa: E402
 
@@ -294,6 +295,16 @@ def _build_dataset_bundle(
         )
     if dataset_kind == "siox":
         return build_siox_datasets(
+            data_path=getattr(args, "data_path"),
+            cfg=cfg,
+            num_train=getattr(args, "num_train", None),
+            num_val=getattr(args, "num_val", None),
+            val_fraction=getattr(args, "val_fraction", 0.2),
+            seed=cfg.seed,
+            convention=convention,
+        )
+    if dataset_kind == "ZnCuSnSeS_small":
+        return build_zncusnses_small_datasets(
             data_path=getattr(args, "data_path"),
             cfg=cfg,
             num_train=getattr(args, "num_train", None),

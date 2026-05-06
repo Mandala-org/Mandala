@@ -28,7 +28,7 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
         *_arg_names("dataset_kind"),
         type=str,
         default="silicon",
-        choices=["silicon", "siox"],
+        choices=["silicon", "siox", "ZnCuSnSeS_small"],
     )
     parser.add_argument(*_arg_names("data_path"), type=str, default=None)
     parser.add_argument(*_arg_names("min_temp"), type=int, default=300)

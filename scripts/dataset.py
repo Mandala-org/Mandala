@@ -30,16 +30,18 @@ def discover_silicon_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
     return pairs
 
 
-def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
-    print(f"--- Discovering SiOx snapshots under {root} ---")
+def discover_single_snapshot_pairs(
+    root: Path,
+    *,
+    label: str,
+) -> list[tuple[Path, Path]]:
+    print(f"--- Discovering {label} snapshots under {root} ---")
     pairs: list[tuple[Path, Path]] = []
 
-    # Allow a single snapshot directory to be used directly, alongside the
-    # usual "root/child/" layout.
     if root.is_dir():
         matrix_path = root / "HS.out"
         if matrix_path.exists():
-            info_path = _resolve_siox_info_path(root)
+            info_path = _resolve_single_snapshot_info_path(root)
             if info_path is not None:
                 pairs.append((matrix_path.resolve(), info_path.resolve()))
 
@@ -47,15 +49,20 @@ def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
         matrix_path = sample_dir / "HS.out"
         if not matrix_path.exists():
             continue
-        info_path = _resolve_siox_info_path(sample_dir)
+        info_path = _resolve_single_snapshot_info_path(sample_dir)
         if info_path is None:
             continue
         pairs.append((matrix_path.resolve(), info_path.resolve()))
-    print(f"--- Found {len(pairs)} SiOx snapshot pairs ---")
+    print(f"--- Found {len(pairs)} {label} snapshot pairs ---")
     return pairs
 
 
-def _resolve_siox_info_path(sample_dir: Path) -> Path | None:
+def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
+    print(f"--- Discovering SiOx snapshots under {root} ---")
+    return discover_single_snapshot_pairs(root, label="SiOx")
+
+
+def _resolve_single_snapshot_info_path(sample_dir: Path) -> Path | None:
     preferred = sample_dir / "SiO2.out"
     if preferred.exists():
         return preferred
@@ -289,6 +296,58 @@ def build_siox_datasets(
     )
 
 
+def build_zncusnses_small_datasets(
+    *,
+    data_path: str | Path,
+    cfg: Config,
+    num_train: int | None = None,
+    num_val: int | None = None,
+    val_fraction: float = 0.2,
+    seed: int = 42,
+    convention: str = "e3nn",
+):
+    print(
+        f"--- ZnCuSnSeS_small dataset builder: data_path={data_path}, seed={seed}, num_train={num_train}, num_val={num_val}, val_fraction={val_fraction} ---"
+    )
+    if val_fraction < 0.0 or val_fraction >= 1.0:
+        raise ValueError("val_fraction must be in [0, 1).")
+    all_pairs = discover_single_snapshot_pairs(Path(data_path), label="ZnCuSnSeS_small")
+    rng = random.Random(seed)
+    rng.shuffle(all_pairs)
+    if not all_pairs:
+        raise ValueError(f"No ZnCuSnSeS_small snapshots found under {data_path}")
+
+    if num_train is not None or num_val is not None:
+        if num_train is None or num_val is None:
+            raise ValueError(
+                "ZnCuSnSeS_small global split mode requires both num_train and num_val."
+            )
+        if num_train <= 0:
+            raise ValueError("num_train must be > 0")
+        if num_val < 0:
+            raise ValueError("num_val must be >= 0")
+    else:
+        inferred_num_val = int(math.floor(len(all_pairs) * val_fraction))
+        if len(all_pairs) > 1:
+            inferred_num_val = max(1, inferred_num_val)
+        num_val = inferred_num_val
+        num_train = len(all_pairs) - num_val
+
+    assert num_train is not None and num_val is not None
+    if len(all_pairs) < num_train + num_val:
+        raise ValueError(
+            f"Requested train+val={num_train + num_val} but found only {len(all_pairs)} ZnCuSnSeS_small snapshots under {data_path}"
+        )
+    train_pairs = all_pairs[:num_train]
+    val_pairs = all_pairs[num_train : num_train + num_val]
+    print(
+        f"--- ZnCuSnSeS_small split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+    )
+    return _create_datasets_from_pairs(
+        train_pairs, val_pairs, cfg, convention=convention
+    )
+
+
 def build_datasets_from_yaml(
     parsed_yaml: dict[str, Any],
     cfg: Config,
@@ -346,6 +405,24 @@ def build_datasets_from_yaml(
         )
     if dataset_kind == "siox":
         return build_siox_datasets(
+            data_path=_require_dataset_value(parameters, overrides, "data_path"),
+            cfg=cfg,
+            num_train=_optional_int(
+                _get_dataset_value(parameters, overrides, "num_train", default=None)
+            ),
+            num_val=_optional_int(
+                _get_dataset_value(parameters, overrides, "num_val", default=None)
+            ),
+            val_fraction=float(
+                _get_dataset_value(parameters, overrides, "val_fraction", default=0.2)
+            ),
+            seed=int(
+                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            ),
+            convention=convention,
+        )
+    if dataset_kind == "ZnCuSnSeS_small":
+        return build_zncusnses_small_datasets(
             data_path=_require_dataset_value(parameters, overrides, "data_path"),
             cfg=cfg,
             num_train=_optional_int(
