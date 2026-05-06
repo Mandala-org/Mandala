@@ -415,6 +415,7 @@ class E3GNNDataset(Dataset):
                 edge_types=self.mapper.edge_types,
                 edge_type2idx=self.mapper.edge_type2idx,
                 separate_shifted_self=bool(self.cfg.separate_shifted_self),
+                target_pair_edges=hamiltonian_target_matrix.pair_edges,
             )
 
             y = {

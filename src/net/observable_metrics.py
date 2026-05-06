@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
 
 import torch
 
 from core.sparse_math import (
-    build_trace_alignment_from_pair_edges,
     trace_matmul_sparse_block_matrix_aligned,
 )
 from data.block_matrix import BlockMatrix
@@ -60,11 +58,9 @@ def validate_observable_config(cfg) -> None:
             )
 
 
-def align_pred_block_matrix_to_target_edges(
+def truncate_pred_block_matrix_to_target_prefix(
     pred_matrix: BlockMatrix,
     target_matrix: BlockMatrix,
-    *,
-    require_exact_prefix: bool = False,
 ) -> BlockMatrix:
     pair_blocks: dict[str, torch.Tensor] = {}
     pair_edges: dict[str, torch.Tensor] = {}
@@ -75,29 +71,14 @@ def align_pred_block_matrix_to_target_edges(
             raise ValueError(f"Prediction is missing key '{key}' required by target")
         pred_blocks = pred_matrix.pair_blocks[key]
         target_n = target_edges.shape[1]
+        if target_n <= 0:
+            raise ValueError(f"Target edge prefix for key '{key}' is empty.")
         if pred_blocks.shape[0] < target_n:
             raise ValueError(
                 f"Prediction is missing the target prefix for key '{key}': "
                 f"pred_len={pred_blocks.shape[0]} target_len={target_n}"
             )
-        if require_exact_prefix:
-            pred_edges = pred_matrix.pair_edges.get(key)
-            if pred_edges is None:
-                raise ValueError(f"Prediction is missing edge tensor for key '{key}'")
-            if pred_edges.shape[1] < target_n:
-                raise ValueError(
-                    f"Prediction edge tensor for key '{key}' is too short: "
-                    f"pred_len={pred_edges.shape[1]} target_len={target_n}"
-                )
-            if not torch.equal(pred_edges[:, :target_n], target_edges):
-                raise ValueError(
-                    f"Prediction prefix edge mismatch for key '{key}' while aligning metrics"
-                )
-        pair_blocks[key] = (
-            pred_blocks[:target_n]
-            if target_n > 0
-            else pred_blocks.new_zeros((0, *pred_blocks.shape[1:]))
-        )
+        pair_blocks[key] = pred_blocks[:target_n]
         pair_edges[key] = target_edges
         for idx, (sx, sy, sz, i, j) in enumerate(target_edges.t().tolist()):
             lookup[(sx, sy, sz, i, j)] = (key, idx)
@@ -113,33 +94,10 @@ def align_pred_block_matrix_to_target_edges(
     )
 
 
-def build_observable_trace_alignment(
-    target_matrix: BlockMatrix,
-) -> dict[str, tuple[str, torch.Tensor]]:
-    return build_trace_alignment_from_pair_edges(target_matrix.pair_edges)
-
-
-def align_pred_block_matrices_to_target_edges(
-    preds_matrix: dict[str, BlockMatrix],
-    target_matrix: BlockMatrix,
-    *,
-    require_exact_prefix: bool = False,
-) -> tuple[dict[str, BlockMatrix], dict[str, tuple[str, torch.Tensor]]]:
-    aligned = {
-        name: align_pred_block_matrix_to_target_edges(
-            pred_matrix,
-            target_matrix,
-            require_exact_prefix=require_exact_prefix,
-        )
-        for name, pred_matrix in preds_matrix.items()
-    }
-    return aligned, build_observable_trace_alignment(target_matrix)
-
-
 def build_observable_predictions(
     preds_matrix: dict[str, BlockMatrix],
     *,
-    trace_alignment: dict[str, Any],
+    trace_alignment,
     H_true: BlockMatrix | None,
     D_true: BlockMatrix | None,
     S_true: BlockMatrix | None,
