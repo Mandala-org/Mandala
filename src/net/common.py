@@ -168,6 +168,7 @@ class Config:
     log_per_irrep_metrics: bool = False
     print_per_irrep_metrics: bool = False
     log_per_irrep_images: bool = False
+    log_train_metrics: bool = False
     log_per_pair_loss_metrics: bool = True
     log_hamiltonian_irrep_contrib_metrics: bool = True
     log_hamiltonian_pair_contrib_metrics: bool = True
