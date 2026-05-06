@@ -70,7 +70,7 @@ parameters:
   e3layernorm:
     value: false
   num-layers-gnn:
-    value: 2
+    value: 3
   tp-type:
     value: separate_weight
   use-self-connection:
@@ -101,10 +101,6 @@ parameters:
     value: true
   head-use-tensor-square:
     value: false
-  head-diag-output-scale:
-    value: 2
-  head-offdiag-output-scale:
-    value: 1
   head-log-scale-mlp-n-layers:
     value: 1
   e3mlp-variant:
@@ -122,12 +118,6 @@ parameters:
       - film
       - normact
       - resnormact
-  e3mlp-output-scale:
-    value: 1
-  e3mlp-weight-init-scale:
-    value: 0.5
-  e3mlp-residual-scale:
-    value: 1
   e3mlp-pre-norm:
     value: false
   e3mlp-norm-eps:
@@ -154,16 +144,14 @@ parameters:
     value: 0.0
   l2-reg-coef:
     value: 0.0
-  init-weights-factor:
-    value: 1
   grad-clip-val:
     value: 1
   accumulate-grad-batches:
     value: 1
   n-radial:
-    value: 64
+    value: 128
   radial-layers:
-    value: [64, 64]
+    value: [128, 128, 128]
   device:
     value: cuda
   gpus:
