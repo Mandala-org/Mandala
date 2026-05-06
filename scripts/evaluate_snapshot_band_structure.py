@@ -290,12 +290,6 @@ def _save_dos_plot(
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    cumulative = torch.zeros_like(grid_ev)
-    if grid_ev.numel() > 1:
-        cumulative[1:] = torch.cumsum(
-            0.5 * (dos[:-1] + dos[1:]) * (grid_ev[1:] - grid_ev[:-1]), dim=0
-        )
-
     fig, ax = plt.subplots(1, 1, figsize=(9.0, 5.8))
     ax.plot(grid_ev.cpu().numpy(), dos.cpu().numpy(), color="#1f5aa6", lw=1.8)
     ax.set_title(title)
@@ -303,36 +297,14 @@ def _save_dos_plot(
     ax.set_ylabel("DOS")
     ax.grid(True, alpha=0.25)
 
-    ax2 = ax.twinx()
-    ax2.plot(
-        grid_ev.cpu().numpy(),
-        cumulative.cpu().numpy(),
-        color="tab:green",
-        lw=1.2,
-        ls="--",
-        label="Integrated DOS",
-    )
-    ax2.set_ylabel("Integrated DOS / electrons")
-
     if fermi_level_ev is not None:
         ax.axvline(fermi_level_ev, color="black", ls=":", lw=1.5, label="Fermi level")
-        idx = int(
-            torch.argmin(torch.abs(grid_ev - grid_ev.new_tensor(fermi_level_ev))).item()
-        )
-        ax2.scatter(
-            [fermi_level_ev],
-            [float(cumulative[idx].item())],
-            color="black",
-            s=36,
-            zorder=5,
-        )
     if num_electrons is not None:
-        ax2.axhline(float(num_electrons), color="tab:green", ls=":", lw=1.0, alpha=0.8)
-        ax2.text(
+        ax.text(
             0.02,
             0.95,
             f"N_e = {num_electrons:.3f}",
-            transform=ax2.transAxes,
+            transform=ax.transAxes,
             ha="left",
             va="top",
             bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
@@ -443,11 +415,12 @@ def _compute_kmesh_dos_and_fermi(
     )
     reciprocal = 2.0 * torch.pi * torch.linalg.inv(snapshot.box).T
     kpoints_abs = fractional_kpoints @ reciprocal
+    show_progress = sys.stderr.isatty()
     k_band = snapshot.get_band_structure(
         kpoints_abs=kpoints_abs,
         fractional_kpoints=fractional_kpoints,
         chunk_size=chunk_size,
-        show_progress=False,
+        show_progress=show_progress,
         psd_cleanup=psd_cleanup,
         allow_jitter=allow_jitter,
     )
@@ -523,13 +496,6 @@ def _save_band_and_dos_plot(
     tick_labels = [_display_k_label(label) for label in payload.tick_labels]
     dos_grid_shifted = dos_grid - (0.0 if band_fermi_ev is None else band_fermi_ev)
 
-    cumulative = torch.zeros_like(dos_grid_shifted)
-    if dos_grid_shifted.numel() > 1:
-        cumulative[1:] = torch.cumsum(
-            0.5 * (dos[:-1] + dos[1:]) * (dos_grid_shifted[1:] - dos_grid_shifted[:-1]),
-            dim=0,
-        )
-
     fig, (ax_band, ax_dos) = plt.subplots(
         1,
         2,
@@ -584,18 +550,6 @@ def _save_band_and_dos_plot(
             ls="--",
             label="OpenMX DOS",
         )
-        if ref_cumulative is not None:
-            ax_ref = ax_dos.twiny()
-            ax_ref.plot(
-                ref_cumulative.cpu().numpy(),
-                ref_energy.cpu().numpy(),
-                color="tab:green",
-                lw=1.0,
-                ls=":",
-                alpha=0.8,
-                label="OpenMX cumulative",
-            )
-            ax_ref.set_xlabel("Integrated DOS / electrons")
     if band_fermi_ev is not None:
         ax_dos.axhline(0.0, color="black", ls=":", lw=1.5, label="Fermi level")
     ax_dos.set_xlabel("DOS")
