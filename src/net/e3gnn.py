@@ -33,6 +33,7 @@ from net.irrep_tools import (
     project_irrep_vectors_to_blocks,
 )
 from net.observable_metrics import (
+    align_pred_block_matrices_to_target_edges,
     add_observable_metrics,
     build_observable_predictions,
     observable_loss,
@@ -384,7 +385,6 @@ class E3GNN(pl.LightningModule):
         """
         x, y = batch
         metrics = {}
-        pred_trace_alignment = x["pred_trace_alignment"]
 
         # --- forward timing (message-passing + heads) -------------------
         t_fwd_start = time.perf_counter()
@@ -533,9 +533,21 @@ class E3GNN(pl.LightningModule):
 
         E_true = y.get("energy")
         N_true = y.get("num_electrons")
+        observable_preds_matrix = preds_matrix
+        target_reference_matrix = H_true or D_true or S_true
+        if target_reference_matrix is not None and preds_matrix:
+            observable_preds_matrix, observable_trace_alignment = (
+                align_pred_block_matrices_to_target_edges(
+                    preds_matrix,
+                    target_reference_matrix,
+                    require_exact_prefix=bool(self.cfg.require_exact_edge_match),
+                )
+            )
+        else:
+            observable_trace_alignment = {}
         observable_values = build_observable_predictions(
-            preds_matrix,
-            pred_trace_alignment=pred_trace_alignment,
+            observable_preds_matrix,
+            trace_alignment=observable_trace_alignment,
             H_true=H_true,
             D_true=D_true,
             S_true=S_true,
