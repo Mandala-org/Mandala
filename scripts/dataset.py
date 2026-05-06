@@ -86,10 +86,7 @@ def _create_datasets_from_pairs(
         print(f"train[0]={train_pairs[0][0]} | {train_pairs[0][1]}")
     if val_pairs:
         print(f"val[0]={val_pairs[0][0]} | {val_pairs[0][1]}")
-    cfg_ds = dataclasses.replace(cfg)
-    if not cfg.apply_cutoff_to_targets:
-        cfg_ds.cutoff_radius = None
-    fac = DatasetFactory(cfg_ds, convention=convention)
+    fac = DatasetFactory(dataclasses.replace(cfg), convention=convention)
     for matrix_path, info_path in train_pairs:
         fac.add_snapshot(matrix_path, info_path, purpose="train")
     for matrix_path, info_path in val_pairs:
