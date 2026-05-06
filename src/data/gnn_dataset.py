@@ -344,19 +344,9 @@ class E3GNNDataset(Dataset):
             )
 
             hamiltonian_target_matrix = snap.hamiltonian
-
-            if self.cfg.train_target == "matrix":
-                hamiltonian_target = hamiltonian_target_matrix
-                overlap_target = snap.overlap
-                density_target = snap.density
-            elif self.cfg.train_target == "irreps":
-                hamiltonian_target = hamiltonian_target_matrix.to_vectors(self.mapper)
-                overlap_target = snap.overlap.to_vectors(self.mapper)
-                density_target = snap.density.to_vectors(self.mapper)
-            else:
-                raise ValueError(
-                    f"Unknown train_target {self.cfg.train_target}, must be 'irreps' or 'matrix'"
-                )
+            hamiltonian_target = hamiltonian_target_matrix
+            overlap_target = snap.overlap
+            density_target = snap.density
 
             if self.cfg.enable_forces:
                 snap.positions.requires_grad_()

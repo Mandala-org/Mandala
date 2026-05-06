@@ -22,12 +22,13 @@ import time
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
-from data.block_matrix import IrrepsBlockData
+from data.block_matrix import BlockMatrix, IrrepsBlockData
 from data.graph_features import compute_edge_geometry_from_static_edges
 
 from net.common import Config, resolve_hidden_irreps
 from net.irrep_tools import (
     build_irrep_projector_cache,
+    build_irrep_block_matrix_cache,
     compute_irrep_metrics,
     compute_hamiltonian_mae_contributions,
     get_all_irreps,
@@ -84,9 +85,9 @@ class E3GNN(pl.LightningModule):
             raise ValueError(
                 "partial_train must be one of None, 'diag', 'shifted_self', or 'offdiag'."
             )
-        if cfg.train_on_irrep_parts and cfg.train_target == "irreps":
+        if cfg.train_on_irrep_parts and cfg.train_target != "matrix":
             raise ValueError(
-                "train_on_irrep_parts expects matrix-space supervision and should not be combined with train_target='irreps'."
+                "train_on_irrep_parts expects matrix-space supervision and should only be used with train_target='matrix'."
             )
         validate_observable_config(cfg)
 
@@ -406,10 +407,22 @@ class E3GNN(pl.LightningModule):
         combined_matrix_losses = {}
         combined_pair_losses: dict[str, dict[str, torch.Tensor]] = {}
         hamiltonian_mae_contribs: dict[str, object] | None = None
+        irrep_block_cache_by_name: dict[
+            str, tuple[dict[str, BlockMatrix], dict[str, BlockMatrix]]
+        ] = {}
         # num_atoms = x["positions"].shape[0]
 
         for name in self.cfg.matrix_targets:
             per_irrep_metrics: dict[str, dict[str, torch.Tensor]] = {}
+            pred_irrep_blocks = None
+            target_irrep_blocks = None
+            need_irrep_cache = self.cfg.log_per_irrep_metrics or (
+                name == "hamiltonian"
+                and (
+                    self.cfg.log_hamiltonian_irrep_contrib_metrics
+                    or self.cfg.log_hamiltonian_pair_contrib_metrics
+                )
+            )
 
             if self.cfg.train_on_irrep_parts:
                 target_irreps = y[name].to_vectors(self.mapper)
@@ -417,21 +430,13 @@ class E3GNN(pl.LightningModule):
                     preds_irreps[name], target_irreps
                 )
             else:
-                p = (
-                    preds_irreps[name]
-                    if self.cfg.train_target == "irreps"
-                    else preds_matrix[name]
-                )
+                p = preds_matrix[name]
                 t = y[name]
 
-                if self.cfg.train_target == "matrix" and self.cfg.symmetrize_output:
+                if self.cfg.symmetrize_output:
                     p = (p + p.transpose()) * 0.5
 
-                p_items, t_items = (
-                    (p.pair_vectors, t.pair_vectors)
-                    if self.cfg.train_target == "irreps"
-                    else (p.pair_blocks, t.pair_blocks)
-                )
+                p_items, t_items = p.pair_blocks, t.pair_blocks
 
                 mse_val = torch.tensor(0.0, device=self.device)
                 mae_val = torch.tensor(0.0, device=self.device)
@@ -480,20 +485,31 @@ class E3GNN(pl.LightningModule):
             matrix_maes[name] = mae_val
             combined_pair_losses[name] = pair_losses
 
+            if need_irrep_cache:
+                pred_irrep_blocks = build_irrep_block_matrix_cache(
+                    preds_matrix[name], self.mapper, self.all_irreps
+                )
+                target_irrep_blocks = build_irrep_block_matrix_cache(
+                    y[name], self.mapper, self.all_irreps
+                )
+                irrep_block_cache_by_name[name] = (
+                    pred_irrep_blocks,
+                    target_irrep_blocks,
+                )
+
             if name == "hamiltonian" and (
                 self.cfg.log_hamiltonian_irrep_contrib_metrics
                 or self.cfg.log_hamiltonian_pair_contrib_metrics
             ):
-                target_irreps = (
-                    y[name]
-                    if self.cfg.train_target == "irreps"
-                    else y[name].to_vectors(self.mapper)
-                )
                 hamiltonian_mae_contribs = compute_hamiltonian_mae_contributions(
-                    preds_irreps[name],
-                    target_irreps,
+                    preds_matrix[name],
+                    y[name],
                     self.mapper,
                     all_irreps=self.all_irreps,
+                    compute_irrep_sums=self.cfg.log_hamiltonian_irrep_contrib_metrics,
+                    compute_pair_sums=self.cfg.log_hamiltonian_pair_contrib_metrics,
+                    pred_irrep_blocks=pred_irrep_blocks,
+                    target_irrep_blocks=target_irrep_blocks,
                 )
 
             # Store for combined loss BEFORE unit conversion
@@ -555,14 +571,9 @@ class E3GNN(pl.LightningModule):
             or self.cfg.train_observables_on_gt
         )
         if needs_gt_observables and {"hamiltonian", "density", "overlap"}.issubset(y):
-            if self.cfg.train_target == "irreps":
-                H_true = y["hamiltonian"].to_blocks(self.mapper)
-                D_true = y["density"].to_blocks(self.mapper)
-                S_true = y["overlap"].to_blocks(self.mapper)
-            else:
-                H_true = y["hamiltonian"]
-                D_true = y["density"]
-                S_true = y["overlap"]
+            H_true = y["hamiltonian"]
+            D_true = y["density"]
+            S_true = y["overlap"]
 
         E_true = y.get("energy")
         N_true = y.get("num_electrons")
@@ -618,16 +629,25 @@ class E3GNN(pl.LightningModule):
             for name in self.cfg.matrix_targets:
                 if name not in preds_irreps or name not in y:
                     continue
-                target_irreps = (
-                    y[name]
-                    if self.cfg.train_target == "irreps"
-                    else y[name].to_vectors(self.mapper)
-                )
+                cache = irrep_block_cache_by_name.get(name)
+                if cache is None:
+                    cache = (
+                        build_irrep_block_matrix_cache(
+                            preds_matrix[name], self.mapper, self.all_irreps
+                        ),
+                        build_irrep_block_matrix_cache(
+                            y[name], self.mapper, self.all_irreps
+                        ),
+                    )
+                    irrep_block_cache_by_name[name] = cache
+                pred_irrep_blocks, target_irrep_blocks = cache
                 irrep_metrics = compute_irrep_metrics(
-                    preds_irreps[name],
-                    target_irreps,
+                    preds_matrix[name],
+                    y[name],
                     self.all_irreps,
                     self.mapper,
+                    pred_irrep_blocks=pred_irrep_blocks,
+                    target_irrep_blocks=target_irrep_blocks,
                 )
                 for key, value in irrep_metrics.items():
                     metrics[f"{stage}/{name}_irrep_{key}"] = value
