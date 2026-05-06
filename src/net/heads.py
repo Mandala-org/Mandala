@@ -184,6 +184,10 @@ class DeepHead(nn.Module):
             pair_vectors = key_edge_feat.new_zeros(
                 (key_edges.shape[1], self.mapper.get_pair_irreps(key).dim)
             )
+            pair_dtype = pair_vectors.dtype
+
+            def _match_pair_dtype(t: torch.Tensor) -> torch.Tensor:
+                return t if t.dtype == pair_dtype else t.to(dtype=pair_dtype)
 
             diag_local_idx = parts["diag_local_idx"]
             if diag_local_idx.numel() > 0:
@@ -200,6 +204,7 @@ class DeepHead(nn.Module):
                     diag_vectors = (
                         torch.exp(self.diag_log_scales[key](diag_hidden)) * diag_vectors
                     )
+                diag_vectors = _match_pair_dtype(diag_vectors)
                 pair_vectors.index_copy_(0, diag_local_idx, diag_vectors)
 
             shifted_self_local_idx = parts["shifted_self_local_idx"]
@@ -214,6 +219,7 @@ class DeepHead(nn.Module):
                         torch.exp(self.shifted_self_log_scales[key](shifted_hidden))
                         * shifted_vectors
                     )
+                shifted_vectors = _match_pair_dtype(shifted_vectors)
                 pair_vectors.index_copy_(0, shifted_self_local_idx, shifted_vectors)
 
             offdiag_local_idx = parts["offdiag_local_idx"]
@@ -228,6 +234,7 @@ class DeepHead(nn.Module):
                         torch.exp(self.offdiag_log_scales[key](offdiag_hidden))
                         * offdiag_vectors
                     )
+                offdiag_vectors = _match_pair_dtype(offdiag_vectors)
                 pair_vectors.index_copy_(0, offdiag_local_idx, offdiag_vectors)
 
             result[key] = pair_vectors
