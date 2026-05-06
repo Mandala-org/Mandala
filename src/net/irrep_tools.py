@@ -192,3 +192,52 @@ def compute_irrep_metrics(
         metrics[f"{irrep_str}_l2_block_rel"] = l2_block_rel
 
     return metrics
+
+
+def compute_hamiltonian_mae_contributions(
+    pred_H_irreps: IrrepsBlockData,
+    target_H_irreps: IrrepsBlockData,
+    mapper: BlockIrrepMapper,
+    *,
+    all_irreps: Iterable[Irrep] | None = None,
+) -> dict[str, object]:
+    if all_irreps is None:
+        all_irreps = get_all_irreps(mapper)
+
+    pair_abs_sums: dict[str, float] = {}
+    irrep_abs_sums: dict[str, float] = {str(ir): 0.0 for ir in all_irreps}
+    total_abs_sum = 0.0
+    total_count = 0
+
+    for pair_key, target_vec in target_H_irreps.pair_vectors.items():
+        if pair_key not in pred_H_irreps.pair_vectors:
+            continue
+        pred_vec = pred_H_irreps.pair_vectors[pair_key]
+        if pred_vec.shape != target_vec.shape:
+            raise ValueError(
+                f"Hamiltonian irrep contribution logging requires matching shapes for key '{pair_key}', "
+                f"got pred_shape={tuple(pred_vec.shape)} target_shape={tuple(target_vec.shape)}"
+            )
+        diff = pred_vec - target_vec
+        abs_sum = float(torch.sum(torch.abs(diff)).item())
+        pair_abs_sums[pair_key] = abs_sum
+        total_abs_sum += abs_sum
+        total_count += int(diff.numel())
+
+        start = 0
+        for mul, irrep in mapper.get_pair_irreps(pair_key):
+            width = mul * irrep.dim
+            if width <= 0:
+                continue
+            irrep_key = str(irrep)
+            irrep_abs_sums[irrep_key] = irrep_abs_sums.get(irrep_key, 0.0) + float(
+                torch.sum(torch.abs(diff[:, start : start + width])).item()
+            )
+            start += width
+
+    return {
+        "total_abs_sum": total_abs_sum,
+        "total_count": total_count,
+        "pair_abs_sums": pair_abs_sums,
+        "irrep_abs_sums": irrep_abs_sums,
+    }
