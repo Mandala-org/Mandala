@@ -220,6 +220,7 @@ def compute_hamiltonian_mae_contributions(
     all_irreps: Iterable[Irrep] | None = None,
     compute_irrep_sums: bool = True,
     compute_pair_sums: bool = True,
+    require_exact_prefix: bool = True,
     pred_irrep_blocks: dict[str, BlockMatrix] | None = None,
     target_irrep_blocks: dict[str, BlockMatrix] | None = None,
 ) -> dict[str, object]:
@@ -244,12 +245,24 @@ def compute_hamiltonian_mae_contributions(
         if pair_key not in pred_H.pair_blocks:
             continue
         pred_blocks = pred_H.pair_blocks[pair_key]
-        if pred_blocks.shape != target_blocks.shape:
+        target_n = target_blocks.shape[0]
+        if pred_blocks.shape[0] < target_n:
             raise ValueError(
                 f"Hamiltonian irrep contribution logging requires matching shapes for key '{pair_key}', "
-                f"got pred_shape={tuple(pred_blocks.shape)} target_shape={tuple(target_blocks.shape)}"
+                f"got pred_len={pred_blocks.shape[0]} target_len={target_n}"
             )
-        diff = pred_blocks - target_blocks
+        if require_exact_prefix:
+            pred_edges = pred_H.pair_edges.get(pair_key)
+            target_edges = target_H.pair_edges.get(pair_key)
+            if pred_edges is None or target_edges is None:
+                raise ValueError(
+                    f"Hamiltonian irrep contribution logging requires edge tensors for key '{pair_key}'"
+                )
+            if not torch.equal(pred_edges[:, :target_n], target_edges[:, :target_n]):
+                raise ValueError(
+                    f"Hamiltonian irrep contribution logging edge prefix mismatch for key '{pair_key}'"
+                )
+        diff = pred_blocks[:target_n] - target_blocks[:target_n]
         abs_sum = float(torch.sum(torch.abs(diff)).item())
         if compute_pair_sums:
             pair_abs_sums[pair_key] = abs_sum
@@ -267,14 +280,32 @@ def compute_hamiltonian_mae_contributions(
                 if pair_key not in pred_irrep.pair_blocks:
                     continue
                 pred_blocks = pred_irrep.pair_blocks[pair_key]
-                if pred_blocks.shape != target_blocks.shape:
+                target_n = target_blocks.shape[0]
+                if pred_blocks.shape[0] < target_n:
                     raise ValueError(
                         f"Hamiltonian irrep contribution logging requires matching shapes for key '{pair_key}' "
-                        f"at irrep '{irrep_key}', got pred_shape={tuple(pred_blocks.shape)} "
-                        f"target_shape={tuple(target_blocks.shape)}"
+                        f"at irrep '{irrep_key}', got pred_len={pred_blocks.shape[0]} "
+                        f"target_len={target_n}"
                     )
+                if require_exact_prefix:
+                    pred_edges = pred_irrep.pair_edges.get(pair_key)
+                    target_edges = target_irrep.pair_edges.get(pair_key)
+                    if pred_edges is None or target_edges is None:
+                        raise ValueError(
+                            f"Hamiltonian irrep contribution logging requires edge tensors for key '{pair_key}' "
+                            f"at irrep '{irrep_key}'"
+                        )
+                    if not torch.equal(
+                        pred_edges[:, :target_n], target_edges[:, :target_n]
+                    ):
+                        raise ValueError(
+                            f"Hamiltonian irrep contribution logging edge prefix mismatch for key '{pair_key}' "
+                            f"at irrep '{irrep_key}'"
+                        )
                 irrep_abs_sum += float(
-                    torch.sum(torch.abs(pred_blocks - target_blocks)).item()
+                    torch.sum(
+                        torch.abs(pred_blocks[:target_n] - target_blocks[:target_n])
+                    ).item()
                 )
             irrep_abs_sums[irrep_key] = irrep_abs_sum
 
