@@ -4,7 +4,10 @@ from typing import Any
 
 import torch
 
-from core.sparse_math import trace_matmul_sparse_block_matrix_aligned
+from core.sparse_math import (
+    build_trace_alignment_from_pair_edges,
+    trace_matmul_sparse_block_matrix_aligned,
+)
 from data.block_matrix import BlockMatrix
 from utils.units import HARTREE_TO_EV
 
@@ -57,10 +60,86 @@ def validate_observable_config(cfg) -> None:
             )
 
 
+def align_pred_block_matrix_to_target_edges(
+    pred_matrix: BlockMatrix,
+    target_matrix: BlockMatrix,
+    *,
+    require_exact_prefix: bool = False,
+) -> BlockMatrix:
+    pair_blocks: dict[str, torch.Tensor] = {}
+    pair_edges: dict[str, torch.Tensor] = {}
+    lookup: dict[tuple[int, int, int, int, int], tuple[str, int]] = {}
+
+    for key, target_edges in target_matrix.pair_edges.items():
+        if key not in pred_matrix.pair_blocks:
+            raise ValueError(f"Prediction is missing key '{key}' required by target")
+        pred_blocks = pred_matrix.pair_blocks[key]
+        target_n = target_edges.shape[1]
+        if pred_blocks.shape[0] < target_n:
+            raise ValueError(
+                f"Prediction is missing the target prefix for key '{key}': "
+                f"pred_len={pred_blocks.shape[0]} target_len={target_n}"
+            )
+        if require_exact_prefix:
+            pred_edges = pred_matrix.pair_edges.get(key)
+            if pred_edges is None:
+                raise ValueError(f"Prediction is missing edge tensor for key '{key}'")
+            if pred_edges.shape[1] < target_n:
+                raise ValueError(
+                    f"Prediction edge tensor for key '{key}' is too short: "
+                    f"pred_len={pred_edges.shape[1]} target_len={target_n}"
+                )
+            if not torch.equal(pred_edges[:, :target_n], target_edges):
+                raise ValueError(
+                    f"Prediction prefix edge mismatch for key '{key}' while aligning metrics"
+                )
+        pair_blocks[key] = (
+            pred_blocks[:target_n]
+            if target_n > 0
+            else pred_blocks.new_zeros((0, *pred_blocks.shape[1:]))
+        )
+        pair_edges[key] = target_edges
+        for idx, (sx, sy, sz, i, j) in enumerate(target_edges.t().tolist()):
+            lookup[(sx, sy, sz, i, j)] = (key, idx)
+
+    return BlockMatrix(
+        atoms=pred_matrix.atoms,
+        atom_counts=pred_matrix.atom_counts,
+        pair_blocks=pair_blocks,
+        pair_edges=pair_edges,
+        lookup=lookup,
+        orbital_cfg=pred_matrix.orbital_cfg,
+        basis=pred_matrix.basis,
+    )
+
+
+def build_observable_trace_alignment(
+    target_matrix: BlockMatrix,
+) -> dict[str, tuple[str, torch.Tensor]]:
+    return build_trace_alignment_from_pair_edges(target_matrix.pair_edges)
+
+
+def align_pred_block_matrices_to_target_edges(
+    preds_matrix: dict[str, BlockMatrix],
+    target_matrix: BlockMatrix,
+    *,
+    require_exact_prefix: bool = False,
+) -> tuple[dict[str, BlockMatrix], dict[str, tuple[str, torch.Tensor]]]:
+    aligned = {
+        name: align_pred_block_matrix_to_target_edges(
+            pred_matrix,
+            target_matrix,
+            require_exact_prefix=require_exact_prefix,
+        )
+        for name, pred_matrix in preds_matrix.items()
+    }
+    return aligned, build_observable_trace_alignment(target_matrix)
+
+
 def build_observable_predictions(
     preds_matrix: dict[str, BlockMatrix],
     *,
-    pred_trace_alignment: dict[str, Any],
+    trace_alignment: dict[str, Any],
     H_true: BlockMatrix | None,
     D_true: BlockMatrix | None,
     S_true: BlockMatrix | None,
@@ -71,38 +150,38 @@ def build_observable_predictions(
         values["energy"] = trace_matmul_sparse_block_matrix_aligned(
             preds_matrix["hamiltonian"],
             preds_matrix["density"],
-            pred_trace_alignment,
+            trace_alignment,
         )
     if D_true is not None and "hamiltonian" in preds_matrix:
         values["energy_gt_density"] = trace_matmul_sparse_block_matrix_aligned(
             preds_matrix["hamiltonian"],
             D_true,
-            pred_trace_alignment,
+            trace_alignment,
         )
     if H_true is not None and "density" in preds_matrix:
         values["energy_gt_hamiltonian"] = trace_matmul_sparse_block_matrix_aligned(
             H_true,
             preds_matrix["density"],
-            pred_trace_alignment,
+            trace_alignment,
         )
 
     if {"density", "overlap"}.issubset(preds_matrix):
         values["num_electrons"] = trace_matmul_sparse_block_matrix_aligned(
             preds_matrix["density"],
             preds_matrix["overlap"],
-            pred_trace_alignment,
+            trace_alignment,
         )
     if S_true is not None and "density" in preds_matrix:
         values["num_electrons_gt_overlap"] = trace_matmul_sparse_block_matrix_aligned(
             preds_matrix["density"],
             S_true,
-            pred_trace_alignment,
+            trace_alignment,
         )
     if D_true is not None and "overlap" in preds_matrix:
         values["num_electrons_gt_density"] = trace_matmul_sparse_block_matrix_aligned(
             D_true,
             preds_matrix["overlap"],
-            pred_trace_alignment,
+            trace_alignment,
         )
 
     return values

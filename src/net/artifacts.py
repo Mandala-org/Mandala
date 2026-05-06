@@ -19,7 +19,10 @@ from net.irrep_tools import (
     filter_irreps_block_data_by_irrep,
     get_all_irreps,
 )
-from net.observable_metrics import build_observable_predictions
+from net.observable_metrics import (
+    build_observable_predictions,
+    build_observable_trace_alignment,
+)
 from net.silicon_study_logging import (
     MATRIX_ALIAS,
     IRREP_PREFIX_BY_MATRIX,
@@ -1173,7 +1176,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         self,
         aligned_preds: dict[str, BlockMatrix],
         y: dict[str, Any],
-        x: dict[str, Any],
+        trace_alignment: dict[str, Any],
         pl_module,
     ) -> tuple[dict[str, BlockMatrix], float | None]:
         metrics_preds = dict(aligned_preds)
@@ -1190,7 +1193,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         num_electrons_pred = trace_matmul_sparse_block_matrix_aligned(
             metrics_preds["density"],
             metrics_preds["overlap"],
-            x["pred_trace_alignment"],
+            trace_alignment,
         )
         num_electrons_mae_pre_correction = float(
             torch.mean(torch.abs(num_electrons_pred - num_electrons_target))
@@ -1258,11 +1261,17 @@ class ArtifactCheckpointCallback(pl.Callback):
                     getattr(pl_module.cfg, "require_exact_edge_match", False)
                 ),
             )
+            observable_trace_alignment = {}
+            if aligned_preds:
+                first_name = next(iter(aligned_preds))
+                observable_trace_alignment = build_observable_trace_alignment(
+                    self._as_block_matrix(y[first_name], pl_module.mapper)
+                )
             metrics_preds, num_electrons_mae_pre_correction = (
                 self._metric_prediction_matrices(
                     aligned_preds,
                     y,
-                    x,
+                    observable_trace_alignment,
                     pl_module,
                 )
             )
@@ -1325,7 +1334,7 @@ class ArtifactCheckpointCallback(pl.Callback):
 
             observable_values = build_observable_predictions(
                 metrics_preds,
-                pred_trace_alignment=x["pred_trace_alignment"],
+                trace_alignment=observable_trace_alignment,
                 H_true=self._as_block_matrix(y["hamiltonian"], pl_module.mapper),
                 D_true=self._as_block_matrix(y["density"], pl_module.mapper),
                 S_true=self._as_block_matrix(y["overlap"], pl_module.mapper),
