@@ -814,8 +814,6 @@ def save_band_and_dos_plot(
         ref_energy, ref_dos, _ref_cumulative = dos_reference
         ref_energy = ref_energy.detach().cpu()
         ref_dos = ref_dos.detach().cpu()
-        if band_fermi_ev is not None:
-            ref_energy = ref_energy - band_fermi_ev
         ref_energy, ref_dos = _clip_energy_curve(
             ref_energy,
             ref_dos,
