@@ -57,6 +57,32 @@ def discover_single_snapshot_pairs(
     return pairs
 
 
+def discover_scale_snapshot_pairs(
+    root: Path,
+    *,
+    scales: list[int],
+    label: str,
+) -> dict[int, list[tuple[Path, Path]]]:
+    print(f"--- Discovering {label} snapshots under {root} for scales={scales} ---")
+    pairs_by_scale: dict[int, list[tuple[Path, Path]]] = {}
+    for scale in scales:
+        scale_dir = root / f"scale_{scale}"
+        if not scale_dir.is_dir():
+            raise ValueError(f"Missing scale directory: {scale_dir}")
+        pairs: list[tuple[Path, Path]] = []
+        for sample_dir in sorted(path for path in scale_dir.iterdir() if path.is_dir()):
+            matrix_path = sample_dir / "HS.out"
+            if not matrix_path.exists():
+                continue
+            info_path = _resolve_single_snapshot_info_path(sample_dir)
+            if info_path is None:
+                continue
+            pairs.append((matrix_path.resolve(), info_path.resolve()))
+        print(f"--- Found {len(pairs)} {label} snapshot pairs in scale_{scale} ---")
+        pairs_by_scale[scale] = pairs
+    return pairs_by_scale
+
+
 def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
     print(f"--- Discovering SiOx snapshots under {root} ---")
     return discover_single_snapshot_pairs(root, label="SiOx")
@@ -348,6 +374,59 @@ def build_zncusnses_small_datasets(
     )
 
 
+def build_zncusnses_datasets(
+    *,
+    data_path: str | Path,
+    cfg: Config,
+    scales: list[int],
+    num_train_per_scale: int,
+    num_val_per_scale: int,
+    seed: int = 42,
+    convention: str = "e3nn",
+):
+    print(
+        f"--- ZnCuSnSeS dataset builder: data_path={data_path}, seed={seed}, scales={scales}, num_train_per_scale={num_train_per_scale}, num_val_per_scale={num_val_per_scale} ---"
+    )
+    if not scales:
+        raise ValueError("scales must contain at least one scale id")
+    if num_train_per_scale <= 0:
+        raise ValueError("num_train_per_scale must be > 0")
+    if num_val_per_scale < 0:
+        raise ValueError("num_val_per_scale must be >= 0")
+
+    pairs_by_scale = discover_scale_snapshot_pairs(
+        Path(data_path), scales=scales, label="ZnCuSnSeS"
+    )
+    rng = random.Random(seed)
+    train_pairs: list[tuple[Path, Path]] = []
+    val_pairs: list[tuple[Path, Path]] = []
+
+    for scale in scales:
+        scale_pairs = list(pairs_by_scale[scale])
+        rng.shuffle(scale_pairs)
+        required = num_train_per_scale + num_val_per_scale
+        if len(scale_pairs) < required:
+            raise ValueError(
+                f"Requested train+val={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
+            )
+        selected_train = scale_pairs[:num_train_per_scale]
+        selected_val = scale_pairs[
+            num_train_per_scale : num_train_per_scale + num_val_per_scale
+        ]
+        print(
+            f"--- ZnCuSnSeS scale {scale}: discovered={len(scale_pairs)}, train={len(selected_train)}, val={len(selected_val)} ---"
+        )
+        train_pairs.extend(selected_train)
+        val_pairs.extend(selected_val)
+
+    print(
+        f"--- ZnCuSnSeS split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+    )
+    return _create_datasets_from_pairs(
+        train_pairs, val_pairs, cfg, convention=convention
+    )
+
+
 def build_datasets_from_yaml(
     parsed_yaml: dict[str, Any],
     cfg: Config,
@@ -433,6 +512,29 @@ def build_datasets_from_yaml(
             ),
             val_fraction=float(
                 _get_dataset_value(parameters, overrides, "val_fraction", default=0.2)
+            ),
+            seed=int(
+                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            ),
+            convention=convention,
+        )
+    if dataset_kind == "ZnCuSnSeS":
+        return build_zncusnses_datasets(
+            data_path=_require_dataset_value(parameters, overrides, "data_path"),
+            cfg=cfg,
+            scales=[
+                int(x)
+                for x in _get_dataset_value(parameters, overrides, "scales", default=[])
+            ],
+            num_train_per_scale=int(
+                _get_dataset_value(
+                    parameters, overrides, "num_train_per_scale", default=40
+                )
+            ),
+            num_val_per_scale=int(
+                _get_dataset_value(
+                    parameters, overrides, "num_val_per_scale", default=10
+                )
             ),
             seed=int(
                 _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)

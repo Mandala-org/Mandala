@@ -28,9 +28,12 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
         *_arg_names("dataset_kind"),
         type=str,
         default="silicon",
-        choices=["silicon", "siox", "ZnCuSnSeS_small"],
+        choices=["silicon", "siox", "ZnCuSnSeS_small", "ZnCuSnSeS"],
     )
     parser.add_argument(*_arg_names("data_path"), type=str, default=None)
+    parser.add_argument(*_arg_names("scales"), type=str_to_list, default=None)
+    parser.add_argument(*_arg_names("num_train_per_scale"), type=int, default=40)
+    parser.add_argument(*_arg_names("num_val_per_scale"), type=int, default=10)
     parser.add_argument(*_arg_names("min_temp"), type=int, default=300)
     parser.add_argument(*_arg_names("max_temp"), type=int, default=3000)
     parser.add_argument(*_arg_names("temp_step"), type=int, default=300)
