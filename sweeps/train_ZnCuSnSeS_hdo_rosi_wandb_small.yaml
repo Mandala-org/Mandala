@@ -3,6 +3,8 @@ method: bayes
 metric:
   name: val/energy_mae_gt_density
   goal: minimize
+
+project: mandala-ZnCuSnSeS-hdo-rosi
 command:
   - ${env}
   - python
@@ -46,7 +48,7 @@ parameters:
 
   # Model architecture
   precision:
-    value: 32-true
+    value: bf16-mixed
   convention:
     value: e3nn
   use-lr-scheduler:
