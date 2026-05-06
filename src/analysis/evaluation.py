@@ -104,6 +104,19 @@ def display_k_label(label: str) -> str:
     return label_str
 
 
+def _clip_energy_curve(
+    energy: torch.Tensor,
+    values: torch.Tensor,
+    *,
+    energy_min: float,
+    energy_max: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    mask = (energy >= float(energy_min)) & (energy <= float(energy_max))
+    if not torch.any(mask):
+        return energy, values
+    return energy[mask], values[mask]
+
+
 def load_dos_reference(
     dos_path: Path,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
@@ -717,11 +730,22 @@ def save_dos_plot(
     title: str,
     num_electrons: float | None,
     fermi_level_ev: float | None,
+    energy_min: float | None = None,
+    energy_max: float | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    grid_ev = grid_ev.detach().cpu()
+    dos = dos.detach().cpu()
+    if energy_min is not None and energy_max is not None:
+        grid_ev, dos = _clip_energy_curve(
+            grid_ev,
+            dos,
+            energy_min=energy_min,
+            energy_max=energy_max,
+        )
 
     fig, ax = plt.subplots(1, 1, figsize=(9.0, 5.8))
-    ax.plot(grid_ev.cpu().numpy(), dos.cpu().numpy(), color="#1f5aa6", lw=1.8)
+    ax.plot(grid_ev.numpy(), dos.numpy(), color="#1f5aa6", lw=1.8)
     ax.set_title(title)
     ax.set_xlabel("Energy (eV)")
     ax.set_ylabel("DOS")
@@ -780,6 +804,25 @@ def save_band_and_dos_plot(
     tick_positions = payload.tick_positions.detach().cpu()
     tick_labels = [display_k_label(label) for label in payload.tick_labels]
     dos_grid_shifted = dos_grid - (0.0 if band_fermi_ev is None else band_fermi_ev)
+    dos_grid_shifted, dos = _clip_energy_curve(
+        dos_grid_shifted.detach().cpu(),
+        dos.detach().cpu(),
+        energy_min=emin_ev,
+        energy_max=emax_ev,
+    )
+    if dos_reference is not None:
+        ref_energy, ref_dos, _ref_cumulative = dos_reference
+        ref_energy = ref_energy.detach().cpu()
+        ref_dos = ref_dos.detach().cpu()
+        if band_fermi_ev is not None:
+            ref_energy = ref_energy - band_fermi_ev
+        ref_energy, ref_dos = _clip_energy_curve(
+            ref_energy,
+            ref_dos,
+            energy_min=emin_ev,
+            energy_max=emax_ev,
+        )
+        dos_reference = (ref_energy, ref_dos, _ref_cumulative)
 
     fig, (ax_band, ax_dos) = plt.subplots(
         1,
@@ -819,8 +862,8 @@ def save_band_and_dos_plot(
         )
 
     ax_dos.plot(
-        dos.cpu().numpy(),
-        dos_grid_shifted.cpu().numpy(),
+        dos.numpy(),
+        dos_grid_shifted.numpy(),
         color="#1f5aa6",
         lw=1.8,
         label="Our DOS",
@@ -828,8 +871,8 @@ def save_band_and_dos_plot(
     if dos_reference is not None:
         ref_energy, ref_dos, _ref_cumulative = dos_reference
         ax_dos.plot(
-            ref_dos.cpu().numpy(),
-            ref_energy.cpu().numpy(),
+            ref_dos.numpy(),
+            ref_energy.numpy(),
             color="tab:orange",
             lw=1.2,
             ls="--",
@@ -837,6 +880,7 @@ def save_band_and_dos_plot(
         )
     if band_fermi_ev is not None:
         ax_dos.axhline(0.0, color="black", ls=":", lw=1.5, label="Fermi level")
+    ax_dos.axvline(0.0, color="black", ls="--", lw=1.1, alpha=0.85)
     ax_dos.set_xlabel("DOS")
     ax_dos.set_title("DOS")
     ax_dos.grid(True, alpha=0.25)
@@ -1165,8 +1209,14 @@ def save_dos_prediction_plot(
         overlap_jitter=overlap_jitter,
     )
     fermi = fermi_level_from_dos(grid, dos, num_electrons)
+    grid, dos = _clip_energy_curve(
+        grid.detach().cpu(),
+        dos.detach().cpu(),
+        energy_min=energy_min,
+        energy_max=energy_max,
+    )
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
-    ax.plot(grid.cpu().numpy(), dos.cpu().numpy(), lw=1.6, color="#1f5aa6")
+    ax.plot(grid.numpy(), dos.numpy(), lw=1.6, color="#1f5aa6")
     if fermi is not None:
         ax.axvline(
             fermi,
@@ -1257,12 +1307,22 @@ def save_tetrahedron_dos_comparison_plot(
             show_progress=show_progress,
         )
     )
+    grid_true, dos_true = _clip_energy_curve(
+        grid_true.detach().cpu(),
+        dos_true.detach().cpu(),
+        energy_min=energy_min,
+        energy_max=energy_max,
+    )
+    grid_pred, dos_pred = _clip_energy_curve(
+        grid_pred.detach().cpu(),
+        dos_pred.detach().cpu(),
+        energy_min=energy_min,
+        energy_max=energy_max,
+    )
 
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
-    ax.plot(
-        grid_true.cpu().numpy(), dos_true.cpu().numpy(), label="Ground Truth", lw=1.8
-    )
-    ax.plot(grid_pred.cpu().numpy(), dos_pred.cpu().numpy(), label="Prediction", lw=1.4)
+    ax.plot(grid_true.numpy(), dos_true.numpy(), label="Ground Truth", lw=1.8)
+    ax.plot(grid_pred.numpy(), dos_pred.numpy(), label="Prediction", lw=1.4)
     if fermi_true is not None:
         ax.axvline(
             fermi_true,
@@ -1309,8 +1369,8 @@ def save_tetrahedron_dos_comparison_plot(
         error_output_path.parent.mkdir(parents=True, exist_ok=True)
         fig, ax = plt.subplots(1, 1, figsize=(9, 4.8))
         ax.plot(
-            grid_true.cpu().numpy(),
-            (dos_pred - dos_true).cpu().numpy(),
+            grid_true.numpy(),
+            (dos_pred - dos_true).numpy(),
             color="#b23a48",
             lw=1.4,
             label="Prediction - Ground Truth",
@@ -1379,8 +1439,14 @@ def save_tetrahedron_dos_prediction_plot(
         e_max=energy_max,
         show_progress=show_progress,
     )
+    grid, dos = _clip_energy_curve(
+        grid.detach().cpu(),
+        dos.detach().cpu(),
+        energy_min=energy_min,
+        energy_max=energy_max,
+    )
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
-    ax.plot(grid.cpu().numpy(), dos.cpu().numpy(), lw=1.6, color="#1f5aa6")
+    ax.plot(grid.numpy(), dos.numpy(), lw=1.6, color="#1f5aa6")
     if fermi is not None:
         ax.axvline(
             fermi,
