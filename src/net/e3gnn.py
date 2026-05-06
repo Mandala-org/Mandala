@@ -403,6 +403,7 @@ class E3GNN(pl.LightningModule):
         matrix_mses = {}
         matrix_maes = {}
         combined_matrix_losses = {}
+        combined_pair_losses: dict[str, dict[str, torch.Tensor]] = {}
         # num_atoms = x["positions"].shape[0]
 
         for name in self.cfg.matrix_targets:
@@ -432,6 +433,7 @@ class E3GNN(pl.LightningModule):
 
                 mse_val = torch.tensor(0.0, device=self.device)
                 mae_val = torch.tensor(0.0, device=self.device)
+                pair_losses: dict[str, torch.Tensor] = {}
 
                 # Vectorized loss calculation
                 for key in t_items.keys():
@@ -464,11 +466,17 @@ class E3GNN(pl.LightningModule):
                     if preds.shape[0] == 0:
                         continue
 
-                    mse_val += self._mse(preds, targets)
-                    mae_val += self._mae(preds, targets)
+                    pair_mse = self._mse(preds, targets)
+                    pair_mae = self._mae(preds, targets)
+                    mse_val += pair_mse
+                    mae_val += pair_mae
+                    pair_losses[key] = (
+                        1 - self.cfg.loss_l1_fraction
+                    ) * pair_mse + self.cfg.loss_l1_fraction * pair_mae
 
             matrix_mses[name] = mse_val
             matrix_maes[name] = mae_val
+            combined_pair_losses[name] = pair_losses
 
             # Store for combined loss BEFORE unit conversion
             mse_for_loss = mse_val
@@ -647,9 +655,20 @@ class E3GNN(pl.LightningModule):
         for name, loss_val in combined_matrix_losses.items():
             metrics[f"{stage}/loss_block_{name}"] = loss_val
 
+        if self.cfg.log_per_pair_loss_metrics:
+            for matrix_name, pair_losses in combined_pair_losses.items():
+                for pair_key, pair_loss in pair_losses.items():
+                    metrics[f"{stage}/loss_block_{matrix_name}_{pair_key}"] = pair_loss
+
         if stage == "train" and loss > 1e-12:
             for name, val in combined_matrix_losses.items():
                 metrics[f"frac/loss_{name}"] = val / loss
+            if self.cfg.log_per_pair_loss_metrics:
+                for matrix_name, pair_losses in combined_pair_losses.items():
+                    for pair_key, pair_loss in pair_losses.items():
+                        metrics[f"frac/loss_{matrix_name}_{pair_key}"] = (
+                            pair_loss / loss
+                        )
             if loss_E_weighted > 0:
                 metrics["frac/loss_energy"] = loss_E_weighted / loss
             if loss_N_weighted > 0:
