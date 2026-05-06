@@ -144,23 +144,20 @@ def compute_graph_features(
         )
 
     if cfg.safety_checks:
-        # check if displacements lead to correct destinations
-        positions_dst_reconstructed = (
+        # Check periodic equivalence of the reconstructed destination positions.
+        dst_residual = (
             positions[offdiag_edge_src_unsorted] + offdiag_disp_unsorted
-        )
-        # Due to periodic boundaries, we need to map positions back into the unit cell
+        ) - positions[offdiag_edge_dst_unsorted]
         if box is not None:
-            positions_dst_reconstructed = (
-                positions_dst_reconstructed + 1e-4
-            )  # avoid edge cases
-            inv_box = torch.linalg.pinv(box.to(positions.device))
-            frac_coords = positions_dst_reconstructed @ inv_box
-            frac_coords = frac_coords - torch.floor(frac_coords)
-            positions_dst_reconstructed = frac_coords @ box.to(positions.device) - 1e-4
-        diffs = positions_dst_reconstructed - positions[offdiag_edge_dst_unsorted]
+            inv_box = torch.linalg.inv(box.to(positions.device))
+            frac_residual = dst_residual @ inv_box
+            frac_residual = frac_residual - torch.round(frac_residual)
+            cart_residual = frac_residual @ box.to(positions.device)
+        else:
+            cart_residual = dst_residual
         assert torch.all(
-            torch.linalg.norm(diffs, dim=-1) < 1e-4
-        ), "Displacement vectors do not lead to correct destination positions."
+            torch.linalg.norm(cart_residual, dim=-1) < 1e-4
+        ), "Displacement vectors do not lead to periodic-equivalent destination positions."
 
     # 6. Sort off-diagonal edges
     # Match the sorting logic in Snapshot.canonicalize_edges:

@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Dict, Any, Mapping
 import torch
 import h5py
+from ase.io import read as ase_read
 from ase import Atoms
 from e3nn.o3 import Irreps
 
@@ -957,6 +958,8 @@ class Snapshot:
         from data.openmx_parser import parse_openmx_scfout
 
         info = parse_info_out(info_path, dtype)
+        matrix_path = Path(matrix_path)
+        info_path = Path(info_path)
         atoms: list[str] = info.elements
         if not atoms:
             raise RuntimeError("Info-file does not contain <coordinates.forces>")
@@ -973,9 +976,34 @@ class Snapshot:
 
         snap.matrix_path = matrix_path
         snap.info_path = info_path
-        snap.positions = info.positions if info.positions.numel() else None
+        cif_path = info_path.with_suffix(".cif")
+        if cif_path.exists():
+            cif = ase_read(str(cif_path))
+            cif_atoms = list(cif.get_chemical_symbols())
+            if cif_atoms != atoms:
+                raise RuntimeError(
+                    f"CIF atom order does not match OpenMX atom order for {info_path}. "
+                    f"OpenMX atoms={atoms[:8]}... (n={len(atoms)}), "
+                    f"CIF atoms={cif_atoms[:8]}... (n={len(cif_atoms)})"
+                )
+            snap.positions = torch.tensor(cif.get_positions(), dtype=dtype)
+            snap.box = torch.tensor(cif.cell.array, dtype=dtype)
+        elif cfg is not None and getattr(
+            cfg, "allow_openmx_positions_box_from_out", False
+        ):
+            if not info.positions.numel() or not info.box.numel():
+                raise RuntimeError(
+                    f"OpenMX fallback requested but info file does not contain positions/box: {info_path}"
+                )
+            snap.positions = info.positions
+            snap.box = info.box
+        else:
+            raise FileNotFoundError(
+                f"Missing CIF file for OpenMX geometry: {cif_path}. "
+                "This loader now expects CIF geometry by default. "
+                "Set cfg.allow_openmx_positions_box_from_out=True to fall back to the .out file geometry."
+            )
         snap.forces = info.forces if info.forces.numel() else None
-        snap.box = info.box if info.box.numel() else None
         snap.stress = info.stress if info.stress.numel() else None
         snap.cfg = cfg
         snap.info = info
