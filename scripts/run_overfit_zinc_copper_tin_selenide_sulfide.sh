@@ -11,7 +11,7 @@ cd "${ROOT_DIR}"
 export WANDB_MODE=online
 
 python -u scripts/wandb_run.py \
-  --dataset-kind siox \
+  --dataset-kind ZnCuSnSeS_small \
   --data-path data/small/ZnCuSnSeS \
   --checkpoint-dir checkpoints/zinc_copper_tin_selenide_sulfide_overfit \
   --snapshot-cache-dir checkpoints/zinc_copper_tin_selenide_sulfide_overfit/snapshot_cache \
