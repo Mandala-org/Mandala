@@ -410,13 +410,24 @@ class E3GNN(pl.LightningModule):
         irrep_block_cache_by_name: dict[
             str, tuple[dict[str, BlockMatrix], dict[str, BlockMatrix]]
         ] = {}
+        allow_train_metrics = stage != "train" or bool(self.cfg.log_train_metrics)
         # num_atoms = x["positions"].shape[0]
 
         for name in self.cfg.matrix_targets:
             per_irrep_metrics: dict[str, dict[str, torch.Tensor]] = {}
             pred_irrep_blocks = None
             target_irrep_blocks = None
-            need_irrep_cache = self.cfg.log_per_irrep_metrics or (
+            need_irrep_cache = allow_train_metrics and (
+                self.cfg.log_per_irrep_metrics
+                or (
+                    name == "hamiltonian"
+                    and (
+                        self.cfg.log_hamiltonian_irrep_contrib_metrics
+                        or self.cfg.log_hamiltonian_pair_contrib_metrics
+                    )
+                )
+            )
+            need_hamiltonian_contribs = allow_train_metrics and (
                 name == "hamiltonian"
                 and (
                     self.cfg.log_hamiltonian_irrep_contrib_metrics
@@ -497,10 +508,7 @@ class E3GNN(pl.LightningModule):
                     target_irrep_blocks,
                 )
 
-            if name == "hamiltonian" and (
-                self.cfg.log_hamiltonian_irrep_contrib_metrics
-                or self.cfg.log_hamiltonian_pair_contrib_metrics
-            ):
+            if need_hamiltonian_contribs:
                 hamiltonian_mae_contribs = compute_hamiltonian_mae_contributions(
                     preds_matrix[name],
                     y[name],
@@ -626,7 +634,7 @@ class E3GNN(pl.LightningModule):
                     forces_pred, forces_true
                 )
 
-        if self.cfg.log_per_irrep_metrics:
+        if allow_train_metrics and self.cfg.log_per_irrep_metrics:
             for name in self.cfg.matrix_targets:
                 if name not in preds_irreps or name not in y:
                     continue
