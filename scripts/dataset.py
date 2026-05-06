@@ -33,6 +33,16 @@ def discover_silicon_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
 def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
     print(f"--- Discovering SiOx snapshots under {root} ---")
     pairs: list[tuple[Path, Path]] = []
+
+    # Allow a single snapshot directory to be used directly, alongside the
+    # usual "root/child/" layout.
+    if root.is_dir():
+        matrix_path = root / "HS.out"
+        if matrix_path.exists():
+            info_path = _resolve_siox_info_path(root)
+            if info_path is not None:
+                pairs.append((matrix_path.resolve(), info_path.resolve()))
+
     for sample_dir in sorted(path for path in root.iterdir() if path.is_dir()):
         matrix_path = sample_dir / "HS.out"
         if not matrix_path.exists():
