@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import re
 import sys
 import time
@@ -11,6 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -112,6 +114,19 @@ def setup_argparse() -> argparse.Namespace:
         type=float,
         default=0.5,
         help="Gaussian broadening sigma in eV for the DOS plot.",
+    )
+    parser.add_argument(
+        "--dos-method",
+        type=str,
+        default="kmesh-average",
+        choices=["kmesh-average", "openmx-tetrahedron", "gaussian"],
+        help="DOS construction method. kmesh-average is the default.",
+    )
+    parser.add_argument(
+        "--dos-kmesh",
+        type=str,
+        default="4x4x4",
+        help="Uniform k-point grid for DOS averaging, e.g. 4x4x4.",
     )
     parser.add_argument(
         "--force-recompute",
@@ -337,6 +352,271 @@ def _save_dos_plot(
     plt.close(fig)
 
 
+def _load_dos_reference(
+    dos_path: Path,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    data = np.loadtxt(dos_path, dtype=np.float64)
+    if data.ndim != 2 or data.shape[1] < 2:
+        raise ValueError(f"Unexpected DOS reference format in {dos_path}")
+    energies = torch.tensor(data[:, 0], dtype=torch.float64)
+    dos = torch.tensor(data[:, 1], dtype=torch.float64)
+    cumulative = (
+        torch.tensor(data[:, 2], dtype=torch.float64) if data.shape[1] >= 3 else None
+    )
+    return energies, dos, cumulative
+
+
+def _parse_kmesh_spec(spec: str) -> tuple[int, int, int]:
+    raw = str(spec).strip().lower().replace(" ", "")
+    parts = raw.split("x")
+    if len(parts) != 3:
+        raise ValueError(f"Expected kmesh like '4x4x4', got {spec!r}")
+    kmesh = tuple(int(part) for part in parts)
+    if min(kmesh) <= 0:
+        raise ValueError(f"kmesh entries must be positive, got {spec!r}")
+    return kmesh
+
+
+def _fractional_kmesh_points(
+    kmesh: tuple[int, int, int], *, device, dtype
+) -> torch.Tensor:
+    grids = [torch.arange(n, device=device, dtype=dtype) / float(n) for n in kmesh]
+    points = []
+    for vals in itertools.product(*grids):
+        points.append(
+            torch.tensor(
+                [float(vals[0]), float(vals[1]), float(vals[2])],
+                device=device,
+                dtype=dtype,
+            )
+        )
+    return torch.stack(points, dim=0)
+
+
+def _compute_gaussian_dos_and_fermi(
+    snapshot: Snapshot,
+    *,
+    psd_cleanup: bool,
+    allow_jitter: bool,
+    dos_sigma_ev: float,
+) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
+    eigenvalues = compute_generalized_eigenvalues(
+        snapshot.hamiltonian,
+        snapshot.overlap,
+        psd_cleanup=psd_cleanup,
+        allow_jitter=allow_jitter,
+    )
+    eigenvalues_ev = eigenvalues * HARTREE_TO_EV
+    eig_min = float(torch.min(eigenvalues_ev).item())
+    eig_max = float(torch.max(eigenvalues_ev).item())
+    span = max(eig_max - eig_min, 1e-6)
+    margin = 0.1 * span + 0.05
+    e_min = eig_min - margin
+    e_max = eig_max + margin
+    grid_ev, dos = compute_dos_from_eigenvalues(
+        eigenvalues_ev,
+        sigma=dos_sigma_ev,
+        bin_width=0.1,
+        e_min=e_min,
+        e_max=e_max,
+    )
+    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
+    dos_electron_target = _effective_dos_electron_target(snapshot)
+    fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
+    return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
+
+
+def _compute_kmesh_dos_and_fermi(
+    snapshot: Snapshot,
+    *,
+    kmesh_spec: str,
+    chunk_size: int,
+    psd_cleanup: bool,
+    allow_jitter: bool,
+    dos_sigma_ev: float,
+) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
+    kmesh = _parse_kmesh_spec(kmesh_spec)
+    fractional_kpoints = _fractional_kmesh_points(
+        kmesh,
+        device=snapshot.box.device,
+        dtype=snapshot.box.dtype,
+    )
+    reciprocal = 2.0 * torch.pi * torch.linalg.inv(snapshot.box).T
+    kpoints_abs = fractional_kpoints @ reciprocal
+    k_band = snapshot.get_band_structure(
+        kpoints_abs=kpoints_abs,
+        fractional_kpoints=fractional_kpoints,
+        chunk_size=chunk_size,
+        show_progress=False,
+        psd_cleanup=psd_cleanup,
+        allow_jitter=allow_jitter,
+    )
+    eigenvalues_ev = k_band.eigenvalues.detach().cpu() * HARTREE_TO_EV
+    if eigenvalues_ev.ndim != 2:
+        raise ValueError(
+            f"Expected band eigenvalues with shape (Nk, Nb), got {tuple(eigenvalues_ev.shape)}"
+        )
+    nk = float(eigenvalues_ev.shape[0])
+    flat_ev = eigenvalues_ev.reshape(-1)
+    eig_min = float(torch.min(flat_ev).item())
+    eig_max = float(torch.max(flat_ev).item())
+    span = max(eig_max - eig_min, 1e-6)
+    margin = 0.1 * span + 0.05
+    e_min = eig_min - margin
+    e_max = eig_max + margin
+    grid_ev, dos = compute_dos_from_eigenvalues(
+        flat_ev,
+        sigma=dos_sigma_ev,
+        bin_width=0.1,
+        e_min=e_min,
+        e_max=e_max,
+    )
+    dos = dos / nk
+    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
+    dos_electron_target = _effective_dos_electron_target(snapshot)
+    fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
+    return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
+
+
+def _compute_tetrahedron_dos_and_fermi(
+    snapshot: Snapshot,
+    *,
+    info_path: Path,
+) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
+    dos_path = info_path.with_name(f"{info_path.stem}.DOS.Tetrahedron")
+    if not dos_path.exists():
+        raise FileNotFoundError(
+            f"OpenMX tetrahedron DOS file not found: {dos_path}. "
+            "Use --dos-method gaussian if you want the broadened-eigenvalue fallback."
+        )
+    grid_ev, dos, _cumulative = _load_dos_reference(dos_path)
+    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
+    dos_electron_target = _effective_dos_electron_target(snapshot)
+    fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
+    return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
+
+
+def _save_band_and_dos_plot(
+    payload: Any,
+    *,
+    dos_grid: torch.Tensor,
+    dos: torch.Tensor,
+    dos_reference: tuple[torch.Tensor, torch.Tensor, torch.Tensor | None] | None,
+    output_path: Path,
+    title: str,
+    emin_ev: float,
+    emax_ev: float,
+    line_alpha: float,
+    num_electrons: float | None,
+    fermi_level_ev: float | None,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    energies_ev = payload.eigenvalues.detach().cpu() * HARTREE_TO_EV
+    band_fermi_ev = fermi_level_ev
+    if payload.fermi_level is not None:
+        band_fermi_ev = float(payload.fermi_level.detach().cpu().item() * HARTREE_TO_EV)
+        energies_ev = energies_ev - band_fermi_ev
+
+    linear_k = payload.linear_k.detach().cpu()
+    tick_positions = payload.tick_positions.detach().cpu()
+    tick_labels = [_display_k_label(label) for label in payload.tick_labels]
+    dos_grid_shifted = dos_grid - (0.0 if band_fermi_ev is None else band_fermi_ev)
+
+    cumulative = torch.zeros_like(dos_grid_shifted)
+    if dos_grid_shifted.numel() > 1:
+        cumulative[1:] = torch.cumsum(
+            0.5 * (dos[:-1] + dos[1:]) * (dos_grid_shifted[1:] - dos_grid_shifted[:-1]),
+            dim=0,
+        )
+
+    fig, (ax_band, ax_dos) = plt.subplots(
+        1,
+        2,
+        figsize=(14.0, 6.0),
+        gridspec_kw={"width_ratios": [2.3, 1.0]},
+        sharey=True,
+    )
+
+    for band_idx in range(energies_ev.shape[1]):
+        ax_band.plot(
+            linear_k.numpy(),
+            energies_ev[:, band_idx].numpy(),
+            color="#1f5aa6",
+            lw=1.05,
+            alpha=line_alpha,
+        )
+    for xpos in tick_positions.tolist():
+        ax_band.axvline(xpos, color="0.80", lw=0.8, zorder=0)
+    ax_band.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+    ax_band.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
+    ax_band.set_ylim(emin_ev, emax_ev)
+    ax_band.set_xticks(tick_positions.numpy())
+    ax_band.set_xticklabels(tick_labels, fontsize=11)
+    ax_band.set_ylabel(r"$E - E_F$ (eV)")
+    ax_band.set_title(title)
+    ax_band.grid(True, axis="y", alpha=0.2)
+    if band_fermi_ev is not None:
+        ax_band.text(
+            0.98,
+            0.03,
+            f"Fermi level = {band_fermi_ev:.3f} eV",
+            transform=ax_band.transAxes,
+            ha="right",
+            va="bottom",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+
+    ax_dos.plot(
+        dos.cpu().numpy(),
+        dos_grid_shifted.cpu().numpy(),
+        color="#1f5aa6",
+        lw=1.8,
+        label="Our DOS",
+    )
+    if dos_reference is not None:
+        ref_energy, ref_dos, ref_cumulative = dos_reference
+        ax_dos.plot(
+            ref_dos.cpu().numpy(),
+            ref_energy.cpu().numpy(),
+            color="tab:orange",
+            lw=1.2,
+            ls="--",
+            label="OpenMX DOS",
+        )
+        if ref_cumulative is not None:
+            ax_ref = ax_dos.twiny()
+            ax_ref.plot(
+                ref_cumulative.cpu().numpy(),
+                ref_energy.cpu().numpy(),
+                color="tab:green",
+                lw=1.0,
+                ls=":",
+                alpha=0.8,
+                label="OpenMX cumulative",
+            )
+            ax_ref.set_xlabel("Integrated DOS / electrons")
+    if band_fermi_ev is not None:
+        ax_dos.axhline(0.0, color="black", ls=":", lw=1.5, label="Fermi level")
+    ax_dos.set_xlabel("DOS")
+    ax_dos.set_title("DOS")
+    ax_dos.grid(True, alpha=0.25)
+    if num_electrons is not None:
+        ax_dos.text(
+            0.98,
+            0.03,
+            f"N_e = {num_electrons:.3f}",
+            transform=ax_dos.transAxes,
+            ha="right",
+            va="bottom",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    ax_dos.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _log(message: str) -> None:
     print(message, flush=True)
 
@@ -536,6 +816,8 @@ def main() -> None:
     _log(f"num_points: {args.num_points}")
     _log(f"chunk_size: {args.chunk_size}")
     _log(f"line_alpha: {args.line_alpha}")
+    _log(f"dos_method: {args.dos_method}")
+    _log(f"dos_kmesh: {args.dos_kmesh}")
     _log(f"dos_sigma_ev: {args.dos_sigma}")
 
     t_load = time.perf_counter()
@@ -593,14 +875,47 @@ def main() -> None:
 
     t_dos = time.perf_counter()
     _log("[4/6] Computing DOS and Fermi level ...")
-    grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
-        _compute_dos_and_fermi(
-            snapshot,
-            psd_cleanup=args.overlap_psd_cleanup,
-            allow_jitter=args.overlap_jitter,
-            dos_sigma_ev=args.dos_sigma,
+    if args.dos_method == "kmesh-average":
+        grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
+            _compute_kmesh_dos_and_fermi(
+                snapshot,
+                kmesh_spec=args.dos_kmesh,
+                chunk_size=args.chunk_size,
+                psd_cleanup=args.overlap_psd_cleanup,
+                allow_jitter=args.overlap_jitter,
+                dos_sigma_ev=args.dos_sigma,
+            )
         )
-    )
+        _log("[4/6] Using k-mesh-averaged eigenvalue DOS.")
+    elif args.dos_method == "openmx-tetrahedron":
+        try:
+            grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
+                _compute_tetrahedron_dos_and_fermi(
+                    snapshot,
+                    info_path=info_path,
+                )
+            )
+            _log("[4/6] Using OpenMX tetrahedron DOS reference.")
+        except FileNotFoundError as exc:
+            _log(f"[4/6] {exc}")
+            _log("[4/6] Falling back to Gaussian-broadened eigenvalue DOS.")
+            grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
+                _compute_gaussian_dos_and_fermi(
+                    snapshot,
+                    psd_cleanup=args.overlap_psd_cleanup,
+                    allow_jitter=args.overlap_jitter,
+                    dos_sigma_ev=args.dos_sigma,
+                )
+            )
+    else:
+        grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
+            _compute_gaussian_dos_and_fermi(
+                snapshot,
+                psd_cleanup=args.overlap_psd_cleanup,
+                allow_jitter=args.overlap_jitter,
+                dos_sigma_ev=args.dos_sigma,
+            )
+        )
     dos_path = output_dir / "dos.png"
     _save_dos_plot(
         grid_ev,
@@ -615,6 +930,12 @@ def main() -> None:
         f"{_format_seconds(time.perf_counter() - t_dos)} "
         f"(N_e={num_electrons:.3f}, DOS_target={dos_electron_target:.3f}, E_F={fermi_level_ev:.3f} eV)"
     )
+
+    dos_reference = None
+    dos_reference_path = info_path.with_name(f"{info_path.stem}.DOS.Tetrahedron")
+    if dos_reference_path.exists():
+        _log(f"[4/6] Loading DOS reference from {dos_reference_path} ...")
+        dos_reference = _load_dos_reference(dos_reference_path)
 
     cache_path = output_dir / "band_structure.pt"
     if cache_path.exists() and not args.force_recompute:
@@ -696,10 +1017,25 @@ def main() -> None:
         emax_ev=args.emax_ev,
         line_alpha=args.line_alpha,
     )
+    band_dos_path = output_dir / "band_structure_with_dos.png"
+    _save_band_and_dos_plot(
+        band_structure,
+        dos_grid=grid_ev,
+        dos=dos,
+        dos_reference=dos_reference,
+        output_path=band_dos_path,
+        title=f"{args.plot_title} (band + DOS)",
+        emin_ev=args.emin_ev,
+        emax_ev=args.emax_ev,
+        line_alpha=args.line_alpha,
+        num_electrons=num_electrons,
+        fermi_level_ev=fermi_level_ev,
+    )
     _log("[6/6] Saved outputs in " f"{_format_seconds(time.perf_counter() - t_plot)}")
 
     _log("=== Band structure evaluation finished ===")
     _log(f"plot_path: {plot_path}")
+    _log(f"band_dos_path: {band_dos_path}")
     _log(f"dos_path: {dos_path}")
     _log(f"num_kpoints: {int(band_structure.eigenvalues.shape[0])}")
     _log(f"num_bands: {int(band_structure.eigenvalues.shape[1])}")
