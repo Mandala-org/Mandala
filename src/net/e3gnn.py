@@ -29,6 +29,7 @@ from net.common import Config, resolve_hidden_irreps
 from net.irrep_tools import (
     build_irrep_projector_cache,
     compute_irrep_metrics,
+    compute_hamiltonian_mae_contributions,
     get_all_irreps,
     project_irrep_vectors_to_blocks,
 )
@@ -404,6 +405,7 @@ class E3GNN(pl.LightningModule):
         matrix_maes = {}
         combined_matrix_losses = {}
         combined_pair_losses: dict[str, dict[str, torch.Tensor]] = {}
+        hamiltonian_mae_contribs: dict[str, object] | None = None
         # num_atoms = x["positions"].shape[0]
 
         for name in self.cfg.matrix_targets:
@@ -478,6 +480,22 @@ class E3GNN(pl.LightningModule):
             matrix_maes[name] = mae_val
             combined_pair_losses[name] = pair_losses
 
+            if name == "hamiltonian" and (
+                self.cfg.log_hamiltonian_irrep_contrib_metrics
+                or self.cfg.log_hamiltonian_pair_contrib_metrics
+            ):
+                target_irreps = (
+                    y[name]
+                    if self.cfg.train_target == "irreps"
+                    else y[name].to_vectors(self.mapper)
+                )
+                hamiltonian_mae_contribs = compute_hamiltonian_mae_contributions(
+                    preds_irreps[name],
+                    target_irreps,
+                    self.mapper,
+                    all_irreps=self.all_irreps,
+                )
+
             # Store for combined loss BEFORE unit conversion
             mse_for_loss = mse_val
             mae_for_loss = mae_val
@@ -485,7 +503,14 @@ class E3GNN(pl.LightningModule):
             if name == "hamiltonian":
                 # Convert to eV^2 and eV for logging only
                 mse_val = mse_val * (HARTREE_TO_EV**2)
-                mae_val = mae_val * HARTREE_TO_EV
+                if hamiltonian_mae_contribs is not None:
+                    denom = int(hamiltonian_mae_contribs["total_count"])
+                    if denom > 0:
+                        mae_val = (
+                            float(hamiltonian_mae_contribs["total_abs_sum"]) / denom
+                        ) * HARTREE_TO_EV
+                else:
+                    mae_val = mae_val * HARTREE_TO_EV
             metrics[f"{stage}/{name}_mae"] = mae_val
             metrics[f"{stage}/{name}_mse"] = mse_val
             if self.cfg.log_per_irrep_metrics or self.cfg.train_on_irrep_parts:
@@ -659,6 +684,26 @@ class E3GNN(pl.LightningModule):
             for matrix_name, pair_losses in combined_pair_losses.items():
                 for pair_key, pair_loss in pair_losses.items():
                     metrics[f"{stage}/loss_block_{matrix_name}_{pair_key}"] = pair_loss
+
+        if (
+            hamiltonian_mae_contribs is not None
+            and int(hamiltonian_mae_contribs["total_count"]) > 0
+        ):
+            denom = int(hamiltonian_mae_contribs["total_count"])
+            if self.cfg.log_hamiltonian_irrep_contrib_metrics:
+                for irrep_key, abs_sum in hamiltonian_mae_contribs[
+                    "irrep_abs_sums"
+                ].items():
+                    metrics[f"{stage}/hamiltonian_mae_{irrep_key}"] = (
+                        abs_sum / denom
+                    ) * HARTREE_TO_EV
+            if self.cfg.log_hamiltonian_pair_contrib_metrics:
+                for pair_key, abs_sum in hamiltonian_mae_contribs[
+                    "pair_abs_sums"
+                ].items():
+                    metrics[f"{stage}/hamiltonian_mae_{pair_key.replace('-', '_')}"] = (
+                        abs_sum / denom
+                    ) * HARTREE_TO_EV
 
         if stage == "train" and loss > 1e-12:
             for name, val in combined_matrix_losses.items():

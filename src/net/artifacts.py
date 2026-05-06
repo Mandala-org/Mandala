@@ -16,6 +16,7 @@ from core.sparse_math import trace_matmul_sparse_block_matrix_aligned
 from data.block_matrix import BlockMatrix, IrrepsBlockData
 from net.irrep_tools import (
     compute_irrep_metrics,
+    compute_hamiltonian_mae_contributions,
     filter_irreps_block_data_by_irrep,
     get_all_irreps,
 )
@@ -1248,6 +1249,10 @@ class ArtifactCheckpointCallback(pl.Callback):
         }
         num_electrons_mae_pre_correction_sum = 0.0
         num_electrons_pre_correction_count = 0
+        hamiltonian_contrib_abs_sum = 0.0
+        hamiltonian_contrib_count = 0
+        hamiltonian_contrib_irrep_sums: dict[str, float] = {}
+        hamiltonian_contrib_pair_sums: dict[str, float] = {}
         first_payload = None
         n_batches = 0
 
@@ -1316,6 +1321,31 @@ class ArtifactCheckpointCallback(pl.Callback):
                 per_irrep_acc = per_irrep_sum_by_name.setdefault(name, {})
                 for key, value in per_irrep.items():
                     per_irrep_acc[key] = per_irrep_acc.get(key, 0.0) + float(value)
+
+                if name == "hamiltonian" and (
+                    getattr(
+                        pl_module.cfg, "log_hamiltonian_irrep_contrib_metrics", False
+                    )
+                    or getattr(
+                        pl_module.cfg, "log_hamiltonian_pair_contrib_metrics", False
+                    )
+                ):
+                    h_contribs = compute_hamiltonian_mae_contributions(
+                        pred_mat.to_vectors(pl_module.mapper),
+                        target_mat.to_vectors(pl_module.mapper),
+                        pl_module.mapper,
+                        all_irreps=all_irreps,
+                    )
+                    hamiltonian_contrib_abs_sum += float(h_contribs["total_abs_sum"])
+                    hamiltonian_contrib_count += int(h_contribs["total_count"])
+                    for key, value in h_contribs["irrep_abs_sums"].items():
+                        hamiltonian_contrib_irrep_sums[key] = (
+                            hamiltonian_contrib_irrep_sums.get(key, 0.0) + float(value)
+                        )
+                    for key, value in h_contribs["pair_abs_sums"].items():
+                        hamiltonian_contrib_pair_sums[key] = (
+                            hamiltonian_contrib_pair_sums.get(key, 0.0) + float(value)
+                        )
 
             if (
                 getattr(pl_module.cfg, "enable_forces", False)
@@ -1471,6 +1501,16 @@ class ArtifactCheckpointCallback(pl.Callback):
                 if num_electrons_pre_correction_count > 0
                 else None
             ),
+            "hamiltonian_contrib_abs_sum": hamiltonian_contrib_abs_sum,
+            "hamiltonian_contrib_count": hamiltonian_contrib_count,
+            "hamiltonian_contrib_irrep_sums": hamiltonian_contrib_irrep_sums,
+            "hamiltonian_contrib_pair_sums": hamiltonian_contrib_pair_sums,
+            "log_hamiltonian_irrep_contrib_metrics": bool(
+                getattr(pl_module.cfg, "log_hamiltonian_irrep_contrib_metrics", False)
+            ),
+            "log_hamiltonian_pair_contrib_metrics": bool(
+                getattr(pl_module.cfg, "log_hamiltonian_pair_contrib_metrics", False)
+            ),
             "first_payload": first_payload,
             "num_batches": n_batches,
         }
@@ -1523,6 +1563,22 @@ class ArtifactCheckpointCallback(pl.Callback):
             payload["val/num_electrons_mae_pre_correction"] = eval_result[
                 "num_electrons_mae_pre_correction"
             ]
+        if eval_result["hamiltonian_contrib_count"] > 0:
+            denom = float(eval_result["hamiltonian_contrib_count"])
+            if eval_result["log_hamiltonian_irrep_contrib_metrics"]:
+                for irrep_key, abs_sum in eval_result[
+                    "hamiltonian_contrib_irrep_sums"
+                ].items():
+                    payload[f"val/hamiltonian_mae_{irrep_key}"] = (
+                        abs_sum / denom * 27.2113845
+                    )
+            if eval_result["log_hamiltonian_pair_contrib_metrics"]:
+                for pair_key, abs_sum in eval_result[
+                    "hamiltonian_contrib_pair_sums"
+                ].items():
+                    payload[f"val/hamiltonian_mae_{pair_key.replace('-', '_')}"] = (
+                        abs_sum / denom * 27.2113845
+                    )
         if (
             eval_result["forces_mae"] is not None
             and eval_result["forces_mse"] is not None
@@ -1647,6 +1703,22 @@ class ArtifactCheckpointCallback(pl.Callback):
                 payload["initial/num_electrons_mae_pre_correction"] = initial_eval[
                     "num_electrons_mae_pre_correction"
                 ]
+            if initial_eval["hamiltonian_contrib_count"] > 0:
+                denom = float(initial_eval["hamiltonian_contrib_count"])
+                if initial_eval["log_hamiltonian_irrep_contrib_metrics"]:
+                    for irrep_key, abs_sum in initial_eval[
+                        "hamiltonian_contrib_irrep_sums"
+                    ].items():
+                        payload[f"initial/hamiltonian_mae_{irrep_key}"] = (
+                            abs_sum / denom * 27.2113845
+                        )
+                if initial_eval["log_hamiltonian_pair_contrib_metrics"]:
+                    for pair_key, abs_sum in initial_eval[
+                        "hamiltonian_contrib_pair_sums"
+                    ].items():
+                        payload[
+                            f"initial/hamiltonian_mae_{pair_key.replace('-', '_')}"
+                        ] = (abs_sum / denom * 27.2113845)
             if (
                 initial_eval["forces_mae"] is not None
                 and initial_eval["forces_mse"] is not None
@@ -1804,6 +1876,22 @@ class ArtifactCheckpointCallback(pl.Callback):
             final_payload["final/num_electrons_mae_pre_correction"] = eval_result[
                 "num_electrons_mae_pre_correction"
             ]
+        if eval_result["hamiltonian_contrib_count"] > 0:
+            denom = float(eval_result["hamiltonian_contrib_count"])
+            if eval_result["log_hamiltonian_irrep_contrib_metrics"]:
+                for irrep_key, abs_sum in eval_result[
+                    "hamiltonian_contrib_irrep_sums"
+                ].items():
+                    final_payload[f"final/hamiltonian_mae_{irrep_key}"] = (
+                        abs_sum / denom * 27.2113845
+                    )
+            if eval_result["log_hamiltonian_pair_contrib_metrics"]:
+                for pair_key, abs_sum in eval_result[
+                    "hamiltonian_contrib_pair_sums"
+                ].items():
+                    final_payload[
+                        f"final/hamiltonian_mae_{pair_key.replace('-', '_')}"
+                    ] = (abs_sum / denom * 27.2113845)
         if (
             eval_result["forces_mae"] is not None
             and eval_result["forces_mse"] is not None
