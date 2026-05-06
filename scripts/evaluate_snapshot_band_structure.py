@@ -292,6 +292,8 @@ def main() -> None:
         title=f"DOS: {args.plot_title}",
         num_electrons=num_electrons,
         fermi_level_ev=fermi_level_ev,
+        energy_min=args.emin_ev,
+        energy_max=args.emax_ev,
     )
     _log(
         "[4/6] Computed DOS in "
