@@ -206,6 +206,7 @@ class Config:
     require_exact_edge_match: bool = (
         True  # validate cutoff prefix only; never mutate edges
     )
+    allow_openmx_positions_box_from_out: bool = False
 
     # -------------------- hyperopt --------------------------------------
     tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
