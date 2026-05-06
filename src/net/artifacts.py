@@ -1094,8 +1094,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         pl_module.eval()
         x, y = batch
         enable_force_eval = bool(
-            getattr(pl_module.cfg, "enable_forces", False)
-            and y.get("forces") is not None
+            pl_module.cfg.enable_forces and y.get("forces") is not None
         )
         if enable_force_eval:
             x = dict(x)
@@ -1181,7 +1180,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         pl_module,
     ) -> tuple[dict[str, BlockMatrix], float | None]:
         metrics_preds = dict(aligned_preds)
-        if not getattr(pl_module.cfg, "rescale_density_to_num_electrons", False):
+        if not pl_module.cfg.rescale_density_to_num_electrons:
             return metrics_preds, None
         if (
             "density" not in metrics_preds
@@ -1265,9 +1264,7 @@ class ArtifactCheckpointCallback(pl.Callback):
                 preds,
                 y,
                 pl_module.mapper,
-                require_exact_prefix=bool(
-                    getattr(pl_module.cfg, "require_exact_edge_match", False)
-                ),
+                require_exact_prefix=bool(pl_module.cfg.require_exact_edge_match),
             )
             observable_trace_alignment = {}
             if aligned_preds:
@@ -1285,7 +1282,7 @@ class ArtifactCheckpointCallback(pl.Callback):
             )
             if (
                 aligned_preds
-                and getattr(pl_module.cfg, "require_exact_edge_match", False)
+                and pl_module.cfg.require_exact_edge_match
                 and not self._printed_strict_checks
             ):
                 log_strict_checks_passed()
@@ -1333,12 +1330,8 @@ class ArtifactCheckpointCallback(pl.Callback):
                     per_irrep_acc[key] = per_irrep_acc.get(key, 0.0) + float(value)
 
                 if name == "hamiltonian" and (
-                    getattr(
-                        pl_module.cfg, "log_hamiltonian_irrep_contrib_metrics", False
-                    )
-                    or getattr(
-                        pl_module.cfg, "log_hamiltonian_pair_contrib_metrics", False
-                    )
+                    pl_module.cfg.log_hamiltonian_irrep_contrib_metrics
+                    or pl_module.cfg.log_hamiltonian_pair_contrib_metrics
                 ):
                     h_contribs = compute_hamiltonian_mae_contributions(
                         pred_mat,
@@ -1346,18 +1339,13 @@ class ArtifactCheckpointCallback(pl.Callback):
                         pl_module.mapper,
                         all_irreps=all_irreps,
                         compute_irrep_sums=bool(
-                            getattr(
-                                pl_module.cfg,
-                                "log_hamiltonian_irrep_contrib_metrics",
-                                False,
-                            )
+                            pl_module.cfg.log_hamiltonian_irrep_contrib_metrics
                         ),
                         compute_pair_sums=bool(
-                            getattr(
-                                pl_module.cfg,
-                                "log_hamiltonian_pair_contrib_metrics",
-                                False,
-                            )
+                            pl_module.cfg.log_hamiltonian_pair_contrib_metrics
+                        ),
+                        require_exact_prefix=bool(
+                            pl_module.cfg.require_exact_edge_match
                         ),
                         pred_irrep_blocks=pred_irrep_blocks,
                         target_irrep_blocks=target_irrep_blocks,
@@ -1374,7 +1362,7 @@ class ArtifactCheckpointCallback(pl.Callback):
                         )
 
             if (
-                getattr(pl_module.cfg, "enable_forces", False)
+                pl_module.cfg.enable_forces
                 and y.get("forces") is not None
                 and "hamiltonian" in preds
                 and "density" in preds
@@ -1532,10 +1520,10 @@ class ArtifactCheckpointCallback(pl.Callback):
             "hamiltonian_contrib_irrep_sums": hamiltonian_contrib_irrep_sums,
             "hamiltonian_contrib_pair_sums": hamiltonian_contrib_pair_sums,
             "log_hamiltonian_irrep_contrib_metrics": bool(
-                getattr(pl_module.cfg, "log_hamiltonian_irrep_contrib_metrics", False)
+                pl_module.cfg.log_hamiltonian_irrep_contrib_metrics
             ),
             "log_hamiltonian_pair_contrib_metrics": bool(
-                getattr(pl_module.cfg, "log_hamiltonian_pair_contrib_metrics", False)
+                pl_module.cfg.log_hamiltonian_pair_contrib_metrics
             ),
             "first_payload": first_payload,
             "num_batches": n_batches,
@@ -1846,7 +1834,7 @@ class ArtifactCheckpointCallback(pl.Callback):
                 frame_path,
                 reference=ref,
                 title=f"{MATRIX_ALIAS.get(name, name)} epoch {epoch}",
-                max_atoms=getattr(pl_module.cfg, "video_max_atoms", None),
+                max_atoms=pl_module.cfg.video_max_atoms,
             )
 
     def on_fit_end(self, trainer, pl_module) -> None:

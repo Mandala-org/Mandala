@@ -508,6 +508,7 @@ class E3GNN(pl.LightningModule):
                     all_irreps=self.all_irreps,
                     compute_irrep_sums=self.cfg.log_hamiltonian_irrep_contrib_metrics,
                     compute_pair_sums=self.cfg.log_hamiltonian_pair_contrib_metrics,
+                    require_exact_prefix=bool(self.cfg.require_exact_edge_match),
                     pred_irrep_blocks=pred_irrep_blocks,
                     target_irrep_blocks=target_irrep_blocks,
                 )
