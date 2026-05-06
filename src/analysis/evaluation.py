@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 import multiprocessing as mp
 import re
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -188,6 +187,19 @@ def effective_dos_electron_target(snapshot: Snapshot) -> float | None:
     return num_electrons
 
 
+def infer_spin_factor(snapshot: Snapshot) -> float:
+    """Infer whether the eigenproblem is spatial-orbital non-spin-polarized."""
+    occupancies = getattr(getattr(snapshot, "info", None), "occupancies", None)
+    if not isinstance(occupancies, torch.Tensor):
+        return 1.0
+
+    occ_cpu = occupancies.detach().cpu()
+    if occ_cpu.ndim == 2 and occ_cpu.shape[1] == 2 and occ_cpu.numel() > 0:
+        if torch.allclose(occ_cpu[:, 0], occ_cpu[:, 1], atol=1e-6, rtol=1e-6):
+            return 2.0
+    return 1.0
+
+
 def fermi_level_from_dos(
     grid: torch.Tensor,
     dos: torch.Tensor,
@@ -221,6 +233,273 @@ def fermi_level_from_dos(
         return float(grid[lo].item())
     t = (target - lo_c) / (hi_c - lo_c)
     return float((grid[lo] + t * (grid[hi] - grid[lo])).item())
+
+
+def _tetrahedron_cdf_pdf(
+    energies: torch.Tensor,
+    grid_ev: torch.Tensor,
+    *,
+    eps: float = 1e-10,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if energies.shape[-1] != 4:
+        raise ValueError(
+            f"Expected last dimension of energies to be 4, got {energies.shape}"
+        )
+
+    e, _ = torch.sort(energies, dim=-1)
+
+    offsets = torch.tensor(
+        [-1.5, -0.5, 0.5, 1.5],
+        dtype=e.dtype,
+        device=e.device,
+    )
+    scale = torch.clamp(torch.max(torch.abs(e), dim=-1, keepdim=True).values, min=1.0)
+    e = e + offsets * eps * scale
+
+    x = grid_ev.to(dtype=e.dtype, device=e.device)
+    x = x.reshape((1,) * (e.ndim - 1) + (-1,))
+
+    cdf = torch.zeros(e.shape[:-1] + (grid_ev.numel(),), dtype=e.dtype, device=e.device)
+    pdf = torch.zeros_like(cdf)
+
+    for i in range(4):
+        ei = e[..., i]
+        denom = torch.ones_like(ei)
+        for j in range(4):
+            if j == i:
+                continue
+            denom = denom * (e[..., j] - ei)
+
+        dx = torch.clamp(x - ei.unsqueeze(-1), min=0.0)
+        cdf = cdf + dx.pow(3) / denom.unsqueeze(-1)
+        pdf = pdf + 3.0 * dx.pow(2) / denom.unsqueeze(-1)
+
+    cdf = torch.clamp(cdf, min=0.0, max=1.0)
+    pdf = torch.clamp(pdf, min=0.0)
+    return cdf, pdf
+
+
+def compute_tetrahedron_dos_from_kmesh_eigenvalues(
+    eigenvalues_ev: torch.Tensor,
+    kmesh: tuple[int, int, int],
+    *,
+    grid_ev: torch.Tensor | None = None,
+    bin_width: float = 0.05,
+    e_min: float | None = None,
+    e_max: float | None = None,
+    spin_factor: float = 1.0,
+    tetra_batch_size: int = 8192,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    nx, ny, nz = kmesh
+    n_cells = nx * ny * nz
+
+    if eigenvalues_ev.ndim == 2:
+        nk, nbands = eigenvalues_ev.shape
+        expected = nx * ny * nz
+        if nk != expected:
+            raise ValueError(
+                f"kmesh {kmesh} has {expected} points, but eigenvalues have {nk}"
+            )
+        eig = eigenvalues_ev.reshape(nx, ny, nz, nbands)
+    elif eigenvalues_ev.ndim == 4:
+        if tuple(eigenvalues_ev.shape[:3]) != tuple(kmesh):
+            raise ValueError(
+                f"eigenvalue grid shape {tuple(eigenvalues_ev.shape[:3])} does not match kmesh {kmesh}"
+            )
+        eig = eigenvalues_ev
+        nbands = eig.shape[-1]
+    else:
+        raise ValueError(
+            "Expected eigenvalues_ev with shape (Nk, Nb) or (Nx, Ny, Nz, Nb), "
+            f"got {tuple(eigenvalues_ev.shape)}"
+        )
+
+    eig = eig.detach().to(dtype=torch.float64, device="cpu")
+    eig_min = float(torch.min(eig).item()) if e_min is None else float(e_min)
+    eig_max = float(torch.max(eig).item()) if e_max is None else float(e_max)
+
+    if grid_ev is None:
+        span = max(eig_max - eig_min, 1e-8)
+        margin = 0.02 * span + 0.05
+        e0 = eig_min - margin
+        e1 = eig_max + margin
+        n_grid = int(np.ceil((e1 - e0) / bin_width)) + 1
+        grid_ev = torch.linspace(e0, e1, n_grid, dtype=torch.float64)
+    else:
+        grid_ev = grid_ev.detach().to(dtype=torch.float64, device="cpu")
+
+    tetrahedra = torch.tensor(
+        [
+            [0, 1, 3, 7],
+            [0, 3, 2, 7],
+            [0, 2, 6, 7],
+            [0, 6, 4, 7],
+            [0, 4, 5, 7],
+            [0, 5, 1, 7],
+        ],
+        dtype=torch.long,
+    )
+
+    all_tet_energies: list[torch.Tensor] = []
+    for ix in range(nx):
+        ix1 = (ix + 1) % nx
+        for iy in range(ny):
+            iy1 = (iy + 1) % ny
+            for iz in range(nz):
+                iz1 = (iz + 1) % nz
+                cube = torch.stack(
+                    [
+                        eig[ix, iy, iz],
+                        eig[ix1, iy, iz],
+                        eig[ix, iy1, iz],
+                        eig[ix1, iy1, iz],
+                        eig[ix, iy, iz1],
+                        eig[ix1, iy, iz1],
+                        eig[ix, iy1, iz1],
+                        eig[ix1, iy1, iz1],
+                    ],
+                    dim=0,
+                )
+                tet_e = cube[tetrahedra].permute(0, 2, 1).reshape(-1, 4)
+                all_tet_energies.append(tet_e)
+
+    tet_energies = torch.cat(all_tet_energies, dim=0)
+    dos = torch.zeros_like(grid_ev)
+    cumulative = torch.zeros_like(grid_ev)
+    weight = float(spin_factor) / float(6 * n_cells)
+
+    for start in range(0, tet_energies.shape[0], tetra_batch_size):
+        stop = min(start + tetra_batch_size, tet_energies.shape[0])
+        batch = tet_energies[start:stop]
+        cdf_batch, pdf_batch = _tetrahedron_cdf_pdf(batch, grid_ev)
+        cumulative = cumulative + weight * torch.sum(cdf_batch, dim=0)
+        dos = dos + weight * torch.sum(pdf_batch, dim=0)
+
+    return grid_ev, dos, cumulative
+
+
+def _kmesh_eigenvalues(
+    snapshot: Snapshot,
+    *,
+    kmesh_spec: str,
+    chunk_size: int,
+    num_workers: int,
+    psd_cleanup: bool,
+    allow_jitter: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    kmesh = parse_kmesh_spec(kmesh_spec)
+    fractional_kpoints = fractional_kmesh_points(
+        kmesh,
+        device=snapshot.box.device,
+        dtype=snapshot.box.dtype,
+    )
+    reciprocal = 2.0 * torch.pi * torch.linalg.inv(snapshot.box).T
+    kpoints_abs = fractional_kpoints @ reciprocal
+    shift_t = snapshot.get_translation_shifts().to(device=snapshot.box.device)
+    if shift_t.numel() == 0:
+        raise ValueError("Snapshot does not contain any translation shifts.")
+
+    ham_shift = block_matrix_to_shiftspace_dense(snapshot.hamiltonian, shifts=shift_t)
+    ovl_shift = block_matrix_to_shiftspace_dense(snapshot.overlap, shifts=shift_t)
+
+    nk = int(kpoints_abs.shape[0])
+    effective_chunk = nk if chunk_size <= 0 else min(int(chunk_size), nk)
+    tasks = [
+        (start, min(start + effective_chunk, nk))
+        for start in range(0, nk, effective_chunk)
+    ]
+    if num_workers <= 1 or len(tasks) <= 1:
+        eig_chunks = []
+        for start, stop in tasks:
+            k_chunk = kpoints_abs[start:stop]
+            ham_k = shiftspace_to_kspace_dense(
+                ham_shift,
+                kpoints_abs=k_chunk,
+                shifts=shift_t,
+                box=snapshot.box,
+            )
+            ovl_k = shiftspace_to_kspace_dense(
+                ovl_shift,
+                kpoints_abs=k_chunk,
+                shifts=shift_t,
+                box=snapshot.box,
+            )
+            eig_chunks.append(
+                _generalized_eigenvalues_kspace(
+                    ham_k,
+                    ovl_k,
+                    psd_cleanup=psd_cleanup,
+                    allow_jitter=allow_jitter,
+                ).cpu()
+            )
+    else:
+        eig_chunks = compute_band_chunks_parallel(
+            ham_shift=ham_shift.detach().cpu(),
+            ovl_shift=ovl_shift.detach().cpu(),
+            shift_t=shift_t.detach().cpu(),
+            box=snapshot.box.detach().cpu(),
+            kpoints_abs=kpoints_abs.detach().cpu(),
+            tasks=tasks,
+            num_workers=num_workers,
+            overlap_psd_cleanup=psd_cleanup,
+            overlap_jitter=allow_jitter,
+        )
+
+    eigenvalues_ev = (
+        torch.cat(eig_chunks, dim=0).to(dtype=torch.float64) * HARTREE_TO_EV
+    )
+    if eigenvalues_ev.ndim != 2:
+        raise ValueError(
+            f"Expected band eigenvalues with shape (Nk, Nb), got {tuple(eigenvalues_ev.shape)}"
+        )
+    expected = int(np.prod(kmesh))
+    if eigenvalues_ev.shape[0] != expected:
+        raise ValueError(
+            f"kmesh {kmesh} has {expected} points, but eigenvalues have {eigenvalues_ev.shape[0]}"
+        )
+    return eigenvalues_ev, fractional_kpoints.detach().cpu()
+
+
+def compute_tetrahedron_dos_and_fermi(
+    snapshot: Snapshot,
+    *,
+    kmesh_spec: str,
+    chunk_size: int,
+    num_workers: int,
+    psd_cleanup: bool,
+    allow_jitter: bool,
+    bin_width: float,
+    grid_ev: torch.Tensor | None = None,
+    e_min: float | None = None,
+    e_max: float | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
+    eigenvalues_ev, _fractional_kpoints = _kmesh_eigenvalues(
+        snapshot,
+        kmesh_spec=kmesh_spec,
+        chunk_size=chunk_size,
+        num_workers=num_workers,
+        psd_cleanup=psd_cleanup,
+        allow_jitter=allow_jitter,
+    )
+    kmesh = parse_kmesh_spec(kmesh_spec)
+    grid_ev, dos, _cumulative = compute_tetrahedron_dos_from_kmesh_eigenvalues(
+        eigenvalues_ev,
+        kmesh,
+        grid_ev=grid_ev,
+        bin_width=bin_width,
+        e_min=e_min,
+        e_max=e_max,
+        spin_factor=infer_spin_factor(snapshot),
+    )
+    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
+    dos_electron_target = effective_dos_electron_target(snapshot)
+    fermi_level_ev = fermi_level_from_dos(grid_ev, dos, dos_electron_target)
+    if (
+        fermi_level_ev is None
+        and getattr(snapshot.info, "fermi_level", None) is not None
+    ):
+        fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
+    return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
 
 
 def compute_gaussian_dos_from_eigenvalues_and_fermi(
@@ -261,33 +540,19 @@ def compute_kmesh_average_dos_and_fermi(
     *,
     kmesh_spec: str,
     chunk_size: int,
+    num_workers: int,
     psd_cleanup: bool,
     allow_jitter: bool,
     dos_sigma_ev: float,
 ) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
-    kmesh = parse_kmesh_spec(kmesh_spec)
-    fractional_kpoints = fractional_kmesh_points(
-        kmesh,
-        device=snapshot.box.device,
-        dtype=snapshot.box.dtype,
-    )
-    reciprocal = 2.0 * torch.pi * torch.linalg.inv(snapshot.box).T
-    kpoints_abs = fractional_kpoints @ reciprocal
-    show_progress = sys.stderr.isatty()
-    k_band = snapshot.get_band_structure(
-        kpoints_abs=kpoints_abs,
-        fractional_kpoints=fractional_kpoints,
+    eigenvalues_ev, _fractional_kpoints = _kmesh_eigenvalues(
+        snapshot,
+        kmesh_spec=kmesh_spec,
         chunk_size=chunk_size,
-        show_progress=show_progress,
+        num_workers=num_workers,
         psd_cleanup=psd_cleanup,
         allow_jitter=allow_jitter,
     )
-    eigenvalues_ev = k_band.eigenvalues.detach().cpu() * HARTREE_TO_EV
-    if eigenvalues_ev.ndim != 2:
-        raise ValueError(
-            f"Expected band eigenvalues with shape (Nk, Nb), got {tuple(eigenvalues_ev.shape)}"
-        )
-    nk = float(eigenvalues_ev.shape[0])
     flat_ev = eigenvalues_ev.reshape(-1)
     eig_min = float(torch.min(flat_ev).item())
     eig_max = float(torch.max(flat_ev).item())
@@ -302,7 +567,7 @@ def compute_kmesh_average_dos_and_fermi(
         e_min=e_min,
         e_max=e_max,
     )
-    dos = dos / nk
+    dos = dos / float(eigenvalues_ev.shape[0])
     num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
     dos_electron_target = effective_dos_electron_target(snapshot)
     fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
@@ -822,6 +1087,206 @@ def save_dos_prediction_plot(
         overlap_jitter=overlap_jitter,
     )
     fermi = fermi_level_from_dos(grid, dos, num_electrons)
+    fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
+    ax.plot(grid.cpu().numpy(), dos.cpu().numpy(), lw=1.6, color="#1f5aa6")
+    if fermi is not None:
+        ax.axvline(
+            fermi,
+            color="#1f5aa6",
+            ls=":",
+            lw=1.4,
+            alpha=0.9,
+            label=f"$E_F$ = {fermi:.3f} eV",
+        )
+    ax.set_title(title)
+    ax.set_xlabel("Energy (eV)")
+    ax.set_ylabel("DOS")
+    ax.grid(True, alpha=0.25)
+    ax.set_xlim(left=energy_min, right=energy_max)
+    if num_electrons is not None:
+        ax.text(
+            0.02,
+            0.98,
+            f"N_e = {num_electrons:.3f}",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    if fermi is not None:
+        ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def save_tetrahedron_dos_comparison_plot(
+    gt_snapshot: Snapshot,
+    pred_snapshot: Snapshot,
+    output_path: Path,
+    *,
+    kmesh_spec: str,
+    chunk_size: int,
+    num_workers: int,
+    energy_min: float,
+    energy_max: float,
+    title: str,
+    error_output_path: Path | None = None,
+    overlap_psd_cleanup: bool = False,
+    overlap_jitter: bool = False,
+    bin_width: float = 0.05,
+) -> dict[str, float]:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    grid_ev = torch.linspace(
+        float(energy_min),
+        float(energy_max),
+        int(np.ceil((float(energy_max) - float(energy_min)) / float(bin_width))) + 1,
+        dtype=torch.float64,
+    )
+    grid_true, dos_true, num_electrons_true, dos_target_true, fermi_true = (
+        compute_tetrahedron_dos_and_fermi(
+            gt_snapshot,
+            kmesh_spec=kmesh_spec,
+            chunk_size=chunk_size,
+            num_workers=num_workers,
+            psd_cleanup=overlap_psd_cleanup,
+            allow_jitter=overlap_jitter,
+            bin_width=bin_width,
+            grid_ev=grid_ev,
+            e_min=energy_min,
+            e_max=energy_max,
+        )
+    )
+    grid_pred, dos_pred, num_electrons_pred, dos_target_pred, fermi_pred = (
+        compute_tetrahedron_dos_and_fermi(
+            pred_snapshot,
+            kmesh_spec=kmesh_spec,
+            chunk_size=chunk_size,
+            num_workers=num_workers,
+            psd_cleanup=overlap_psd_cleanup,
+            allow_jitter=overlap_jitter,
+            bin_width=bin_width,
+            grid_ev=grid_ev,
+            e_min=energy_min,
+            e_max=energy_max,
+        )
+    )
+
+    fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
+    ax.plot(
+        grid_true.cpu().numpy(), dos_true.cpu().numpy(), label="Ground Truth", lw=1.8
+    )
+    ax.plot(grid_pred.cpu().numpy(), dos_pred.cpu().numpy(), label="Prediction", lw=1.4)
+    if fermi_true is not None:
+        ax.axvline(
+            fermi_true,
+            color="black",
+            ls="--",
+            lw=1.2,
+            alpha=0.85,
+            label=f"GT $E_F$ = {fermi_true:.3f} eV",
+        )
+    if fermi_pred is not None:
+        ax.axvline(
+            fermi_pred,
+            color="#1f5aa6",
+            ls=":",
+            lw=1.4,
+            alpha=0.9,
+            label=f"Pred $E_F$ = {fermi_pred:.3f} eV",
+        )
+    ax.set_title(title)
+    ax.set_xlabel("Energy (eV)")
+    ax.set_ylabel("DOS")
+    ax.grid(True, alpha=0.25)
+    ax.set_xlim(left=energy_min, right=energy_max)
+    text_lines = []
+    if num_electrons_true is not None:
+        text_lines.append(f"GT N_e = {num_electrons_true:.3f}")
+    if num_electrons_pred is not None:
+        text_lines.append(f"Pred N_e = {num_electrons_pred:.3f}")
+    if text_lines:
+        ax.text(
+            0.02,
+            0.98,
+            "\n".join(text_lines),
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        )
+    ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    if error_output_path is not None:
+        error_output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig, ax = plt.subplots(1, 1, figsize=(9, 4.8))
+        ax.plot(
+            grid_true.cpu().numpy(),
+            (dos_pred - dos_true).cpu().numpy(),
+            color="#b23a48",
+            lw=1.4,
+            label="Prediction - Ground Truth",
+        )
+        ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+        ax.set_title(title.replace("comparison", "error"))
+        ax.set_xlabel("Energy (eV)")
+        ax.set_ylabel("DOS Error")
+        ax.grid(True, alpha=0.25)
+        ax.set_xlim(left=energy_min, right=energy_max)
+        ax.legend(loc="best")
+        fig.tight_layout()
+        fig.savefig(error_output_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+    return {
+        "dos_abs_mean": float(torch.mean(torch.abs(dos_pred - dos_true)).item()),
+        "dos_abs_max": float(torch.max(torch.abs(dos_pred - dos_true)).item()),
+        "fermi_gt_ev": float(fermi_true) if fermi_true is not None else float("nan"),
+        "fermi_pred_ev": float(fermi_pred) if fermi_pred is not None else float("nan"),
+        "dos_target_gt": (
+            float(dos_target_true) if dos_target_true is not None else float("nan")
+        ),
+        "dos_target_pred": (
+            float(dos_target_pred) if dos_target_pred is not None else float("nan")
+        ),
+    }
+
+
+def save_tetrahedron_dos_prediction_plot(
+    snapshot: Snapshot,
+    output_path: Path,
+    *,
+    kmesh_spec: str,
+    chunk_size: int,
+    num_workers: int,
+    energy_min: float,
+    energy_max: float,
+    num_electrons: float | None,
+    title: str,
+    overlap_psd_cleanup: bool = False,
+    overlap_jitter: bool = False,
+    bin_width: float = 0.05,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    grid_ev = torch.linspace(
+        float(energy_min),
+        float(energy_max),
+        int(np.ceil((float(energy_max) - float(energy_min)) / float(bin_width))) + 1,
+        dtype=torch.float64,
+    )
+    grid, dos, _num_electrons, _dos_target, fermi = compute_tetrahedron_dos_and_fermi(
+        snapshot,
+        kmesh_spec=kmesh_spec,
+        chunk_size=chunk_size,
+        num_workers=num_workers,
+        psd_cleanup=overlap_psd_cleanup,
+        allow_jitter=overlap_jitter,
+        bin_width=bin_width,
+        grid_ev=grid_ev,
+        e_min=energy_min,
+        e_max=energy_max,
+    )
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
     ax.plot(grid.cpu().numpy(), dos.cpu().numpy(), lw=1.6, color="#1f5aa6")
     if fermi is not None:

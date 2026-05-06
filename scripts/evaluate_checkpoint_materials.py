@@ -63,6 +63,13 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--density-clim", type=float, default=0.1)
     parser.add_argument("--dos-sigma", type=float, default=0.2)
     parser.add_argument("--dos-bin-width", type=float, default=0.1)
+    parser.add_argument(
+        "--dos-method",
+        type=str,
+        default="tetrahedron",
+        choices=["tetrahedron", "gaussian"],
+    )
+    parser.add_argument("--dos-kmesh", type=str, default="4x4x4")
     parser.add_argument("--dos-energy-min", type=float, default=-10.0)
     parser.add_argument("--dos-energy-max", type=float, default=15.0)
     parser.add_argument("--num-points", type=int, default=240)
@@ -383,23 +390,40 @@ def _run_snapshot_case(
         if args.use_gt_overlap_for_eigs
         else float(pred_band_snapshot.get_number_of_electrons().item())
     )
-    dos_metrics = analysis_eval.save_dos_comparison_plot(
-        pred_mats["hamiltonian"],
-        overlap_for_eigs,
-        gt_mats["hamiltonian"],
-        gt_mats["overlap"],
-        num_electrons_true,
-        num_electrons_pred,
-        output_dir / "dos_comparison.png",
-        sigma=args.dos_sigma,
-        bin_width=args.dos_bin_width,
-        energy_min=args.dos_energy_min,
-        energy_max=args.dos_energy_max,
-        title=f"DOS comparison: {title}",
-        error_output_path=output_dir / "dos_error.png",
-        overlap_psd_cleanup=args.overlap_psd_cleanup,
-        overlap_jitter=args.overlap_jitter,
-    )
+    if args.dos_method == "tetrahedron":
+        dos_metrics = analysis_eval.save_tetrahedron_dos_comparison_plot(
+            gt_snapshot,
+            pred_band_snapshot,
+            output_dir / "dos_comparison.png",
+            kmesh_spec=args.dos_kmesh,
+            chunk_size=args.chunk_size,
+            num_workers=args.num_workers,
+            energy_min=args.dos_energy_min,
+            energy_max=args.dos_energy_max,
+            title=f"DOS comparison: {title}",
+            error_output_path=output_dir / "dos_error.png",
+            overlap_psd_cleanup=args.overlap_psd_cleanup,
+            overlap_jitter=args.overlap_jitter,
+            bin_width=args.dos_bin_width,
+        )
+    else:
+        dos_metrics = analysis_eval.save_dos_comparison_plot(
+            pred_mats["hamiltonian"],
+            overlap_for_eigs,
+            gt_mats["hamiltonian"],
+            gt_mats["overlap"],
+            num_electrons_true,
+            num_electrons_pred,
+            output_dir / "dos_comparison.png",
+            sigma=args.dos_sigma,
+            bin_width=args.dos_bin_width,
+            energy_min=args.dos_energy_min,
+            energy_max=args.dos_energy_max,
+            title=f"DOS comparison: {title}",
+            error_output_path=output_dir / "dos_error.png",
+            overlap_psd_cleanup=args.overlap_psd_cleanup,
+            overlap_jitter=args.overlap_jitter,
+        )
 
     gt_band = analysis_eval.compute_or_load_band_structure(
         gt_snapshot,
@@ -450,6 +474,8 @@ def _run_snapshot_case(
     print("matrix_path:", matrix_path)
     print("info_path:", info_path)
     print("output_dir:", output_dir)
+    print("dos_method:", args.dos_method)
+    print("dos_kmesh:", args.dos_kmesh)
     print("dos_metrics:", dos_metrics)
 
 
@@ -550,19 +576,35 @@ def _run_cif_case(
             "CIF evaluation needs a predicted overlap matrix for DOS/band plots."
         )
     num_electrons_pred = float(pred_snapshot_for_eigs.get_number_of_electrons().item())
-    analysis_eval.save_dos_prediction_plot(
-        pred_mats["hamiltonian"],
-        pred_snapshot_for_eigs.overlap,
-        output_dir / "dos_prediction.png",
-        sigma=args.dos_sigma,
-        bin_width=args.dos_bin_width,
-        energy_min=args.dos_energy_min,
-        energy_max=args.dos_energy_max,
-        num_electrons=num_electrons_pred,
-        title=f"DOS prediction: {title}",
-        overlap_psd_cleanup=args.overlap_psd_cleanup,
-        overlap_jitter=args.overlap_jitter,
-    )
+    if args.dos_method == "tetrahedron":
+        analysis_eval.save_tetrahedron_dos_prediction_plot(
+            pred_snapshot_for_eigs,
+            output_dir / "dos_prediction.png",
+            kmesh_spec=args.dos_kmesh,
+            chunk_size=args.chunk_size,
+            num_workers=args.num_workers,
+            energy_min=args.dos_energy_min,
+            energy_max=args.dos_energy_max,
+            num_electrons=num_electrons_pred,
+            title=f"DOS prediction: {title}",
+            overlap_psd_cleanup=args.overlap_psd_cleanup,
+            overlap_jitter=args.overlap_jitter,
+            bin_width=args.dos_bin_width,
+        )
+    else:
+        analysis_eval.save_dos_prediction_plot(
+            pred_mats["hamiltonian"],
+            pred_snapshot_for_eigs.overlap,
+            output_dir / "dos_prediction.png",
+            sigma=args.dos_sigma,
+            bin_width=args.dos_bin_width,
+            energy_min=args.dos_energy_min,
+            energy_max=args.dos_energy_max,
+            num_electrons=num_electrons_pred,
+            title=f"DOS prediction: {title}",
+            overlap_psd_cleanup=args.overlap_psd_cleanup,
+            overlap_jitter=args.overlap_jitter,
+        )
     pred_band = analysis_eval.compute_or_load_band_structure(
         pred_snapshot_for_eigs,
         analysis_eval.band_cache_path(
@@ -607,6 +649,8 @@ def _run_cif_case(
     print("checkpoint:", args.checkpoint)
     print("cif_path:", args.cif_path)
     print("output_dir:", output_dir)
+    print("dos_method:", args.dos_method)
+    print("dos_kmesh:", args.dos_kmesh)
 
 
 def main() -> None:
