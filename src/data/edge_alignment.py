@@ -289,6 +289,7 @@ def build_prediction_edge_metadata(
     edge_types: list[str],
     edge_type2idx: dict[str, int],
     separate_shifted_self: bool,
+    target_pair_edges: dict[str, torch.Tensor] | None = None,
 ) -> dict[str, object]:
     edges_5d = torch.cat([edge_shift, edge_index], dim=0)
     pred_pair_edges_static: dict[str, torch.Tensor] = {}
@@ -334,6 +335,22 @@ def build_prediction_edge_metadata(
         }
 
     pred_trace_alignment = build_trace_alignment_from_pair_edges(pred_pair_edges_static)
+    if target_pair_edges is not None:
+        trimmed_trace_alignment: dict[str, tuple[str, torch.Tensor]] = {}
+        for key, target_edges in target_pair_edges.items():
+            if key not in pred_trace_alignment:
+                raise ValueError(f"Missing prediction trace alignment for key '{key}'")
+            rev_key, idx = pred_trace_alignment[key]
+        target_n = target_edges.shape[1]
+        if target_n <= 0:
+            raise ValueError(f"Target trace alignment for key '{key}' is empty.")
+        if idx.shape[0] < target_n:
+            raise ValueError(
+                f"Prediction trace alignment for key '{key}' is too short: "
+                f"pred_len={idx.shape[0]} target_len={target_n}"
+            )
+        trimmed_trace_alignment[key] = (rev_key, idx[:target_n])
+        pred_trace_alignment = trimmed_trace_alignment
     return {
         "pred_pair_edges_static": pred_pair_edges_static,
         "pred_lookup_static": pred_lookup_static,

@@ -35,10 +35,10 @@ from net.irrep_tools import (
     project_irrep_vectors_to_blocks,
 )
 from net.observable_metrics import (
-    align_pred_block_matrices_to_target_edges,
     add_observable_metrics,
     build_observable_predictions,
     observable_loss,
+    truncate_pred_block_matrix_to_target_prefix,
     validate_observable_config,
 )
 from net.encoders import NodeEncoder, EdgeEncoder
@@ -586,18 +586,16 @@ class E3GNN(pl.LightningModule):
 
         E_true = y.get("energy")
         N_true = y.get("num_electrons")
-        observable_preds_matrix = preds_matrix
-        target_reference_matrix = H_true or D_true or S_true
-        if target_reference_matrix is not None and preds_matrix:
-            observable_preds_matrix, observable_trace_alignment = (
-                align_pred_block_matrices_to_target_edges(
-                    preds_matrix,
-                    target_reference_matrix,
-                    require_exact_prefix=bool(self.cfg.require_exact_edge_match),
-                )
+        observable_preds_matrix = {}
+        for name, pred_matrix in preds_matrix.items():
+            target_matrix = y.get(name)
+            if target_matrix is None:
+                continue
+            observable_preds_matrix[name] = truncate_pred_block_matrix_to_target_prefix(
+                pred_matrix,
+                target_matrix,
             )
-        else:
-            observable_trace_alignment = {}
+            observable_trace_alignment = x["pred_trace_alignment"]
         observable_values = build_observable_predictions(
             observable_preds_matrix,
             trace_alignment=observable_trace_alignment,
