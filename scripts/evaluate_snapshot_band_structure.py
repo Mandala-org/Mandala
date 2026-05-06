@@ -112,6 +112,12 @@ def setup_argparse() -> argparse.Namespace:
         help="Energy grid spacing in eV for the tetrahedron DOS.",
     )
     parser.add_argument(
+        "--tetra-batch-size",
+        type=int,
+        default=256,
+        help="Number of tetrahedra processed per DOS batch.",
+    )
+    parser.add_argument(
         "--dos-method",
         type=str,
         default="tetrahedron",
@@ -252,6 +258,7 @@ def main() -> None:
                 psd_cleanup=args.overlap_psd_cleanup,
                 allow_jitter=args.overlap_jitter,
                 bin_width=args.dos_bin_width,
+                tetra_batch_size=args.tetra_batch_size,
             )
         )
         _log("[4/6] Using tetrahedron DOS on a uniform k-mesh.")

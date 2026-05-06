@@ -311,7 +311,7 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
     e_min: float | None = None,
     e_max: float | None = None,
     spin_factor: float = 1.0,
-    tetra_batch_size: int = 8192,
+    tetra_batch_size: int = 256,
     num_workers: int = 1,
     show_progress: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -540,6 +540,7 @@ def compute_tetrahedron_dos_and_fermi(
     psd_cleanup: bool,
     allow_jitter: bool,
     bin_width: float,
+    tetra_batch_size: int = 256,
     grid_ev: torch.Tensor | None = None,
     e_min: float | None = None,
     e_max: float | None = None,
@@ -564,6 +565,7 @@ def compute_tetrahedron_dos_and_fermi(
         e_min=e_min,
         e_max=e_max,
         spin_factor=infer_spin_factor(snapshot),
+        tetra_batch_size=tetra_batch_size,
         num_workers=num_workers,
         show_progress=show_progress,
     )
@@ -1211,6 +1213,7 @@ def save_tetrahedron_dos_comparison_plot(
     overlap_psd_cleanup: bool = False,
     overlap_jitter: bool = False,
     bin_width: float = 0.05,
+    tetra_batch_size: int = 256,
     show_progress: bool | None = None,
 ) -> dict[str, float]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1231,6 +1234,7 @@ def save_tetrahedron_dos_comparison_plot(
             psd_cleanup=overlap_psd_cleanup,
             allow_jitter=overlap_jitter,
             bin_width=bin_width,
+            tetra_batch_size=tetra_batch_size,
             grid_ev=grid_ev,
             e_min=energy_min,
             e_max=energy_max,
@@ -1246,6 +1250,7 @@ def save_tetrahedron_dos_comparison_plot(
             psd_cleanup=overlap_psd_cleanup,
             allow_jitter=overlap_jitter,
             bin_width=bin_width,
+            tetra_batch_size=tetra_batch_size,
             grid_ev=grid_ev,
             e_min=energy_min,
             e_max=energy_max,
@@ -1348,6 +1353,7 @@ def save_tetrahedron_dos_prediction_plot(
     overlap_psd_cleanup: bool = False,
     overlap_jitter: bool = False,
     bin_width: float = 0.05,
+    tetra_batch_size: int = 256,
     show_progress: bool | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1367,6 +1373,7 @@ def save_tetrahedron_dos_prediction_plot(
         psd_cleanup=overlap_psd_cleanup,
         allow_jitter=overlap_jitter,
         bin_width=bin_width,
+        tetra_batch_size=tetra_batch_size,
         grid_ev=grid_ev,
         e_min=energy_min,
         e_max=energy_max,
