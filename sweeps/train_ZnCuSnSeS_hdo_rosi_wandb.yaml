@@ -70,7 +70,7 @@ parameters:
   e3layernorm:
     value: false
   num-layers-gnn:
-    value: 3
+    values: [2, 3]
   tp-type:
     value: separate_weight
   use-self-connection:
