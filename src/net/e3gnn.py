@@ -290,12 +290,17 @@ class E3GNN(pl.LightningModule):
                     target.pair_vectors[pair_key], projector, self.mapper
                 )
 
-                min_n = min(pred_blocks.shape[0], target_blocks.shape[0])
-                if min_n <= 0:
+                target_n = target_blocks.shape[0]
+                if target_n <= 0:
                     continue
+                if pred_blocks.shape[0] < target_n:
+                    raise ValueError(
+                        f"Predicted irrep blocks for key {pair_key} and irrep {irrep_key} "
+                        f"are too short: pred_len={pred_blocks.shape[0]} target_len={target_n}"
+                    )
 
-                pred_edges = pred.pair_edges[pair_key][:, :min_n]
-                target_edges = target.pair_edges[pair_key][:, :min_n]
+                pred_edges = pred.pair_edges[pair_key][:, :target_n]
+                target_edges = target.pair_edges[pair_key][:, :target_n]
                 if self.cfg.safety_checks:
                     assert torch.equal(
                         pred_edges, target_edges
@@ -305,8 +310,8 @@ class E3GNN(pl.LightningModule):
                 if not partial_mask.any():
                     continue
 
-                pred_selected = pred_blocks[:min_n][partial_mask]
-                target_selected = target_blocks[:min_n][partial_mask]
+                pred_selected = pred_blocks[:target_n][partial_mask]
+                target_selected = target_blocks[:target_n][partial_mask]
                 if pred_selected.shape[0] == 0:
                     continue
 
@@ -435,11 +440,18 @@ class E3GNN(pl.LightningModule):
                     preds = p_items[key]
                     targets = t_items[key]
 
-                    min_n = min(preds.shape[0], targets.shape[0])
-                    preds = preds[:min_n]
-                    targets = targets[:min_n]
-                    pred_edges = p.pair_edges[key][:, :min_n]
-                    target_edges = t.pair_edges[key][:, :min_n]
+                    target_n = targets.shape[0]
+                    if target_n <= 0:
+                        continue
+                    if preds.shape[0] < target_n:
+                        raise ValueError(
+                            f"Predicted blocks for matrix {name}, key {key} are too short: "
+                            f"pred_len={preds.shape[0]} target_len={target_n}"
+                        )
+                    preds = preds[:target_n]
+                    targets = targets[:target_n]
+                    pred_edges = p.pair_edges[key][:, :target_n]
+                    target_edges = t.pair_edges[key][:, :target_n]
 
                     if self.cfg.safety_checks:
                         assert torch.equal(

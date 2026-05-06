@@ -108,14 +108,18 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
                     preds = p_blocks[key]
                     targets = t_blocks[key]
 
-                    # Handle size mismatch by truncating to the smaller size
-                    min_n = min(preds.shape[0], targets.shape[0])
-                    preds = preds[:min_n]
-                    targets = targets[:min_n]
+                    target_n = targets.shape[0]
+                    if preds.shape[0] < target_n:
+                        raise ValueError(
+                            f"Predicted blocks for {name}, key {key} are too short: "
+                            f"pred_len={preds.shape[0]} target_len={target_n}"
+                        )
+                    preds = preds[:target_n]
+                    targets = targets[:target_n]
 
                     if cfg.safety_checks:
                         if not torch.equal(
-                            p_edges[key][:, :min_n], t_edges[key][:, :min_n]
+                            p_edges[key][:, :target_n], t_edges[key][:, :target_n]
                         ):
                             raise ValueError(
                                 f"Edge indices for predicted and target {name} matrices do not match."
@@ -138,10 +142,14 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
                     preds = p_vecs[key]
                     targets = t_vecs[key]
 
-                    # Handle size mismatch by truncating to the smaller size
-                    min_n = min(preds.shape[0], targets.shape[0])
-                    preds = preds[:min_n]
-                    targets = targets[:min_n]
+                    target_n = targets.shape[0]
+                    if preds.shape[0] < target_n:
+                        raise ValueError(
+                            f"Predicted vectors for {name}, key {key} are too short: "
+                            f"pred_len={preds.shape[0]} target_len={target_n}"
+                        )
+                    preds = preds[:target_n]
+                    targets = targets[:target_n]
 
                     expected_loss_matrix += torch.mean((preds - targets) ** 2)
 
