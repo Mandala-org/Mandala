@@ -19,7 +19,6 @@ python -u scripts/wandb_run.py \
   --num-val 0 \
   --seed 42 \
   --precision 32-true \
-  --resume-mode latest \
   --generate-video true \
   --log-artifacts true \
   --wandb-mode online \
@@ -29,7 +28,7 @@ python -u scripts/wandb_run.py \
   --max-epochs 1000 \
   --batch-size 1 \
   --cutoff-radius 11.0 \
-  --l-max 4 \
+  --l-max 5 \
   --hidden-base-dim 32 \
   --hidden-irreps 32x0e+32x0o+16x1e+16x1o+8x2e+8x2o+8x3e+8x3o+8x4e \
   --edge-type-emb-dim 32 \
@@ -37,7 +36,7 @@ python -u scripts/wandb_run.py \
   --edge-encoder-style distance \
   --edge-encoder-use-sh-tensor-square false \
   --e3layernorm false \
-  --num-layers-gnn 2 \
+  --num-layers-gnn 3 \
   --tp-type separate_weight \
   --use-self-connection true \
   --edge-update-node-combine concat \
@@ -47,16 +46,16 @@ python -u scripts/wandb_run.py \
   --head-use-mlp-log-scale false \
   --neck-depth 1 \
   --internal-e3mlp-layers 1 \
-  --head-e3mlp-layers 2 \
+  --head-e3mlp-layers 3 \
   --head-use-node-embeddings-for-self-edges true \
   --separate-shifted-self true \
   --head-use-tensor-square false \
   --head-diag-output-scale 2 \
   --head-offdiag-output-scale 1 \
   --head-log-scale-mlp-n-layers 1 \
-  --e3mlp-variant normact \
-  --internal-e3mlp-variant normact \
-  --head-e3mlp-variant normact \
+  --e3mlp-variant film \
+  --internal-e3mlp-variant film \
+  --head-e3mlp-variant film \
   --e3mlp-output-scale 1 \
   --e3mlp-weight-init-scale 0.5 \
   --e3mlp-residual-scale 1 \
@@ -65,7 +64,7 @@ python -u scripts/wandb_run.py \
   --e3mlp-film-hidden-dim 64 \
   --activation-odd-scalar tanh \
   --activation-odd-gate tanh \
-  --nonlin-kind normact \
+  --nonlin-kind film \
   --activation-scalar leakyrelu \
   --activation-gate softplus \
   --s2act-res 128 \
@@ -80,8 +79,8 @@ python -u scripts/wandb_run.py \
   --init-weights-factor 1 \
   --grad-clip-val 1 \
   --accumulate-grad-batches 1 \
-  --n-radial 64 \
-  --radial-layers '[64,64]' \
+  --n-radial 128 \
+  --radial-layers '[128,128,128]' \
   --device cuda \
   --gpus 1 \
   --num-workers 8 \
@@ -106,12 +105,12 @@ python -u scripts/wandb_run.py \
   --log-partial-gt-observables true \
   --loss-coef-observables 0.0 \
   --loss-coef-forces 0.0 \
-  --symmetrize-output false \
+  --symmetrize-output true \
   --apply-cutoff-to-targets false \
   --require-exact-edge-match true \
   --safety-checks true \
   --revert-on-spike false \
   --precompute-edge-features true \
   --radial-embedding-scale none \
-  --wandb-project mandala-zinc-copper-tin-selenide-sulfide-overfit \
+  --wandb-project mandala-zinc-copper-tin-selenide-sulfide-overfit-test \
   --run-name overfit-zinc-copper-tin-selenide-sulfide-cutoff11
