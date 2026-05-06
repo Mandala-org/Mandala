@@ -157,8 +157,6 @@ class E3GNNDataset(Dataset):
                 str(matrix_path.resolve()),
                 str(info_path.resolve()),
                 self.convention,
-                str(self.cfg.cutoff_radius),
-                str(self.cfg.apply_cutoff_to_targets),
                 str(self.dtype),
                 str(mat_stat.st_mtime_ns),
                 str(mat_stat.st_size),
@@ -280,8 +278,6 @@ class E3GNNDataset(Dataset):
 
         self.snapshot_cache_misses += 1
         snapshot_cutoff = None
-        if not self.cfg.apply_cutoff_to_targets:
-            snapshot_cutoff = self.cfg.cutoff_radius
         if matrix_path.suffix == ".npz" or info_path.suffix == ".json":
             snapshot = Snapshot.from_pyscf(
                 npz_path=matrix_path,

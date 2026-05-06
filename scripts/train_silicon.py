@@ -502,10 +502,7 @@ def run_single_training(
         f"Found {len(train_pairs)} training snapshots and {len(val_pairs)} validation snapshots."
     )
 
-    cfg_ds = dataclasses.replace(cfg)
-    if not cfg.apply_cutoff_to_targets:
-        cfg_ds.cutoff_radius = None
-    fac = DatasetFactory(cfg_ds)
+    fac = DatasetFactory(dataclasses.replace(cfg))
 
     for m, i in train_pairs:
         fac.add_snapshot(m, i, purpose="train")

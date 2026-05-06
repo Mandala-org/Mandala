@@ -253,7 +253,7 @@ def test_train_silicon_global_split_mode(monkeypatch, tmp_path):
     assert len(captured["snapshots"]) == 3
     assert sum(1 for _, _, purpose in captured["snapshots"] if purpose == "train") == 2
     assert sum(1 for _, _, purpose in captured["snapshots"] if purpose == "val") == 1
-    assert captured["dataset_cfg"].cutoff_radius is None
+    assert captured["dataset_cfg"].cutoff_radius == pytest.approx(7.0)
 
 
 def test_train_silicon_splits_workers_by_sample_ratio(monkeypatch, tmp_path):
