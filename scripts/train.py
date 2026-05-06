@@ -27,7 +27,7 @@ from net.artifacts import (
 from net.benchmark import BenchmarkCallback  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
-from net.silicon_study_logging import (  # noqa: E402
+from net.run_logging import (  # noqa: E402
     log_config,
     log_cutoff_application,
     log_graph,
