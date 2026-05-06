@@ -85,16 +85,14 @@ parameters:
     value: true
   head-use-mlp-log-scale:
     value: false
+
   internal-e3mlp-layers:
-    values:
-      - 1
-      - 2
-      - 3
+    values: [1, 2, 3]
+  neck-depth:
+    values: [1, 2, 3]
   head-e3mlp-layers:
-    values:
-      - 1
-      - 2
-      - 3
+    values: [1, 2, 3]
+
   head-use-node-embeddings-for-self-edges:
     value: true
   separate-shifted-self:
