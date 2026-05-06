@@ -13,7 +13,6 @@ python -u scripts/wandb_run.py \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/SiOx \
   --checkpoint-dir checkpoints/siox \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/SiOx/snapshot_cache \
-
   --num-train 60 \
   --num-val 10 \
   --seed 42 \
