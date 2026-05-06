@@ -64,7 +64,7 @@ python -u scripts/wandb_run.py \
   --e3mlp-film-hidden-dim 64 \
   --activation-odd-scalar tanh \
   --activation-odd-gate tanh \
-  --nonlin-kind film \
+  --nonlin-kind normact \
   --activation-scalar leakyrelu \
   --activation-gate softplus \
   --s2act-res 128 \
