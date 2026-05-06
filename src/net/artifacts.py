@@ -54,9 +54,14 @@ def _compute_mu_h(H_pred: BlockMatrix, H_gt: BlockMatrix, S: BlockMatrix) -> flo
         pred_blocks = H_pred.pair_blocks[key]
         gt_blocks = H_gt.pair_blocks[key]
         s_blocks = S.pair_blocks[key]
-        min_n = min(pred_blocks.shape[0], gt_blocks.shape[0], s_blocks.shape[0])
-        diff = pred_blocks[:min_n] - gt_blocks[:min_n]
-        s_val = s_blocks[:min_n]
+        target_n = gt_blocks.shape[0]
+        if pred_blocks.shape[0] < target_n or s_blocks.shape[0] < target_n:
+            raise ValueError(
+                f"Aligned mu_H calculation requires prefix length {target_n} for key '{key}', "
+                f"got pred_len={pred_blocks.shape[0]} and s_len={s_blocks.shape[0]}"
+            )
+        diff = pred_blocks[:target_n] - gt_blocks[:target_n]
+        s_val = s_blocks[:target_n]
         numerator += torch.sum(diff * s_val).item()
         denominator += torch.sum(s_val * s_val).item()
     return numerator / denominator if denominator > 1e-10 else 0.0
@@ -197,6 +202,8 @@ def compute_detailed_metrics_aligned(
 def align_pred_block_matrix_to_target_edges(
     pred_matrix: BlockMatrix,
     target_matrix: BlockMatrix,
+    *,
+    require_exact_prefix: bool = False,
 ) -> BlockMatrix:
     pair_blocks: dict[str, torch.Tensor] = {}
     pair_edges: dict[str, torch.Tensor] = {}
@@ -206,23 +213,28 @@ def align_pred_block_matrix_to_target_edges(
         if key not in pred_matrix.pair_blocks:
             raise ValueError(f"Prediction is missing key '{key}' required by target")
         pred_blocks = pred_matrix.pair_blocks[key]
-        gathered = []
-        for edge in target_edges.t().tolist():
-            edge_key = tuple(map(int, edge))
-            if edge_key not in pred_matrix.lookup:
+        target_n = target_edges.shape[1]
+        if pred_blocks.shape[0] < target_n:
+            raise ValueError(
+                f"Prediction is missing the target prefix for key '{key}': "
+                f"pred_len={pred_blocks.shape[0]} target_len={target_n}"
+            )
+        if require_exact_prefix:
+            pred_edges = pred_matrix.pair_edges.get(key)
+            if pred_edges is None:
+                raise ValueError(f"Prediction is missing edge tensor for key '{key}'")
+            if pred_edges.shape[1] < target_n:
                 raise ValueError(
-                    f"Prediction is missing target edge {edge_key} for key '{key}'"
+                    f"Prediction edge tensor for key '{key}' is too short: "
+                    f"pred_len={pred_edges.shape[1]} target_len={target_n}"
                 )
-            pred_key, pred_idx = pred_matrix.lookup[edge_key]
-            if pred_key != key:
+            if not torch.equal(pred_edges[:, :target_n], target_edges):
                 raise ValueError(
-                    f"Prediction edge {edge_key} mapped to wrong key "
-                    f"'{pred_key}' instead of '{key}'"
+                    f"Prediction prefix edge mismatch for key '{key}' while aligning metrics"
                 )
-            gathered.append(pred_blocks[pred_idx])
         pair_blocks[key] = (
-            torch.stack(gathered, dim=0)
-            if gathered
+            pred_blocks[:target_n]
+            if target_n > 0
             else pred_blocks.new_zeros((0, *pred_blocks.shape[1:]))
         )
         pair_edges[key] = target_edges
@@ -243,6 +255,8 @@ def align_pred_block_matrix_to_target_edges(
 def align_pred_irreps_to_target_edges(
     pred_irreps: IrrepsBlockData,
     target_irreps: IrrepsBlockData,
+    *,
+    require_exact_prefix: bool = False,
 ) -> IrrepsBlockData:
     pair_vectors: dict[str, torch.Tensor] = {}
     pair_edges: dict[str, torch.Tensor] = {}
@@ -254,23 +268,30 @@ def align_pred_irreps_to_target_edges(
                 f"Prediction is missing irrep key '{key}' required by target"
             )
         pred_vectors = pred_irreps.pair_vectors[key]
-        gathered = []
-        for edge in target_edges.t().tolist():
-            edge_key = tuple(map(int, edge))
-            if edge_key not in pred_irreps.lookup:
+        target_n = target_edges.shape[1]
+        if pred_vectors.shape[0] < target_n:
+            raise ValueError(
+                f"Prediction is missing the target irrep prefix for key '{key}': "
+                f"pred_len={pred_vectors.shape[0]} target_len={target_n}"
+            )
+        if require_exact_prefix:
+            pred_edges = pred_irreps.pair_edges.get(key)
+            if pred_edges is None:
                 raise ValueError(
-                    f"Prediction is missing target irrep edge {edge_key} for key '{key}'"
+                    f"Prediction is missing edge tensor for irrep key '{key}'"
                 )
-            pred_key, pred_idx = pred_irreps.lookup[edge_key]
-            if pred_key != key:
+            if pred_edges.shape[1] < target_n:
                 raise ValueError(
-                    f"Prediction irrep edge {edge_key} mapped to wrong key "
-                    f"'{pred_key}' instead of '{key}'"
+                    f"Prediction edge tensor for irrep key '{key}' is too short: "
+                    f"pred_len={pred_edges.shape[1]} target_len={target_n}"
                 )
-            gathered.append(pred_vectors[pred_idx])
+            if not torch.equal(pred_edges[:, :target_n], target_edges):
+                raise ValueError(
+                    f"Prediction prefix edge mismatch for irrep key '{key}' while aligning metrics"
+                )
         pair_vectors[key] = (
-            torch.stack(gathered, dim=0)
-            if gathered
+            pred_vectors[:target_n]
+            if target_n > 0
             else pred_vectors.new_zeros((0, pred_vectors.shape[-1]))
         )
         pair_edges[key] = target_edges
@@ -1128,7 +1149,12 @@ class ArtifactCheckpointCallback(pl.Callback):
             return
 
     def _align_pred_matrices(
-        self, preds: dict[str, Any], y: dict[str, Any], mapper
+        self,
+        preds: dict[str, Any],
+        y: dict[str, Any],
+        mapper,
+        *,
+        require_exact_prefix: bool = False,
     ) -> dict[str, BlockMatrix]:
         aligned: dict[str, BlockMatrix] = {}
         for name, pred_obj in preds.items():
@@ -1137,7 +1163,9 @@ class ArtifactCheckpointCallback(pl.Callback):
             pred_mat = self._as_block_matrix(pred_obj, mapper)
             target_mat = self._as_block_matrix(y[name], mapper)
             aligned[name] = align_pred_block_matrix_to_target_edges(
-                pred_mat, target_mat
+                pred_mat,
+                target_mat,
+                require_exact_prefix=require_exact_prefix,
             )
         return aligned
 
@@ -1222,7 +1250,14 @@ class ArtifactCheckpointCallback(pl.Callback):
 
         for batch in self._iter_eval_batches(trainer):
             x, y, preds = self._predict(pl_module, batch)
-            aligned_preds = self._align_pred_matrices(preds, y, pl_module.mapper)
+            aligned_preds = self._align_pred_matrices(
+                preds,
+                y,
+                pl_module.mapper,
+                require_exact_prefix=bool(
+                    getattr(pl_module.cfg, "require_exact_edge_match", False)
+                ),
+            )
             metrics_preds, num_electrons_mae_pre_correction = (
                 self._metric_prediction_matrices(
                     aligned_preds,
@@ -1258,6 +1293,9 @@ class ArtifactCheckpointCallback(pl.Callback):
                 pred_ir = align_pred_irreps_to_target_edges(
                     pred_mat.to_vectors(pl_module.mapper),
                     target_mat.to_vectors(pl_module.mapper),
+                    require_exact_prefix=bool(
+                        getattr(pl_module.cfg, "require_exact_edge_match", False)
+                    ),
                 )
                 targ_ir = target_mat.to_vectors(pl_module.mapper)
                 per_irrep = compute_irrep_metrics(

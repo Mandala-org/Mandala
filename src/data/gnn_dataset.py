@@ -34,12 +34,10 @@ from net.common import Config
 
 from data.edge_alignment import (
     build_prediction_edge_metadata,
-    reconcile_graph_edges_to_target,
     strict_edge_alignment_check,
     strict_reverse_edge_check,
 )
 from data.graph_features import (
-    compute_edge_geometry_from_static_edges,
     compute_graph_features,
 )
 from data.snapshot import Snapshot
@@ -396,40 +394,6 @@ class E3GNNDataset(Dataset):
                 sh_irreps=self.sh_irreps,
                 edge_type2idx=self.mapper.edge_type2idx,
             )
-
-            if self.cfg.require_exact_edge_match:
-                edge_index, edge_shift, _ = reconcile_graph_edges_to_target(
-                    edge_index=edge_index,
-                    edge_shift=edge_shift,
-                    reference_matrix=snap.hamiltonian,
-                    atoms_list=list(atoms),
-                    mapper=self.mapper,
-                    positions=snap.positions,
-                    box=snap.box,
-                    snapshot_label=snapshot_label,
-                )
-                edge_type_idx = torch.tensor(
-                    [
-                        self.mapper.edge_type2idx[f"{atoms[i]}-{atoms[j]}"]
-                        for i, j in zip(edge_index[0].tolist(), edge_index[1].tolist())
-                    ],
-                    dtype=torch.long,
-                )
-                edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
-                    positions=snap.positions,
-                    box=snap.box,
-                    edge_index=edge_index,
-                    edge_shift=edge_shift,
-                    sh_irreps=self.sh_irreps,
-                    cutoff_radius=self.cfg.cutoff_radius,
-                    n_radial=self.cfg.n_radial,
-                    radial_embedding_scale=self.cfg.radial_embedding_scale,
-                )
-                num_self_edges = int(
-                    ((edge_index[0] == edge_index[1]) & (edge_shift == 0).all(dim=0))
-                    .sum()
-                    .item()
-                )
 
             strict_reverse_edge_check(edge_index, edge_shift, edge_set_name="graph")
             for matrix_name, matrix_target in (

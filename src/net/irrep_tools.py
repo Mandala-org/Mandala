@@ -168,12 +168,17 @@ def compute_irrep_metrics(
                 continue
             pred_blocks = pred_irrep_blocks.pair_blocks[key]
             targ_blocks_full = target_irrep_blocks.pair_blocks[key]
-            min_n = min(pred_blocks.shape[0], targ_blocks_full.shape[0])
-            if min_n <= 0:
+            target_n = targ_blocks_full.shape[0]
+            if target_n <= 0:
                 continue
+            if pred_blocks.shape[0] < target_n:
+                raise ValueError(
+                    f"Predicted irrep blocks for key '{key}' are too short: "
+                    f"pred_len={pred_blocks.shape[0]} target_len={target_n}"
+                )
 
-            pred_sel = pred_blocks[:min_n]
-            targ_sel = targ_blocks_full[:min_n]
+            pred_sel = pred_blocks[:target_n]
+            targ_sel = targ_blocks_full[:target_n]
             diff = pred_sel - targ_sel
 
             l1_error_blocks = torch.sum(torch.abs(diff), dim=(1, 2))
@@ -188,7 +193,7 @@ def compute_irrep_metrics(
             sum_l1_target_block += torch.sum(l1_target_blocks).item()
             sum_l2_block_sq += torch.sum(l2_error_blocks_sq).item()
             sum_l2_target_block_sq += torch.sum(l2_target_blocks_sq).item()
-            total_blocks += pred_sel.shape[0]
+            total_blocks += target_n
             sum_l1_target_full += torch.sum(l1_target_blocks).item()
             sum_l2_target_full_sq += torch.sum(l2_target_blocks_sq).item()
 

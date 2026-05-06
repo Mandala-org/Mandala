@@ -91,52 +91,71 @@ def reconcile_graph_edges_to_target(
     box: torch.Tensor | None,
     snapshot_label: str,
 ) -> tuple[torch.Tensor, torch.Tensor, bool]:
+    validate_graph_prefix_matches_target(
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        reference_matrix=reference_matrix,
+        atoms_list=atoms_list,
+        positions=positions,
+        box=box,
+        snapshot_label=snapshot_label,
+    )
+    return edge_index, edge_shift, False
+
+
+def validate_graph_prefix_matches_target(
+    *,
+    edge_index: torch.Tensor,
+    edge_shift: torch.Tensor,
+    reference_matrix: BlockMatrix,
+    atoms_list: list[str],
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+    snapshot_label: str,
+) -> None:
     target_by_key = block_matrix_edges_by_key(reference_matrix)
     graph_by_key = graph_edges_by_key(edge_index, edge_shift, atoms_list)
 
+    target_keys = sorted(target_by_key)
+    graph_keys = sorted(graph_by_key)
+    if target_keys != graph_keys:
+        missing_in_graph = sorted(set(target_keys) - set(graph_keys))
+        extra_in_graph = sorted(set(graph_keys) - set(target_keys))
+        raise RuntimeError(
+            f"[GRAPH] {snapshot_label} key-set mismatch: "
+            f"missing_in_graph={missing_in_graph}, extra_in_graph={extra_in_graph}"
+        )
+
     mismatch_lines: list[str] = []
-    needs_fix = False
-    all_keys = sorted(set(target_by_key) | set(graph_by_key))
-    for key in all_keys:
-        target_edges = target_by_key.get(key, [])
-        graph_edges = graph_by_key.get(key, [])
-        target_counter = Counter(target_edges)
-        graph_counter = Counter(graph_edges)
-        if target_counter == graph_counter:
-            continue
-        needs_fix = True
-        missing_in_graph = list((target_counter - graph_counter).elements())
-        extra_in_graph = list((graph_counter - target_counter).elements())
-        if missing_in_graph:
-            edge = missing_in_graph[0]
-            mismatch_lines.append(
-                "[GRAPH DIAGNOSTIC] "
-                f"{snapshot_label} key={key} missing_in_graph "
-                f"(sx,sy,sz,i,j,dist)=({edge[0]}, {edge[1]}, {edge[2]}, {edge[3]}, {edge[4]}, "
-                f"{edge5_distance(edge, positions, box):.6f}) count={len(missing_in_graph)}"
-            )
-        if extra_in_graph:
-            edge = extra_in_graph[0]
-            mismatch_lines.append(
-                "[GRAPH DIAGNOSTIC] "
-                f"{snapshot_label} key={key} extra_in_graph "
-                f"(sx,sy,sz,i,j,dist)=({edge[0]}, {edge[1]}, {edge[2]}, {edge[3]}, {edge[4]}, "
-                f"{edge5_distance(edge, positions, box):.6f}) count={len(extra_in_graph)}"
+    for key in target_keys:
+        target_edges = target_by_key[key]
+        graph_edges = graph_by_key[key]
+        if len(graph_edges) < len(target_edges):
+            raise RuntimeError(
+                f"[GRAPH] {snapshot_label} key={key} graph prefix too short: "
+                f"graph_len={len(graph_edges)} target_len={len(target_edges)}"
             )
 
-    if not needs_fix:
-        return edge_index, edge_shift, False
+        for idx, (target_edge, graph_edge) in enumerate(zip(target_edges, graph_edges)):
+            if target_edge == graph_edge:
+                continue
+            mismatch_lines.append(
+                "[GRAPH DIAGNOSTIC] "
+                f"{snapshot_label} key={key} idx={idx} "
+                f"expected=(sx,sy,sz,i,j,dist)=({target_edge[0]}, {target_edge[1]}, {target_edge[2]}, {target_edge[3]}, {target_edge[4]}, "
+                f"{edge5_distance(target_edge, positions, box):.6f}) "
+                f"got=(sx,sy,sz,i,j,dist)=({graph_edge[0]}, {graph_edge[1]}, {graph_edge[2]}, {graph_edge[3]}, {graph_edge[4]}, "
+                f"{edge5_distance(graph_edge, positions, box):.6f})"
+            )
+            break
 
-    for line in mismatch_lines[:10]:
-        print(line)
-    print(
-        "[GRAPH] Replacing graph edge list with target-matrix edge list "
-        f"for {snapshot_label} so exact edge matching holds."
-    )
-    fixed_edge_index, fixed_edge_shift = build_global_edge_tensors_from_pair_edges(
-        reference_matrix.pair_edges, mapper.edge_types, edge_index.device
-    )
-    return fixed_edge_index, fixed_edge_shift, True
+    if mismatch_lines:
+        for line in mismatch_lines[:10]:
+            print(line)
+        raise RuntimeError(
+            f"[GRAPH] {snapshot_label} edge prefix mismatch. "
+            "The cutoff graph prefix does not exactly match the target matrix prefix."
+        )
 
 
 def _group_graph_edges_by_key(
@@ -179,6 +198,9 @@ def strict_edge_alignment_check(
     matrix_name: str,
     require_exact: bool = False,
 ) -> None:
+    if not require_exact:
+        return
+
     graph_edges_by_key = _group_graph_edges_by_key(
         edge_index=edge_index,
         edge_shift=edge_shift,
@@ -187,36 +209,34 @@ def strict_edge_alignment_check(
         edge_types=edge_types,
     )
 
+    target_keys = set(target_matrix.pair_edges.keys())
+    graph_keys = set(graph_edges_by_key.keys())
+    if target_keys != graph_keys:
+        missing_in_graph = sorted(target_keys - graph_keys)
+        extra_in_graph = sorted(graph_keys - target_keys)
+        raise RuntimeError(
+            f"[{matrix_name}] key-set mismatch. "
+            f"Missing in graph={missing_in_graph}, extra in graph={extra_in_graph}"
+        )
+
     for key, target_edges_t in target_matrix.pair_edges.items():
         target_edges: List[Edge5D] = [
             tuple(map(int, row)) for row in target_edges_t.t().tolist()
         ]
         graph_edges = graph_edges_by_key.get(key, [])
 
-        min_n = min(len(target_edges), len(graph_edges))
-        for idx in range(min_n):
-            if target_edges[idx] != graph_edges[idx]:
+        if len(graph_edges) < len(target_edges):
+            raise RuntimeError(
+                f"[{matrix_name}] edge prefix too short for key '{key}': "
+                f"graph_len={len(graph_edges)} target_len={len(target_edges)}"
+            )
+
+        for idx, (target_edge, graph_edge) in enumerate(zip(target_edges, graph_edges)):
+            if target_edge != graph_edge:
                 raise RuntimeError(
-                    f"[{matrix_name}] edge order mismatch for key '{key}' at idx={idx}: "
-                    f"{target_edges[idx]} != {graph_edges[idx]}"
+                    f"[{matrix_name}] edge prefix mismatch for key '{key}' at idx={idx}: "
+                    f"{target_edge} != {graph_edge}"
                 )
-
-        if require_exact and len(target_edges) != len(graph_edges):
-            raise RuntimeError(
-                f"[{matrix_name}] edge count mismatch for key '{key}': "
-                f"target={len(target_edges)} vs graph={len(graph_edges)}"
-            )
-
-    if require_exact:
-        target_keys = set(target_matrix.pair_edges.keys())
-        graph_keys = set(graph_edges_by_key.keys())
-        if target_keys != graph_keys:
-            missing_in_graph = sorted(target_keys - graph_keys)
-            missing_in_target = sorted(graph_keys - target_keys)
-            raise RuntimeError(
-                f"[{matrix_name}] key set mismatch. "
-                f"Missing in graph={missing_in_graph}, missing in target={missing_in_target}"
-            )
 
 
 def strict_reverse_edge_check(

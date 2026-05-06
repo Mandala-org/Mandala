@@ -199,7 +199,9 @@ class Config:
     precompute_edge_features: bool = True  # precompute edge features
     radial_embedding_scale: str = "none"
     apply_cutoff_to_targets: bool = True
-    require_exact_edge_match: bool = True
+    require_exact_edge_match: bool = (
+        True  # validate cutoff prefix only; never mutate edges
+    )
 
     # -------------------- hyperopt --------------------------------------
     tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
