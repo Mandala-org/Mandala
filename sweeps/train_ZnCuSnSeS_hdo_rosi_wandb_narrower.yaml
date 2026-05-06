@@ -54,7 +54,7 @@ parameters:
   cutoff-radius:
     value: 11.0
   l-max:
-    values: 6
+    value: 6
   hidden-base-dim:
     value: 64
   hidden-irreps:
