@@ -152,16 +152,9 @@ def compute_irrep_metrics(
         pred_irrep_blocks = pred_irrep_filtered.to_blocks(mapper)
         target_irrep_blocks = target_irrep_filtered.to_blocks(mapper)
 
-        sum_l1_elem = 0.0
-        sum_l2_elem = 0.0
-        total_elements = 0
-        sum_l1_block = 0.0
-        sum_l1_target_block = 0.0
         sum_l2_block_sq = 0.0
         sum_l2_target_block_sq = 0.0
         total_blocks = 0
-        sum_l1_target_full = 0.0
-        sum_l2_target_full_sq = 0.0
 
         for key in target_irrep_blocks.pair_blocks.keys():
             if key not in pred_irrep_blocks.pair_blocks:
@@ -181,42 +174,21 @@ def compute_irrep_metrics(
             targ_sel = targ_blocks_full[:target_n]
             diff = pred_sel - targ_sel
 
-            l1_error_blocks = torch.sum(torch.abs(diff), dim=(1, 2))
             l2_error_blocks_sq = torch.sum(diff**2, dim=(1, 2))
-            l1_target_blocks = torch.sum(torch.abs(targ_sel), dim=(1, 2))
             l2_target_blocks_sq = torch.sum(targ_sel**2, dim=(1, 2))
 
-            sum_l1_elem += torch.sum(l1_error_blocks).item()
-            sum_l2_elem += torch.sum(l2_error_blocks_sq).item()
-            total_elements += diff.numel()
-            sum_l1_block += torch.sum(l1_error_blocks).item()
-            sum_l1_target_block += torch.sum(l1_target_blocks).item()
             sum_l2_block_sq += torch.sum(l2_error_blocks_sq).item()
             sum_l2_target_block_sq += torch.sum(l2_target_blocks_sq).item()
             total_blocks += target_n
-            sum_l1_target_full += torch.sum(l1_target_blocks).item()
-            sum_l2_target_full_sq += torch.sum(l2_target_blocks_sq).item()
 
-        if total_elements <= 0:
+        if total_blocks <= 0:
             continue
 
-        l1_elem = sum_l1_elem / total_elements
-        l2_elem = (sum_l2_elem / total_elements) ** 0.5
-        l1_block = sum_l1_block / max(total_blocks, 1)
         l2_block = (sum_l2_block_sq / max(total_blocks, 1)) ** 0.5
-        l1_block_rel = sum_l1_block / (sum_l1_target_block + rel_eps)
         l2_block_rel = (sum_l2_block_sq**0.5) / (sum_l2_target_block_sq**0.5 + rel_eps)
-        l1_full_rel = sum_l1_elem / (sum_l1_target_full + rel_eps)
-        l2_full_rel = (sum_l2_elem**0.5) / (sum_l2_target_full_sq**0.5 + rel_eps)
 
         irrep_str = str(irrep)
-        metrics[f"{irrep_str}_l1_elem"] = l1_elem
-        metrics[f"{irrep_str}_l2_elem"] = l2_elem
-        metrics[f"{irrep_str}_l1_block"] = l1_block
-        metrics[f"{irrep_str}_l1_block_rel"] = l1_block_rel
-        metrics[f"{irrep_str}_l2_block"] = l2_block
+        metrics[f"{irrep_str}_l2_block_abs"] = l2_block
         metrics[f"{irrep_str}_l2_block_rel"] = l2_block_rel
-        metrics[f"{irrep_str}_l1_full_rel"] = l1_full_rel
-        metrics[f"{irrep_str}_l2_full_rel"] = l2_full_rel
 
     return metrics

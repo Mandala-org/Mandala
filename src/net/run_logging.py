@@ -161,14 +161,8 @@ def log_per_irrep_metrics(
         irrep_str = str(irrep)
         print(f"    {metric_prefix}{irrep_str:4s}:")
         for suffix, label in (
-            ("l1_elem", "L1 elem"),
-            ("l2_elem", "L2 elem"),
-            ("l1_block", "L1 block"),
-            ("l1_block_rel", "L1 block rel"),
-            ("l2_block", "L2 block"),
+            ("l2_block_abs", "L2 block abs"),
             ("l2_block_rel", "L2 block rel"),
-            ("l1_full_rel", "L1 full rel"),
-            ("l2_full_rel", "L2 full rel"),
         ):
             value = per_irrep_metrics.get(f"{irrep_str}_{suffix}")
             if value is not None:
@@ -236,14 +230,8 @@ def build_wandb_per_irrep_metrics_log(
         irrep_str = str(irrep)
         prefix_ir = f"{metric_prefix}{irrep_str}"
         for suffix in (
-            "l1_elem",
-            "l2_elem",
-            "l1_block",
-            "l1_block_rel",
-            "l2_block",
+            "l2_block_abs",
             "l2_block_rel",
-            "l1_full_rel",
-            "l2_full_rel",
         ):
             payload[f"irrep_metrics/{prefix_ir}_{suffix}"] = per_irrep_metrics.get(
                 f"{irrep_str}_{suffix}", 0.0

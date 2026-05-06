@@ -28,7 +28,7 @@ from net.artifacts import (
     ArtifactCheckpointCallback,
     RevertOnSpikeCallback,
 )  # noqa: E402
-from net.silicon_study_logging import (  # noqa: E402
+from net.run_logging import (  # noqa: E402
     log_config,
     log_cutoff_application,
     log_graph,

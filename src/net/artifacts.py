@@ -23,7 +23,7 @@ from net.observable_metrics import (
     build_observable_predictions,
     build_observable_trace_alignment,
 )
-from net.silicon_study_logging import (
+from net.run_logging import (
     MATRIX_ALIAS,
     IRREP_PREFIX_BY_MATRIX,
     build_wandb_detailed_metrics_log,
