@@ -28,6 +28,7 @@ from net.artifacts import (  # noqa: E402
     compute_dos_from_eigenvalues,
     compute_generalized_eigenvalues,
 )
+from analysis import evaluation as analysis_eval  # noqa: E402
 from utils.units import HARTREE_TO_EV  # noqa: E402
 
 DEFAULT_PATH_STRING = "GXWKGLUWLK,UX"
@@ -727,7 +728,7 @@ def main() -> None:
 
     t_path = time.perf_counter()
     _log("[2/6] Building k-path ...")
-    openmx_path = _band_path_from_openmx_info(info_path)
+    openmx_path = analysis_eval.band_path_from_openmx_info(info_path)
     path_string = args.path_string
     if openmx_path is not None:
         openmx_path_string, openmx_special_points = openmx_path
@@ -771,7 +772,7 @@ def main() -> None:
     _log("[4/6] Computing DOS and Fermi level ...")
     if args.dos_method == "kmesh-average":
         grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
-            _compute_kmesh_average_dos_and_fermi(
+            analysis_eval.compute_kmesh_average_dos_and_fermi(
                 snapshot,
                 kmesh_spec=args.dos_kmesh,
                 chunk_size=args.chunk_size,
@@ -783,7 +784,7 @@ def main() -> None:
         _log("[4/6] Using k-mesh-averaged eigenvalue DOS.")
     else:
         grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
-            _compute_gaussian_dos_from_eigenvalues_and_fermi(
+            analysis_eval.compute_gaussian_dos_from_eigenvalues_and_fermi(
                 snapshot,
                 psd_cleanup=args.overlap_psd_cleanup,
                 allow_jitter=args.overlap_jitter,
@@ -791,7 +792,7 @@ def main() -> None:
             )
         )
     dos_path = output_dir / "dos.png"
-    _save_dos_plot(
+    analysis_eval.save_dos_plot(
         grid_ev,
         dos,
         output_path=dos_path,
@@ -809,7 +810,7 @@ def main() -> None:
     dos_reference_path = info_path.with_name(f"{info_path.stem}.DOS.Tetrahedron")
     if dos_reference_path.exists():
         _log(f"[4/6] Loading DOS reference from {dos_reference_path} ...")
-        dos_reference = _load_dos_reference(dos_reference_path)
+        dos_reference = analysis_eval.load_dos_reference(dos_reference_path)
 
     cache_path = output_dir / "band_structure.pt"
     if cache_path.exists() and not args.force_recompute:
@@ -883,7 +884,7 @@ def main() -> None:
     plot_path = output_dir / "band_structure.png"
     t_plot = time.perf_counter()
     _log("[6/6] Saving plot and serialized payload ...")
-    _save_band_structure_plot(
+    analysis_eval.save_band_structure_plot(
         band_structure,
         plot_path,
         title=args.plot_title,
@@ -892,7 +893,7 @@ def main() -> None:
         line_alpha=args.line_alpha,
     )
     band_dos_path = output_dir / "band_structure_with_dos.png"
-    _save_band_and_dos_plot(
+    analysis_eval.save_band_and_dos_plot(
         band_structure,
         dos_grid=grid_ev,
         dos=dos,

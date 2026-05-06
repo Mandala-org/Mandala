@@ -35,6 +35,7 @@ from data.structure_inference import (  # noqa: E402
 )
 from data.kspace_snapshot import build_band_path  # noqa: E402
 from data.kspace_snapshot import shiftspace_to_kspace_dense  # noqa: E402
+from analysis import evaluation as analysis_eval  # noqa: E402
 from net.artifacts import _as_dense, _crop_dense_to_max_atoms  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
@@ -1186,7 +1187,7 @@ def _run_snapshot_case(
     gt_snapshot = _build_snapshot_from_matrices(
         gt_mats, positions=positions, box=box, info=info
     )
-    resolved_path_string, special_points = _resolve_band_path(
+    resolved_path_string, special_points = analysis_eval.resolve_band_path(
         info_path, args.path_string
     )
     overlap_for_eigs = (
@@ -1219,7 +1220,7 @@ def _run_snapshot_case(
         if args.density_clim is not None
         else (args.plot_clim if args.plot_clim is not None else 0.1)
     )
-    _save_comparison_plot(
+    analysis_eval.save_comparison_plot(
         pred_mats["hamiltonian"],
         gt_mats["hamiltonian"],
         output_dir / "hamiltonian_first_atoms_comparison.png",
@@ -1227,7 +1228,7 @@ def _run_snapshot_case(
         max_atoms=args.max_atoms,
         clim=ham_clim,
     )
-    _save_correlation_plot(
+    analysis_eval.save_correlation_plot(
         pred_mats["hamiltonian"],
         gt_mats["hamiltonian"],
         output_dir / "hamiltonian_correlation.png",
@@ -1237,7 +1238,7 @@ def _run_snapshot_case(
         seed=args.correlation_sample_seed,
     )
     if "density" in pred_mats:
-        _save_comparison_plot(
+        analysis_eval.save_comparison_plot(
             pred_mats["density"],
             gt_mats["density"],
             output_dir / "density_first_atoms_comparison.png",
@@ -1245,7 +1246,7 @@ def _run_snapshot_case(
             max_atoms=args.max_atoms,
             clim=density_clim,
         )
-        _save_correlation_plot(
+        analysis_eval.save_correlation_plot(
             pred_mats["density"],
             gt_mats["density"],
             output_dir / "density_correlation.png",
@@ -1259,7 +1260,7 @@ def _run_snapshot_case(
             "--- Density prediction unavailable; skipping density comparison plot ---"
         )
     if "overlap" in pred_mats:
-        _save_correlation_plot(
+        analysis_eval.save_correlation_plot(
             pred_mats["overlap"],
             gt_mats["overlap"],
             output_dir / "overlap_correlation.png",
@@ -1282,7 +1283,7 @@ def _run_snapshot_case(
             else None
         )
     )
-    dos_metrics = _save_dos_comparison_plot(
+    dos_metrics = analysis_eval.save_dos_comparison_plot(
         pred_mats["hamiltonian"],
         overlap_for_eigs,
         gt_mats["hamiltonian"],
@@ -1300,9 +1301,9 @@ def _run_snapshot_case(
         overlap_jitter=args.overlap_jitter,
     )
 
-    gt_band = _compute_or_load_band_structure(
+    gt_band = analysis_eval.compute_or_load_band_structure(
         gt_snapshot,
-        _band_cache_path(
+        analysis_eval.band_cache_path(
             output_dir,
             kind="gt",
             use_gt_overlap_for_eigs=args.use_gt_overlap_for_eigs,
@@ -1316,9 +1317,9 @@ def _run_snapshot_case(
         overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
     )
-    pred_band = _compute_or_load_band_structure(
+    pred_band = analysis_eval.compute_or_load_band_structure(
         pred_band_snapshot,
-        _band_cache_path(
+        analysis_eval.band_cache_path(
             output_dir,
             kind="pred",
             use_gt_overlap_for_eigs=args.use_gt_overlap_for_eigs,
@@ -1332,7 +1333,7 @@ def _run_snapshot_case(
         overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
     )
-    _save_band_structure_comparison_plot(
+    analysis_eval.save_band_structure_comparison_plot(
         gt_band,
         pred_band,
         output_dir / "band_structure_comparison.png",
@@ -1377,7 +1378,7 @@ def _run_cif_case(
         raise ValueError(
             "CIF mode now requires --reference-info-path so the OpenMX Band.kpath can be reused; the hardcoded silicon FCC fallback was removed."
         )
-    resolved_path_string, special_points = _resolve_band_path(
+    resolved_path_string, special_points = analysis_eval.resolve_band_path(
         args.reference_info_path, args.path_string
     )
     x = build_model_input_from_structure(
@@ -1413,7 +1414,7 @@ def _run_cif_case(
         if args.density_clim is not None
         else (args.plot_clim if args.plot_clim is not None else 0.1)
     )
-    _save_prediction_plot(
+    analysis_eval.save_prediction_plot(
         pred_mats["hamiltonian"],
         output_dir / "hamiltonian_first_atoms_prediction.png",
         title=f"Hamiltonian prediction: {title}",
@@ -1421,7 +1422,7 @@ def _run_cif_case(
         clim=ham_clim,
     )
     if "density" in pred_mats:
-        _save_prediction_plot(
+        analysis_eval.save_prediction_plot(
             pred_mats["density"],
             output_dir / "density_first_atoms_prediction.png",
             title=f"Density prediction: {title}",
@@ -1446,7 +1447,7 @@ def _run_cif_case(
             "CIF evaluation needs a predicted overlap matrix for DOS/band plots."
         )
     num_electrons_pred = float(pred_snapshot_for_eigs.get_number_of_electrons().item())
-    _save_dos_prediction_plot(
+    analysis_eval.save_dos_prediction_plot(
         pred_mats["hamiltonian"],
         pred_snapshot_for_eigs.overlap,
         output_dir / "dos_prediction.png",
@@ -1459,7 +1460,7 @@ def _run_cif_case(
         overlap_psd_cleanup=args.overlap_psd_cleanup,
         overlap_jitter=args.overlap_jitter,
     )
-    pred_band = _compute_or_load_band_structure(
+    pred_band = analysis_eval.compute_or_load_band_structure(
         pred_snapshot_for_eigs,
         output_dir / "band_structure_pred.pt",
         path_string=resolved_path_string,
@@ -1471,7 +1472,7 @@ def _run_cif_case(
         overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
     )
-    _save_band_structure_prediction_plot(
+    analysis_eval.save_band_structure_prediction_plot(
         pred_band,
         output_dir / "band_structure_prediction.png",
         title=f"Band structure prediction: {title}",
