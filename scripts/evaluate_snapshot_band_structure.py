@@ -112,14 +112,14 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument(
         "--dos-sigma",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Gaussian broadening sigma in eV for the DOS plot.",
     )
     parser.add_argument(
         "--dos-method",
         type=str,
         default="kmesh-average",
-        choices=["kmesh-average", "openmx-tetrahedron", "gaussian"],
+        choices=["kmesh-average", "gaussian"],
         help="DOS construction method. kmesh-average is the default.",
     )
     parser.add_argument(
@@ -160,17 +160,6 @@ def _discover_snapshot_paths(
     if not info_candidate.exists():
         raise FileNotFoundError(f"Info file not found: {info_candidate}")
     return matrix_candidate, info_candidate
-
-
-def _silicon_fcc_special_points() -> dict[str, list[float]]:
-    return {
-        "G": [0.0, 0.0, 0.0],
-        "X": [0.0, 0.5, 0.5],
-        "W": [0.25, 0.75, 0.5],
-        "K": [0.375, 0.75, 0.375],
-        "L": [0.5, 0.5, 0.5],
-        "U": [0.25, 0.625, 0.625],
-    }
 
 
 def _openmx_band_segments(
@@ -365,7 +354,7 @@ def _fractional_kmesh_points(
     return torch.stack(points, dim=0)
 
 
-def _compute_gaussian_dos_and_fermi(
+def _compute_gaussian_dos_from_eigenvalues_and_fermi(
     snapshot: Snapshot,
     *,
     psd_cleanup: bool,
@@ -398,7 +387,7 @@ def _compute_gaussian_dos_and_fermi(
     return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
 
 
-def _compute_kmesh_dos_and_fermi(
+def _compute_kmesh_average_dos_and_fermi(
     snapshot: Snapshot,
     *,
     kmesh_spec: str,
@@ -445,24 +434,6 @@ def _compute_kmesh_dos_and_fermi(
         e_max=e_max,
     )
     dos = dos / nk
-    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
-    dos_electron_target = _effective_dos_electron_target(snapshot)
-    fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
-    return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
-
-
-def _compute_tetrahedron_dos_and_fermi(
-    snapshot: Snapshot,
-    *,
-    info_path: Path,
-) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
-    dos_path = info_path.with_name(f"{info_path.stem}.DOS.Tetrahedron")
-    if not dos_path.exists():
-        raise FileNotFoundError(
-            f"OpenMX tetrahedron DOS file not found: {dos_path}. "
-            "Use --dos-method gaussian if you want the broadened-eigenvalue fallback."
-        )
-    grid_ev, dos, _cumulative = _load_dos_reference(dos_path)
     num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
     dos_electron_target = _effective_dos_electron_target(snapshot)
     fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
@@ -718,39 +689,6 @@ def _effective_dos_electron_target(snapshot: Snapshot) -> float | None:
     return num_electrons
 
 
-def _compute_dos_and_fermi(
-    snapshot: Snapshot,
-    *,
-    psd_cleanup: bool,
-    allow_jitter: bool,
-    dos_sigma_ev: float,
-) -> tuple[torch.Tensor, torch.Tensor, float | None, float | None, float | None]:
-    eigenvalues = compute_generalized_eigenvalues(
-        snapshot.hamiltonian,
-        snapshot.overlap,
-        psd_cleanup=psd_cleanup,
-        allow_jitter=allow_jitter,
-    )
-    eigenvalues_ev = eigenvalues * HARTREE_TO_EV
-    eig_min = float(torch.min(eigenvalues_ev).item())
-    eig_max = float(torch.max(eigenvalues_ev).item())
-    span = max(eig_max - eig_min, 1e-6)
-    margin = 0.1 * span + 0.05
-    e_min = eig_min - margin
-    e_max = eig_max + margin
-    grid_ev, dos = compute_dos_from_eigenvalues(
-        eigenvalues_ev,
-        sigma=dos_sigma_ev,
-        bin_width=0.1,
-        e_min=e_min,
-        e_max=e_max,
-    )
-    num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
-    dos_electron_target = _effective_dos_electron_target(snapshot)
-    fermi_level_ev = _fermi_level_from_dos(grid_ev, dos, dos_electron_target)
-    return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
-
-
 def main() -> None:
     t0 = time.perf_counter()
     args = setup_argparse()
@@ -791,14 +729,16 @@ def main() -> None:
     _log("[2/6] Building k-path ...")
     openmx_path = _band_path_from_openmx_info(info_path)
     path_string = args.path_string
-    special_points = _silicon_fcc_special_points()
-    path_source = "hardcoded silicon FCC points"
     if openmx_path is not None:
         openmx_path_string, openmx_special_points = openmx_path
-        special_points = openmx_special_points
-        path_source = "OpenMX Band.kpath points"
         if args.path_string == DEFAULT_PATH_STRING:
             path_string = openmx_path_string
+        special_points = openmx_special_points
+        path_source = "OpenMX Band.kpath points"
+    else:
+        raise ValueError(
+            "OpenMX Band.kpath is required; the hardcoded silicon FCC fallback was removed."
+        )
 
     (
         fractional_kpoints,
@@ -831,7 +771,7 @@ def main() -> None:
     _log("[4/6] Computing DOS and Fermi level ...")
     if args.dos_method == "kmesh-average":
         grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
-            _compute_kmesh_dos_and_fermi(
+            _compute_kmesh_average_dos_and_fermi(
                 snapshot,
                 kmesh_spec=args.dos_kmesh,
                 chunk_size=args.chunk_size,
@@ -841,29 +781,9 @@ def main() -> None:
             )
         )
         _log("[4/6] Using k-mesh-averaged eigenvalue DOS.")
-    elif args.dos_method == "openmx-tetrahedron":
-        try:
-            grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
-                _compute_tetrahedron_dos_and_fermi(
-                    snapshot,
-                    info_path=info_path,
-                )
-            )
-            _log("[4/6] Using OpenMX tetrahedron DOS reference.")
-        except FileNotFoundError as exc:
-            _log(f"[4/6] {exc}")
-            _log("[4/6] Falling back to Gaussian-broadened eigenvalue DOS.")
-            grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
-                _compute_gaussian_dos_and_fermi(
-                    snapshot,
-                    psd_cleanup=args.overlap_psd_cleanup,
-                    allow_jitter=args.overlap_jitter,
-                    dos_sigma_ev=args.dos_sigma,
-                )
-            )
     else:
         grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev = (
-            _compute_gaussian_dos_and_fermi(
+            _compute_gaussian_dos_from_eigenvalues_and_fermi(
                 snapshot,
                 psd_cleanup=args.overlap_psd_cleanup,
                 allow_jitter=args.overlap_jitter,
