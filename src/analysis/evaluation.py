@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import sys
 import multiprocessing as mp
 import re
 from pathlib import Path
@@ -30,6 +31,7 @@ from utils.units import HARTREE_TO_EV
 DEFAULT_PATH_STRING = "GXWKGLUWLK,UX"
 
 _BAND_MP_STATE: dict[str, Any] | None = None
+_TETRA_MP_STATE: dict[str, Any] | None = None
 
 
 def openmx_band_segments(
@@ -279,6 +281,27 @@ def _tetrahedron_cdf_pdf(
     return cdf, pdf
 
 
+def _tetra_worker_init() -> None:
+    torch.set_num_threads(1)
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        pass
+
+
+def _tetra_batch_worker(task: tuple[int, int]) -> tuple[torch.Tensor, torch.Tensor]:
+    if _TETRA_MP_STATE is None:
+        raise RuntimeError("Tetrahedron worker state is not initialized.")
+    start, stop = task
+    batch = _TETRA_MP_STATE["tet_energies"][start:stop]
+    cdf_batch, pdf_batch = _tetrahedron_cdf_pdf(batch, _TETRA_MP_STATE["grid_ev"])
+    weight = float(_TETRA_MP_STATE["weight"])
+    return (
+        weight * torch.sum(cdf_batch, dim=0).cpu(),
+        weight * torch.sum(pdf_batch, dim=0).cpu(),
+    )
+
+
 def compute_tetrahedron_dos_from_kmesh_eigenvalues(
     eigenvalues_ev: torch.Tensor,
     kmesh: tuple[int, int, int],
@@ -289,7 +312,11 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
     e_max: float | None = None,
     spin_factor: float = 1.0,
     tetra_batch_size: int = 8192,
+    num_workers: int = 1,
+    show_progress: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    global _TETRA_MP_STATE
+
     nx, ny, nz = kmesh
     n_cells = nx * ny * nz
 
@@ -368,14 +395,58 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
     cumulative = torch.zeros_like(grid_ev)
     weight = float(spin_factor) / float(6 * n_cells)
 
-    for start in range(0, tet_energies.shape[0], tetra_batch_size):
-        stop = min(start + tetra_batch_size, tet_energies.shape[0])
-        batch = tet_energies[start:stop]
-        cdf_batch, pdf_batch = _tetrahedron_cdf_pdf(batch, grid_ev)
-        cumulative = cumulative + weight * torch.sum(cdf_batch, dim=0)
-        dos = dos + weight * torch.sum(pdf_batch, dim=0)
+    tasks = [
+        (start, min(start + tetra_batch_size, tet_energies.shape[0]))
+        for start in range(0, tet_energies.shape[0], tetra_batch_size)
+    ]
+    worker_count = max(1, min(int(num_workers), len(tasks)))
 
-    return grid_ev, dos, cumulative
+    if worker_count <= 1 or len(tasks) <= 1:
+        iterator: Any = range(0, tet_energies.shape[0], tetra_batch_size)
+        if show_progress and tet_energies.shape[0] > tetra_batch_size:
+            try:
+                from tqdm.auto import tqdm
+            except ImportError:  # pragma: no cover - optional dependency
+                tqdm = None
+            if tqdm is not None:
+                iterator = tqdm(iterator, total=len(tasks), desc="Tetrahedron batches")
+        for start in iterator:
+            stop = min(start + tetra_batch_size, tet_energies.shape[0])
+            batch = tet_energies[start:stop]
+            cdf_batch, pdf_batch = _tetrahedron_cdf_pdf(batch, grid_ev)
+            cumulative = cumulative + weight * torch.sum(cdf_batch, dim=0)
+            dos = dos + weight * torch.sum(pdf_batch, dim=0)
+        return grid_ev, dos, cumulative
+
+    try:
+        ctx = mp.get_context("fork")
+    except ValueError as exc:  # pragma: no cover - platform specific
+        raise RuntimeError(
+            "multiprocessing fork context is required for parallel tetrahedron batches"
+        ) from exc
+
+    _TETRA_MP_STATE = {
+        "tet_energies": tet_energies.detach().cpu(),
+        "grid_ev": grid_ev.detach().cpu(),
+        "weight": weight,
+    }
+    try:
+        try:
+            from tqdm.auto import tqdm
+        except ImportError:  # pragma: no cover - optional dependency
+            tqdm = None
+        with ctx.Pool(worker_count, initializer=_tetra_worker_init) as pool:
+            result_iter = pool.imap(_tetra_batch_worker, tasks, chunksize=1)
+            if show_progress and tqdm is not None and len(tasks) > 1:
+                result_iter = tqdm(
+                    result_iter, total=len(tasks), desc="Tetrahedron batches"
+                )
+            for cdf_part, pdf_part in result_iter:
+                cumulative = cumulative + cdf_part
+                dos = dos + pdf_part
+        return grid_ev, dos, cumulative
+    finally:
+        _TETRA_MP_STATE = None
 
 
 def _kmesh_eigenvalues(
@@ -472,7 +543,10 @@ def compute_tetrahedron_dos_and_fermi(
     grid_ev: torch.Tensor | None = None,
     e_min: float | None = None,
     e_max: float | None = None,
+    show_progress: bool | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
     eigenvalues_ev, _fractional_kpoints = _kmesh_eigenvalues(
         snapshot,
         kmesh_spec=kmesh_spec,
@@ -490,6 +564,8 @@ def compute_tetrahedron_dos_and_fermi(
         e_min=e_min,
         e_max=e_max,
         spin_factor=infer_spin_factor(snapshot),
+        num_workers=num_workers,
+        show_progress=show_progress,
     )
     num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
     dos_electron_target = effective_dos_electron_target(snapshot)
@@ -1135,8 +1211,11 @@ def save_tetrahedron_dos_comparison_plot(
     overlap_psd_cleanup: bool = False,
     overlap_jitter: bool = False,
     bin_width: float = 0.05,
+    show_progress: bool | None = None,
 ) -> dict[str, float]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
     grid_ev = torch.linspace(
         float(energy_min),
         float(energy_max),
@@ -1155,6 +1234,7 @@ def save_tetrahedron_dos_comparison_plot(
             grid_ev=grid_ev,
             e_min=energy_min,
             e_max=energy_max,
+            show_progress=show_progress,
         )
     )
     grid_pred, dos_pred, num_electrons_pred, dos_target_pred, fermi_pred = (
@@ -1169,6 +1249,7 @@ def save_tetrahedron_dos_comparison_plot(
             grid_ev=grid_ev,
             e_min=energy_min,
             e_max=energy_max,
+            show_progress=show_progress,
         )
     )
 
@@ -1267,8 +1348,11 @@ def save_tetrahedron_dos_prediction_plot(
     overlap_psd_cleanup: bool = False,
     overlap_jitter: bool = False,
     bin_width: float = 0.05,
+    show_progress: bool | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
     grid_ev = torch.linspace(
         float(energy_min),
         float(energy_max),
@@ -1286,6 +1370,7 @@ def save_tetrahedron_dos_prediction_plot(
         grid_ev=grid_ev,
         e_min=energy_min,
         e_max=energy_max,
+        show_progress=show_progress,
     )
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
     ax.plot(grid.cpu().numpy(), dos.cpu().numpy(), lw=1.6, color="#1f5aa6")
