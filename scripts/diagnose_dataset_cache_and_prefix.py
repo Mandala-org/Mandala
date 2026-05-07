@@ -94,6 +94,11 @@ def setup_argparse() -> argparse.Namespace:
         help="Enable the exact prefix check during dataset build.",
     )
     parser.add_argument(
+        "--apply-cutoff-to-targets",
+        action="store_true",
+        help="Filter target matrices before alignment, matching the benchmark path.",
+    )
+    parser.add_argument(
         "--key",
         type=str,
         default="Zn-Se",
@@ -164,7 +169,10 @@ def _key_prefix_summary(
     cfg: Config,
     *,
     key: str,
+    apply_cutoff_to_targets: bool,
 ) -> dict[str, Any]:
+    if apply_cutoff_to_targets and cfg.cutoff_radius is not None:
+        snapshot = snapshot.filter_by_distance(cfg.cutoff_radius)
     edge_index, edge_shift, _edge_type_idx, *_ = compute_graph_features(
         positions=snapshot.positions,
         box=snapshot.box,
@@ -242,7 +250,7 @@ def _build_cfg(
         require_exact_edge_match=require_exact_edge_match,
         precompute_edge_features=True,
         separate_shifted_self=True,
-        apply_cutoff_to_targets=False,
+        apply_cutoff_to_targets=bool(args.apply_cutoff_to_targets),
         shuffle_snapshot_load_order=False,
         matrix_targets=["hamiltonian", "overlap", "density"],
         train_target="matrix",
@@ -347,10 +355,20 @@ def main() -> None:
         "preprocessed_cache_file": preprocessed_cache_file,
         "snapshot_cache_file_exists_after_first_build": cache_file_exists,
         "fresh_prefix_summary": _key_prefix_summary(
-            fresh_snapshot, mapper, cfg_fresh, key=args.key
+            fresh_snapshot,
+            mapper,
+            cfg_fresh,
+            key=args.key,
+            apply_cutoff_to_targets=bool(args.apply_cutoff_to_targets),
         ),
         "cached_prefix_summary": (
-            _key_prefix_summary(cached_snapshot, mapper, cfg_fresh, key=args.key)
+            _key_prefix_summary(
+                cached_snapshot,
+                mapper,
+                cfg_fresh,
+                key=args.key,
+                apply_cutoff_to_targets=bool(args.apply_cutoff_to_targets),
+            )
             if cached_snapshot is not None
             else None
         ),
@@ -359,6 +377,7 @@ def main() -> None:
             if cached_snapshot is not None
             else None
         ),
+        "apply_cutoff_to_targets": bool(args.apply_cutoff_to_targets),
         "dataset_first_build": ds_first_status,
         "dataset_second_build": ds_second_status,
         "dataset_sample_summary": dataset_summary,
