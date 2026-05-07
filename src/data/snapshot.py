@@ -54,6 +54,31 @@ from core.periodic_fourier import shiftspace_to_kspace_dense
 __all__ = ["Snapshot"]
 
 
+def _compute_atom_image_shifts(
+    reference_positions: torch.Tensor,
+    target_positions: torch.Tensor,
+    box: torch.Tensor,
+    *,
+    atol: float = 1.0e-4,
+) -> torch.Tensor:
+    if reference_positions.shape != target_positions.shape:
+        raise ValueError(
+            "reference_positions and target_positions must have the same shape"
+        )
+    if box.shape != torch.Size([3, 3]):
+        raise ValueError(f"box must have shape (3, 3), got {tuple(box.shape)}")
+    inv_box = torch.linalg.inv(box)
+    delta_frac = (target_positions - reference_positions) @ inv_box
+    atom_shifts = torch.round(delta_frac)
+    residual = delta_frac - atom_shifts
+    if float(torch.max(torch.abs(residual)).item()) > atol:
+        raise RuntimeError(
+            "Atom positions are not related by integer lattice shifts within tolerance "
+            f"{atol}. max_residual={float(torch.max(torch.abs(residual)).item()):.6e}"
+        )
+    return atom_shifts.to(dtype=torch.long)
+
+
 class Snapshot:
     """Bundle H, S, D for one configuration and provide physics helpers."""
 
@@ -230,6 +255,26 @@ class Snapshot:
             new_ham,
             new_ovl,
             new_den,
+            positions=self.positions,
+            forces=self.forces,
+            box=self.box,
+            stress=self.stress,
+            matrix_path=self.matrix_path,
+            info_path=self.info_path,
+            cutoff_radius=self.cutoff_radius,
+            cfg=self.cfg,
+            info=self.info,
+        )
+
+    def relabel_atom_images(self, atom_image_shifts: torch.Tensor) -> "Snapshot":
+        """
+        Relabel all matrix edge shifts to match a different per-atom periodic-image
+        convention.
+        """
+        return Snapshot(
+            self.hamiltonian.relabel_atom_images(atom_image_shifts),
+            self.overlap.relabel_atom_images(atom_image_shifts),
+            self.density.relabel_atom_images(atom_image_shifts),
             positions=self.positions,
             forces=self.forces,
             box=self.box,
@@ -986,8 +1031,16 @@ class Snapshot:
                     f"OpenMX atoms={atoms[:8]}... (n={len(atoms)}), "
                     f"CIF atoms={cif_atoms[:8]}... (n={len(cif_atoms)})"
                 )
-            snap.positions = torch.tensor(cif.get_positions(), dtype=dtype)
-            snap.box = torch.tensor(cif.cell.array, dtype=dtype)
+            cif_positions = torch.tensor(cif.get_positions(), dtype=dtype)
+            cif_box = torch.tensor(cif.cell.array, dtype=dtype)
+            atom_shifts = _compute_atom_image_shifts(
+                info.positions.to(dtype=dtype),
+                cif_positions,
+                cif_box,
+            )
+            snap = snap.relabel_atom_images(atom_shifts)
+            snap.positions = cif_positions
+            snap.box = cif_box
         elif cfg is not None and getattr(
             cfg, "allow_openmx_positions_box_from_out", False
         ):
