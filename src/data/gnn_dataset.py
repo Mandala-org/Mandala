@@ -44,11 +44,37 @@ from data.snapshot import Snapshot
 from tqdm.auto import tqdm
 
 
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v1"
+SNAPSHOT_CACHE_VERSION = "v2"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v2"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
     return json.dumps(mapper.orbital_cfg.to_dict(), sort_keys=True)
+
+
+def _stat_payload(path: Path | None) -> dict[str, str | int | None]:
+    if path is None or not path.exists():
+        return {
+            "path": None,
+            "mtime_ns": None,
+            "size": None,
+        }
+    stat = path.stat()
+    return {
+        "path": str(path.resolve()),
+        "mtime_ns": int(stat.st_mtime_ns),
+        "size": int(stat.st_size),
+    }
+
+
+def _geometry_source_payload(info_path: Path, cfg: Config) -> dict[str, object]:
+    cif_path = info_path.with_suffix(".cif")
+    return {
+        "allow_openmx_positions_box_from_out": bool(
+            getattr(cfg, "allow_openmx_positions_box_from_out", False)
+        ),
+        "cif": _stat_payload(cif_path),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -150,19 +176,16 @@ class E3GNNDataset(Dataset):
         if snapshot_cache_dir is None:
             return None
         cache_dir = Path(snapshot_cache_dir).expanduser()
-        mat_stat = matrix_path.stat()
-        info_stat = info_path.stat()
-        key = "|".join(
-            [
-                str(matrix_path.resolve()),
-                str(info_path.resolve()),
-                self.convention,
-                str(self.dtype),
-                str(mat_stat.st_mtime_ns),
-                str(mat_stat.st_size),
-                str(info_stat.st_mtime_ns),
-                str(info_stat.st_size),
-            ]
+        key = json.dumps(
+            {
+                "version": SNAPSHOT_CACHE_VERSION,
+                "matrix": _stat_payload(matrix_path),
+                "info": _stat_payload(info_path),
+                "geometry": _geometry_source_payload(info_path, self.cfg),
+                "convention": self.convention,
+                "dtype": str(self.dtype),
+            },
+            sort_keys=True,
         )
         key_hash = hashlib.md5(key.encode("utf-8")).hexdigest()
         return cache_dir / f"{matrix_path.stem}_{key_hash}.pt"
@@ -176,16 +199,11 @@ class E3GNNDataset(Dataset):
         if snapshot_cache_dir is None:
             return None
         cache_root = Path(snapshot_cache_dir).expanduser() / "preprocessed_samples"
-        mat_stat = matrix_path.stat()
-        info_stat = info_path.stat()
         key_payload = {
             "version": PREPROCESSED_SAMPLE_CACHE_VERSION,
-            "matrix_path": str(matrix_path.resolve()),
-            "info_path": str(info_path.resolve()),
-            "matrix_mtime_ns": mat_stat.st_mtime_ns,
-            "matrix_size": mat_stat.st_size,
-            "info_mtime_ns": info_stat.st_mtime_ns,
-            "info_size": info_stat.st_size,
+            "matrix": _stat_payload(matrix_path),
+            "info": _stat_payload(info_path),
+            "geometry": _geometry_source_payload(info_path, self.cfg),
             "orbital_cfg": _serialize_orbital_cfg_key(self.mapper),
             "convention": self.convention,
             "l_max": int(self.cfg.l_max),
