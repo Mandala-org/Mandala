@@ -333,6 +333,49 @@ class BlockMatrix:
             basis=self.basis,
         )
 
+    def relabel_atom_images(self, atom_image_shifts: torch.Tensor) -> "BlockMatrix":
+        """
+        Relabel edge shifts to a different per-atom periodic image convention.
+
+        ``atom_image_shifts[i]`` is the integer lattice shift that maps atom ``i``
+        from the old convention to the new one.
+        """
+        if atom_image_shifts.ndim != 2 or atom_image_shifts.shape[1] != 3:
+            raise ValueError(
+                "atom_image_shifts must have shape (n_atoms, 3), got "
+                f"{tuple(atom_image_shifts.shape)}"
+            )
+        if atom_image_shifts.shape[0] != len(self.atoms):
+            raise ValueError(
+                "atom_image_shifts length must match number of atoms: "
+                f"{atom_image_shifts.shape[0]} != {len(self.atoms)}"
+            )
+
+        atom_image_shifts = atom_image_shifts.to(dtype=torch.long)
+        relabeled_blocks = {k: v for k, v in self.pair_blocks.items()}
+        relabeled_edges: Dict[PairKey, torch.Tensor] = {}
+        relabeled_lookup: Dict[Tuple[int, int], Tuple[PairKey, int]] = {}
+
+        for key, edges in self.pair_edges.items():
+            new_edges = edges.clone()
+            src = edges[3].to(dtype=torch.long)
+            dst = edges[4].to(dtype=torch.long)
+            shift_delta = atom_image_shifts[src] - atom_image_shifts[dst]
+            new_edges[:3] = new_edges[:3] + shift_delta.T
+            relabeled_edges[key] = new_edges
+            for idx, (sx, sy, sz, i, j) in enumerate(new_edges.t().tolist()):
+                relabeled_lookup[(sx, sy, sz, i, j)] = (key, idx)
+
+        return BlockMatrix(
+            atoms=self.atoms,
+            atom_counts=self.atom_counts,
+            pair_blocks=relabeled_blocks,
+            pair_edges=relabeled_edges,
+            lookup=relabeled_lookup,
+            orbital_cfg=self.orbital_cfg,
+            basis=self.basis,
+        )
+
     # ------------------------------------------------------------------ arithmetic
     # private helper ------------------------------------------------------------
     def _align_with(self, other: "BlockMatrix") -> Tuple["BlockMatrix", "BlockMatrix"]:

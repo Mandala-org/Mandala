@@ -92,3 +92,57 @@ def test_compute_graph_features():
     assert torch.allclose(
         edge_sh[:num_self_edges, 1:], torch.zeros_like(edge_sh[:num_self_edges, 1:])
     )
+
+
+def test_compute_graph_features_is_invariant_under_atom_image_relabeling():
+    cfg = Config(
+        cutoff_radius=3.0,
+        n_radial=5,
+        safety_checks=True,
+    )
+    sh_irreps = Irreps("1x0e + 1x1o")
+    edge_type2idx = {"H-H": 0}
+    atoms = ("H", "H")
+    box = torch.eye(3) * 10.0
+
+    pos_ref = torch.tensor([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    pos_shifted = torch.tensor([[0.0, 0.0, 0.0], [12.0, 0.0, 0.0]])
+    atom_image_shifts = torch.tensor([[0, 0, 0], [1, 0, 0]], dtype=torch.long)
+
+    out_ref = compute_graph_features(pos_ref, box, atoms, cfg, sh_irreps, edge_type2idx)
+    out_shifted = compute_graph_features(
+        pos_shifted, box, atoms, cfg, sh_irreps, edge_type2idx
+    )
+
+    (
+        edge_index_ref,
+        edge_shift_ref,
+        edge_type_idx_ref,
+        edge_length_emb_ref,
+        edge_sh_ref,
+        num_self_edges_ref,
+    ) = out_ref
+    (
+        edge_index_shifted,
+        edge_shift_shifted,
+        edge_type_idx_shifted,
+        edge_length_emb_shifted,
+        edge_sh_shifted,
+        num_self_edges_shifted,
+    ) = out_shifted
+
+    # Geometry and ordering should be identical.
+    assert torch.equal(edge_index_ref, edge_index_shifted)
+    assert torch.equal(edge_type_idx_ref, edge_type_idx_shifted)
+    assert num_self_edges_ref == num_self_edges_shifted
+    assert torch.allclose(edge_length_emb_ref, edge_length_emb_shifted)
+    assert torch.allclose(edge_sh_ref, edge_sh_shifted)
+
+    # Edge shifts change exactly by the atom-image relabeling rule:
+    # new_shift = old_shift + shift(src) - shift(dst)
+    src = edge_index_ref[0]
+    dst = edge_index_ref[1]
+    expected_edge_shift = (
+        edge_shift_ref + atom_image_shifts[src].T - atom_image_shifts[dst].T
+    )
+    assert torch.equal(edge_shift_shifted, expected_edge_shift)
