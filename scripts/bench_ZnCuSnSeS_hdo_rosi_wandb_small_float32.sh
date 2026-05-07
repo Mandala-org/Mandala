@@ -20,6 +20,7 @@ python -u scripts/wandb_run.py \
   --resume-mode latest \
   --seed 42 \
   --precision 32-true \
+  --gpus 1 \
   --convention e3nn \
   --dataset-device cuda \
   --num-workers 8 \

@@ -1,0 +1,462 @@
+#!/usr/bin/env python
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from itertools import combinations_with_replacement
+from pathlib import Path
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib-codex")
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import torch
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from data.snapshot import Snapshot  # noqa: E402
+
+
+DEFAULT_PROBLEM_EDGE = (1, 1, 0, 2, 17)
+DEFAULT_PROBLEM_KEY = "Zn-Se"
+DEFAULT_COMPETING_EDGE = (1, 0, 0, 2, 16)
+DEFAULT_COMPETING_KEY = "Zn-Se"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Plot Hamiltonian block magnitude versus edge distance for the "
+            "ZnCu2Sn_SeS_2_scale_1_010 snapshot."
+        )
+    )
+    parser.add_argument(
+        "--snapshot-path",
+        type=Path,
+        default=Path("data/small/ZnCu2Sn_SeS_2_scale_1_010"),
+        help="Snapshot directory containing HS.out and the OpenMX info file.",
+    )
+    parser.add_argument(
+        "--matrix-path",
+        type=Path,
+        default=None,
+        help="Optional explicit matrix path. Overrides --snapshot-path discovery.",
+    )
+    parser.add_argument(
+        "--info-path",
+        type=Path,
+        default=None,
+        help="Optional explicit info path. Overrides --snapshot-path discovery.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("eval_outputs/tmp_scale_1_010_block_mag_vs_distance"),
+        help="Directory for the output figure and summary JSON.",
+    )
+    parser.add_argument(
+        "--convention",
+        type=str,
+        default="e3nn",
+        help="Snapshot convention used during loading.",
+    )
+    parser.add_argument(
+        "--cutoff-radius",
+        type=float,
+        default=11.0,
+        help="Target cutoff radius to mirror the benchmark preprocessing.",
+    )
+    parser.add_argument(
+        "--apply-cutoff",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Apply the benchmark target cutoff before plotting.",
+    )
+    parser.add_argument(
+        "--symmetrize-targets",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Symmetrize targets the same way dataset preprocessing does.",
+    )
+    parser.add_argument(
+        "--problem-key",
+        type=str,
+        default=DEFAULT_PROBLEM_KEY,
+        help="Directed pair key of the problematic target edge.",
+    )
+    parser.add_argument(
+        "--problem-edge",
+        type=int,
+        nargs=5,
+        metavar=("SX", "SY", "SZ", "SRC", "DST"),
+        default=DEFAULT_PROBLEM_EDGE,
+        help="Problematic 5D edge to highlight in red.",
+    )
+    parser.add_argument(
+        "--competing-key",
+        type=str,
+        default=DEFAULT_COMPETING_KEY,
+        help="Directed pair key of the competing graph edge.",
+    )
+    parser.add_argument(
+        "--competing-edge",
+        type=int,
+        nargs=5,
+        metavar=("SX", "SY", "SZ", "SRC", "DST"),
+        default=DEFAULT_COMPETING_EDGE,
+        help="Competing 5D edge to highlight in orange.",
+    )
+    return parser.parse_args()
+
+
+def _discover_info_file(snapshot_dir: Path) -> Path | None:
+    preferred = [
+        "ZnCuSeS.out",
+        "info.dat",
+        "info.txt",
+        "SiO2.out",
+    ]
+    for name in preferred:
+        candidate = snapshot_dir / name
+        if candidate.exists():
+            return candidate
+    for candidate in sorted(snapshot_dir.glob("*.out")):
+        if candidate.name in {"HS.out", "log.out"}:
+            continue
+        return candidate
+    return None
+
+
+def _discover_snapshot_paths(
+    snapshot_path: Path,
+    matrix_path: Path | None,
+    info_path: Path | None,
+) -> tuple[Path, Path]:
+    if matrix_path is not None and info_path is not None:
+        return matrix_path, info_path
+    if matrix_path is not None or info_path is not None:
+        raise ValueError("Provide both --matrix-path and --info-path together.")
+    if snapshot_path.is_file():
+        matrix_candidate = snapshot_path
+        info_candidate = _discover_info_file(snapshot_path.parent)
+        if info_candidate is None:
+            raise FileNotFoundError(
+                f"Could not infer info file next to matrix file: {snapshot_path}"
+            )
+        return matrix_candidate, info_candidate
+    if not snapshot_path.is_dir():
+        raise FileNotFoundError(f"Snapshot path does not exist: {snapshot_path}")
+    matrix_candidate = snapshot_path / "HS.out"
+    if not matrix_candidate.exists():
+        raise FileNotFoundError(f"Matrix file not found: {matrix_candidate}")
+    info_candidate = _discover_info_file(snapshot_path)
+    if info_candidate is None:
+        raise FileNotFoundError(
+            f"Could not infer info file under snapshot directory: {snapshot_path}"
+        )
+    return matrix_candidate, info_candidate
+
+
+def _load_processed_snapshot(
+    matrix_path: Path,
+    info_path: Path,
+    *,
+    convention: str,
+    apply_cutoff: bool,
+    cutoff_radius: float,
+    symmetrize_targets: bool,
+) -> Snapshot:
+    snap = Snapshot.from_openmx(
+        matrix_path=matrix_path,
+        info_path=info_path,
+        convention=convention,
+    )
+    if apply_cutoff:
+        snap = snap.filter_by_distance(cutoff_radius)
+    if symmetrize_targets:
+        snap = snap.symmetrize_matrices(
+            hamiltonian=True,
+            overlap=True,
+            density=True,
+        )
+    return snap
+
+
+def _unordered_pair_key(a: str, b: str, order_index: dict[str, int]) -> str:
+    if order_index[a] <= order_index[b]:
+        return f"{a}-{b}"
+    return f"{b}-{a}"
+
+
+def _block_magnitude(blocks: torch.Tensor) -> torch.Tensor:
+    return torch.sqrt(torch.sum(blocks * blocks, dim=(1, 2)))
+
+
+def _edge_distances(
+    edges: torch.Tensor,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+) -> torch.Tensor:
+    src = edges[3].to(dtype=torch.long)
+    dst = edges[4].to(dtype=torch.long)
+    disp = positions[dst] - positions[src]
+    if box is not None:
+        shift = edges[:3].T.to(device=positions.device, dtype=positions.dtype)
+        disp = disp + shift @ box
+    return torch.linalg.norm(disp, dim=-1)
+
+
+def _collect_subplot_data(
+    snap: Snapshot,
+    *,
+    problem_key: str,
+    problem_edge: tuple[int, int, int, int, int],
+    competing_key: str,
+    competing_edge: tuple[int, int, int, int, int],
+) -> tuple[dict[str, dict[str, list[float]]], dict[str, object]]:
+    matrix = snap.hamiltonian
+    positions = snap.positions
+    box = snap.box
+    if positions is None:
+        raise RuntimeError("Snapshot positions are missing.")
+
+    element_order = list(dict.fromkeys(matrix.atoms))
+    order_index = {el: idx for idx, el in enumerate(element_order)}
+    subplot_order = [
+        f"{a}-{b}" for a, b in combinations_with_replacement(element_order, 2)
+    ]
+
+    subplot_data: dict[str, dict[str, list[float]]] = {
+        key: {
+            "distances": [],
+            "magnitudes": [],
+            "is_problem": [],
+            "is_competing": [],
+            "directed_keys": [],
+            "edges": [],
+        }
+        for key in subplot_order
+    }
+    problem_found = False
+    competing_found = False
+    problem_record: dict[str, object] | None = None
+    competing_record: dict[str, object] | None = None
+
+    for directed_key, blocks in matrix.pair_blocks.items():
+        if directed_key not in matrix.pair_edges:
+            raise RuntimeError(f"Missing pair_edges entry for key {directed_key}")
+        edges = matrix.pair_edges[directed_key]
+        mags = _block_magnitude(blocks).detach().cpu()
+        dists = _edge_distances(edges, positions, box).detach().cpu()
+
+        el_a, el_b = directed_key.split("-")
+        subplot_key = _unordered_pair_key(el_a, el_b, order_index)
+        payload = subplot_data[subplot_key]
+
+        for idx, edge_row in enumerate(edges.t().tolist()):
+            edge_5d = tuple(int(x) for x in edge_row)
+            is_problem = directed_key == problem_key and edge_5d == problem_edge
+            is_competing = directed_key == competing_key and edge_5d == competing_edge
+            payload["distances"].append(float(dists[idx].item()))
+            payload["magnitudes"].append(float(mags[idx].item()))
+            payload["is_problem"].append(bool(is_problem))
+            payload["is_competing"].append(bool(is_competing))
+            payload["directed_keys"].append(directed_key)
+            payload["edges"].append(edge_5d)
+            if is_problem:
+                problem_found = True
+                problem_record = {
+                    "directed_key": directed_key,
+                    "subplot_key": subplot_key,
+                    "edge": edge_5d,
+                    "distance": float(dists[idx].item()),
+                    "magnitude": float(mags[idx].item()),
+                    "local_idx": idx,
+                }
+            if is_competing:
+                competing_found = True
+                competing_record = {
+                    "directed_key": directed_key,
+                    "subplot_key": subplot_key,
+                    "edge": edge_5d,
+                    "distance": float(dists[idx].item()),
+                    "magnitude": float(mags[idx].item()),
+                    "local_idx": idx,
+                }
+
+    summary = {
+        "element_order": element_order,
+        "subplot_order": subplot_order,
+        "problem_key": problem_key,
+        "problem_edge": list(problem_edge),
+        "competing_key": competing_key,
+        "competing_edge": list(competing_edge),
+        "problem_found": problem_found,
+        "problem_record": problem_record,
+        "competing_found": competing_found,
+        "competing_record": competing_record,
+    }
+    return subplot_data, summary
+
+
+def _plot(
+    subplot_data: dict[str, dict[str, list[float]]],
+    summary: dict[str, object],
+    output_path: Path,
+) -> None:
+    subplot_order = summary["subplot_order"]
+    fig, axes = plt.subplots(5, 3, figsize=(18, 24), constrained_layout=True)
+    axes_flat = list(axes.flat)
+
+    for ax, subplot_key in zip(axes_flat, subplot_order, strict=True):
+        payload = subplot_data[subplot_key]
+        distances = payload["distances"]
+        magnitudes = payload["magnitudes"]
+        is_problem = payload["is_problem"]
+        is_competing = payload["is_competing"]
+
+        if not distances:
+            ax.set_title(f"{subplot_key} (no data)")
+            ax.set_xlabel("Edge distance")
+            ax.set_ylabel("Hamiltonian block magnitude")
+            ax.grid(alpha=0.2)
+            continue
+
+        blue_x = [
+            d
+            for d, bad, competing in zip(
+                distances, is_problem, is_competing, strict=True
+            )
+            if not bad and not competing
+        ]
+        blue_y = [
+            m
+            for m, bad, competing in zip(
+                magnitudes, is_problem, is_competing, strict=True
+            )
+            if not bad and not competing
+        ]
+        red_x = [d for d, bad in zip(distances, is_problem, strict=True) if bad]
+        red_y = [m for m, bad in zip(magnitudes, is_problem, strict=True) if bad]
+        orange_x = [
+            d for d, competing in zip(distances, is_competing, strict=True) if competing
+        ]
+        orange_y = [
+            m
+            for m, competing in zip(magnitudes, is_competing, strict=True)
+            if competing
+        ]
+
+        ax.scatter(blue_x, blue_y, s=20, c="#1f77b4", alpha=0.85)
+        if red_x:
+            ax.scatter(red_x, red_y, s=55, c="#d62728", alpha=0.95, zorder=5)
+            ax.annotate(
+                "problem edge",
+                (red_x[0], red_y[0]),
+                xytext=(8, 8),
+                textcoords="offset points",
+                color="#d62728",
+                fontsize=9,
+            )
+        if orange_x:
+            ax.scatter(orange_x, orange_y, s=55, c="#ff7f0e", alpha=0.95, zorder=5)
+            ax.annotate(
+                "competing edge",
+                (orange_x[0], orange_y[0]),
+                xytext=(8, -14),
+                textcoords="offset points",
+                color="#ff7f0e",
+                fontsize=9,
+            )
+
+        ax.set_title(f"{subplot_key}  n={len(distances)}")
+        ax.set_xlabel("Edge distance")
+        ax.set_ylabel("Hamiltonian block magnitude")
+        ax.grid(alpha=0.2)
+
+    fig.suptitle(
+        "scale_1_010 Hamiltonian block magnitude vs edge distance",
+        fontsize=18,
+    )
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+
+
+def main() -> None:
+    args = parse_args()
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    matrix_path, info_path = _discover_snapshot_paths(
+        args.snapshot_path,
+        args.matrix_path,
+        args.info_path,
+    )
+    print(f"Loading snapshot from matrix={matrix_path} info={info_path}", flush=True)
+    snap = _load_processed_snapshot(
+        matrix_path,
+        info_path,
+        convention=args.convention,
+        apply_cutoff=bool(args.apply_cutoff),
+        cutoff_radius=float(args.cutoff_radius),
+        symmetrize_targets=bool(args.symmetrize_targets),
+    )
+
+    problem_edge = tuple(int(x) for x in args.problem_edge)
+    subplot_data, summary = _collect_subplot_data(
+        snap,
+        problem_key=args.problem_key,
+        problem_edge=problem_edge,
+        competing_key=args.competing_key,
+        competing_edge=tuple(int(x) for x in args.competing_edge),
+    )
+
+    figure_path = output_dir / "hamiltonian_block_magnitude_vs_distance_5x3.png"
+    _plot(subplot_data, summary, figure_path)
+
+    summary_path = output_dir / "summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True))
+
+    print(f"Wrote {figure_path}", flush=True)
+    print(f"Wrote {summary_path}", flush=True)
+    if summary["problem_found"]:
+        problem_record = summary["problem_record"]
+        print(
+            "Problem edge found: "
+            f"{problem_record['directed_key']} "
+            f"edge={tuple(problem_record['edge'])} "
+            f"distance={problem_record['distance']:.6f} "
+            f"magnitude={problem_record['magnitude']:.6f}",
+            flush=True,
+        )
+    else:
+        print(
+            "Problem edge was not found in the plotted Hamiltonian target state.",
+            flush=True,
+        )
+    if summary["competing_found"]:
+        competing_record = summary["competing_record"]
+        print(
+            "Competing edge found: "
+            f"{competing_record['directed_key']} "
+            f"edge={tuple(competing_record['edge'])} "
+            f"distance={competing_record['distance']:.6f} "
+            f"magnitude={competing_record['magnitude']:.6f}",
+            flush=True,
+        )
+    else:
+        print(
+            "Competing edge was not found in the plotted Hamiltonian target state.",
+            flush=True,
+        )
+
+
+if __name__ == "__main__":
+    main()
