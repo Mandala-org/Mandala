@@ -119,3 +119,79 @@ def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
     ]
     assert sorted(call_order) == ["mat0", "mat1", "mat2", "mat3", "mat4"]
     assert call_order != ["mat0", "mat1", "mat2", "mat3", "mat4"]
+
+
+@pytest.mark.unit
+def test_snapshot_cache_file_changes_when_cif_metadata_changes(tmp_path):
+    ds = object.__new__(E3GNNDataset)
+    cache_root = tmp_path / "cache"
+    matrix_path = tmp_path / "sample" / "HS.out"
+    info_path = tmp_path / "sample" / "ZnCuSeS.out"
+    cif_path = tmp_path / "sample" / "ZnCuSeS.cif"
+    matrix_path.parent.mkdir(parents=True)
+    matrix_path.write_text("matrix")
+    info_path.write_text("info")
+    cif_path.write_text("cif-v1")
+
+    ds.cfg = SimpleNamespace(
+        snapshot_cache_dir=str(cache_root),
+        allow_openmx_positions_box_from_out=False,
+    )
+    ds.convention = "e3nn"
+    ds.dtype = torch.float32
+
+    cache_file_before = E3GNNDataset._snapshot_cache_file(ds, matrix_path, info_path)
+    assert cache_file_before is not None
+
+    cif_path.write_text("cif-v2 with different size")
+
+    cache_file_after = E3GNNDataset._snapshot_cache_file(ds, matrix_path, info_path)
+    assert cache_file_after is not None
+    assert cache_file_before != cache_file_after
+
+
+@pytest.mark.unit
+def test_preprocessed_cache_file_changes_when_geometry_source_mode_changes(tmp_path):
+    ds = object.__new__(E3GNNDataset)
+    cache_root = tmp_path / "cache"
+    matrix_path = tmp_path / "sample" / "HS.out"
+    info_path = tmp_path / "sample" / "ZnCuSeS.out"
+    cif_path = tmp_path / "sample" / "ZnCuSeS.cif"
+    matrix_path.parent.mkdir(parents=True)
+    matrix_path.write_text("matrix")
+    info_path.write_text("info")
+    cif_path.write_text("cif")
+
+    ds.mapper = SimpleNamespace(
+        orbital_cfg=SimpleNamespace(to_dict=lambda: {"Zn": "1s"})
+    )
+    ds.convention = "e3nn"
+    ds.dtype = torch.float32
+    ds.cfg = SimpleNamespace(
+        snapshot_cache_dir=str(cache_root),
+        l_max=5,
+        n_radial=8,
+        radial_embedding_scale="none",
+        cutoff_radius=11.0,
+        apply_cutoff_to_targets=True,
+        matrix_targets=["hamiltonian", "density", "overlap"],
+        train_target="matrix",
+        symmetrize_hamiltonian_targets=True,
+        require_exact_edge_match=True,
+        precompute_edge_features=True,
+        separate_shifted_self=True,
+        allow_openmx_positions_box_from_out=False,
+    )
+
+    cache_file_cif = E3GNNDataset._preprocessed_sample_cache_file(
+        ds, matrix_path, info_path
+    )
+    assert cache_file_cif is not None
+
+    ds.cfg.allow_openmx_positions_box_from_out = True
+
+    cache_file_out_fallback = E3GNNDataset._preprocessed_sample_cache_file(
+        ds, matrix_path, info_path
+    )
+    assert cache_file_out_fallback is not None
+    assert cache_file_cif != cache_file_out_fallback
