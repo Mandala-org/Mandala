@@ -195,8 +195,12 @@ def _unordered_pair_key(a: str, b: str, order_index: dict[str, int]) -> str:
     return f"{b}-{a}"
 
 
-def _block_magnitude(blocks: torch.Tensor) -> torch.Tensor:
-    return torch.sqrt(torch.sum(blocks * blocks, dim=(1, 2)))
+def _block_sum_squares(blocks: torch.Tensor) -> torch.Tensor:
+    return torch.sum(blocks * blocks, dim=(1, 2))
+
+
+def _block_mean_squares(blocks: torch.Tensor) -> torch.Tensor:
+    return torch.mean(blocks * blocks, dim=(1, 2))
 
 
 def _edge_distances(
@@ -220,6 +224,7 @@ def _collect_subplot_data(
     problem_edge: tuple[int, int, int, int, int],
     competing_key: str,
     competing_edge: tuple[int, int, int, int, int],
+    value_mode: str,
 ) -> tuple[dict[str, dict[str, list[float]]], dict[str, object]]:
     matrix = snap.hamiltonian
     positions = snap.positions
@@ -253,7 +258,13 @@ def _collect_subplot_data(
         if directed_key not in matrix.pair_edges:
             raise RuntimeError(f"Missing pair_edges entry for key {directed_key}")
         edges = matrix.pair_edges[directed_key]
-        mags = _block_magnitude(blocks).detach().cpu()
+        if value_mode == "sum_squares":
+            values = _block_sum_squares(blocks)
+        elif value_mode == "mean_squares":
+            values = _block_mean_squares(blocks)
+        else:
+            raise ValueError(f"Unsupported value_mode: {value_mode}")
+        values = values.detach().cpu()
         dists = _edge_distances(edges, positions, box).detach().cpu()
 
         el_a, el_b = directed_key.split("-")
@@ -265,7 +276,7 @@ def _collect_subplot_data(
             is_problem = directed_key == problem_key and edge_5d == problem_edge
             is_competing = directed_key == competing_key and edge_5d == competing_edge
             payload["distances"].append(float(dists[idx].item()))
-            payload["magnitudes"].append(float(mags[idx].item()))
+            payload["magnitudes"].append(float(values[idx].item()))
             payload["is_problem"].append(bool(is_problem))
             payload["is_competing"].append(bool(is_competing))
             payload["directed_keys"].append(directed_key)
@@ -277,7 +288,7 @@ def _collect_subplot_data(
                     "subplot_key": subplot_key,
                     "edge": edge_5d,
                     "distance": float(dists[idx].item()),
-                    "magnitude": float(mags[idx].item()),
+                    "magnitude": float(values[idx].item()),
                     "local_idx": idx,
                 }
             if is_competing:
@@ -287,7 +298,7 @@ def _collect_subplot_data(
                     "subplot_key": subplot_key,
                     "edge": edge_5d,
                     "distance": float(dists[idx].item()),
-                    "magnitude": float(mags[idx].item()),
+                    "magnitude": float(values[idx].item()),
                     "local_idx": idx,
                 }
 
@@ -310,9 +321,12 @@ def _plot(
     subplot_data: dict[str, dict[str, list[float]]],
     summary: dict[str, object],
     output_path: Path,
+    *,
+    y_label: str,
+    title: str,
 ) -> None:
     subplot_order = summary["subplot_order"]
-    fig, axes = plt.subplots(5, 3, figsize=(18, 24), constrained_layout=True)
+    fig, axes = plt.subplots(3, 5, figsize=(30, 15), constrained_layout=True)
     axes_flat = list(axes.flat)
 
     for ax, subplot_key in zip(axes_flat, subplot_order, strict=True):
@@ -325,7 +339,8 @@ def _plot(
         if not distances:
             ax.set_title(f"{subplot_key} (no data)")
             ax.set_xlabel("Edge distance")
-            ax.set_ylabel("Hamiltonian block magnitude")
+            ax.set_ylabel(y_label)
+            ax.set_yscale("log")
             ax.grid(alpha=0.2)
             continue
 
@@ -378,14 +393,50 @@ def _plot(
 
         ax.set_title(f"{subplot_key}  n={len(distances)}")
         ax.set_xlabel("Edge distance")
-        ax.set_ylabel("Hamiltonian block magnitude")
+        ax.set_ylabel(y_label)
+        ax.set_yscale("log")
         ax.grid(alpha=0.2)
 
-    fig.suptitle(
-        "scale_1_010 Hamiltonian block magnitude vs edge distance",
-        fontsize=18,
-    )
+    fig.suptitle(title, fontsize=18)
     fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+
+
+def _plot_combined(
+    subplot_data: dict[str, dict[str, list[float]]],
+    summary: dict[str, object],
+    output_path: Path,
+    *,
+    y_label: str,
+    title: str,
+) -> None:
+    subplot_order = summary["subplot_order"]
+    fig, ax = plt.subplots(1, 1, figsize=(13, 9), constrained_layout=True)
+    cmap = plt.get_cmap("tab20")
+
+    for idx, subplot_key in enumerate(subplot_order):
+        payload = subplot_data[subplot_key]
+        distances = payload["distances"]
+        magnitudes = payload["magnitudes"]
+        if not distances:
+            continue
+        color = cmap(idx % cmap.N)
+        ax.scatter(
+            distances,
+            magnitudes,
+            s=18,
+            alpha=0.8,
+            color=color,
+            label=subplot_key,
+        )
+
+    ax.set_title(title)
+    ax.set_xlabel("Edge distance")
+    ax.set_ylabel(y_label)
+    ax.set_yscale("log")
+    ax.grid(alpha=0.2)
+    ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False)
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -416,15 +467,53 @@ def main() -> None:
         problem_edge=problem_edge,
         competing_key=args.competing_key,
         competing_edge=tuple(int(x) for x in args.competing_edge),
+        value_mode="sum_squares",
     )
 
-    figure_path = output_dir / "hamiltonian_block_magnitude_vs_distance_5x3.png"
-    _plot(subplot_data, summary, figure_path)
+    figure_path = output_dir / "hamiltonian_block_magnitude_vs_distance_3x5.png"
+    _plot(
+        subplot_data,
+        summary,
+        figure_path,
+        y_label="Hamiltonian block sum of squares",
+        title="scale_1_010 Hamiltonian block sum of squares vs edge distance",
+    )
+    combined_figure_path = (
+        output_dir / "hamiltonian_block_magnitude_vs_distance_all_pairs.png"
+    )
+    _plot_combined(
+        subplot_data,
+        summary,
+        combined_figure_path,
+        y_label="Hamiltonian block sum of squares",
+        title="scale_1_010 Hamiltonian block sum of squares vs edge distance",
+    )
+
+    mean_subplot_data, mean_summary = _collect_subplot_data(
+        snap,
+        problem_key=args.problem_key,
+        problem_edge=problem_edge,
+        competing_key=args.competing_key,
+        competing_edge=tuple(int(x) for x in args.competing_edge),
+        value_mode="mean_squares",
+    )
+    mean_figure_path = (
+        output_dir / "hamiltonian_block_mean_square_vs_distance_all_pairs.png"
+    )
+    _plot_combined(
+        mean_subplot_data,
+        mean_summary,
+        mean_figure_path,
+        y_label="Hamiltonian block mean square",
+        title="scale_1_010 Hamiltonian block mean square vs edge distance",
+    )
 
     summary_path = output_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True))
 
     print(f"Wrote {figure_path}", flush=True)
+    print(f"Wrote {combined_figure_path}", flush=True)
+    print(f"Wrote {mean_figure_path}", flush=True)
     print(f"Wrote {summary_path}", flush=True)
     if summary["problem_found"]:
         problem_record = summary["problem_record"]
