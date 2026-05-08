@@ -46,6 +46,8 @@ parameters:
     distribution: log_uniform_values
     min: 0.001
     max: 0.1
+  max_epochs:
+    value: 400
 
   # Model architecture
   precision:
@@ -106,7 +108,7 @@ parameters:
     values: [1, 2, 3, 4]
 
   head-use-node-embeddings-for-self-edges:
-    values: [true, false]
+    value: true
   separate-shifted-self:
     value: true
   head-use-tensor-square:
@@ -167,7 +169,7 @@ parameters:
   gpus:
     value: 1
   benchmark:
-    value: true
+    value: false
   adaptive-log-interval:
     value: true
   log-interval:
@@ -225,6 +227,6 @@ parameters:
   revert-decay-patience:
     value: 4
   revert-decay-rate:
-    value: 0.8
+    value: 0.5
   revert-spike-factor:
     value: 2.0
