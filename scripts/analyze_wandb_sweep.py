@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+import hashlib
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -174,6 +175,21 @@ def main() -> None:
         fig.savefig(figure_path, bbox_inches="tight", dpi=args.dpi)
         plt.close(fig)
         print(f"\nSaved figure: {figure_path}")
+
+        scatter_fig = _plot_metric_scatterplots(
+            variable_specs,
+            records,
+            top_runs,
+            sweep_path,
+            rank_metric,
+            args.max_figure_width,
+            args.max_figure_height,
+            args.max_categorical_label_chars,
+        )
+        scatter_path = output_dir / "sweep_metric_scatterplots.png"
+        scatter_fig.savefig(scatter_path, bbox_inches="tight", dpi=args.dpi)
+        plt.close(scatter_fig)
+        print(f"Saved figure: {scatter_path}")
     else:
         print(
             "\nNo non-constant swept variables were found, so no histograms were generated."
@@ -418,7 +434,14 @@ def _plot_variables(
                 if value is None:
                     continue
                 color = colors[idx % len(colors)]
-                ax.axvline(value, color=color, lw=2.0, alpha=0.95)
+                x_pos = _top_run_marker_x(
+                    value,
+                    idx,
+                    len(top_runs),
+                    numeric_values,
+                    use_log=use_log,
+                )
+                ax.axvline(x_pos, color=color, lw=2.0, alpha=0.95)
             ax.set_xlabel("")
             if use_log:
                 ax.set_title(f"{key} (log scale)", fontsize=10, pad=6)
@@ -456,7 +479,15 @@ def _plot_variables(
                     continue
                 color = colors[idx % len(colors)]
                 position = ordered_labels.index(label)
-                ax.axvline(position, color=color, lw=2.0, alpha=0.95)
+                x_pos = _top_run_marker_x(
+                    float(position),
+                    idx,
+                    len(top_runs),
+                    np.asarray(positions, dtype=float),
+                    use_log=False,
+                    categorical=True,
+                )
+                ax.axvline(x_pos, color=color, lw=2.0, alpha=0.95)
             ax.set_xticks(positions)
             ax.set_xticklabels(ordered_labels, rotation=15, ha="right", fontsize=7)
             ax.set_xlabel("")
@@ -490,6 +521,200 @@ def _plot_variables(
         fig.tight_layout(rect=(0.02, 0.06, 1.0, 0.94), w_pad=1.0, h_pad=1.0)
     else:
         fig.tight_layout(rect=(0.02, 0.02, 1.0, 0.94), w_pad=1.0, h_pad=1.0)
+    return fig
+
+
+def _plot_metric_scatterplots(
+    variable_specs: list[dict[str, Any]],
+    records: list[RunRecord],
+    top_runs: list[RunRecord],
+    sweep_path: str,
+    rank_metric: str,
+    max_figure_width: float,
+    max_figure_height: float,
+    max_categorical_label_chars: int,
+):
+    n_plots = len(variable_specs)
+    ncols = max(1, math.ceil(math.sqrt(n_plots * 1.2)))
+    nrows = math.ceil(n_plots / ncols)
+    fig_width = min(max_figure_width, max(14.0, 3.8 * ncols))
+    fig_height = min(max_figure_height, max(8.0, 2.75 * nrows))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(fig_width, fig_height))
+    axes_arr = np.atleast_1d(axes).ravel()
+
+    top_run_ids = {run.run_id for run in top_runs}
+    color_map = _build_scatter_color_map(records, top_run_ids)
+    top_colors = ("#d62728", "#ff7f0e", "#f1c40f")
+    top_color_by_id = {
+        run.run_id: top_colors[idx % len(top_colors)]
+        for idx, run in enumerate(top_runs)
+    }
+
+    for ax, spec in zip(axes_arr, variable_specs):
+        key = spec["key"]
+        title = spec["display_name"]
+        kind = spec["kind"]
+        distribution = spec["distribution"]
+
+        if kind == "numeric":
+            points = []
+            for record in records:
+                x = _coerce_numeric(record.config.get(key))
+                y = record.score
+                if x is None or y is None or x <= 0 or y <= 0:
+                    continue
+                points.append((record, x, y))
+            if points:
+                non_top_xs = [
+                    x for record, x, _ in points if record.run_id not in top_run_ids
+                ]
+                non_top_ys = [
+                    y for record, _, y in points if record.run_id not in top_run_ids
+                ]
+                non_top_colors = [
+                    color_map[record.run_id]
+                    for record, _, _ in points
+                    if record.run_id not in top_run_ids
+                ]
+                if non_top_xs:
+                    ax.scatter(
+                        non_top_xs,
+                        non_top_ys,
+                        s=18,
+                        c=non_top_colors,
+                        alpha=0.45,
+                        linewidths=0,
+                    )
+                for idx, run in enumerate(top_runs):
+                    point = next(
+                        (
+                            (x, y)
+                            for record, x, y in points
+                            if record.run_id == run.run_id
+                        ),
+                        None,
+                    )
+                    if point is None:
+                        continue
+                    ax.scatter(
+                        [point[0]],
+                        [point[1]],
+                        s=75,
+                        c=[top_colors[idx % len(top_colors)]],
+                        edgecolors="black",
+                        linewidths=0.4,
+                        zorder=4,
+                    )
+                use_log_x = distribution == "log_uniform_values"
+                if use_log_x:
+                    ax.set_xscale("log")
+            else:
+                ax.text(0.5, 0.5, "No positive data", ha="center", va="center")
+                use_log_x = distribution == "log_uniform_values"
+        else:
+            labels = [
+                _format_categorical_value(
+                    key, record.config.get(key), max_categorical_label_chars
+                )
+                for record in records
+                if record.config.get(key, MISSING) is not MISSING
+                and record.score is not None
+                and record.score > 0
+            ]
+            ordered_labels = sorted(set(labels))
+            positions = {label: idx for idx, label in enumerate(ordered_labels)}
+            for record in records:
+                value = record.config.get(key, MISSING)
+                if value is MISSING or record.score is None or record.score <= 0:
+                    continue
+                label = _format_categorical_value(
+                    key, value, max_categorical_label_chars
+                )
+                x = positions[label]
+                jitter = _categorical_jitter(record.run_id, key)
+                if record.run_id in top_color_by_id:
+                    color = top_color_by_id[record.run_id]
+                else:
+                    color = color_map[record.run_id]
+                ax.scatter(
+                    [x + jitter],
+                    [record.score],
+                    s=18,
+                    c=[color],
+                    alpha=0.45 if record.run_id not in top_run_ids else 1.0,
+                    linewidths=0,
+                    zorder=3 if record.run_id in top_run_ids else 2,
+                )
+            for idx, run in enumerate(top_runs):
+                value = run.config.get(key, MISSING)
+                if value is MISSING or run.score is None or run.score <= 0:
+                    continue
+                label = _format_categorical_value(
+                    key, value, max_categorical_label_chars
+                )
+                if label not in positions:
+                    continue
+                ax.scatter(
+                    [positions[label]],
+                    [run.score],
+                    s=90,
+                    c=[top_colors[idx % len(top_colors)]],
+                    edgecolors="black",
+                    linewidths=0.4,
+                    zorder=5,
+                )
+            ax.set_xticks(list(positions.values()))
+            ax.set_xticklabels(ordered_labels, rotation=15, ha="right", fontsize=7)
+            ax.set_xlim(-0.5, max(len(ordered_labels) - 0.5, 0.5))
+            use_log_x = False
+
+        ax.set_yscale("log")
+        ax.set_title(title, fontsize=10, pad=6)
+        ax.set_ylabel(rank_metric, fontsize=9)
+        ax.tick_params(axis="both", labelsize=8)
+        ax.grid(True, axis="both", alpha=0.22)
+        if kind == "numeric" and use_log_x:
+            ax.set_xlabel("")
+            ax.set_title(f"{title} (log x scale)", fontsize=10, pad=6)
+        else:
+            ax.set_xlabel("")
+
+    for ax in axes_arr[len(variable_specs) :]:
+        ax.set_visible(False)
+
+    for idx, ax in enumerate(axes_arr[: len(variable_specs)]):
+        col = idx % ncols
+        if col > 0:
+            ax.set_ylabel("")
+
+    handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markerfacecolor=color,
+            markeredgecolor="black",
+            markeredgewidth=0.4,
+            markersize=8,
+            label=f"{idx + 1}. {run.name or run.run_id}",
+        )
+        for idx, (run, color) in enumerate(zip(top_runs, top_colors))
+    ]
+
+    fig.suptitle(
+        f"W&B sweep metric scatterplots\n{sweep_path}\nmetric={rank_metric} (log scale)",
+        fontsize=12,
+        y=0.98,
+    )
+    fig.legend(
+        handles=handles,
+        loc="lower center",
+        ncol=min(3, len(handles)),
+        frameon=False,
+        bbox_to_anchor=(0.5, 0.0),
+    )
+    fig.tight_layout(rect=(0.02, 0.06, 1.0, 0.94), w_pad=1.0, h_pad=1.0)
     return fig
 
 
@@ -658,6 +883,65 @@ def _truncate_hidden_irreps_value(value: str) -> str:
     if len(parts) < 3:
         return value
     return "+".join(parts[:2]) + "+"
+
+
+def _build_scatter_color_map(
+    records: list[RunRecord], top_run_ids: set[str]
+) -> dict[str, str]:
+    palette = list(plt.get_cmap("tab20").colors)
+    rng = np.random.default_rng(0)
+    rng.shuffle(palette)
+    palette_hex = [matplotlib.colors.to_hex(color) for color in palette]
+    color_map: dict[str, str] = {}
+    idx = 0
+    for record in records:
+        if record.run_id in top_run_ids:
+            continue
+        color_map[record.run_id] = palette_hex[idx % len(palette_hex)]
+        idx += 1
+    return color_map
+
+
+def _categorical_jitter(run_id: str, key: str, width: float = 0.12) -> float:
+    seed_bytes = hashlib.sha1(f"{run_id}:{key}".encode("utf-8")).digest()[:8]
+    seed = int.from_bytes(seed_bytes, "big", signed=False)
+    rng = np.random.default_rng(seed)
+    return float(rng.uniform(-width, width))
+
+
+def _top_run_marker_x(
+    base_x: float,
+    idx: int,
+    n_top_runs: int,
+    values: np.ndarray,
+    *,
+    use_log: bool,
+    categorical: bool = False,
+) -> float:
+    if n_top_runs <= 1:
+        return base_x
+
+    centered = idx - (n_top_runs - 1) / 2.0
+
+    if categorical:
+        return base_x + centered * 0.08
+
+    arr = np.asarray(values, dtype=float)
+    if arr.size == 0:
+        return base_x
+
+    if use_log:
+        # Keep the lines visually separated while preserving positive values.
+        factor = 1.0 + centered * 0.025
+        return max(base_x * factor, np.finfo(float).tiny)
+
+    lo = float(np.min(arr))
+    hi = float(np.max(arr))
+    span = hi - lo
+    if span <= 0:
+        span = max(abs(lo), 1.0)
+    step = max(span * 0.01, 1e-6)
+    return base_x + centered * step
 
 
 def _unique_in_order(values: list[Any]) -> list[Any]:
