@@ -22,8 +22,8 @@ python -u scripts/wandb_run.py \
   --precision 32-true \
   --gpus 1 \
   --convention e3nn \
-  --dataset-device cuda \
-  --num-workers 8 \
+  --dataset-device cpu \
+  --num-workers 11 \
   --scales '[1]' \
   --num-train-per-scale 10 \
   --num-val-per-scale 2 \
