@@ -156,6 +156,7 @@ class E3GNN(pl.LightningModule):
             }
         )
 
+        self._nan_loss_detected = False
         self._apply_init_weights_factor()
 
         # Print model summary if verbosity >= 1
@@ -263,6 +264,34 @@ class E3GNN(pl.LightningModule):
                 return i != j
             return ~is_diag
         raise RuntimeError(f"Unsupported partial_train value: {self.cfg.partial_train}")
+
+    def _stop_training_on_nonfinite_loss(
+        self,
+        loss: torch.Tensor,
+        *,
+        stage: str,
+        batch_idx: int,
+        phase: str,
+    ) -> bool:
+        if stage != "train":
+            return False
+        if torch.isfinite(loss).all():
+            return False
+
+        self._nan_loss_detected = True
+        print(
+            "--- Non-finite train loss detected "
+            f"(phase={phase}, batch_idx={batch_idx}); "
+            "stopping before optimizer step and finishing evaluation. ---",
+            flush=True,
+        )
+        trainer = getattr(self, "_trainer", None)
+        if trainer is not None:
+            try:
+                trainer.should_stop = True
+            except Exception:
+                pass
+        return True
 
     def _compute_irrep_part_losses(
         self,
@@ -563,6 +592,13 @@ class E3GNN(pl.LightningModule):
             ) * mse_for_loss + self.cfg.loss_l1_fraction * mae_for_loss
 
         loss_matrix = sum(combined_matrix_losses.values())
+        if self._stop_training_on_nonfinite_loss(
+            loss_matrix,
+            stage=stage,
+            batch_idx=batch_idx,
+            phase="matrix",
+        ):
+            return None
 
         # --- Observable Evaluation --------------------------------------
         t_obs_start = time.perf_counter()
@@ -688,6 +724,14 @@ class E3GNN(pl.LightningModule):
             l2_reg = sum(p.pow(2).sum() for p in self.parameters())
             loss += self.cfg.l2_reg_coef * l2_reg
             metrics[f"{stage}/loss_l2_reg"] = l2_reg
+
+        if self._stop_training_on_nonfinite_loss(
+            loss,
+            stage=stage,
+            batch_idx=batch_idx,
+            phase="total",
+        ):
+            return None
 
         # --- Logging ------------------------------------------------------
         metrics[f"{stage}/loss_total"] = loss

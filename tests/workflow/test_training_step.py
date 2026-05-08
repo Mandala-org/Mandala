@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 import torch
 
@@ -62,3 +64,29 @@ def test_training_step_with_force_loss():
 
     assert isinstance(loss, torch.Tensor)
     assert torch.isfinite(loss)
+
+
+@pytest.mark.integration
+def test_training_step_stops_on_nan_loss():
+    from data.factory import DatasetFactory
+
+    fac = DatasetFactory(Config(cutoff_radius=5.0, verbosity=0))
+    fac.add_snapshot(
+        "data/small/H2O/original/H2O.matrix",
+        "data/small/H2O/original/H2O.info.out",
+    )
+    train_ds, _, mapper = fac.create()
+
+    cfg = Config(cutoff_radius=5.0, safety_checks=True, verbosity=0)
+    model = E3GNN(mapper, cfg)
+    batch = train_ds[0]
+
+    monkey_trainer = SimpleNamespace(should_stop=False)
+    object.__setattr__(model, "_trainer", monkey_trainer)
+    model._mse = lambda pred, target: torch.tensor(float("nan"), device=pred.device)
+
+    loss = model.training_step(batch, 0)
+
+    assert loss is None
+    assert model._nan_loss_detected is True
+    assert monkey_trainer.should_stop is True
