@@ -105,7 +105,7 @@ class Config:
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
 
     # ---------------------- training ------------------------------------
-    lr: float = 3e-4
+    lr: float = 3e-2
     max_epochs: int = 100
     batch_size: int = 1
     use_lr_scheduler: bool = True

@@ -69,11 +69,15 @@ parameters:
   emb-use-odd-features:
     value: true
   edge-encoder-style:
-    value: distance
+    values:
+      - distance
+      - rich
   edge-encoder-use-sh-tensor-square:
     value: false
   e3layernorm:
-    value: false
+    values:
+      - true
+      - false
   num-layers-gnn:
     values: [2, 3]
   tp-type:
@@ -85,7 +89,10 @@ parameters:
   edge-update-residual:
     values: [true, false]
   node-update-message-agg:
-    value: sum
+    values:
+      - sum
+      - average
+      - attention
   node-update-residual:
     values: [true, false]
   head-use-mlp-log-scale:
