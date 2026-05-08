@@ -31,9 +31,9 @@ parameters:
   snapshot-cache-dir:
     value: /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache
   dataset-device:
-    value: cuda
+    value: cpu
   num-workers:
-    value: 8
+    value: 11
   scales:
     value: [1]
   num-train-per-scale:
@@ -153,11 +153,11 @@ parameters:
   l1-reg-coef:
     value: 0.0
   l2-reg-coef:
-    value: 0.0
+    values: [0.0, 1e-6, 1e-4]
   grad-clip-val:
-    value: 1
+    values: [0.0, 0.5, 1.0]
   accumulate-grad-batches:
-    value: 1
+    values: [1, 5]
   n-radial:
     value: 128
   radial-layers:
