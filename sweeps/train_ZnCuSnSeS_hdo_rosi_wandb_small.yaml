@@ -5,6 +5,7 @@ metric:
   goal: minimize
 
 project: mandala-ZnCuSnSeS-hdo-rosi
+name: ZnCuSnSeS-hdo-rosi-small
 command:
   - ${env}
   - python
@@ -60,7 +61,9 @@ parameters:
   hidden-base-dim:
     value: 64
   hidden-irreps:
-    value: 64x0e+64x0o+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+16x4e+16x4o+8x5e+8x5o+8x6e+8x6o
+    values:
+      - 64x0e+64x0o+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+16x4e+16x4o+8x5e+8x5o+8x6e+8x6o
+      - 128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+32x3e+32x3o+32x4e+32x4o+16x5e+16x5o+16x6e+16x6o
   edge-type-emb-dim:
     value: 32
   emb-use-odd-features:
