@@ -46,9 +46,9 @@ python -u scripts/wandb_run.py \
   --node-update-message-agg sum \
   --node-update-residual true \
   --head-use-mlp-log-scale false \
-  --neck-depth 2 \
-  --internal-e3mlp-layers 2 \
-  --head-e3mlp-layers 2 \
+  --neck-depth 4 \
+  --internal-e3mlp-layers 4 \
+  --head-e3mlp-layers 4 \
   --head-use-node-embeddings-for-self-edges true \
   --separate-shifted-self true \
   --head-use-tensor-square false \
