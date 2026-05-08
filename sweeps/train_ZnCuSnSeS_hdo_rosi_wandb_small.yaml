@@ -51,7 +51,7 @@ parameters:
 
   # Model architecture
   precision:
-    value: float32-true
+    value: 32-true
   convention:
     value: e3nn
   use-lr-scheduler:
