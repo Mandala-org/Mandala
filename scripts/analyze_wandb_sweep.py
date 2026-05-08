@@ -79,8 +79,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--top-k",
         type=int,
-        default=3,
+        default=5,
         help="How many top runs to overlay on the histograms.",
+    )
+    parser.add_argument(
+        "--top-k-ci",
+        type=int,
+        default=None,
+        help="How many top runs to use for the scatterplot confidence band. Defaults to --top-k.",
+    )
+    parser.add_argument(
+        "--k-fold",
+        type=int,
+        default=5,
+        help="Number of folds used to build the scatterplot confidence band.",
     )
     parser.add_argument(
         "--bins",
@@ -139,7 +151,15 @@ def main() -> None:
         rank_metric, args.rank_goal, objective.get("goal", "minimize")
     )
     records = _collect_run_records(runs, rank_metric)
-    top_runs = _select_top_runs(records, args.top_k, rank_metric, rank_goal)
+    ranked_records = _rank_records(records, rank_goal)
+    highlight_count = min(args.top_k, len(ranked_records))
+    top_runs = ranked_records[:highlight_count]
+    run_styles = _build_rank_run_styles(ranked_records, highlight_count)
+    ci_count = min(
+        args.top_k_ci if args.top_k_ci is not None else args.top_k,
+        len(ranked_records),
+    )
+    ci_runs = ranked_records[:ci_count]
     variable_specs = _find_swept_variables(records, sweep_params)
 
     output_dir = (
@@ -164,6 +184,7 @@ def main() -> None:
         fig = _plot_variables(
             variable_specs,
             top_runs,
+            run_styles,
             args.bins,
             sweep_path,
             rank_metric,
@@ -180,6 +201,9 @@ def main() -> None:
             variable_specs,
             records,
             top_runs,
+            run_styles,
+            ci_runs,
+            args.k_fold,
             sweep_path,
             rank_metric,
             args.max_figure_width,
@@ -301,18 +325,16 @@ def _collect_run_records(runs: list[Any], rank_metric: str) -> list[RunRecord]:
     return records
 
 
-def _select_top_runs(
-    records: list[RunRecord], top_k: int, rank_metric: str, rank_goal: str
-) -> list[RunRecord]:
+def _rank_records(records: list[RunRecord], rank_goal: str) -> list[RunRecord]:
     ranked = [record for record in records if record.score is not None]
     if not ranked:
-        raise SystemExit(f"No run exposed a numeric value for metric {rank_metric!r}.")
+        return []
     ranked.sort(
         key=lambda record: record.score if record.score is not None else math.inf
     )
     if rank_goal == "maximize":
         ranked.reverse()
-    return ranked[:top_k]
+    return ranked
 
 
 def _resolve_rank_goal(rank_metric: str, rank_goal: str, sweep_goal: str) -> str:
@@ -374,6 +396,7 @@ def _find_swept_variables(
 def _plot_variables(
     variable_specs: list[dict[str, Any]],
     top_runs: list[RunRecord],
+    run_styles: dict[str, dict[str, Any]],
     base_bins: int,
     sweep_path: str,
     rank_metric: str,
@@ -388,20 +411,6 @@ def _plot_variables(
     fig_height = min(max_figure_height, max(8.0, 2.75 * nrows))
     fig, axes = plt.subplots(nrows, ncols, figsize=(fig_width, fig_height))
     axes_arr = np.atleast_1d(axes).ravel()
-
-    colors = ("#d62728", "#ff7f0e", "#f1c40f")
-    line_handles = []
-    for idx, run in enumerate(top_runs):
-        color = colors[idx % len(colors)]
-        line_handles.append(
-            Line2D(
-                [0],
-                [0],
-                color=color,
-                lw=2.5,
-                label=f"{idx + 1}. {run.name or run.run_id}",
-            )
-        )
 
     for ax, spec in zip(axes_arr, variable_specs):
         values = spec["values"]
@@ -433,14 +442,17 @@ def _plot_variables(
                 value = _coerce_numeric(run.config.get(spec["key"]))
                 if value is None:
                     continue
-                color = colors[idx % len(colors)]
-                x_pos = _top_run_marker_x(
-                    value,
-                    idx,
-                    len(top_runs),
-                    numeric_values,
-                    use_log=use_log,
-                )
+                color = run_styles[run.run_id]["color"]
+                if len(spec["unique_values"]) < 8:
+                    x_pos = _top_run_marker_x(
+                        value,
+                        idx,
+                        len(top_runs),
+                        numeric_values,
+                        use_log=use_log,
+                    )
+                else:
+                    x_pos = value
                 ax.axvline(x_pos, color=color, lw=2.0, alpha=0.95)
             ax.set_xlabel("")
             if use_log:
@@ -477,7 +489,7 @@ def _plot_variables(
                 )
                 if label not in counts:
                     continue
-                color = colors[idx % len(colors)]
+                color = run_styles[run.run_id]["color"]
                 position = ordered_labels.index(label)
                 x_pos = _top_run_marker_x(
                     float(position),
@@ -510,11 +522,22 @@ def _plot_variables(
         fontsize=12,
         y=0.98,
     )
-    if line_handles:
+    legend_runs = top_runs[:5]
+    if legend_runs:
+        legend_handles = [
+            Line2D(
+                [0],
+                [0],
+                color=run_styles[run.run_id]["color"],
+                lw=2.5,
+                label=f"{idx + 1}. {run.name or run.run_id}",
+            )
+            for idx, run in enumerate(legend_runs)
+        ]
         fig.legend(
-            handles=line_handles,
+            handles=legend_handles,
             loc="lower center",
-            ncol=min(3, len(line_handles)),
+            ncol=min(5, len(legend_handles)),
             frameon=False,
             bbox_to_anchor=(0.5, 0.0),
         )
@@ -528,6 +551,9 @@ def _plot_metric_scatterplots(
     variable_specs: list[dict[str, Any]],
     records: list[RunRecord],
     top_runs: list[RunRecord],
+    run_styles: dict[str, dict[str, Any]],
+    ci_runs: list[RunRecord],
+    k_fold: int,
     sweep_path: str,
     rank_metric: str,
     max_figure_width: float,
@@ -543,12 +569,7 @@ def _plot_metric_scatterplots(
     axes_arr = np.atleast_1d(axes).ravel()
 
     top_run_ids = {run.run_id for run in top_runs}
-    color_map = _build_scatter_color_map(records, top_run_ids)
-    top_colors = ("#d62728", "#ff7f0e", "#f1c40f")
-    top_color_by_id = {
-        run.run_id: top_colors[idx % len(top_colors)]
-        for idx, run in enumerate(top_runs)
-    }
+    ci_run_ids = {run.run_id for run in ci_runs}
 
     for ax, spec in zip(axes_arr, variable_specs):
         key = spec["key"]
@@ -572,7 +593,7 @@ def _plot_metric_scatterplots(
                     y for record, _, y in points if record.run_id not in top_run_ids
                 ]
                 non_top_colors = [
-                    color_map[record.run_id]
+                    run_styles[record.run_id]["color"]
                     for record, _, _ in points
                     if record.run_id not in top_run_ids
                 ]
@@ -580,10 +601,34 @@ def _plot_metric_scatterplots(
                     ax.scatter(
                         non_top_xs,
                         non_top_ys,
-                        s=18,
+                        s=12,
                         c=non_top_colors,
-                        alpha=0.45,
+                        alpha=0.34,
                         linewidths=0,
+                    )
+                band = _compute_numeric_ci_band_from_points(
+                    points,
+                    ci_run_ids,
+                    k_fold,
+                    use_log_x=distribution == "log_uniform_values",
+                )
+                if band is not None:
+                    x_grid, y_center, y_low, y_high = band
+                    ax.fill_between(
+                        x_grid,
+                        y_low,
+                        y_high,
+                        color="black",
+                        alpha=0.08,
+                        zorder=0,
+                    )
+                    ax.plot(
+                        x_grid,
+                        y_center,
+                        color="black",
+                        alpha=0.28,
+                        linewidth=1.05,
+                        zorder=1,
                     )
                 for idx, run in enumerate(top_runs):
                     point = next(
@@ -599,10 +644,11 @@ def _plot_metric_scatterplots(
                     ax.scatter(
                         [point[0]],
                         [point[1]],
-                        s=75,
-                        c=[top_colors[idx % len(top_colors)]],
+                        s=48,
+                        c=[run_styles[run.run_id]["color"]],
                         edgecolors="black",
                         linewidths=0.4,
+                        alpha=0.99,
                         zorder=4,
                     )
                 use_log_x = distribution == "log_uniform_values"
@@ -632,36 +678,19 @@ def _plot_metric_scatterplots(
                 )
                 x = positions[label]
                 jitter = _categorical_jitter(record.run_id, key)
-                if record.run_id in top_color_by_id:
-                    color = top_color_by_id[record.run_id]
-                else:
-                    color = color_map[record.run_id]
+                color = run_styles[record.run_id]["color"]
+                size = run_styles[record.run_id]["size"]
+                alpha = run_styles[record.run_id]["alpha"]
+                is_top = record.run_id in top_run_ids
                 ax.scatter(
                     [x + jitter],
                     [record.score],
-                    s=18,
+                    s=size,
                     c=[color],
-                    alpha=0.45 if record.run_id not in top_run_ids else 1.0,
-                    linewidths=0,
-                    zorder=3 if record.run_id in top_run_ids else 2,
-                )
-            for idx, run in enumerate(top_runs):
-                value = run.config.get(key, MISSING)
-                if value is MISSING or run.score is None or run.score <= 0:
-                    continue
-                label = _format_categorical_value(
-                    key, value, max_categorical_label_chars
-                )
-                if label not in positions:
-                    continue
-                ax.scatter(
-                    [positions[label]],
-                    [run.score],
-                    s=90,
-                    c=[top_colors[idx % len(top_colors)]],
-                    edgecolors="black",
-                    linewidths=0.4,
-                    zorder=5,
+                    alpha=alpha,
+                    edgecolors="black" if is_top else "none",
+                    linewidths=0.4 if is_top else 0,
+                    zorder=3 if is_top else 2,
                 )
             ax.set_xticks(list(positions.values()))
             ax.set_xticklabels(ordered_labels, rotation=15, ha="right", fontsize=7)
@@ -687,33 +716,34 @@ def _plot_metric_scatterplots(
         if col > 0:
             ax.set_ylabel("")
 
-    handles = [
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            linestyle="none",
-            markerfacecolor=color,
-            markeredgecolor="black",
-            markeredgewidth=0.4,
-            markersize=8,
-            label=f"{idx + 1}. {run.name or run.run_id}",
-        )
-        for idx, (run, color) in enumerate(zip(top_runs, top_colors))
-    ]
-
     fig.suptitle(
         f"W&B sweep metric scatterplots\n{sweep_path}\nmetric={rank_metric} (log scale)",
         fontsize=12,
         y=0.98,
     )
-    fig.legend(
-        handles=handles,
-        loc="lower center",
-        ncol=min(3, len(handles)),
-        frameon=False,
-        bbox_to_anchor=(0.5, 0.0),
-    )
+    legend_runs = top_runs[:5]
+    if legend_runs:
+        legend_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                linestyle="none",
+                markerfacecolor=run_styles[run.run_id]["color"],
+                markeredgecolor="black",
+                markeredgewidth=0.4,
+                markersize=8,
+                label=f"{idx + 1}. {run.name or run.run_id}",
+            )
+            for idx, run in enumerate(legend_runs)
+        ]
+        fig.legend(
+            handles=legend_handles,
+            loc="lower center",
+            ncol=min(5, len(legend_handles)),
+            frameon=False,
+            bbox_to_anchor=(0.5, 0.0),
+        )
     fig.tight_layout(rect=(0.02, 0.06, 1.0, 0.94), w_pad=1.0, h_pad=1.0)
     return fig
 
@@ -885,21 +915,47 @@ def _truncate_hidden_irreps_value(value: str) -> str:
     return "+".join(parts[:2]) + "+"
 
 
-def _build_scatter_color_map(
-    records: list[RunRecord], top_run_ids: set[str]
-) -> dict[str, str]:
-    palette = list(plt.get_cmap("tab20").colors)
-    rng = np.random.default_rng(0)
-    rng.shuffle(palette)
-    palette_hex = [matplotlib.colors.to_hex(color) for color in palette]
-    color_map: dict[str, str] = {}
-    idx = 0
-    for record in records:
-        if record.run_id in top_run_ids:
-            continue
-        color_map[record.run_id] = palette_hex[idx % len(palette_hex)]
-        idx += 1
-    return color_map
+def _build_rank_run_styles(
+    ranked_records: list[RunRecord], highlight_count: int
+) -> dict[str, dict[str, Any]]:
+    if not ranked_records:
+        return {}
+
+    highlight_count = max(0, min(highlight_count, len(ranked_records)))
+    top_records = ranked_records[:highlight_count]
+    rest_records = ranked_records[highlight_count:]
+
+    top_colors = _gradient_colors("#d62728", "#f1c40f", len(top_records))
+    rest_colors = _gradient_colors("#f1c40f", "#1f77b4", len(rest_records))
+
+    styles: dict[str, dict[str, Any]] = {}
+    for record, color in zip(top_records, top_colors):
+        styles[record.run_id] = {
+            "color": color,
+            "size": 52,
+            "alpha": 0.98,
+        }
+    for record, color in zip(rest_records, rest_colors):
+        styles[record.run_id] = {
+            "color": color,
+            "size": 14,
+            "alpha": 0.38,
+        }
+    return styles
+
+
+def _gradient_colors(start_hex: str, end_hex: str, count: int) -> list[str]:
+    if count <= 0:
+        return []
+    start = np.asarray(matplotlib.colors.to_rgb(start_hex), dtype=float)
+    end = np.asarray(matplotlib.colors.to_rgb(end_hex), dtype=float)
+    if count == 1:
+        return [matplotlib.colors.to_hex(start)]
+    colors = []
+    for t in np.linspace(0.0, 1.0, count):
+        rgb = start * (1.0 - t) + end * t
+        colors.append(matplotlib.colors.to_hex(rgb))
+    return colors
 
 
 def _categorical_jitter(run_id: str, key: str, width: float = 0.12) -> float:
@@ -942,6 +998,99 @@ def _top_run_marker_x(
         span = max(abs(lo), 1.0)
     step = max(span * 0.01, 1e-6)
     return base_x + centered * step
+
+
+def _compute_numeric_ci_band_from_points(
+    points: list[tuple[RunRecord, float, float]],
+    ci_run_ids: set[str],
+    k_fold: int,
+    use_log_x: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+    ci_points = [(x, y) for record, x, y in points if record.run_id in ci_run_ids]
+    return _compute_numeric_ci_band_from_xy(ci_points, k_fold, use_log_x)
+
+
+def _compute_numeric_ci_band_from_xy(
+    points: list[tuple[float, float]],
+    k_fold: int,
+    use_log_x: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+    if len(points) < 2:
+        return None
+
+    xs = np.asarray([x for x, _ in points], dtype=float)
+    ys = np.asarray([y for _, y in points], dtype=float)
+    valid = np.isfinite(xs) & np.isfinite(ys) & (ys > 0)
+    if use_log_x:
+        valid &= xs > 0
+    xs = xs[valid]
+    ys = ys[valid]
+    if xs.size < 2:
+        return None
+
+    x_min = float(np.min(xs))
+    x_max = float(np.max(xs))
+    if x_min == x_max:
+        return None
+
+    if use_log_x:
+        x_grid = np.logspace(np.log10(x_min), np.log10(x_max), 200)
+    else:
+        x_grid = np.linspace(x_min, x_max, 200)
+
+    n = xs.size
+    fold_count = max(2, min(int(k_fold), n))
+    indices = np.arange(n)
+    rng = np.random.default_rng(0)
+    rng.shuffle(indices)
+    folds = np.array_split(indices, fold_count)
+
+    fold_preds: list[np.ndarray] = []
+    for fold in folds:
+        train_idx = np.setdiff1d(indices, fold, assume_unique=False)
+        if train_idx.size < 1:
+            continue
+        fit = _fit_log_linear_regression(xs[train_idx], ys[train_idx])
+        if fit is None:
+            continue
+        slope, intercept = fit
+        fold_preds.append(_predict_log_linear_regression(x_grid, slope, intercept))
+
+    if not fold_preds:
+        return None
+
+    center_fit = _fit_log_linear_regression(xs, ys)
+    if center_fit is None:
+        return None
+    slope, intercept = center_fit
+    y_center = _predict_log_linear_regression(x_grid, slope, intercept)
+    y_stack = np.vstack(fold_preds)
+    y_low = np.min(y_stack, axis=0)
+    y_high = np.max(y_stack, axis=0)
+    return x_grid, y_center, y_low, y_high
+
+
+def _fit_log_linear_regression(
+    xs: np.ndarray, ys: np.ndarray
+) -> tuple[float, float] | None:
+    xs = np.asarray(xs, dtype=float)
+    ys = np.asarray(ys, dtype=float)
+    mask = np.isfinite(xs) & np.isfinite(ys) & (ys > 0)
+    xs = xs[mask]
+    ys = ys[mask]
+    if xs.size == 0:
+        return None
+    if xs.size == 1 or np.allclose(xs, xs[0]):
+        return 0.0, float(np.log(ys).mean())
+    slope, intercept = np.polyfit(xs, np.log(ys), 1)
+    return float(slope), float(intercept)
+
+
+def _predict_log_linear_regression(
+    xs: np.ndarray, slope: float, intercept: float
+) -> np.ndarray:
+    xs = np.asarray(xs, dtype=float)
+    return np.exp(intercept + slope * xs)
 
 
 def _unique_in_order(values: list[Any]) -> list[Any]:

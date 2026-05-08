@@ -2,14 +2,16 @@
 
 - Ranking metric: `val/hamiltonian_mae`
 - Ranking goal: `minimize`
-- Runs loaded: `19`
+- Runs loaded: `24`
 - Non-constant swept variables: `12`
 
 ## Top runs
 
-1. `graceful-sweep-8` (`znxgd753`) score=0.02190062403678894
-2. `colorful-sweep-16` (`n912gq7a`) score=0.024326466023921967
-3. `radiant-sweep-12` (`gc1mm6ca`) score=0.030687818303704265
+1. `graceful-sweep-8` (`znxgd753`) score=0.01880776509642601
+2. `colorful-sweep-16` (`n912gq7a`) score=0.020206496119499207
+3. `radiant-sweep-12` (`gc1mm6ca`) score=0.024893663823604584
+4. `peachy-sweep-5` (`2d7cbzwc`) score=0.032363757491111755
+5. `devoted-sweep-14` (`6xurqi7r`) score=0.03269856050610542
 
 ## Variables
 
