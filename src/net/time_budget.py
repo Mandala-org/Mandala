@@ -24,8 +24,14 @@ class WallClockBudgetCallback(pl.Callback):
         self._stop_requested = False
 
     def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
-        self._fit_start_time = self._clock()
+        self._fit_start_time = None
         self._stop_requested = False
+
+    def on_train_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        if self._fit_start_time is None:
+            self._fit_start_time = self._clock()
 
     def on_validation_epoch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
@@ -33,7 +39,7 @@ class WallClockBudgetCallback(pl.Callback):
         if trainer.sanity_checking or self._stop_requested:
             return
         if self._fit_start_time is None:
-            self._fit_start_time = self._clock()
+            return
         elapsed = self._clock() - self._fit_start_time
         if elapsed < self.budget_seconds:
             return
