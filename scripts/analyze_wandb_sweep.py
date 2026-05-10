@@ -264,21 +264,20 @@ def main() -> None:
         f"- Runs loaded: `{len(runs)}`",
         f"- Non-constant swept variables: `{len(variable_specs)}`",
         "",
-        "## Top runs",
+        "## Variables",
         "",
     ]
-    for idx, rec in enumerate(top_runs, start=1):
-        report_lines.append(f"{idx}. `{rec.name}` (`{rec.run_id}`) score={rec.score}")
-    report_lines.extend(["", "## Variables", ""])
     for spec in variable_specs:
-        report_lines.append(
-            f"- `{spec['display_name']}`: {spec['kind']}"
-            + (
-                f", distribution={spec['distribution']}"
-                if spec["distribution"] is not None
-                else ""
+        report_lines.append(f"### `{spec['display_name']}`")
+        report_lines.append(_summarize_variable_spec(spec))
+        report_lines.append("")
+        for idx, rec in enumerate(top_runs, start=1):
+            value = rec.config.get(spec["key"], MISSING)
+            report_lines.append(
+                f"- {idx}. `{rec.name}` (`{rec.run_id}`): "
+                f"`{_display_value(value) if value is not MISSING else 'missing'}`"
             )
-        )
+        report_lines.append("")
     report_path.write_text("\n".join(report_lines) + "\n")
     print(f"Saved report: {report_path}")
 
@@ -856,6 +855,45 @@ def _print_top_runs(top_runs: list[RunRecord], rank_metric: str) -> None:
     for idx, record in enumerate(top_runs, start=1):
         print(f"  {idx}. {record.name} ({record.run_id}) -> {record.score}")
     print()
+
+
+def _summarize_variable_spec(spec: dict[str, Any]) -> str:
+    display_name = spec["display_name"]
+    kind = spec["kind"]
+    distribution = spec["distribution"]
+    unique_values = spec["unique_values"]
+    n_unique = len(unique_values)
+    n_present = len(spec["values"])
+    if kind == "numeric":
+        numeric_values = np.asarray(spec["numeric_values"], dtype=float)
+        lo = float(np.min(numeric_values))
+        hi = float(np.max(numeric_values))
+        distribution_text = (
+            f" The sweep metadata marks it as `{distribution}`."
+            if distribution is not None
+            else ""
+        )
+        examples = ", ".join(unique_values[:4])
+        if n_unique > 4:
+            examples += ", ..."
+        return (
+            f"`{display_name}` is a numeric parameter that appears in `{n_present}` runs "
+            f"with `{n_unique}` distinct values spanning `{lo:g}` to `{hi:g}`."
+            f"{distribution_text} Example values: {examples}."
+        )
+    examples = ", ".join(unique_values[:6])
+    if n_unique > 6:
+        examples += ", ..."
+    distribution_text = (
+        f" The sweep metadata marks it as `{distribution}`."
+        if distribution is not None
+        else ""
+    )
+    return (
+        f"`{display_name}` is a categorical parameter that appears in `{n_present}` runs "
+        f"with `{n_unique}` distinct values."
+        f"{distribution_text} Example values: {examples}."
+    )
 
 
 def _normalize_mapping(mapping: Any) -> dict[str, Any]:
