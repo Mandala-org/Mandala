@@ -1697,7 +1697,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         )
         _maybe_log_wandb(run, payload)
         fp = eval_result["first_payload"]
-        if fp is not None:
+        if self.generate_video and fp is not None:
             self._save_epoch_frame(trainer, pl_module, fp["x"], fp["y"], fp["preds"])
 
     def _save_epoch_frame(self, trainer, pl_module, x, y, preds) -> None:
