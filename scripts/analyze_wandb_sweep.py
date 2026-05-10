@@ -73,8 +73,8 @@ def parse_args() -> argparse.Namespace:
         default="auto",
         choices=["auto", "minimize", "maximize"],
         help=(
-            "Direction for ranking by --rank-metric. 'auto' follows the sweep "
-            "objective goal when possible and otherwise uses a simple metric-name heuristic."
+            "Direction for ranking by --rank-metric. 'auto' uses the sweep "
+            "objective goal from sweep metadata."
         ),
     )
     parser.add_argument(
@@ -137,9 +137,11 @@ def main() -> None:
     if not runs:
         raise SystemExit(f"Sweep {sweep_path} has no runs.")
 
-    sweep_config = _normalize_mapping(_safe_mapping(getattr(sweep, "config", {})))
-    sweep_params = _normalize_mapping(sweep_config.get("parameters", {}))
-    objective = _safe_mapping(sweep_config.get("metric", {}))
+    sweep_config = _require_mapping(getattr(sweep, "config", {}), "sweep config")
+    sweep_params = _require_mapping(
+        sweep_config.get("parameters", {}), "sweep config.parameters"
+    )
+    objective = _require_mapping(sweep_config.get("metric", {}), "sweep config.metric")
     default_rank_metric = objective.get("name")
     rank_metric = args.rank_metric or default_rank_metric
     if not rank_metric:
@@ -147,11 +149,13 @@ def main() -> None:
             "Could not infer a ranking metric from the sweep metadata. "
             "Pass --rank-metric explicitly."
         )
+    if "goal" not in objective:
+        raise SystemExit(
+            "Sweep metric metadata is missing goal; expected 'minimize' or 'maximize'."
+        )
 
-    rank_goal = _resolve_rank_goal(
-        rank_metric, args.rank_goal, objective.get("goal", "minimize")
-    )
-    records = _collect_run_records(runs, rank_metric)
+    rank_goal = _resolve_rank_goal(rank_metric, args.rank_goal, objective["goal"])
+    records, skipped_runs = _collect_run_records(runs, rank_metric)
     ranked_records = _rank_records(records, rank_goal)
     highlight_count = min(args.top_k, len(ranked_records))
     top_runs = ranked_records[:highlight_count]
@@ -172,6 +176,8 @@ def main() -> None:
 
     print(f"Sweep: {sweep_path}")
     print(f"Runs loaded: {len(runs)}")
+    print(f"Runs available for plots: {len(records)}")
+    print(f"Runs skipped for ranking without {rank_metric!r}: {skipped_runs}")
     print(f"Ranking metric: {rank_metric} ({rank_goal})")
     print(f"Top runs used for overlays: {len(top_runs)}")
     print(f"Non-constant swept variables: {len(variable_specs)}")
@@ -309,11 +315,33 @@ def _sweep_path_from_ref(ref: str) -> str:
     return f"{entity}/{project}/{sweep_id}"
 
 
-def _collect_run_records(runs: list[Any], rank_metric: str) -> list[RunRecord]:
+def _collect_run_records(
+    runs: list[Any], rank_metric: str
+) -> tuple[list[RunRecord], int]:
     records: list[RunRecord] = []
+    skipped_runs = 0
     for run in runs:
-        config = _normalize_run_config(_safe_mapping(getattr(run, "config", {})))
-        score = _safe_float(_mapping_get(getattr(run, "summary", {}), rank_metric))
+        config = _normalize_run_config(
+            _require_mapping(
+                getattr(run, "config", {}), f"run {getattr(run, 'id', '')} config"
+            )
+        )
+        summary = _require_mapping(
+            getattr(run, "summary", {}), f"run {getattr(run, 'id', '')} summary"
+        )
+        score = None
+        if rank_metric in summary:
+            try:
+                score = float(summary[rank_metric])
+            except Exception as exc:
+                raise SystemExit(
+                    f"Expected run {getattr(run, 'id', '')} summary[{rank_metric!r}] to be numeric."
+                ) from exc
+            if not math.isfinite(score):
+                score = None
+                skipped_runs += 1
+        else:
+            skipped_runs += 1
         records.append(
             RunRecord(
                 run_id=str(getattr(run, "id", "")),
@@ -323,11 +351,15 @@ def _collect_run_records(runs: list[Any], rank_metric: str) -> list[RunRecord]:
                 config=config,
             )
         )
-    return records
+    return records, skipped_runs
 
 
 def _rank_records(records: list[RunRecord], rank_goal: str) -> list[RunRecord]:
-    ranked = [record for record in records if record.score is not None]
+    ranked = [
+        record
+        for record in records
+        if record.score is not None and math.isfinite(record.score)
+    ]
     if not ranked:
         return []
     ranked.sort(
@@ -341,24 +373,20 @@ def _rank_records(records: list[RunRecord], rank_goal: str) -> list[RunRecord]:
 def _resolve_rank_goal(rank_metric: str, rank_goal: str, sweep_goal: str) -> str:
     if rank_goal != "auto":
         return rank_goal
-    if sweep_goal in {"minimize", "maximize"}:
-        return sweep_goal
-    lowered = rank_metric.lower()
-    if any(
-        token in lowered
-        for token in ("loss", "error", "mae", "mse", "rmse", "distance")
-    ):
-        return "minimize"
-    return "maximize"
+    if sweep_goal not in {"minimize", "maximize"}:
+        raise SystemExit(
+            f"Sweep metric goal must be 'minimize' or 'maximize', got {sweep_goal!r}."
+        )
+    return sweep_goal
 
 
 def _find_swept_variables(
     records: list[RunRecord], sweep_params: dict[str, Any]
 ) -> list[dict[str, Any]]:
     all_keys = set(sweep_params)
-    if not all_keys:
-        for record in records:
-            all_keys.update(record.config)
+    for record in records:
+        all_keys.update(record.config)
+    all_keys = {key for key in all_keys if _is_analysis_variable_key(key)}
 
     variable_specs: list[dict[str, Any]] = []
     for key in sorted(all_keys):
@@ -374,7 +402,9 @@ def _find_swept_variables(
         numeric_values = [_coerce_numeric(value) for value in present]
         is_numeric = all(value is not None for value in numeric_values)
         display_name = _display_name(key)
-        param_meta = _safe_mapping(sweep_params.get(key, {}))
+        param_meta = _require_mapping(
+            sweep_params.get(key, {}), f"sweep parameter {key!r}"
+        )
         distribution = param_meta.get("distribution")
         variable_specs.append(
             {
@@ -829,11 +859,11 @@ def _print_top_runs(top_runs: list[RunRecord], rank_metric: str) -> None:
 
 
 def _normalize_mapping(mapping: Any) -> dict[str, Any]:
-    data = _safe_mapping(mapping)
+    data = _require_mapping(mapping, "mapping")
     normalized: dict[str, Any] = {}
     for key, value in data.items():
         if not isinstance(key, str):
-            continue
+            raise SystemExit("Expected mapping keys to be strings.")
         normalized[key.replace("-", "_")] = _unwrap_wandb_value(value)
     return normalized
 
@@ -895,6 +925,35 @@ def _is_sequence_like_key(key: str) -> bool:
     )
 
 
+def _is_analysis_variable_key(key: str) -> bool:
+    if key in {
+        "cfg",
+        "run_name",
+        "wandb_project",
+        "checkpoint_dir",
+        "save_dir",
+        "snapshot_cache_dir",
+        "data_path",
+        "dataset_kind",
+        "dataset_device",
+        "precision",
+        "device",
+        "gpus",
+        "num_workers",
+        "seed",
+        "resume_mode",
+        "wandb_mode",
+        "benchmark",
+        "verbosity",
+        "bench_verbosity",
+        "tune",
+    }:
+        return False
+    if key.startswith("log_") or key.startswith("wandb_"):
+        return False
+    return True
+
+
 def _parse_string_literal(value: str) -> Any | None:
     stripped = value.strip()
     if not stripped:
@@ -911,39 +970,30 @@ def _parse_string_literal(value: str) -> Any | None:
     return None
 
 
-def _safe_mapping(mapping: Any) -> dict[str, Any]:
-    if mapping is None:
-        return {}
+def _require_mapping(mapping: Any, context: str) -> dict[str, Any]:
     if isinstance(mapping, dict):
         return mapping
     try:
-        return dict(mapping)
-    except Exception:
-        return {}
+        result = dict(mapping)
+    except Exception as exc:
+        raise SystemExit(f"Expected {context} to be a mapping.") from exc
+    return result
+
+
+def _require_float(value: Any, context: str) -> float:
+    try:
+        numeric = float(value)
+    except Exception as exc:
+        raise SystemExit(f"Expected {context} to be numeric.") from exc
+    if not math.isfinite(numeric):
+        raise SystemExit(f"Expected {context} to be finite, got {numeric!r}.")
+    return numeric
 
 
 def _unwrap_wandb_value(value: Any) -> Any:
     if isinstance(value, dict) and set(value) == {"value"}:
         return value["value"]
     return value
-
-
-def _mapping_get(mapping: Any, key: str) -> Any:
-    if hasattr(mapping, "get"):
-        return mapping.get(key)
-    try:
-        return dict(mapping).get(key)
-    except Exception:
-        return None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
 
 
 def _coerce_numeric(value: Any) -> float | None:
