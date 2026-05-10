@@ -33,7 +33,7 @@ parameters:
   dataset-device:
     value: cpu
   num-workers:
-    value: 11
+    value: 3
   scales:
     value: [1]
   num-train-per-scale:
