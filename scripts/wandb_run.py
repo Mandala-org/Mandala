@@ -76,6 +76,7 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(*_arg_names("sweep_yaml"), type=str, default=None)
     parser.add_argument(*_arg_names("convention"), type=str, default="e3nn")
+    parser.add_argument(*_arg_names("max_wall_clock_hours"), type=float, default=None)
 
     config_fields = get_type_hints(Config)
     for name, field_type in config_fields.items():
@@ -135,6 +136,7 @@ def main() -> None:
     args = setup_argparse()
     if args.resume_from_wandb is not None:
         _apply_wandb_resume_metadata(args)
+    _normalize_wall_clock_args(args)
     _validate_required_args(args)
     print("=== wandb_run.py starting ===")
     print(f"dataset_kind={args.dataset_kind}")
@@ -192,6 +194,22 @@ def _arg_names(name: str) -> tuple[str, ...]:
     if alias == primary:
         return (primary,)
     return (primary, alias)
+
+
+def _normalize_wall_clock_args(args: argparse.Namespace) -> None:
+    explicit_args = set(getattr(args, "_explicit_args", set()))
+    explicit_seconds = "max_wall_clock_seconds" in explicit_args
+    explicit_hours = "max_wall_clock_hours" in explicit_args
+    hours = getattr(args, "max_wall_clock_hours", None)
+    if explicit_seconds and explicit_hours:
+        raise ValueError(
+            "--max-wall-clock-seconds and --max-wall-clock-hours are mutually exclusive"
+        )
+    if hours is None:
+        return
+    if hours <= 0:
+        raise ValueError("--max-wall-clock-hours must be positive")
+    args.max_wall_clock_seconds = float(hours) * 3600.0
 
 
 def _apply_wandb_resume_metadata(args: argparse.Namespace) -> None:

@@ -107,6 +107,7 @@ class Config:
     # ---------------------- training ------------------------------------
     lr: float = 3e-2
     max_epochs: int = 100
+    max_wall_clock_seconds: float | None = None
     batch_size: int = 1
     use_lr_scheduler: bool = True
     lr_scheduler_factor: float = 0.5

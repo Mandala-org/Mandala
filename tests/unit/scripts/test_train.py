@@ -161,6 +161,35 @@ def test_build_callbacks_adds_revert_on_spike(monkeypatch, tmp_path):
     assert callbacks[2][1]["monitor"] == cfg.lr_scheduler_target
 
 
+def test_build_callbacks_adds_wall_clock_budget(monkeypatch, tmp_path):
+    mod = _load_module()
+
+    monkeypatch.setattr(mod, "_build_progress_bar", lambda: "progress")
+    monkeypatch.setattr(
+        mod,
+        "ArtifactCheckpointCallback",
+        lambda **kwargs: ("artifact", kwargs),
+    )
+    monkeypatch.setattr(
+        mod,
+        "WallClockBudgetCallback",
+        lambda **kwargs: ("wall_clock", kwargs),
+    )
+
+    args = mod.argparse.Namespace(log_artifacts=True, generate_video=False)
+    cfg = mod.Config(
+        benchmark=False,
+        revert_on_spike=False,
+        max_wall_clock_seconds=43200.0,
+    )
+
+    callbacks = mod._build_callbacks(args, cfg, tmp_path, extra_callbacks=None)
+
+    assert callbacks[0] == "progress"
+    assert callbacks[1][0] == "artifact"
+    assert callbacks[2] == ("wall_clock", {"budget_seconds": 43200.0})
+
+
 def test_run_training_uses_wandb_run_name_for_run_dir(monkeypatch, tmp_path):
     mod = _load_module()
 

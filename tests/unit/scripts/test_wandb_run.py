@@ -78,6 +78,25 @@ def test_setup_argparse_accepts_fork_run(monkeypatch):
     assert args.fork_run is True
 
 
+def test_setup_argparse_accepts_max_wall_clock_hours(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "wandb_run.py",
+            "--max-wall-clock-hours",
+            "12",
+        ],
+    )
+
+    args = mod.setup_argparse()
+    mod._normalize_wall_clock_args(args)
+
+    assert args.max_wall_clock_hours == 12.0
+    assert args.max_wall_clock_seconds == 43200.0
+
+
 def test_parse_wandb_run_url_accepts_sweep_run_url():
     mod = _load_module()
 
@@ -145,6 +164,22 @@ parameters:
 
     assert captured["args"].data_path == "/tmp/data"
     assert captured["parsed_yaml"]["parameters"]["dataset-kind"]["value"] == "silicon"
+
+
+def test_normalize_wall_clock_args_rejects_both_units():
+    mod = _load_module()
+    args = mod.argparse.Namespace(
+        max_wall_clock_seconds=60.0,
+        max_wall_clock_hours=1.0,
+        _explicit_args={"max_wall_clock_seconds", "max_wall_clock_hours"},
+    )
+
+    try:
+        mod._normalize_wall_clock_args(args)
+    except ValueError as exc:
+        assert "mutually exclusive" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when both time-budget units are set")
 
 
 def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch):

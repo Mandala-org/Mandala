@@ -35,6 +35,7 @@ from net.run_logging import (  # noqa: E402
     log_orbital_config,
     log_snapshot_info,
 )
+from net.time_budget import WallClockBudgetCallback  # noqa: E402
 from scripts.dataset import (  # noqa: E402
     build_datasets_from_yaml,
     build_silicon_datasets,
@@ -489,6 +490,10 @@ def _build_callbacks(
                 decay_rate=cfg.revert_decay_rate,
                 spike_factor=cfg.revert_spike_factor,
             )
+        )
+    if cfg.max_wall_clock_seconds is not None:
+        callbacks.append(
+            WallClockBudgetCallback(budget_seconds=cfg.max_wall_clock_seconds)
         )
     if extra_callbacks:
         callbacks.extend(extra_callbacks)
