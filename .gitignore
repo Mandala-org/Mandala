@@ -15,6 +15,7 @@ benchmarks/
 lightning_logs/
 outputs/
 eval_outputs/
+eval_cache/
 wandb_sweep_analysis/
 slurm-*.out
 
