@@ -225,13 +225,51 @@ def _discover_snapshot_paths(
         raise ValueError("Provide both --matrix-path and --info-path together.")
     if snapshot_path is None:
         raise ValueError("--snapshot-path is required in snapshot mode.")
-    matrix_candidate = snapshot_path / "Si_DM"
-    info_candidate = snapshot_path / "info.dat"
+    if snapshot_path.is_file():
+        matrix_candidate = snapshot_path
+        info_candidate = _discover_info_file(snapshot_path.parent)
+        if info_candidate is None:
+            raise FileNotFoundError(
+                f"Could not infer info file next to matrix file: {snapshot_path}"
+            )
+        return matrix_candidate, info_candidate
+    matrix_candidate = _discover_matrix_file(snapshot_path)
+    info_candidate = _discover_info_file(snapshot_path)
     if not matrix_candidate.exists():
         raise FileNotFoundError(f"Matrix file not found: {matrix_candidate}")
-    if not info_candidate.exists():
-        raise FileNotFoundError(f"Info file not found: {info_candidate}")
+    if info_candidate is None or not info_candidate.exists():
+        raise FileNotFoundError(
+            f"Info file not found under snapshot path: {snapshot_path}"
+        )
     return matrix_candidate, info_candidate
+
+
+def _discover_matrix_file(snapshot_dir: Path) -> Path:
+    for name in ("Si_DM", "HS.out"):
+        candidate = snapshot_dir / name
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        f"Could not infer matrix file under snapshot path: {snapshot_dir}"
+    )
+
+
+def _discover_info_file(snapshot_dir: Path) -> Path | None:
+    preferred = [
+        "info.dat",
+        "info.txt",
+        "ZnCuSeS.out",
+        "SiO2.out",
+    ]
+    for name in preferred:
+        candidate = snapshot_dir / name
+        if candidate.exists():
+            return candidate
+    for candidate in sorted(snapshot_dir.glob("*.out")):
+        if candidate.name in {"HS.out", "log.out"}:
+            continue
+        return candidate
+    return None
 
 
 def _resolve_orbital_cfg(args: argparse.Namespace, cfg: Config) -> OrbitalIrrepConfig:

@@ -16,6 +16,7 @@ from analysis.wandb_sweep_core import (
     categorical_jitter,
     coerce_numeric,
     compute_numeric_ci_band_from_points,
+    display_value,
     format_categorical_value,
     numeric_jitter,
     run_url_for_record,
@@ -492,7 +493,9 @@ def build_html_report(
     histogram_fig: go.Figure,
     scatter_fig: go.Figure,
     include_plotlyjs: str | bool,
+    run_page_index: dict[str, dict[str, Any]] | None = None,
 ) -> str:
+    run_page_index = run_page_index or {}
     summary_cards = f"""
 <div class="summary-grid">
   <div class="card"><div class="k">Sweep</div><div class="v">{html.escape(result.sweep_path)}</div></div>
@@ -504,8 +507,11 @@ def build_html_report(
 </div>
 """
     top_rows = "\n".join(
-        f'<tr><td>{idx}</td><td><a href="{html.escape(run_url_for_record(result.sweep_path, rec))}">{html.escape(rec.name or rec.run_id)}</a></td>'
-        f"<td>{html.escape(rec.run_id)}</td><td>{html.escape(rec.state)}</td><td>{rec.score if rec.score is not None else ''}</td></tr>"
+        f"<tr><td>{idx}</td>"
+        f"<td>{_run_page_link(rec, run_page_index)}</td>"
+        f'<td><a href="{html.escape(run_url_for_record(result.sweep_path, rec))}">wandb</a></td>'
+        f"<td>{html.escape(rec.run_id)}</td><td>{html.escape(rec.state)}</td><td>{rec.score if rec.score is not None else ''}</td>"
+        f"<td>{html.escape(_evaluation_status_label(rec, run_page_index))}</td></tr>"
         for idx, rec in enumerate(result.top_runs, start=1)
     )
     variable_rows = "\n".join(
@@ -613,7 +619,7 @@ def build_html_report(
     <div class="panel">
       <h2>Top Runs</h2>
       <table>
-        <thead><tr><th>Rank</th><th>Run</th><th>ID</th><th>State</th><th>{html.escape(result.rank_metric)}</th></tr></thead>
+        <thead><tr><th>Rank</th><th>Run Page</th><th>W&amp;B</th><th>ID</th><th>State</th><th>{html.escape(result.rank_metric)}</th><th>Evaluation</th></tr></thead>
         <tbody>{top_rows}</tbody>
       </table>
     </div>
@@ -635,6 +641,165 @@ def build_html_report(
   </div>
 </body>
 </html>"""
+
+
+def build_run_detail_page(
+    result: SweepAnalysisResult,
+    record: RunRecord,
+    *,
+    include_plotlyjs: str | bool,
+    run_page_index: dict[str, dict[str, Any]] | None = None,
+) -> str:
+    run_page_index = run_page_index or {}
+    page_info = run_page_index.get(record.run_id, {})
+    evaluation = page_info.get("evaluation", {})
+    image_assets = evaluation.get("image_assets", [])
+    file_assets = evaluation.get("file_assets", [])
+    config_rows = "\n".join(
+        f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(display_value(value)))}</td></tr>"
+        for key, value in sorted(record.config.items())
+    )
+    if image_assets:
+        evaluation_html = "\n".join(
+            f"""
+<div class="asset-card">
+  <div class="asset-title">{html.escape(asset['label'])}</div>
+  <a href="{html.escape(asset['href'])}" target="_blank" rel="noopener noreferrer">
+    <img src="{html.escape(asset['href'])}" alt="{html.escape(asset['label'])}">
+  </a>
+</div>
+"""
+            for asset in image_assets
+        )
+        downloads_html = "\n".join(
+            f'<li><a href="{html.escape(asset["href"])}">{html.escape(asset["label"])}</a></li>'
+            for asset in file_assets
+        )
+        evaluation_section = f"""
+<div class="panel">
+  <h2>Precomputed Evaluation</h2>
+  <div class="meta-line">Source bundle: <code>{html.escape(str(evaluation.get("source_dir", "")))}</code></div>
+  <div class="asset-grid">
+    {evaluation_html}
+  </div>
+  <h2>Downloads</h2>
+  <ul class="downloads">
+    {downloads_html}
+  </ul>
+</div>
+"""
+    else:
+        evaluation_section = """
+<div class="panel">
+  <h2>Precomputed Evaluation</h2>
+  <p class="empty">No precomputed local evaluation bundle was found for this run yet.</p>
+</div>
+"""
+    _ = include_plotlyjs
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html.escape(record.name or record.run_id)} - W&amp;B Run Report</title>
+  <style>
+    :root {{
+      color-scheme: dark;
+    }}
+    body {{
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 30%),
+        radial-gradient(circle at top right, rgba(16, 185, 129, 0.10), transparent 26%),
+        linear-gradient(180deg, #0b1020 0%, #0f172a 42%, #111827 100%);
+      color: #e5e7eb;
+    }}
+    .page {{ max-width: 1500px; margin: 0 auto; padding: 24px; }}
+    .topbar {{ display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }}
+    .crumb, .cta {{
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px;
+      border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(15, 23, 42, 0.82); color: #c8d4ea; text-decoration: none;
+    }}
+    .page h1, h2 {{ margin: 0 0 12px; }}
+    .lead {{ color: #a8b3c7; margin-bottom: 24px; }}
+    .summary-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }}
+    .card, .panel {{
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(10px);
+      margin-bottom: 20px;
+    }}
+    .card {{ border-radius: 14px; padding: 14px 16px; margin-bottom: 0; }}
+    .k {{ font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 6px; }}
+    .v {{ font-size: 16px; font-weight: 600; word-break: break-word; color: #f8fafc; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ text-align: left; padding: 10px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.18); vertical-align: top; }}
+    th {{ font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; }}
+    td {{ font-size: 14px; color: #e5e7eb; }}
+    a {{ color: #7dd3fc; text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+    code {{ background: rgba(148, 163, 184, 0.12); color: #f8fafc; padding: 2px 6px; border-radius: 6px; }}
+    .asset-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }}
+    .asset-card {{
+      background: rgba(9, 14, 28, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 16px;
+      padding: 14px;
+    }}
+    .asset-title {{ font-weight: 600; margin-bottom: 10px; color: #f8fafc; }}
+    .asset-card img {{ display: block; width: 100%; height: auto; border-radius: 10px; }}
+    .downloads {{ margin: 0; padding-left: 18px; }}
+    .meta-line {{ color: #a8b3c7; margin-bottom: 14px; }}
+    .empty {{ color: #a8b3c7; }}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topbar">
+      <a class="crumb" href="../sweep_report.html">Back to sweep report</a>
+      <a class="cta" href="{html.escape(run_url_for_record(result.sweep_path, record))}" target="_blank" rel="noopener noreferrer">Open in W&amp;B</a>
+    </div>
+    <h1>{html.escape(record.name or record.run_id)}</h1>
+    <div class="lead">Run detail page for <code>{html.escape(record.run_id)}</code></div>
+    <div class="summary-grid">
+      <div class="card"><div class="k">Rank Metric</div><div class="v">{html.escape(result.rank_metric)}</div></div>
+      <div class="card"><div class="k">Score</div><div class="v">{record.score if record.score is not None else "n/a"}</div></div>
+      <div class="card"><div class="k">State</div><div class="v">{html.escape(record.state)}</div></div>
+      <div class="card"><div class="k">Evaluation</div><div class="v">{html.escape(_evaluation_status_label(record, run_page_index))}</div></div>
+    </div>
+    {evaluation_section}
+    <div class="panel">
+      <h2>Config</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Value</th></tr></thead>
+        <tbody>{config_rows}</tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+def _run_page_link(record: RunRecord, run_page_index: dict[str, dict[str, Any]]) -> str:
+    page = run_page_index.get(record.run_id, {})
+    href = page.get("href", f"runs/{record.run_id}.html")
+    label = html.escape(record.name or record.run_id)
+    return f'<a href="{html.escape(href)}">{label}</a>'
+
+
+def _evaluation_status_label(
+    record: RunRecord, run_page_index: dict[str, dict[str, Any]]
+) -> str:
+    page = run_page_index.get(record.run_id, {})
+    evaluation = page.get("evaluation", {})
+    if evaluation.get("image_assets"):
+        return "precomputed"
+    return "missing"
 
 
 def _row_col(index: int, ncols: int) -> tuple[int, int]:

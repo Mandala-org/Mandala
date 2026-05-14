@@ -29,6 +29,24 @@ def parse_args() -> argparse.Namespace:
     source.add_argument("--checkpoint", type=Path, default=None)
     source.add_argument("--run-url", type=str, default=None)
     parser.add_argument(
+        "--report-run-id",
+        type=str,
+        default=None,
+        help="Optional W&B run ID metadata for checkpoint-based evaluation bundles.",
+    )
+    parser.add_argument(
+        "--report-run-name",
+        type=str,
+        default=None,
+        help="Optional run name metadata for checkpoint-based evaluation bundles.",
+    )
+    parser.add_argument(
+        "--report-run-url",
+        type=str,
+        default=None,
+        help="Optional W&B run URL metadata for checkpoint-based evaluation bundles.",
+    )
+    parser.add_argument(
         "--checkpoint-kind",
         type=str,
         default="best",
@@ -156,6 +174,9 @@ def _resolve_source(args: argparse.Namespace) -> dict[str, Any]:
             "kind": "checkpoint",
             "checkpoint_path": str(checkpoint_path),
             "label": checkpoint_path.stem,
+            "run_id": args.report_run_id,
+            "run_name": args.report_run_name,
+            "run_url": args.report_run_url,
         }
     assert args.run_url is not None
     entity, project, run_id = _parse_run_ref(args.run_url)
