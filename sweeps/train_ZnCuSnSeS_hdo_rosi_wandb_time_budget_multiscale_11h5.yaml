@@ -42,9 +42,9 @@ parameters:
     value: [1, 2, 3, 4]
   # Keep total train/val volume in the same ballpark as the best recent single-scale sweep.
   num-train-per-scale:
-    value: 20
+    value: 80
   num-val-per-scale:
-    value: 5
+    value: 20
   max-wall-clock-hours:
     value: 11.5
 
@@ -101,7 +101,7 @@ parameters:
   node-update-message-agg:
     value: attention
   node-update-attention-scalar-dim:
-    value: 64
+    values: [64, 128, 256]
   node-update-attention-heads:
     value: 4
   node-update-residual:
@@ -135,7 +135,7 @@ parameters:
   e3mlp-norm-eps:
     value: 1e-8
   e3mlp-film-hidden-dim:
-    value: 64
+    values: [64, 128, 256]
 
   # Activations / regularization
   activation-odd-scalar:
