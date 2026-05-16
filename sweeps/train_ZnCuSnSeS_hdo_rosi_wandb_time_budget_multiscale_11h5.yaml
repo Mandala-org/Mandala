@@ -119,7 +119,7 @@ parameters:
   internal-e3mlp-layers:
     value: 1
   head-e3mlp-layers:
-    values: [1, 2]
+    values: [1, 2, 3]
   head-use-node-embeddings-for-self-edges:
     value: true
   separate-shifted-self:
@@ -159,7 +159,7 @@ parameters:
   l2-reg-coef:
     value: 0.0
   n-radial:
-    value: 128
+    value: [128, 256]
   radial-layers:
     value: [128, 128, 128]
 
