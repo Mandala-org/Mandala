@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:-print}"
-GROUP="${2:-all}"
-
-if [[ "${MODE}" != "print" && "${MODE}" != "run" ]]; then
-  echo "Usage: $0 [print|run] [all|single-scale|multi-scale]" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: $0 <seed> [scale1|scales1234]" >&2
+  echo "   or: DRY_RUN=1 $0 <seed> [scale1|scales1234]" >&2
+  echo "Examples:" >&2
+  echo "  $0 43" >&2
+  echo "  $0 101 scales1234" >&2
+  echo "  DRY_RUN=1 $0 43" >&2
   exit 1
 fi
 
-if [[ "${GROUP}" != "all" && "${GROUP}" != "single-scale" && "${GROUP}" != "multi-scale" ]]; then
-  echo "Usage: $0 [print|run] [all|single-scale|multi-scale]" >&2
+SEED="$1"
+SCALE_MODE="${2:-scale1}"
+
+if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
+  echo "Seed must be an integer, got: ${SEED}" >&2
+  exit 1
+fi
+
+if [[ "${SCALE_MODE}" != "scale1" && "${SCALE_MODE}" != "scales1234" ]]; then
+  echo "Second argument must be 'scale1' or 'scales1234', got: ${SCALE_MODE}" >&2
   exit 1
 fi
 
@@ -24,7 +34,16 @@ WANDB_PROJECT="mandala-ZnCuSnSeS-hamiltonian-rosi"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS"
 SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache"
 
-BASE_ARGS=(
+if [[ "${SCALE_MODE}" == "scale1" ]]; then
+  RUN_NAME="zncusnses-toprun47h-seed${SEED}-scale1"
+  SCALES="[1]"
+else
+  RUN_NAME="zncusnses-toprun47h-seed${SEED}-scales1234"
+  SCALES="[1, 2, 3, 4]"
+fi
+
+CMD=(
+  "${PYTHON_BIN}"
   scripts/wandb_run.py
   --wandb-project "${WANDB_PROJECT}"
   --checkpoint-dir "${CHECKPOINT_DIR}"
@@ -132,39 +151,15 @@ BASE_ARGS=(
   --revert-decay-patience 4
   --revert-decay-rate 0.5
   --revert-spike-factor 2.0
+  --run-name "${RUN_NAME}"
+  --seed "${SEED}"
+  --scales "${SCALES}"
 )
 
-launch() {
-  local run_name="$1"
-  local seed="$2"
-  local scales="$3"
-  local cmd=(
-    "${PYTHON_BIN}"
-    "${BASE_ARGS[@]}"
-    --run-name "${run_name}"
-    --seed "${seed}"
-    --scales "${scales}"
-  )
-
-  if [[ "${MODE}" == "print" ]]; then
-    printf '%q ' "${cmd[@]}"
-    printf '\n'
-  else
-    printf '\n=== Launching %s ===\n' "${run_name}"
-    "${cmd[@]}"
-  fi
-}
-
-if [[ "${GROUP}" == "all" || "${GROUP}" == "single-scale" ]]; then
-  launch "zncusnses-toprun47h-seed43-scale1" 43 "[1]"
-  launch "zncusnses-toprun47h-seed44-scale1" 44 "[1]"
-  launch "zncusnses-toprun47h-seed45-scale1" 45 "[1]"
-  launch "zncusnses-toprun47h-seed46-scale1" 46 "[1]"
-  launch "zncusnses-toprun47h-seed47-scale1" 47 "[1]"
-fi
-
-if [[ "${GROUP}" == "all" || "${GROUP}" == "multi-scale" ]]; then
-  launch "zncusnses-toprun47h-seed101-scales1234" 101 "[1, 2, 3, 4]"
-  launch "zncusnses-toprun47h-seed102-scales1234" 102 "[1, 2, 3, 4]"
-  launch "zncusnses-toprun47h-seed103-scales1234" 103 "[1, 2, 3, 4]"
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  printf '%q ' "${CMD[@]}"
+  printf '\n'
+else
+  printf '\n=== Launching %s ===\n' "${RUN_NAME}"
+  "${CMD[@]}"
 fi
