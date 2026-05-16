@@ -159,7 +159,7 @@ parameters:
   l2-reg-coef:
     value: 0.0
   n-radial:
-    value: [128, 256]
+    values: [128, 256]
   radial-layers:
     value: [128, 128, 128]
 
