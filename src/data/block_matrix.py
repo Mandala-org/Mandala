@@ -562,7 +562,7 @@ class BlockMatrix:
         import torch
         from core.orbital_irrep_config import OrbitalIrrepConfig
 
-        payload = torch.load(path, map_location="cpu")
+        payload = torch.load(path, map_location="cpu", weights_only=False)
         if payload.get("type") != "block":
             raise ValueError("file does not contain block matrix")
 
@@ -1113,7 +1113,7 @@ class IrrepsBlockData:
         import torch
         from core.orbital_irrep_config import OrbitalIrrepConfig
 
-        payload = torch.load(path, map_location="cpu")
+        payload = torch.load(path, map_location="cpu", weights_only=False)
         if payload.get("type") != "irrep":
             raise ValueError("file does not contain irrep snapshot")
 

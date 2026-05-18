@@ -28,17 +28,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
-CHECKPOINT_DIR="checkpoints/ZnCuSnSeS_hamiltonian_toprun_47h"
-RESUME_CHECKPOINT="/data/home2/brzoza73/casus/mandala/checkpoints/ZnCuSnSeS_hamiltonian_narrow/polar-sweep-35/latest_checkpoint.pt"
+CHECKPOINT_DIR="checkpoints/ZnCuSnSeS_hamiltonian_restart_hkgmr1y6_47h"
+RESUME_CHECKPOINT="/data/home2/brzoza73/casus/mandala/checkpoints/ZnCuSnSeS_hamiltonian_toprun_47h/zncusnses-toprun47h-seed47-scale1/latest_checkpoint.pt"
 WANDB_PROJECT="mandala-ZnCuSnSeS-hamiltonian-rosi"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS"
 SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache"
 
 if [[ "${SCALE_MODE}" == "scale1" ]]; then
-  RUN_NAME="zncusnses-toprun47h-seed${SEED}-scale1"
+  RUN_NAME="zncusnses-restart-hkgmr1y6-47h-seed${SEED}-scale1"
   SCALES="[1]"
 else
-  RUN_NAME="zncusnses-toprun47h-seed${SEED}-scales1234"
+  RUN_NAME="zncusnses-restart-hkgmr1y6-47h-seed${SEED}-scales1234"
   SCALES="[1, 2, 3, 4]"
 fi
 

@@ -42,7 +42,7 @@ parameters:
     value: [1, 2, 3, 4]
   # Keep total train/val volume in the same ballpark as the best recent single-scale sweep.
   num-train-per-scale:
-    value: 80
+    value: 60
   num-val-per-scale:
     value: 20
   max-wall-clock-hours:

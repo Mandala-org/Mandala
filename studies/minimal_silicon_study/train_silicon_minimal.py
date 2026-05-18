@@ -597,7 +597,7 @@ def _apply_checkpoint_config_overrides(
 
 
 def _load_checkpoint(path: str | os.PathLike) -> dict[str, Any]:
-    return torch.load(path, map_location="cpu")
+    return torch.load(path, map_location="cpu", weights_only=False)
 
 
 def _resolve_resume_checkpoint_path(path: str | os.PathLike) -> Path:
@@ -870,7 +870,7 @@ def get_preprocessed_sample_cache_file(
 
 def load_preprocessed_sample_cache(path: Path) -> dict | None:
     try:
-        return torch.load(path, map_location="cpu")
+        return torch.load(path, map_location="cpu", weights_only=False)
     except Exception:
         try:
             path.unlink()

@@ -444,7 +444,7 @@ def load_training_checkpoint(
     optimizer: torch.optim.Optimizer,
     device: str,
 ) -> tuple[int, list[dict], float, bool]:
-    payload = torch.load(path, map_location=device)
+    payload = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(payload["model_state_dict"])
     optimizer.load_state_dict(payload["optimizer_state_dict"])
     torch.set_rng_state(payload["torch_rng_state"].cpu())
@@ -695,7 +695,7 @@ def load_snapshot(
         / snapshot_name
         / "pair_cache.pt"
     )
-    payload = torch.load(path, map_location="cpu")
+    payload = torch.load(path, map_location="cpu", weights_only=False)
     return payload["inputs"], payload["targets"], payload["mapper"]
 
 

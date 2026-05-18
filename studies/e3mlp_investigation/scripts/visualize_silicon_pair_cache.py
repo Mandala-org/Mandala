@@ -80,7 +80,9 @@ def save_block_examples(cache_payload, snapshot: str, out_dir: Path) -> None:
 def main() -> None:
     args = parse_args()
     cache_dir = Path(args.cache_root) / args.snapshot
-    cache_payload = torch.load(cache_dir / "pair_cache.pt", map_location="cpu")
+    cache_payload = torch.load(
+        cache_dir / "pair_cache.pt", map_location="cpu", weights_only=False
+    )
     save_block_examples(cache_payload, args.snapshot, cache_dir)
 
 
