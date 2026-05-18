@@ -52,11 +52,11 @@ parameters:
   lr:
     distribution: log_uniform_values
     min: 0.008
-    max: 0.02
+    max: 0.05
   max_epochs:
     value: 3000
   grad-clip-val:
-    values: [1.0, 2.0]
+    values: [0.5, 1.0]
   accumulate-grad-batches:
     value: 1
 
