@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import html
 import math
+import json
+import shutil
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
+import torch
 from plotly.subplots import make_subplots
 
 from analysis.wandb_sweep_core import (
@@ -487,6 +491,186 @@ def build_scatter_figure(
     return fig
 
 
+def discover_evaluation_manifests(
+    evaluation_cache_root: Path,
+) -> list[dict[str, Any]]:
+    manifests: list[dict[str, Any]] = []
+    if not evaluation_cache_root.exists():
+        return manifests
+    for manifest_path in evaluation_cache_root.rglob("evaluation_manifest.json"):
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        manifests.append(
+            {
+                "manifest_path": manifest_path,
+                "bundle_dir": manifest_path.parent,
+                "payload": payload,
+            }
+        )
+    return manifests
+
+
+def prepare_run_page_index(
+    output_dir: Path,
+    ranked_records: list[RunRecord],
+    evaluation_cache_root: Path,
+) -> dict[str, dict[str, Any]]:
+    manifests = discover_evaluation_manifests(evaluation_cache_root)
+    run_page_index: dict[str, dict[str, Any]] = {}
+    assets_root = output_dir / "run_assets"
+    assets_root.mkdir(parents=True, exist_ok=True)
+    for record in ranked_records:
+        page_info: dict[str, Any] = {"href": f"runs/{record.run_id}.html"}
+        manifest = find_manifest_for_run(record, manifests)
+        if manifest is not None:
+            evaluation = copy_evaluation_bundle_assets(
+                manifest,
+                assets_root / record.run_id,
+                record.run_id,
+            )
+            page_info["evaluation"] = evaluation
+        run_page_index[record.run_id] = page_info
+    return run_page_index
+
+
+def find_manifest_for_run(
+    record: RunRecord,
+    manifests: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for manifest in manifests:
+        source = manifest.get("payload", {}).get("source", {})
+        if str(source.get("run_id") or "") == record.run_id:
+            return manifest
+    return None
+
+
+def find_manifest_for_checkpoint(
+    checkpoint_path: Path,
+    manifests: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    resolved = str(checkpoint_path.expanduser().resolve())
+    for manifest in manifests:
+        source = manifest.get("payload", {}).get("source", {})
+        manifest_checkpoint = source.get("checkpoint_path") or manifest.get(
+            "payload", {}
+        ).get("checkpoint")
+        if not manifest_checkpoint:
+            continue
+        try:
+            manifest_resolved = str(
+                Path(str(manifest_checkpoint)).expanduser().resolve()
+            )
+        except Exception:
+            manifest_resolved = str(manifest_checkpoint)
+        if manifest_resolved == resolved:
+            return manifest
+    return None
+
+
+def find_manifest_for_run_id(
+    run_id: str,
+    manifests: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for manifest in manifests:
+        source = manifest.get("payload", {}).get("source", {})
+        if str(source.get("run_id") or "") == run_id:
+            return manifest
+    return None
+
+
+def copy_evaluation_bundle_assets(
+    manifest: dict[str, Any],
+    destination_dir: Path,
+    asset_namespace: str,
+    *,
+    href_prefix: str = "../run_assets",
+) -> dict[str, Any]:
+    source_dir = Path(manifest["bundle_dir"])
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    preferred_images = [
+        "band_structure_comparison.png",
+        "band_structure_prediction.png",
+        "dos_comparison.png",
+        "dos_prediction.png",
+        "dos_error.png",
+        "hamiltonian_first_atoms_comparison.png",
+        "hamiltonian_first_atoms_prediction.png",
+        "hamiltonian_correlation.png",
+        "density_first_atoms_comparison.png",
+        "density_first_atoms_prediction.png",
+        "density_correlation.png",
+        "overlap_correlation.png",
+    ]
+    image_assets = []
+    file_assets = []
+    for filename in preferred_images:
+        source_path = source_dir / filename
+        if not source_path.exists():
+            continue
+        target_path = destination_dir / filename
+        shutil.copy2(source_path, target_path)
+        image_assets.append(
+            {
+                "label": label_for_asset(filename),
+                "href": f"{href_prefix}/{asset_namespace}/{filename}",
+            }
+        )
+    extra_files = [
+        "evaluation_manifest.json",
+        "band_structure_gt_gt_overlap.pt",
+        "band_structure_pred_gt_overlap.pt",
+        "band_structure_gt.pt",
+        "band_structure_pred.pt",
+        "pred_hamiltonian.pt",
+        "pred_density.pt",
+        "pred_overlap.pt",
+        "structure_metadata.pt",
+        "model_input.pt",
+    ]
+    copied_files: dict[str, Path] = {}
+    for filename in extra_files:
+        source_path = source_dir / filename
+        if not source_path.exists():
+            continue
+        target_path = destination_dir / filename
+        shutil.copy2(source_path, target_path)
+        copied_files[filename] = target_path
+        file_assets.append(
+            {
+                "label": filename,
+                "href": f"{href_prefix}/{asset_namespace}/{filename}",
+            }
+        )
+    return {
+        "source_dir": str(source_dir),
+        "asset_dir": str(destination_dir),
+        "manifest": manifest.get("payload", {}),
+        "image_assets": image_assets,
+        "file_assets": file_assets,
+        "copied_files": {name: str(path) for name, path in copied_files.items()},
+    }
+
+
+def label_for_asset(filename: str) -> str:
+    mapping = {
+        "band_structure_comparison.png": "Band structure comparison",
+        "band_structure_prediction.png": "Band structure prediction",
+        "dos_comparison.png": "DOS comparison",
+        "dos_prediction.png": "DOS prediction",
+        "dos_error.png": "DOS error",
+        "hamiltonian_first_atoms_comparison.png": "Hamiltonian heatmap",
+        "hamiltonian_first_atoms_prediction.png": "Hamiltonian prediction heatmap",
+        "hamiltonian_correlation.png": "Hamiltonian correlation",
+        "density_first_atoms_comparison.png": "Density heatmap",
+        "density_first_atoms_prediction.png": "Density prediction heatmap",
+        "density_correlation.png": "Density correlation",
+        "overlap_correlation.png": "Overlap correlation",
+    }
+    return mapping.get(filename, filename)
+
+
 def build_html_report(
     result: SweepAnalysisResult,
     *,
@@ -650,14 +834,43 @@ def build_run_detail_page(
     include_plotlyjs: str | bool,
     run_page_index: dict[str, dict[str, Any]] | None = None,
 ) -> str:
+    external_url = run_url_for_record(result.sweep_path, record)
+    return build_model_detail_page(
+        record,
+        include_plotlyjs=include_plotlyjs,
+        run_page_index=run_page_index,
+        rank_metric=result.rank_metric,
+        external_url=external_url,
+        backlink_href="../sweep_report.html",
+        backlink_label="Back to sweep report",
+    )
+
+
+def build_model_detail_page(
+    record: RunRecord,
+    *,
+    include_plotlyjs: str | bool,
+    run_page_index: dict[str, dict[str, Any]] | None = None,
+    rank_metric: str | None = None,
+    external_url: str | None = None,
+    backlink_href: str | None = None,
+    backlink_label: str | None = None,
+) -> str:
     run_page_index = run_page_index or {}
     page_info = run_page_index.get(record.run_id, {})
     evaluation = page_info.get("evaluation", {})
     image_assets = evaluation.get("image_assets", [])
     file_assets = evaluation.get("file_assets", [])
+    manifest = evaluation.get("manifest", {})
+    settings = manifest.get("settings", {})
     config_rows = "\n".join(
         f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(display_value(value)))}</td></tr>"
         for key, value in sorted(record.config.items())
+    )
+    band_html = _build_interactive_band_section(
+        evaluation,
+        include_plotlyjs=include_plotlyjs,
+        div_id_prefix=f"band-{record.run_id}",
     )
     if image_assets:
         evaluation_html = "\n".join(
@@ -675,10 +888,26 @@ def build_run_detail_page(
             f'<li><a href="{html.escape(asset["href"])}">{html.escape(asset["label"])}</a></li>'
             for asset in file_assets
         )
+        settings_rows = "\n".join(
+            f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(display_value(value)))}</td></tr>"
+            for key, value in sorted(settings.items())
+        )
+        settings_section = (
+            f"""
+  <h2>Evaluation Settings</h2>
+  <table>
+    <thead><tr><th>Key</th><th>Value</th></tr></thead>
+    <tbody>{settings_rows}</tbody>
+  </table>
+"""
+            if settings_rows
+            else ""
+        )
         evaluation_section = f"""
 <div class="panel">
   <h2>Precomputed Evaluation</h2>
   <div class="meta-line">Source bundle: <code>{html.escape(str(evaluation.get("source_dir", "")))}</code></div>
+  {band_html}
   <div class="asset-grid">
     {evaluation_html}
   </div>
@@ -686,6 +915,7 @@ def build_run_detail_page(
   <ul class="downloads">
     {downloads_html}
   </ul>
+  {settings_section}
 </div>
 """
     else:
@@ -695,7 +925,17 @@ def build_run_detail_page(
   <p class="empty">No precomputed local evaluation bundle was found for this run yet.</p>
 </div>
 """
-    _ = include_plotlyjs
+    score_label = rank_metric or "Score"
+    backlink_html = (
+        f'<a class="crumb" href="{html.escape(backlink_href)}">{html.escape(backlink_label or "Back")}</a>'
+        if backlink_href is not None
+        else ""
+    )
+    external_html = (
+        f'<a class="cta" href="{html.escape(external_url)}" target="_blank" rel="noopener noreferrer">Open in W&amp;B</a>'
+        if external_url
+        else ""
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -745,6 +985,14 @@ def build_run_detail_page(
     a:hover {{ text-decoration: underline; }}
     code {{ background: rgba(148, 163, 184, 0.12); color: #f8fafc; padding: 2px 6px; border-radius: 6px; }}
     .asset-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }}
+    .plotly-panel {{
+      margin-bottom: 18px;
+      overflow-x: hidden;
+    }}
+    .plotly-panel .plotly, .plotly-panel .plotly-graph-div, .plotly-panel .js-plotly-plot {{
+      width: 100% !important;
+      max-width: 100% !important;
+    }}
     .asset-card {{
       background: rgba(9, 14, 28, 0.72);
       border: 1px solid rgba(148, 163, 184, 0.14);
@@ -761,13 +1009,13 @@ def build_run_detail_page(
 <body>
   <div class="page">
     <div class="topbar">
-      <a class="crumb" href="../sweep_report.html">Back to sweep report</a>
-      <a class="cta" href="{html.escape(run_url_for_record(result.sweep_path, record))}" target="_blank" rel="noopener noreferrer">Open in W&amp;B</a>
+      {backlink_html}
+      {external_html}
     </div>
     <h1>{html.escape(record.name or record.run_id)}</h1>
     <div class="lead">Run detail page for <code>{html.escape(record.run_id)}</code></div>
     <div class="summary-grid">
-      <div class="card"><div class="k">Rank Metric</div><div class="v">{html.escape(result.rank_metric)}</div></div>
+      <div class="card"><div class="k">Metric</div><div class="v">{html.escape(score_label)}</div></div>
       <div class="card"><div class="k">Score</div><div class="v">{record.score if record.score is not None else "n/a"}</div></div>
       <div class="card"><div class="k">State</div><div class="v">{html.escape(record.state)}</div></div>
       <div class="card"><div class="k">Evaluation</div><div class="v">{html.escape(_evaluation_status_label(record, run_page_index))}</div></div>
@@ -805,3 +1053,121 @@ def _evaluation_status_label(
 def _row_col(index: int, ncols: int) -> tuple[int, int]:
     zero = index - 1
     return zero // ncols + 1, zero % ncols + 1
+
+
+def _build_interactive_band_section(
+    evaluation: dict[str, Any],
+    *,
+    include_plotlyjs: str | bool,
+    div_id_prefix: str,
+) -> str:
+    figure = _build_band_structure_figure(evaluation)
+    if figure is None:
+        return ""
+    band_html = pio.to_html(
+        figure,
+        include_plotlyjs=include_plotlyjs,
+        full_html=False,
+        default_width="100%",
+        default_height="100%",
+        div_id=f"{div_id_prefix}-band",
+        config={"responsive": True},
+    )
+    return f"""
+  <h2>Interactive Band Structure</h2>
+  <div class="plotly-panel">
+    {band_html}
+  </div>
+"""
+
+
+def _build_band_structure_figure(evaluation: dict[str, Any]) -> go.Figure | None:
+    copied_files = evaluation.get("copied_files", {})
+    gt_path = copied_files.get("band_structure_gt_gt_overlap.pt") or copied_files.get(
+        "band_structure_gt.pt"
+    )
+    pred_path = copied_files.get(
+        "band_structure_pred_gt_overlap.pt"
+    ) or copied_files.get("band_structure_pred.pt")
+    if gt_path is None and pred_path is None:
+        return None
+
+    payloads: list[tuple[str, dict[str, Any], str]] = []
+    if gt_path is not None:
+        payloads.append(("Ground truth", _load_band_payload(Path(gt_path)), "#e5e7eb"))
+    if pred_path is not None:
+        payloads.append(("Prediction", _load_band_payload(Path(pred_path)), "#60a5fa"))
+
+    fig = make_subplots(
+        rows=1,
+        cols=len(payloads),
+        shared_yaxes=True,
+        subplot_titles=[title for title, _payload, _color in payloads],
+    )
+
+    for idx, (title, payload, color) in enumerate(payloads, start=1):
+        linear_k = np.asarray(payload["linear_k"], dtype=float)
+        energies = _band_energies_ev(payload)
+        for band_idx in range(energies.shape[1]):
+            fig.add_trace(
+                go.Scattergl(
+                    x=linear_k,
+                    y=energies[:, band_idx],
+                    mode="lines",
+                    line=dict(color=color, width=1.1),
+                    opacity=0.28 if title != "Ground truth" else 0.42,
+                    hoverinfo="skip",
+                    showlegend=False,
+                ),
+                row=1,
+                col=idx,
+            )
+        tick_positions = np.asarray(payload["tick_positions"], dtype=float).tolist()
+        tick_labels = [str(label) for label in payload["tick_labels"]]
+        fig.update_xaxes(
+            tickmode="array",
+            tickvals=tick_positions,
+            ticktext=tick_labels,
+            row=1,
+            col=idx,
+        )
+        for xpos in tick_positions:
+            fig.add_vline(
+                x=xpos,
+                line_color="rgba(148,163,184,0.25)",
+                line_width=1,
+                row=1,
+                col=idx,
+            )
+
+    fig.update_yaxes(title_text="Energy relative to Fermi (eV)", row=1, col=1)
+    fig.update_layout(
+        height=420,
+        autosize=True,
+        margin=dict(l=50, r=25, t=55, b=40),
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e8edf7"),
+    )
+    return fig
+
+
+def _load_band_payload(path: Path) -> dict[str, Any]:
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict):
+        raise TypeError(f"Unexpected band payload type in {path}: {type(payload)!r}")
+    return payload
+
+
+def _band_energies_ev(payload: dict[str, Any]) -> np.ndarray:
+    energies = payload["eigenvalues"]
+    if torch.is_tensor(energies):
+        energies = energies.detach().cpu().numpy()
+    energies = np.asarray(energies, dtype=float) * 27.211386245988
+    fermi = payload.get("fermi_level")
+    if fermi is not None:
+        if torch.is_tensor(fermi):
+            fermi = float(fermi.detach().cpu().item())
+        energies = energies - float(fermi) * 27.211386245988
+    return energies

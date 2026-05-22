@@ -59,6 +59,9 @@ data/deeph_e3/silicon_reproduced/*
 models/
 saved_models/
 
+# predictions
+*.pt
+
 # images
 *.png
 *.jpg

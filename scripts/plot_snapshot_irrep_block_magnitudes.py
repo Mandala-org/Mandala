@@ -173,6 +173,14 @@ def _summary_stats(values: torch.Tensor) -> dict[str, float | int | None]:
     }
 
 
+def _log_magnitudes(values: torch.Tensor) -> tuple[torch.Tensor, int]:
+    positive = values[values > 0]
+    zero_count = int((values <= 0).sum().item())
+    if positive.numel() == 0:
+        return torch.empty(0, dtype=torch.float64), zero_count
+    return torch.log10(positive.to(dtype=torch.float64)), zero_count
+
+
 def _plot_matrix_histograms(
     matrix_name: str,
     magnitudes: dict[str, torch.Tensor],
@@ -182,16 +190,16 @@ def _plot_matrix_histograms(
     fig, axes = plt.subplots(4, 3, figsize=(18, 20), constrained_layout=True)
     axes_flat = list(axes.flat)
 
-    all_vals = torch.cat(
-        [
-            vals.to(dtype=torch.float64)
-            for vals in magnitudes.values()
-            if vals.numel() > 0
-        ],
-        dim=0,
+    all_log_vals_list = [
+        _log_magnitudes(vals)[0] for vals in magnitudes.values() if vals.numel() > 0
+    ]
+    all_log_vals = (
+        torch.cat(all_log_vals_list, dim=0)
+        if all_log_vals_list
+        else torch.empty(0, dtype=torch.float64)
     )
-    if all_vals.numel() > 0:
-        hist_bins = np.histogram_bin_edges(all_vals.numpy(), bins=bins)
+    if all_log_vals.numel() > 0:
+        hist_bins = np.histogram_bin_edges(all_log_vals.numpy(), bins=bins)
     else:
         hist_bins = bins
 
@@ -201,18 +209,24 @@ def _plot_matrix_histograms(
             ax.set_title(f"{irrep_key} (no data)")
             ax.axis("off")
             continue
-        arr = vals.numpy()
+        log_vals, zero_count = _log_magnitudes(vals)
+        if log_vals.numel() == 0:
+            ax.set_title(f"{irrep_key} (all values are zero)")
+            ax.axis("off")
+            continue
+        arr = log_vals.numpy()
         ax.hist(arr, bins=hist_bins, color="#2c7fb8", alpha=0.85)
-        stats = _summary_stats(vals)
+        stats = _summary_stats(vals[vals > 0])
         ax.set_title(
-            f"{irrep_key}  n={stats['count']}  mean={stats['mean']:.3g}  "
-            f"p95={stats['p95']:.3g}"
+            f"{irrep_key}  n={stats['count']}  zeros={zero_count}  "
+            f"mean={stats['mean']:.3g}  p95={stats['p95']:.3g}"
         )
-        ax.set_xlabel("Block Frobenius norm")
+        ax.set_xlabel("log10(Block Frobenius norm)")
         ax.set_ylabel("Count")
+        ax.set_yscale("log")
         ax.grid(alpha=0.2)
 
-    fig.suptitle(f"{matrix_name} irrep block magnitudes", fontsize=18)
+    fig.suptitle(f"{matrix_name} irrep block log-magnitudes", fontsize=18)
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 

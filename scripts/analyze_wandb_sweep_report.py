@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from pathlib import Path
-from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -22,6 +20,7 @@ from analysis.wandb_sweep_core import (  # noqa: E402
 from analysis.wandb_sweep_plotly import (  # noqa: E402
     build_histogram_figure,
     build_html_report,
+    prepare_run_page_index,
     build_run_detail_page,
     build_scatter_figure,
 )
@@ -93,7 +92,7 @@ def main() -> None:
         k_fold=args.k_fold,
         max_categorical_label_chars=args.max_categorical_label_chars,
     )
-    run_page_index = _prepare_run_pages(
+    run_page_index = prepare_run_page_index(
         output_dir,
         result.ranked_records,
         args.evaluation_cache_root,
@@ -125,123 +124,6 @@ def main() -> None:
         json.dumps(build_summary_payload(result), indent=2, default=json_default)
     )
     print(f"Saved summary: {summary_path}")
-
-
-def _prepare_run_pages(
-    output_dir: Path,
-    ranked_records: list[Any],
-    evaluation_cache_root: Path,
-) -> dict[str, dict[str, Any]]:
-    manifests = _discover_evaluation_manifests(evaluation_cache_root)
-    run_page_index: dict[str, dict[str, Any]] = {}
-    assets_root = output_dir / "run_assets"
-    assets_root.mkdir(parents=True, exist_ok=True)
-    for record in ranked_records:
-        page_info: dict[str, Any] = {"href": f"runs/{record.run_id}.html"}
-        manifest = manifests.get(record.run_id)
-        if manifest is not None:
-            evaluation = _copy_bundle_assets(
-                manifest,
-                assets_root / record.run_id,
-                record.run_id,
-            )
-            page_info["evaluation"] = evaluation
-        run_page_index[record.run_id] = page_info
-    return run_page_index
-
-
-def _discover_evaluation_manifests(
-    evaluation_cache_root: Path,
-) -> dict[str, dict[str, Any]]:
-    manifests: dict[str, dict[str, Any]] = {}
-    if not evaluation_cache_root.exists():
-        return manifests
-    for manifest_path in evaluation_cache_root.rglob("evaluation_manifest.json"):
-        try:
-            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        source = payload.get("source", {})
-        run_id = source.get("run_id")
-        if not run_id:
-            continue
-        manifests[str(run_id)] = {
-            "manifest_path": manifest_path,
-            "bundle_dir": manifest_path.parent,
-            "payload": payload,
-        }
-    return manifests
-
-
-def _copy_bundle_assets(
-    manifest: dict[str, Any],
-    destination_dir: Path,
-    run_id: str,
-) -> dict[str, Any]:
-    source_dir = Path(manifest["bundle_dir"])
-    destination_dir.mkdir(parents=True, exist_ok=True)
-    preferred_images = [
-        "band_structure_comparison.png",
-        "dos_comparison.png",
-        "dos_error.png",
-        "hamiltonian_first_atoms_comparison.png",
-        "hamiltonian_correlation.png",
-        "density_first_atoms_comparison.png",
-        "density_correlation.png",
-        "overlap_correlation.png",
-    ]
-    image_assets = []
-    file_assets = []
-    for filename in preferred_images:
-        source_path = source_dir / filename
-        if not source_path.exists():
-            continue
-        target_path = destination_dir / filename
-        shutil.copy2(source_path, target_path)
-        image_assets.append(
-            {
-                "label": _label_for_asset(filename),
-                "href": f"../run_assets/{run_id}/{filename}",
-            }
-        )
-    extra_files = [
-        "evaluation_manifest.json",
-        "band_structure_gt_gt_overlap.pt",
-        "band_structure_pred_gt_overlap.pt",
-        "band_structure_gt.pt",
-        "band_structure_pred.pt",
-    ]
-    for filename in extra_files:
-        source_path = source_dir / filename
-        if not source_path.exists():
-            continue
-        target_path = destination_dir / filename
-        shutil.copy2(source_path, target_path)
-        file_assets.append(
-            {
-                "label": filename,
-                "href": f"../run_assets/{run_id}/{filename}",
-            }
-        )
-    return {
-        "source_dir": str(source_dir),
-        "image_assets": image_assets,
-        "file_assets": file_assets,
-    }
-
-
-def _label_for_asset(filename: str) -> str:
-    mapping = {
-        "band_structure_comparison.png": "Band structure comparison",
-        "dos_comparison.png": "DOS comparison",
-        "dos_error.png": "DOS error",
-        "hamiltonian_first_atoms_comparison.png": "Hamiltonian heatmap",
-        "hamiltonian_correlation.png": "Hamiltonian correlation",
-        "density_first_atoms_comparison.png": "Density heatmap",
-        "density_correlation.png": "Density correlation",
-        "overlap_correlation.png": "Overlap correlation",
-    }
-    return mapping.get(filename, filename)
 
 
 if __name__ == "__main__":

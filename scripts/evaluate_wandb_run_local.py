@@ -62,6 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--snapshot-path", type=Path, default=None)
     parser.add_argument("--matrix-path", type=Path, default=None)
     parser.add_argument("--info-path", type=Path, default=None)
+    parser.add_argument("--band-info-path", type=Path, default=None)
     parser.add_argument("--cif-path", type=Path, default=None)
     parser.add_argument("--reference-info-path", type=Path, default=None)
     parser.add_argument("--orbital-set", type=str, default=None)
@@ -264,6 +265,7 @@ def _build_eval_namespace(
         snapshot_path=args.snapshot_path,
         matrix_path=args.matrix_path,
         info_path=args.info_path,
+        band_info_path=args.band_info_path,
         cif_path=args.cif_path,
         reference_info_path=args.reference_info_path,
         orbital_set=args.orbital_set,
@@ -307,6 +309,7 @@ def _settings_for_cache(args: argparse.Namespace) -> dict[str, Any]:
         "snapshot_path": str(args.snapshot_path) if args.snapshot_path else None,
         "matrix_path": str(args.matrix_path) if args.matrix_path else None,
         "info_path": str(args.info_path) if args.info_path else None,
+        "band_info_path": str(args.band_info_path) if args.band_info_path else None,
         "cif_path": str(args.cif_path) if args.cif_path else None,
         "reference_info_path": (
             str(args.reference_info_path) if args.reference_info_path else None

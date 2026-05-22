@@ -40,6 +40,12 @@ def setup_argparse() -> argparse.Namespace:
         help="Optional explicit info path. Overrides --snapshot-path discovery.",
     )
     parser.add_argument(
+        "--band-info-path",
+        type=Path,
+        default=None,
+        help="Optional separate OpenMX info file used only for resolving Band.kpath special points.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("eval_outputs/ground_truth_silicon_300K_band_structure"),
@@ -216,8 +222,11 @@ def main() -> None:
 
     t_path = time.perf_counter()
     _log("[2/6] Building k-path ...")
+    band_info_path = (
+        args.band_info_path if args.band_info_path is not None else info_path
+    )
     path_string, special_points = analysis_eval.resolve_band_path(
-        info_path, args.path_string
+        band_info_path, args.path_string
     )
     (
         fractional_kpoints,

@@ -45,6 +45,12 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--snapshot-path", type=Path, default=None)
     parser.add_argument("--matrix-path", type=Path, default=None)
     parser.add_argument("--info-path", type=Path, default=None)
+    parser.add_argument(
+        "--band-info-path",
+        type=Path,
+        default=None,
+        help="Optional separate OpenMX info file used only for resolving Band.kpath special points.",
+    )
     parser.add_argument("--cif-path", type=Path, default=None)
     parser.add_argument("--reference-info-path", type=Path, default=None)
     parser.add_argument("--orbital-set", type=str, default=None)
@@ -345,8 +351,11 @@ def _run_snapshot_case(
     gt_snapshot = _build_snapshot_from_matrices(
         gt_mats, positions=positions, box=box, info=info
     )
+    band_info_path = (
+        args.band_info_path if args.band_info_path is not None else info_path
+    )
     resolved_path_string, special_points = analysis_eval.resolve_band_path(
-        info_path, args.path_string
+        band_info_path, args.path_string
     )
     overlap_for_eigs = (
         gt_mats["overlap"] if args.use_gt_overlap_for_eigs else pred_mats.get("overlap")
@@ -549,8 +558,13 @@ def _run_cif_case(
         raise ValueError(
             "CIF mode requires --reference-info-path so the OpenMX Band.kpath can be reused."
         )
+    band_info_path = (
+        args.band_info_path
+        if args.band_info_path is not None
+        else args.reference_info_path
+    )
     resolved_path_string, special_points = analysis_eval.resolve_band_path(
-        args.reference_info_path, args.path_string
+        band_info_path, args.path_string
     )
     x = build_model_input_from_structure(
         atoms=atoms,
