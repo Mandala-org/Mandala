@@ -139,7 +139,7 @@ parameters:
   internal-e3mlp-layers:
     values: [1, 2]
   head-e3mlp-layers:
-    value: [1, 2]
+    values: [1, 2]
   head-use-node-embeddings-for-self-edges:
     value: true
   separate-shifted-self:
@@ -153,7 +153,7 @@ parameters:
   head-log-scale-mlp-n-layers:
     value: 1
   e3mlp-variant:
-    value: [film, normact, resnormact]
+    values: [film, normact, resnormact]
   e3mlp-output-scale:
     value: 1.0
   e3mlp-weight-init-scale:
