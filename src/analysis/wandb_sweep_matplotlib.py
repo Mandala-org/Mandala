@@ -14,6 +14,7 @@ from analysis.wandb_sweep_core import (
     coerce_numeric,
     compute_numeric_ci_band_from_points,
     format_categorical_value,
+    filter_records_within_orders_of_magnitude,
     numeric_bins,
     numeric_jitter,
     top_run_marker_x,
@@ -27,10 +28,15 @@ def plot_variable_histograms(
     base_bins: int,
     sweep_path: str,
     rank_metric: str,
+    rank_goal: str,
     max_figure_width: float,
     max_figure_height: float,
     max_categorical_label_chars: int,
 ):
+    top_runs = filter_records_within_orders_of_magnitude(
+        top_runs,
+        rank_goal=rank_goal,
+    )
     n_plots = len(variable_specs)
     ncols = max(1, math.ceil(math.sqrt(n_plots * 1.2)))
     nrows = math.ceil(n_plots / ncols)
@@ -182,10 +188,23 @@ def plot_metric_scatterplots(
     k_fold: int,
     sweep_path: str,
     rank_metric: str,
+    rank_goal: str,
     max_figure_width: float,
     max_figure_height: float,
     max_categorical_label_chars: int,
 ):
+    records = filter_records_within_orders_of_magnitude(
+        records,
+        rank_goal=rank_goal,
+    )
+    top_runs = filter_records_within_orders_of_magnitude(
+        top_runs,
+        rank_goal=rank_goal,
+    )
+    ci_runs = filter_records_within_orders_of_magnitude(
+        ci_runs,
+        rank_goal=rank_goal,
+    )
     n_plots = len(variable_specs)
     ncols = max(1, math.ceil(math.sqrt(n_plots * 1.2)))
     nrows = math.ceil(n_plots / ncols)

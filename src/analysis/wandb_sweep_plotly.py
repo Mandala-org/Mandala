@@ -20,6 +20,7 @@ from analysis.wandb_sweep_core import (
     categorical_jitter,
     coerce_numeric,
     compute_numeric_ci_band_from_points,
+    filter_records_within_orders_of_magnitude,
     display_value,
     format_categorical_value,
     numeric_jitter,
@@ -36,6 +37,10 @@ def build_histogram_figure(
     max_categorical_label_chars: int,
 ) -> go.Figure:
     variable_specs = result.variable_specs
+    top_runs = filter_records_within_orders_of_magnitude(
+        result.top_runs,
+        rank_goal=result.rank_goal,
+    )
     n_plots = len(variable_specs)
     ncols = max(1, math.ceil(math.sqrt(max(n_plots, 1) * 1.2)))
     nrows = max(1, math.ceil(max(n_plots, 1) / ncols))
@@ -77,7 +82,7 @@ def build_histogram_figure(
             use_log = spec["distribution"] == "log_uniform_values"
             if use_log:
                 fig.update_xaxes(type="log", row=row, col=col)
-            for top_idx, run in enumerate(result.top_runs):
+            for top_idx, run in enumerate(top_runs):
                 value = coerce_numeric(run.config.get(spec["key"]))
                 if value is None:
                     continue
@@ -86,7 +91,7 @@ def build_histogram_figure(
                     x_pos = top_run_marker_x(
                         value,
                         top_idx,
-                        len(result.top_runs),
+                        len(top_runs),
                         numeric_values,
                         use_log=use_log,
                     )
@@ -131,7 +136,7 @@ def build_histogram_figure(
                 row=row,
                 col=col,
             )
-            for top_idx, run in enumerate(result.top_runs):
+            for top_idx, run in enumerate(top_runs):
                 label = format_categorical_value(
                     spec["key"],
                     run.config.get(spec["key"]),
@@ -143,7 +148,7 @@ def build_histogram_figure(
                 x_pos = top_run_marker_x(
                     float(position),
                     top_idx,
-                    len(result.top_runs),
+                    len(top_runs),
                     positions,
                     use_log=False,
                     categorical=True,
@@ -184,6 +189,18 @@ def build_scatter_figure(
     max_categorical_label_chars: int,
 ) -> go.Figure:
     variable_specs = result.variable_specs
+    records = filter_records_within_orders_of_magnitude(
+        result.records,
+        rank_goal=result.rank_goal,
+    )
+    top_runs = filter_records_within_orders_of_magnitude(
+        result.top_runs,
+        rank_goal=result.rank_goal,
+    )
+    ci_runs = filter_records_within_orders_of_magnitude(
+        result.ci_runs,
+        rank_goal=result.rank_goal,
+    )
     n_plots = len(variable_specs)
     ncols = max(1, math.ceil(math.sqrt(max(n_plots, 1) * 1.2)))
     nrows = max(1, math.ceil(max(n_plots, 1) / ncols))
@@ -197,15 +214,15 @@ def build_scatter_figure(
         for spec in variable_specs
     ]
     fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=subplot_titles)
-    top_run_ids = {run.run_id for run in result.top_runs}
-    ci_run_ids = {run.run_id for run in result.ci_runs}
+    top_run_ids = {run.run_id for run in top_runs}
+    ci_run_ids = {run.run_id for run in ci_runs}
 
     for idx, spec in enumerate(variable_specs, start=1):
         row, col = _row_col(idx, ncols)
         key = spec["key"]
         if spec["kind"] == "numeric":
             points = []
-            for record in result.records:
+            for record in records:
                 x = coerce_numeric(record.config.get(key))
                 y = record.score
                 if x is None or y is None or x <= 0 or y <= 0:
@@ -312,7 +329,7 @@ def build_scatter_figure(
                         col=col,
                     )
                 highlighted = []
-                for run in result.top_runs:
+                for run in top_runs:
                     point = next(
                         (
                             (x, y)
@@ -371,7 +388,7 @@ def build_scatter_figure(
                 format_categorical_value(
                     key, record.config.get(key), max_categorical_label_chars
                 )
-                for record in result.records
+                for record in records
                 if record.config.get(key) is not None
                 and record.score is not None
                 and record.score > 0
@@ -380,7 +397,7 @@ def build_scatter_figure(
             positions = {label: idx for idx, label in enumerate(ordered_labels)}
             non_top_points: list[tuple[RunRecord, float, float, str]] = []
             top_points: list[tuple[RunRecord, float, float, str]] = []
-            for record in result.records:
+            for record in records:
                 value = record.config.get(key)
                 if value is None or record.score is None or record.score <= 0:
                     continue

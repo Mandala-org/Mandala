@@ -199,6 +199,62 @@ def rank_records(records: list[RunRecord], rank_goal: str) -> list[RunRecord]:
     return ranked
 
 
+def best_score_for_records(
+    records: list[RunRecord],
+    rank_goal: str,
+) -> float | None:
+    scores = [
+        record.score
+        for record in records
+        if record.score is not None and math.isfinite(record.score)
+    ]
+    if not scores:
+        return None
+    if rank_goal == "maximize":
+        return max(scores)
+    return min(scores)
+
+
+def score_within_orders_of_magnitude(
+    score: float | None,
+    best_score: float | None,
+    rank_goal: str,
+    *,
+    max_orders_worse: float = 3.0,
+) -> bool:
+    if score is None or best_score is None:
+        return False
+    if not math.isfinite(score) or not math.isfinite(best_score):
+        return False
+    if score <= 0 or best_score <= 0:
+        return False
+    factor = 10.0**max_orders_worse
+    if rank_goal == "maximize":
+        return score >= best_score / factor
+    return score <= best_score * factor
+
+
+def filter_records_within_orders_of_magnitude(
+    records: list[RunRecord],
+    *,
+    rank_goal: str,
+    max_orders_worse: float = 3.0,
+) -> list[RunRecord]:
+    best_score = best_score_for_records(records, rank_goal)
+    if best_score is None:
+        return []
+    return [
+        record
+        for record in records
+        if score_within_orders_of_magnitude(
+            record.score,
+            best_score,
+            rank_goal,
+            max_orders_worse=max_orders_worse,
+        )
+    ]
+
+
 def resolve_rank_goal(rank_metric: str, rank_goal: str, sweep_goal: str) -> str:
     if rank_goal != "auto":
         return rank_goal

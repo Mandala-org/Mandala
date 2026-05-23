@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import glob
 import math
 import random
 import sys
@@ -18,14 +17,7 @@ from net.common import Config  # noqa: E402
 
 def discover_silicon_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
     print(f"--- Discovering silicon snapshots under {root} ---")
-    pairs: list[tuple[Path, Path]] = []
-    for matrix_path in sorted(root.rglob("Si_DM")):
-        if not matrix_path.is_file():
-            continue
-        info_path = matrix_path.parent / "info.dat"
-        if not info_path.exists():
-            continue
-        pairs.append((matrix_path.resolve(), info_path.resolve()))
+    pairs = discover_single_snapshot_pairs(root, label="silicon")
     print(f"--- Found {len(pairs)} silicon snapshot pairs ---")
     return pairs
 
@@ -157,11 +149,7 @@ def build_silicon_datasets(
             raise ValueError("num_val must be >= 0")
         if min_temp == max_temp == val_temp:
             temp_path = data_root / f"{val_temp}K"
-            all_pairs = []
-            for matrix_path in sorted(glob.glob(str(temp_path / "*/Si_DM"))):
-                info_path = Path(matrix_path).parent / "info.dat"
-                if info_path.exists():
-                    all_pairs.append((Path(matrix_path), info_path))
+            all_pairs = discover_single_snapshot_pairs(temp_path, label="silicon")
             print(
                 f"--- Silicon single-temp split selected: temp={val_temp}K, discovered={len(all_pairs)} ---"
             )
@@ -200,7 +188,8 @@ def build_silicon_datasets(
         )
         for temp in all_temps:
             temp_path = data_root / f"{temp}K"
-            snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
+            snapshot_pairs = discover_single_snapshot_pairs(temp_path, label="silicon")
+            snapshot_paths = [matrix_path for matrix_path, _ in snapshot_pairs]
             if len(snapshot_paths) < train_per_temp + val_per_temp:
                 raise ValueError(
                     f"Requested train+val per temp={train_per_temp + val_per_temp} "
@@ -216,14 +205,13 @@ def build_silicon_datasets(
                 f"--- Silicon temp {temp}K: discovered={len(snapshot_paths)}, "
                 f"train={len(selected_train)}, val={len(selected_val)} ---"
             )
+            pair_map = {
+                matrix_path: info_path for matrix_path, info_path in snapshot_pairs
+            }
             for matrix_path in selected_train:
-                info_path = Path(matrix_path).parent / "info.dat"
-                if info_path.exists():
-                    train_pairs.append((Path(matrix_path), info_path))
+                train_pairs.append((Path(matrix_path), pair_map[Path(matrix_path)]))
             for matrix_path in selected_val:
-                info_path = Path(matrix_path).parent / "info.dat"
-                if info_path.exists():
-                    val_pairs.append((Path(matrix_path), info_path))
+                val_pairs.append((Path(matrix_path), pair_map[Path(matrix_path)]))
 
         return _create_datasets_from_pairs(
             train_pairs, val_pairs, cfg, convention=convention
@@ -239,20 +227,21 @@ def build_silicon_datasets(
     train_pairs: list[tuple[Path, Path]] = []
     for temp in train_temps:
         temp_path = data_root / f"{temp}K"
-        snapshot_paths = sorted(glob.glob(str(temp_path / "*/Si_DM")))
+        snapshot_pairs = discover_single_snapshot_pairs(temp_path, label="silicon")
+        snapshot_paths = [matrix_path for matrix_path, _ in snapshot_pairs]
         num_to_sample = min(len(snapshot_paths), n_snapshots_per_temp)
         print(
             f"--- Silicon temp {temp}K: discovered={len(snapshot_paths)}, sampled={num_to_sample} ---"
         )
         selected_paths = rng.sample(snapshot_paths, num_to_sample)
+        pair_map = {matrix_path: info_path for matrix_path, info_path in snapshot_pairs}
         for matrix_path in selected_paths:
-            info_path = Path(matrix_path).parent / "info.dat"
-            if info_path.exists():
-                train_pairs.append((Path(matrix_path), info_path))
+            train_pairs.append((Path(matrix_path), pair_map[Path(matrix_path)]))
 
     val_pairs: list[tuple[Path, Path]] = []
     val_path = data_root / f"{val_temp}K"
-    val_snapshot_paths = sorted(glob.glob(str(val_path / "*/Si_DM")))
+    val_snapshot_pairs = discover_single_snapshot_pairs(val_path, label="silicon")
+    val_snapshot_paths = [matrix_path for matrix_path, _ in val_snapshot_pairs]
     num_val_to_sample = min(len(val_snapshot_paths), n_snapshots_per_temp)
     if val_n_snapshots is not None:
         num_val_to_sample = min(num_val_to_sample, val_n_snapshots)
@@ -260,10 +249,11 @@ def build_silicon_datasets(
         f"--- Silicon val temp {val_temp}K: discovered={len(val_snapshot_paths)}, sampled={num_val_to_sample} ---"
     )
     selected_val_paths = rng.sample(val_snapshot_paths, num_val_to_sample)
+    val_pair_map = {
+        matrix_path: info_path for matrix_path, info_path in val_snapshot_pairs
+    }
     for matrix_path in selected_val_paths:
-        info_path = Path(matrix_path).parent / "info.dat"
-        if info_path.exists():
-            val_pairs.append((Path(matrix_path), info_path))
+        val_pairs.append((Path(matrix_path), val_pair_map[Path(matrix_path)]))
 
     return _create_datasets_from_pairs(
         train_pairs, val_pairs, cfg, convention=convention
