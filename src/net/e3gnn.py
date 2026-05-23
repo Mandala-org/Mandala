@@ -473,7 +473,8 @@ class E3GNN(pl.LightningModule):
                 p = preds_matrix[name]
                 t = y[name]
 
-                if self.cfg.symmetrize_output:
+                should_symmetrize = self.cfg.symmetrize_output or stage == "val"
+                if should_symmetrize:
                     p = (p + p.transpose()) * 0.5
 
                 p_items, t_items = p.pair_blocks, t.pair_blocks

@@ -1,0 +1,281 @@
+program: scripts/wandb_run.py
+method: bayes
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+
+project: mandala-silicon-hamiltonian-rosi
+name: silicon-hamiltonian-300K-narrow-compat-old-modern
+command:
+  - ${env}
+  - python
+  - -u
+  - ${program}
+  - ${args}
+parameters:
+  # Experiment metadata
+  wandb-project:
+    value: mandala-silicon-hamiltonian-rosi
+  checkpoint-dir:
+    value: checkpoints/silicon_hamiltonian_300K_new_data
+  resume-mode:
+    value: latest
+  wandb-mode:
+    value: online
+  generate-video:
+    value: true
+  log-artifacts:
+    value: true
+
+  # Dataset: 300K only, 80 train / 20 val
+  dataset-kind:
+    value: silicon
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new/snapshot_cache
+  dataset-device:
+    value: cpu
+  num-workers:
+    value: 8
+  min-temp:
+    value: 300
+  max-temp:
+    value: 300
+  temp-step:
+    value: 300
+  val-temp:
+    value: 300
+  num-train:
+    value: 80
+  num-val:
+    value: 20
+
+  # Optimization: narrow around the old and recent good silicon runs
+  lr:
+    distribution: log_uniform_values
+    min: 0.001
+    max: 0.01
+  max-epochs:
+    value: 5000
+  grad-clip-val:
+    values: [1.0, 2.0, 5.0]
+  accumulate-grad-batches:
+    value: 1
+  use-lr-scheduler:
+    value: true
+  lr-scheduler-factor:
+    value: 0.5
+  lr-scheduler-patience:
+    value: 60
+  lr-scheduler-min-lr:
+    value: 1e-8
+  lr-scheduler-target:
+    value: val/hamiltonian_mae
+  revert-on-spike:
+    value: true
+  revert-monitor:
+    value: val/hamiltonian_mae
+  revert-decay-patience:
+    value: 4
+  revert-decay-rate:
+    value: 0.8
+  revert-spike-factor:
+    value: 2.0
+
+  # Core architecture
+  precision:
+    value: 32-true
+  convention:
+    value: e3nn
+  cutoff-radius:
+    value: 8.0
+  l-max:
+    value: 4
+  hidden-base-dim:
+    value: 32
+  hidden-irreps:
+    values:
+      - 64x0e+64x0o+32x1e+32x1o+16x2e+16x2o+16x3e+16x3o+16x4e
+      - 128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+16x3e+16x3o+16x4e
+      # Front-heavy natural-parity tiers
+      - 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e
+      - 256x0e+24x0o+8x1e+128x1o+32x2e+8x2o+8x3e+32x3o+16x4e
+      - 512x0e+24x0o+8x1e+128x1o+32x2e+8x2o+8x3e+32x3o+16x4e
+  edge-type-emb-dim:
+    value: 32
+  emb-use-odd-features:
+    value: true
+  edge-encoder-style:
+    values: [rich]
+  edge-encoder-use-sh-tensor-square:
+    values: [false, true]
+  e3layernorm:
+    value: false
+  num-layers-gnn:
+    value: 2
+  tp-type:
+    value: separate_weight
+  use-self-connection:
+    values: [true, false]
+  edge-update-node-combine:
+    value: concat
+  edge-update-residual:
+    values: [true, false]
+  node-update-message-agg:
+    values: [sum, attention]
+  node-update-attention-scalar-dim:
+    values: [64, 128]
+  node-update-attention-heads:
+    value: 4
+  node-update-residual:
+    values: [true, false]
+
+  # E3MLP / head architecture
+  head-use-mlp-log-scale:
+    value: false
+  neck-depth:
+    values: [1, 2]
+  internal-e3mlp-layers:
+    values: [1, 2]
+  head-e3mlp-layers:
+    value: [1, 2]
+  head-use-node-embeddings-for-self-edges:
+    value: true
+  separate-shifted-self:
+    value: true
+  head-use-tensor-square:
+    value: false
+  head-diag-output-scale:
+    values: [1.0, 2.0]
+  head-offdiag-output-scale:
+    value: 1.0
+  head-log-scale-mlp-n-layers:
+    value: 1
+  e3mlp-variant:
+    value: [film, normact, resnormact]
+  e3mlp-output-scale:
+    value: 1.0
+  e3mlp-weight-init-scale:
+    values: [0.5, 1.0]
+  e3mlp-residual-scale:
+    values: [0.25, 1.0]
+  e3mlp-pre-norm:
+    value: false
+  e3mlp-norm-eps:
+    value: 1e-8
+  e3mlp-film-hidden-dim:
+    values: [64, 128]
+
+  # Activations / regularization / radial stack
+  activation-odd-scalar:
+    value: tanh
+  activation-odd-gate:
+    value: tanh
+  nonlin-kind:
+    value: normact
+  activation-scalar:
+    value: leakyrelu
+  activation-gate:
+    value: softplus
+  s2act-res:
+    value: 128
+  norm-kind:
+    value: component
+  dropout:
+    value: 0.0
+  l1-reg-coef:
+    value: 0.0
+  l2-reg-coef:
+    value: 0.0
+  init-weights-factor:
+    value: 1.0
+  n-radial:
+    values: [64, 128]
+  radial-layers:
+    values:
+      - [64, 64]
+      - [128, 128]
+      - [256, 256, 256]
+
+  # Runtime
+  device:
+    value: cuda
+  gpus:
+    value: 1
+  benchmark:
+    value: false
+  adaptive-log-interval:
+    value: true
+  log-interval:
+    value: 10
+  seed:
+    value: 42
+
+  # Logging
+  log-data:
+    value: true
+  log-model:
+    value: true
+  log-forward:
+    value: false
+  log-per-irrep-metrics:
+    value: true
+  print-per-irrep-metrics:
+    value: false
+  log-per-irrep-images:
+    value: false
+  log-partial-gt-observables:
+    value: true
+  log-per-pair-loss-metrics:
+    value: true
+  log-hamiltonian-irrep-contrib-metrics:
+    value: true
+  log-hamiltonian-pair-contrib-metrics:
+    value: true
+  log-activation-mag:
+    value: false
+  train-on-irrep-parts:
+    value: false
+
+  # Targets / evaluation
+  matrix-targets:
+    value: [hamiltonian]
+  enable-energy:
+    value: true
+  enable-num-electrons:
+    value: true
+  enable-forces:
+    value: false
+  enable-stress:
+    value: false
+  train-on-energy:
+    value: false
+  train-on-num-electrons:
+    value: false
+  train-on-forces:
+    value: false
+  train-on-stress:
+    value: false
+  train-observables-on-gt:
+    value: false
+  loss-coef-observables:
+    value: 0.0
+  loss-coef-forces:
+    value: 0.0
+  loss-coef-stress:
+    value: 0.0
+  symmetrize-output:
+    values: [true, false]
+  symmetrize-hamiltonian-targets:
+    value: true
+  rescale-density-to-num-electrons:
+    value: false
+  precompute-edge-features:
+    value: true
+  radial-embedding-scale:
+    value: none
+  apply-cutoff-to-targets:
+    value: true
+  require-exact-edge-match:
+    value: true

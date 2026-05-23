@@ -639,6 +639,8 @@ class NodeUpdateBlock(nn.Module):
         self.value_projs = None
         if self.message_agg_mode == "attention":
             attn_irreps = Irreps(f"{self.attn_scalar_dim}x0e")
+            attn_geom_irreps = Irreps(f"{n_radial}x0e")
+            attn_key_input_irreps = (attn_geom_irreps + self.conv.irreps_out).simplify()
             self.query_proj = E3MLP(
                 node_irreps,
                 Irreps("64x0e"),
@@ -648,7 +650,7 @@ class NodeUpdateBlock(nn.Module):
                 activate_last=False,
             )
             self.key_proj = E3MLP(
-                edge_irreps,
+                attn_key_input_irreps,
                 Irreps("64x0e"),
                 attn_irreps,
                 1,
@@ -658,8 +660,8 @@ class NodeUpdateBlock(nn.Module):
             self.value_projs = nn.ModuleList(
                 [
                     E3MLP(
-                        edge_irreps,
-                        edge_irreps,
+                        self.conv.irreps_out,
+                        self.conv.irreps_out,
                         self.conv.irreps_out,
                         1,
                         cfg,
@@ -738,10 +740,13 @@ class NodeUpdateBlock(nn.Module):
             query = self.query_proj(node).reshape(
                 node.shape[0], self.attn_num_heads, self.attn_head_dim
             )
-            key = self.key_proj(edge).reshape(
+            key_input = torch.cat([edge_length_emb, edge_messages], dim=-1)
+            key = self.key_proj(key_input).reshape(
                 edge.shape[0], self.attn_num_heads, self.attn_head_dim
             )
-            values = torch.stack([proj(edge) for proj in self.value_projs], dim=1)
+            values = torch.stack(
+                [proj(edge_messages) for proj in self.value_projs], dim=1
+            )
             scores = (query[dst] * key).sum(dim=-1) / float(self.attn_head_dim) ** 0.5
             max_per_dst = scatter(
                 scores, dst, dim=0, dim_size=node_old.size(0), reduce="max"

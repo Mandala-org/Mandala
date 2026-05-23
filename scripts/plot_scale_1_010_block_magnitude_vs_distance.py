@@ -15,6 +15,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -28,13 +29,19 @@ DEFAULT_PROBLEM_EDGE = (1, 1, 0, 2, 17)
 DEFAULT_PROBLEM_KEY = "Zn-Se"
 DEFAULT_COMPETING_EDGE = (1, 0, 0, 2, 16)
 DEFAULT_COMPETING_KEY = "Zn-Se"
+DEFAULT_MATRIX_NAMES = ("hamiltonian", "overlap", "density")
+MATRIX_COLORS = {
+    "hamiltonian": "#1f77b4",
+    "overlap": "#ff7f0e",
+    "density": "#2ca02c",
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Plot Hamiltonian block magnitude versus edge distance for the "
-            "ZnCu2Sn_SeS_2_scale_1_010 snapshot."
+            "Plot block magnitude versus edge distance for one or more matrices "
+            "in the ZnCu2Sn_SeS_2_scale_1_010 snapshot."
         )
     )
     parser.add_argument(
@@ -60,6 +67,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("eval_outputs/tmp_scale_1_010_block_mag_vs_distance"),
         help="Directory for the output figure and summary JSON.",
+    )
+    parser.add_argument(
+        "--matrix-names",
+        type=str,
+        default="hamiltonian,overlap,density",
+        help=(
+            "Comma-separated matrix names to plot. Use any subset of "
+            "hamiltonian,overlap,density."
+        ),
     )
     parser.add_argument(
         "--convention",
@@ -114,6 +130,19 @@ def parse_args() -> argparse.Namespace:
         help="Competing 5D edge to highlight in orange.",
     )
     return parser.parse_args()
+
+
+def _parse_matrix_names(raw_value: str) -> list[str]:
+    matrix_names = [name.strip() for name in raw_value.split(",") if name.strip()]
+    valid_names = {"hamiltonian", "overlap", "density"}
+    if not matrix_names:
+        raise ValueError("At least one matrix name must be provided.")
+    invalid_names = [name for name in matrix_names if name not in valid_names]
+    if invalid_names:
+        raise ValueError(
+            "Unsupported matrix name(s): " + ", ".join(sorted(set(invalid_names)))
+        )
+    return matrix_names
 
 
 def _discover_info_file(snapshot_dir: Path) -> Path | None:
@@ -220,13 +249,15 @@ def _edge_distances(
 def _collect_subplot_data(
     snap: Snapshot,
     *,
+    matrix_name: str,
     problem_key: str,
     problem_edge: tuple[int, int, int, int, int],
     competing_key: str,
     competing_edge: tuple[int, int, int, int, int],
     value_mode: str,
+    highlight_edges: bool,
 ) -> tuple[dict[str, dict[str, list[float]]], dict[str, object]]:
-    matrix = snap.hamiltonian
+    matrix = getattr(snap, matrix_name)
     positions = snap.positions
     box = snap.box
     if positions is None:
@@ -273,8 +304,16 @@ def _collect_subplot_data(
 
         for idx, edge_row in enumerate(edges.t().tolist()):
             edge_5d = tuple(int(x) for x in edge_row)
-            is_problem = directed_key == problem_key and edge_5d == problem_edge
-            is_competing = directed_key == competing_key and edge_5d == competing_edge
+            is_problem = (
+                highlight_edges
+                and directed_key == problem_key
+                and edge_5d == problem_edge
+            )
+            is_competing = (
+                highlight_edges
+                and directed_key == competing_key
+                and edge_5d == competing_edge
+            )
             payload["distances"].append(float(dists[idx].item()))
             payload["magnitudes"].append(float(values[idx].item()))
             payload["is_problem"].append(bool(is_problem))
@@ -303,6 +342,7 @@ def _collect_subplot_data(
                 }
 
     summary = {
+        "matrix_name": matrix_name,
         "element_order": element_order,
         "subplot_order": subplot_order,
         "problem_key": problem_key,
@@ -315,6 +355,86 @@ def _collect_subplot_data(
         "competing_record": competing_record,
     }
     return subplot_data, summary
+
+
+def _plot_multi_matrix(
+    subplot_data_by_matrix: dict[str, dict[str, dict[str, list[float]]]],
+    summary_by_matrix: dict[str, dict[str, object]],
+    output_path: Path,
+    *,
+    y_label: str,
+    title: str,
+) -> None:
+    first_summary = next(iter(summary_by_matrix.values()))
+    subplot_order = first_summary["subplot_order"]
+    fig, axes = plt.subplots(3, 5, figsize=(19.2, 9.6), constrained_layout=True)
+    axes_flat = list(axes.flat)
+
+    legend_handles = []
+    legend_labels = []
+    for matrix_name, color in MATRIX_COLORS.items():
+        if matrix_name not in subplot_data_by_matrix:
+            continue
+        legend_handles.append(
+            Line2D([0], [0], marker="o", linestyle="none", color=color, markersize=8)
+        )
+        legend_labels.append(matrix_name)
+
+    for ax, subplot_key in zip(axes_flat, subplot_order, strict=True):
+        any_data = False
+        for matrix_name, payload_by_subplot in subplot_data_by_matrix.items():
+            payload = payload_by_subplot[subplot_key]
+            distances = payload["distances"]
+            magnitudes = payload["magnitudes"]
+            is_problem = payload["is_problem"]
+            is_competing = payload["is_competing"]
+            if not distances:
+                continue
+            any_data = True
+            color = MATRIX_COLORS.get(matrix_name, "#666666")
+
+            blue_x = [
+                d
+                for d, bad, competing in zip(
+                    distances, is_problem, is_competing, strict=True
+                )
+                if not bad and not competing
+            ]
+            blue_y = [
+                m
+                for m, bad, competing in zip(
+                    magnitudes, is_problem, is_competing, strict=True
+                )
+                if not bad and not competing
+            ]
+            ax.scatter(blue_x, blue_y, s=18, c=color, alpha=0.7)
+
+        if not any_data:
+            ax.set_title(f"{subplot_key} (no data)")
+            ax.set_xlabel("Edge distance")
+            ax.set_ylabel(y_label)
+            ax.set_yscale("log")
+            ax.grid(alpha=0.2)
+            continue
+
+        ax.set_title(f"{subplot_key}")
+        ax.set_xlabel("Edge distance")
+        ax.set_ylabel(y_label)
+        ax.set_yscale("log")
+        ax.grid(alpha=0.2)
+        if subplot_key == subplot_order[0] and legend_handles:
+            ax.legend(
+                legend_handles,
+                legend_labels,
+                loc="lower left",
+                frameon=True,
+                framealpha=0.9,
+                fontsize=9,
+            )
+
+    fig.suptitle(title, fontsize=18)
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
 
 
 def _plot(
@@ -444,6 +564,7 @@ def main() -> None:
     args = parse_args()
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    matrix_names = _parse_matrix_names(args.matrix_names)
 
     matrix_path, info_path = _discover_snapshot_paths(
         args.snapshot_path,
@@ -460,91 +581,71 @@ def main() -> None:
         symmetrize_targets=bool(args.symmetrize_targets),
     )
 
-    problem_edge = tuple(int(x) for x in args.problem_edge)
-    subplot_data, summary = _collect_subplot_data(
-        snap,
-        problem_key=args.problem_key,
-        problem_edge=problem_edge,
-        competing_key=args.competing_key,
-        competing_edge=tuple(int(x) for x in args.competing_edge),
-        value_mode="sum_squares",
-    )
+    subplot_data_by_matrix: dict[str, dict[str, dict[str, list[float]]]] = {}
+    summary_by_matrix: dict[str, dict[str, object]] = {}
+    output_labels: list[str] = []
+    for matrix_name in matrix_names:
+        subplot_data, summary = _collect_subplot_data(
+            snap,
+            matrix_name=matrix_name,
+            problem_key=args.problem_key,
+            problem_edge=tuple(int(x) for x in args.problem_edge),
+            competing_key=args.competing_key,
+            competing_edge=tuple(int(x) for x in args.competing_edge),
+            value_mode="sum_squares",
+            highlight_edges=False,
+        )
+        subplot_data_by_matrix[matrix_name] = subplot_data
+        summary_by_matrix[matrix_name] = summary
+        output_labels.append(matrix_name)
 
-    figure_path = output_dir / "hamiltonian_block_magnitude_vs_distance_3x5.png"
-    _plot(
-        subplot_data,
-        summary,
+    figure_basename = "_".join(output_labels) + "_block_magnitude_vs_distance_3x5.png"
+    figure_path = output_dir / figure_basename
+    _plot_multi_matrix(
+        subplot_data_by_matrix,
+        summary_by_matrix,
         figure_path,
-        y_label="Hamiltonian block sum of squares",
-        title="scale_1_010 Hamiltonian block sum of squares vs edge distance",
-    )
-    combined_figure_path = (
-        output_dir / "hamiltonian_block_magnitude_vs_distance_all_pairs.png"
-    )
-    _plot_combined(
-        subplot_data,
-        summary,
-        combined_figure_path,
-        y_label="Hamiltonian block sum of squares",
-        title="scale_1_010 Hamiltonian block sum of squares vs edge distance",
-    )
-
-    mean_subplot_data, mean_summary = _collect_subplot_data(
-        snap,
-        problem_key=args.problem_key,
-        problem_edge=problem_edge,
-        competing_key=args.competing_key,
-        competing_edge=tuple(int(x) for x in args.competing_edge),
-        value_mode="mean_squares",
-    )
-    mean_figure_path = (
-        output_dir / "hamiltonian_block_mean_square_vs_distance_all_pairs.png"
-    )
-    _plot_combined(
-        mean_subplot_data,
-        mean_summary,
-        mean_figure_path,
-        y_label="Hamiltonian block mean square",
-        title="scale_1_010 Hamiltonian block mean square vs edge distance",
+        y_label="Block sum of squares",
+        title=f"scale_1_010 block sum of squares vs edge distance ({', '.join(output_labels)})",
     )
 
     summary_path = output_dir / "summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True))
+    summary_path.write_text(json.dumps(summary_by_matrix, indent=2, sort_keys=True))
 
     print(f"Wrote {figure_path}", flush=True)
-    print(f"Wrote {combined_figure_path}", flush=True)
-    print(f"Wrote {mean_figure_path}", flush=True)
     print(f"Wrote {summary_path}", flush=True)
-    if summary["problem_found"]:
-        problem_record = summary["problem_record"]
-        print(
-            "Problem edge found: "
-            f"{problem_record['directed_key']} "
-            f"edge={tuple(problem_record['edge'])} "
-            f"distance={problem_record['distance']:.6f} "
-            f"magnitude={problem_record['magnitude']:.6f}",
-            flush=True,
-        )
-    else:
-        print(
-            "Problem edge was not found in the plotted Hamiltonian target state.",
-            flush=True,
-        )
-    if summary["competing_found"]:
-        competing_record = summary["competing_record"]
-        print(
-            "Competing edge found: "
-            f"{competing_record['directed_key']} "
-            f"edge={tuple(competing_record['edge'])} "
-            f"distance={competing_record['distance']:.6f} "
-            f"magnitude={competing_record['magnitude']:.6f}",
-            flush=True,
-        )
-    else:
-        print(
-            "Competing edge was not found in the plotted Hamiltonian target state.",
-            flush=True,
-        )
+    for matrix_name in matrix_names:
+        summary = summary_by_matrix[matrix_name]
+        if summary["problem_found"]:
+            problem_record = summary["problem_record"]
+            print(
+                f"[{matrix_name}] Problem edge found: "
+                f"{problem_record['directed_key']} "
+                f"edge={tuple(problem_record['edge'])} "
+                f"distance={problem_record['distance']:.6f} "
+                f"magnitude={problem_record['magnitude']:.6f}",
+                flush=True,
+            )
+        elif matrix_name == "hamiltonian":
+            print(
+                "Problem edge was not found in the plotted Hamiltonian target state.",
+                flush=True,
+            )
+        if summary["competing_found"]:
+            competing_record = summary["competing_record"]
+            print(
+                f"[{matrix_name}] Competing edge found: "
+                f"{competing_record['directed_key']} "
+                f"edge={tuple(competing_record['edge'])} "
+                f"distance={competing_record['distance']:.6f} "
+                f"magnitude={competing_record['magnitude']:.6f}",
+                flush=True,
+            )
+        elif matrix_name == "hamiltonian":
+            print(
+                "Competing edge was not found in the plotted Hamiltonian target state.",
+                flush=True,
+            )
 
 
 if __name__ == "__main__":
