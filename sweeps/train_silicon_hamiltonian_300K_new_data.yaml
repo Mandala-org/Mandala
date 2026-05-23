@@ -127,7 +127,7 @@ parameters:
   node-update-attention-scalar-dim:
     values: [64, 128]
   node-update-attention-heads:
-    value: 4
+    values: [2, 4]
   node-update-residual:
     values: [true, false]
 
@@ -236,7 +236,7 @@ parameters:
   log-activation-mag:
     value: false
   train-on-irrep-parts:
-    value: false
+    values: [false, true]
 
   # Targets / evaluation
   matrix-targets:
