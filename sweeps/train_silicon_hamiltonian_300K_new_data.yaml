@@ -203,6 +203,8 @@ parameters:
     value: cuda
   gpus:
     value: 1
+  max-wall-clock-hours:
+    value: 12
   benchmark:
     value: false
   adaptive-log-interval:
