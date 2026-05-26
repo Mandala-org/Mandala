@@ -114,7 +114,7 @@ CMD=(
   --matrix-targets "[\"hamiltonian\"]"
   --max-epochs 5000
   --max-temp 300
-  --max-wall-clock-hours 12
+  --max-wall-clock-hours 47
   --min-temp 300
   --n-radial 128
   --neck-depth 2
