@@ -127,7 +127,7 @@ CMD=(
   --num-layers-gnn 2
   --num-train 80
   --num-val 20
-  --num-workers 8
+  --num-workers 3
   --precision 32-true
   --precompute-edge-features True
   --print-per-irrep-metrics False
