@@ -26,12 +26,18 @@ source mandala-venv/bin/activate
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mpl-${USER}}"
 mkdir -p "${MPLCONFIGDIR}"
 
-CHECKPOINT_DIR="checkpoints/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73"
-RESUME_CHECKPOINT="/data/home2/brzoza73/casus/mandala/checkpoints/silicon_hamiltonian_300K_new_data/sage-sweep-73/latest_checkpoint.pt"
+CHECKPOINT_DIR="/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73"
+RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data/sage-sweep-73/latest_checkpoint.pt}"
 WANDB_PROJECT="mandala-silicon-hamiltonian-rosi"
 RUN_NAME="silicon_hamiltonian_300K_new_data_restart_sage_sweep_73_lr${LR//./p}_seed${SEED}"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new"
 SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new/snapshot_cache"
+
+if [[ ! -f "${RESUME_CHECKPOINT}" ]]; then
+  echo "Resume checkpoint not found: ${RESUME_CHECKPOINT}" >&2
+  echo "Set RESUME_CHECKPOINT to the correct latest_checkpoint.pt path before launching." >&2
+  exit 1
+fi
 
 CMD=(
   python -u scripts/wandb_run.py
