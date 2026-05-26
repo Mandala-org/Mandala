@@ -1,18 +1,17 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -euo pipefail
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo "Usage: $0 <learning-rate> <seed> [run-tag]" >&2
+if [[ $# -ne 2 ]]; then
+  echo "Usage: $0 <learning-rate> <seed>" >&2
   echo "Examples:" >&2
   echo "  $0 0.001 42" >&2
-  echo "  $0 0.0005 123 lr-scan-a" >&2
+  echo "  $0 0.0005 45" >&2
   exit 1
 fi
 
 LR="$1"
 SEED="$2"
-RUN_TAG="${3:-}"
 
 if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
   echo "Seed must be an integer, got: ${SEED}" >&2
@@ -20,136 +19,151 @@ if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-if [[ -f "${HOME}/casus/mandala-venv/bin/activate" ]]; then
-  source "${HOME}/casus/mandala-venv/bin/activate"
-elif [[ -f "${ROOT_DIR}/mandala-venv/bin/activate" ]]; then
-  source "${ROOT_DIR}/mandala-venv/bin/activate"
-else
-  echo "Could not find mandala virtualenv." >&2
-  exit 1
-fi
-
 cd "${ROOT_DIR}"
 
-CHECKPOINT_DIR="checkpoints/silicon_hamiltonian_300K_new_data_restart"
+source mandala-venv/bin/activate
+
+export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mpl-${USER}}"
+mkdir -p "${MPLCONFIGDIR}"
+
+CHECKPOINT_DIR="checkpoints/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73"
 RESUME_CHECKPOINT="/data/home2/brzoza73/casus/mandala/checkpoints/silicon_hamiltonian_300K_new_data/sage-sweep-73/latest_checkpoint.pt"
-SWEEP_YAML="sweeps/train_silicon_hamiltonian_300K_new_data.yaml"
 WANDB_PROJECT="mandala-silicon-hamiltonian-rosi"
+RUN_NAME="silicon_hamiltonian_300K_new_data_restart_sage_sweep_73_lr${LR//./p}_seed${SEED}"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new"
 SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new/snapshot_cache"
 
-LR_TAG="${LR//./p}"
-DEFAULT_RUN_TAG="sage-sweep-73-lr${LR_TAG}-seed${SEED}"
-if [[ -n "${RUN_TAG}" ]]; then
-  RUN_TAG="${RUN_TAG}"
-else
-  RUN_TAG="${DEFAULT_RUN_TAG}"
-fi
-
-python -u scripts/wandb_run.py \
-  --sweep-yaml "${SWEEP_YAML}" \
-  --wandb-project "${WANDB_PROJECT}" \
-  --wandb-mode online \
-  --checkpoint-dir "${CHECKPOINT_DIR}" \
-  --resume-from-checkpoint "${RESUME_CHECKPOINT}" \
-  --run-name "${RUN_TAG}" \
-  --dataset-kind silicon \
-  --data-path "${DATA_PATH}" \
-  --snapshot-cache-dir "${SNAPSHOT_CACHE_DIR}" \
-  --dataset-device cpu \
-  --gpus 1 \
-  --num-workers 3 \
-  --max-wall-clock-hours 47 \
-  --min-temp 300 \
-  --max-temp 300 \
-  --temp-step 300 \
-  --val-temp 300 \
-  --num-train 80 \
-  --num-val 20 \
-  --generate-video true \
-  --log-artifacts true \
-  --max-epochs 5000 \
-  --precision 32-true \
-  --convention e3nn \
-  --use-lr-scheduler true \
-  --lr-scheduler-factor 0.5 \
-  --lr-scheduler-patience 60 \
-  --lr-scheduler-min-lr 1e-8 \
-  --lr-scheduler-target val/hamiltonian_mae \
-  --revert-on-spike true \
-  --revert-monitor val/hamiltonian_mae \
-  --revert-decay-patience 4 \
-  --revert-decay-rate 0.8 \
-  --revert-spike-factor 2.0 \
-  --cutoff-radius 8.0 \
-  --l-max 4 \
-  --hidden-base-dim 32 \
-  --edge-type-emb-dim 32 \
-  --emb-use-odd-features true \
-  --edge-encoder-style rich \
-  --edge-encoder-use-sh-tensor-square false \
-  --e3layernorm false \
-  --num-layers-gnn 2 \
-  --tp-type separate_weight \
-  --edge-update-node-combine concat \
-  --head-use-mlp-log-scale false \
-  --head-use-node-embeddings-for-self-edges true \
-  --separate-shifted-self true \
-  --head-use-tensor-square false \
-  --head-offdiag-output-scale 1.0 \
-  --head-log-scale-mlp-n-layers 1 \
-  --e3mlp-output-scale 1.0 \
-  --e3mlp-pre-norm false \
-  --e3mlp-norm-eps 1e-8 \
-  --activation-odd-scalar tanh \
-  --activation-odd-gate tanh \
-  --nonlin-kind normact \
-  --activation-scalar leakyrelu \
-  --activation-gate softplus \
-  --s2act-res 128 \
-  --norm-kind component \
-  --dropout 0.0 \
-  --l1-reg-coef 0.0 \
-  --l2-reg-coef 0.0 \
-  --init-weights-factor 1.0 \
-  --n-radial 64 \
-  --radial-layers "[64, 64]" \
-  --device cuda \
-  --benchmark false \
-  --adaptive-log-interval true \
-  --log-interval 10 \
-  --log-data true \
-  --log-model true \
-  --log-forward false \
-  --log-per-irrep-metrics true \
-  --print-per-irrep-metrics false \
-  --log-per-irrep-images false \
-  --log-partial-gt-observables true \
-  --log-per-pair-loss-metrics true \
-  --log-hamiltonian-irrep-contrib-metrics true \
-  --log-hamiltonian-pair-contrib-metrics true \
-  --log-activation-mag false \
-  --train-on-irrep-parts false \
-  --matrix-targets "[\"hamiltonian\"]" \
-  --enable-energy true \
-  --enable-num-electrons true \
-  --enable-forces false \
-  --enable-stress false \
-  --train-on-energy false \
-  --train-on-num-electrons false \
-  --train-on-forces false \
-  --train-on-stress false \
-  --train-observables-on-gt false \
-  --loss-coef-observables 0.0 \
-  --loss-coef-forces 0.0 \
-  --loss-coef-stress 0.0 \
-  --symmetrize-output true \
-  --symmetrize-hamiltonian-targets true \
-  --rescale-density-to-num-electrons false \
-  --precompute-edge-features true \
-  --radial-embedding-scale none \
-  --apply-cutoff-to-targets true \
-  --require-exact-edge-match true \
-  --lr "${LR}" \
+CMD=(
+  python -u scripts/wandb_run.py
+  --checkpoint-dir "${CHECKPOINT_DIR}"
+  --resume-from-checkpoint "${RESUME_CHECKPOINT}"
+  --fork-run true
+  --resume-mode latest
+  --wandb-mode online
+  --wandb-project "${WANDB_PROJECT}"
+  --run-name "${RUN_NAME}"
+  --accumulate-grad-batches 1
+  --activation-gate softplus
+  --activation-odd-gate tanh
+  --activation-odd-scalar tanh
+  --activation-scalar leakyrelu
+  --adaptive-log-interval True
+  --apply-cutoff-to-targets True
+  --benchmark False
+  --convention e3nn
+  --cutoff-radius 8
+  --data-path "${DATA_PATH}"
+  --dataset-device cpu
+  --dataset-kind silicon
+  --device cuda
+  --dropout 0
+  --e3layernorm False
+  --e3mlp-film-hidden-dim 128
+  --e3mlp-norm-eps 1e-08
+  --e3mlp-output-scale 1
+  --e3mlp-pre-norm False
+  --e3mlp-residual-scale 1
+  --e3mlp-variant film
+  --e3mlp-weight-init-scale 1
+  --edge-encoder-style rich
+  --edge-encoder-use-sh-tensor-square True
+  --edge-type-emb-dim 32
+  --edge-update-node-combine concat
+  --edge-update-residual False
+  --emb-use-odd-features True
+  --enable-energy True
+  --enable-forces False
+  --enable-num-electrons True
+  --enable-stress False
+  --generate-video True
+  --gpus 1
+  --grad-clip-val 5
+  --head-diag-output-scale 2
+  --head-e3mlp-layers 2
+  --head-log-scale-mlp-n-layers 1
+  --head-offdiag-output-scale 1
+  --head-use-mlp-log-scale False
+  --head-use-node-embeddings-for-self-edges True
+  --head-use-tensor-square False
+  --hidden-base-dim 32
+  --hidden-irreps "128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+16x3e+16x3o+16x4e"
+  --init-weights-factor 1
+  --internal-e3mlp-layers 1
+  --l-max 4
+  --l1-reg-coef 0
+  --l2-reg-coef 0
+  --log-activation-mag False
+  --log-artifacts True
+  --log-data True
+  --log-forward False
+  --log-hamiltonian-irrep-contrib-metrics True
+  --log-hamiltonian-pair-contrib-metrics True
+  --log-interval 10
+  --log-model True
+  --log-partial-gt-observables True
+  --log-per-irrep-images False
+  --log-per-irrep-metrics True
+  --log-per-pair-loss-metrics True
+  --loss-coef-forces 0
+  --loss-coef-observables 0
+  --loss-coef-stress 0
+  --lr-scheduler-factor 0.5
+  --lr-scheduler-min-lr 1e-08
+  --lr-scheduler-patience 60
+  --lr-scheduler-target val/hamiltonian_mae
+  --matrix-targets "[\"hamiltonian\"]"
+  --max-epochs 5000
+  --max-temp 300
+  --max-wall-clock-hours 12
+  --min-temp 300
+  --n-radial 128
+  --neck-depth 2
+  --node-update-attention-heads 4
+  --node-update-attention-scalar-dim 128
+  --node-update-message-agg attention
+  --node-update-residual False
+  --nonlin-kind normact
+  --norm-kind component
+  --num-layers-gnn 2
+  --num-train 80
+  --num-val 20
+  --num-workers 8
+  --precision 32-true
+  --precompute-edge-features True
+  --print-per-irrep-metrics False
+  --radial-embedding-scale none
+  --radial-layers "[128, 128]"
+  --require-exact-edge-match True
+  --rescale-density-to-num-electrons False
+  --revert-decay-patience 4
+  --revert-decay-rate 0.8
+  --revert-monitor val/hamiltonian_mae
+  --revert-on-spike True
+  --revert-spike-factor 2
+  --s2act-res 128
+  --separate-shifted-self True
+  --snapshot-cache-dir "${SNAPSHOT_CACHE_DIR}"
+  --symmetrize-hamiltonian-targets True
+  --symmetrize-output False
+  --temp-step 300
+  --tp-type separate_weight
+  --train-observables-on-gt False
+  --train-on-energy False
+  --train-on-forces False
+  --train-on-irrep-parts False
+  --train-on-num-electrons False
+  --train-on-stress False
+  --use-lr-scheduler True
+  --use-self-connection True
+  --val-temp 300
+  --lr "${LR}"
   --seed "${SEED}"
+)
+
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  printf '%q ' "${CMD[@]}"
+  printf '\n'
+else
+  printf '\n=== Launching %s ===\n' "${RUN_NAME}"
+  "${CMD[@]}"
+fi
