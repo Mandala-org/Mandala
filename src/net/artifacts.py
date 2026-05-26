@@ -827,7 +827,7 @@ class RevertOnSpikeCallback(pl.Callback):
 
     def _save_best_checkpoint(self, trainer: Any) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        trainer.save_checkpoint(str(self.best_path))
+        trainer.save_checkpoint(str(self.best_path), weights_only=False)
 
     def _restore_best_checkpoint(self, trainer: Any) -> bool:
         if not self.best_path.exists():
@@ -1632,11 +1632,11 @@ class ArtifactCheckpointCallback(pl.Callback):
         if metric is not None:
             score = float(metric.detach().cpu().item())
             if self.save_best and self._is_better(score):
-                trainer.save_checkpoint(str(self.best_path))
+                trainer.save_checkpoint(str(self.best_path), weights_only=False)
                 self.state.best_score = score
                 self.state.best_epoch = int(trainer.current_epoch)
         if self.save_latest:
-            trainer.save_checkpoint(str(self.latest_path))
+            trainer.save_checkpoint(str(self.latest_path), weights_only=False)
 
         if self.reference_batch is None or not self._should_log_now(
             int(trainer.current_epoch), pl_module
@@ -1723,7 +1723,7 @@ class ArtifactCheckpointCallback(pl.Callback):
 
     def on_fit_end(self, trainer, pl_module) -> None:
         if self.save_final:
-            trainer.save_checkpoint(str(self.final_path))
+            trainer.save_checkpoint(str(self.final_path), weights_only=False)
 
         if self.reference_batch is None:
             return
@@ -1926,7 +1926,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         if not self.save_latest:
             return
         try:
-            trainer.save_checkpoint(str(self.latest_path))
+            trainer.save_checkpoint(str(self.latest_path), weights_only=False)
             print(
                 f"--- Saved latest checkpoint after interrupt/exception: {self.latest_path} ---"
             )
