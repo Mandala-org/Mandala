@@ -64,6 +64,15 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--cif-path", type=Path, default=None)
     parser.add_argument("--reference-info-path", type=Path, default=None)
     parser.add_argument("--orbital-set", type=str, default=None)
+    parser.add_argument(
+        "--analysis-cutoff-radius",
+        type=float,
+        default=None,
+        help=(
+            "Optional post-inference cutoff applied to both predictions and ground truth "
+            "before analysis plots and metrics are computed."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
         "--device",
@@ -337,6 +346,20 @@ def _build_snapshot_from_matrices(
     )
 
 
+def _maybe_apply_analysis_cutoff(
+    snapshot: Snapshot, analysis_cutoff_radius: float | None, cfg: Config
+) -> Snapshot:
+    if analysis_cutoff_radius is None:
+        return snapshot
+    trained_cutoff = getattr(cfg, "cutoff_radius", None)
+    if trained_cutoff is not None and analysis_cutoff_radius > float(trained_cutoff):
+        raise ValueError(
+            "analysis cutoff must not exceed the trained cutoff: "
+            f"analysis_cutoff_radius={analysis_cutoff_radius} > trained_cutoff={trained_cutoff}"
+        )
+    return snapshot.filter_by_distance(float(analysis_cutoff_radius))
+
+
 def _run_snapshot_case(
     args: argparse.Namespace, checkpoint: dict[str, Any], cfg: Config
 ) -> None:
@@ -405,6 +428,18 @@ def _run_snapshot_case(
         box=box,
         info=info,
     )
+    gt_snapshot = _maybe_apply_analysis_cutoff(
+        gt_snapshot, args.analysis_cutoff_radius, cfg
+    )
+    pred_band_snapshot = _maybe_apply_analysis_cutoff(
+        pred_band_snapshot, args.analysis_cutoff_radius, cfg
+    )
+    gt_mats = {
+        name: gt_snapshot[name] for name in ("hamiltonian", "density", "overlap")
+    }
+    pred_mats = {
+        name: pred_band_snapshot[name] for name in ("hamiltonian", "density", "overlap")
+    }
 
     title = args.plot_title or matrix_path.parent.name
     ham_clim = (
@@ -434,6 +469,13 @@ def _run_snapshot_case(
         alpha=args.correlation_alpha,
         seed=args.correlation_sample_seed,
     )
+    analysis_eval.save_block_error_scatter_data(
+        pred_mats["hamiltonian"],
+        gt_mats["hamiltonian"],
+        positions=positions,
+        box=box,
+        output_path=output_dir / "hamiltonian_block_error_metrics.pt",
+    )
     if "density" in pred_mats:
         analysis_eval.save_comparison_plot(
             pred_mats["density"],
@@ -451,6 +493,13 @@ def _run_snapshot_case(
             max_points=args.correlation_max_points,
             alpha=args.correlation_alpha,
             seed=args.correlation_sample_seed,
+        )
+        analysis_eval.save_block_error_scatter_data(
+            pred_mats["density"],
+            gt_mats["density"],
+            positions=positions,
+            box=box,
+            output_path=output_dir / "density_block_error_metrics.pt",
         )
     else:
         print(
@@ -489,6 +538,8 @@ def _run_snapshot_case(
             overlap_jitter=args.overlap_jitter,
             bin_width=args.dos_bin_width,
             tetra_batch_size=args.tetra_batch_size,
+            cache_path_true=output_dir / "tetrahedron_dos_cache_gt.pt",
+            cache_path_pred=output_dir / "tetrahedron_dos_cache_pred.pt",
         )
     else:
         dos_metrics = analysis_eval.save_dos_comparison_plot(
@@ -661,6 +712,9 @@ def _run_cif_case(
         positions=positions,
         box=box,
     )
+    pred_snapshot_for_eigs = _maybe_apply_analysis_cutoff(
+        pred_snapshot_for_eigs, args.analysis_cutoff_radius, cfg
+    )
     if pred_snapshot_for_eigs.overlap is None:
         raise ValueError(
             "CIF evaluation needs a predicted overlap matrix for DOS/band plots."
@@ -681,6 +735,7 @@ def _run_cif_case(
             overlap_jitter=args.overlap_jitter,
             bin_width=args.dos_bin_width,
             tetra_batch_size=args.tetra_batch_size,
+            cache_path=output_dir / "tetrahedron_dos_cache_pred.pt",
         )
     else:
         analysis_eval.save_dos_prediction_plot(

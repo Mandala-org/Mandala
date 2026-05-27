@@ -67,6 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cif-path", type=Path, default=None)
     parser.add_argument("--reference-info-path", type=Path, default=None)
     parser.add_argument("--orbital-set", type=str, default=None)
+    parser.add_argument("--analysis-cutoff-radius", type=float, default=None)
     parser.add_argument(
         "--device", type=str, default="auto", choices=["auto", "cpu", "cuda"]
     )
@@ -271,6 +272,7 @@ def _build_eval_namespace(
         cif_path=args.cif_path,
         reference_info_path=args.reference_info_path,
         orbital_set=args.orbital_set,
+        analysis_cutoff_radius=args.analysis_cutoff_radius,
         output_dir=output_dir,
         device=args.device,
         convention=args.convention,
@@ -318,6 +320,7 @@ def _settings_for_cache(args: argparse.Namespace) -> dict[str, Any]:
             str(args.reference_info_path) if args.reference_info_path else None
         ),
         "orbital_set": args.orbital_set,
+        "analysis_cutoff_radius": args.analysis_cutoff_radius,
         "convention": args.convention,
         "max_atoms": args.max_atoms,
         "cif_max_atoms": args.cif_max_atoms,

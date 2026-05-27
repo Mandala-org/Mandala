@@ -468,6 +468,104 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
         _TETRA_MP_STATE = None
 
 
+def _dos_cache_signature(
+    snapshot: Snapshot,
+    *,
+    kind: str,
+    kmesh_spec: str,
+    chunk_size: int,
+    num_workers: int,
+    psd_cleanup: bool,
+    allow_jitter: bool,
+    bin_width: float,
+    tetra_batch_size: int,
+    e_min: float | None,
+    e_max: float | None,
+) -> dict[str, Any]:
+    def _path_sig(path_like: str | Path | None) -> dict[str, Any] | None:
+        if path_like is None:
+            return None
+        path = Path(path_like)
+        if not path.exists():
+            return {"path": str(path), "exists": False}
+        stat = path.stat()
+        return {
+            "path": str(path.resolve()),
+            "exists": True,
+            "mtime_ns": stat.st_mtime_ns,
+            "size": stat.st_size,
+        }
+
+    info = getattr(snapshot, "info", None)
+    fermi_level = None
+    if getattr(info, "fermi_level", None) is not None:
+        fermi_level = float(info.fermi_level.item() * HARTREE_TO_EV)
+    return {
+        "kind": kind,
+        "matrix_path": _path_sig(getattr(snapshot, "matrix_path", None)),
+        "info_path": _path_sig(getattr(snapshot, "info_path", None)),
+        "kmesh_spec": kmesh_spec,
+        "chunk_size": int(chunk_size),
+        "num_workers": int(num_workers),
+        "psd_cleanup": bool(psd_cleanup),
+        "allow_jitter": bool(allow_jitter),
+        "bin_width": float(bin_width),
+        "tetra_batch_size": int(tetra_batch_size),
+        "e_min": None if e_min is None else float(e_min),
+        "e_max": None if e_max is None else float(e_max),
+        "num_atoms": len(getattr(snapshot.hamiltonian, "atoms", [])),
+        "num_electrons": float(
+            snapshot.get_number_of_electrons().detach().cpu().item()
+        ),
+        "fermi_level_ev": fermi_level,
+    }
+
+
+def _load_dos_cache(
+    cache_path: Path,
+    signature: dict[str, Any],
+) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float] | None:
+    if not cache_path.exists():
+        return None
+    payload = torch.load(cache_path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("signature") != signature:
+        return None
+    return (
+        payload["grid_ev"],
+        payload["dos"],
+        float(payload["num_electrons"]),
+        payload.get("dos_electron_target"),
+        float(payload["fermi_level_ev"]),
+    )
+
+
+def _save_dos_cache(
+    cache_path: Path,
+    signature: dict[str, Any],
+    grid_ev: torch.Tensor,
+    dos: torch.Tensor,
+    num_electrons: float,
+    dos_electron_target: float | None,
+    fermi_level_ev: float,
+) -> None:
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "signature": signature,
+            "grid_ev": grid_ev.detach().cpu(),
+            "dos": dos.detach().cpu(),
+            "num_electrons": float(num_electrons),
+            "dos_electron_target": (
+                None if dos_electron_target is None else float(dos_electron_target)
+            ),
+            "fermi_level_ev": float(fermi_level_ev),
+        },
+        cache_path,
+    )
+
+
 def _kmesh_eigenvalues(
     snapshot: Snapshot,
     *,
@@ -564,7 +662,25 @@ def compute_tetrahedron_dos_and_fermi(
     e_min: float | None = None,
     e_max: float | None = None,
     show_progress: bool | None = None,
+    cache_path: Path | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
+    signature = _dos_cache_signature(
+        snapshot,
+        kind="tetrahedron",
+        kmesh_spec=kmesh_spec,
+        chunk_size=chunk_size,
+        num_workers=num_workers,
+        psd_cleanup=psd_cleanup,
+        allow_jitter=allow_jitter,
+        bin_width=bin_width,
+        tetra_batch_size=tetra_batch_size,
+        e_min=e_min,
+        e_max=e_max,
+    )
+    if cache_path is not None:
+        cached = _load_dos_cache(cache_path, signature)
+        if cached is not None:
+            return cached
     if show_progress is None:
         show_progress = sys.stderr.isatty()
     eigenvalues_ev, _fractional_kpoints = _kmesh_eigenvalues(
@@ -590,12 +706,21 @@ def compute_tetrahedron_dos_and_fermi(
     )
     num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
     dos_electron_target = effective_dos_electron_target(snapshot)
-    fermi_level_ev = fermi_level_from_dos(grid_ev, dos, dos_electron_target)
-    if (
-        fermi_level_ev is None
-        and getattr(snapshot.info, "fermi_level", None) is not None
-    ):
+    fermi_level_ev = None
+    if getattr(snapshot.info, "fermi_level", None) is not None:
         fermi_level_ev = float(snapshot.info.fermi_level.item() * HARTREE_TO_EV)
+    if fermi_level_ev is None:
+        fermi_level_ev = fermi_level_from_dos(grid_ev, dos, dos_electron_target)
+    if cache_path is not None:
+        _save_dos_cache(
+            cache_path,
+            signature,
+            grid_ev,
+            dos,
+            num_electrons,
+            dos_electron_target,
+            fermi_level_ev,
+        )
     return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
 
 
@@ -941,6 +1066,101 @@ def save_comparison_plot(
     plt.close(fig)
 
 
+def compute_block_error_scatter_data(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor,
+) -> dict[str, Any]:
+    positions_cpu = positions.detach().cpu()
+    box_cpu = box.detach().cpu()
+
+    edge_length: list[float] = []
+    abs_mae: list[float] = []
+    rel_mae: list[float] = []
+    block_magnitude: list[float] = []
+    pair_key: list[str] = []
+    edge_index: list[int] = []
+    src_atom: list[int] = []
+    dst_atom: list[int] = []
+    shift_sx: list[int] = []
+    shift_sy: list[int] = []
+    shift_sz: list[int] = []
+    matched_edges = 0
+    missing_in_pred = 0
+
+    eps = 1.0e-12
+    for key in target.keys():
+        if key not in pred.pair_edges:
+            continue
+        target_edges = target.pair_edges[key].detach().cpu()
+        target_blocks = target.pair_blocks[key].detach().cpu()
+        pred_lookup = pred.lookup
+        for idx in range(target_edges.shape[1]):
+            sx, sy, sz, i, j = [int(v) for v in target_edges[:, idx].tolist()]
+            pred_entry = pred_lookup.get((sx, sy, sz, i, j))
+            if pred_entry is None:
+                missing_in_pred += 1
+                continue
+            pred_key, pred_idx = pred_entry
+            pred_block = pred.pair_blocks[pred_key][pred_idx].detach().cpu()
+            target_block = target_blocks[idx]
+            shift = torch.tensor([sx, sy, sz], dtype=positions_cpu.dtype)
+            disp = positions_cpu[j] - positions_cpu[i] + shift @ box_cpu
+            length = float(torch.linalg.norm(disp).item())
+            diff = pred_block - target_block
+            mae = float(torch.mean(torch.abs(diff)).item())
+            magnitude = float(torch.mean(torch.abs(target_block)).item())
+            rel = mae / max(magnitude, eps)
+            edge_length.append(length)
+            abs_mae.append(mae)
+            rel_mae.append(rel)
+            block_magnitude.append(magnitude)
+            pair_key.append(str(key))
+            edge_index.append(idx)
+            src_atom.append(i)
+            dst_atom.append(j)
+            shift_sx.append(sx)
+            shift_sy.append(sy)
+            shift_sz.append(sz)
+            matched_edges += 1
+
+    return {
+        "pair_key": pair_key,
+        "edge_index": edge_index,
+        "src_atom": src_atom,
+        "dst_atom": dst_atom,
+        "shift_sx": shift_sx,
+        "shift_sy": shift_sy,
+        "shift_sz": shift_sz,
+        "edge_length": edge_length,
+        "abs_mae": abs_mae,
+        "rel_mae": rel_mae,
+        "block_magnitude": block_magnitude,
+        "matched_edges": matched_edges,
+        "missing_in_pred": missing_in_pred,
+    }
+
+
+def save_block_error_scatter_data(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor,
+    output_path: Path,
+) -> None:
+    payload = compute_block_error_scatter_data(
+        pred,
+        target,
+        positions=positions,
+        box=box,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, output_path)
+
+
 def save_prediction_plot(
     mat,
     output_path: Path,
@@ -1269,6 +1489,8 @@ def save_tetrahedron_dos_comparison_plot(
     bin_width: float = 0.05,
     tetra_batch_size: int = 256,
     show_progress: bool | None = None,
+    cache_path_true: Path | None = None,
+    cache_path_pred: Path | None = None,
 ) -> dict[str, float]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if show_progress is None:
@@ -1293,6 +1515,7 @@ def save_tetrahedron_dos_comparison_plot(
             e_min=energy_min,
             e_max=energy_max,
             show_progress=show_progress,
+            cache_path=cache_path_true,
         )
     )
     grid_pred, dos_pred, num_electrons_pred, dos_target_pred, fermi_pred = (
@@ -1309,6 +1532,7 @@ def save_tetrahedron_dos_comparison_plot(
             e_min=energy_min,
             e_max=energy_max,
             show_progress=show_progress,
+            cache_path=cache_path_pred,
         )
     )
     grid_true, dos_true = _clip_energy_curve(
@@ -1419,6 +1643,7 @@ def save_tetrahedron_dos_prediction_plot(
     bin_width: float = 0.05,
     tetra_batch_size: int = 256,
     show_progress: bool | None = None,
+    cache_path: Path | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if show_progress is None:
@@ -1442,6 +1667,7 @@ def save_tetrahedron_dos_prediction_plot(
         e_min=energy_min,
         e_max=energy_max,
         show_progress=show_progress,
+        cache_path=cache_path,
     )
     grid, dos = _clip_energy_curve(
         grid.detach().cpu(),

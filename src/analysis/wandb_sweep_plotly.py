@@ -640,6 +640,8 @@ def copy_evaluation_bundle_assets(
         "band_structure_pred_gt_overlap.pt",
         "band_structure_gt.pt",
         "band_structure_pred.pt",
+        "hamiltonian_block_error_metrics.pt",
+        "density_block_error_metrics.pt",
         "pred_hamiltonian.pt",
         "pred_density.pt",
         "pred_overlap.pt",
@@ -677,6 +679,8 @@ def label_for_asset(filename: str) -> str:
         "dos_comparison.png": "DOS comparison",
         "dos_prediction.png": "DOS prediction",
         "dos_error.png": "DOS error",
+        "hamiltonian_block_error_metrics.pt": "Hamiltonian block error metrics",
+        "density_block_error_metrics.pt": "Density block error metrics",
         "hamiltonian_first_atoms_comparison.png": "Hamiltonian heatmap",
         "hamiltonian_first_atoms_prediction.png": "Hamiltonian prediction heatmap",
         "hamiltonian_correlation.png": "Hamiltonian correlation",
@@ -889,6 +893,11 @@ def build_model_detail_page(
         include_plotlyjs=include_plotlyjs,
         div_id_prefix=f"band-{record.run_id}",
     )
+    block_error_html = _build_block_error_section(
+        evaluation,
+        include_plotlyjs=False if band_html else include_plotlyjs,
+        div_id_prefix=f"block-{record.run_id}",
+    )
     if image_assets:
         evaluation_html = "\n".join(
             f"""
@@ -925,6 +934,7 @@ def build_model_detail_page(
   <h2>Precomputed Evaluation</h2>
   <div class="meta-line">Source bundle: <code>{html.escape(str(evaluation.get("source_dir", "")))}</code></div>
   {band_html}
+  {block_error_html}
   <div class="asset-grid">
     {evaluation_html}
   </div>
@@ -942,6 +952,8 @@ def build_model_detail_page(
   <p class="empty">No precomputed local evaluation bundle was found for this run yet.</p>
 </div>
 """
+    if block_error_html and not image_assets:
+        evaluation_section += block_error_html
     score_label = rank_metric or "Score"
     backlink_html = (
         f'<a class="crumb" href="{html.escape(backlink_href)}">{html.escape(backlink_label or "Back")}</a>'
@@ -1018,6 +1030,36 @@ def build_model_detail_page(
     }}
     .asset-title {{ font-weight: 600; margin-bottom: 10px; color: #f8fafc; }}
     .asset-card img {{ display: block; width: 100%; height: auto; border-radius: 10px; }}
+    .metric-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }}
+    .metric-card {{
+      background: rgba(9, 14, 28, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 16px;
+      padding: 14px;
+    }}
+    .metric-title {{ font-weight: 600; margin-bottom: 8px; color: #f8fafc; }}
+    .axis-controls {{
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      color: #cbd5e1;
+      font-size: 13px;
+    }}
+    .axis-toggle {{ display: inline-flex; align-items: center; gap: 6px; }}
+    .metric-plot .plotly, .metric-plot .plotly-graph-div, .metric-plot .js-plotly-plot {{
+      width: 100% !important;
+      max-width: 100% !important;
+    }}
+    @media (max-width: 980px) {{
+      .metric-grid {{
+        grid-template-columns: 1fr;
+      }}
+    }}
     .downloads {{ margin: 0; padding-left: 18px; }}
     .meta-line {{ color: #a8b3c7; margin-bottom: 14px; }}
     .empty {{ color: #a8b3c7; }}
@@ -1078,7 +1120,12 @@ def _build_interactive_band_section(
     include_plotlyjs: str | bool,
     div_id_prefix: str,
 ) -> str:
-    figure = _build_band_structure_figure(evaluation)
+    settings = evaluation.get("manifest", {}).get("settings", {})
+    figure = _build_band_structure_figure(
+        evaluation,
+        emin_ev=_coerce_optional_float(settings.get("band_emin_ev")),
+        emax_ev=_coerce_optional_float(settings.get("band_emax_ev")),
+    )
     if figure is None:
         return ""
     band_html = pio.to_html(
@@ -1086,7 +1133,7 @@ def _build_interactive_band_section(
         include_plotlyjs=include_plotlyjs,
         full_html=False,
         default_width="100%",
-        default_height="100%",
+        default_height="420px",
         div_id=f"{div_id_prefix}-band",
         config={"responsive": True},
     )
@@ -1098,7 +1145,12 @@ def _build_interactive_band_section(
 """
 
 
-def _build_band_structure_figure(evaluation: dict[str, Any]) -> go.Figure | None:
+def _build_band_structure_figure(
+    evaluation: dict[str, Any],
+    *,
+    emin_ev: float | None = None,
+    emax_ev: float | None = None,
+) -> go.Figure | None:
     copied_files = evaluation.get("copied_files", {})
     gt_path = copied_files.get("band_structure_gt_gt_overlap.pt") or copied_files.get(
         "band_structure_gt.pt"
@@ -1158,6 +1210,8 @@ def _build_band_structure_figure(evaluation: dict[str, Any]) -> go.Figure | None
             )
 
     fig.update_yaxes(title_text="Energy relative to Fermi (eV)", row=1, col=1)
+    if emin_ev is not None and emax_ev is not None:
+        fig.update_yaxes(range=[float(emin_ev), float(emax_ev)], row=1, col=1)
     fig.update_layout(
         height=420,
         autosize=True,
@@ -1168,6 +1222,247 @@ def _build_band_structure_figure(evaluation: dict[str, Any]) -> go.Figure | None
         font=dict(color="#e8edf7"),
     )
     return fig
+
+
+def _build_block_error_section(
+    evaluation: dict[str, Any],
+    *,
+    include_plotlyjs: str | bool,
+    div_id_prefix: str,
+) -> str:
+    copied_files = evaluation.get("copied_files", {})
+    metric_files = [
+        ("Hamiltonian", copied_files.get("hamiltonian_block_error_metrics.pt")),
+        ("Density", copied_files.get("density_block_error_metrics.pt")),
+    ]
+    metric_files = [(name, path) for name, path in metric_files if path is not None]
+    if not metric_files:
+        return ""
+
+    sections = []
+    first_plot_uses_js = True if include_plotlyjs else False
+    for idx, (name, path) in enumerate(metric_files, start=1):
+        payload = _load_block_error_payload(Path(path))
+        section_id = f"{div_id_prefix}-{idx}"
+        plots = [
+            (
+                "Absolute block error vs edge length",
+                _make_block_error_figure(
+                    payload,
+                    x_key="edge_length",
+                    y_key="abs_mae",
+                    title=f"{name}: absolute block error vs edge length",
+                    x_label="Edge length (Angstrom)",
+                    y_label="Mean absolute block error",
+                ),
+                False,
+                False,
+            ),
+            (
+                "Relative block error vs edge length",
+                _make_block_error_figure(
+                    payload,
+                    x_key="edge_length",
+                    y_key="rel_mae",
+                    title=f"{name}: relative block error vs edge length",
+                    x_label="Edge length (Angstrom)",
+                    y_label="Relative block error",
+                ),
+                False,
+                False,
+            ),
+            (
+                "Absolute block error vs block magnitude",
+                _make_block_error_figure(
+                    payload,
+                    x_key="block_magnitude",
+                    y_key="abs_mae",
+                    title=f"{name}: absolute block error vs block magnitude",
+                    x_label="Target block magnitude",
+                    y_label="Mean absolute block error",
+                ),
+                True,
+                False,
+            ),
+            (
+                "Relative block error vs block magnitude",
+                _make_block_error_figure(
+                    payload,
+                    x_key="block_magnitude",
+                    y_key="rel_mae",
+                    title=f"{name}: relative block error vs block magnitude",
+                    x_label="Target block magnitude",
+                    y_label="Relative block error",
+                ),
+                True,
+                False,
+            ),
+        ]
+        plot_cards = []
+        for plot_idx, (label, fig, allow_log_x, allow_log_y) in enumerate(
+            plots, start=1
+        ):
+            plot_div_id = f"{section_id}-plot-{plot_idx}"
+            controls_id = f"{plot_div_id}-controls"
+            plot_html = pio.to_html(
+                fig,
+                include_plotlyjs=include_plotlyjs if first_plot_uses_js else False,
+                full_html=False,
+                default_width="100%",
+                default_height="360px",
+                div_id=plot_div_id,
+                config={"responsive": True},
+            )
+            first_plot_uses_js = False
+            controls = _axis_control_html(
+                controls_id,
+                allow_log_x=allow_log_x,
+                allow_log_y=allow_log_y,
+            )
+            plot_cards.append(
+                f"""
+<div class="metric-card">
+  <div class="metric-title">{html.escape(label)}</div>
+  <div class="axis-controls" id="{html.escape(controls_id)}">
+    {controls}
+  </div>
+  <div class="metric-plot">
+    {plot_html}
+  </div>
+  <script>{_axis_control_script(plot_div_id, controls_id, allow_log_x, allow_log_y)}</script>
+</div>
+"""
+            )
+        sections.append(
+            f"""
+<div class="panel">
+  <h2>{html.escape(name)} Block Error Diagnostics</h2>
+  <div class="metric-grid">
+    {"".join(plot_cards)}
+  </div>
+</div>
+"""
+        )
+    return "\n".join(sections)
+
+
+def _load_block_error_payload(path: Path) -> dict[str, Any]:
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"Unexpected block error payload type in {path}: {type(payload)!r}"
+        )
+    return payload
+
+
+def _coerce_optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _series_from_payload(payload: dict[str, Any], key: str) -> np.ndarray:
+    values = payload.get(key, [])
+    if torch.is_tensor(values):
+        values = values.detach().cpu().numpy()
+    return np.asarray(values, dtype=float)
+
+
+def _make_block_error_figure(
+    payload: dict[str, Any],
+    *,
+    x_key: str,
+    y_key: str,
+    title: str,
+    x_label: str,
+    y_label: str,
+) -> go.Figure:
+    x = _series_from_payload(payload, x_key)
+    y = _series_from_payload(payload, y_key)
+    hover = [
+        f"key={k}<br>"
+        f"edge={idx}<br>"
+        f"src={src} dst={dst}<br>"
+        f"shift=({sx}, {sy}, {sz})<br>"
+        f"x={xv:.6g}<br>"
+        f"y={yv:.6g}"
+        for k, idx, src, dst, sx, sy, sz, xv, yv in zip(
+            payload.get("pair_key", []),
+            payload.get("edge_index", []),
+            payload.get("src_atom", []),
+            payload.get("dst_atom", []),
+            payload.get("shift_sx", []),
+            payload.get("shift_sy", []),
+            payload.get("shift_sz", []),
+            x,
+            y,
+        )
+    ]
+    fig = go.Figure(
+        data=[
+            go.Scattergl(
+                x=x,
+                y=y,
+                mode="markers",
+                marker=dict(size=6, color="#60a5fa", opacity=0.35, line=dict(width=0)),
+                hovertemplate="%{customdata}<extra></extra>",
+                customdata=hover,
+                showlegend=False,
+            )
+        ]
+    )
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        margin=dict(l=45, r=20, t=40, b=45),
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e8edf7"),
+    )
+    return fig
+
+
+def _axis_control_html(control_id: str, *, allow_log_x: bool, allow_log_y: bool) -> str:
+    parts = [
+        '<label class="axis-toggle"><input type="checkbox" data-axis="y"> Log Y</label>'
+    ]
+    if allow_log_x:
+        parts.append(
+            '<label class="axis-toggle"><input type="checkbox" data-axis="x"> Log X</label>'
+        )
+    return "".join(parts)
+
+
+def _axis_control_script(
+    plot_div_id: str,
+    control_id: str,
+    allow_log_x: bool,
+    allow_log_y: bool,
+) -> str:
+    relayout_items = ["'yaxis.type': yBox.checked ? 'log' : 'linear'"]
+    if allow_log_x:
+        relayout_items.append("'xaxis.type': xBox.checked ? 'log' : 'linear'")
+    relayout_obj = "{ " + ", ".join(relayout_items) + " }"
+    return f"""
+(function() {{
+  const root = document.getElementById({json.dumps(control_id)});
+  const yBox = root ? root.querySelector('input[data-axis="y"]') : null;
+  const xBox = root ? root.querySelector('input[data-axis="x"]') : null;
+  const plotId = {json.dumps(plot_div_id)};
+  function updateAxis() {{
+    if (!window.Plotly) return;
+    const updates = {relayout_obj};
+    Plotly.relayout(document.getElementById(plotId), updates);
+  }}
+  if (yBox) yBox.addEventListener('change', updateAxis);
+  if (xBox) xBox.addEventListener('change', updateAxis);
+}})();
+"""
 
 
 def _load_band_payload(path: Path) -> dict[str, Any]:

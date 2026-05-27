@@ -298,6 +298,7 @@ def main() -> None:
                 allow_jitter=args.overlap_jitter,
                 bin_width=args.dos_bin_width,
                 tetra_batch_size=args.tetra_batch_size,
+                cache_path=output_dir / "tetrahedron_dos_cache.pt",
             )
         )
         _log("[4/6] Using tetrahedron DOS on a uniform k-mesh.")
