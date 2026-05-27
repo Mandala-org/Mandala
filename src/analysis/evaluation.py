@@ -1284,6 +1284,7 @@ def _make_cutout_payload(
     dims: list[int],
     *,
     selection_label: str,
+    worst_edges: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     diff_dense = pred_dense - gt_dense
     abs_max = max(
@@ -1298,7 +1299,48 @@ def _make_cutout_payload(
         "pred": _rounded_matrix_payload(pred_dense),
         "diff": _rounded_matrix_payload(diff_dense),
         "abs_max": abs_max,
+        "worst_edges": worst_edges or [],
     }
+
+
+def _record_payload(
+    record: dict[str, Any],
+    *,
+    include_shift: bool,
+) -> dict[str, Any]:
+    payload = {
+        "pair_key": str(record.get("pair_key", "")),
+        "src_atom": int(record.get("src_atom", 0)),
+        "dst_atom": int(record.get("dst_atom", 0)),
+        "abs_mae": float(record.get("abs_mae", 0.0)),
+        "rel_mae": float(record.get("rel_mae", 0.0)),
+    }
+    if "edge_length" in record:
+        payload["edge_length"] = float(record["edge_length"])
+    if include_shift:
+        shift = record.get("shift", (0, 0, 0))
+        payload["shift"] = [int(v) for v in _tuple3(shift)]
+    return payload
+
+
+def _top_edge_records(
+    records: list[dict[str, Any]],
+    *,
+    max_items: int = 10,
+    include_shift: bool,
+) -> list[dict[str, Any]]:
+    ordered = sorted(
+        records,
+        key=lambda rec: (
+            -float(rec.get("abs_mae", 0.0)),
+            -float(rec.get("rel_mae", 0.0)),
+            int(rec.get("src_atom", 0)),
+            int(rec.get("dst_atom", 0)),
+        ),
+    )
+    return [
+        _record_payload(rec, include_shift=include_shift) for rec in ordered[:max_items]
+    ]
 
 
 def _edge_displacement(
@@ -1353,6 +1395,177 @@ def _edge_error_records(
                 }
             )
     return records
+
+
+def _error_block_from_lookup(
+    pred,
+    target,
+    *,
+    lookup_key: tuple[int, int, int, int, int],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, bool]:
+    target_entry = target.lookup.get(lookup_key)
+    if target_entry is None:
+        raise KeyError(f"Target lookup key not found: {lookup_key!r}")
+    target_key, target_idx = target_entry
+    target_block = target.pair_blocks[target_key][target_idx].detach().cpu()
+    pred_entry = pred.lookup.get(lookup_key)
+    if pred_entry is None:
+        pred_block = torch.zeros_like(target_block)
+        return pred_block, target_block, pred_block - target_block, True
+    pred_key, pred_idx = pred_entry
+    pred_block = pred.pair_blocks[pred_key][pred_idx].detach().cpu()
+    return pred_block, target_block, pred_block - target_block, False
+
+
+def build_snapshot_3d_error_payload(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor,
+) -> dict[str, Any]:
+    positions_cpu = positions.detach().cpu().to(torch.float64)
+    box_cpu = box.detach().cpu().to(torch.float64)
+    eps = 1.0e-12
+
+    edges_payload: list[dict[str, Any]] = []
+    ghost_index: dict[tuple[int, int, int, int], int] = {}
+    ghosts_payload: list[dict[str, Any]] = []
+    edge_metric_abs_values: list[float] = []
+    edge_metric_rel_values: list[float] = []
+
+    for key in target.keys():
+        target_edges = target.pair_edges[key].detach().cpu()
+        for idx in range(target_edges.shape[1]):
+            sx, sy, sz, src_atom, dst_atom = [
+                int(v) for v in target_edges[:, idx].tolist()
+            ]
+            pred_block, target_block, diff_block, missing_pred = (
+                _error_block_from_lookup(
+                    pred,
+                    target,
+                    lookup_key=(sx, sy, sz, src_atom, dst_atom),
+                )
+            )
+            start = positions_cpu[src_atom]
+            edge_vec = _edge_displacement(
+                positions_cpu,
+                box_cpu,
+                src_atom,
+                dst_atom,
+                (sx, sy, sz),
+            )
+            end = start + edge_vec
+            abs_mae = _block_mean_abs(diff_block)
+            target_mag = _block_mean_abs(target_block)
+            rel_mae = abs_mae / max(target_mag, eps)
+            edges_payload.append(
+                {
+                    "pair_key": str(key),
+                    "src_atom": src_atom,
+                    "dst_atom": dst_atom,
+                    "shift": [sx, sy, sz],
+                    "start": [float(x) for x in start.tolist()],
+                    "end": [float(x) for x in end.tolist()],
+                    "edge_length": float(torch.linalg.norm(edge_vec).item()),
+                    "abs_mae": float(abs_mae),
+                    "rel_mae": float(rel_mae),
+                    "missing_pred": bool(missing_pred),
+                }
+            )
+            edge_metric_abs_values.append(float(abs_mae))
+            edge_metric_rel_values.append(float(rel_mae))
+
+            if (sx, sy, sz) != (0, 0, 0):
+                ghost_key = (dst_atom, sx, sy, sz)
+                if ghost_key not in ghost_index:
+                    ghost_index[ghost_key] = len(ghosts_payload)
+                    ghosts_payload.append(
+                        {
+                            "atom": int(dst_atom),
+                            "shift": [sx, sy, sz],
+                            "position": [float(x) for x in end.tolist()],
+                        }
+                    )
+
+    node_diag_payload: list[dict[str, Any]] = []
+    node_metric_abs_values: list[float] = []
+    node_metric_rel_values: list[float] = []
+    for atom_idx in range(len(target.atoms)):
+        pred_block, target_block, diff_block, missing_pred = _error_block_from_lookup(
+            pred,
+            target,
+            lookup_key=(0, 0, 0, atom_idx, atom_idx),
+        )
+        abs_mae = _block_mean_abs(diff_block)
+        target_mag = _block_mean_abs(target_block)
+        rel_mae = abs_mae / max(target_mag, eps)
+        node_diag_payload.append(
+            {
+                "atom": int(atom_idx),
+                "position": [float(x) for x in positions_cpu[atom_idx].tolist()],
+                "abs_mae": float(abs_mae),
+                "rel_mae": float(rel_mae),
+                "missing_pred": bool(missing_pred),
+            }
+        )
+        node_metric_abs_values.append(float(abs_mae))
+        node_metric_rel_values.append(float(rel_mae))
+
+    box_rows = [[float(x) for x in row.tolist()] for row in box_cpu]
+    return {
+        "atom_count": int(len(target.atoms)),
+        "atoms": list(target.atoms),
+        "positions": [[float(x) for x in row.tolist()] for row in positions_cpu],
+        "box": box_rows,
+        "edges": edges_payload,
+        "ghosts": ghosts_payload,
+        "node_diagonal": node_diag_payload,
+        "stats": {
+            "edge_abs_max": float(
+                max(edge_metric_abs_values) if edge_metric_abs_values else 0.0
+            ),
+            "edge_rel_max": float(
+                max(edge_metric_rel_values) if edge_metric_rel_values else 0.0
+            ),
+            "node_abs_max": float(
+                max(node_metric_abs_values) if node_metric_abs_values else 0.0
+            ),
+            "node_rel_max": float(
+                max(node_metric_rel_values) if node_metric_rel_values else 0.0
+            ),
+            "edge_abs_min_positive": float(
+                min((v for v in edge_metric_abs_values if v > 0.0), default=1.0e-12)
+            ),
+            "edge_rel_min_positive": float(
+                min((v for v in edge_metric_rel_values if v > 0.0), default=1.0e-12)
+            ),
+            "node_abs_min_positive": float(
+                min((v for v in node_metric_abs_values if v > 0.0), default=1.0e-12)
+            ),
+            "node_rel_min_positive": float(
+                min((v for v in node_metric_rel_values if v > 0.0), default=1.0e-12)
+            ),
+        },
+    }
+
+
+def save_snapshot_3d_error_payload(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor,
+    output_path: Path,
+) -> None:
+    payload = build_snapshot_3d_error_payload(
+        pred,
+        target,
+        positions=positions,
+        box=box,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, output_path)
 
 
 def _shift_resolved_closest_selection(
@@ -1536,6 +1749,31 @@ def _random_sum_pbc_selections(
     return selections
 
 
+def _sum_pbc_records_for_atoms(
+    pair_records: list[dict[str, Any]],
+    selected_atoms: list[int],
+) -> list[dict[str, Any]]:
+    selected = set(int(atom) for atom in selected_atoms)
+    return [
+        rec
+        for rec in pair_records
+        if int(rec["src_atom"]) in selected and int(rec["dst_atom"]) in selected
+    ]
+
+
+def _shift_resolved_records_for_nodes(
+    records: list[dict[str, Any]],
+    selected_nodes: list[tuple[int, tuple[int, int, int]]],
+) -> list[dict[str, Any]]:
+    selected_atoms = {int(atom_idx) for atom_idx, _shift in selected_nodes}
+    return [
+        rec
+        for rec in records
+        if int(rec["src_atom"]) in selected_atoms
+        and int(rec["dst_atom"]) in selected_atoms
+    ]
+
+
 def build_hamiltonian_interactive_heatmap_payload(
     pred,
     target,
@@ -1621,6 +1859,7 @@ def build_hamiltonian_interactive_heatmap_payload(
             max_neighbors=closest_neighbor_count,
         )
         if sum_atoms:
+            sum_records = _sum_pbc_records_for_atoms(pair_records, sum_atoms)
             gt_dense, dims = _dense_atom_subset(
                 target_dense_full,
                 target.atoms,
@@ -1642,6 +1881,11 @@ def build_hamiltonian_interactive_heatmap_payload(
                     [str(atom_idx) for atom_idx in sum_atoms],
                     dims,
                     selection_label=f"Closest neighbors around atom {anchor_atom}",
+                    worst_edges=_top_edge_records(
+                        sum_records,
+                        max_items=10,
+                        include_shift=False,
+                    ),
                 ),
             )
 
@@ -1651,6 +1895,7 @@ def build_hamiltonian_interactive_heatmap_payload(
             max_neighbors=closest_neighbor_count,
         )
         if shift_nodes:
+            shift_records = _shift_resolved_records_for_nodes(records, shift_nodes)
             gt_dense, dims = _build_shift_resolved_dense_cutout(target, shift_nodes)
             pred_dense, _ = _build_shift_resolved_dense_cutout(pred, shift_nodes)
             register_cutout(
@@ -1665,6 +1910,11 @@ def build_hamiltonian_interactive_heatmap_payload(
                     ],
                     dims,
                     selection_label=f"Closest neighbors around atom {anchor_atom}",
+                    worst_edges=_top_edge_records(
+                        shift_records,
+                        max_items=10,
+                        include_shift=True,
+                    ),
                 ),
             )
 
@@ -1675,6 +1925,7 @@ def build_hamiltonian_interactive_heatmap_payload(
         ("worst_rel", worst_rel_atoms, "Worst relative pair errors"),
     ):
         if atoms_selected:
+            sum_records = _sum_pbc_records_for_atoms(pair_records, atoms_selected)
             gt_dense, dims = _dense_atom_subset(
                 target_dense_full,
                 target.atoms,
@@ -1696,6 +1947,11 @@ def build_hamiltonian_interactive_heatmap_payload(
                     [str(atom_idx) for atom_idx in atoms_selected],
                     dims,
                     selection_label=label,
+                    worst_edges=_top_edge_records(
+                        sum_records,
+                        max_items=10,
+                        include_shift=False,
+                    ),
                 ),
             )
 
@@ -1712,6 +1968,7 @@ def build_hamiltonian_interactive_heatmap_payload(
         ("worst_rel", worst_rel_nodes, "Worst relative edge errors"),
     ):
         if nodes_selected:
+            shift_records = _shift_resolved_records_for_nodes(records, nodes_selected)
             gt_dense, dims = _build_shift_resolved_dense_cutout(target, nodes_selected)
             pred_dense, _ = _build_shift_resolved_dense_cutout(pred, nodes_selected)
             register_cutout(
@@ -1726,6 +1983,11 @@ def build_hamiltonian_interactive_heatmap_payload(
                     ],
                     dims,
                     selection_label=label,
+                    worst_edges=_top_edge_records(
+                        shift_records,
+                        max_items=10,
+                        include_shift=True,
+                    ),
                 ),
             )
 
@@ -1734,6 +1996,7 @@ def build_hamiltonian_interactive_heatmap_payload(
         max_nodes=max_nodes,
         count=random_count,
     ):
+        sum_records = _sum_pbc_records_for_atoms(pair_records, atom_selection)
         gt_dense, dims = _dense_atom_subset(
             target_dense_full,
             target.atoms,
@@ -1754,6 +2017,11 @@ def build_hamiltonian_interactive_heatmap_payload(
                 [str(atom_idx) for atom_idx in atom_selection],
                 dims,
                 selection_label="Random summed-PBC selection",
+                worst_edges=_top_edge_records(
+                    sum_records,
+                    max_items=10,
+                    include_shift=False,
+                ),
             ),
         )
 
@@ -1762,6 +2030,7 @@ def build_hamiltonian_interactive_heatmap_payload(
         max_nodes=max_nodes,
         count=random_count,
     ):
+        shift_records = _shift_resolved_records_for_nodes(records, node_selection)
         gt_dense, dims = _build_shift_resolved_dense_cutout(target, node_selection)
         pred_dense, _ = _build_shift_resolved_dense_cutout(pred, node_selection)
         register_random(
@@ -1775,6 +2044,11 @@ def build_hamiltonian_interactive_heatmap_payload(
                 ],
                 dims,
                 selection_label="Random shift-resolved selection",
+                worst_edges=_top_edge_records(
+                    shift_records,
+                    max_items=10,
+                    include_shift=True,
+                ),
             ),
         )
 

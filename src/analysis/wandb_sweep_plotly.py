@@ -643,6 +643,7 @@ def copy_evaluation_bundle_assets(
         "band_structure_pred.pt",
         "hamiltonian_block_error_metrics.pt",
         "hamiltonian_interactive_heatmaps.pt",
+        "snapshot_3d_error_payload.pt",
         "density_block_error_metrics.pt",
         "pred_hamiltonian.pt",
         "pred_density.pt",
@@ -683,6 +684,7 @@ def label_for_asset(filename: str) -> str:
         "dos_error.png": "DOS error",
         "hamiltonian_block_error_metrics.pt": "Hamiltonian block error metrics",
         "hamiltonian_interactive_heatmaps.pt": "Hamiltonian interactive heatmaps",
+        "snapshot_3d_error_payload.pt": "Snapshot 3D error payload",
         "density_block_error_metrics.pt": "Density block error metrics",
         "hamiltonian_first_atoms_comparison.png": "Hamiltonian heatmap",
         "hamiltonian_first_atoms_prediction.png": "Hamiltonian prediction heatmap",
@@ -891,19 +893,30 @@ def build_model_detail_page(
         f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(display_value(value)))}</td></tr>"
         for key, value in sorted(record.config.items())
     )
-    heatmap_html = _build_hamiltonian_heatmap_section(
+    snapshot_3d_html = _build_snapshot_3d_section(
         evaluation,
         include_plotlyjs=include_plotlyjs,
+        div_id_prefix=f"snapshot-3d-{record.run_id}",
+    )
+    heatmap_html = _build_hamiltonian_heatmap_section(
+        evaluation,
+        include_plotlyjs=False if snapshot_3d_html else include_plotlyjs,
         div_id_prefix=f"ham-heatmap-{record.run_id}",
     )
     band_html = _build_interactive_band_section(
         evaluation,
-        include_plotlyjs=False if heatmap_html else include_plotlyjs,
+        include_plotlyjs=(
+            False if (snapshot_3d_html or heatmap_html) else include_plotlyjs
+        ),
         div_id_prefix=f"band-{record.run_id}",
     )
     block_error_html = _build_block_error_section(
         evaluation,
-        include_plotlyjs=False if (heatmap_html or band_html) else include_plotlyjs,
+        include_plotlyjs=(
+            False
+            if (snapshot_3d_html or heatmap_html or band_html)
+            else include_plotlyjs
+        ),
         div_id_prefix=f"block-{record.run_id}",
     )
     if image_assets:
@@ -941,6 +954,7 @@ def build_model_detail_page(
 <div class="panel">
   <h2>Precomputed Evaluation</h2>
   <div class="meta-line">Source bundle: <code>{html.escape(str(evaluation.get("source_dir", "")))}</code></div>
+  {snapshot_3d_html}
   {heatmap_html}
   {band_html}
   {block_error_html}
@@ -1064,6 +1078,39 @@ def build_model_detail_page(
       width: 100% !important;
       max-width: 100% !important;
     }}
+    .heatmap-layout {{
+      display: grid;
+      grid-template-columns: minmax(0, 3.2fr) minmax(300px, 1.25fr);
+      gap: 16px;
+      align-items: start;
+    }}
+    .heatmap-main {{
+      min-width: 0;
+    }}
+    .heatmap-side {{
+      min-width: 0;
+      position: sticky;
+      top: 18px;
+    }}
+    .worst-edge-table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    .worst-edge-table th,
+    .worst-edge-table td {{
+      padding: 8px 6px;
+      font-size: 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    }}
+    .worst-edge-table th {{
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    .worst-edge-table td {{
+      color: #e5e7eb;
+      word-break: break-word;
+    }}
     .heatmap-controls {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -1087,6 +1134,40 @@ def build_model_detail_page(
       padding: 10px 12px;
       font-size: 14px;
     }}
+    .snapshot3d-controls {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .snapshot3d-controls label {{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #cbd5e1;
+      font-size: 13px;
+    }}
+    .snapshot3d-controls select,
+    .snapshot3d-controls input {{
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(9, 14, 28, 0.82);
+      color: #f8fafc;
+      padding: 10px 12px;
+      font-size: 14px;
+    }}
+    .snapshot3d-inline {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 22px;
+      color: #cbd5e1;
+      font-size: 13px;
+    }}
+    .snapshot3d-inline input[type="checkbox"] {{
+      width: 16px;
+      height: 16px;
+    }}
     .heatmap-controls button {{
       cursor: pointer;
       align-self: end;
@@ -1097,6 +1178,12 @@ def build_model_detail_page(
       min-height: 20px;
     }}
     @media (max-width: 980px) {{
+      .heatmap-layout {{
+        grid-template-columns: 1fr;
+      }}
+      .heatmap-side {{
+        position: static;
+      }}
       .metric-grid {{
         grid-template-columns: 1fr;
       }}
@@ -1164,6 +1251,370 @@ def _bwr_plotly_colorscale(samples: int = 33) -> list[list[Any]]:
         ]
         for idx, (r, g, b, _a) in enumerate(cmap(np.linspace(0.0, 1.0, samples)))
     ]
+
+
+def _sequential_plotly_colorscale(
+    name: str = "turbo", samples: int = 33
+) -> list[list[Any]]:
+    cmap = mpl_cm.get_cmap(name)
+    return [
+        [
+            float(idx / max(samples - 1, 1)),
+            f"rgb({int(r*255)},{int(g*255)},{int(b*255)})",
+        ]
+        for idx, (r, g, b, _a) in enumerate(cmap(np.linspace(0.0, 1.0, samples)))
+    ]
+
+
+def _load_snapshot_3d_payload(path: Path) -> dict[str, Any]:
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"Unexpected snapshot 3D payload type in {path}: {type(payload)!r}"
+        )
+    return payload
+
+
+def _build_snapshot_3d_section(
+    evaluation: dict[str, Any],
+    *,
+    include_plotlyjs: str | bool,
+    div_id_prefix: str,
+) -> str:
+    copied_files = evaluation.get("copied_files", {})
+    payload_path = copied_files.get("snapshot_3d_error_payload.pt")
+    if payload_path is None:
+        return ""
+    payload = _load_snapshot_3d_payload(Path(payload_path))
+    colorscale = _sequential_plotly_colorscale("turbo")
+    plot_div_id = f"{div_id_prefix}-plot"
+    metric_id = f"{div_id_prefix}-metric"
+    scale_id = f"{div_id_prefix}-scale"
+    threshold_id = f"{div_id_prefix}-threshold"
+    threshold_value_id = f"{div_id_prefix}-threshold-value"
+    ghosts_id = f"{div_id_prefix}-ghosts"
+    figure_html = pio.to_html(
+        go.Figure(),
+        include_plotlyjs=include_plotlyjs,
+        full_html=False,
+        default_width="100%",
+        default_height="720px",
+        div_id=plot_div_id,
+        config={"responsive": True},
+    )
+    payload_json = json.dumps(payload)
+    colorscale_json = json.dumps(colorscale)
+    return f"""
+  <h2>Snapshot 3D Error View</h2>
+  <div class="snapshot3d-controls">
+    <label>Metric
+      <select id="{html.escape(metric_id)}">
+        <option value="abs_mae">Absolute MAE</option>
+        <option value="rel_mae">Relative error</option>
+      </select>
+    </label>
+    <label>Scale
+      <select id="{html.escape(scale_id)}">
+        <option value="linear">Linear</option>
+        <option value="log">Log10</option>
+      </select>
+    </label>
+    <label>Threshold
+      <input id="{html.escape(threshold_id)}" type="range" min="0" max="1" step="0.001" value="0">
+    </label>
+    <label>Threshold value
+      <input id="{html.escape(threshold_value_id)}" type="text" value="0" readonly>
+    </label>
+    <label class="snapshot3d-inline">
+      <input id="{html.escape(ghosts_id)}" type="checkbox" checked>
+      Show ghost nodes
+    </label>
+  </div>
+  <div class="plotly-panel">
+    {figure_html}
+  </div>
+  <script>
+  (function() {{
+    const payload = {payload_json};
+    const colorscale = {colorscale_json};
+    const metricEl = document.getElementById({json.dumps(metric_id)});
+    const scaleEl = document.getElementById({json.dumps(scale_id)});
+    const thresholdEl = document.getElementById({json.dumps(threshold_id)});
+    const thresholdValueEl = document.getElementById({json.dumps(threshold_value_id)});
+    const ghostsEl = document.getElementById({json.dumps(ghosts_id)});
+    const plotDiv = document.getElementById({json.dumps(plot_div_id)});
+
+    function lerp(a, b, t) {{
+      return a + (b - a) * t;
+    }}
+
+    function parseRgb(text) {{
+      const match = String(text).match(/rgb\\((\\d+),(\\d+),(\\d+)\\)/);
+      if (!match) return [255, 255, 255];
+      return [Number(match[1]), Number(match[2]), Number(match[3])];
+    }}
+
+    function colorForValue(t) {{
+      const clamped = Math.max(0, Math.min(1, t));
+      for (let idx = 1; idx < colorscale.length; idx += 1) {{
+        const left = colorscale[idx - 1];
+        const right = colorscale[idx];
+        if (clamped <= right[0]) {{
+          const span = Math.max(right[0] - left[0], 1e-12);
+          const localT = (clamped - left[0]) / span;
+          const a = parseRgb(left[1]);
+          const b = parseRgb(right[1]);
+          const rgb = [
+            Math.round(lerp(a[0], b[0], localT)),
+            Math.round(lerp(a[1], b[1], localT)),
+            Math.round(lerp(a[2], b[2], localT)),
+          ];
+          return `rgb(${{rgb[0]}},${{rgb[1]}},${{rgb[2]}})`;
+        }}
+      }}
+      return colorscale[colorscale.length - 1][1];
+    }}
+
+    function boxSegments(box) {{
+      const a = box[0];
+      const b = box[1];
+      const c = box[2];
+      const corners = [
+        [0, 0, 0],
+        a,
+        b,
+        c,
+        [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+        [a[0] + c[0], a[1] + c[1], a[2] + c[2]],
+        [b[0] + c[0], b[1] + c[1], b[2] + c[2]],
+        [a[0] + b[0] + c[0], a[1] + b[1] + c[1], a[2] + b[2] + c[2]],
+      ];
+      const edgePairs = [
+        [0, 1], [0, 2], [0, 3], [1, 4], [1, 5], [2, 4],
+        [2, 6], [3, 5], [3, 6], [4, 7], [5, 7], [6, 7],
+      ];
+      const x = [];
+      const y = [];
+      const z = [];
+      edgePairs.forEach(([u, v]) => {{
+        x.push(corners[u][0], corners[v][0], null);
+        y.push(corners[u][1], corners[v][1], null);
+        z.push(corners[u][2], corners[v][2], null);
+      }});
+      return {{
+        type: "scatter3d",
+        mode: "lines",
+        x: x,
+        y: y,
+        z: z,
+        line: {{color: "rgba(148,163,184,0.7)", width: 4}},
+        hoverinfo: "skip",
+        showlegend: false,
+      }};
+    }}
+
+    function metricConfig() {{
+      const metric = metricEl.value;
+      const stats = payload.stats || {{}};
+      const edgeMax = Number(stats[metric === "abs_mae" ? "edge_abs_max" : "edge_rel_max"] || 0);
+      const nodeMax = Number(stats[metric === "abs_mae" ? "node_abs_max" : "node_rel_max"] || 0);
+      const minPosEdge = Number(stats[metric === "abs_mae" ? "edge_abs_min_positive" : "edge_rel_min_positive"] || 1e-12);
+      const minPosNode = Number(stats[metric === "abs_mae" ? "node_abs_min_positive" : "node_rel_min_positive"] || 1e-12);
+      const maxValue = Math.max(edgeMax, nodeMax, minPosEdge, minPosNode);
+      const minPositive = Math.max(Math.min(minPosEdge, minPosNode, maxValue), 1e-12);
+      const logMin = Math.log10(minPositive) - 1.0;
+      const logMax = Math.log10(Math.max(maxValue, minPositive * 10.0));
+      return {{
+        metric: metric,
+        useLog: scaleEl.value === "log",
+        maxValue: maxValue,
+        minPositive: minPositive,
+        logMin: logMin,
+        logMax: Math.max(logMax, logMin + 1e-6),
+      }};
+    }}
+
+    function thresholdValue(cfg) {{
+      const t = Number(thresholdEl.value || 0);
+      const exponent = cfg.logMin + t * (cfg.logMax - cfg.logMin);
+      return Math.pow(10, exponent);
+    }}
+
+    function transformedValue(raw, cfg) {{
+      const clipped = Math.max(Number(raw || 0), cfg.minPositive);
+      return cfg.useLog ? Math.log10(clipped) : Number(raw || 0);
+    }}
+
+    function transformedRange(cfg) {{
+      if (cfg.useLog) {{
+        return [Math.log10(cfg.minPositive), Math.log10(Math.max(cfg.maxValue, cfg.minPositive))];
+      }}
+      return [0, Math.max(cfg.maxValue, cfg.minPositive)];
+    }}
+
+    function edgeHover(edge) {{
+      return [
+        `edge=${{edge.src_atom}} -> ${{edge.dst_atom}}`,
+        `shift=(${{edge.shift[0]}}, ${{edge.shift[1]}}, ${{edge.shift[2]}})`,
+        `length=${{Number(edge.edge_length).toFixed(3)}}`,
+        `abs_mae=${{Number(edge.abs_mae).toExponential(3)}}`,
+        `rel_mae=${{Number(edge.rel_mae).toExponential(3)}}`,
+        edge.missing_pred ? "prediction missing -> zero-filled for error" : "",
+      ].filter(Boolean).join("<br>");
+    }}
+
+    function nodeHover(node) {{
+      return [
+        `atom=${{node.atom}}`,
+        `abs_mae=${{Number(node.abs_mae).toExponential(3)}}`,
+        `rel_mae=${{Number(node.rel_mae).toExponential(3)}}`,
+        node.missing_pred ? "prediction missing -> zero-filled for error" : "",
+      ].filter(Boolean).join("<br>");
+    }}
+
+    function ghostHover(ghost, metricSource) {{
+      return [
+        `ghost atom=${{ghost.atom}}`,
+        `shift=(${{ghost.shift[0]}}, ${{ghost.shift[1]}}, ${{ghost.shift[2]}})`,
+        `abs_mae=${{Number(metricSource.abs_mae).toExponential(3)}}`,
+        `rel_mae=${{Number(metricSource.rel_mae).toExponential(3)}}`,
+      ].join("<br>");
+    }}
+
+    function buildEdgeTraces(cfg, threshold) {{
+      const visibleEdges = (payload.edges || []).filter((edge) => Number(edge[cfg.metric] || 0) >= threshold);
+      if (!visibleEdges.length) return [];
+      const [cmin, cmax] = transformedRange(cfg);
+      const binCount = 18;
+      const bins = Array.from({{length: binCount}}, () => ({{x: [], y: [], z: [], hover: []}}));
+      visibleEdges.forEach((edge) => {{
+        const value = transformedValue(edge[cfg.metric], cfg);
+        const t = cmax <= cmin ? 0.5 : (value - cmin) / (cmax - cmin);
+        const binIdx = Math.max(0, Math.min(binCount - 1, Math.floor(t * (binCount - 1))));
+        bins[binIdx].x.push(edge.start[0], edge.end[0], null);
+        bins[binIdx].y.push(edge.start[1], edge.end[1], null);
+        bins[binIdx].z.push(edge.start[2], edge.end[2], null);
+        bins[binIdx].hover.push(edgeHover(edge), edgeHover(edge), null);
+      }});
+      return bins
+        .map((bin, idx) => {{
+          if (!bin.x.length) return null;
+          const color = colorForValue(idx / Math.max(binCount - 1, 1));
+          return {{
+            type: "scatter3d",
+            mode: "lines",
+            x: bin.x,
+            y: bin.y,
+            z: bin.z,
+            text: bin.hover,
+            hovertemplate: "%{{text}}<extra></extra>",
+            line: {{color: color, width: 4}},
+            opacity: 0.72,
+            showlegend: false,
+          }};
+        }})
+        .filter(Boolean);
+    }}
+
+    function buildNodeTrace(cfg) {{
+      const [cmin, cmax] = transformedRange(cfg);
+      const nodes = payload.node_diagonal || [];
+      return {{
+        type: "scatter3d",
+        mode: "markers",
+        x: nodes.map((node) => node.position[0]),
+        y: nodes.map((node) => node.position[1]),
+        z: nodes.map((node) => node.position[2]),
+        text: nodes.map((node) => nodeHover(node)),
+        hovertemplate: "%{{text}}<extra></extra>",
+        marker: {{
+          size: 6,
+          color: nodes.map((node) => transformedValue(node[cfg.metric], cfg)),
+          colorscale: colorscale,
+          cmin: cmin,
+          cmax: cmax,
+          opacity: 0.96,
+          colorbar: {{
+            title: `${{cfg.useLog ? "log10 " : ""}}${{cfg.metric}}`,
+            len: 0.8,
+            y: 0.5,
+          }},
+        }},
+        name: "Atoms",
+      }};
+    }}
+
+    function buildGhostTrace(cfg) {{
+      if (!ghostsEl.checked) return null;
+      const [cmin, cmax] = transformedRange(cfg);
+      const nodeMap = new Map((payload.node_diagonal || []).map((node) => [Number(node.atom), node]));
+      const ghosts = payload.ghosts || [];
+      if (!ghosts.length) return null;
+      return {{
+        type: "scatter3d",
+        mode: "markers",
+        x: ghosts.map((ghost) => ghost.position[0]),
+        y: ghosts.map((ghost) => ghost.position[1]),
+        z: ghosts.map((ghost) => ghost.position[2]),
+        text: ghosts.map((ghost) => ghostHover(ghost, nodeMap.get(Number(ghost.atom)) || {{abs_mae: 0, rel_mae: 0}})),
+        hovertemplate: "%{{text}}<extra></extra>",
+        marker: {{
+          size: 4,
+          symbol: "diamond",
+          color: ghosts.map((ghost) => {{
+            const metricSource = nodeMap.get(Number(ghost.atom)) || {{abs_mae: 0, rel_mae: 0}};
+            return transformedValue(metricSource[cfg.metric], cfg);
+          }}),
+          colorscale: colorscale,
+          cmin: cmin,
+          cmax: cmax,
+          opacity: 0.55,
+          showscale: false,
+          line: {{color: "rgba(255,255,255,0.45)", width: 1}},
+        }},
+        name: "Ghosts",
+      }};
+    }}
+
+    function render() {{
+      if (!window.Plotly || !plotDiv) return;
+      const cfg = metricConfig();
+      const threshold = thresholdValue(cfg);
+      thresholdValueEl.value = threshold.toExponential(3);
+      const traces = [
+        boxSegments(payload.box || [[0,0,0],[1,0,0],[0,1,0]]),
+        ...buildEdgeTraces(cfg, threshold),
+        buildNodeTrace(cfg),
+      ];
+      const ghostTrace = buildGhostTrace(cfg);
+      if (ghostTrace) traces.push(ghostTrace);
+      const layout = {{
+        height: 720,
+        margin: {{l: 0, r: 0, t: 10, b: 0}},
+        template: "plotly_dark",
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: {{color: "#e8edf7"}},
+        scene: {{
+          aspectmode: "data",
+          xaxis: {{title: "x", backgroundcolor: "rgba(0,0,0,0)"}},
+          yaxis: {{title: "y", backgroundcolor: "rgba(0,0,0,0)"}},
+          zaxis: {{title: "z", backgroundcolor: "rgba(0,0,0,0)"}},
+          camera: {{eye: {{x: 1.55, y: 1.55, z: 1.15}}}},
+        }},
+        showlegend: false,
+      }};
+      Plotly.react(plotDiv, traces, layout, {{responsive: true}});
+    }}
+
+    metricEl.addEventListener("change", render);
+    scaleEl.addEventListener("change", render);
+    thresholdEl.addEventListener("input", render);
+    ghostsEl.addEventListener("change", render);
+    render();
+  }})();
+  </script>
+"""
 
 
 def _load_hamiltonian_heatmap_payload(path: Path) -> dict[str, Any]:
@@ -1249,6 +1700,24 @@ def _build_hamiltonian_heatmap_figure(
     return fig
 
 
+def _worst_edge_rows(cutout: dict[str, Any]) -> str:
+    rows = []
+    for idx, edge in enumerate(cutout.get("worst_edges", []), start=1):
+        shift = edge.get("shift")
+        shift_text = ""
+        if shift is not None:
+            shift_text = f" [{shift[0]},{shift[1]},{shift[2]}]"
+        edge_label = f"{edge.get('src_atom')} -> {edge.get('dst_atom')}{shift_text}"
+        rows.append(
+            f"<tr><td>{idx}</td><td>{html.escape(edge_label)}</td>"
+            f"<td>{float(edge.get('abs_mae', 0.0)):.4e}</td>"
+            f"<td>{float(edge.get('rel_mae', 0.0)):.4e}</td></tr>"
+        )
+    if not rows:
+        return '<tr><td colspan="4" class="empty">No edges available.</td></tr>'
+    return "\n".join(rows)
+
+
 def _build_hamiltonian_heatmap_section(
     evaluation: dict[str, Any],
     *,
@@ -1276,6 +1745,7 @@ def _build_hamiltonian_heatmap_section(
     clim_id = f"{div_id_prefix}-clim"
     clim_value_id = f"{div_id_prefix}-clim-value"
     random_button_id = f"{div_id_prefix}-randomize"
+    edges_body_id = f"{div_id_prefix}-edges-body"
     figure_html = pio.to_html(
         _build_hamiltonian_heatmap_figure(
             initial_cutout,
@@ -1291,6 +1761,11 @@ def _build_hamiltonian_heatmap_section(
     )
     payload_json = json.dumps(payload)
     colorscale_json = json.dumps(colorscale)
+    initial_edges_html = _worst_edge_rows(initial_cutout)
+    log_min = math.log10(min_clim)
+    log_max = math.log10(max_clim)
+    log_initial = math.log10(initial_clim)
+    log_step = max((log_max - log_min) / 200.0, 1.0e-3)
     return f"""
   <h2>Interactive Hamiltonian Heatmaps</h2>
   <div class="heatmap-controls">
@@ -1312,16 +1787,29 @@ def _build_hamiltonian_heatmap_section(
       <input id="{html.escape(atom_id)}" type="number" min="0" max="{int(payload.get('atom_count', 0)) - 1}" value="0">
     </label>
     <label>Clim
-      <input id="{html.escape(clim_id)}" type="range" min="{min_clim:.6f}" max="{max_clim:.6f}" step="{max(max_clim / 200.0, 1.0e-4):.6f}" value="{initial_clim:.6f}">
+      <input id="{html.escape(clim_id)}" type="range" min="{log_min:.6f}" max="{log_max:.6f}" step="{log_step:.6f}" value="{log_initial:.6f}">
     </label>
     <label>Clim value
-      <input id="{html.escape(clim_value_id)}" type="text" value="{initial_clim:.4f}" readonly>
+      <input id="{html.escape(clim_value_id)}" type="text" value="{initial_clim:.3e}" readonly>
     </label>
     <button id="{html.escape(random_button_id)}" type="button">Randomize</button>
   </div>
   <div class="heatmap-caption" id="{html.escape(caption_id)}"></div>
-  <div class="plotly-panel">
-    {figure_html}
+  <div class="heatmap-layout">
+    <div class="plotly-panel heatmap-main">
+      {figure_html}
+    </div>
+    <div class="heatmap-side">
+      <div class="metric-card">
+        <div class="metric-title">Worst Edges</div>
+        <table class="worst-edge-table">
+          <thead><tr><th>#</th><th>Edge</th><th>Abs</th><th>Rel</th></tr></thead>
+          <tbody id="{html.escape(edges_body_id)}">
+            {initial_edges_html}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
   <script>
   (function() {{
@@ -1334,6 +1822,7 @@ def _build_hamiltonian_heatmap_section(
     const climValueEl = document.getElementById({json.dumps(clim_value_id)});
     const randomButton = document.getElementById({json.dumps(random_button_id)});
     const captionEl = document.getElementById({json.dumps(caption_id)});
+    const edgesBody = document.getElementById({json.dumps(edges_body_id)});
     const plotDiv = document.getElementById({json.dumps(heatmap_div_id)});
     let randomIndex = 0;
 
@@ -1411,8 +1900,8 @@ def _build_hamiltonian_heatmap_section(
     function render() {{
       const cutout = currentCutout();
       if (!cutout || !window.Plotly || !plotDiv) return;
-      const clim = Number(climEl.value || payload.default_clim || 0.05);
-      climValueEl.value = clim.toFixed(4);
+      const clim = Math.pow(10, Number(climEl.value || Math.log10(payload.default_clim || 0.05)));
+      climValueEl.value = clim.toExponential(3);
       const data = [
         heatmapTrace(cutout.gt, clim, false, "x", "y"),
         heatmapTrace(cutout.pred, clim, false, "x2", "y2"),
@@ -1421,6 +1910,13 @@ def _build_hamiltonian_heatmap_section(
       Plotly.react(plotDiv, data, buildLayout(cutout), {{responsive: true}});
       if (captionEl) {{
         captionEl.textContent = cutout.selection_label || "";
+      }}
+      if (edgesBody) {{
+        const rows = (cutout.worst_edges || []).map((edge, idx) => {{
+          const shift = edge.shift ? " [" + edge.shift[0] + "," + edge.shift[1] + "," + edge.shift[2] + "]" : "";
+          return "<tr><td>" + (idx + 1) + "</td><td>" + edge.src_atom + " -> " + edge.dst_atom + shift + "</td><td>" + Number(edge.abs_mae).toExponential(4) + "</td><td>" + Number(edge.rel_mae).toExponential(4) + "</td></tr>";
+        }});
+        edgesBody.innerHTML = rows.length ? rows.join("") : '<tr><td colspan="4" class="empty">No edges available.</td></tr>';
       }}
       const showAtom = strategyEl.value === "closest_neighbors";
       const showRandom = strategyEl.value === "random";

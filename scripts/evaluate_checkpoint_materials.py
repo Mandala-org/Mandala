@@ -346,8 +346,31 @@ def _build_snapshot_from_matrices(
     )
 
 
-def _maybe_apply_analysis_cutoff(
-    snapshot: Snapshot, analysis_cutoff_radius: float | None, cfg: Config
+def _filter_block_matrix_by_distance_analysis(
+    block_matrix,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+    cutoff_radius: float,
+):
+    mask_dict: dict[str, torch.Tensor] = {}
+    for key, edges in block_matrix.pair_edges.items():
+        sx, sy, sz = edges[0], edges[1], edges[2]
+        src, dst = edges[3], edges[4]
+        shift = torch.stack([sx, sy, sz], dim=1).to(positions.dtype)
+        if box is not None:
+            disp = positions[dst] - positions[src] + shift @ box
+        else:
+            disp = positions[dst] - positions[src]
+        dist = torch.linalg.norm(disp, dim=1)
+        mask_dict[key] = dist <= float(cutoff_radius)
+    return block_matrix._apply_edge_mask(mask_dict, drop_empty=True)
+
+
+def _apply_analysis_cutoff_to_snapshot(
+    snapshot: Snapshot,
+    analysis_cutoff_radius: float | None,
+    cfg: Config,
 ) -> Snapshot:
     if analysis_cutoff_radius is None:
         return snapshot
@@ -357,7 +380,52 @@ def _maybe_apply_analysis_cutoff(
             "analysis cutoff must not exceed the trained cutoff: "
             f"analysis_cutoff_radius={analysis_cutoff_radius} > trained_cutoff={trained_cutoff}"
         )
-    return snapshot.filter_by_distance(float(analysis_cutoff_radius))
+    if snapshot.positions is None:
+        raise ValueError("analysis cutoff requires snapshot positions")
+
+    cutoff_radius = float(analysis_cutoff_radius)
+    filtered_h = _filter_block_matrix_by_distance_analysis(
+        snapshot.hamiltonian,
+        positions=snapshot.positions,
+        box=snapshot.box,
+        cutoff_radius=cutoff_radius,
+    )
+    filtered_s = _filter_block_matrix_by_distance_analysis(
+        snapshot.overlap,
+        positions=snapshot.positions,
+        box=snapshot.box,
+        cutoff_radius=cutoff_radius,
+    )
+    filtered_d = _filter_block_matrix_by_distance_analysis(
+        snapshot.density,
+        positions=snapshot.positions,
+        box=snapshot.box,
+        cutoff_radius=cutoff_radius,
+    )
+    return Snapshot(
+        filtered_h,
+        filtered_s,
+        filtered_d,
+        positions=snapshot.positions,
+        forces=snapshot.forces,
+        box=snapshot.box,
+        stress=snapshot.stress,
+        matrix_path=snapshot.matrix_path,
+        info_path=snapshot.info_path,
+        cutoff_radius=cutoff_radius,
+        cfg=snapshot.cfg,
+        info=snapshot.info,
+    )
+
+
+def _maybe_apply_analysis_cutoff(
+    snapshot: Snapshot, analysis_cutoff_radius: float | None, cfg: Config
+) -> Snapshot:
+    return _apply_analysis_cutoff_to_snapshot(
+        snapshot,
+        analysis_cutoff_radius,
+        cfg,
+    )
 
 
 def _run_snapshot_case(
@@ -410,6 +478,14 @@ def _run_snapshot_case(
     resolved_path_string, special_points = analysis_eval.resolve_band_path(
         band_info_path, args.path_string, special_points_override
     )
+    gt_snapshot = _maybe_apply_analysis_cutoff(
+        gt_snapshot, args.analysis_cutoff_radius, cfg
+    )
+    gt_mats = {
+        name: gt_snapshot[name] for name in ("hamiltonian", "density", "overlap")
+    }
+
+    density_for_eigs = pred_mats.get("density", gt_mats["density"])
     overlap_for_eigs = (
         gt_mats["overlap"] if args.use_gt_overlap_for_eigs else pred_mats.get("overlap")
     )
@@ -417,7 +493,6 @@ def _run_snapshot_case(
         raise ValueError(
             "Checkpoint does not predict overlap and --use-gt-overlap-for-eigs was not set."
         )
-    density_for_eigs = pred_mats.get("density", gt_mats["density"])
     pred_band_snapshot = _build_snapshot_from_matrices(
         {
             "hamiltonian": pred_mats["hamiltonian"],
@@ -428,18 +503,9 @@ def _run_snapshot_case(
         box=box,
         info=info,
     )
-    gt_snapshot = _maybe_apply_analysis_cutoff(
-        gt_snapshot, args.analysis_cutoff_radius, cfg
-    )
     pred_band_snapshot = _maybe_apply_analysis_cutoff(
         pred_band_snapshot, args.analysis_cutoff_radius, cfg
     )
-    gt_mats = {
-        name: gt_snapshot[name] for name in ("hamiltonian", "density", "overlap")
-    }
-    pred_mats = {
-        name: pred_band_snapshot[name] for name in ("hamiltonian", "density", "overlap")
-    }
 
     title = args.plot_title or matrix_path.parent.name
     ham_clim = (
@@ -468,6 +534,13 @@ def _run_snapshot_case(
         output_path=output_dir / "hamiltonian_interactive_heatmaps.pt",
         default_clim=ham_clim,
         max_nodes=6,
+    )
+    analysis_eval.save_snapshot_3d_error_payload(
+        pred_mats["hamiltonian"],
+        gt_mats["hamiltonian"],
+        positions=positions,
+        box=box,
+        output_path=output_dir / "snapshot_3d_error_payload.pt",
     )
     analysis_eval.save_correlation_plot(
         pred_mats["hamiltonian"],
@@ -553,7 +626,7 @@ def _run_snapshot_case(
     else:
         dos_metrics = analysis_eval.save_dos_comparison_plot(
             pred_mats["hamiltonian"],
-            overlap_for_eigs,
+            pred_band_snapshot.overlap,
             gt_mats["hamiltonian"],
             gt_mats["overlap"],
             num_electrons_true,
