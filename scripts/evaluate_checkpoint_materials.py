@@ -485,9 +485,35 @@ def _run_snapshot_case(
         name: gt_snapshot[name] for name in ("hamiltonian", "density", "overlap")
     }
 
-    density_for_eigs = pred_mats.get("density", gt_mats["density"])
+    pred_analysis_snapshot = _build_snapshot_from_matrices(
+        {
+            "hamiltonian": pred_mats["hamiltonian"],
+            "density": pred_mats.get("density", gt_mats["density"]),
+            "overlap": pred_mats.get("overlap", gt_mats["overlap"]),
+        },
+        positions=positions,
+        box=box,
+        info=info,
+    )
+    pred_analysis_snapshot = _maybe_apply_analysis_cutoff(
+        pred_analysis_snapshot, args.analysis_cutoff_radius, cfg
+    )
+    pred_mats_aligned: dict[str, Any] = {}
+    for name in ("hamiltonian", "density", "overlap"):
+        if name not in pred_mats:
+            continue
+        pred_mats_aligned[name], _align_debug = (
+            analysis_eval.align_prediction_to_target(
+                pred_analysis_snapshot[name],
+                gt_mats[name],
+            )
+        )
+
+    density_for_eigs = pred_mats_aligned.get("density", gt_mats["density"])
     overlap_for_eigs = (
-        gt_mats["overlap"] if args.use_gt_overlap_for_eigs else pred_mats.get("overlap")
+        gt_mats["overlap"]
+        if args.use_gt_overlap_for_eigs
+        else pred_mats_aligned.get("overlap")
     )
     if overlap_for_eigs is None:
         raise ValueError(
@@ -495,16 +521,13 @@ def _run_snapshot_case(
         )
     pred_band_snapshot = _build_snapshot_from_matrices(
         {
-            "hamiltonian": pred_mats["hamiltonian"],
+            "hamiltonian": pred_mats_aligned["hamiltonian"],
             "density": density_for_eigs,
             "overlap": overlap_for_eigs,
         },
         positions=positions,
         box=box,
         info=info,
-    )
-    pred_band_snapshot = _maybe_apply_analysis_cutoff(
-        pred_band_snapshot, args.analysis_cutoff_radius, cfg
     )
 
     title = args.plot_title or matrix_path.parent.name
@@ -519,7 +542,7 @@ def _run_snapshot_case(
         else (args.plot_clim if args.plot_clim is not None else 0.1)
     )
     analysis_eval.save_comparison_plot(
-        pred_mats["hamiltonian"],
+        pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
         output_dir / "hamiltonian_first_atoms_comparison.png",
         title=f"Hamiltonian comparison: {title}",
@@ -527,7 +550,7 @@ def _run_snapshot_case(
         clim=ham_clim,
     )
     analysis_eval.save_hamiltonian_interactive_heatmap_payload(
-        pred_mats["hamiltonian"],
+        pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
         positions=positions,
         box=box,
@@ -536,14 +559,14 @@ def _run_snapshot_case(
         max_nodes=6,
     )
     analysis_eval.save_snapshot_3d_error_payload(
-        pred_mats["hamiltonian"],
+        pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
         positions=positions,
         box=box,
         output_path=output_dir / "snapshot_3d_error_payload.pt",
     )
     analysis_eval.save_correlation_plot(
-        pred_mats["hamiltonian"],
+        pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
         output_dir / "hamiltonian_correlation.png",
         title=f"Hamiltonian correlation: {title}",
@@ -551,8 +574,35 @@ def _run_snapshot_case(
         alpha=args.correlation_alpha,
         seed=args.correlation_sample_seed,
     )
+    ham_support_debug = analysis_eval.save_prediction_support_debug_artifacts(
+        pred_analysis_snapshot["hamiltonian"],
+        gt_mats["hamiltonian"],
+        positions=positions,
+        box=box,
+        output_dir=output_dir,
+        prefix="hamiltonian",
+        title=f"Hamiltonian correlation: {title}",
+    )
+    print(
+        "[DEBUG] Hamiltonian support: "
+        f"target_edges={ham_support_debug['counts']['target_edges_total']} "
+        f"pred_edges_raw={ham_support_debug['counts']['pred_edges_total_raw']} "
+        f"pred_edges_aligned={ham_support_debug['counts']['pred_edges_total_aligned']} "
+        f"pred_only={ham_support_debug['counts']['pred_only_edges_total']} "
+        f"missing={ham_support_debug['counts']['missing_edges_total']}"
+    )
+    print(
+        "[DEBUG] Hamiltonian dense corr: "
+        f"raw={ham_support_debug['correlation']['raw_dense']:.6f} "
+        f"aligned={ham_support_debug['correlation']['aligned_dense']:.6f}"
+    )
+    print(
+        "[DEBUG] Hamiltonian gt~0 spike: "
+        f"raw={ham_support_debug['dense_zero_support_raw']['target_zero_pred_nonzero_entries']} "
+        f"aligned={ham_support_debug['dense_zero_support_aligned']['target_zero_pred_nonzero_entries']}"
+    )
     analysis_eval.save_block_error_scatter_data(
-        pred_mats["hamiltonian"],
+        pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
         positions=positions,
         box=box,
@@ -560,7 +610,7 @@ def _run_snapshot_case(
     )
     if "density" in pred_mats:
         analysis_eval.save_comparison_plot(
-            pred_mats["density"],
+            pred_mats_aligned["density"],
             gt_mats["density"],
             output_dir / "density_first_atoms_comparison.png",
             title=f"Density comparison: {title}",
@@ -568,7 +618,7 @@ def _run_snapshot_case(
             clim=density_clim,
         )
         analysis_eval.save_correlation_plot(
-            pred_mats["density"],
+            pred_mats_aligned["density"],
             gt_mats["density"],
             output_dir / "density_correlation.png",
             title=f"Density correlation: {title}",
@@ -577,7 +627,7 @@ def _run_snapshot_case(
             seed=args.correlation_sample_seed,
         )
         analysis_eval.save_block_error_scatter_data(
-            pred_mats["density"],
+            pred_mats_aligned["density"],
             gt_mats["density"],
             positions=positions,
             box=box,
@@ -589,7 +639,7 @@ def _run_snapshot_case(
         )
     if "overlap" in pred_mats:
         analysis_eval.save_correlation_plot(
-            pred_mats["overlap"],
+            pred_mats_aligned["overlap"],
             gt_mats["overlap"],
             output_dir / "overlap_correlation.png",
             title=f"Overlap correlation: {title}",
@@ -684,8 +734,10 @@ def _run_snapshot_case(
         line_alpha=args.band_line_alpha,
     )
 
-    for name, block in pred_mats.items():
+    for name, block in pred_mats_aligned.items():
         block.save(output_dir / f"pred_{name}.pt")
+    for name, block in pred_mats.items():
+        block.save(output_dir / f"pred_raw_{name}.pt")
     print("mode: snapshot")
     print("checkpoint:", args.checkpoint)
     print("matrix_path:", matrix_path)

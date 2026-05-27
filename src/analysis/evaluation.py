@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import random
 import sys
 import multiprocessing as mp
@@ -1065,6 +1066,349 @@ def save_comparison_plot(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+
+
+def align_prediction_to_target(
+    pred,
+    target,
+    *,
+    prefer_prefix: bool = True,
+) -> tuple[Any, dict[str, Any]]:
+    pair_blocks: dict[str, torch.Tensor] = {}
+    pair_edges: dict[str, torch.Tensor] = {}
+    lookup: dict[tuple[int, int, int, int, int], tuple[str, int]] = {}
+    debug: dict[str, Any] = {
+        "mode": "prefix" if prefer_prefix else "lookup",
+        "used_prefix": True,
+        "fallback_used": False,
+        "keys": {},
+        "extra_edges_total": 0,
+        "missing_edges_total": 0,
+        "prefix_mismatch_keys": [],
+    }
+
+    for key, target_blocks in target.pair_blocks.items():
+        if key not in pred.pair_blocks:
+            raise ValueError(f"Key {key!r} not found in prediction.")
+        pred_blocks = pred.pair_blocks[key]
+        pred_edges = pred.pair_edges[key]
+        target_edges = target.pair_edges[key]
+        target_n = int(target_blocks.shape[0])
+        pred_n = int(pred_blocks.shape[0])
+        if pred_n < target_n:
+            raise ValueError(
+                f"Predicted blocks for key {key!r} are too short: pred_len={pred_n} target_len={target_n}"
+            )
+
+        key_debug = {
+            "target_edges": target_n,
+            "pred_edges": pred_n,
+            "extra_edges": max(pred_n - target_n, 0),
+            "used_prefix": False,
+            "missing_edges": 0,
+        }
+        debug["extra_edges_total"] += key_debug["extra_edges"]
+
+        use_prefix = False
+        if prefer_prefix:
+            prefix_edges = pred_edges[:, :target_n]
+            if prefix_edges.shape == target_edges.shape and torch.equal(
+                prefix_edges.detach().cpu(), target_edges.detach().cpu()
+            ):
+                use_prefix = True
+
+        if use_prefix:
+            kept_blocks = pred_blocks[:target_n]
+            kept_edges = pred_edges[:, :target_n]
+            key_debug["used_prefix"] = True
+        else:
+            debug["used_prefix"] = False
+            debug["fallback_used"] = True
+            debug["prefix_mismatch_keys"].append(str(key))
+            selected_idx: list[int] = []
+            missing_edges = 0
+            for edge in target_edges.t().tolist():
+                pred_entry = pred.lookup.get(tuple(int(v) for v in edge))
+                if pred_entry is None:
+                    missing_edges += 1
+                    continue
+                _pred_key, pred_idx = pred_entry
+                selected_idx.append(int(pred_idx))
+            key_debug["missing_edges"] = missing_edges
+            debug["missing_edges_total"] += missing_edges
+            if selected_idx:
+                index_tensor = torch.tensor(
+                    selected_idx, device=pred_blocks.device, dtype=torch.long
+                )
+                kept_blocks = pred_blocks.index_select(0, index_tensor)
+                kept_edges = pred_edges.index_select(1, index_tensor)
+            else:
+                kept_blocks = pred_blocks[:0]
+                kept_edges = pred_edges[:, :0]
+
+        pair_blocks[key] = kept_blocks
+        pair_edges[key] = kept_edges
+        key_debug["kept_edges"] = int(kept_blocks.shape[0])
+        debug["keys"][str(key)] = key_debug
+        for idx, (sx, sy, sz, i, j) in enumerate(kept_edges.t().tolist()):
+            lookup[(int(sx), int(sy), int(sz), int(i), int(j))] = (key, idx)
+
+    aligned_pred = pred.__class__(
+        atoms=pred.atoms,
+        atom_counts=pred.atom_counts,
+        pair_blocks=pair_blocks,
+        pair_edges=pair_edges,
+        lookup=lookup,
+        orbital_cfg=pred.orbital_cfg,
+        basis=pred.basis,
+    )
+    return aligned_pred, debug
+
+
+def _dense_zero_support_stats(
+    pred_dense: torch.Tensor,
+    target_dense: torch.Tensor,
+    *,
+    zero_tol: float,
+) -> dict[str, float | int]:
+    target_abs = torch.abs(target_dense)
+    pred_abs = torch.abs(pred_dense)
+    zero_mask = target_abs <= float(zero_tol)
+    nonzero_pred_mask = pred_abs > float(zero_tol)
+    spike_mask = zero_mask & nonzero_pred_mask
+    zero_count = int(zero_mask.sum().item())
+    spike_count = int(spike_mask.sum().item())
+    spike_values = pred_abs[spike_mask]
+    return {
+        "target_zero_entries": zero_count,
+        "target_zero_pred_nonzero_entries": spike_count,
+        "target_zero_pred_nonzero_fraction": (
+            float(spike_count / zero_count) if zero_count > 0 else 0.0
+        ),
+        "target_zero_pred_nonzero_mean_abs": (
+            float(spike_values.mean().item()) if spike_values.numel() else 0.0
+        ),
+        "target_zero_pred_nonzero_max_abs": (
+            float(spike_values.max().item()) if spike_values.numel() else 0.0
+        ),
+    }
+
+
+def compute_prediction_support_diagnostics(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+    zero_tol: float = 1.0e-12,
+    top_k: int = 25,
+) -> dict[str, Any]:
+    pred_aligned, align_debug = align_prediction_to_target(pred, target)
+    positions_cpu = positions.detach().cpu()
+    box_cpu = box.detach().cpu() if box is not None else None
+
+    pred_only_records: list[dict[str, Any]] = []
+    missing_records: list[dict[str, Any]] = []
+
+    for key, pred_edges in pred.pair_edges.items():
+        pred_blocks = pred.pair_blocks[key].detach().cpu()
+        for idx in range(pred_edges.shape[1]):
+            sx, sy, sz, i, j = [int(v) for v in pred_edges[:, idx].tolist()]
+            lookup_key = (sx, sy, sz, i, j)
+            if lookup_key in target.lookup:
+                continue
+            pred_block = pred_blocks[idx]
+            disp = _edge_displacement(
+                positions_cpu,
+                box_cpu,
+                i,
+                j,
+                (sx, sy, sz),
+            )
+            pred_only_records.append(
+                {
+                    "pair_key": str(key),
+                    "src_atom": i,
+                    "dst_atom": j,
+                    "shift": [sx, sy, sz],
+                    "edge_index": int(idx),
+                    "edge_length": float(torch.linalg.norm(disp).item()),
+                    "mean_abs_pred": _block_mean_abs(pred_block),
+                    "max_abs_pred": float(torch.max(torch.abs(pred_block)).item()),
+                }
+            )
+
+    for key, target_edges in target.pair_edges.items():
+        for idx in range(target_edges.shape[1]):
+            sx, sy, sz, i, j = [int(v) for v in target_edges[:, idx].tolist()]
+            lookup_key = (sx, sy, sz, i, j)
+            if lookup_key in pred.lookup:
+                continue
+            disp = _edge_displacement(
+                positions_cpu,
+                box_cpu,
+                i,
+                j,
+                (sx, sy, sz),
+            )
+            missing_records.append(
+                {
+                    "pair_key": str(key),
+                    "src_atom": i,
+                    "dst_atom": j,
+                    "shift": [sx, sy, sz],
+                    "edge_index": int(idx),
+                    "edge_length": float(torch.linalg.norm(disp).item()),
+                }
+            )
+
+    pred_only_records.sort(
+        key=lambda rec: (-float(rec["mean_abs_pred"]), rec["src_atom"], rec["dst_atom"])
+    )
+    missing_records.sort(
+        key=lambda rec: (rec["src_atom"], rec["dst_atom"], tuple(rec["shift"]))
+    )
+
+    pred_dense_raw = pred.to_dense().detach().cpu().to(torch.float64)
+    pred_dense_aligned = pred_aligned.to_dense().detach().cpu().to(torch.float64)
+    target_dense = target.to_dense().detach().cpu().to(torch.float64)
+    corr_raw = float(
+        torch.corrcoef(torch.stack([target_dense.flatten(), pred_dense_raw.flatten()]))[
+            0, 1
+        ].item()
+    )
+    corr_aligned = float(
+        torch.corrcoef(
+            torch.stack([target_dense.flatten(), pred_dense_aligned.flatten()])
+        )[0, 1].item()
+    )
+
+    pred_only_lengths = [float(rec["edge_length"]) for rec in pred_only_records]
+    pred_only_magnitudes = [float(rec["mean_abs_pred"]) for rec in pred_only_records]
+
+    return {
+        "alignment": align_debug,
+        "counts": {
+            "target_edges_total": int(
+                sum(edges.shape[1] for edges in target.pair_edges.values())
+            ),
+            "pred_edges_total_raw": int(
+                sum(edges.shape[1] for edges in pred.pair_edges.values())
+            ),
+            "pred_edges_total_aligned": int(
+                sum(edges.shape[1] for edges in pred_aligned.pair_edges.values())
+            ),
+            "pred_only_edges_total": int(len(pred_only_records)),
+            "missing_edges_total": int(len(missing_records)),
+        },
+        "correlation": {
+            "raw_dense": corr_raw,
+            "aligned_dense": corr_aligned,
+        },
+        "dense_zero_support_raw": _dense_zero_support_stats(
+            pred_dense_raw,
+            target_dense,
+            zero_tol=zero_tol,
+        ),
+        "dense_zero_support_aligned": _dense_zero_support_stats(
+            pred_dense_aligned,
+            target_dense,
+            zero_tol=zero_tol,
+        ),
+        "pred_only_edge_length": {
+            "count": int(len(pred_only_lengths)),
+            "mean": float(np.mean(pred_only_lengths)) if pred_only_lengths else 0.0,
+            "median": float(np.median(pred_only_lengths)) if pred_only_lengths else 0.0,
+            "max": float(np.max(pred_only_lengths)) if pred_only_lengths else 0.0,
+        },
+        "pred_only_mean_abs_pred": {
+            "count": int(len(pred_only_magnitudes)),
+            "mean": (
+                float(np.mean(pred_only_magnitudes)) if pred_only_magnitudes else 0.0
+            ),
+            "median": (
+                float(np.median(pred_only_magnitudes)) if pred_only_magnitudes else 0.0
+            ),
+            "max": float(np.max(pred_only_magnitudes)) if pred_only_magnitudes else 0.0,
+        },
+        "top_pred_only_edges": pred_only_records[:top_k],
+        "top_missing_edges": missing_records[:top_k],
+    }
+
+
+def save_prediction_support_debug_artifacts(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+    output_dir: Path,
+    prefix: str,
+    title: str,
+    zero_tol: float = 1.0e-12,
+) -> dict[str, Any]:
+    diagnostics = compute_prediction_support_diagnostics(
+        pred,
+        target,
+        positions=positions,
+        box=box,
+        zero_tol=zero_tol,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    json_path = output_dir / f"{prefix}_prediction_support_debug.json"
+    json_path.write_text(json.dumps(diagnostics, indent=2), encoding="utf-8")
+
+    pred_aligned, _ = align_prediction_to_target(pred, target)
+    save_correlation_plot(
+        pred_aligned,
+        target,
+        output_dir / f"{prefix}_aligned_correlation.png",
+        title=f"{title} (training-style aligned)",
+        max_points=250000,
+        alpha=0.03,
+        seed=0,
+    )
+
+    pred_only_records = diagnostics["top_pred_only_edges"]
+    all_pred_only = compute_prediction_support_diagnostics(
+        pred,
+        target,
+        positions=positions,
+        box=box,
+        zero_tol=zero_tol,
+        top_k=max(
+            diagnostics["counts"]["pred_only_edges_total"],
+            len(pred_only_records),
+        ),
+    )["top_pred_only_edges"]
+    pred_only_lengths = [float(rec["edge_length"]) for rec in all_pred_only]
+    pred_only_magnitudes = [float(rec["mean_abs_pred"]) for rec in all_pred_only]
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.8))
+    if pred_only_lengths:
+        axes[0].hist(
+            pred_only_lengths, bins=min(40, max(10, len(pred_only_lengths) // 4))
+        )
+    axes[0].set_title("Prediction-only edge lengths")
+    axes[0].set_xlabel("Distance")
+    axes[0].set_ylabel("Count")
+    axes[0].grid(True, alpha=0.25)
+    if pred_only_magnitudes:
+        log_mag = np.log10(np.clip(np.asarray(pred_only_magnitudes), 1e-16, None))
+        axes[1].hist(log_mag, bins=min(40, max(10, len(log_mag) // 4)))
+    axes[1].set_title("Prediction-only block mean |value|")
+    axes[1].set_xlabel("log10(mean |pred block|)")
+    axes[1].set_ylabel("Count")
+    axes[1].grid(True, alpha=0.25)
+    fig.suptitle(f"{title}: support diagnostics")
+    fig.tight_layout()
+    fig.savefig(
+        output_dir / f"{prefix}_support_debug.png",
+        dpi=220,
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+    return diagnostics
 
 
 def compute_block_error_scatter_data(
