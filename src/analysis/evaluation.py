@@ -1923,6 +1923,8 @@ def _shift_resolved_closest_selection(
         if int(record["src_atom"]) != int(anchor_atom):
             continue
         dst_atom = int(record["dst_atom"])
+        if dst_atom == int(anchor_atom):
+            continue
         current = nearest_by_atom.get(dst_atom)
         if current is None or float(record["edge_length"]) < float(
             current["edge_length"]
@@ -1948,6 +1950,8 @@ def _sum_pbc_closest_selection(
         if int(record["src_atom"]) != int(anchor_atom):
             continue
         dst_atom = int(record["dst_atom"])
+        if dst_atom == int(anchor_atom):
+            continue
         dist = float(record["edge_length"])
         prev = nearest_by_atom.get(dst_atom)
         if prev is None or dist < prev:

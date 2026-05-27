@@ -1299,6 +1299,8 @@ def _build_snapshot_3d_section(
     threshold_id = f"{div_id_prefix}-threshold"
     threshold_value_id = f"{div_id_prefix}-threshold-value"
     ghosts_id = f"{div_id_prefix}-ghosts"
+    nodes_id = f"{div_id_prefix}-nodes"
+    edges_id = f"{div_id_prefix}-edges"
     figure_html = pio.to_html(
         go.Figure(),
         include_plotlyjs=include_plotlyjs,
@@ -1335,6 +1337,14 @@ def _build_snapshot_3d_section(
       <input id="{html.escape(ghosts_id)}" type="checkbox" checked>
       Show ghost nodes
     </label>
+    <label class="snapshot3d-inline">
+      <input id="{html.escape(nodes_id)}" type="checkbox" checked>
+      Show nodes
+    </label>
+    <label class="snapshot3d-inline">
+      <input id="{html.escape(edges_id)}" type="checkbox" checked>
+      Show edges
+    </label>
   </div>
   <div class="plotly-panel">
     {figure_html}
@@ -1348,6 +1358,8 @@ def _build_snapshot_3d_section(
     const thresholdEl = document.getElementById({json.dumps(threshold_id)});
     const thresholdValueEl = document.getElementById({json.dumps(threshold_value_id)});
     const ghostsEl = document.getElementById({json.dumps(ghosts_id)});
+    const nodesEl = document.getElementById({json.dumps(nodes_id)});
+    const edgesEl = document.getElementById({json.dumps(edges_id)});
     const plotDiv = document.getElementById({json.dumps(plot_div_id)});
 
     function lerp(a, b, t) {{
@@ -1440,6 +1452,38 @@ def _build_snapshot_3d_section(
       }};
     }}
 
+    function visibleMetricValues(cfg, threshold) {{
+      const values = [];
+      if (edgesEl && edgesEl.checked) {{
+        (payload.edges || []).forEach((edge) => {{
+          const raw = Number(edge[cfg.metric] || 0);
+          if (raw >= threshold) values.push(transformedValue(raw, cfg));
+        }});
+      }}
+      if (nodesEl && nodesEl.checked) {{
+        (payload.node_diagonal || []).forEach((node) => {{
+          values.push(transformedValue(node[cfg.metric], cfg));
+        }});
+      }}
+      if (ghostsEl && ghostsEl.checked) {{
+        const nodeMap = new Map((payload.node_diagonal || []).map((node) => [Number(node.atom), node]));
+        (payload.ghosts || []).forEach((ghost) => {{
+          const metricSource = nodeMap.get(Number(ghost.atom)) || {{abs_mae: 0, rel_mae: 0}};
+          values.push(transformedValue(metricSource[cfg.metric], cfg));
+        }});
+      }}
+      return values;
+    }}
+
+    function visibleEdgeMetricValues(cfg, threshold) {{
+      const values = [];
+      (payload.edges || []).forEach((edge) => {{
+        const raw = Number(edge[cfg.metric] || 0);
+        if (raw >= threshold) values.push(transformedValue(raw, cfg));
+      }});
+      return values;
+    }}
+
     function thresholdValue(cfg) {{
       const t = Number(thresholdEl.value || 0);
       const exponent = cfg.logMin + t * (cfg.logMax - cfg.logMin);
@@ -1451,7 +1495,13 @@ def _build_snapshot_3d_section(
       return cfg.useLog ? Math.log10(clipped) : Number(raw || 0);
     }}
 
-    function transformedRange(cfg) {{
+    function transformedRange(cfg, values) {{
+      if (values && values.length) {{
+        let minVal = Math.min(...values);
+        let maxVal = Math.max(...values);
+        if (maxVal <= minVal) maxVal = minVal + 1e-6;
+        return [minVal, maxVal];
+      }}
       if (cfg.useLog) {{
         return [Math.log10(cfg.minPositive), Math.log10(Math.max(cfg.maxValue, cfg.minPositive))];
       }}
@@ -1478,21 +1528,50 @@ def _build_snapshot_3d_section(
       ].filter(Boolean).join("<br>");
     }}
 
-    function ghostHover(ghost, metricSource) {{
+    function ghostHover(ghost) {{
       return [
         `ghost atom=${{ghost.atom}}`,
         `shift=(${{ghost.shift[0]}}, ${{ghost.shift[1]}}, ${{ghost.shift[2]}})`,
-        `abs_mae=${{Number(metricSource.abs_mae).toExponential(3)}}`,
-        `rel_mae=${{Number(metricSource.rel_mae).toExponential(3)}}`,
+        "value=0",
       ].join("<br>");
+    }}
+
+    function buildColorbarTrace(cfg, threshold) {{
+      if (!(edgesEl && edgesEl.checked)) return null;
+      const visibleValues = visibleEdgeMetricValues(cfg, threshold);
+      if (!visibleValues.length) return null;
+      const [cmin, cmax] = transformedRange(cfg, visibleValues);
+      return {{
+        type: "scatter3d",
+        mode: "markers",
+        x: [0],
+        y: [0],
+        z: [0],
+        hoverinfo: "skip",
+        showlegend: false,
+        marker: {{
+          size: 1,
+          opacity: 0,
+          color: [cmin],
+          colorscale: colorscale,
+          cmin: cmin,
+          cmax: cmax,
+          showscale: true,
+          colorbar: {{
+            title: `${{cfg.useLog ? "log10 " : ""}}${{cfg.metric}}`,
+            len: 0.8,
+            y: 0.5,
+          }},
+        }},
+      }};
     }}
 
     function buildEdgeTraces(cfg, threshold) {{
       const visibleEdges = (payload.edges || []).filter((edge) => Number(edge[cfg.metric] || 0) >= threshold);
       if (!visibleEdges.length) return [];
-      const [cmin, cmax] = transformedRange(cfg);
+      const [cmin, cmax] = transformedRange(cfg, visibleEdgeMetricValues(cfg, threshold));
       const binCount = 18;
-      const bins = Array.from({{length: binCount}}, () => ({{x: [], y: [], z: [], hover: []}}));
+      const bins = Array.from({{length: binCount}}, () => ({{x: [], y: [], z: [], hover: [], values: []}}));
       visibleEdges.forEach((edge) => {{
         const value = transformedValue(edge[cfg.metric], cfg);
         const t = cmax <= cmin ? 0.5 : (value - cmin) / (cmax - cmin);
@@ -1501,11 +1580,13 @@ def _build_snapshot_3d_section(
         bins[binIdx].y.push(edge.start[1], edge.end[1], null);
         bins[binIdx].z.push(edge.start[2], edge.end[2], null);
         bins[binIdx].hover.push(edgeHover(edge), edgeHover(edge), null);
+        bins[binIdx].values.push(value);
       }});
       return bins
         .map((bin, idx) => {{
           if (!bin.x.length) return null;
-          const color = colorForValue(idx / Math.max(binCount - 1, 1));
+          const binValue = Math.max(...bin.values);
+          const color = colorForValue(cmax <= cmin ? 0.5 : (binValue - cmin) / (cmax - cmin));
           return {{
             type: "scatter3d",
             mode: "lines",
@@ -1522,8 +1603,13 @@ def _build_snapshot_3d_section(
         .filter(Boolean);
     }}
 
-    function buildNodeTrace(cfg) {{
-      const [cmin, cmax] = transformedRange(cfg);
+    function buildNodeTrace(cfg, showScale) {{
+      if (!(nodesEl && nodesEl.checked)) return null;
+      const edgeValues = visibleEdgeMetricValues(cfg, Number(thresholdEl.value || 0));
+      const [cmin, cmax] = transformedRange(
+        cfg,
+        edgeValues.length ? edgeValues : visibleMetricValues(cfg, Number(thresholdEl.value || 0))
+      );
       const nodes = payload.node_diagonal || [];
       return {{
         type: "scatter3d",
@@ -1540,20 +1626,19 @@ def _build_snapshot_3d_section(
           cmin: cmin,
           cmax: cmax,
           opacity: 0.96,
-          colorbar: {{
+          showscale: showScale,
+          colorbar: showScale ? {{
             title: `${{cfg.useLog ? "log10 " : ""}}${{cfg.metric}}`,
             len: 0.8,
             y: 0.5,
-          }},
+          }} : undefined,
         }},
         name: "Atoms",
       }};
     }}
 
-    function buildGhostTrace(cfg) {{
+    function buildGhostTrace(cfg, showScale) {{
       if (!ghostsEl.checked) return null;
-      const [cmin, cmax] = transformedRange(cfg);
-      const nodeMap = new Map((payload.node_diagonal || []).map((node) => [Number(node.atom), node]));
       const ghosts = payload.ghosts || [];
       if (!ghosts.length) return null;
       return {{
@@ -1562,20 +1647,13 @@ def _build_snapshot_3d_section(
         x: ghosts.map((ghost) => ghost.position[0]),
         y: ghosts.map((ghost) => ghost.position[1]),
         z: ghosts.map((ghost) => ghost.position[2]),
-        text: ghosts.map((ghost) => ghostHover(ghost, nodeMap.get(Number(ghost.atom)) || {{abs_mae: 0, rel_mae: 0}})),
+        text: ghosts.map((ghost) => ghostHover(ghost)),
         hovertemplate: "%{{text}}<extra></extra>",
         marker: {{
           size: 4,
           symbol: "diamond",
-          color: ghosts.map((ghost) => {{
-            const metricSource = nodeMap.get(Number(ghost.atom)) || {{abs_mae: 0, rel_mae: 0}};
-            return transformedValue(metricSource[cfg.metric], cfg);
-          }}),
-          colorscale: colorscale,
-          cmin: cmin,
-          cmax: cmax,
+          color: "rgba(148,163,184,0.55)",
           opacity: 0.55,
-          showscale: false,
           line: {{color: "rgba(255,255,255,0.45)", width: 1}},
         }},
         name: "Ghosts",
@@ -1587,12 +1665,22 @@ def _build_snapshot_3d_section(
       const cfg = metricConfig();
       const threshold = thresholdValue(cfg);
       thresholdValueEl.value = threshold.toExponential(3);
+      const edgesVisible = !!(edgesEl && edgesEl.checked);
+      const nodesVisible = !!(nodesEl && nodesEl.checked);
+      const ghostsVisible = !!(ghostsEl && ghostsEl.checked);
       const traces = [
         boxSegments(payload.box || [[0,0,0],[1,0,0],[0,1,0]]),
-        ...buildEdgeTraces(cfg, threshold),
-        buildNodeTrace(cfg),
+        ...(edgesVisible ? buildEdgeTraces(cfg, threshold) : []),
       ];
-      const ghostTrace = buildGhostTrace(cfg);
+      const colorbarTrace = edgesVisible
+        ? buildColorbarTrace(cfg, threshold)
+        : (nodesVisible
+            ? null
+            : (ghostsVisible ? null : null));
+      if (colorbarTrace) traces.push(colorbarTrace);
+      const nodeTrace = buildNodeTrace(cfg, !edgesVisible);
+      if (nodeTrace) traces.push(nodeTrace);
+      const ghostTrace = buildGhostTrace(cfg, !edgesVisible && !nodesVisible);
       if (ghostTrace) traces.push(ghostTrace);
       const layout = {{
         height: 720,
@@ -1617,6 +1705,8 @@ def _build_snapshot_3d_section(
     scaleEl.addEventListener("change", render);
     thresholdEl.addEventListener("input", render);
     ghostsEl.addEventListener("change", render);
+    if (nodesEl) nodesEl.addEventListener("change", render);
+    if (edgesEl) edgesEl.addEventListener("change", render);
     render();
   }})();
   </script>
@@ -2260,11 +2350,11 @@ def _make_block_error_figure(
 
 def _axis_control_html(control_id: str, *, allow_log_x: bool, allow_log_y: bool) -> str:
     parts = [
-        '<label class="axis-toggle"><input type="checkbox" data-axis="y"> Log Y</label>'
+        '<label class="axis-toggle"><input type="checkbox" data-axis="y" checked> Log Y</label>'
     ]
     if allow_log_x:
         parts.append(
-            '<label class="axis-toggle"><input type="checkbox" data-axis="x"> Log X</label>'
+            '<label class="axis-toggle"><input type="checkbox" data-axis="x" checked> Log X</label>'
         )
     return "".join(parts)
 
@@ -2292,6 +2382,7 @@ def _axis_control_script(
   }}
   if (yBox) yBox.addEventListener('change', updateAxis);
   if (xBox) xBox.addEventListener('change', updateAxis);
+  updateAxis();
 }})();
 """
 
