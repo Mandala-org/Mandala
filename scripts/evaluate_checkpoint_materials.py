@@ -346,6 +346,13 @@ def _build_snapshot_from_matrices(
     )
 
 
+def _remove_if_exists(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
 def _filter_block_matrix_by_distance_analysis(
     block_matrix,
     *,
@@ -484,6 +491,7 @@ def _run_snapshot_case(
     gt_mats = {
         name: gt_snapshot[name] for name in ("hamiltonian", "density", "overlap")
     }
+    predicted_matrix_names = set(cfg.matrix_targets)
 
     pred_analysis_snapshot = _build_snapshot_from_matrices(
         {
@@ -574,33 +582,6 @@ def _run_snapshot_case(
         alpha=args.correlation_alpha,
         seed=args.correlation_sample_seed,
     )
-    ham_support_debug = analysis_eval.save_prediction_support_debug_artifacts(
-        pred_analysis_snapshot["hamiltonian"],
-        gt_mats["hamiltonian"],
-        positions=positions,
-        box=box,
-        output_dir=output_dir,
-        prefix="hamiltonian",
-        title=f"Hamiltonian correlation: {title}",
-    )
-    print(
-        "[DEBUG] Hamiltonian support: "
-        f"target_edges={ham_support_debug['counts']['target_edges_total']} "
-        f"pred_edges_raw={ham_support_debug['counts']['pred_edges_total_raw']} "
-        f"pred_edges_aligned={ham_support_debug['counts']['pred_edges_total_aligned']} "
-        f"pred_only={ham_support_debug['counts']['pred_only_edges_total']} "
-        f"missing={ham_support_debug['counts']['missing_edges_total']}"
-    )
-    print(
-        "[DEBUG] Hamiltonian dense corr: "
-        f"raw={ham_support_debug['correlation']['raw_dense']:.6f} "
-        f"aligned={ham_support_debug['correlation']['aligned_dense']:.6f}"
-    )
-    print(
-        "[DEBUG] Hamiltonian gt~0 spike: "
-        f"raw={ham_support_debug['dense_zero_support_raw']['target_zero_pred_nonzero_entries']} "
-        f"aligned={ham_support_debug['dense_zero_support_aligned']['target_zero_pred_nonzero_entries']}"
-    )
     analysis_eval.save_block_error_scatter_data(
         pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
@@ -608,7 +589,7 @@ def _run_snapshot_case(
         box=box,
         output_path=output_dir / "hamiltonian_block_error_metrics.pt",
     )
-    if "density" in pred_mats:
+    if "density" in pred_mats and "density" in predicted_matrix_names:
         analysis_eval.save_comparison_plot(
             pred_mats_aligned["density"],
             gt_mats["density"],
@@ -634,10 +615,13 @@ def _run_snapshot_case(
             output_path=output_dir / "density_block_error_metrics.pt",
         )
     else:
+        _remove_if_exists(output_dir / "density_correlation.png")
+        _remove_if_exists(output_dir / "density_first_atoms_comparison.png")
+        _remove_if_exists(output_dir / "density_block_error_metrics.pt")
         print(
-            "--- Density prediction unavailable; skipping density comparison plot ---"
+            "--- Density prediction unavailable; skipping density comparison and diagnostics ---"
         )
-    if "overlap" in pred_mats:
+    if "overlap" in pred_mats and "overlap" in predicted_matrix_names:
         analysis_eval.save_correlation_plot(
             pred_mats_aligned["overlap"],
             gt_mats["overlap"],
@@ -647,6 +631,8 @@ def _run_snapshot_case(
             alpha=args.correlation_alpha,
             seed=args.correlation_sample_seed,
         )
+    else:
+        _remove_if_exists(output_dir / "overlap_correlation.png")
 
     num_electrons_true = float(gt_snapshot.get_number_of_electrons().item())
     num_electrons_pred = (
@@ -738,6 +724,12 @@ def _run_snapshot_case(
         block.save(output_dir / f"pred_{name}.pt")
     for name, block in pred_mats.items():
         block.save(output_dir / f"pred_raw_{name}.pt")
+    for stale_name in (
+        "hamiltonian_aligned_correlation.png",
+        "hamiltonian_support_debug.png",
+        "hamiltonian_prediction_support_debug.json",
+    ):
+        _remove_if_exists(output_dir / stale_name)
     print("mode: snapshot")
     print("checkpoint:", args.checkpoint)
     print("matrix_path:", matrix_path)
