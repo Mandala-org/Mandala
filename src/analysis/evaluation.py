@@ -84,13 +84,19 @@ def band_path_from_openmx_info(
 
 
 def resolve_band_path(
-    info_path: Path, requested_path_string: str
-) -> tuple[str, dict[str, list[float]]]:
+    info_path: Path | None,
+    requested_path_string: str,
+    special_points_override: dict[str, list[float]] | None = None,
+) -> tuple[str, dict[str, list[float]] | None]:
+    if special_points_override is not None:
+        if not special_points_override:
+            raise ValueError("special_points_override must not be empty")
+        return requested_path_string, special_points_override
+    if info_path is None:
+        return requested_path_string, None
     resolved = band_path_from_openmx_info(info_path)
     if resolved is None:
-        raise ValueError(
-            f"No OpenMX Band.kpath found in {info_path}; the hardcoded fallback was removed."
-        )
+        return requested_path_string, None
     openmx_path_string, special_points = resolved
     if requested_path_string == DEFAULT_PATH_STRING:
         return openmx_path_string, special_points

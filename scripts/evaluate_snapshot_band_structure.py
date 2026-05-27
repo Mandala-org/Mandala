@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -44,6 +45,15 @@ def setup_argparse() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional separate OpenMX info file used only for resolving Band.kpath special points.",
+    )
+    parser.add_argument(
+        "--special-points-json",
+        type=str,
+        default=None,
+        help=(
+            "Optional JSON object mapping k-point labels to fractional coordinates, "
+            'for example \'{"G":[0,0,0],"X":[0.5,0,0]}\'.'
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -182,6 +192,25 @@ def _format_seconds(seconds: float) -> str:
     return f"{minutes}m {remainder:.1f}s"
 
 
+def _parse_special_points_json(value: str | None) -> dict[str, list[float]] | None:
+    if value is None:
+        return None
+    payload = json.loads(value)
+    if not isinstance(payload, dict) or not payload:
+        raise ValueError("--special-points-json must decode to a non-empty object")
+
+    special_points: dict[str, list[float]] = {}
+    for key, coords in payload.items():
+        if not isinstance(key, str):
+            raise ValueError("special-point labels must be strings")
+        if not isinstance(coords, list) or len(coords) != 3:
+            raise ValueError(
+                f"special point {key!r} must map to a length-3 coordinate list"
+            )
+        special_points[key] = [float(coord) for coord in coords]
+    return special_points
+
+
 def main() -> None:
     t0 = time.perf_counter()
     args = setup_argparse()
@@ -225,8 +254,9 @@ def main() -> None:
     band_info_path = (
         args.band_info_path if args.band_info_path is not None else info_path
     )
+    special_points_override = _parse_special_points_json(args.special_points_json)
     path_string, special_points = analysis_eval.resolve_band_path(
-        band_info_path, args.path_string
+        band_info_path, args.path_string, special_points_override
     )
     (
         fractional_kpoints,

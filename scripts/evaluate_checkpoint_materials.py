@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,15 @@ def setup_argparse() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional separate OpenMX info file used only for resolving Band.kpath special points.",
+    )
+    parser.add_argument(
+        "--special-points-json",
+        type=str,
+        default=None,
+        help=(
+            "Optional JSON object mapping k-point labels to fractional coordinates, "
+            'for example \'{"G":[0,0,0],"X":[0.5,0,0]}\'.'
+        ),
     )
     parser.add_argument("--cif-path", type=Path, default=None)
     parser.add_argument("--reference-info-path", type=Path, default=None)
@@ -195,6 +205,25 @@ def _resolve_device(device_arg: str) -> torch.device:
     if device_arg == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested but is not available.")
     return torch.device(device_arg)
+
+
+def _parse_special_points_json(value: str | None) -> dict[str, list[float]] | None:
+    if value is None:
+        return None
+    payload = json.loads(value)
+    if not isinstance(payload, dict) or not payload:
+        raise ValueError("--special-points-json must decode to a non-empty object")
+
+    special_points: dict[str, list[float]] = {}
+    for key, coords in payload.items():
+        if not isinstance(key, str):
+            raise ValueError("special-point labels must be strings")
+        if not isinstance(coords, list) or len(coords) != 3:
+            raise ValueError(
+                f"special point {key!r} must map to a length-3 coordinate list"
+            )
+        special_points[key] = [float(coord) for coord in coords]
+    return special_points
 
 
 def _move_to_device(obj: Any, device: torch.device) -> Any:
@@ -354,8 +383,9 @@ def _run_snapshot_case(
     band_info_path = (
         args.band_info_path if args.band_info_path is not None else info_path
     )
+    special_points_override = _parse_special_points_json(args.special_points_json)
     resolved_path_string, special_points = analysis_eval.resolve_band_path(
-        band_info_path, args.path_string
+        band_info_path, args.path_string, special_points_override
     )
     overlap_for_eigs = (
         gt_mats["overlap"] if args.use_gt_overlap_for_eigs else pred_mats.get("overlap")
@@ -563,8 +593,9 @@ def _run_cif_case(
         if args.band_info_path is not None
         else args.reference_info_path
     )
+    special_points_override = _parse_special_points_json(args.special_points_json)
     resolved_path_string, special_points = analysis_eval.resolve_band_path(
-        band_info_path, args.path_string
+        band_info_path, args.path_string, special_points_override
     )
     x = build_model_input_from_structure(
         atoms=atoms,
