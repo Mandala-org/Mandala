@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import random
 import sys
 import multiprocessing as mp
 import re
@@ -1182,6 +1183,629 @@ def save_prediction_plot(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+
+
+def _block_mean_abs(block: torch.Tensor) -> float:
+    return float(torch.mean(torch.abs(block)).item())
+
+
+def _tuple3(values: Any) -> tuple[int, int, int]:
+    return (int(values[0]), int(values[1]), int(values[2]))
+
+
+def _node_image_label(atom_idx: int, shift: tuple[int, int, int]) -> str:
+    if shift == (0, 0, 0):
+        return str(atom_idx)
+    return f"{atom_idx} [{shift[0]},{shift[1]},{shift[2]}]"
+
+
+def _orbital_dims_for_atoms(atoms: tuple[str, ...], orbital_cfg: Any) -> list[int]:
+    return [int(orbital_cfg.element_to_irreps[atom].dim) for atom in atoms]
+
+
+def _dense_atom_subset(
+    dense: torch.Tensor,
+    atoms: tuple[str, ...],
+    orbital_cfg: Any,
+    atom_indices: list[int],
+) -> tuple[torch.Tensor, list[int]]:
+    dims_all = _orbital_dims_for_atoms(atoms, orbital_cfg)
+    offsets = [0]
+    for dim in dims_all[:-1]:
+        offsets.append(offsets[-1] + dim)
+    chunks: list[torch.Tensor] = []
+    dims_selected: list[int] = []
+    for row_atom in atom_indices:
+        row_dim = dims_all[row_atom]
+        row_start = offsets[row_atom]
+        row_chunks = []
+        for col_atom in atom_indices:
+            col_dim = dims_all[col_atom]
+            col_start = offsets[col_atom]
+            row_chunks.append(
+                dense[
+                    row_start : row_start + row_dim,
+                    col_start : col_start + col_dim,
+                ]
+            )
+        chunks.append(torch.cat(row_chunks, dim=1))
+        dims_selected.append(row_dim)
+    return torch.cat(chunks, dim=0), dims_selected
+
+
+def _pair_dense_block(
+    dense: torch.Tensor,
+    atoms: tuple[str, ...],
+    orbital_cfg: Any,
+    src_atom: int,
+    dst_atom: int,
+) -> torch.Tensor:
+    dims_all = _orbital_dims_for_atoms(atoms, orbital_cfg)
+    offsets = [0]
+    for dim in dims_all[:-1]:
+        offsets.append(offsets[-1] + dim)
+    row_dim = dims_all[src_atom]
+    col_dim = dims_all[dst_atom]
+    row_start = offsets[src_atom]
+    col_start = offsets[dst_atom]
+    return dense[
+        row_start : row_start + row_dim,
+        col_start : col_start + col_dim,
+    ]
+
+
+def _cutout_axes_meta(labels: list[str], dims: list[int]) -> dict[str, Any]:
+    boundaries = []
+    centers = []
+    offset = 0
+    for dim in dims:
+        boundaries.append(offset)
+        centers.append(offset + 0.5 * dim - 0.5)
+        offset += dim
+    boundaries.append(offset)
+    return {
+        "labels": labels,
+        "dims": dims,
+        "tick_positions": centers,
+        "boundaries": boundaries,
+        "total_dim": offset,
+    }
+
+
+def _rounded_matrix_payload(mat: torch.Tensor) -> list[list[float]]:
+    arr = mat.detach().cpu().to(torch.float64).numpy()
+    return np.round(arr, 6).tolist()
+
+
+def _make_cutout_payload(
+    gt_dense: torch.Tensor,
+    pred_dense: torch.Tensor,
+    labels: list[str],
+    dims: list[int],
+    *,
+    selection_label: str,
+) -> dict[str, Any]:
+    diff_dense = pred_dense - gt_dense
+    abs_max = max(
+        float(torch.max(torch.abs(gt_dense)).item()) if gt_dense.numel() else 0.0,
+        float(torch.max(torch.abs(pred_dense)).item()) if pred_dense.numel() else 0.0,
+        float(torch.max(torch.abs(diff_dense)).item()) if diff_dense.numel() else 0.0,
+    )
+    return {
+        "selection_label": selection_label,
+        "axes": _cutout_axes_meta(labels, dims),
+        "gt": _rounded_matrix_payload(gt_dense),
+        "pred": _rounded_matrix_payload(pred_dense),
+        "diff": _rounded_matrix_payload(diff_dense),
+        "abs_max": abs_max,
+    }
+
+
+def _edge_displacement(
+    positions: torch.Tensor,
+    box: torch.Tensor,
+    src_atom: int,
+    dst_atom: int,
+    shift: tuple[int, int, int],
+) -> torch.Tensor:
+    shift_t = torch.tensor(shift, dtype=positions.dtype)
+    return positions[dst_atom] - positions[src_atom] + shift_t @ box
+
+
+def _edge_error_records(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor,
+) -> list[dict[str, Any]]:
+    positions_cpu = positions.detach().cpu()
+    box_cpu = box.detach().cpu()
+    records: list[dict[str, Any]] = []
+    eps = 1.0e-12
+    for key in target.keys():
+        if key not in pred.pair_edges:
+            continue
+        target_edges = target.pair_edges[key].detach().cpu()
+        target_blocks = target.pair_blocks[key].detach().cpu()
+        pred_lookup = pred.lookup
+        for idx in range(target_edges.shape[1]):
+            sx, sy, sz, i, j = [int(v) for v in target_edges[:, idx].tolist()]
+            pred_entry = pred_lookup.get((sx, sy, sz, i, j))
+            if pred_entry is None:
+                continue
+            pred_key, pred_idx = pred_entry
+            pred_block = pred.pair_blocks[pred_key][pred_idx].detach().cpu()
+            target_block = target_blocks[idx]
+            disp = _edge_displacement(positions_cpu, box_cpu, i, j, (sx, sy, sz))
+            mae = _block_mean_abs(pred_block - target_block)
+            magnitude = _block_mean_abs(target_block)
+            records.append(
+                {
+                    "pair_key": str(key),
+                    "src_atom": i,
+                    "dst_atom": j,
+                    "shift": (sx, sy, sz),
+                    "edge_index": idx,
+                    "edge_length": float(torch.linalg.norm(disp).item()),
+                    "abs_mae": mae,
+                    "rel_mae": mae / max(magnitude, eps),
+                }
+            )
+    return records
+
+
+def _shift_resolved_closest_selection(
+    records: list[dict[str, Any]],
+    *,
+    anchor_atom: int,
+    max_neighbors: int,
+) -> list[tuple[int, tuple[int, int, int]]]:
+    nearest_by_atom: dict[int, dict[str, Any]] = {}
+    for record in records:
+        if int(record["src_atom"]) != int(anchor_atom):
+            continue
+        dst_atom = int(record["dst_atom"])
+        current = nearest_by_atom.get(dst_atom)
+        if current is None or float(record["edge_length"]) < float(
+            current["edge_length"]
+        ):
+            nearest_by_atom[dst_atom] = record
+    neighbors = sorted(
+        nearest_by_atom.values(),
+        key=lambda rec: (float(rec["edge_length"]), int(rec["dst_atom"])),
+    )[: max(0, int(max_neighbors))]
+    return [(int(anchor_atom), (0, 0, 0))] + [
+        (int(rec["dst_atom"]), _tuple3(rec["shift"])) for rec in neighbors
+    ]
+
+
+def _sum_pbc_closest_selection(
+    records: list[dict[str, Any]],
+    *,
+    anchor_atom: int,
+    max_neighbors: int,
+) -> list[int]:
+    nearest_by_atom: dict[int, float] = {}
+    for record in records:
+        if int(record["src_atom"]) != int(anchor_atom):
+            continue
+        dst_atom = int(record["dst_atom"])
+        dist = float(record["edge_length"])
+        prev = nearest_by_atom.get(dst_atom)
+        if prev is None or dist < prev:
+            nearest_by_atom[dst_atom] = dist
+    ordered = sorted(nearest_by_atom.items(), key=lambda item: (item[1], item[0]))
+    return [int(anchor_atom)] + [
+        atom for atom, _dist in ordered[: max(0, int(max_neighbors))]
+    ]
+
+
+def _shift_resolved_ranked_selection(
+    sorted_records: list[dict[str, Any]],
+    *,
+    max_nodes: int,
+) -> list[tuple[int, tuple[int, int, int]]]:
+    nodes: list[tuple[int, tuple[int, int, int]]] = []
+    seen = set()
+    for record in sorted_records:
+        for node in (
+            (int(record["src_atom"]), (0, 0, 0)),
+            (int(record["dst_atom"]), _tuple3(record["shift"])),
+        ):
+            if node in seen:
+                continue
+            nodes.append(node)
+            seen.add(node)
+            if len(nodes) >= int(max_nodes):
+                return nodes
+    return nodes
+
+
+def _sum_pair_error_records(
+    pred_dense: torch.Tensor,
+    target_dense: torch.Tensor,
+    atoms: tuple[str, ...],
+    orbital_cfg: Any,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    eps = 1.0e-12
+    atom_count = len(atoms)
+    for src_atom in range(atom_count):
+        for dst_atom in range(atom_count):
+            pred_block = _pair_dense_block(
+                pred_dense, atoms, orbital_cfg, src_atom, dst_atom
+            )
+            target_block = _pair_dense_block(
+                target_dense, atoms, orbital_cfg, src_atom, dst_atom
+            )
+            mae = _block_mean_abs(pred_block - target_block)
+            magnitude = _block_mean_abs(target_block)
+            records.append(
+                {
+                    "src_atom": src_atom,
+                    "dst_atom": dst_atom,
+                    "abs_mae": mae,
+                    "rel_mae": mae / max(magnitude, eps),
+                }
+            )
+    return records
+
+
+def _sum_pbc_ranked_selection(
+    sorted_pair_records: list[dict[str, Any]],
+    *,
+    max_nodes: int,
+) -> list[int]:
+    atoms: list[int] = []
+    seen = set()
+    for record in sorted_pair_records:
+        for atom_idx in (int(record["src_atom"]), int(record["dst_atom"])):
+            if atom_idx in seen:
+                continue
+            atoms.append(atom_idx)
+            seen.add(atom_idx)
+            if len(atoms) >= int(max_nodes):
+                return atoms
+    return atoms
+
+
+def _build_shift_resolved_dense_cutout(
+    mat,
+    node_images: list[tuple[int, tuple[int, int, int]]],
+) -> tuple[torch.Tensor, list[int]]:
+    dims = _orbital_dims_for_atoms(mat.atoms, mat.orbital_cfg)
+    device = next(iter(mat.pair_blocks.values())).device
+    dtype = next(iter(mat.pair_blocks.values())).dtype
+    row_chunks: list[torch.Tensor] = []
+    dims_selected = [dims[atom_idx] for atom_idx, _shift in node_images]
+    for row_atom, row_shift in node_images:
+        row_dim = dims[row_atom]
+        col_chunks: list[torch.Tensor] = []
+        for col_atom, col_shift in node_images:
+            col_dim = dims[col_atom]
+            shift = (
+                int(col_shift[0] - row_shift[0]),
+                int(col_shift[1] - row_shift[1]),
+                int(col_shift[2] - row_shift[2]),
+            )
+            block = torch.zeros((row_dim, col_dim), dtype=dtype, device=device)
+            entry = mat.lookup.get((shift[0], shift[1], shift[2], row_atom, col_atom))
+            if entry is not None:
+                key, idx = entry
+                block = mat.pair_blocks[key][idx]
+            col_chunks.append(block)
+        row_chunks.append(torch.cat(col_chunks, dim=1))
+    return torch.cat(row_chunks, dim=0), dims_selected
+
+
+def _random_shift_resolved_selections(
+    records: list[dict[str, Any]],
+    *,
+    max_nodes: int,
+    count: int,
+) -> list[list[tuple[int, tuple[int, int, int]]]]:
+    selections = []
+    base_records = list(records)
+    for seed in range(int(count)):
+        shuffled = list(base_records)
+        random.Random(seed).shuffle(shuffled)
+        selection = _shift_resolved_ranked_selection(
+            shuffled,
+            max_nodes=max_nodes,
+        )
+        if selection:
+            selections.append(selection)
+    return selections
+
+
+def _random_sum_pbc_selections(
+    pair_records: list[dict[str, Any]],
+    *,
+    max_nodes: int,
+    count: int,
+) -> list[list[int]]:
+    selections = []
+    base_records = list(pair_records)
+    for seed in range(int(count)):
+        shuffled = list(base_records)
+        random.Random(seed).shuffle(shuffled)
+        selection = _sum_pbc_ranked_selection(shuffled, max_nodes=max_nodes)
+        if selection:
+            selections.append(selection)
+    return selections
+
+
+def build_hamiltonian_interactive_heatmap_payload(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor,
+    default_clim: float,
+    max_nodes: int = 6,
+    random_count: int = 12,
+    closest_neighbor_count: int = 5,
+) -> dict[str, Any]:
+    pred_dense_full = pred.to_dense().detach().cpu().to(torch.float64)
+    target_dense_full = target.to_dense().detach().cpu().to(torch.float64)
+    records = _edge_error_records(pred, target, positions=positions, box=box)
+    atom_count = len(target.atoms)
+    pair_records = _sum_pair_error_records(
+        pred_dense_full,
+        target_dense_full,
+        target.atoms,
+        target.orbital_cfg,
+    )
+
+    sorted_abs_edges = sorted(
+        records,
+        key=lambda rec: (
+            -float(rec["abs_mae"]),
+            rec["src_atom"],
+            rec["dst_atom"],
+            rec["shift"],
+        ),
+    )
+    sorted_rel_edges = sorted(
+        records,
+        key=lambda rec: (
+            -float(rec["rel_mae"]),
+            rec["src_atom"],
+            rec["dst_atom"],
+            rec["shift"],
+        ),
+    )
+    sorted_abs_pairs = sorted(
+        pair_records,
+        key=lambda rec: (-float(rec["abs_mae"]), rec["src_atom"], rec["dst_atom"]),
+    )
+    sorted_rel_pairs = sorted(
+        pair_records,
+        key=lambda rec: (-float(rec["rel_mae"]), rec["src_atom"], rec["dst_atom"]),
+    )
+
+    payload: dict[str, Any] = {
+        "default_clim": float(default_clim),
+        "atom_count": int(atom_count),
+        "max_nodes": int(max_nodes),
+        "closest_neighbor_count": int(closest_neighbor_count),
+        "sum_pbc": {
+            "closest_neighbors": {},
+            "random": [],
+        },
+        "shift_resolved": {
+            "closest_neighbors": {},
+            "random": [],
+        },
+    }
+
+    max_abs_value = 0.0
+
+    def register_cutout(
+        container: dict[str, Any], key: str, cutout: dict[str, Any]
+    ) -> None:
+        nonlocal max_abs_value
+        container[key] = cutout
+        max_abs_value = max(max_abs_value, float(cutout["abs_max"]))
+
+    def register_random(container: list[Any], cutout: dict[str, Any]) -> None:
+        nonlocal max_abs_value
+        container.append(cutout)
+        max_abs_value = max(max_abs_value, float(cutout["abs_max"]))
+
+    for anchor_atom in range(atom_count):
+        sum_atoms = _sum_pbc_closest_selection(
+            records,
+            anchor_atom=anchor_atom,
+            max_neighbors=closest_neighbor_count,
+        )
+        if sum_atoms:
+            gt_dense, dims = _dense_atom_subset(
+                target_dense_full,
+                target.atoms,
+                target.orbital_cfg,
+                sum_atoms,
+            )
+            pred_dense, _ = _dense_atom_subset(
+                pred_dense_full,
+                pred.atoms,
+                pred.orbital_cfg,
+                sum_atoms,
+            )
+            register_cutout(
+                payload["sum_pbc"]["closest_neighbors"],
+                str(anchor_atom),
+                _make_cutout_payload(
+                    gt_dense,
+                    pred_dense,
+                    [str(atom_idx) for atom_idx in sum_atoms],
+                    dims,
+                    selection_label=f"Closest neighbors around atom {anchor_atom}",
+                ),
+            )
+
+        shift_nodes = _shift_resolved_closest_selection(
+            records,
+            anchor_atom=anchor_atom,
+            max_neighbors=closest_neighbor_count,
+        )
+        if shift_nodes:
+            gt_dense, dims = _build_shift_resolved_dense_cutout(target, shift_nodes)
+            pred_dense, _ = _build_shift_resolved_dense_cutout(pred, shift_nodes)
+            register_cutout(
+                payload["shift_resolved"]["closest_neighbors"],
+                str(anchor_atom),
+                _make_cutout_payload(
+                    gt_dense.detach().cpu().to(torch.float64),
+                    pred_dense.detach().cpu().to(torch.float64),
+                    [
+                        _node_image_label(atom_idx, shift)
+                        for atom_idx, shift in shift_nodes
+                    ],
+                    dims,
+                    selection_label=f"Closest neighbors around atom {anchor_atom}",
+                ),
+            )
+
+    worst_abs_atoms = _sum_pbc_ranked_selection(sorted_abs_pairs, max_nodes=max_nodes)
+    worst_rel_atoms = _sum_pbc_ranked_selection(sorted_rel_pairs, max_nodes=max_nodes)
+    for key, atoms_selected, label in (
+        ("worst_abs", worst_abs_atoms, "Worst absolute pair errors"),
+        ("worst_rel", worst_rel_atoms, "Worst relative pair errors"),
+    ):
+        if atoms_selected:
+            gt_dense, dims = _dense_atom_subset(
+                target_dense_full,
+                target.atoms,
+                target.orbital_cfg,
+                atoms_selected,
+            )
+            pred_dense, _ = _dense_atom_subset(
+                pred_dense_full,
+                pred.atoms,
+                pred.orbital_cfg,
+                atoms_selected,
+            )
+            register_cutout(
+                payload["sum_pbc"],
+                key,
+                _make_cutout_payload(
+                    gt_dense,
+                    pred_dense,
+                    [str(atom_idx) for atom_idx in atoms_selected],
+                    dims,
+                    selection_label=label,
+                ),
+            )
+
+    worst_abs_nodes = _shift_resolved_ranked_selection(
+        sorted_abs_edges,
+        max_nodes=max_nodes,
+    )
+    worst_rel_nodes = _shift_resolved_ranked_selection(
+        sorted_rel_edges,
+        max_nodes=max_nodes,
+    )
+    for key, nodes_selected, label in (
+        ("worst_abs", worst_abs_nodes, "Worst absolute edge errors"),
+        ("worst_rel", worst_rel_nodes, "Worst relative edge errors"),
+    ):
+        if nodes_selected:
+            gt_dense, dims = _build_shift_resolved_dense_cutout(target, nodes_selected)
+            pred_dense, _ = _build_shift_resolved_dense_cutout(pred, nodes_selected)
+            register_cutout(
+                payload["shift_resolved"],
+                key,
+                _make_cutout_payload(
+                    gt_dense.detach().cpu().to(torch.float64),
+                    pred_dense.detach().cpu().to(torch.float64),
+                    [
+                        _node_image_label(atom_idx, shift)
+                        for atom_idx, shift in nodes_selected
+                    ],
+                    dims,
+                    selection_label=label,
+                ),
+            )
+
+    for atom_selection in _random_sum_pbc_selections(
+        pair_records,
+        max_nodes=max_nodes,
+        count=random_count,
+    ):
+        gt_dense, dims = _dense_atom_subset(
+            target_dense_full,
+            target.atoms,
+            target.orbital_cfg,
+            atom_selection,
+        )
+        pred_dense, _ = _dense_atom_subset(
+            pred_dense_full,
+            pred.atoms,
+            pred.orbital_cfg,
+            atom_selection,
+        )
+        register_random(
+            payload["sum_pbc"]["random"],
+            _make_cutout_payload(
+                gt_dense,
+                pred_dense,
+                [str(atom_idx) for atom_idx in atom_selection],
+                dims,
+                selection_label="Random summed-PBC selection",
+            ),
+        )
+
+    for node_selection in _random_shift_resolved_selections(
+        records,
+        max_nodes=max_nodes,
+        count=random_count,
+    ):
+        gt_dense, dims = _build_shift_resolved_dense_cutout(target, node_selection)
+        pred_dense, _ = _build_shift_resolved_dense_cutout(pred, node_selection)
+        register_random(
+            payload["shift_resolved"]["random"],
+            _make_cutout_payload(
+                gt_dense.detach().cpu().to(torch.float64),
+                pred_dense.detach().cpu().to(torch.float64),
+                [
+                    _node_image_label(atom_idx, shift)
+                    for atom_idx, shift in node_selection
+                ],
+                dims,
+                selection_label="Random shift-resolved selection",
+            ),
+        )
+
+    payload["max_clim"] = float(max(max_abs_value, float(default_clim)))
+    return payload
+
+
+def save_hamiltonian_interactive_heatmap_payload(
+    pred,
+    target,
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor,
+    output_path: Path,
+    default_clim: float,
+    max_nodes: int = 6,
+    random_count: int = 12,
+    closest_neighbor_count: int = 5,
+) -> None:
+    payload = build_hamiltonian_interactive_heatmap_payload(
+        pred,
+        target,
+        positions=positions,
+        box=box,
+        default_clim=default_clim,
+        max_nodes=max_nodes,
+        random_count=random_count,
+        closest_neighbor_count=closest_neighbor_count,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, output_path)
 
 
 def save_correlation_plot(

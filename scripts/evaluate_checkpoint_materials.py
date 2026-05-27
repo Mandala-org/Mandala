@@ -460,6 +460,15 @@ def _run_snapshot_case(
         max_atoms=args.max_atoms,
         clim=ham_clim,
     )
+    analysis_eval.save_hamiltonian_interactive_heatmap_payload(
+        pred_mats["hamiltonian"],
+        gt_mats["hamiltonian"],
+        positions=positions,
+        box=box,
+        output_path=output_dir / "hamiltonian_interactive_heatmaps.pt",
+        default_clim=ham_clim,
+        max_nodes=6,
+    )
     analysis_eval.save_correlation_plot(
         pred_mats["hamiltonian"],
         gt_mats["hamiltonian"],

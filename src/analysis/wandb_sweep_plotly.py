@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from matplotlib import cm as mpl_cm
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -641,6 +642,7 @@ def copy_evaluation_bundle_assets(
         "band_structure_gt.pt",
         "band_structure_pred.pt",
         "hamiltonian_block_error_metrics.pt",
+        "hamiltonian_interactive_heatmaps.pt",
         "density_block_error_metrics.pt",
         "pred_hamiltonian.pt",
         "pred_density.pt",
@@ -680,6 +682,7 @@ def label_for_asset(filename: str) -> str:
         "dos_prediction.png": "DOS prediction",
         "dos_error.png": "DOS error",
         "hamiltonian_block_error_metrics.pt": "Hamiltonian block error metrics",
+        "hamiltonian_interactive_heatmaps.pt": "Hamiltonian interactive heatmaps",
         "density_block_error_metrics.pt": "Density block error metrics",
         "hamiltonian_first_atoms_comparison.png": "Hamiltonian heatmap",
         "hamiltonian_first_atoms_prediction.png": "Hamiltonian prediction heatmap",
@@ -888,14 +891,19 @@ def build_model_detail_page(
         f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(display_value(value)))}</td></tr>"
         for key, value in sorted(record.config.items())
     )
-    band_html = _build_interactive_band_section(
+    heatmap_html = _build_hamiltonian_heatmap_section(
         evaluation,
         include_plotlyjs=include_plotlyjs,
+        div_id_prefix=f"ham-heatmap-{record.run_id}",
+    )
+    band_html = _build_interactive_band_section(
+        evaluation,
+        include_plotlyjs=False if heatmap_html else include_plotlyjs,
         div_id_prefix=f"band-{record.run_id}",
     )
     block_error_html = _build_block_error_section(
         evaluation,
-        include_plotlyjs=False if band_html else include_plotlyjs,
+        include_plotlyjs=False if (heatmap_html or band_html) else include_plotlyjs,
         div_id_prefix=f"block-{record.run_id}",
     )
     if image_assets:
@@ -933,6 +941,7 @@ def build_model_detail_page(
 <div class="panel">
   <h2>Precomputed Evaluation</h2>
   <div class="meta-line">Source bundle: <code>{html.escape(str(evaluation.get("source_dir", "")))}</code></div>
+  {heatmap_html}
   {band_html}
   {block_error_html}
   <div class="asset-grid">
@@ -1055,6 +1064,38 @@ def build_model_detail_page(
       width: 100% !important;
       max-width: 100% !important;
     }}
+    .heatmap-controls {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .heatmap-controls label {{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #cbd5e1;
+      font-size: 13px;
+    }}
+    .heatmap-controls select,
+    .heatmap-controls input,
+    .heatmap-controls button {{
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(9, 14, 28, 0.82);
+      color: #f8fafc;
+      padding: 10px 12px;
+      font-size: 14px;
+    }}
+    .heatmap-controls button {{
+      cursor: pointer;
+      align-self: end;
+    }}
+    .heatmap-caption {{
+      color: #a8b3c7;
+      margin-bottom: 10px;
+      min-height: 20px;
+    }}
     @media (max-width: 980px) {{
       .metric-grid {{
         grid-template-columns: 1fr;
@@ -1112,6 +1153,294 @@ def _evaluation_status_label(
 def _row_col(index: int, ncols: int) -> tuple[int, int]:
     zero = index - 1
     return zero // ncols + 1, zero % ncols + 1
+
+
+def _bwr_plotly_colorscale(samples: int = 33) -> list[list[Any]]:
+    cmap = mpl_cm.get_cmap("bwr")
+    return [
+        [
+            float(idx / max(samples - 1, 1)),
+            f"rgb({int(r*255)},{int(g*255)},{int(b*255)})",
+        ]
+        for idx, (r, g, b, _a) in enumerate(cmap(np.linspace(0.0, 1.0, samples)))
+    ]
+
+
+def _load_hamiltonian_heatmap_payload(path: Path) -> dict[str, Any]:
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"Unexpected Hamiltonian heatmap payload type in {path}: {type(payload)!r}"
+        )
+    return payload
+
+
+def _fallback_heatmap_cutout(payload: dict[str, Any]) -> dict[str, Any] | None:
+    for family in ("sum_pbc", "shift_resolved"):
+        family_payload = payload.get(family, {})
+        for key in ("worst_abs", "worst_rel"):
+            cutout = family_payload.get(key)
+            if cutout is not None:
+                return cutout
+        closest = family_payload.get("closest_neighbors", {})
+        if closest:
+            first_key = sorted(closest.keys(), key=lambda value: int(value))[0]
+            return closest[first_key]
+        random_items = family_payload.get("random", [])
+        if random_items:
+            return random_items[0]
+    return None
+
+
+def _build_hamiltonian_heatmap_figure(
+    cutout: dict[str, Any],
+    *,
+    colorscale: list[list[Any]],
+    clim: float,
+) -> go.Figure:
+    axes = cutout.get("axes", {})
+    tick_positions = axes.get("tick_positions", [])
+    tick_labels = axes.get("labels", [])
+    subplot_titles = ["Ground truth", "Prediction", "Difference"]
+    fig = make_subplots(rows=1, cols=3, subplot_titles=subplot_titles)
+    for idx, key in enumerate(("gt", "pred", "diff"), start=1):
+        axis_suffix = "" if idx == 1 else str(idx)
+        fig.add_trace(
+            go.Heatmap(
+                z=cutout.get(key, []),
+                zmin=-float(clim),
+                zmax=float(clim),
+                colorscale=colorscale,
+                colorbar=dict(len=0.78, y=0.5) if idx == 3 else None,
+                showscale=idx == 3,
+                hovertemplate="row=%{y}<br>col=%{x}<br>value=%{z:.6f}<extra></extra>",
+            ),
+            row=1,
+            col=idx,
+        )
+        fig.update_xaxes(
+            tickmode="array",
+            tickvals=tick_positions,
+            ticktext=tick_labels,
+            tickangle=-35,
+            constrain="domain",
+            row=1,
+            col=idx,
+        )
+        fig.update_yaxes(
+            tickmode="array",
+            tickvals=tick_positions,
+            ticktext=tick_labels,
+            autorange="reversed",
+            scaleanchor=f"x{axis_suffix}",
+            scaleratio=1,
+            constrain="domain",
+            row=1,
+            col=idx,
+        )
+    fig.update_layout(
+        height=460,
+        margin=dict(l=60, r=30, t=60, b=90),
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e8edf7"),
+    )
+    return fig
+
+
+def _build_hamiltonian_heatmap_section(
+    evaluation: dict[str, Any],
+    *,
+    include_plotlyjs: str | bool,
+    div_id_prefix: str,
+) -> str:
+    copied_files = evaluation.get("copied_files", {})
+    payload_path = copied_files.get("hamiltonian_interactive_heatmaps.pt")
+    if payload_path is None:
+        return ""
+    payload = _load_hamiltonian_heatmap_payload(Path(payload_path))
+    initial_cutout = _fallback_heatmap_cutout(payload)
+    if initial_cutout is None:
+        return ""
+
+    colorscale = _bwr_plotly_colorscale()
+    initial_clim = float(payload.get("default_clim", 0.05))
+    max_clim = max(float(payload.get("max_clim", initial_clim)), initial_clim)
+    min_clim = max(min(initial_clim / 10.0, max_clim), 1.0e-4)
+    heatmap_div_id = f"{div_id_prefix}-plot"
+    caption_id = f"{div_id_prefix}-caption"
+    family_id = f"{div_id_prefix}-family"
+    strategy_id = f"{div_id_prefix}-strategy"
+    atom_id = f"{div_id_prefix}-atom"
+    clim_id = f"{div_id_prefix}-clim"
+    clim_value_id = f"{div_id_prefix}-clim-value"
+    random_button_id = f"{div_id_prefix}-randomize"
+    figure_html = pio.to_html(
+        _build_hamiltonian_heatmap_figure(
+            initial_cutout,
+            colorscale=colorscale,
+            clim=initial_clim,
+        ),
+        include_plotlyjs=include_plotlyjs,
+        full_html=False,
+        default_width="100%",
+        default_height="460px",
+        div_id=heatmap_div_id,
+        config={"responsive": True},
+    )
+    payload_json = json.dumps(payload)
+    colorscale_json = json.dumps(colorscale)
+    return f"""
+  <h2>Interactive Hamiltonian Heatmaps</h2>
+  <div class="heatmap-controls">
+    <label>View
+      <select id="{html.escape(family_id)}">
+        <option value="sum_pbc">Sum PBC</option>
+        <option value="shift_resolved">Shift resolved</option>
+      </select>
+    </label>
+    <label>Selection
+      <select id="{html.escape(strategy_id)}">
+        <option value="worst_abs">Worst absolute error</option>
+        <option value="worst_rel">Worst relative error</option>
+        <option value="closest_neighbors">Closest neighbors</option>
+        <option value="random">Random</option>
+      </select>
+    </label>
+    <label>Anchor atom
+      <input id="{html.escape(atom_id)}" type="number" min="0" max="{int(payload.get('atom_count', 0)) - 1}" value="0">
+    </label>
+    <label>Clim
+      <input id="{html.escape(clim_id)}" type="range" min="{min_clim:.6f}" max="{max_clim:.6f}" step="{max(max_clim / 200.0, 1.0e-4):.6f}" value="{initial_clim:.6f}">
+    </label>
+    <label>Clim value
+      <input id="{html.escape(clim_value_id)}" type="text" value="{initial_clim:.4f}" readonly>
+    </label>
+    <button id="{html.escape(random_button_id)}" type="button">Randomize</button>
+  </div>
+  <div class="heatmap-caption" id="{html.escape(caption_id)}"></div>
+  <div class="plotly-panel">
+    {figure_html}
+  </div>
+  <script>
+  (function() {{
+    const payload = {payload_json};
+    const colorscale = {colorscale_json};
+    const familyEl = document.getElementById({json.dumps(family_id)});
+    const strategyEl = document.getElementById({json.dumps(strategy_id)});
+    const atomEl = document.getElementById({json.dumps(atom_id)});
+    const climEl = document.getElementById({json.dumps(clim_id)});
+    const climValueEl = document.getElementById({json.dumps(clim_value_id)});
+    const randomButton = document.getElementById({json.dumps(random_button_id)});
+    const captionEl = document.getElementById({json.dumps(caption_id)});
+    const plotDiv = document.getElementById({json.dumps(heatmap_div_id)});
+    let randomIndex = 0;
+
+    function firstClosestKey(familyPayload) {{
+      const keys = Object.keys((familyPayload && familyPayload.closest_neighbors) || {{}});
+      if (!keys.length) return null;
+      return keys.sort((a, b) => Number(a) - Number(b))[0];
+    }}
+
+    function fallbackCutout(familyPayload) {{
+      if (!familyPayload) return null;
+      if (familyPayload.worst_abs) return familyPayload.worst_abs;
+      if (familyPayload.worst_rel) return familyPayload.worst_rel;
+      const closestKey = firstClosestKey(familyPayload);
+      if (closestKey !== null) return familyPayload.closest_neighbors[closestKey];
+      if (familyPayload.random && familyPayload.random.length) return familyPayload.random[0];
+      return null;
+    }}
+
+    function currentCutout() {{
+      const familyPayload = payload[familyEl.value] || payload.sum_pbc || {{}};
+      if (strategyEl.value === "closest_neighbors") {{
+        const key = String(Math.max(0, Math.min(Number(atomEl.value || 0), Number(payload.atom_count || 1) - 1)));
+        return (familyPayload.closest_neighbors || {{}})[key] || fallbackCutout(familyPayload);
+      }}
+      if (strategyEl.value === "random") {{
+        const items = familyPayload.random || [];
+        if (!items.length) return fallbackCutout(familyPayload);
+        return items[randomIndex % items.length];
+      }}
+      return familyPayload[strategyEl.value] || fallbackCutout(familyPayload);
+    }}
+
+    function heatmapTrace(z, clim, showscale, xaxisName, yaxisName) {{
+      return {{
+        type: "heatmap",
+        z: z,
+        zmin: -clim,
+        zmax: clim,
+        colorscale: colorscale,
+        xaxis: xaxisName,
+        yaxis: yaxisName,
+        showscale: showscale,
+        colorbar: showscale ? {{len: 0.78, y: 0.5}} : undefined,
+        hovertemplate: "row=%{{y}}<br>col=%{{x}}<br>value=%{{z:.6f}}<extra></extra>",
+      }};
+    }}
+
+    function buildLayout(cutout) {{
+      const axes = cutout.axes || {{}};
+      const tickvals = axes.tick_positions || [];
+      const ticktext = axes.labels || [];
+      return {{
+        height: 460,
+        margin: {{l: 60, r: 30, t: 60, b: 90}},
+        template: "plotly_dark",
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: {{color: "#e8edf7"}},
+        grid: {{rows: 1, columns: 3, pattern: "independent"}},
+        xaxis: {{tickmode: "array", tickvals: tickvals, ticktext: ticktext, tickangle: -35, constrain: "domain"}},
+        xaxis2: {{tickmode: "array", tickvals: tickvals, ticktext: ticktext, tickangle: -35, constrain: "domain"}},
+        xaxis3: {{tickmode: "array", tickvals: tickvals, ticktext: ticktext, tickangle: -35, constrain: "domain"}},
+        yaxis: {{tickmode: "array", tickvals: tickvals, ticktext: ticktext, autorange: "reversed", scaleanchor: "x", scaleratio: 1, constrain: "domain"}},
+        yaxis2: {{tickmode: "array", tickvals: tickvals, ticktext: ticktext, autorange: "reversed", scaleanchor: "x2", scaleratio: 1, constrain: "domain"}},
+        yaxis3: {{tickmode: "array", tickvals: tickvals, ticktext: ticktext, autorange: "reversed", scaleanchor: "x3", scaleratio: 1, constrain: "domain"}},
+        annotations: [
+          {{text: "Ground truth", x: 0.145, y: 1.08, xref: "paper", yref: "paper", showarrow: false, font: {{size: 14}}}},
+          {{text: "Prediction", x: 0.5, y: 1.08, xref: "paper", yref: "paper", showarrow: false, font: {{size: 14}}}},
+          {{text: "Difference", x: 0.855, y: 1.08, xref: "paper", yref: "paper", showarrow: false, font: {{size: 14}}}},
+        ],
+      }};
+    }}
+
+    function render() {{
+      const cutout = currentCutout();
+      if (!cutout || !window.Plotly || !plotDiv) return;
+      const clim = Number(climEl.value || payload.default_clim || 0.05);
+      climValueEl.value = clim.toFixed(4);
+      const data = [
+        heatmapTrace(cutout.gt, clim, false, "x", "y"),
+        heatmapTrace(cutout.pred, clim, false, "x2", "y2"),
+        heatmapTrace(cutout.diff, clim, true, "x3", "y3"),
+      ];
+      Plotly.react(plotDiv, data, buildLayout(cutout), {{responsive: true}});
+      if (captionEl) {{
+        captionEl.textContent = cutout.selection_label || "";
+      }}
+      const showAtom = strategyEl.value === "closest_neighbors";
+      const showRandom = strategyEl.value === "random";
+      atomEl.parentElement.style.display = showAtom ? "flex" : "none";
+      randomButton.style.display = showRandom ? "block" : "none";
+    }}
+
+    familyEl.addEventListener("change", render);
+    strategyEl.addEventListener("change", render);
+    atomEl.addEventListener("change", render);
+    atomEl.addEventListener("input", render);
+    climEl.addEventListener("input", render);
+    randomButton.addEventListener("click", function() {{
+      randomIndex += 1;
+      render();
+    }});
+    render();
+  }})();
+  </script>
+"""
 
 
 def _build_interactive_band_section(
