@@ -79,6 +79,7 @@ class Config:
     head_use_node_embeddings_for_self_edges: bool = True
     separate_shifted_self: bool = False
     head_use_tensor_square: bool = False
+    head_pair_mode: str = "split"  # "split" | "shared_conditioned"
     head_diag_output_scale: float = 1.0
     head_offdiag_output_scale: float = 1.0
 
@@ -212,6 +213,7 @@ class Config:
     # -------------------- hyperopt --------------------------------------
     tune: str | None = None  # hyperparameter tuning (e.g. "ray", "wandb")
     train_on_irrep_parts: bool = False
+    compatibility: bool = False
 
     # --- DeepH-E3 Specific Config ---
     num_block: int = 3

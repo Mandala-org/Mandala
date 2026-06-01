@@ -140,7 +140,11 @@ class BlockIrrepMapper(nn.Module):
                 self._maps[(el_a, el_b)] = itm
                 # Sanitize key for buffer name
                 buffer_name = f"q_{el_a}_{el_b}"
-                self.register_buffer(buffer_name, q.to(device=device, dtype=dtype))
+                self.register_buffer(
+                    buffer_name,
+                    q.to(device=device, dtype=dtype),
+                    persistent=False,
+                )
 
         # edge-type encoding (ordered pairs)
         elems = self.orbital_cfg.elements()

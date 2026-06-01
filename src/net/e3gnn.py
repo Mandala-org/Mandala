@@ -41,6 +41,7 @@ from net.observable_metrics import (
     truncate_pred_block_matrix_to_target_prefix,
     validate_observable_config,
 )
+from net.checkpoint_compat import strip_mapper_keys
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
 from net.heads import DeepHead
@@ -178,6 +179,9 @@ class E3GNN(pl.LightningModule):
             strict=strict,
             **kwargs,
         )
+
+    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True):
+        return super().load_state_dict(strip_mapper_keys(state_dict), strict=strict)
 
     def _apply_init_weights_factor(self) -> None:
         factor = float(self.cfg.init_weights_factor)

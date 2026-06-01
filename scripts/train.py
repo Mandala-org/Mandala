@@ -27,6 +27,7 @@ from net.artifacts import (
 from net.benchmark import BenchmarkCallback  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
+from net.checkpoint_compat import initialize_model_from_checkpoint  # noqa: E402
 from net.run_logging import (  # noqa: E402
     log_config,
     log_cutoff_application,
@@ -62,6 +63,7 @@ def run_training(
         getattr(args, "resume_from_checkpoint", None),
         getattr(args, "resume_mode", "latest"),
     )
+    compatibility_mode = bool(getattr(args, "compatibility", False))
     accelerator, devices = _resolve_accelerator_and_device(cfg)
     logger = _build_logger(args, cfg, requested_run_name)
     run_name = resolve_run_name(requested_run_name, logger)
@@ -72,7 +74,7 @@ def run_training(
     dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
     train_ds, val_ds, mapper = dataset_bundle
     run_dir = Path(getattr(args, "checkpoint_dir", cfg.save_dir)) / run_name
-    if run_dir.exists() and resume_checkpoint is None:
+    if run_dir.exists() and (resume_checkpoint is None or compatibility_mode):
         raise FileExistsError(
             f"Run directory already exists: {run_dir}. Use a unique run name or resume explicitly."
         )
@@ -82,6 +84,16 @@ def run_training(
     train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
 
     model = E3GNN(mapper=mapper, cfg=cfg)
+    compatibility_report = None
+    if compatibility_mode:
+        if resume_checkpoint is None:
+            raise ValueError(
+                "compatibility=True requires resume_from_checkpoint to point to a source checkpoint."
+            )
+        compatibility_report = initialize_model_from_checkpoint(
+            model, checkpoint_path=resume_checkpoint
+        )
+        _write_compatibility_report(run_dir, compatibility_report)
     callbacks = _build_callbacks(args, cfg, run_dir, extra_callbacks)
     trainer = pl.Trainer(
         max_epochs=cfg.max_epochs,
@@ -104,7 +116,11 @@ def run_training(
             model=model,
             train_dataloaders=train_loader,
             val_dataloaders=val_loader,
-            ckpt_path=str(resume_checkpoint) if resume_checkpoint else None,
+            ckpt_path=(
+                str(resume_checkpoint)
+                if resume_checkpoint is not None and not compatibility_mode
+                else None
+            ),
         )
     except KeyboardInterrupt:
         interrupted = True
@@ -543,6 +559,7 @@ def _print_run_summary(
     print(f"run_name={run_name}")
     print(f"checkpoint_dir={checkpoint_dir}")
     print(f"resume_checkpoint={resume_checkpoint}")
+    print(f"compatibility={getattr(args, 'compatibility', False)}")
     print(f"dataset_kind={getattr(args, 'dataset_kind', 'silicon')}")
     print(f"data_path={getattr(args, 'data_path', None)}")
     print(f"max_epochs={cfg.max_epochs}")
@@ -550,3 +567,13 @@ def _print_run_summary(
     print(f"accelerator={accelerator}")
     print(f"devices={devices}")
     print(f"precompute_edge_features={cfg.precompute_edge_features}")
+
+
+def _write_compatibility_report(run_dir: Path, report: Any) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "compatibility_report.json"
+    import json
+
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(report.to_dict(), f, indent=2, sort_keys=True)
+    print(f"--- Wrote compatibility report to {path} ---")
