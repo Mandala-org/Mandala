@@ -96,7 +96,7 @@ CMD=(
   --enable-stress False
   --generate-video True
   --gpus 1
-  --grad-clip-val 5
+  --grad-clip-val 2
   --head-diag-output-scale 2
   --head-e3mlp-layers 2
   --head-log-scale-mlp-n-layers 1
