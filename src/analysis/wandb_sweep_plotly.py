@@ -2091,6 +2091,7 @@ def _build_band_structure_figure(
     fig = make_subplots(
         rows=1,
         cols=len(payloads),
+        shared_xaxes=True,
         shared_yaxes=True,
         subplot_titles=[title for title, _payload, _color in payloads],
     )
@@ -2129,6 +2130,8 @@ def _build_band_structure_figure(
                 row=1,
                 col=idx,
             )
+        if idx > 1:
+            fig.update_xaxes(matches="x", row=1, col=idx)
 
     fig.update_yaxes(title_text="Energy relative to Fermi (eV)", row=1, col=1)
     if emin_ev is not None and emax_ev is not None:
