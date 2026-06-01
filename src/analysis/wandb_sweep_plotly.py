@@ -610,16 +610,10 @@ def copy_evaluation_bundle_assets(
     preferred_images = [
         "band_structure_comparison.png",
         "band_structure_prediction.png",
-        "dos_comparison.png",
-        "dos_prediction.png",
-        "dos_error.png",
         "hamiltonian_first_atoms_comparison.png",
         "hamiltonian_first_atoms_prediction.png",
-        "hamiltonian_correlation.png",
         "density_first_atoms_comparison.png",
         "density_first_atoms_prediction.png",
-        "density_correlation.png",
-        "overlap_correlation.png",
     ]
     image_assets = []
     file_assets = []
@@ -641,10 +635,21 @@ def copy_evaluation_bundle_assets(
         "band_structure_pred_gt_overlap.pt",
         "band_structure_gt.pt",
         "band_structure_pred.pt",
+        "dos_comparison.pt",
+        "dos_prediction.pt",
+        "dos_comparison.png",
+        "dos_prediction.png",
+        "dos_error.png",
+        "hamiltonian_correlation.pt",
+        "hamiltonian_correlation.png",
         "hamiltonian_block_error_metrics.pt",
         "hamiltonian_interactive_heatmaps.pt",
         "snapshot_3d_error_payload.pt",
         "density_block_error_metrics.pt",
+        "density_correlation.pt",
+        "density_correlation.png",
+        "overlap_correlation.pt",
+        "overlap_correlation.png",
         "pred_hamiltonian.pt",
         "pred_raw_hamiltonian.pt",
         "pred_density.pt",
@@ -685,6 +690,8 @@ def label_for_asset(filename: str) -> str:
         "dos_comparison.png": "DOS comparison",
         "dos_prediction.png": "DOS prediction",
         "dos_error.png": "DOS error",
+        "dos_comparison.pt": "DOS comparison payload",
+        "dos_prediction.pt": "DOS prediction payload",
         "hamiltonian_block_error_metrics.pt": "Hamiltonian block error metrics",
         "hamiltonian_interactive_heatmaps.pt": "Hamiltonian interactive heatmaps",
         "snapshot_3d_error_payload.pt": "Snapshot 3D error payload",
@@ -692,13 +699,16 @@ def label_for_asset(filename: str) -> str:
         "hamiltonian_first_atoms_comparison.png": "Hamiltonian heatmap",
         "hamiltonian_first_atoms_prediction.png": "Hamiltonian prediction heatmap",
         "hamiltonian_correlation.png": "Hamiltonian correlation",
+        "hamiltonian_correlation.pt": "Hamiltonian correlation payload",
         "pred_raw_hamiltonian.pt": "Raw predicted Hamiltonian blocks",
         "pred_raw_density.pt": "Raw predicted density blocks",
         "pred_raw_overlap.pt": "Raw predicted overlap blocks",
         "density_first_atoms_comparison.png": "Density heatmap",
         "density_first_atoms_prediction.png": "Density prediction heatmap",
         "density_correlation.png": "Density correlation",
+        "density_correlation.pt": "Density correlation payload",
         "overlap_correlation.png": "Overlap correlation",
+        "overlap_correlation.pt": "Overlap correlation payload",
     }
     return mapping.get(filename, filename)
 
@@ -904,23 +914,60 @@ def build_model_detail_page(
         include_plotlyjs=include_plotlyjs,
         div_id_prefix=f"snapshot-3d-{record.run_id}",
     )
+    copied_files = evaluation.get("copied_files", {})
+    dos_has_plotly = any(
+        copied_files.get(name) is not None
+        for name in ("dos_comparison.pt", "dos_prediction.pt")
+    )
+    correlation_has_plotly = any(
+        copied_files.get(name) is not None
+        for name in (
+            "hamiltonian_correlation.pt",
+            "density_correlation.pt",
+            "overlap_correlation.pt",
+        )
+    )
     heatmap_html = _build_hamiltonian_heatmap_section(
         evaluation,
         include_plotlyjs=False if snapshot_3d_html else include_plotlyjs,
         div_id_prefix=f"ham-heatmap-{record.run_id}",
     )
-    band_html = _build_interactive_band_section(
+    dos_html = _build_dos_section(
         evaluation,
         include_plotlyjs=(
             False if (snapshot_3d_html or heatmap_html) else include_plotlyjs
         ),
+        div_id_prefix=f"dos-{record.run_id}",
+    )
+    band_html = _build_interactive_band_section(
+        evaluation,
+        include_plotlyjs=(
+            False
+            if (snapshot_3d_html or heatmap_html or dos_has_plotly)
+            else include_plotlyjs
+        ),
         div_id_prefix=f"band-{record.run_id}",
+    )
+    correlation_html = _build_correlation_section(
+        evaluation,
+        include_plotlyjs=(
+            False
+            if (snapshot_3d_html or heatmap_html or dos_has_plotly or band_html)
+            else include_plotlyjs
+        ),
+        div_id_prefix=f"corr-{record.run_id}",
     )
     block_error_html = _build_block_error_section(
         evaluation,
         include_plotlyjs=(
             False
-            if (snapshot_3d_html or heatmap_html or band_html)
+            if (
+                snapshot_3d_html
+                or heatmap_html
+                or dos_has_plotly
+                or band_html
+                or correlation_has_plotly
+            )
             else include_plotlyjs
         ),
         div_id_prefix=f"block-{record.run_id}",
@@ -962,7 +1009,9 @@ def build_model_detail_page(
   <div class="meta-line">Source bundle: <code>{html.escape(str(evaluation.get("source_dir", "")))}</code></div>
   {snapshot_3d_html}
   {heatmap_html}
+  {dos_html}
   {band_html}
+  {correlation_html}
   {block_error_html}
   <div class="asset-grid">
     {evaluation_html}
@@ -2268,6 +2317,363 @@ def _build_block_error_section(
 """
         )
     return "\n".join(sections)
+
+
+def _load_plot_payload(path: Path) -> dict[str, Any]:
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict):
+        raise TypeError(f"Unexpected payload type in {path}: {type(payload)!r}")
+    return payload
+
+
+def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
+    kind = str(payload.get("kind", ""))
+    if kind not in {"dos_comparison", "dos_prediction"}:
+        return None
+
+    fig = go.Figure()
+    if kind == "dos_comparison":
+        grid_true = _series_from_payload(payload, "grid_true")
+        dos_true = _series_from_payload(payload, "dos_true")
+        grid_pred = _series_from_payload(payload, "grid_pred")
+        dos_pred = _series_from_payload(payload, "dos_pred")
+        dos_error = _series_from_payload(payload, "dos_error")
+        fermi_true = payload.get("fermi_true_ev")
+        fermi_pred = payload.get("fermi_pred_ev")
+        fig.add_trace(
+            go.Scattergl(
+                x=grid_true,
+                y=dos_true,
+                mode="lines",
+                line=dict(color="#e5e7eb", width=1.9),
+                name="Ground truth",
+            )
+        )
+        fig.add_trace(
+            go.Scattergl(
+                x=grid_pred,
+                y=dos_pred,
+                mode="lines",
+                line=dict(color="#60a5fa", width=1.6),
+                name="Prediction",
+            )
+        )
+        if fermi_true is not None:
+            fig.add_vline(
+                x=0.0,
+                line=dict(color="rgba(0,0,0,0.9)", dash="dash", width=1.2),
+                annotation_text="GT $E_F$",
+                annotation_position="top left",
+            )
+        if fermi_pred is not None:
+            fig.add_vline(
+                x=(
+                    float(fermi_pred - fermi_true)
+                    if fermi_true is not None
+                    else float(fermi_pred)
+                ),
+                line=dict(color="#1f5aa6", dash="dot", width=1.2),
+                annotation_text=(
+                    "Pred $E_F - E_F^{GT}$" if fermi_true is not None else "Pred $E_F$"
+                ),
+                annotation_position="top right",
+            )
+        fig2 = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.08,
+            row_heights=[0.72, 0.28],
+        )
+        for trace in fig.data:
+            fig2.add_trace(trace, row=1, col=1)
+        fig2.add_trace(
+            go.Scattergl(
+                x=grid_true,
+                y=dos_error,
+                mode="lines",
+                line=dict(color="#f97316", width=1.4),
+                name="Prediction - Ground truth",
+                showlegend=False,
+            ),
+            row=2,
+            col=1,
+        )
+        fig2.add_hline(
+            y=0.0,
+            row=1,
+            col=1,
+            line=dict(color="rgba(255,255,255,0.25)", dash="dash", width=1.0),
+        )
+        fig2.add_hline(
+            y=0.0,
+            row=2,
+            col=1,
+            line=dict(color="rgba(255,255,255,0.35)", dash="dash", width=1.0),
+        )
+        fig2.update_yaxes(title_text="DOS", row=1, col=1)
+        fig2.update_yaxes(title_text="DOS error", row=2, col=1)
+        fig2.update_xaxes(
+            title_text=(
+                "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
+            ),
+            row=2,
+            col=1,
+        )
+        fig2.update_layout(
+            title=str(payload.get("title", "DOS comparison")),
+            height=560,
+            autosize=True,
+            margin=dict(l=50, r=25, t=55, b=40),
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e8edf7"),
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0.0
+            ),
+        )
+        if fermi_true is not None:
+            x_range = [
+                float(np.min(grid_true)),
+                float(np.max(grid_true)),
+            ]
+            fig2.update_xaxes(
+                range=x_range,
+                row=1,
+                col=1,
+            )
+            fig2.update_xaxes(
+                range=x_range,
+                row=2,
+                col=1,
+            )
+        return fig2
+
+    grid = _series_from_payload(payload, "grid")
+    dos = _series_from_payload(payload, "dos")
+    fermi = payload.get("fermi_ev")
+    if fermi is not None:
+        grid = grid - float(fermi)
+    fig.add_trace(
+        go.Scattergl(
+            x=grid,
+            y=dos,
+            mode="lines",
+            line=dict(color="#60a5fa", width=1.8),
+            name="DOS",
+        )
+    )
+    if fermi is not None:
+        fig.add_vline(
+            x=0.0,
+            line=dict(color="rgba(255,255,255,0.9)", dash="dash", width=1.2),
+            annotation_text="$E_F$",
+            annotation_position="top left",
+        )
+    fig.update_layout(
+        title=str(payload.get("title", "DOS")),
+        height=420,
+        autosize=True,
+        margin=dict(l=50, r=25, t=55, b=40),
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e8edf7"),
+    )
+    fig.update_xaxes(
+        title_text="Energy - $E_F$ (eV)" if fermi is not None else "Energy (eV)"
+    )
+    if fermi is not None:
+        fig.update_xaxes(
+            range=[
+                float(payload.get("energy_min_ev", float(np.min(grid)))) - float(fermi),
+                float(payload.get("energy_max_ev", float(np.max(grid)))) - float(fermi),
+            ]
+        )
+    fig.update_yaxes(title_text="DOS")
+    return fig
+
+
+def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
+    if str(payload.get("kind", "")) != "correlation":
+        return None
+    pred = _series_from_payload(payload, "pred")
+    target = _series_from_payload(payload, "target")
+    if pred.size == 0 or target.size == 0:
+        return None
+    bound = float(payload.get("bound", 0.0))
+    if not np.isfinite(bound) or bound <= 0.0:
+        stacked = np.concatenate([pred, target], axis=0)
+        bound = float(np.quantile(np.abs(stacked), 0.9999))
+    lo = float(payload.get("lo", -bound))
+    hi = float(payload.get("hi", bound))
+    corr = payload.get("corr")
+    fig = go.Figure(
+        data=[
+            go.Scattergl(
+                x=target,
+                y=pred,
+                mode="markers",
+                marker=dict(size=4, color="#60a5fa", opacity=0.3, line=dict(width=0)),
+                hovertemplate="GT=%{x:.6g}<br>Pred=%{y:.6g}<extra></extra>",
+                showlegend=False,
+            )
+        ]
+    )
+    fig.add_trace(
+        go.Scattergl(
+            x=[lo, hi],
+            y=[lo, hi],
+            mode="lines",
+            line=dict(color="rgba(0,0,0,0.9)", dash="dash", width=1.2),
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    fig.update_layout(
+        title=str(payload.get("title", "Correlation"))
+        + (
+            f" | r = {float(corr):.4f}"
+            if corr is not None and np.isfinite(float(corr))
+            else ""
+        ),
+        xaxis_title="Ground truth",
+        yaxis_title="Prediction",
+        margin=dict(l=50, r=25, t=55, b=45),
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e8edf7"),
+    )
+    fig.update_xaxes(range=[lo, hi])
+    fig.update_yaxes(range=[lo, hi], scaleanchor="x", scaleratio=1)
+    return fig
+
+
+def _fallback_image_html(href: str, alt: str, *, height: str = "420px") -> str:
+    return f"""
+  <div class="plotly-panel">
+    <img src="{html.escape(href)}" alt="{html.escape(alt)}" style="width:100%; height:auto; max-height:{html.escape(height)}; object-fit:contain;">
+  </div>
+"""
+
+
+def _build_dos_section(
+    evaluation: dict[str, Any],
+    *,
+    include_plotlyjs: str | bool,
+    div_id_prefix: str,
+) -> str:
+    copied_files = evaluation.get("copied_files", {})
+    asset_namespace = Path(str(evaluation.get("asset_dir", ""))).name
+    payload_path = copied_files.get("dos_comparison.pt") or copied_files.get(
+        "dos_prediction.pt"
+    )
+    if payload_path is not None:
+        payload = _load_plot_payload(Path(payload_path))
+        figure = _build_dos_figure(payload)
+        if figure is not None:
+            figure_height = (
+                "560px" if str(payload.get("kind")) == "dos_comparison" else "420px"
+            )
+            figure_html = pio.to_html(
+                figure,
+                include_plotlyjs=include_plotlyjs,
+                full_html=False,
+                default_width="100%",
+                default_height=figure_height,
+                div_id=f"{div_id_prefix}-dos",
+                config={"responsive": True},
+            )
+            return f"""
+  <h2>Interactive DOS</h2>
+  <div class="plotly-panel">
+    {figure_html}
+  </div>
+"""
+
+    image_href = None
+    if copied_files.get("dos_comparison.png") is not None:
+        image_href = f"run_assets/{asset_namespace}/dos_comparison.png"
+    elif copied_files.get("dos_prediction.png") is not None:
+        image_href = f"run_assets/{asset_namespace}/dos_prediction.png"
+    if image_href is None:
+        return ""
+    return f"""
+  <h2>Interactive DOS</h2>
+  {_fallback_image_html(image_href, "DOS plot", height="560px")}
+"""
+
+
+def _build_correlation_section(
+    evaluation: dict[str, Any],
+    *,
+    include_plotlyjs: str | bool,
+    div_id_prefix: str,
+) -> str:
+    copied_files = evaluation.get("copied_files", {})
+    asset_namespace = Path(str(evaluation.get("asset_dir", ""))).name
+    items = [
+        (
+            "Hamiltonian",
+            copied_files.get("hamiltonian_correlation.pt"),
+            "hamiltonian_correlation.png",
+        ),
+        (
+            "Density",
+            copied_files.get("density_correlation.pt"),
+            "density_correlation.png",
+        ),
+        (
+            "Overlap",
+            copied_files.get("overlap_correlation.pt"),
+            "overlap_correlation.png",
+        ),
+    ]
+    sections = []
+    first_plot_uses_js = True if include_plotlyjs else False
+    for idx, (name, payload_path, fallback_png) in enumerate(items, start=1):
+        if payload_path is not None:
+            payload = _load_plot_payload(Path(payload_path))
+            figure = _build_correlation_figure(payload)
+            if figure is None:
+                continue
+            plot_html = pio.to_html(
+                figure,
+                include_plotlyjs=include_plotlyjs if first_plot_uses_js else False,
+                full_html=False,
+                default_width="100%",
+                default_height="430px",
+                div_id=f"{div_id_prefix}-corr-{idx}",
+                config={"responsive": True},
+            )
+            first_plot_uses_js = False
+            sections.append(
+                f"""
+  <div class="metric-card">
+    <div class="metric-title">{html.escape(name)} correlation</div>
+    <div class="metric-plot">{plot_html}</div>
+  </div>
+"""
+            )
+        elif copied_files.get(fallback_png) is not None:
+            sections.append(
+                f"""
+  <div class="metric-card">
+    <div class="metric-title">{html.escape(name)} correlation</div>
+    {_fallback_image_html(f"run_assets/{asset_namespace}/{fallback_png}", f"{name} correlation", height="430px")}
+  </div>
+"""
+            )
+    if not sections:
+        return ""
+    return f"""
+  <h2>Correlation Diagnostics</h2>
+  <div class="metric-grid">
+    {"".join(sections)}
+  </div>
+"""
 
 
 def _load_block_error_payload(path: Path) -> dict[str, Any]:

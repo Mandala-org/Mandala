@@ -2490,6 +2490,20 @@ def save_correlation_plot(
     fig.tight_layout()
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
+    torch.save(
+        {
+            "kind": "correlation",
+            "title": title,
+            "pred": pred_dense.detach().cpu(),
+            "target": target_dense.detach().cpu(),
+            "corr": corr,
+            "bound": bound,
+            "lo": lo,
+            "hi": hi,
+            "sampled_points": int(pred_dense.numel()),
+        },
+        output_path.with_suffix(".pt"),
+    )
 
 
 def compute_dos_data(
@@ -2631,6 +2645,29 @@ def save_dos_comparison_plot(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    torch.save(
+        {
+            "kind": "dos_comparison",
+            "title": title,
+            "grid_true": plot_grid_true.detach().cpu(),
+            "dos_true": dos_true.detach().cpu(),
+            "grid_pred": plot_grid_pred.detach().cpu(),
+            "dos_pred": dos_pred.detach().cpu(),
+            "dos_error": (dos_pred - dos_true).detach().cpu(),
+            "num_electrons_true": (
+                None if num_electrons_true is None else float(num_electrons_true)
+            ),
+            "num_electrons_pred": (
+                None if num_electrons_pred is None else float(num_electrons_pred)
+            ),
+            "fermi_true_ev": None if fermi_true is None else float(fermi_true),
+            "fermi_pred_ev": None if fermi_pred is None else float(fermi_pred),
+            "energy_min_ev": float(energy_min),
+            "energy_max_ev": float(energy_max),
+            "method": "gaussian",
+        },
+        output_path.with_suffix(".pt"),
+    )
     if error_output_path is not None:
         error_output_path.parent.mkdir(parents=True, exist_ok=True)
         fig, ax = plt.subplots(1, 1, figsize=(9, 4.8))
@@ -2730,6 +2767,20 @@ def save_dos_prediction_plot(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    torch.save(
+        {
+            "kind": "dos_prediction",
+            "title": title,
+            "grid": grid.detach().cpu(),
+            "dos": dos.detach().cpu(),
+            "num_electrons": None if num_electrons is None else float(num_electrons),
+            "fermi_ev": None if fermi is None else float(fermi),
+            "energy_min_ev": float(energy_min),
+            "energy_max_ev": float(energy_max),
+            "method": "gaussian",
+        },
+        output_path.with_suffix(".pt"),
+    )
 
 
 def save_tetrahedron_dos_comparison_plot(
@@ -2892,6 +2943,29 @@ def save_tetrahedron_dos_comparison_plot(
         fig.tight_layout()
         fig.savefig(error_output_path, dpi=200, bbox_inches="tight")
         plt.close(fig)
+    torch.save(
+        {
+            "kind": "dos_comparison",
+            "title": title,
+            "grid_true": plot_grid_true.detach().cpu(),
+            "dos_true": dos_true.detach().cpu(),
+            "grid_pred": plot_grid_pred.detach().cpu(),
+            "dos_pred": dos_pred.detach().cpu(),
+            "dos_error": (dos_pred - dos_true).detach().cpu(),
+            "num_electrons_true": (
+                None if num_electrons_true is None else float(num_electrons_true)
+            ),
+            "num_electrons_pred": (
+                None if num_electrons_pred is None else float(num_electrons_pred)
+            ),
+            "fermi_true_ev": None if fermi_true is None else float(fermi_true),
+            "fermi_pred_ev": None if fermi_pred is None else float(fermi_pred),
+            "energy_min_ev": float(energy_min),
+            "energy_max_ev": float(energy_max),
+            "method": "tetrahedron",
+        },
+        output_path.with_suffix(".pt"),
+    )
     return {
         "dos_abs_mean": float(torch.mean(torch.abs(dos_pred - dos_true)).item()),
         "dos_abs_max": float(torch.max(torch.abs(dos_pred - dos_true)).item()),
@@ -2985,6 +3059,20 @@ def save_tetrahedron_dos_prediction_plot(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    torch.save(
+        {
+            "kind": "dos_prediction",
+            "title": title,
+            "grid": grid.detach().cpu(),
+            "dos": dos.detach().cpu(),
+            "num_electrons": None if num_electrons is None else float(num_electrons),
+            "fermi_ev": None if fermi is None else float(fermi),
+            "energy_min_ev": float(energy_min),
+            "energy_max_ev": float(energy_max),
+            "method": "tetrahedron",
+        },
+        output_path.with_suffix(".pt"),
+    )
 
 
 def save_band_structure_comparison_plot(
