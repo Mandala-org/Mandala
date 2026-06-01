@@ -2574,35 +2574,49 @@ def save_dos_comparison_plot(
     rel_err = abs_err / (torch.abs(eig_true[:min_len]) + 1e-12)
     fermi_true = fermi_level_from_dos(grid_true, dos_true, num_electrons_true)
     fermi_pred = fermi_level_from_dos(grid_pred, dos_pred, num_electrons_pred)
+    plot_grid_true = grid_true.detach().cpu()
+    plot_grid_pred = grid_pred.detach().cpu()
+    if fermi_true is not None:
+        plot_grid_true = plot_grid_true - float(fermi_true)
+        plot_grid_pred = plot_grid_pred - float(fermi_true)
 
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
     ax.plot(
-        grid_true.cpu().numpy(), dos_true.cpu().numpy(), label="Ground Truth", lw=1.8
+        plot_grid_true.numpy(), dos_true.cpu().numpy(), label="Ground Truth", lw=1.8
     )
-    ax.plot(grid_pred.cpu().numpy(), dos_pred.cpu().numpy(), label="Prediction", lw=1.4)
+    ax.plot(plot_grid_pred.numpy(), dos_pred.cpu().numpy(), label="Prediction", lw=1.4)
     if fermi_true is not None:
         ax.axvline(
-            fermi_true,
+            0.0,
             color="black",
             ls="--",
             lw=1.2,
             alpha=0.85,
-            label=f"GT $E_F$ = {fermi_true:.3f} eV",
+            label="GT $E_F$",
         )
     if fermi_pred is not None:
         ax.axvline(
-            fermi_pred,
+            float(fermi_pred - fermi_true) if fermi_true is not None else fermi_pred,
             color="#1f5aa6",
             ls=":",
             lw=1.4,
             alpha=0.9,
-            label=f"Pred $E_F$ = {fermi_pred:.3f} eV",
+            label=(
+                f"Pred $E_F - E_F^{{GT}}$ = {fermi_pred - fermi_true:.3f} eV"
+                if fermi_true is not None
+                else f"Pred $E_F$ = {fermi_pred:.3f} eV"
+            ),
         )
     ax.set_title(title)
-    ax.set_xlabel("Energy (eV)")
+    ax.set_xlabel(
+        "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
+    )
     ax.set_ylabel("DOS")
     ax.grid(True, alpha=0.25)
-    ax.set_xlim(left=energy_min, right=energy_max)
+    if fermi_true is not None:
+        ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+    else:
+        ax.set_xlim(left=energy_min, right=energy_max)
     text_lines = []
     if num_electrons_true is not None:
         text_lines.append(f"GT N_e = {num_electrons_true:.3f}")
@@ -2627,7 +2641,7 @@ def save_dos_comparison_plot(
         fig, ax = plt.subplots(1, 1, figsize=(9, 4.8))
         dos_error = dos_pred - dos_true
         ax.plot(
-            grid_true.cpu().numpy(),
+            plot_grid_true.numpy(),
             dos_error.cpu().numpy(),
             color="#b23a48",
             lw=1.4,
@@ -2635,10 +2649,15 @@ def save_dos_comparison_plot(
         )
         ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
         ax.set_title(title.replace("comparison", "error"))
-        ax.set_xlabel("Energy (eV)")
+        ax.set_xlabel(
+            "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
+        )
         ax.set_ylabel("DOS Error")
         ax.grid(True, alpha=0.25)
-        ax.set_xlim(left=energy_min, right=energy_max)
+        if fermi_true is not None:
+            ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+        else:
+            ax.set_xlim(left=energy_min, right=energy_max)
         ax.legend(loc="best")
         fig.tight_layout()
         fig.savefig(error_output_path, dpi=200, bbox_inches="tight")
@@ -2793,33 +2812,47 @@ def save_tetrahedron_dos_comparison_plot(
         energy_min=energy_min,
         energy_max=energy_max,
     )
+    plot_grid_true = grid_true
+    plot_grid_pred = grid_pred
+    if fermi_true is not None:
+        plot_grid_true = plot_grid_true - float(fermi_true)
+        plot_grid_pred = plot_grid_pred - float(fermi_true)
 
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
-    ax.plot(grid_true.numpy(), dos_true.numpy(), label="Ground Truth", lw=1.8)
-    ax.plot(grid_pred.numpy(), dos_pred.numpy(), label="Prediction", lw=1.4)
+    ax.plot(plot_grid_true.numpy(), dos_true.numpy(), label="Ground Truth", lw=1.8)
+    ax.plot(plot_grid_pred.numpy(), dos_pred.numpy(), label="Prediction", lw=1.4)
     if fermi_true is not None:
         ax.axvline(
-            fermi_true,
+            0.0,
             color="black",
             ls="--",
             lw=1.2,
             alpha=0.85,
-            label=f"GT $E_F$ = {fermi_true:.3f} eV",
+            label="GT $E_F$",
         )
     if fermi_pred is not None:
         ax.axvline(
-            fermi_pred,
+            float(fermi_pred - fermi_true) if fermi_true is not None else fermi_pred,
             color="#1f5aa6",
             ls=":",
             lw=1.4,
             alpha=0.9,
-            label=f"Pred $E_F$ = {fermi_pred:.3f} eV",
+            label=(
+                f"Pred $E_F - E_F^{{GT}}$ = {fermi_pred - fermi_true:.3f} eV"
+                if fermi_true is not None
+                else f"Pred $E_F$ = {fermi_pred:.3f} eV"
+            ),
         )
     ax.set_title(title)
-    ax.set_xlabel("Energy (eV)")
+    ax.set_xlabel(
+        "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
+    )
     ax.set_ylabel("DOS")
     ax.grid(True, alpha=0.25)
-    ax.set_xlim(left=energy_min, right=energy_max)
+    if fermi_true is not None:
+        ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+    else:
+        ax.set_xlim(left=energy_min, right=energy_max)
     text_lines = []
     if num_electrons_true is not None:
         text_lines.append(f"GT N_e = {num_electrons_true:.3f}")
@@ -2843,7 +2876,7 @@ def save_tetrahedron_dos_comparison_plot(
         error_output_path.parent.mkdir(parents=True, exist_ok=True)
         fig, ax = plt.subplots(1, 1, figsize=(9, 4.8))
         ax.plot(
-            grid_true.numpy(),
+            plot_grid_true.numpy(),
             (dos_pred - dos_true).numpy(),
             color="#b23a48",
             lw=1.4,
@@ -2851,10 +2884,15 @@ def save_tetrahedron_dos_comparison_plot(
         )
         ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
         ax.set_title(title.replace("comparison", "error"))
-        ax.set_xlabel("Energy (eV)")
+        ax.set_xlabel(
+            "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
+        )
         ax.set_ylabel("DOS Error")
         ax.grid(True, alpha=0.25)
-        ax.set_xlim(left=energy_min, right=energy_max)
+        if fermi_true is not None:
+            ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+        else:
+            ax.set_xlim(left=energy_min, right=energy_max)
         ax.legend(loc="best")
         fig.tight_layout()
         fig.savefig(error_output_path, dpi=200, bbox_inches="tight")
