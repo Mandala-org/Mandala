@@ -120,6 +120,7 @@ class E3GNNDataset(Dataset):
         self.snapshot_cache_misses = 0
         self.preprocessed_cache_hits = 0
         self.preprocessed_cache_misses = 0
+        self.skipped_snapshot_paths: list[tuple[Path, Path, str]] = []
         load_indices = list(range(len(self.snapshot_paths)))
         if getattr(self.cfg, "shuffle_snapshot_load_order", True):
             warmup_seed = secrets.randbits(64)
@@ -134,22 +135,46 @@ class E3GNNDataset(Dataset):
         )
         for idx in tqdm(load_indices, desc="Loading snapshots"):
             matrix_path, info_path = self.snapshot_paths[idx]
-            snapshot = self._load_snapshot(matrix_path, info_path)
             try:
+                snapshot = self._load_snapshot(matrix_path, info_path)
                 sample = self._load_or_build_preprocessed_sample(
                     matrix_path, info_path, snapshot
                 )
             except Exception as exc:
-                raise RuntimeError(
-                    f"Failed to preprocess snapshot matrix={matrix_path} info={info_path}: {exc}"
-                ) from exc
+                message = (
+                    "!!! WARNING: skipping snapshot due to load/preprocess failure !!! "
+                    f"matrix={matrix_path} info={info_path} error={exc}"
+                )
+                print(message)
+                self.skipped_snapshot_paths.append((matrix_path, info_path, str(exc)))
+                loaded_samples[idx] = None
+                continue
             loaded_samples[idx] = sample
-        if any(sample is None for sample in loaded_samples):
-            raise RuntimeError("Internal error: some snapshots failed to load.")
         self.snapshots = [sample for sample in loaded_samples if sample is not None]
+        if not self.snapshots:
+            raise RuntimeError(
+                "All snapshots failed to load or preprocess. "
+                f"Skipped={len(self.skipped_snapshot_paths)}."
+            )
+        if self.skipped_snapshot_paths:
+            print(
+                "!!! WARNING: skipped "
+                f"{len(self.skipped_snapshot_paths)} / {len(self.snapshot_paths)} snapshot(s) "
+                "during dataset construction !!!"
+            )
+            for matrix_path, info_path, error in self.skipped_snapshot_paths[:10]:
+                print(
+                    "!!! SKIPPED SNAPSHOT !!! "
+                    f"matrix={matrix_path} info={info_path} error={error}"
+                )
+            if len(self.skipped_snapshot_paths) > 10:
+                print(
+                    "!!! WARNING: additional skipped snapshots not shown: "
+                    f"{len(self.skipped_snapshot_paths) - 10}"
+                )
         if getattr(self.cfg, "snapshot_cache_dir", None) is None:
             print(
-                f"[CACHE] Snapshot loading: cache disabled, loaded {len(self.snapshot_paths)} snapshot(s)"
+                f"[CACHE] Snapshot loading: cache disabled, loaded {len(self.snapshots)} snapshot(s)"
             )
         else:
             total = self.snapshot_cache_hits + self.snapshot_cache_misses
@@ -160,7 +185,7 @@ class E3GNNDataset(Dataset):
             )
         if getattr(self.cfg, "snapshot_cache_dir", None) is None:
             print(
-                f"[CACHE] Preprocessed samples: cache disabled, built {len(self.snapshot_paths)} sample(s)"
+                f"[CACHE] Preprocessed samples: cache disabled, built {len(self.snapshots)} sample(s)"
             )
         else:
             total = self.preprocessed_cache_hits + self.preprocessed_cache_misses
