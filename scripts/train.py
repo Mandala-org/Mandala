@@ -40,6 +40,7 @@ from net.time_budget import WallClockBudgetCallback  # noqa: E402
 from scripts.dataset import (  # noqa: E402
     build_datasets_from_yaml,
     build_silicon_datasets,
+    build_silicon_scales_datasets,
     build_siox_datasets,
     build_zncusnses_small_datasets,
     build_zncusnses_datasets,
@@ -318,6 +319,19 @@ def _build_dataset_bundle(
             num_train=getattr(args, "num_train", None),
             num_val=getattr(args, "num_val", None),
             val_fraction=getattr(args, "val_fraction", 0.2),
+            seed=cfg.seed,
+            convention=convention,
+        )
+    if dataset_kind == "silicon_scales":
+        scales = getattr(args, "scales", None)
+        if scales is None:
+            scales = [1]
+        return build_silicon_scales_datasets(
+            data_path=getattr(args, "data_path"),
+            cfg=cfg,
+            scales=[int(x) for x in scales],
+            num_train_per_scale=int(getattr(args, "num_train_per_scale", 40)),
+            num_val_per_scale=int(getattr(args, "num_val_per_scale", 10)),
             seed=cfg.seed,
             convention=convention,
         )

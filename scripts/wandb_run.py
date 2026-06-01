@@ -28,7 +28,13 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
         *_arg_names("dataset_kind"),
         type=str,
         default="silicon",
-        choices=["silicon", "siox", "ZnCuSnSeS_small", "ZnCuSnSeS"],
+        choices=[
+            "silicon",
+            "silicon_scales",
+            "siox",
+            "ZnCuSnSeS_small",
+            "ZnCuSnSeS",
+        ],
     )
     parser.add_argument(*_arg_names("data_path"), type=str, default=None)
     parser.add_argument(*_arg_names("scales"), type=str_to_list, default=None)

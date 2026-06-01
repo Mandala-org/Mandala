@@ -417,6 +417,59 @@ def build_zncusnses_datasets(
     )
 
 
+def build_silicon_scales_datasets(
+    *,
+    data_path: str | Path,
+    cfg: Config,
+    scales: list[int],
+    num_train_per_scale: int,
+    num_val_per_scale: int,
+    seed: int = 42,
+    convention: str = "e3nn",
+):
+    print(
+        f"--- Silicon-scales dataset builder: data_path={data_path}, seed={seed}, scales={scales}, num_train_per_scale={num_train_per_scale}, num_val_per_scale={num_val_per_scale} ---"
+    )
+    if not scales:
+        raise ValueError("scales must contain at least one scale id")
+    if num_train_per_scale <= 0:
+        raise ValueError("num_train_per_scale must be > 0")
+    if num_val_per_scale < 0:
+        raise ValueError("num_val_per_scale must be >= 0")
+
+    pairs_by_scale = discover_scale_snapshot_pairs(
+        Path(data_path), scales=scales, label="silicon_scales"
+    )
+    rng = random.Random(seed)
+    train_pairs: list[tuple[Path, Path]] = []
+    val_pairs: list[tuple[Path, Path]] = []
+
+    for scale in scales:
+        scale_pairs = list(pairs_by_scale[scale])
+        rng.shuffle(scale_pairs)
+        required = num_train_per_scale + num_val_per_scale
+        if len(scale_pairs) < required:
+            raise ValueError(
+                f"Requested train+val={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
+            )
+        selected_train = scale_pairs[:num_train_per_scale]
+        selected_val = scale_pairs[
+            num_train_per_scale : num_train_per_scale + num_val_per_scale
+        ]
+        print(
+            f"--- Silicon_scales scale {scale}: discovered={len(scale_pairs)}, train={len(selected_train)}, val={len(selected_val)} ---"
+        )
+        train_pairs.extend(selected_train)
+        val_pairs.extend(selected_val)
+
+    print(
+        f"--- Silicon_scales split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+    )
+    return _create_datasets_from_pairs(
+        train_pairs, val_pairs, cfg, convention=convention
+    )
+
+
 def build_datasets_from_yaml(
     parsed_yaml: dict[str, Any],
     cfg: Config,
@@ -510,6 +563,29 @@ def build_datasets_from_yaml(
         )
     if dataset_kind == "ZnCuSnSeS":
         return build_zncusnses_datasets(
+            data_path=_require_dataset_value(parameters, overrides, "data_path"),
+            cfg=cfg,
+            scales=[
+                int(x)
+                for x in _get_dataset_value(parameters, overrides, "scales", default=[])
+            ],
+            num_train_per_scale=int(
+                _get_dataset_value(
+                    parameters, overrides, "num_train_per_scale", default=40
+                )
+            ),
+            num_val_per_scale=int(
+                _get_dataset_value(
+                    parameters, overrides, "num_val_per_scale", default=10
+                )
+            ),
+            seed=int(
+                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            ),
+            convention=convention,
+        )
+    if dataset_kind == "silicon_scales":
+        return build_silicon_scales_datasets(
             data_path=_require_dataset_value(parameters, overrides, "data_path"),
             cfg=cfg,
             scales=[
