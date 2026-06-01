@@ -1383,11 +1383,11 @@ def _build_snapshot_3d_section(
       <input id="{html.escape(threshold_value_id)}" type="text" value="0" readonly>
     </label>
     <label class="snapshot3d-inline">
-      <input id="{html.escape(ghosts_id)}" type="checkbox" checked>
+      <input id="{html.escape(ghosts_id)}" type="checkbox">
       Show ghost nodes
     </label>
     <label class="snapshot3d-inline">
-      <input id="{html.escape(nodes_id)}" type="checkbox" checked>
+      <input id="{html.escape(nodes_id)}" type="checkbox">
       Show nodes
     </label>
     <label class="snapshot3d-inline">
@@ -1501,7 +1501,7 @@ def _build_snapshot_3d_section(
       }};
     }}
 
-    function visibleMetricValues(cfg, threshold) {{
+    function sharedMetricValues(cfg, threshold) {{
       const values = [];
       if (edgesEl && edgesEl.checked) {{
         (payload.edges || []).forEach((edge) => {{
@@ -1521,15 +1521,6 @@ def _build_snapshot_3d_section(
           values.push(transformedValue(metricSource[cfg.metric], cfg));
         }});
       }}
-      return values;
-    }}
-
-    function visibleEdgeMetricValues(cfg, threshold) {{
-      const values = [];
-      (payload.edges || []).forEach((edge) => {{
-        const raw = Number(edge[cfg.metric] || 0);
-        if (raw >= threshold) values.push(transformedValue(raw, cfg));
-      }});
       return values;
     }}
 
@@ -1586,8 +1577,7 @@ def _build_snapshot_3d_section(
     }}
 
     function buildColorbarTrace(cfg, threshold) {{
-      if (!(edgesEl && edgesEl.checked)) return null;
-      const visibleValues = visibleEdgeMetricValues(cfg, threshold);
+      const visibleValues = sharedMetricValues(cfg, threshold);
       if (!visibleValues.length) return null;
       const [cmin, cmax] = transformedRange(cfg, visibleValues);
       return {{
@@ -1618,7 +1608,7 @@ def _build_snapshot_3d_section(
     function buildEdgeTraces(cfg, threshold) {{
       const visibleEdges = (payload.edges || []).filter((edge) => Number(edge[cfg.metric] || 0) >= threshold);
       if (!visibleEdges.length) return [];
-      const [cmin, cmax] = transformedRange(cfg, visibleEdgeMetricValues(cfg, threshold));
+      const [cmin, cmax] = transformedRange(cfg, sharedMetricValues(cfg, threshold));
       const binCount = 18;
       const bins = Array.from({{length: binCount}}, () => ({{x: [], y: [], z: [], hover: [], values: []}}));
       visibleEdges.forEach((edge) => {{
@@ -1654,10 +1644,10 @@ def _build_snapshot_3d_section(
 
     function buildNodeTrace(cfg, showScale) {{
       if (!(nodesEl && nodesEl.checked)) return null;
-      const edgeValues = visibleEdgeMetricValues(cfg, Number(thresholdEl.value || 0));
+      const sharedValues = sharedMetricValues(cfg, Number(thresholdEl.value || 0));
       const [cmin, cmax] = transformedRange(
         cfg,
-        edgeValues.length ? edgeValues : visibleMetricValues(cfg, Number(thresholdEl.value || 0))
+        sharedValues.length ? sharedValues : [transformedValue(0, cfg)]
       );
       const nodes = payload.node_diagonal || [];
       return {{
@@ -2617,7 +2607,7 @@ def _build_correlation_section(
     items = [
         (
             "Hamiltonian",
-            copied_files.get("hamiltonian_correlation.pt"),
+            None,
             "hamiltonian_correlation.png",
         ),
         (
@@ -2634,6 +2624,17 @@ def _build_correlation_section(
     sections = []
     first_plot_uses_js = True if include_plotlyjs else False
     for idx, (name, payload_path, fallback_png) in enumerate(items, start=1):
+        if name == "Hamiltonian":
+            if copied_files.get(fallback_png) is not None:
+                sections.append(
+                    f"""
+  <div class="metric-card">
+    <div class="metric-title">Hamiltonian correlation</div>
+    {_fallback_image_html(f"run_assets/{asset_namespace}/{fallback_png}", "Hamiltonian correlation", height="430px")}
+  </div>
+"""
+                )
+            continue
         if payload_path is not None:
             payload = _load_plot_payload(Path(payload_path))
             figure = _build_correlation_figure(payload)
