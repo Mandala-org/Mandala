@@ -701,12 +701,9 @@ class Snapshot:
 
         progress = None
         if show_progress:
-            try:
-                from tqdm.auto import tqdm
-            except ImportError:  # pragma: no cover - optional dependency
-                tqdm = None
-            if tqdm is not None:
-                progress = tqdm
+            from tqdm.auto import tqdm
+
+            progress = tqdm
 
         fractional_kpoints_t = fractional_kpoints
         linear_k_t = linear_k

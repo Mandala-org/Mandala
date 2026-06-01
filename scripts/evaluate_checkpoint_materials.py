@@ -523,6 +523,11 @@ def _run_snapshot_case(
         if args.use_gt_overlap_for_eigs
         else pred_mats_aligned.get("overlap")
     )
+    if args.use_gt_overlap_for_eigs and gt_mats.get("overlap") is None:
+        raise ValueError(
+            "--use-gt-overlap-for-eigs was set, but the target snapshot does not "
+            "provide an overlap matrix."
+        )
     if overlap_for_eigs is None:
         raise ValueError(
             "Checkpoint does not predict overlap and --use-gt-overlap-for-eigs was not set."
@@ -843,7 +848,8 @@ def _run_cif_case(
     )
     if pred_snapshot_for_eigs.overlap is None:
         raise ValueError(
-            "CIF evaluation needs a predicted overlap matrix for DOS/band plots."
+            "CIF evaluation needs an overlap matrix for DOS/band plots. "
+            "Provide a predicted overlap matrix."
         )
     num_electrons_pred = float(pred_snapshot_for_eigs.get_number_of_electrons().item())
     if args.dos_method == "tetrahedron":

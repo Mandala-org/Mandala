@@ -108,7 +108,7 @@ def resolve_band_path(
 def display_k_label(label: str) -> str:
     label_str = str(label).strip()
     if label_str in {"G", "Gamma", r"$\Gamma$", "$\\Gamma$"}:
-        return r"$\Gamma$"
+        return "Γ"
     return label_str
 
 
@@ -425,12 +425,9 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
     if worker_count <= 1 or len(tasks) <= 1:
         iterator: Any = range(0, tet_energies.shape[0], tetra_batch_size)
         if show_progress and tet_energies.shape[0] > tetra_batch_size:
-            try:
-                from tqdm.auto import tqdm
-            except ImportError:  # pragma: no cover - optional dependency
-                tqdm = None
-            if tqdm is not None:
-                iterator = tqdm(iterator, total=len(tasks), desc="Tetrahedron batches")
+            from tqdm.auto import tqdm
+
+            iterator = tqdm(iterator, total=len(tasks), desc="Tetrahedron batches")
         for start in iterator:
             stop = min(start + tetra_batch_size, tet_energies.shape[0])
             batch = tet_energies[start:stop]
@@ -452,13 +449,11 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
         "weight": weight,
     }
     try:
-        try:
-            from tqdm.auto import tqdm
-        except ImportError:  # pragma: no cover - optional dependency
-            tqdm = None
+        from tqdm.auto import tqdm
+
         with ctx.Pool(worker_count, initializer=_tetra_worker_init) as pool:
             result_iter = pool.imap(_tetra_batch_worker, tasks, chunksize=1)
-            if show_progress and tqdm is not None and len(tasks) > 1:
+            if show_progress and len(tasks) > 1:
                 result_iter = tqdm(
                     result_iter, total=len(tasks), desc="Tetrahedron batches"
                 )
@@ -3166,13 +3161,11 @@ def compute_band_chunks_parallel(
         "overlap_jitter": overlap_jitter,
     }
     try:
-        try:
-            from tqdm.auto import tqdm
-        except ImportError:  # pragma: no cover - optional dependency
-            tqdm = None
+        from tqdm.auto import tqdm
+
         with ctx.Pool(worker_count, initializer=_band_worker_init) as pool:
             result_iter = pool.imap(_band_chunk_worker, tasks, chunksize=1)
-            if tqdm is not None and len(tasks) > 1:
+            if len(tasks) > 1:
                 result_iter = tqdm(result_iter, total=len(tasks), desc="Band chunks")
             return list(result_iter)
     finally:
@@ -3215,12 +3208,10 @@ def build_band_structure_from_chunks(
 
     if num_workers <= 1 or len(tasks) <= 1:
         eig_chunks = []
-        try:
-            from tqdm.auto import tqdm
-        except ImportError:  # pragma: no cover - optional dependency
-            tqdm = None
+        from tqdm.auto import tqdm
+
         task_iter = tasks
-        if tqdm is not None and len(tasks) > 1:
+        if len(tasks) > 1:
             task_iter = tqdm(tasks, total=len(tasks), desc="Band chunks")
         for start, stop in task_iter:
             k_chunk = kpoints_abs[start:stop]

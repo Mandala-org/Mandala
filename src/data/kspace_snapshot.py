@@ -80,7 +80,7 @@ def _linear_k_axis(kpoints_abs: torch.Tensor) -> torch.Tensor:
 
 
 def _format_k_label(label: str) -> str:
-    return r"$\Gamma$" if label == "G" else label
+    return "Γ" if label == "G" else label
 
 
 def build_band_path(
@@ -129,7 +129,11 @@ def _generalized_eigenvalues_kspace(
 ) -> torch.Tensor:
     H = 0.5 * (hamiltonian_k + hamiltonian_k.transpose(-1, -2).conj())
     if overlap_k is None:
-        return torch.linalg.eigvalsh(H)
+        raise ValueError(
+            "Band-structure eigensolve requires an overlap matrix; "
+            "pass an overlap tensor or enable --use-gt-overlap-for-eigs "
+            "with a target snapshot that provides overlap."
+        )
 
     S = 0.5 * (overlap_k + overlap_k.transpose(-1, -2).conj())
     if psd_cleanup:
