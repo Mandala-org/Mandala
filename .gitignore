@@ -70,3 +70,12 @@ saved_models/
 
 # slurm.out
 slurm_*.out
+# Local environments
+venv/
+.venv/
+# Generated outputs and caches
+model_reports/
+.mypy_cache/
+# Model/checkpoint artifacts
+*.pth
+*.ckpt

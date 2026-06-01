@@ -1,5 +1,12 @@
+# Large scientific/data artifacts
 data/big/** filter=lfs diff=lfs merge=lfs -text
+data/**/*.out filter=lfs diff=lfs merge=lfs -text
+data/**/*.matrix filter=lfs diff=lfs merge=lfs -text
+data/**/*.h5 filter=lfs diff=lfs merge=lfs -text
+data/**/*.hdf5 filter=lfs diff=lfs merge=lfs -text
+data/**/*.npy filter=lfs diff=lfs merge=lfs -text
+data/**/*.npz filter=lfs diff=lfs merge=lfs -text
+data/**/*.csc filter=lfs diff=lfs merge=lfs -text
+
+# Images and generated plots, only when intentionally tracked
 *.png filter=lfs diff=lfs merge=lfs -text
-*.csv filter=lfs diff=lfs merge=lfs -text
-*.matrix filter=lfs diff=lfs merge=lfs -text
-*.out filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,11 @@
+set style data lines
+set nokey
+set zeroaxis
+set ytics 1
+set mytics 5
+set xra [0.000000:1.282396]
+set yra [-24.073437:118.537128]
+set ylabel "eV"
+set xtics ("L" 0.000000, "G" 0.305391, "X" 0.737280, "U" 0.924293, "G" 1.282396)
+plot "Si.BANDDAT1"
+pause -1

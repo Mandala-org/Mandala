@@ -1,0 +1,103 @@
+#
+# File Name
+#
+
+System.CurrrentDirectory         ./    # default=./
+System.Name                      ZnCuSeS
+level.of.stdout                  1    # default=1 (1-3)
+level.of.fileout                 1    # default=1 (0-2)
+
+DATA.PATH /bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9/DFT_DATA19/
+
+#
+# Definition of Atomic Species
+#
+
+Species.Number       5
+<Definition.of.Atomic.Species
+	Zn	Zn10.0S-s2p2d2	Zn_PBE19S
+	Cu	Cu10.0S-s2p2d2	Cu_PBE19S
+	Sn	Sn7.0-s2p2d3f1	Sn_PBE19
+	Se	Se9.0-s4p3d3f2  Se_PBE19
+	S	S9.0-s4p3d3f2	S_PBE19
+Definition.of.Atomic.Species>
+
+#
+# SCF or Electronic System
+#
+
+scf.XcType                  GGA-PBE    # LDA|LSDA-CA|LSDA-PW|GGA-PBE
+scf.SpinPolarization        off        # On|Off|NC
+scf.ElectronicTemperature   300       # default=300 (K)
+scf.energycutoff            400.0       # default=150 (Ry)
+scf.maxIter                 2000         # default=40
+scf.EigenvalueSolver        Band      # DC|GDC|Cluster|Band
+scf.Kgrid                  11 11 11       # means 4x4x4
+scf.Mixing.Type            Rmm-Diish     # Simple|Rmm-Diis|Gr-Pulay|Kerker|Rmm-Diisk
+scf.Init.Mixing.Weight     0.10        # default=0.30
+scf.Min.Mixing.Weight      0.01       # default=0.001
+scf.Max.Mixing.Weight      0.25       # default=0.40
+scf.Mixing.History          32          # default=5
+scf.Mixing.StartPulay       16          # default=6
+scf.criterion             1.0e-8      # default=1.0e-6 (Hartree)
+scf.stress.tensor on # on|off, default=off
+#scf.lapack.dste    dstegr
+
+#
+# MD or Geometry Optimization
+#
+
+MD.Type                      Nomd        # Nomd|Opt|NVE|NVT_VS|NVT_NH
+                                         # Constraint_Opt|DIIS2|Constraint_DIIS2
+MD.Opt.DIIS.History          4
+MD.Opt.StartDIIS             5         # default=5
+MD.maxIter                 100         # default=1
+MD.TimeStep                1.0         # default=0.5 (fs)
+MD.Opt.criterion          1.0e-4       # default=1.0e-4 (Hartree/bohr)
+
+HS.fileout    on
+
+
+Atoms.Number 32
+Atoms.SpeciesAndCoordinates.Unit   Ang # Ang|AU
+<Atoms.SpeciesAndCoordinates           # Unit=Ang.
+1 Zn 7.8720250e+00 1.9914631e-03 1.1160625e+01 6 6
+2 Zn 7.86393872 3.93580361 5.50931205 6 6
+3 Zn 3.93527709 7.94798375 5.54123869 6 6
+4 Zn  3.94130312  3.98688833 11.11439362 6 6
+5 Cu 1.98295141 6.00013589 8.56295464 5.5 5.5
+6 Cu 1.9706645  1.98612826 8.5832393  5.5 5.5
+7 Cu 1.94704975 1.98082645 2.93518961 5.5 5.5
+8 Cu 1.9804734  5.94946494 2.93213188 5.5 5.5
+9 Cu 5.89878695 5.96062092 2.92334363 5.5 5.5
+10 Cu 5.88151351 1.98262622 2.94352849 5.5 5.5
+11 Cu 5.88500502 1.97822666 8.56079206 5.5 5.5
+12 Cu 5.88294808 5.96186426 8.52629386 5.5 5.5
+13 Sn  3.95766199  0.04172342 11.21588552 7 7
+14 Sn 3.93058577 3.98543398 5.55634937 7 7
+15 Sn 7.8757635  0.02642214 5.52754583 7 7
+16 Sn  0.01732327  3.96965047 11.20361123 7 7
+17 Se 7.87746605 5.8598764  7.11613046 3 3
+18 Se 0.01093672 2.06864542 7.12034842 3 3
+19 Se 7.86328788 1.85548916 1.50707712 3 3
+20 Se 0.01020058 6.04605672 1.49044486 3 3
+21 Se 3.9556953  5.8641877  1.47494597 3 3
+22 Se 3.93119838 2.09171209 1.46133439 3 3
+23 Se 3.95880598 1.88538178 7.08857278 3 3
+24 Se 3.96017062 6.04115535 7.08458296 3 3
+25 S 1.90468627 0.01408804 9.73107815 3 3
+26 S 5.94953586e+00 3.59340986e-03 9.72151835e+00 3 3
+27 S 1.8989684  3.97773072 4.0850881  3 3
+28 S 5.94735735 3.96078704 4.08706635 3 3
+29 S 5.85121    7.9344832  4.07720676 3 3
+30 S 2.04159258 7.95006954 4.10342755 3 3
+31 S 5.87464937 3.98240684 9.75265439 3 3
+32 S 2.00281976 3.98679819 9.70087378 3 3
+Atoms.SpeciesAndCoordinates>
+
+Atoms.UnitVectors.Unit             Ang #  Ang|AU
+<Atoms.UnitVectors                     # unit=Ang.
+7.877504 0.       0.
+0.       7.950326 0.
+ 0.        0.       11.243022
+Atoms.UnitVectors>
