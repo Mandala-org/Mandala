@@ -446,6 +446,7 @@ class E3GNN(pl.LightningModule):
             per_irrep_metrics: dict[str, dict[str, torch.Tensor]] = {}
             pred_irrep_blocks = None
             target_irrep_blocks = None
+            pair_losses: dict[str, torch.Tensor] = {}
             need_irrep_cache = allow_train_metrics and (
                 self.cfg.log_per_irrep_metrics
                 or (
@@ -481,7 +482,6 @@ class E3GNN(pl.LightningModule):
 
                 mse_val = torch.tensor(0.0, device=self.device)
                 mae_val = torch.tensor(0.0, device=self.device)
-                pair_losses: dict[str, torch.Tensor] = {}
 
                 # Vectorized loss calculation
                 for key in t_items.keys():
