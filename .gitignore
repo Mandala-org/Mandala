@@ -79,3 +79,5 @@ model_reports/
 # Model/checkpoint artifacts
 *.pth
 *.ckpt
+data/big/graphene/
+data/small/ZnCuSnSeS/
