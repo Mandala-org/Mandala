@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -165,7 +165,7 @@ def _extract_source_config(checkpoint: dict[str, Any]) -> Config:
     if cfg_payload is None:
         return cfg
     if is_dataclass(cfg_payload):
-        cfg_data = asdict(cfg_payload)
+        cfg_data = _safe_dataclass_to_dict(cfg_payload)
     elif isinstance(cfg_payload, dict):
         cfg_data = dict(cfg_payload)
     else:
@@ -173,6 +173,15 @@ def _extract_source_config(checkpoint: dict[str, Any]) -> Config:
     for key, value in cfg_data.items():
         if hasattr(cfg, key):
             setattr(cfg, key, value)
+    if not hasattr(cfg, "head_pair_mode"):
+        cfg.head_pair_mode = "split"
+    print(
+        "[compat] extracted source config "
+        f"head_pair_mode={getattr(cfg, 'head_pair_mode', None)} "
+        f"hidden_irreps={getattr(cfg, 'hidden_irreps', None)} "
+        f"l_max={getattr(cfg, 'l_max', None)} "
+        f"hidden_base_dim={getattr(cfg, 'hidden_base_dim', None)}"
+    )
     return cfg
 
 
@@ -214,10 +223,29 @@ def _build_source_model_skeleton(
 
 def _copy_config(cfg: Config) -> Config:
     new_cfg = Config()
-    for key, value in asdict(cfg).items():
+    if is_dataclass(cfg):
+        cfg_data = _safe_dataclass_to_dict(cfg)
+    else:
+        cfg_data = dict(vars(cfg))
+    for key, value in cfg_data.items():
         if hasattr(new_cfg, key):
             setattr(new_cfg, key, value)
+    if not hasattr(new_cfg, "head_pair_mode"):
+        new_cfg.head_pair_mode = "split"
     return new_cfg
+
+
+def _safe_dataclass_to_dict(obj: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for field_info in fields(obj):
+        if not hasattr(obj, field_info.name):
+            if field_info.default is not MISSING:
+                out[field_info.name] = field_info.default
+            elif field_info.default_factory is not MISSING:  # type: ignore[attr-defined]
+                out[field_info.name] = field_info.default_factory()  # type: ignore[misc]
+            continue
+        out[field_info.name] = getattr(obj, field_info.name)
+    return out
 
 
 def _discover_source_targets(state_dict: dict[str, torch.Tensor]) -> list[str]:

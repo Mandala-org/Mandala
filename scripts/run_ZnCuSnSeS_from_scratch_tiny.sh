@@ -48,7 +48,7 @@ CMD=(
   --precision 32-true
   --convention e3nn
   --use-lr-scheduler true
-  --cutoff-radius 11.0
+  --cutoff-radius 12.0
   --l-max 6
   --hidden-base-dim 64
   --hidden-irreps "128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e+4x4o+4x5e+12x5o+8x6e"
