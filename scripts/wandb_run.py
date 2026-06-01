@@ -134,6 +134,13 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main() -> None:
     args = setup_argparse()
+    if args.resume_from_wandb is not None and bool(
+        getattr(args, "compatibility", False)
+    ):
+        raise ValueError(
+            "--resume-from-wandb and --compatibility cannot be used together. "
+            "resume_from_wandb always means continuing the same run identity."
+        )
     if args.resume_from_wandb is not None:
         _apply_wandb_resume_metadata(args)
     _normalize_wall_clock_args(args)
@@ -147,6 +154,7 @@ def main() -> None:
     print(f"resume_from_checkpoint={args.resume_from_checkpoint}")
     print(f"resume_from_wandb={args.resume_from_wandb}")
     print(f"fork_run={args.fork_run}")
+    print(f"compatibility={getattr(args, 'compatibility', False)}")
     parsed_yaml = None
     if args.sweep_yaml is not None:
         print(f"--- Loading sweep YAML: {args.sweep_yaml} ---")
