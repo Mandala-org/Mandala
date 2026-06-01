@@ -3,20 +3,28 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <learning-rate> <seed>" >&2
+  echo "Usage: $0 <seed> <train_on_irrep_parts:true|false>" >&2
   echo "Examples:" >&2
-  echo "  $0 0.001 42" >&2
-  echo "  $0 0.0005 45" >&2
+  echo "  $0 42 true" >&2
+  echo "  $0 45 false" >&2
   exit 1
 fi
 
-LR="$1"
-SEED="$2"
+SEED="$1"
+TRAIN_ON_IRREP_PARTS="$2"
 
 if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
   echo "Seed must be an integer, got: ${SEED}" >&2
   exit 1
 fi
+
+case "${TRAIN_ON_IRREP_PARTS}" in
+  true|false) ;;
+  *)
+    echo "train_on_irrep_parts must be 'true' or 'false', got: ${TRAIN_ON_IRREP_PARTS}" >&2
+    exit 1
+    ;;
+esac
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
@@ -27,9 +35,14 @@ export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mpl-${USER}}"
 mkdir -p "${MPLCONFIGDIR}"
 
 CHECKPOINT_DIR="/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73"
-RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data/sage-sweep-73/latest_checkpoint.pt}"
+RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73_lr0p001_seed42/best_model.pt}"
 WANDB_PROJECT="mandala-silicon-hamiltonian-rosi"
-RUN_NAME="silicon_hamiltonian_300K_new_data_restart_sage_sweep_73_lr${LR//./p}_seed${SEED}"
+LR="0.001"
+IRREP_SUFFIX="plain"
+if [[ "${TRAIN_ON_IRREP_PARTS}" == "true" ]]; then
+  IRREP_SUFFIX="irrep"
+fi
+RUN_NAME="silicon_hamiltonian_300K_new_data_restart_sage_sweep_73_lr${LR//./p}_seed${SEED}_${IRREP_SUFFIX}"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new"
 SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big_new/snapshot_cache"
 
@@ -156,7 +169,7 @@ CMD=(
   --train-observables-on-gt False
   --train-on-energy False
   --train-on-forces False
-  --train-on-irrep-parts False
+  --train-on-irrep-parts "${TRAIN_ON_IRREP_PARTS}"
   --train-on-num-electrons False
   --train-on-stress False
   --use-lr-scheduler True
