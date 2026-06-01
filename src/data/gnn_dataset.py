@@ -306,14 +306,20 @@ class E3GNNDataset(Dataset):
                 cfg=self.cfg,
             )
         else:
-            snapshot = Snapshot.from_openmx(
-                matrix_path=matrix_path,
-                info_path=info_path,
-                convention=self.convention,
-                symmetrize_density=True,
-                cutoff_radius=snapshot_cutoff,
-                cfg=self.cfg,
-            )
+            try:
+                snapshot = Snapshot.from_openmx(
+                    matrix_path=matrix_path,
+                    info_path=info_path,
+                    convention=self.convention,
+                    symmetrize_density=True,
+                    cutoff_radius=snapshot_cutoff,
+                    cfg=self.cfg,
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    "Failed to load OpenMX snapshot "
+                    f"matrix_path={matrix_path} info_path={info_path}: {exc}"
+                ) from exc
         if cache_file is not None:
             try:
                 cache_file.parent.mkdir(parents=True, exist_ok=True)

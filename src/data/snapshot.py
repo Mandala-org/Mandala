@@ -1004,7 +1004,12 @@ class Snapshot:
         info_path = Path(info_path)
         atoms: list[str] = info.elements
         if not atoms:
-            raise RuntimeError("Info-file does not contain <coordinates.forces>")
+            raise RuntimeError(
+                "Info-file does not contain a parseable <coordinates.forces> block "
+                f"for {info_path}. Parsed elements={len(info.elements)}, "
+                f"positions_shape={tuple(info.positions.shape)}, "
+                f"forces_shape={tuple(info.forces.shape)}"
+            )
 
         orb_cfg = OrbitalIrrepConfig.from_dict(info.orbital_set)
 
