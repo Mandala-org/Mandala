@@ -80,4 +80,5 @@ model_reports/
 *.pth
 *.ckpt
 data/big/graphene/
+data/big/silicon/300K_72/
 data/small/ZnCuSnSeS/
