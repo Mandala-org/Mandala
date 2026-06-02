@@ -335,6 +335,7 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
     tetra_batch_size: int = 256,
     num_workers: int = 1,
     show_progress: bool = False,
+    progress_label: str = "Tetrahedron batches",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     global _TETRA_MP_STATE
 
@@ -454,9 +455,7 @@ def compute_tetrahedron_dos_from_kmesh_eigenvalues(
         with ctx.Pool(worker_count, initializer=_tetra_worker_init) as pool:
             result_iter = pool.imap(_tetra_batch_worker, tasks, chunksize=1)
             if show_progress and len(tasks) > 1:
-                result_iter = tqdm(
-                    result_iter, total=len(tasks), desc="Tetrahedron batches"
-                )
+                result_iter = tqdm(result_iter, total=len(tasks), desc=progress_label)
             for cdf_part, pdf_part in result_iter:
                 cumulative = cumulative + cdf_part
                 dos = dos + pdf_part
@@ -571,6 +570,7 @@ def _kmesh_eigenvalues(
     num_workers: int,
     psd_cleanup: bool,
     allow_jitter: bool,
+    progress_label: str = "DOS k-mesh eigensolve",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     kmesh = parse_kmesh_spec(kmesh_spec)
     fractional_kpoints = fractional_kmesh_points(
@@ -628,6 +628,7 @@ def _kmesh_eigenvalues(
             num_workers=num_workers,
             overlap_psd_cleanup=psd_cleanup,
             overlap_jitter=allow_jitter,
+            progress_label=progress_label,
         )
 
     eigenvalues_ev = (
@@ -660,6 +661,7 @@ def compute_tetrahedron_dos_and_fermi(
     e_max: float | None = None,
     show_progress: bool | None = None,
     cache_path: Path | None = None,
+    progress_label: str = "Tetrahedron DOS k-mesh eigensolve",
 ) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float]:
     signature = _dos_cache_signature(
         snapshot,
@@ -687,6 +689,7 @@ def compute_tetrahedron_dos_and_fermi(
         num_workers=num_workers,
         psd_cleanup=psd_cleanup,
         allow_jitter=allow_jitter,
+        progress_label=progress_label,
     )
     kmesh = parse_kmesh_spec(kmesh_spec)
     grid_ev, dos, _cumulative = compute_tetrahedron_dos_from_kmesh_eigenvalues(
@@ -700,6 +703,7 @@ def compute_tetrahedron_dos_and_fermi(
         tetra_batch_size=tetra_batch_size,
         num_workers=num_workers,
         show_progress=show_progress,
+        progress_label=f"{progress_label} / tetrahedron batches",
     )
     num_electrons = float(snapshot.get_number_of_electrons().detach().cpu().item())
     dos_electron_target = effective_dos_electron_target(snapshot)
@@ -2802,6 +2806,7 @@ def save_tetrahedron_dos_comparison_plot(
     show_progress: bool | None = None,
     cache_path_true: Path | None = None,
     cache_path_pred: Path | None = None,
+    progress_label: str = "Tetrahedron DOS k-mesh eigensolve",
 ) -> dict[str, float]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if show_progress is None:
@@ -2827,6 +2832,7 @@ def save_tetrahedron_dos_comparison_plot(
             e_max=energy_max,
             show_progress=show_progress,
             cache_path=cache_path_true,
+            progress_label=f"{progress_label} (GT)",
         )
     )
     grid_pred, dos_pred, num_electrons_pred, dos_target_pred, fermi_pred = (
@@ -2844,6 +2850,7 @@ def save_tetrahedron_dos_comparison_plot(
             e_max=energy_max,
             show_progress=show_progress,
             cache_path=cache_path_pred,
+            progress_label=f"{progress_label} (prediction)",
         )
     )
     grid_true, dos_true = _clip_energy_curve(
@@ -2997,6 +3004,7 @@ def save_tetrahedron_dos_prediction_plot(
     tetra_batch_size: int = 256,
     show_progress: bool | None = None,
     cache_path: Path | None = None,
+    progress_label: str = "Tetrahedron DOS k-mesh eigensolve",
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if show_progress is None:
@@ -3021,6 +3029,7 @@ def save_tetrahedron_dos_prediction_plot(
         e_max=energy_max,
         show_progress=show_progress,
         cache_path=cache_path,
+        progress_label=progress_label,
     )
     grid, dos = _clip_energy_curve(
         grid.detach().cpu(),
@@ -3213,6 +3222,7 @@ def compute_band_chunks_parallel(
     num_workers: int,
     overlap_psd_cleanup: bool,
     overlap_jitter: bool,
+    progress_label: str = "Band-path eigensolve",
 ) -> list[torch.Tensor]:
     global _BAND_MP_STATE
 
@@ -3254,7 +3264,7 @@ def compute_band_chunks_parallel(
         with ctx.Pool(worker_count, initializer=_band_worker_init) as pool:
             result_iter = pool.imap(_band_chunk_worker, tasks, chunksize=1)
             if len(tasks) > 1:
-                result_iter = tqdm(result_iter, total=len(tasks), desc="Band chunks")
+                result_iter = tqdm(result_iter, total=len(tasks), desc=progress_label)
             return list(result_iter)
     finally:
         _BAND_MP_STATE = None
@@ -3270,6 +3280,7 @@ def build_band_structure_from_chunks(
     num_workers: int,
     overlap_psd_cleanup: bool,
     overlap_jitter: bool,
+    progress_label: str = "Band-path eigensolve",
 ) -> BandStructure:
     fractional_kpoints, kpoints_abs, linear_k, tick_positions, tick_labels = (
         build_band_path(
@@ -3300,7 +3311,7 @@ def build_band_structure_from_chunks(
 
         task_iter = tasks
         if len(tasks) > 1:
-            task_iter = tqdm(tasks, total=len(tasks), desc="Band chunks")
+            task_iter = tqdm(tasks, total=len(tasks), desc=progress_label)
         for start, stop in task_iter:
             k_chunk = kpoints_abs[start:stop]
             ham_k = shiftspace_to_kspace_dense(
@@ -3334,6 +3345,7 @@ def build_band_structure_from_chunks(
             num_workers=num_workers,
             overlap_psd_cleanup=overlap_psd_cleanup,
             overlap_jitter=overlap_jitter,
+            progress_label=progress_label,
         )
 
     eigenvalues = torch.cat(eig_chunks, dim=0).to(dtype=ham_shift.dtype)
@@ -3430,6 +3442,7 @@ def compute_or_load_band_structure(
     overlap_psd_cleanup: bool,
     overlap_jitter: bool,
     force_recompute: bool,
+    progress_label: str = "Band-path eigensolve",
 ) -> Any:
     if cache_path.exists() and not force_recompute:
         payload = torch.load(cache_path, map_location="cpu", weights_only=False)
@@ -3449,6 +3462,7 @@ def compute_or_load_band_structure(
         num_workers=num_workers,
         overlap_psd_cleanup=overlap_psd_cleanup,
         overlap_jitter=overlap_jitter,
+        progress_label=progress_label,
     )
     band_structure.overlap_psd_cleanup = bool(overlap_psd_cleanup)
     band_structure.overlap_jitter = bool(overlap_jitter)

@@ -646,6 +646,7 @@ def _run_snapshot_case(
         else float(pred_band_snapshot.get_number_of_electrons().item())
     )
     if args.dos_method == "tetrahedron":
+        print("--- Computing tetrahedron DOS comparison (GT + prediction) ---")
         dos_metrics = analysis_eval.save_tetrahedron_dos_comparison_plot(
             gt_snapshot,
             pred_band_snapshot,
@@ -663,8 +664,10 @@ def _run_snapshot_case(
             tetra_batch_size=args.tetra_batch_size,
             cache_path_true=output_dir / "tetrahedron_dos_cache_gt.pt",
             cache_path_pred=output_dir / "tetrahedron_dos_cache_pred.pt",
+            progress_label="Tetrahedron DOS k-mesh",
         )
     else:
+        print("--- Computing Gaussian DOS comparison (GT + prediction) ---")
         dos_metrics = analysis_eval.save_dos_comparison_plot(
             pred_mats["hamiltonian"],
             pred_band_snapshot.overlap,
@@ -698,7 +701,9 @@ def _run_snapshot_case(
         overlap_psd_cleanup=args.overlap_psd_cleanup,
         overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
+        progress_label="GT band-path eigensolve",
     )
+    print("--- Computing band-path eigensolve for prediction snapshot ---")
     pred_band = analysis_eval.compute_or_load_band_structure(
         pred_band_snapshot,
         analysis_eval.band_cache_path(
@@ -714,6 +719,7 @@ def _run_snapshot_case(
         overlap_psd_cleanup=args.overlap_psd_cleanup,
         overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
+        progress_label="Prediction band-path eigensolve",
     )
     analysis_eval.save_band_structure_comparison_plot(
         gt_band,
@@ -853,6 +859,7 @@ def _run_cif_case(
         )
     num_electrons_pred = float(pred_snapshot_for_eigs.get_number_of_electrons().item())
     if args.dos_method == "tetrahedron":
+        print("--- Computing tetrahedron DOS prediction ---")
         analysis_eval.save_tetrahedron_dos_prediction_plot(
             pred_snapshot_for_eigs,
             output_dir / "dos_prediction.png",
@@ -868,8 +875,10 @@ def _run_cif_case(
             bin_width=args.dos_bin_width,
             tetra_batch_size=args.tetra_batch_size,
             cache_path=output_dir / "tetrahedron_dos_cache_pred.pt",
+            progress_label="Tetrahedron DOS k-mesh (prediction)",
         )
     else:
+        print("--- Computing Gaussian DOS prediction ---")
         analysis_eval.save_dos_prediction_plot(
             pred_mats["hamiltonian"],
             pred_snapshot_for_eigs.overlap,
@@ -898,6 +907,7 @@ def _run_cif_case(
         overlap_psd_cleanup=args.overlap_psd_cleanup,
         overlap_jitter=args.overlap_jitter,
         force_recompute=args.force_recompute_bands,
+        progress_label="Prediction band-path eigensolve",
     )
     analysis_eval.save_band_structure_prediction_plot(
         pred_band,
