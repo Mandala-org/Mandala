@@ -167,6 +167,20 @@ def _populate_config_from_args(args: argparse.Namespace) -> Config:
     for key, value in vars(args).items():
         if hasattr(cfg, key):
             setattr(cfg, key, value)
+    explicit_args = set(getattr(args, "_explicit_args", set()))
+    observables_enabled_by_loss = float(cfg.loss_coef_observables) != 0.0
+    if "train_on_energy" not in explicit_args:
+        cfg.train_on_energy = observables_enabled_by_loss
+        print(
+            "--- Auto-setting train_on_energy from loss_coef_observables: "
+            f"{cfg.train_on_energy} (loss_coef_observables={cfg.loss_coef_observables}) ---"
+        )
+    if "train_on_num_electrons" not in explicit_args:
+        cfg.train_on_num_electrons = observables_enabled_by_loss
+        print(
+            "--- Auto-setting train_on_num_electrons from loss_coef_observables: "
+            f"{cfg.train_on_num_electrons} (loss_coef_observables={cfg.loss_coef_observables}) ---"
+        )
     if isinstance(cfg.matrix_targets, str):
         cfg.matrix_targets = _coerce_list_value(cfg.matrix_targets)
     if isinstance(cfg.radial_layers, str):
