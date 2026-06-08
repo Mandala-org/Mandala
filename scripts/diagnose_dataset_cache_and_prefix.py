@@ -16,9 +16,12 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 import torch
 from e3nn.o3 import Irreps
 
+from analysis.evaluation import fractional_kmesh_points, parse_kmesh_spec  # noqa: E402
 from core.block_irrep_mapper import BlockIrrepMapper  # noqa: E402
+from core.periodic_fourier import shiftspace_to_kspace_dense  # noqa: E402
 from data.gnn_dataset import E3GNNDataset  # noqa: E402
 from data.graph_features import compute_graph_features  # noqa: E402
+from data.kspace_snapshot import block_matrix_to_shiftspace_dense  # noqa: E402
 from data.snapshot import Snapshot  # noqa: E402
 from net.common import Config  # noqa: E402
 
@@ -108,6 +111,12 @@ def setup_argparse() -> argparse.Namespace:
         "--preserve-temp-cache",
         action="store_true",
         help="Keep the temporary cache dir instead of deleting it.",
+    )
+    parser.add_argument(
+        "--dos-kmesh",
+        type=str,
+        default="4x4x4",
+        help="k-mesh used for overlap PSD/Cholesky diagnostics.",
     )
     return parser.parse_args()
 
@@ -237,6 +246,98 @@ def _pair_edges_equal(a: Snapshot, b: Snapshot) -> dict[str, Any]:
     return {"same_key_set": True, "all_equal": same_all, "per_key": per_key}
 
 
+def _prepare_targets_like_dataset(snapshot: Snapshot, cfg: Config) -> Snapshot:
+    prepared = snapshot
+    if cfg.apply_cutoff_to_targets and cfg.cutoff_radius is not None:
+        prepared = prepared.filter_by_distance(cfg.cutoff_radius)
+    return prepared.symmetrize_matrices(
+        hamiltonian=cfg.symmetrize_hamiltonian_targets,
+        overlap=True,
+        density=True,
+    )
+
+
+def _snapshot_from_dataset_sample(sample: tuple[dict, dict]) -> Snapshot:
+    x, y = sample
+    return Snapshot(
+        y["hamiltonian"],
+        y["overlap"],
+        y["density"],
+        positions=x["positions"],
+        box=x["box"],
+        forces=y.get("forces"),
+        stress=y.get("stress"),
+    )
+
+
+def _overlap_kmesh_diagnostics(
+    snapshot: Snapshot, *, kmesh_spec: str
+) -> dict[str, Any]:
+    if snapshot.box is None:
+        return {"ok": False, "error": "snapshot has no box"}
+
+    shifts = snapshot.get_translation_shifts().to(device=snapshot.box.device)
+    if shifts.numel() == 0:
+        return {"ok": False, "error": "snapshot has no translation shifts"}
+
+    kmesh = parse_kmesh_spec(kmesh_spec)
+    fractional_kpoints = fractional_kmesh_points(
+        kmesh,
+        device=snapshot.box.device,
+        dtype=snapshot.box.dtype,
+    )
+    reciprocal = 2.0 * torch.pi * torch.linalg.inv(snapshot.box).T
+    kpoints_abs = fractional_kpoints @ reciprocal
+    overlap_shift = block_matrix_to_shiftspace_dense(snapshot.overlap, shifts=shifts)
+    overlap_k = shiftspace_to_kspace_dense(
+        overlap_shift,
+        kpoints_abs=kpoints_abs,
+        shifts=shifts,
+        box=snapshot.box,
+    ).to(torch.complex128)
+
+    min_eigs: list[float] = []
+    max_eigs: list[float] = []
+    max_herm_resid = 0.0
+    failures: list[dict[str, Any]] = []
+
+    for idx in range(int(overlap_k.shape[0])):
+        S = overlap_k[idx]
+        herm_resid = S - S.transpose(-1, -2).conj()
+        max_herm_resid = max(max_herm_resid, float(herm_resid.abs().max().item()))
+        S_herm = 0.5 * (S + S.transpose(-1, -2).conj())
+        eigs = torch.linalg.eigvalsh(S_herm).real
+        min_eigs.append(float(eigs.min().item()))
+        max_eigs.append(float(eigs.max().item()))
+        try:
+            torch.linalg.cholesky(S_herm)
+        except torch.linalg.LinAlgError as exc:
+            failures.append(
+                {
+                    "k_index": idx,
+                    "min_eigenvalue": float(eigs.min().item()),
+                    "max_eigenvalue": float(eigs.max().item()),
+                    "error": str(exc),
+                }
+            )
+
+    return {
+        "ok": True,
+        "basis": snapshot.overlap.basis,
+        "kmesh_spec": kmesh_spec,
+        "num_kpoints": int(overlap_k.shape[0]),
+        "num_translation_shifts": int(shifts.shape[0]),
+        "num_overlap_edges": int(
+            sum(edges.shape[1] for edges in snapshot.overlap.pair_edges.values())
+        ),
+        "max_abs_hermiticity_residual": max_herm_resid,
+        "global_min_eigenvalue": min(min_eigs),
+        "global_max_eigenvalue": max(max_eigs),
+        "num_cholesky_failures": len(failures),
+        "first_failures": failures[:8],
+    }
+
+
 def _build_cfg(
     cache_dir: str | None, require_exact_edge_match: bool, args: argparse.Namespace
 ) -> Config:
@@ -286,6 +387,7 @@ def main() -> None:
         cutoff_radius=None,
         cfg=cfg_fresh,
     )
+    fresh_targets = _prepare_targets_like_dataset(fresh_snapshot, cfg_fresh)
     mapper = BlockIrrepMapper(
         fresh_snapshot.hamiltonian.orbital_cfg,
         diagonal=False,
@@ -339,6 +441,7 @@ def main() -> None:
             args.convention,
         )
         dataset_sample = ds_second[0]
+        dataset_target_snapshot = _snapshot_from_dataset_sample(dataset_sample)
         dataset_summary = {
             "x_edge_count": int(dataset_sample[0]["edge_index"].shape[1]),
             "target_key_count": len(dataset_sample[1]["hamiltonian"].pair_edges),
@@ -346,6 +449,7 @@ def main() -> None:
     except Exception as exc:
         ds_second_status = {"ok": False, "error": repr(exc)}
         dataset_summary = None
+        dataset_target_snapshot = None
 
     payload: dict[str, Any] = {
         "matrix_path": matrix_path,
@@ -377,6 +481,32 @@ def main() -> None:
             if cached_snapshot is not None
             else None
         ),
+        "overlap_psd_diagnostics": {
+            "fresh_loaded": _overlap_kmesh_diagnostics(
+                fresh_snapshot,
+                kmesh_spec=args.dos_kmesh,
+            ),
+            "fresh_targets_like_dataset": _overlap_kmesh_diagnostics(
+                fresh_targets,
+                kmesh_spec=args.dos_kmesh,
+            ),
+            "cached_loaded": (
+                _overlap_kmesh_diagnostics(
+                    cached_snapshot,
+                    kmesh_spec=args.dos_kmesh,
+                )
+                if cached_snapshot is not None
+                else None
+            ),
+            "dataset_target_snapshot": (
+                _overlap_kmesh_diagnostics(
+                    dataset_target_snapshot,
+                    kmesh_spec=args.dos_kmesh,
+                )
+                if dataset_target_snapshot is not None
+                else None
+            ),
+        },
         "apply_cutoff_to_targets": bool(args.apply_cutoff_to_targets),
         "dataset_first_build": ds_first_status,
         "dataset_second_build": ds_second_status,
@@ -400,6 +530,16 @@ def main() -> None:
             f"  key={cached_summary['key']} prefix_exact={cached_summary['prefix_exact']} "
             f"first_mismatch_idx={cached_summary['first_mismatch_idx']} "
             f"target_len={cached_summary['target_len']} graph_len={cached_summary['graph_len']}",
+            flush=True,
+        )
+    for label, diag in payload["overlap_psd_diagnostics"].items():
+        if diag is None:
+            continue
+        print(
+            f"[SUMMARY] {label} overlap PSD "
+            f"ok={diag.get('ok')} "
+            f"fails={diag.get('num_cholesky_failures')} "
+            f"min_eig={diag.get('global_min_eigenvalue')}",
             flush=True,
         )
     print("[SUMMARY] dataset first build", payload["dataset_first_build"], flush=True)
