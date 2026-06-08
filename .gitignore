@@ -76,6 +76,7 @@ venv/
 # Generated outputs and caches
 model_reports/
 .mypy_cache/
+.cache/
 # Model/checkpoint artifacts
 *.pth
 *.ckpt
