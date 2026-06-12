@@ -167,17 +167,10 @@ def _discover_snapshot_paths(
 
 
 def _discover_info_file(snapshot_dir: Path) -> Path | None:
-    preferred = ["ZnCuSeS.out", "SiO2.out", "info.dat", "info.txt"]
-    for name in preferred:
+    for name in ("Si.out", "SiO2.out", "ZnCuSeS.out", "info.dat", "info.txt"):
         candidate = snapshot_dir / name
         if candidate.exists():
             return candidate
-    for candidate in sorted(snapshot_dir.glob("*.out")):
-        if candidate.name not in {"HS.out", "log.out"}:
-            return candidate
-    fallback = snapshot_dir / "log.out"
-    if fallback.exists():
-        return fallback
     return None
 
 

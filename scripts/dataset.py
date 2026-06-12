@@ -81,19 +81,10 @@ def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
 
 
 def _resolve_single_snapshot_info_path(sample_dir: Path) -> Path | None:
-    preferred = sample_dir / "SiO2.out"
-    if preferred.exists():
-        return preferred
-    candidates = sorted(
-        path
-        for path in sample_dir.glob("*.out")
-        if path.name not in {"HS.out", "log.out"}
-    )
-    if candidates:
-        return candidates[0]
-    fallback = sample_dir / "log.out"
-    if fallback.exists():
-        return fallback
+    for name in ("Si.out", "SiO2.out", "ZnCuSeS.out", "info.dat", "info.txt"):
+        candidate = sample_dir / name
+        if candidate.exists():
+            return candidate
     return None
 
 
