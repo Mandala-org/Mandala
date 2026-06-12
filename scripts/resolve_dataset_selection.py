@@ -6,6 +6,8 @@ import argparse
 import random
 from pathlib import Path
 
+from data.openmx_info_parser import parse_info_out
+
 
 def str_to_list(raw: str | None) -> list[int] | None:
     if raw is None:
@@ -43,30 +45,80 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--scales", type=str_to_list, default=None)
     parser.add_argument("--num-train-per-scale", type=int, default=40)
     parser.add_argument("--num-val-per-scale", type=int, default=10)
+    parser.add_argument(
+        "--allow-log-fallback",
+        action="store_true",
+        help=(
+            "Reproduce the legacy training-time behavior that accepted log.out "
+            "when the expected info file was missing."
+        ),
+    )
+    parser.add_argument(
+        "--require-parseable-info",
+        action="store_true",
+        help=(
+            "Drop snapshots whose info file does not contain a parseable "
+            "<coordinates.forces> block, matching training-time skipping."
+        ),
+    )
     return parser.parse_args()
 
 
-def _resolve_info_file(sample_dir: Path) -> Path | None:
+def _is_parseable_info(path: Path) -> bool:
+    try:
+        parse_info_out(path)
+        return True
+    except Exception:
+        return False
+
+
+def _resolve_info_file(
+    sample_dir: Path,
+    *,
+    allow_log_fallback: bool,
+    require_parseable_info: bool,
+) -> Path | None:
     for name in ("Si.out", "SiO2.out", "ZnCuSeS.out", "info.dat", "info.txt"):
         candidate = sample_dir / name
         if candidate.exists():
+            if require_parseable_info and not _is_parseable_info(candidate):
+                return None
+            return candidate
+    if allow_log_fallback:
+        candidate = sample_dir / "log.out"
+        if candidate.exists():
+            if require_parseable_info and not _is_parseable_info(candidate):
+                return None
             return candidate
     return None
 
 
-def _discover_pairs(root: Path) -> list[tuple[Path, Path]]:
+def _discover_pairs(
+    root: Path,
+    *,
+    allow_log_fallback: bool,
+    require_parseable_info: bool,
+) -> list[tuple[Path, Path]]:
     pairs: list[tuple[Path, Path]] = []
     if root.is_dir():
         matrix_path = root / "HS.out"
         if matrix_path.exists():
-            info_path = _resolve_info_file(root)
+            info_path = _resolve_info_file(
+                root,
+                allow_log_fallback=allow_log_fallback,
+                require_parseable_info=require_parseable_info,
+            )
             if info_path is not None:
                 pairs.append((matrix_path.resolve(), info_path.resolve()))
         for sample_dir in sorted(path for path in root.iterdir() if path.is_dir()):
             matrix_path = sample_dir / "HS.out"
             if not matrix_path.exists():
                 continue
-            info_path = _resolve_info_file(sample_dir)
+            info_path = _resolve_info_file(
+                sample_dir,
+                allow_log_fallback=allow_log_fallback,
+                require_parseable_info=require_parseable_info,
+            )
             if info_path is None:
                 continue
             pairs.append((matrix_path.resolve(), info_path.resolve()))
@@ -74,14 +126,22 @@ def _discover_pairs(root: Path) -> list[tuple[Path, Path]]:
 
 
 def _discover_scale_pairs(
-    root: Path, scales: list[int]
+    root: Path,
+    scales: list[int],
+    *,
+    allow_log_fallback: bool,
+    require_parseable_info: bool,
 ) -> dict[int, list[tuple[Path, Path]]]:
     pairs_by_scale: dict[int, list[tuple[Path, Path]]] = {}
     for scale in scales:
         scale_dir = root / f"scale_{scale}"
         if not scale_dir.is_dir():
             raise FileNotFoundError(f"Missing scale directory: {scale_dir}")
-        pairs_by_scale[scale] = _discover_pairs(scale_dir)
+        pairs_by_scale[scale] = _discover_pairs(
+            scale_dir,
+            allow_log_fallback=allow_log_fallback,
+            require_parseable_info=require_parseable_info,
+        )
     return pairs_by_scale
 
 
@@ -96,6 +156,8 @@ def _split_single_snapshot(
     *,
     data_path: Path,
     seed: int,
+    allow_log_fallback: bool,
+    require_parseable_info: bool,
     num_train: int | None,
     num_val: int | None,
     val_fraction: float,
@@ -110,7 +172,11 @@ def _split_single_snapshot(
 
     if min_temp == max_temp == val_temp and min_temp is not None:
         root = data_path / f"{val_temp}K"
-        all_pairs = _discover_pairs(root)
+        all_pairs = _discover_pairs(
+            root,
+            allow_log_fallback=allow_log_fallback,
+            require_parseable_info=require_parseable_info,
+        )
         rng.shuffle(all_pairs)
         if not all_pairs:
             raise ValueError(f"No snapshots found under {root}")
@@ -141,7 +207,11 @@ def _split_single_snapshot(
         train_pairs: list[tuple[Path, Path]] = []
         val_pairs: list[tuple[Path, Path]] = []
         for temp in all_temps:
-            temp_pairs = _discover_pairs(data_path / f"{temp}K")
+            temp_pairs = _discover_pairs(
+                data_path / f"{temp}K",
+                allow_log_fallback=allow_log_fallback,
+                require_parseable_info=require_parseable_info,
+            )
             shuffled = list(temp_pairs)
             rng.shuffle(shuffled)
             if len(shuffled) < train_per_temp + val_per_temp:
@@ -165,13 +235,21 @@ def _split_single_snapshot(
     ]
     train_pairs: list[tuple[Path, Path]] = []
     for temp in train_temps:
-        temp_pairs = _discover_pairs(data_path / f"{temp}K")
+        temp_pairs = _discover_pairs(
+            data_path / f"{temp}K",
+            allow_log_fallback=allow_log_fallback,
+            require_parseable_info=require_parseable_info,
+        )
         num_to_sample = min(len(temp_pairs), n_snapshots_per_temp or 50)
         shuffled = list(temp_pairs)
         rng.shuffle(shuffled)
         train_pairs.extend(shuffled[:num_to_sample])
 
-    val_pairs = _discover_pairs(data_path / f"{val_temp}K")
+    val_pairs = _discover_pairs(
+        data_path / f"{val_temp}K",
+        allow_log_fallback=allow_log_fallback,
+        require_parseable_info=require_parseable_info,
+    )
     num_val_to_sample = min(len(val_pairs), n_snapshots_per_temp or 50)
     if val_n_snapshots is not None:
         num_val_to_sample = min(num_val_to_sample, val_n_snapshots)
@@ -184,6 +262,8 @@ def _split_multi_snapshot(
     *,
     data_path: Path,
     seed: int,
+    allow_log_fallback: bool,
+    require_parseable_info: bool,
     scales: list[int],
     num_train_per_scale: int,
     num_val_per_scale: int,
@@ -191,7 +271,12 @@ def _split_multi_snapshot(
     list[tuple[Path, Path]], list[tuple[Path, Path]], dict[int, list[tuple[Path, Path]]]
 ]:
     rng = random.Random(seed)
-    pairs_by_scale = _discover_scale_pairs(data_path, scales)
+    pairs_by_scale = _discover_scale_pairs(
+        data_path,
+        scales,
+        allow_log_fallback=allow_log_fallback,
+        require_parseable_info=require_parseable_info,
+    )
     train_pairs: list[tuple[Path, Path]] = []
     val_pairs: list[tuple[Path, Path]] = []
     for scale in scales:
@@ -218,6 +303,8 @@ def main() -> None:
         train_pairs, val_pairs = _split_single_snapshot(
             data_path=data_path,
             seed=args.seed,
+            allow_log_fallback=args.allow_log_fallback,
+            require_parseable_info=args.require_parseable_info,
             num_train=args.num_train,
             num_val=args.num_val,
             val_fraction=args.val_fraction,
@@ -233,12 +320,18 @@ def main() -> None:
         train_pairs, val_pairs, _ = _split_multi_snapshot(
             data_path=data_path,
             seed=args.seed,
+            allow_log_fallback=args.allow_log_fallback,
+            require_parseable_info=args.require_parseable_info,
             scales=[int(x) for x in scales],
             num_train_per_scale=args.num_train_per_scale,
             num_val_per_scale=args.num_val_per_scale,
         )
     elif args.dataset_kind == "siox":
-        all_pairs = _discover_pairs(data_path)
+        all_pairs = _discover_pairs(
+            data_path,
+            allow_log_fallback=args.allow_log_fallback,
+            require_parseable_info=args.require_parseable_info,
+        )
         rng = random.Random(args.seed)
         rng.shuffle(all_pairs)
         if not all_pairs:
@@ -261,7 +354,11 @@ def main() -> None:
             train_pairs = all_pairs[: len(all_pairs) - num_val]
             val_pairs = all_pairs[len(all_pairs) - num_val :]
     elif args.dataset_kind == "ZnCuSnSeS_small":
-        all_pairs = _discover_pairs(data_path)
+        all_pairs = _discover_pairs(
+            data_path,
+            allow_log_fallback=args.allow_log_fallback,
+            require_parseable_info=args.require_parseable_info,
+        )
         rng = random.Random(args.seed)
         rng.shuffle(all_pairs)
         if not all_pairs:
@@ -288,6 +385,8 @@ def main() -> None:
         train_pairs, val_pairs, _ = _split_multi_snapshot(
             data_path=data_path,
             seed=args.seed,
+            allow_log_fallback=args.allow_log_fallback,
+            require_parseable_info=args.require_parseable_info,
             scales=[int(x) for x in scales],
             num_train_per_scale=args.num_train_per_scale,
             num_val_per_scale=args.num_val_per_scale,
