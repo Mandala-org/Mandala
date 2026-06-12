@@ -421,6 +421,7 @@ def build_silicon_scales_datasets(
     print(
         f"--- Silicon-scales dataset builder: data_path={data_path}, seed={seed}, scales={scales}, num_train_per_scale={num_train_per_scale}, num_val_per_scale={num_val_per_scale} ---"
     )
+    allow_incomplete_dataset = bool(getattr(cfg, "allow_incomplete_dataset", False))
     if not scales:
         raise ValueError("scales must contain at least one scale id")
     if num_train_per_scale <= 0:
@@ -440,13 +441,17 @@ def build_silicon_scales_datasets(
         rng.shuffle(scale_pairs)
         required = num_train_per_scale + num_val_per_scale
         if len(scale_pairs) < required:
-            raise ValueError(
-                f"Requested train+val={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
+            if not allow_incomplete_dataset:
+                raise ValueError(
+                    f"Requested train+val={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
+                )
+            print(
+                f"--- Silicon_scales scale {scale}: discovered={len(scale_pairs)} is below requested {required}; using all available snapshots ---"
             )
-        selected_train = scale_pairs[:num_train_per_scale]
-        selected_val = scale_pairs[
-            num_train_per_scale : num_train_per_scale + num_val_per_scale
-        ]
+        train_stop = min(num_train_per_scale, len(scale_pairs))
+        val_stop = min(required, len(scale_pairs))
+        selected_train = scale_pairs[:train_stop]
+        selected_val = scale_pairs[train_stop:val_stop]
         print(
             f"--- Silicon_scales scale {scale}: discovered={len(scale_pairs)}, train={len(selected_train)}, val={len(selected_val)} ---"
         )

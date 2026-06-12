@@ -64,6 +64,7 @@ CMD=(
   --adaptive-log-interval True
   --apply-cutoff-to-targets True
   --benchmark False
+  --allow-incomplete-dataset True
   --convention e3nn
   --cutoff-radius 8
   --data-path "${DATA_PATH}"

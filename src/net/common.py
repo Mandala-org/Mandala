@@ -204,6 +204,7 @@ class Config:
     seed: int = 42  # random seed for reproducibility
     precompute_edge_features: bool = True  # precompute edge features
     radial_embedding_scale: str = "none"
+    allow_incomplete_dataset: bool = False  # tolerate short snapshot lists
     apply_cutoff_to_targets: bool = True
     require_exact_edge_match: bool = (
         True  # validate cutoff prefix only; never mutate edges
