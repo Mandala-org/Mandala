@@ -475,6 +475,18 @@ def _run_snapshot_case(
     info = parse_info_out(info_path)
     positions = x["positions"]
     box = x["box"]
+    raw_gt_snapshot = Snapshot.from_openmx(
+        matrix_path=matrix_path,
+        info_path=info_path,
+        convention=args.convention,
+        symmetrize_density=True,
+        cutoff_radius=None,
+        cfg=cfg,
+    ).symmetrize_matrices(
+        hamiltonian=cfg.symmetrize_hamiltonian_targets,
+        overlap=True,
+        density=True,
+    )
     gt_snapshot = _build_snapshot_from_matrices(
         gt_mats, positions=positions, box=box, info=info
     )
@@ -519,7 +531,7 @@ def _run_snapshot_case(
 
     density_for_eigs = pred_mats_aligned.get("density", gt_mats["density"])
     overlap_for_eigs = (
-        gt_mats["overlap"]
+        raw_gt_snapshot.overlap
         if args.use_gt_overlap_for_eigs
         else pred_mats_aligned.get("overlap")
     )
@@ -648,7 +660,7 @@ def _run_snapshot_case(
     if args.dos_method == "tetrahedron":
         print("--- Computing tetrahedron DOS comparison (GT + prediction) ---")
         dos_metrics = analysis_eval.save_tetrahedron_dos_comparison_plot(
-            gt_snapshot,
+            raw_gt_snapshot,
             pred_band_snapshot,
             output_dir / "dos_comparison.png",
             kmesh_spec=args.dos_kmesh,
@@ -687,7 +699,7 @@ def _run_snapshot_case(
         )
 
     gt_band = analysis_eval.compute_or_load_band_structure(
-        gt_snapshot,
+        raw_gt_snapshot,
         analysis_eval.band_cache_path(
             output_dir,
             kind="gt",
