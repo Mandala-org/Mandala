@@ -1,0 +1,270 @@
+program: scripts/wandb_run.py
+method: bayes
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+
+project: mandala-ZnCuSnSeS-hamiltonian-compat-from-silicon
+name: ZnCuSnSeS-hamiltonian-compat-from-silicon-11h5
+command:
+  - ${env}
+  - python
+  - -u
+  - ${program}
+  - ${args}
+parameters:
+  # Experiment metadata
+  wandb-project:
+    value: mandala-ZnCuSnSeS-hamiltonian-compat-from-silicon
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_from_silicon_compat_11h5
+  resume-from-checkpoint:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73_lr0p004_seed43/best_model.pt
+  resume-mode:
+    value: best
+  compatibility:
+    value: true
+  wandb-mode:
+    value: online
+  generate-video:
+    value: false
+  log-artifacts:
+    value: true
+
+  # Dataset / time budget
+  dataset-kind:
+    value: ZnCuSnSeS
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache
+  dataset-device:
+    value: cuda
+  num-workers:
+    value: 0
+  scales:
+    value: [1]
+  num-train-per-scale:
+    value: 80
+  num-val-per-scale:
+    value: 20
+  max-wall-clock-hours:
+    value: 11.5
+
+  # Optimization
+  lr:
+    distribution: log_uniform_values
+    min: 0.0002
+    max: 0.001
+  max_epochs:
+    value: 3000
+  grad-clip-val:
+    values: [0.5, 1.0]
+  accumulate-grad-batches:
+    value: 1
+
+  # Core architecture
+  precision:
+    value: 32-mixed
+  convention:
+    value: e3nn
+  use-lr-scheduler:
+    value: true
+  cutoff-radius:
+    value: 12.0
+  l-max:
+    value: 6
+  hidden-base-dim:
+    value: 64
+  hidden-irreps:
+    value: 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e+4x4o+4x5e+12x5o+8x6e
+  edge-type-emb-dim:
+    value: 32
+  emb-use-odd-features:
+    value: true
+  edge-encoder-style:
+    value: rich
+  edge-encoder-use-sh-tensor-square:
+    value: false
+  e3layernorm:
+    value: false
+  num-layers-gnn:
+    value: 2
+  tp-type:
+    value: separate_weight
+  use-self-connection:
+    value: false
+  edge-update-node-combine:
+    value: concat
+  edge-update-residual:
+    value: false
+  node-update-message-agg:
+    value: attention
+  node-update-attention-scalar-dim:
+    value: 64
+  node-update-attention-heads:
+    value: 4
+  node-update-residual:
+    value: false
+
+  # E3MLP / head architecture
+  e3mlp-variant:
+    value: film
+  internal-e3mlp-variant:
+    value: resnormact
+  head-e3mlp-variant:
+    value: film
+  neck-depth:
+    value: 1
+  internal-e3mlp-layers:
+    value: 1
+  head-e3mlp-layers:
+    value: 1
+  head-pair-mode:
+    value: shared_conditioned
+  head-use-node-embeddings-for-self-edges:
+    value: true
+  separate-shifted-self:
+    value: true
+  head-use-tensor-square:
+    value: false
+  head-use-mlp-log-scale:
+    value: false
+  head-log-scale-mlp-n-layers:
+    value: 1
+  head-diag-output-scale:
+    value: 1.0
+  head-offdiag-output-scale:
+    value: 1.0
+  e3mlp-pre-norm:
+    value: false
+  e3mlp-norm-eps:
+    value: 1e-8
+  e3mlp-film-hidden-dim:
+    value: 64
+  e3mlp-output-scale:
+    value: 1.0
+  e3mlp-weight-init-scale:
+    value: 1.0
+  e3mlp-residual-scale:
+    value: 0.25
+
+  # Activations / regularization
+  activation-odd-scalar:
+    value: tanh
+  activation-odd-gate:
+    value: tanh
+  nonlin-kind:
+    value: normact
+  activation-scalar:
+    value: leakyrelu
+  activation-gate:
+    value: softplus
+  s2act-res:
+    value: 128
+  norm-kind:
+    value: component
+  dropout:
+    value: 0.0
+  l1-reg-coef:
+    value: 0.0
+  l2-reg-coef:
+    value: 0.0
+  n-radial:
+    value: 128
+  radial-layers:
+    value: [128, 128, 128]
+
+  # Runtime
+  device:
+    value: cuda
+  gpus:
+    value: 1
+  benchmark:
+    value: false
+  adaptive-log-interval:
+    value: true
+  log-interval:
+    value: 10
+
+  # Logging
+  log-data:
+    value: false
+  log-model:
+    value: false
+  log-forward:
+    value: false
+  log-per-irrep-metrics:
+    value: true
+  print-per-irrep-metrics:
+    value: false
+  log-per-irrep-images:
+    value: false
+  log-hamiltonian-irrep-contrib-metrics:
+    value: true
+  log-hamiltonian-pair-contrib-metrics:
+    value: true
+
+  # Targets / evaluation
+  matrix-targets:
+    value: [hamiltonian]
+  enable-energy:
+    value: true
+  enable-num-electrons:
+    value: true
+  enable-forces:
+    value: false
+  enable-stress:
+    value: false
+  train-on-energy:
+    value: false
+  train-on-num-electrons:
+    value: false
+  train-on-forces:
+    value: false
+  train-on-stress:
+    value: false
+  train-on-irrep-parts:
+    value: false
+  train-observables-on-gt:
+    value: false
+  log-partial-gt-observables:
+    value: true
+  loss-coef-observables:
+    value: 0.0
+  loss-coef-forces:
+    value: 0.0
+  loss-coef-stress:
+    value: 0.0
+  symmetrize-output:
+    value: true
+  apply-cutoff-to-targets:
+    value: true
+  require-exact-edge-match:
+    value: true
+  symmetrize-hamiltonian-targets:
+    value: true
+  precompute-edge-features:
+    value: true
+  radial-embedding-scale:
+    value: none
+
+  # Revert / scheduler
+  revert-on-spike:
+    value: true
+  revert-monitor:
+    value: val/hamiltonian_mae
+  revert-decay-patience:
+    value: 4
+  revert-decay-rate:
+    value: 0.5
+  revert-spike-factor:
+    value: 2.0
+  lr-scheduler-target:
+    value: val/hamiltonian_mae
+  lr-scheduler-factor:
+    value: 0.5
+  lr-scheduler-min-lr:
+    value: 1e-08
+  lr-scheduler-patience:
+    value: 60
