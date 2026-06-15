@@ -65,7 +65,7 @@ parameters:
 
   # Core architecture
   precision:
-    value: 32-mixed
+    value: 32-true
   convention:
     value: e3nn
   use-lr-scheduler:
