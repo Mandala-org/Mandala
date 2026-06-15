@@ -17,7 +17,7 @@ parameters:
   wandb-project:
     value: mandala-silicon-hamiltonian-rosi
   checkpoint-dir:
-    value: checkpoints/silicon_hamiltonian_300K_new_data
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data
   resume-mode:
     value: latest
   wandb-mode:

@@ -17,9 +17,9 @@ parameters:
   wandb-project:
     value: mandala-silicon-perturbed-hdo-compat
   checkpoint-dir:
-    value: checkpoints/silicon_perturbed_scales_hdo_compat_from_likely_sweep_22_47h5
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hdo_compat_from_likely_sweep_22_47h5
   resume-from-checkpoint:
-    value: checkpoints/silicon_perturbed_scales_hamiltonian_compat_11h5/likely-sweep-22/best_model.pt
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hamiltonian_compat_11h5/likely-sweep-22/best_model.pt
   compatibility:
     value: true
   resume-mode:

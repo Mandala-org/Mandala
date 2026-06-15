@@ -17,7 +17,7 @@ parameters:
   wandb-project:
     value: mandala-silicon-perturbed-hamiltonian-compat
   checkpoint-dir:
-    value: checkpoints/silicon_perturbed_scales_hamiltonian_compat_11h5
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hamiltonian_compat_11h5
   resume-from-checkpoint:
     value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73/silicon_hamiltonian_300K_new_data_restart_sage_sweep_73_lr0p004_seed43/best_model.pt
   compatibility:

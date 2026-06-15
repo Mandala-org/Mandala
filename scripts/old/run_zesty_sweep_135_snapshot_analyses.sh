@@ -15,7 +15,7 @@ fi
 
 cd "${ROOT_DIR}"
 
-CHECKPOINT="${CHECKPOINT:-/home/brzoza73/casus/mandala/checkpoints/silicon/zesty-sweep-135/best_model.pt}"
+CHECKPOINT="${CHECKPOINT:-/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon/zesty-sweep-135/best_model.pt}"
 DATA_ROOT="${DATA_ROOT:-/bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${ROOT_DIR}/eval_outputs/zesty-sweep-135_snapshot0_gt_overlap}"
 SNAPSHOT_INDEX="${SNAPSHOT_INDEX:-0}"

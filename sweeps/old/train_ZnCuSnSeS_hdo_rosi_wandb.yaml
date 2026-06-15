@@ -14,7 +14,7 @@ parameters:
   wandb-project:
     value: mandala-ZnCuSnSeS-hdo-rosi
   checkpoint-dir:
-    value: checkpoints/ZnCuSnSeS
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS
   resume-mode:
     value: latest
   wandb-mode:

@@ -19,7 +19,7 @@ parameters:
   wandb-mode:
     value: online
   checkpoint-dir:
-    value: checkpoints/restarts_from_e9yo3gkj
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/restarts_from_e9yo3gkj
   max-epochs:
     value: 400
   num-train:

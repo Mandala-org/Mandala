@@ -18,7 +18,7 @@ cd "${ROOT_DIR}"
 python -u scripts/wandb_run.py \
   --dataset-kind siox \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/SiOx \
-  --checkpoint-dir checkpoints/siox \
+  --checkpoint-dir /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/siox \
   --resume-from-wandb https://wandb.ai/b-brzoza/mandala-minimal-siox-hamiltonian-energy-halfgt-rosi/runs/9onx8a88 \
   --resume-mode latest \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/SiOx/snapshot_cache \

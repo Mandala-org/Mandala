@@ -15,7 +15,7 @@ python -u scripts/train_silicon.py \
   --run-name silicon_integrity_complement \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/snapshot_cache \
-  --checkpoint-dir checkpoints/silicon_integrity_complement \
+  --checkpoint-dir /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_integrity_complement \
   --matrix-targets density \
   --enable-energy true \
   --enable-num-electrons true \

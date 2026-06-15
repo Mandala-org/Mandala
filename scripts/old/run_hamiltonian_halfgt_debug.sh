@@ -13,7 +13,7 @@ cd "${ROOT_DIR}"
 python scripts/wandb_run.py \
   --dataset-kind silicon \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/silicon_very_big/dataset_A \
-  --checkpoint-dir checkpoints/silicon \
+  --checkpoint-dir /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon \
   --min-temp 3000 \
   --max-temp 3000 \
   --temp-step 300 \

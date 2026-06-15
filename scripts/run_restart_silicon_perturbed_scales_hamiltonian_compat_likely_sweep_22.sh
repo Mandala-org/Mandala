@@ -37,7 +37,7 @@ source mandala-venv/bin/activate
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mpl-${USER}}"
 mkdir -p "${MPLCONFIGDIR}"
 
-CHECKPOINT_DIR="checkpoints/silicon_perturbed_scales_hamiltonian_compat_11h5"
+CHECKPOINT_DIR="/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hamiltonian_compat_11h5"
 SOURCE_RUN_NAME="likely-sweep-22"
 RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-${ROOT_DIR}/${CHECKPOINT_DIR}/${SOURCE_RUN_NAME}/best_model.pt}"
 WANDB_PROJECT="mandala-silicon-perturbed-hamiltonian-compat"

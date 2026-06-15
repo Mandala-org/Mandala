@@ -35,8 +35,8 @@ source mandala-venv/bin/activate
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mpl-${USER}}"
 mkdir -p "${MPLCONFIGDIR}"
 
-CHECKPOINT_DIR="checkpoints/silicon_perturbed_scales_hdo_compat_from_likely_sweep_22_47h5"
-RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-/data/home2/brzoza73/casus/mandala/checkpoints/silicon_perturbed_scales_hdo_compat_from_likely_sweep_22_47h5/sleek-sweep-8/best_model.pt}"
+CHECKPOINT_DIR="/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hdo_compat_from_likely_sweep_22_47h5"
+RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hdo_compat_from_likely_sweep_22_47h5/sleek-sweep-8/best_model.pt}"
 WANDB_PROJECT="mandala-silicon-perturbed-hdo-compat"
 RUN_NAME="sleek-sweep-8-restart-lr${LR_TAG}"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si"

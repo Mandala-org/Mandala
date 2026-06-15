@@ -13,7 +13,7 @@ export WANDB_MODE=online
 python -u scripts/wandb_run.py \
   --dataset-kind ZnCuSnSeS_small \
   --data-path data/small/ZnCuSnSeS \
-  --checkpoint-dir checkpoints/zinc_copper_tin_selenide_sulfide_overfit \
+  --checkpoint-dir /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/zinc_copper_tin_selenide_sulfide_overfit \
   --snapshot-cache-dir checkpoints/zinc_copper_tin_selenide_sulfide_overfit/snapshot_cache \
   --num-train 1 \
   --num-val 0 \

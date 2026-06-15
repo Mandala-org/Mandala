@@ -11,7 +11,7 @@ cd "${ROOT_DIR}"
 python -u scripts/wandb_run.py \
   --dataset-kind siox \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/SiOx \
-  --checkpoint-dir checkpoints/siox \
+  --checkpoint-dir /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/siox \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/SiOx/snapshot_cache \
   --num-train 60 \
   --num-val 10 \

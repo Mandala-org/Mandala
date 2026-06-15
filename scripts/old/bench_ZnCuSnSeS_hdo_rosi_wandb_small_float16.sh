@@ -14,7 +14,7 @@ python -u scripts/wandb_run.py \
   --dataset-kind ZnCuSnSeS \
   --data-path /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache \
-  --checkpoint-dir checkpoints/ZnCuSnSeS_small_sampled \
+  --checkpoint-dir /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_small_sampled \
   --wandb-project mandala-ZnCuSnSeS-hdo-rosi \
   --wandb-mode online \
   --resume-mode latest \

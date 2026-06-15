@@ -14,7 +14,7 @@ parameters:
   wandb-project:
     value: mandala-minimal-silicon-hamiltonian-energy-halfgt-rosi
   checkpoint-dir:
-    value: checkpoints/silicon
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon
   resume-mode:
     value: latest
   wandb-mode:
