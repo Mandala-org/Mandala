@@ -2474,6 +2474,7 @@ def save_correlation_plot(
     lo = -bound
     hi = bound
     corr = float(torch.corrcoef(torch.stack([target_dense, pred_dense]))[0, 1].item())
+    r2 = float(corr * corr)
 
     fig, ax = plt.subplots(1, 1, figsize=(6.0, 6.0))
     ax.scatter(
@@ -2495,7 +2496,7 @@ def save_correlation_plot(
     ax.text(
         0.02,
         0.98,
-        f"r = {corr:.4f}\nN = {pred_np.size}",
+        f"R^2 = {r2:.4f}\nN = {pred_np.size}",
         transform=ax.transAxes,
         ha="left",
         va="top",
@@ -2511,6 +2512,7 @@ def save_correlation_plot(
             "pred": pred_dense.detach().cpu(),
             "target": target_dense.detach().cpu(),
             "corr": corr,
+            "r2": r2,
             "bound": bound,
             "lo": lo,
             "hi": hi,

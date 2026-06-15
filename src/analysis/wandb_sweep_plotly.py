@@ -2499,6 +2499,12 @@ def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
     lo = float(payload.get("lo", -bound))
     hi = float(payload.get("hi", bound))
     corr = payload.get("corr")
+    r2 = payload.get("r2")
+    if r2 is None and corr is not None:
+        try:
+            r2 = float(corr) * float(corr)
+        except Exception:
+            r2 = None
     fig = go.Figure(
         data=[
             go.Scattergl(
@@ -2524,8 +2530,8 @@ def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
     fig.update_layout(
         title=str(payload.get("title", "Correlation"))
         + (
-            f" | r = {float(corr):.4f}"
-            if corr is not None and np.isfinite(float(corr))
+            f" | R^2 = {float(r2):.4f}"
+            if r2 is not None and np.isfinite(float(r2))
             else ""
         ),
         xaxis_title="Ground truth",
