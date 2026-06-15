@@ -86,23 +86,33 @@ def band_path_from_openmx_info(
 
 
 def resolve_band_path(
+    box: torch.Tensor | None,
     info_path: Path | None,
-    requested_path_string: str,
+    requested_path_string: str | None,
     special_points_override: dict[str, list[float]] | None = None,
 ) -> tuple[str, dict[str, list[float]] | None]:
     if special_points_override is not None:
         if not special_points_override:
             raise ValueError("special_points_override must not be empty")
+        if requested_path_string is None:
+            raise ValueError(
+                "special_points_override requires an explicit --path-string"
+            )
         return requested_path_string, special_points_override
-    if info_path is None:
-        return requested_path_string, None
-    resolved = band_path_from_openmx_info(info_path)
-    if resolved is None:
-        return requested_path_string, None
-    openmx_path_string, special_points = resolved
-    if requested_path_string == DEFAULT_PATH_STRING:
-        return openmx_path_string, special_points
-    return requested_path_string, special_points
+    if info_path is not None:
+        resolved = band_path_from_openmx_info(info_path)
+        if resolved is None:
+            raise ValueError(f"No OpenMX Band.kpath found in {info_path}")
+        openmx_path_string, special_points = resolved
+        if requested_path_string is None:
+            return openmx_path_string, special_points
+        return requested_path_string, special_points
+    if requested_path_string is None:
+        if box is None:
+            raise ValueError("Need a snapshot box to resolve the default ASE band path")
+        default_path_string, *_ = build_band_path(box, npoints=2)
+        return default_path_string, None
+    return requested_path_string, None
 
 
 def display_k_label(label: str) -> str:
@@ -3282,13 +3292,18 @@ def build_band_structure_from_chunks(
     overlap_jitter: bool,
     progress_label: str = "Band-path eigensolve",
 ) -> BandStructure:
-    fractional_kpoints, kpoints_abs, linear_k, tick_positions, tick_labels = (
-        build_band_path(
-            snapshot.box,
-            path=path_string,
-            special_points=special_points,
-            npoints=num_points,
-        )
+    (
+        _resolved_path_string,
+        fractional_kpoints,
+        kpoints_abs,
+        linear_k,
+        tick_positions,
+        tick_labels,
+    ) = build_band_path(
+        snapshot.box,
+        path=path_string,
+        special_points=special_points,
+        npoints=num_points,
     )
     shift_t = snapshot.get_translation_shifts().to(device=snapshot.box.device)
     if shift_t.numel() == 0:

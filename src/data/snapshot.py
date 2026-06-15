@@ -721,6 +721,7 @@ class Snapshot:
                 )
             else:
                 (
+                    _resolved_path_string,
                     fractional_kpoints_t,
                     kpoints_abs,
                     linear_k_t,

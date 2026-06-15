@@ -258,9 +258,6 @@ def _build_eval_namespace(
     output_dir: Path,
     eval_mod: Any,
 ) -> argparse.Namespace:
-    path_string = args.path_string
-    if path_string is None:
-        path_string = eval_mod.analysis_eval.DEFAULT_PATH_STRING
     return argparse.Namespace(
         checkpoint=Path(checkpoint_path),
         mode=args.mode,
@@ -289,7 +286,7 @@ def _build_eval_namespace(
         dos_energy_min=args.dos_energy_min,
         dos_energy_max=args.dos_energy_max,
         num_points=args.num_points,
-        path_string=path_string,
+        path_string=args.path_string,
         use_gt_overlap_for_eigs=args.use_gt_overlap_for_eigs,
         band_emin_ev=args.band_emin_ev,
         band_emax_ev=args.band_emax_ev,

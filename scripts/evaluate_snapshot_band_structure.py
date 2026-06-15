@@ -76,7 +76,7 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument(
         "--path-string",
         type=str,
-        default=analysis_eval.DEFAULT_PATH_STRING,
+        default=None,
         help="Band path string in fractional reciprocal coordinates.",
     )
     parser.add_argument(
@@ -251,14 +251,15 @@ def main() -> None:
 
     t_path = time.perf_counter()
     _log("[2/6] Building k-path ...")
-    band_info_path = (
-        args.band_info_path if args.band_info_path is not None else info_path
-    )
     special_points_override = _parse_special_points_json(args.special_points_json)
     path_string, special_points = analysis_eval.resolve_band_path(
-        band_info_path, args.path_string, special_points_override
+        box=snapshot.box,
+        info_path=args.band_info_path,
+        requested_path_string=args.path_string,
+        special_points_override=special_points_override,
     )
     (
+        _resolved_path_string,
         fractional_kpoints,
         kpoints_abs,
         linear_k,

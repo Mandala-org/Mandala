@@ -104,9 +104,7 @@ def setup_argparse() -> argparse.Namespace:
     parser.add_argument("--dos-energy-min", type=float, default=-10.0)
     parser.add_argument("--dos-energy-max", type=float, default=15.0)
     parser.add_argument("--num-points", type=int, default=240)
-    parser.add_argument(
-        "--path-string", type=str, default=analysis_eval.DEFAULT_PATH_STRING
-    )
+    parser.add_argument("--path-string", type=str, default=None)
     parser.add_argument(
         "--use-gt-overlap-for-eigs",
         action="store_true",
@@ -490,12 +488,12 @@ def _run_snapshot_case(
     gt_snapshot = _build_snapshot_from_matrices(
         gt_mats, positions=positions, box=box, info=info
     )
-    band_info_path = (
-        args.band_info_path if args.band_info_path is not None else info_path
-    )
     special_points_override = _parse_special_points_json(args.special_points_json)
     resolved_path_string, special_points = analysis_eval.resolve_band_path(
-        band_info_path, args.path_string, special_points_override
+        box=box,
+        info_path=args.band_info_path,
+        requested_path_string=args.path_string,
+        special_points_override=special_points_override,
     )
     gt_snapshot = _maybe_apply_analysis_cutoff(
         gt_snapshot, args.analysis_cutoff_radius, cfg
@@ -788,14 +786,12 @@ def _run_cif_case(
         raise ValueError(
             "CIF mode requires --reference-info-path so the OpenMX Band.kpath can be reused."
         )
-    band_info_path = (
-        args.band_info_path
-        if args.band_info_path is not None
-        else args.reference_info_path
-    )
     special_points_override = _parse_special_points_json(args.special_points_json)
     resolved_path_string, special_points = analysis_eval.resolve_band_path(
-        band_info_path, args.path_string, special_points_override
+        box=box,
+        info_path=args.band_info_path,
+        requested_path_string=args.path_string,
+        special_points_override=special_points_override,
     )
     x = build_model_input_from_structure(
         atoms=atoms,

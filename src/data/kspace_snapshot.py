@@ -89,7 +89,7 @@ def build_band_path(
     path: str | None = None,
     special_points: dict[str, Sequence[float]] | None = None,
     npoints: int = 200,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str]]:
+) -> tuple[str, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str]]:
     cell = Cell(box.detach().cpu().numpy())
     if special_points is None:
         band_path = cell.bandpath(path=path, npoints=npoints)
@@ -98,6 +98,7 @@ def build_band_path(
             cell, path=path, special_points=special_points
         ).interpolate(npoints=npoints)
 
+    path_string = str(band_path.path)
     fractional_kpoints = torch.tensor(
         np.asarray(band_path.kpts),
         dtype=box.dtype,
@@ -117,7 +118,14 @@ def build_band_path(
         device=box.device,
     )
     tick_labels = [_format_k_label(str(label)) for label in tick_labels_raw]
-    return fractional_kpoints, kpoints_abs, linear_k, tick_positions, tick_labels
+    return (
+        path_string,
+        fractional_kpoints,
+        kpoints_abs,
+        linear_k,
+        tick_positions,
+        tick_labels,
+    )
 
 
 def _generalized_eigenvalues_kspace(
