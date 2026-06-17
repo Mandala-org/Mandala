@@ -251,13 +251,13 @@ parameters:
   hamiltonian-envelope-path:
     value: eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json
   hamiltonian-envelope-mode:
-    values: [off, normalize_target, multiply_prediction]
+    values: ["off", "normalize_target", "multiply_prediction"]
   pair-conditioned-radial-mlp:
     values: [false, true]
   pair-distance-normalization:
-    values: [off, pair_r0]
+    values: ["off", "pair_r0"]
   loss-weighting-mode:
-    value: off
+    value: "off"
 
   # Revert / stability
   revert-on-spike:
