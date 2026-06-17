@@ -25,7 +25,7 @@ CHECKPOINT_DIR="/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuS
 WANDB_PROJECT="mandala-ZnCuSnSeS-hamiltonian-envelope-stress"
 RUN_NAME="zncusnses-envelope-stress-test-seed${SEED}"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS"
-SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache"
+SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache_envelopes"
 ENVELOPE_PATH="eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json"
 
 if [[ ! -f "${ENVELOPE_PATH}" ]]; then
@@ -43,7 +43,7 @@ CMD=(
   --dataset-kind ZnCuSnSeS
   --data-path "${DATA_PATH}"
   --snapshot-cache-dir "${SNAPSHOT_CACHE_DIR}"
-  --dataset-device cpu
+  --dataset-device cuda
   --num-workers 3
   --scales "[1]"
   --num-train-per-scale 2
@@ -54,7 +54,7 @@ CMD=(
   --precision 32-true
   --convention e3nn
   --use-lr-scheduler true
-  --cutoff-radius 12.0
+  --cutoff-radius 11.0
   --l-max 6
   --hidden-base-dim 64
   --hidden-irreps "128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e+4x4o+4x5e+12x5o+8x6e"
@@ -75,9 +75,9 @@ CMD=(
   --e3mlp-variant film
   --internal-e3mlp-variant resnormact
   --head-e3mlp-variant film
-  --neck-depth 1
-  --internal-e3mlp-layers 1
-  --head-e3mlp-layers 1
+  --neck-depth 2
+  --internal-e3mlp-layers 2
+  --head-e3mlp-layers 2
   --head-pair-mode shared_conditioned
   --head-use-node-embeddings-for-self-edges true
   --separate-shifted-self true
@@ -114,7 +114,7 @@ CMD=(
   --log-per-irrep-metrics true
   --print-per-irrep-metrics false
   --log-per-irrep-images false
-  --matrix-targets "[\"hamiltonian\", \"density\", \"overlap\"]"
+  --matrix-targets "[\"hamiltonian\"]"
   --enable-energy true
   --enable-num-electrons true
   --enable-forces false
