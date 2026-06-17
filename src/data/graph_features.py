@@ -41,6 +41,7 @@ def compute_edge_geometry_from_static_edges(
     n_radial: int,
     radial_embedding_scale: str,
     radial_lengths: torch.Tensor | None = None,
+    radial_basis_end: float | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if box is not None:
         shift_float = edge_shift.T.to(dtype=positions.dtype)
@@ -68,11 +69,13 @@ def compute_edge_geometry_from_static_edges(
         radial_lengths = radial_lengths.to(
             device=edge_lengths.device, dtype=edge_lengths.dtype
         )
+    if radial_basis_end is None:
+        radial_basis_end = cutoff_radius
 
     edge_length_emb = soft_one_hot_linspace(
         radial_lengths,
         start=0.0,
-        end=cutoff_radius,
+        end=radial_basis_end,
         number=n_radial,
         basis="gaussian",
         cutoff=False,
@@ -255,8 +258,10 @@ def compute_graph_features(
 
     # 9. Calculate geometric features for the final edge order
     radial_lengths = None
+    radial_basis_end = None
     if edge_type_r0 is not None:
         radial_lengths = edge_lengths / edge_type_r0.index_select(0, edge_type_idx)
+        radial_basis_end = 1.0
 
     edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
         positions=positions,
@@ -268,6 +273,7 @@ def compute_graph_features(
         n_radial=cfg.n_radial,
         radial_embedding_scale=cfg.radial_embedding_scale,
         radial_lengths=radial_lengths,
+        radial_basis_end=radial_basis_end,
     )
 
     return (

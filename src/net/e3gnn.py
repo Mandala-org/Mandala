@@ -280,6 +280,11 @@ class E3GNN(pl.LightningModule):
             )
             return scaled_pred, target_matrix, scaled_pred
         if mode == "normalize_target":
+            physical_pred = scale_block_matrix_by_edge_values(
+                pred_matrix,
+                edge_envelope,
+                edge_partitions,
+            )
             normalized_target = scale_block_matrix_by_edge_values(
                 target_matrix,
                 edge_envelope,
@@ -288,7 +293,7 @@ class E3GNN(pl.LightningModule):
                 eps=eps,
                 allow_prefix_trim=True,
             )
-            return pred_matrix, normalized_target, pred_matrix
+            return pred_matrix, normalized_target, physical_pred
         raise ValueError(
             "hamiltonian_envelope_mode must be one of 'off', "
             "'normalize_target', or 'multiply_prediction'."
@@ -379,6 +384,7 @@ class E3GNN(pl.LightningModule):
 
     def _populate_edge_features(self, x: Dict[str, Any]) -> None:
         radial_lengths = None
+        radial_basis_end = None
         if (
             str(getattr(self.cfg, "pair_distance_normalization", "off")).lower()
             == "pair_r0"
@@ -389,6 +395,7 @@ class E3GNN(pl.LightningModule):
                     "and edge_r0 in the batch."
                 )
             radial_lengths = x["edge_length"] / x["edge_r0"].clamp_min(1e-12)
+            radial_basis_end = 1.0
         edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
             positions=x["positions"],
             box=x["box"],
@@ -399,6 +406,7 @@ class E3GNN(pl.LightningModule):
             n_radial=self.cfg.n_radial,
             radial_embedding_scale=self.cfg.radial_embedding_scale,
             radial_lengths=radial_lengths,
+            radial_basis_end=radial_basis_end,
         )
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh
@@ -876,14 +884,12 @@ class E3GNN(pl.LightningModule):
             physical_pred_matrix = pred_matrix
             if name in {"hamiltonian", "overlap"}:
                 mode = self._matrix_envelope_mode()
-                if mode == "multiply_prediction":
+                if mode in {"multiply_prediction", "normalize_target"}:
                     physical_pred_matrix = scale_block_matrix_by_edge_values(
                         pred_matrix,
                         x["edge_envelope"],
                         x["edge_partitions"],
                     )
-                elif mode == "normalize_target":
-                    physical_pred_matrix = pred_matrix
             observable_preds_matrix[name] = truncate_pred_block_matrix_to_target_prefix(
                 physical_pred_matrix,
                 target_matrix,

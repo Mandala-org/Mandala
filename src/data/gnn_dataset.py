@@ -194,6 +194,12 @@ class E3GNNDataset(Dataset):
                     matrix_path, info_path, snapshot
                 )
             except Exception as exc:
+                if not bool(getattr(self.cfg, "allow_incomplete_dataset", False)):
+                    raise RuntimeError(
+                        "Snapshot load/preprocess failure encountered while "
+                        "allow_incomplete_dataset=False. "
+                        f"matrix={matrix_path} info={info_path}"
+                    ) from exc
                 message = (
                     "!!! WARNING: skipping snapshot due to load/preprocess failure !!! "
                     f"matrix={matrix_path} info={info_path} error={exc}"
