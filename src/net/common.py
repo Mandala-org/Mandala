@@ -171,7 +171,6 @@ class Config:
     loss_weighting_mode: str = "off"
     loss_weight_min: float = 0.0
     loss_weight_max: float = 100.0
-    loss_normalized_hamiltonian_coef: float = 0.0
 
     # -------------- logging ---------------------------------------------
     run_name: str = "mandala-run"

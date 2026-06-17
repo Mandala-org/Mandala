@@ -24,6 +24,16 @@ class SlaterSoftCutoffEnvelopeTable:
         return {pair: idx for idx, pair in enumerate(self.pair_keys)}
 
 
+def _resolve_pair_key(pair: str, pairs: dict[str, object]) -> str:
+    if pair in pairs:
+        return pair
+    left, right = pair.split("-", maxsplit=1)
+    reversed_pair = f"{right}-{left}"
+    if reversed_pair in pairs:
+        return reversed_pair
+    raise ValueError(f"Envelope artifact is missing parameters for pair {pair!r}.")
+
+
 def load_slater_soft_cutoff_envelope_table(
     path: str | Path,
     *,
@@ -52,17 +62,16 @@ def load_slater_soft_cutoff_envelope_table(
         pair_keys = tuple(pair_order)
     params = []
     for pair in pair_keys:
-        if pair not in pairs:
-            raise ValueError(
-                f"Envelope artifact {path} is missing parameters for pair {pair!r}."
-            )
-        entry = pairs[pair]
+        entry_key = _resolve_pair_key(pair, pairs)
+        entry = pairs[entry_key]
         if not isinstance(entry, dict):
-            raise ValueError(f"Envelope entry for pair {pair!r} must be a mapping.")
+            raise ValueError(
+                f"Envelope entry for pair {entry_key!r} must be a mapping."
+            )
         theta = entry.get("theta")
         if not isinstance(theta, list) or len(theta) != 5:
             raise ValueError(
-                f"Envelope entry for pair {pair!r} must contain 5 theta values."
+                f"Envelope entry for pair {entry_key!r} must contain 5 theta values."
             )
         params.append(theta)
 

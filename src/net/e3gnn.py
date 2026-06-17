@@ -331,6 +331,42 @@ class E3GNN(pl.LightningModule):
             raise ValueError("loss_weight_max must be >= loss_weight_min.")
         return weights.clamp(min=min_w, max=max_w)
 
+    def _weighted_edge_block_losses(
+        self,
+        *,
+        preds: torch.Tensor,
+        targets: torch.Tensor,
+        edge_weights: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if preds.shape != targets.shape:
+            raise ValueError(
+                "Predicted and target block tensors must have identical shapes, got "
+                f"{tuple(preds.shape)} and {tuple(targets.shape)}"
+            )
+        if preds.ndim != 3:
+            raise ValueError(
+                f"Block tensors must have shape (E, D1, D2), got {tuple(preds.shape)}"
+            )
+
+        per_edge_mse = torch.mean((preds - targets) ** 2, dim=(1, 2))
+        per_edge_mae = torch.mean(torch.abs(preds - targets), dim=(1, 2))
+        if edge_weights is None:
+            return per_edge_mse.mean(), per_edge_mae.mean()
+
+        if edge_weights.ndim != 1 or edge_weights.shape[0] != per_edge_mse.shape[0]:
+            raise ValueError(
+                "Edge weights must be a 1D tensor matching the number of selected "
+                f"edges, got weights={tuple(edge_weights.shape)} and "
+                f"selected_edges={int(per_edge_mse.shape[0])}"
+            )
+        edge_weights = edge_weights.to(device=preds.device, dtype=preds.dtype)
+        weight_sum = edge_weights.sum()
+        if not torch.isfinite(weight_sum) or float(weight_sum) <= 0.0:
+            raise ValueError("Edge weights must have a positive finite sum.")
+        weighted_mse = torch.sum(edge_weights * per_edge_mse) / weight_sum
+        weighted_mae = torch.sum(edge_weights * per_edge_mae) / weight_sum
+        return weighted_mse, weighted_mae
+
     def _should_recompute_edge_features(self, x: Dict[str, Any]) -> bool:
         if not self.cfg.precompute_edge_features:
             return True
@@ -616,6 +652,9 @@ class E3GNN(pl.LightningModule):
                     x=x,
                 )
             )
+            matrix_edge_weights = (
+                edge_loss_weights if name in {"hamiltonian", "overlap"} else None
+            )
             need_irrep_cache = allow_train_metrics and (
                 self.cfg.log_per_irrep_metrics
                 or (
@@ -696,17 +735,21 @@ class E3GNN(pl.LightningModule):
                     if preds.shape[0] == 0:
                         continue
 
-                    pair_mse = self._mse(preds, targets)
-                    pair_mae = self._mae(preds, targets)
-                    pair_weight = 1.0
-                    if edge_loss_weights is not None:
-                        pair_weight = torch.mean(
-                            edge_loss_weights.index_select(
-                                0, x["edge_partitions"][key]["global_idx"]
-                            )
+                    edge_weights_selected = None
+                    if matrix_edge_weights is not None:
+                        selected_global_idx = x["edge_partitions"][key]["global_idx"][
+                            :target_n
+                        ][partial_mask]
+                        edge_weights_selected = matrix_edge_weights.index_select(
+                            0, selected_global_idx
                         )
-                    weighted_pair_mse = pair_weight * pair_mse
-                    weighted_pair_mae = pair_weight * pair_mae
+                    weighted_pair_mse, weighted_pair_mae = (
+                        self._weighted_edge_block_losses(
+                            preds=preds,
+                            targets=targets,
+                            edge_weights=edge_weights_selected,
+                        )
+                    )
                     loss_mse_val += weighted_pair_mse
                     loss_mae_val += weighted_pair_mae
                     pair_losses[key] = (
@@ -910,22 +953,7 @@ class E3GNN(pl.LightningModule):
         t_obs_end = time.perf_counter()
 
         # --- Total Loss Aggregation ---
-        total_matrix_l1_component = self.cfg.loss_l1_fraction * sum(
-            matrix_maes.values()
-        )
-        total_matrix_l2_component = (1 - self.cfg.loss_l1_fraction) * sum(
-            matrix_mses.values()
-        )
-
-        total_l1_loss = total_matrix_l1_component
-        total_l2_loss = (
-            total_matrix_l2_component
-            + loss_E_weighted
-            + loss_N_weighted
-            + loss_F_weighted
-        )
-
-        loss = total_l1_loss + total_l2_loss
+        loss = loss_matrix + loss_E_weighted + loss_N_weighted + loss_F_weighted
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
