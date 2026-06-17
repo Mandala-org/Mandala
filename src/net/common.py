@@ -133,6 +133,8 @@ class Config:
     radial_layers: Sequence[int] = field(
         default_factory=lambda: (128,)
     )  # e.g. (128,) -> 2-layer MLP
+    pair_conditioned_radial_mlp: bool = False
+    pair_distance_normalization: str = "off"  # off | pair_r0
 
     # -------------- output head ----------------------------------------
     # --------- additional outputs --------------------------------------
@@ -161,6 +163,15 @@ class Config:
     loss_coef_observables: float = 1e-5
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
+    hamiltonian_envelope_mode: str = (
+        "off"  # off | normalize_target | multiply_prediction
+    )
+    hamiltonian_envelope_path: str | None = None
+    hamiltonian_envelope_eps: float = 1e-12
+    loss_weighting_mode: str = "off"
+    loss_weight_min: float = 0.0
+    loss_weight_max: float = 100.0
+    loss_normalized_hamiltonian_coef: float = 0.0
 
     # -------------- logging ---------------------------------------------
     run_name: str = "mandala-run"

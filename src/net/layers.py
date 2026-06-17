@@ -133,10 +133,26 @@ class EquiConv(nn.Module):
         cfg: Config,
         nonlin: bool = True,
         info: dict | None = None,
+        n_edge_types: int | None = None,
     ):
         super().__init__()
         self.cfg = cfg
         self.info = info or {}
+        self.pair_conditioned_radial_mlp = bool(
+            getattr(self.cfg, "pair_conditioned_radial_mlp", False)
+        )
+        self.pair_emb = None
+        radial_in_dim = n_radial
+        if self.pair_conditioned_radial_mlp:
+            if n_edge_types is None:
+                raise ValueError("pair_conditioned_radial_mlp requires n_edge_types.")
+            self.pair_emb = nn.Embedding(
+                n_edge_types,
+                self.cfg.edge_type_emb_dim,
+                dtype=self.cfg.dtype,
+            )
+            nn.init.normal_(self.pair_emb.weight, std=0.2)
+            radial_in_dim += self.cfg.edge_type_emb_dim
 
         irreps_in1 = Irreps(irreps_in1)
         irreps_in2 = Irreps(irreps_in2)
@@ -229,7 +245,7 @@ class EquiConv(nn.Module):
         # Element-wise multiplication weights (learned per-irrep scaling)
         # This is computed from radial features via MLP
         self.radial_mlp = RadialMLP(
-            in_dim=n_radial,
+            in_dim=radial_in_dim,
             out_dim=self.irreps_out.num_irreps,  # One weight per irrep
             layers=self.cfg.radial_layers,
             act="silu",
@@ -241,6 +257,7 @@ class EquiConv(nn.Module):
         fea_in1: torch.Tensor,
         fea_in2: torch.Tensor,
         edge_length_emb: torch.Tensor,
+        edge_type_idx: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -294,6 +311,13 @@ class EquiConv(nn.Module):
             z = self.nonlin(z)
 
         # Radial weighting (element-wise multiplication)
+        if self.pair_conditioned_radial_mlp:
+            if edge_type_idx is None:
+                raise ValueError(
+                    "pair_conditioned_radial_mlp requires edge_type_idx in forward()."
+                )
+            pair_emb = self.pair_emb(edge_type_idx)
+            edge_length_emb = torch.cat([edge_length_emb, pair_emb], dim=-1)
         weights = self.radial_mlp(edge_length_emb)
 
         # Apply weights per irrep
@@ -335,6 +359,7 @@ class EdgeUpdateBlock(nn.Module):
         cfg: Config,
         info: dict = None,
         edge_irreps_out: Irreps | None = None,
+        n_edge_types: int | None = None,
     ):
         super().__init__()
         self.cfg = cfg
@@ -403,6 +428,7 @@ class EdgeUpdateBlock(nn.Module):
             cfg=cfg,
             nonlin=True,  # Use gate nonlinearity
             info=info,
+            n_edge_types=n_edge_types,
         )
 
         # Post-linear transformation
@@ -465,6 +491,7 @@ class EdgeUpdateBlock(nn.Module):
         edge_sh: torch.Tensor,
         edge_length_emb: torch.Tensor,
         edge_one_hot: torch.Tensor = None,
+        edge_type_idx: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -498,7 +525,7 @@ class EdgeUpdateBlock(nn.Module):
         fea_in = torch.cat([node_context, edge], dim=-1)
 
         # EquiConv
-        edge = self.conv(fea_in, edge_sh, edge_length_emb)
+        edge = self.conv(fea_in, edge_sh, edge_length_emb, edge_type_idx=edge_type_idx)
 
         # Post-linear
         edge = self.lin_post(edge)
@@ -547,6 +574,7 @@ class NodeUpdateBlock(nn.Module):
         cfg: Config,
         info: dict = None,
         node_irreps_out: Irreps = None,  # Output irreps for nodes (defaults to edge_irreps)
+        n_edge_types: int | None = None,
     ):
         super().__init__()
         self.cfg = cfg
@@ -601,6 +629,7 @@ class NodeUpdateBlock(nn.Module):
             cfg=cfg,
             nonlin=True,
             info=info,
+            n_edge_types=n_edge_types,
         )
 
         # Post-linear transformation
@@ -698,6 +727,7 @@ class NodeUpdateBlock(nn.Module):
         edge_sh: torch.Tensor,
         edge_length_emb: torch.Tensor,
         node_one_hot: torch.Tensor = None,
+        edge_type_idx: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -725,7 +755,9 @@ class NodeUpdateBlock(nn.Module):
         fea_in = torch.cat([node[src], node[dst], edge], dim=-1)
 
         # EquiConv to create messages
-        edge_messages = self.conv(fea_in, edge_sh, edge_length_emb)
+        edge_messages = self.conv(
+            fea_in, edge_sh, edge_length_emb, edge_type_idx=edge_type_idx
+        )
 
         # Aggregate messages to nodes
         if self.message_agg_mode == "sum":
@@ -823,6 +855,7 @@ class MessageBlock(nn.Module):
         info: dict = None,
         node_irreps_out: Irreps | None = None,
         edge_irreps_out: Irreps | None = None,
+        n_edge_types: int | None = None,
     ):
         super().__init__()
         self.cfg = cfg
@@ -837,6 +870,7 @@ class MessageBlock(nn.Module):
             num_species=num_species,
             cfg=cfg,
             info=info,
+            n_edge_types=n_edge_types,
         )
         self.edge_upd = EdgeUpdateBlock(
             node_irreps=self.node_upd.irreps_out,
@@ -845,6 +879,7 @@ class MessageBlock(nn.Module):
             num_species=num_species,
             cfg=cfg,
             info=info,
+            n_edge_types=n_edge_types,
         )
         self.node_irreps_out = self.node_upd.irreps_out
         self.edge_irreps_out = self.edge_upd.irreps_out
@@ -858,6 +893,7 @@ class MessageBlock(nn.Module):
         edge_length_emb: torch.Tensor,
         node_one_hot: torch.Tensor = None,
         edge_one_hot: torch.Tensor = None,
+        edge_type_idx: torch.Tensor | None = None,
         activation_mags: dict = None,
     ):
         """
@@ -877,7 +913,13 @@ class MessageBlock(nn.Module):
             Tuple of (updated_node, updated_edge)
         """
         node = self.node_upd(
-            node, edge, edge_index, edge_sh, edge_length_emb, node_one_hot
+            node,
+            edge,
+            edge_index,
+            edge_sh,
+            edge_length_emb,
+            node_one_hot,
+            edge_type_idx=edge_type_idx,
         )
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
@@ -888,7 +930,13 @@ class MessageBlock(nn.Module):
                 activation_mags[tag] = mag
 
         edge = self.edge_upd(
-            node, edge, edge_index, edge_sh, edge_length_emb, edge_one_hot
+            node,
+            edge,
+            edge_index,
+            edge_sh,
+            edge_length_emb,
+            edge_one_hot,
+            edge_type_idx=edge_type_idx,
         )
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:

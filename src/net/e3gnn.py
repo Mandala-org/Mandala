@@ -23,6 +23,7 @@ import time
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix, IrrepsBlockData
+from data.envelope import scale_block_matrix_by_edge_values
 from data.graph_features import compute_edge_geometry_from_static_edges
 
 from net.common import Config, resolve_hidden_irreps
@@ -91,6 +92,24 @@ class E3GNN(pl.LightningModule):
                 "train_on_irrep_parts expects matrix-space supervision and should only be used with train_target='matrix'."
             )
         validate_observable_config(cfg)
+        envelope_mode = str(getattr(cfg, "hamiltonian_envelope_mode", "off")).lower()
+        if envelope_mode not in {"off", "normalize_target", "multiply_prediction"}:
+            raise ValueError(
+                "hamiltonian_envelope_mode must be one of 'off', "
+                "'normalize_target', or 'multiply_prediction'."
+            )
+        if bool(getattr(cfg, "pair_conditioned_radial_mlp", False)) and bool(
+            getattr(cfg, "train_on_irrep_parts", False)
+        ):
+            raise ValueError(
+                "pair_conditioned_radial_mlp is not supported together with "
+                "train_on_irrep_parts."
+            )
+        if bool(getattr(cfg, "train_on_irrep_parts", False)) and envelope_mode != "off":
+            raise ValueError(
+                "hamiltonian_envelope_mode requires matrix-space training; "
+                "it cannot be used with train_on_irrep_parts."
+            )
 
         # ---------- shared irreps ---------------------------------------
         self.hidden_irreps: Irreps = resolve_hidden_irreps(self.cfg)
@@ -123,6 +142,7 @@ class E3GNN(pl.LightningModule):
                 num_species=len(self.mapper.orbital_cfg.elements()),
                 cfg=self.cfg,
                 info={"layer": i},
+                n_edge_types=len(self.mapper.edge_types),
             )
             self.mp_blocks.append(block)
             node_irreps = block.node_irreps_out
@@ -227,6 +247,90 @@ class E3GNN(pl.LightningModule):
         )
         return irreps_blocks
 
+    def _matrix_envelope_mode(self) -> str:
+        return str(getattr(self.cfg, "hamiltonian_envelope_mode", "off")).lower()
+
+    def _apply_matrix_envelope_mode(
+        self,
+        *,
+        name: str,
+        pred_matrix: BlockMatrix,
+        target_matrix: BlockMatrix,
+        x: Dict[str, Any],
+    ) -> tuple[BlockMatrix, BlockMatrix, BlockMatrix]:
+        mode = self._matrix_envelope_mode()
+        if name not in {"hamiltonian", "overlap"} or mode == "off":
+            return pred_matrix, target_matrix, pred_matrix
+        if "edge_envelope" not in x:
+            raise ValueError(
+                "hamiltonian_envelope_mode requires edge_envelope in the batch."
+            )
+        if "edge_partitions" not in x:
+            raise ValueError(
+                "hamiltonian_envelope_mode requires edge_partitions in the batch."
+            )
+        edge_envelope = x["edge_envelope"]
+        edge_partitions = x["edge_partitions"]
+        eps = float(getattr(self.cfg, "hamiltonian_envelope_eps", 1.0e-12))
+        if mode == "multiply_prediction":
+            scaled_pred = scale_block_matrix_by_edge_values(
+                pred_matrix,
+                edge_envelope,
+                edge_partitions,
+            )
+            return scaled_pred, target_matrix, scaled_pred
+        if mode == "normalize_target":
+            normalized_target = scale_block_matrix_by_edge_values(
+                target_matrix,
+                edge_envelope,
+                edge_partitions,
+                inverse=True,
+                eps=eps,
+            )
+            return pred_matrix, normalized_target, pred_matrix
+        raise ValueError(
+            "hamiltonian_envelope_mode must be one of 'off', "
+            "'normalize_target', or 'multiply_prediction'."
+        )
+
+    def _edge_loss_weights(self, x: Dict[str, Any]) -> torch.Tensor | None:
+        mode = str(getattr(self.cfg, "loss_weighting_mode", "off")).lower()
+        if mode == "off":
+            return None
+        if "edge_partitions" not in x:
+            raise ValueError(
+                "loss_weighting_mode requires edge_partitions in the batch."
+            )
+        if mode in {"envelope_inverse_sqrt_clipped", "envelope_inverse_clipped"}:
+            if "edge_envelope" not in x:
+                raise ValueError(
+                    "loss_weighting_mode based on envelope requires edge_envelope in the batch."
+                )
+            base = x["edge_envelope"]
+            eps = float(getattr(self.cfg, "hamiltonian_envelope_eps", 1.0e-12))
+            if mode == "envelope_inverse_sqrt_clipped":
+                weights = torch.rsqrt(base.clamp_min(eps))
+            else:
+                weights = base.clamp_min(eps).reciprocal()
+        elif mode == "distance_short_range_bias":
+            if "edge_length" not in x:
+                raise ValueError(
+                    "distance_short_range_bias loss weighting requires edge_length in the batch."
+                )
+            weights = torch.rsqrt(1.0 + x["edge_length"].clamp_min(0.0))
+        else:
+            raise ValueError(
+                "loss_weighting_mode must be one of 'off', "
+                "'distance_short_range_bias', "
+                "'envelope_inverse_sqrt_clipped', or 'envelope_inverse_clipped'."
+            )
+
+        min_w = float(getattr(self.cfg, "loss_weight_min", 0.0))
+        max_w = float(getattr(self.cfg, "loss_weight_max", 1.0))
+        if max_w < min_w:
+            raise ValueError("loss_weight_max must be >= loss_weight_min.")
+        return weights.clamp(min=min_w, max=max_w)
+
     def _should_recompute_edge_features(self, x: Dict[str, Any]) -> bool:
         if not self.cfg.precompute_edge_features:
             return True
@@ -237,6 +341,17 @@ class E3GNN(pl.LightningModule):
         return False
 
     def _populate_edge_features(self, x: Dict[str, Any]) -> None:
+        radial_lengths = None
+        if (
+            str(getattr(self.cfg, "pair_distance_normalization", "off")).lower()
+            == "pair_r0"
+        ):
+            if "edge_length" not in x or "edge_r0" not in x:
+                raise ValueError(
+                    "pair_distance_normalization='pair_r0' requires edge_length "
+                    "and edge_r0 in the batch."
+                )
+            radial_lengths = x["edge_length"] / x["edge_r0"].clamp_min(1e-12)
         edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
             positions=x["positions"],
             box=x["box"],
@@ -246,6 +361,7 @@ class E3GNN(pl.LightningModule):
             cutoff_radius=self.cfg.cutoff_radius,
             n_radial=self.cfg.n_radial,
             radial_embedding_scale=self.cfg.radial_embedding_scale,
+            radial_lengths=radial_lengths,
         )
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh
@@ -389,6 +505,7 @@ class E3GNN(pl.LightningModule):
                 edge_length_emb=x["edge_length_emb"],
                 node_one_hot=x["node_one_hot"],
                 edge_one_hot=x["edge_one_hot"],
+                edge_type_idx=x["edge_type_idx"],
                 activation_mags=activation_mags,
             )
 
@@ -444,14 +561,61 @@ class E3GNN(pl.LightningModule):
             str, tuple[dict[str, BlockMatrix], dict[str, BlockMatrix]]
         ] = {}
         allow_train_metrics = stage != "train" or bool(self.cfg.log_train_metrics)
+        edge_loss_weights = self._edge_loss_weights(x)
         # num_atoms = x["positions"].shape[0]
+
+        def _compute_physical_matrix_metrics(
+            pred_matrix: BlockMatrix,
+            target_matrix: BlockMatrix,
+            matrix_name: str,
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+            mse_val = torch.tensor(0.0, device=self.device)
+            mae_val = torch.tensor(0.0, device=self.device)
+            for key in target_matrix.pair_blocks.keys():
+                if key not in pred_matrix.pair_blocks:
+                    raise ValueError(f"Key {key} not found in predicted items.")
+                preds = pred_matrix.pair_blocks[key]
+                targets = target_matrix.pair_blocks[key]
+                target_n = targets.shape[0]
+                if target_n <= 0:
+                    continue
+                if preds.shape[0] < target_n:
+                    raise ValueError(
+                        f"Predicted blocks for matrix {matrix_name}, key {key} are too short: "
+                        f"pred_len={preds.shape[0]} target_len={target_n}"
+                    )
+                preds = preds[:target_n]
+                targets = targets[:target_n]
+                pred_edges = pred_matrix.pair_edges[key][:, :target_n]
+                target_edges = target_matrix.pair_edges[key][:, :target_n]
+                if self.cfg.safety_checks:
+                    assert torch.equal(
+                        pred_edges, target_edges
+                    ), f"Edge mismatch in metric block loss for matrix {matrix_name}, key {key}."
+                partial_mask = self._partial_train_mask(target_edges)
+                preds = preds[partial_mask]
+                targets = targets[partial_mask]
+                if preds.shape[0] == 0:
+                    continue
+                mse_val += self._mse(preds, targets)
+                mae_val += self._mae(preds, targets)
+            return mse_val, mae_val
 
         for name in self.cfg.matrix_targets:
             per_irrep_metrics: dict[str, dict[str, torch.Tensor]] = {}
             pred_irrep_blocks = None
             target_irrep_blocks = None
             pair_losses: dict[str, torch.Tensor] = {}
-            metric_pred_matrix = preds_matrix[name]
+            raw_pred_matrix = preds_matrix[name]
+            raw_target_matrix = y[name]
+            loss_pred_matrix, loss_target_matrix, metric_pred_matrix = (
+                self._apply_matrix_envelope_mode(
+                    name=name,
+                    pred_matrix=raw_pred_matrix,
+                    target_matrix=raw_target_matrix,
+                    x=x,
+                )
+            )
             need_irrep_cache = allow_train_metrics and (
                 self.cfg.log_per_irrep_metrics
                 or (
@@ -471,23 +635,35 @@ class E3GNN(pl.LightningModule):
             )
 
             if self.cfg.train_on_irrep_parts:
-                target_irreps = y[name].to_vectors(self.mapper)
-                mse_val, mae_val, per_irrep_metrics = self._compute_irrep_part_losses(
-                    preds_irreps[name], target_irreps
+                if self._matrix_envelope_mode() != "off":
+                    raise ValueError(
+                        "hamiltonian_envelope_mode is not supported with train_on_irrep_parts."
+                    )
+                target_irreps = raw_target_matrix.to_vectors(self.mapper)
+                loss_mse_val, loss_mae_val, per_irrep_metrics = (
+                    self._compute_irrep_part_losses(preds_irreps[name], target_irreps)
                 )
+                metric_mse_val = loss_mse_val
+                metric_mae_val = loss_mae_val
             else:
-                p = preds_matrix[name]
-                t = y[name]
+                p = loss_pred_matrix
+                t = loss_target_matrix
 
                 should_symmetrize = self.cfg.symmetrize_output or stage == "val"
                 if should_symmetrize:
                     p = (p + p.transpose()) * 0.5
-                metric_pred_matrix = p
+                    if self._matrix_envelope_mode() == "normalize_target":
+                        t = (t + t.transpose()) * 0.5
+
+                if should_symmetrize:
+                    metric_pred_matrix = (
+                        metric_pred_matrix + metric_pred_matrix.transpose()
+                    ) * 0.5
 
                 p_items, t_items = p.pair_blocks, t.pair_blocks
 
-                mse_val = torch.tensor(0.0, device=self.device)
-                mae_val = torch.tensor(0.0, device=self.device)
+                loss_mse_val = torch.tensor(0.0, device=self.device)
+                loss_mae_val = torch.tensor(0.0, device=self.device)
 
                 # Vectorized loss calculation
                 for key in t_items.keys():
@@ -522,14 +698,30 @@ class E3GNN(pl.LightningModule):
 
                     pair_mse = self._mse(preds, targets)
                     pair_mae = self._mae(preds, targets)
-                    mse_val += pair_mse
-                    mae_val += pair_mae
+                    pair_weight = 1.0
+                    if edge_loss_weights is not None:
+                        pair_weight = torch.mean(
+                            edge_loss_weights.index_select(
+                                0, x["edge_partitions"][key]["global_idx"]
+                            )
+                        )
+                    weighted_pair_mse = pair_weight * pair_mse
+                    weighted_pair_mae = pair_weight * pair_mae
+                    loss_mse_val += weighted_pair_mse
+                    loss_mae_val += weighted_pair_mae
                     pair_losses[key] = (
-                        1 - self.cfg.loss_l1_fraction
-                    ) * pair_mse + self.cfg.loss_l1_fraction * pair_mae
+                        (1 - self.cfg.loss_l1_fraction) * weighted_pair_mse
+                        + self.cfg.loss_l1_fraction * weighted_pair_mae
+                    )
 
-            matrix_mses[name] = mse_val
-            matrix_maes[name] = mae_val
+                metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
+                    metric_pred_matrix,
+                    raw_target_matrix,
+                    name,
+                )
+
+            matrix_mses[name] = metric_mse_val
+            matrix_maes[name] = metric_mae_val
             combined_pair_losses[name] = pair_losses
 
             if need_irrep_cache:
@@ -537,7 +729,7 @@ class E3GNN(pl.LightningModule):
                     metric_pred_matrix, self.mapper, self.all_irreps
                 )
                 target_irrep_blocks = build_irrep_block_matrix_cache(
-                    y[name], self.mapper, self.all_irreps
+                    raw_target_matrix, self.mapper, self.all_irreps
                 )
                 irrep_block_cache_by_name[name] = (
                     pred_irrep_blocks,
@@ -547,7 +739,7 @@ class E3GNN(pl.LightningModule):
             if need_hamiltonian_contribs:
                 hamiltonian_mae_contribs = compute_hamiltonian_mae_contributions(
                     metric_pred_matrix,
-                    y[name],
+                    raw_target_matrix,
                     self.mapper,
                     all_irreps=self.all_irreps,
                     compute_irrep_sums=self.cfg.log_hamiltonian_irrep_contrib_metrics,
@@ -558,12 +750,14 @@ class E3GNN(pl.LightningModule):
                 )
 
             # Store for combined loss BEFORE unit conversion
-            mse_for_loss = mse_val
-            mae_for_loss = mae_val
+            mse_for_loss = loss_mse_val
+            mae_for_loss = loss_mae_val
 
+            mse_val = metric_mse_val
+            mae_val = metric_mae_val
             if name == "hamiltonian":
                 # Convert to eV^2 and eV for logging only
-                mse_val = mse_val * (HARTREE_TO_EV**2)
+                mse_val = metric_mse_val * (HARTREE_TO_EV**2)
                 if hamiltonian_mae_contribs is not None:
                     denom = int(hamiltonian_mae_contribs["total_count"])
                     if denom > 0:
@@ -571,7 +765,7 @@ class E3GNN(pl.LightningModule):
                             float(hamiltonian_mae_contribs["total_abs_sum"]) / denom
                         ) * HARTREE_TO_EV
                 else:
-                    mae_val = mae_val * HARTREE_TO_EV
+                    mae_val = metric_mae_val * HARTREE_TO_EV
             metrics[f"{stage}/{name}_mae"] = mae_val
             metrics[f"{stage}/{name}_mse"] = mse_val
             if self.cfg.log_per_irrep_metrics or self.cfg.train_on_irrep_parts:
@@ -612,6 +806,8 @@ class E3GNN(pl.LightningModule):
         loss_E_weighted = torch.tensor(0.0, device=self.device)
         loss_N_weighted = torch.tensor(0.0, device=self.device)
         loss_F_weighted = torch.tensor(0.0, device=self.device)
+        observable_preds_matrix = {}
+        observable_trace_alignment = x["pred_trace_alignment"]
 
         H_true = None
         D_true = None
@@ -629,16 +825,25 @@ class E3GNN(pl.LightningModule):
 
         E_true = y.get("energy")
         N_true = y.get("num_electrons")
-        observable_preds_matrix = {}
         for name, pred_matrix in preds_matrix.items():
             target_matrix = y.get(name)
             if target_matrix is None:
                 continue
+            physical_pred_matrix = pred_matrix
+            if name in {"hamiltonian", "overlap"}:
+                mode = self._matrix_envelope_mode()
+                if mode == "multiply_prediction":
+                    physical_pred_matrix = scale_block_matrix_by_edge_values(
+                        pred_matrix,
+                        x["edge_envelope"],
+                        x["edge_partitions"],
+                    )
+                elif mode == "normalize_target":
+                    physical_pred_matrix = pred_matrix
             observable_preds_matrix[name] = truncate_pred_block_matrix_to_target_prefix(
-                pred_matrix,
+                physical_pred_matrix,
                 target_matrix,
             )
-            observable_trace_alignment = x["pred_trace_alignment"]
         observable_values = build_observable_predictions(
             observable_preds_matrix,
             trace_alignment=observable_trace_alignment,

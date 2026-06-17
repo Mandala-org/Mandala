@@ -37,6 +37,10 @@ from data.edge_alignment import (
     strict_edge_alignment_check,
     strict_reverse_edge_check,
 )
+from data.envelope import (
+    build_edge_envelope,
+    load_slater_soft_cutoff_envelope_table,
+)
 from data.graph_features import (
     compute_graph_features,
 )
@@ -45,7 +49,7 @@ from tqdm.auto import tqdm
 
 
 SNAPSHOT_CACHE_VERSION = "v2"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v2"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v3"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
@@ -101,16 +105,65 @@ class E3GNNDataset(Dataset):
         if not self.snapshot_paths:
             raise ValueError("At least one snapshot path must be provided")
 
+        # shared, **externally-provided** mapper ------------------------------
+        self.mapper: BlockIrrepMapper = mapper
+        self.orbital_cfg = mapper.orbital_cfg
+
         self.dtype = self.cfg.dtype
+
+        envelope_mode = str(
+            getattr(self.cfg, "hamiltonian_envelope_mode", "off")
+        ).lower()
+        pair_distance_normalization = str(
+            getattr(self.cfg, "pair_distance_normalization", "off")
+        ).lower()
+        if envelope_mode not in {"off", "normalize_target", "multiply_prediction"}:
+            raise ValueError(
+                "hamiltonian_envelope_mode must be one of 'off', "
+                "'normalize_target', or 'multiply_prediction'."
+            )
+        if pair_distance_normalization not in {"off", "pair_r0"}:
+            raise ValueError(
+                "pair_distance_normalization must be one of 'off' or 'pair_r0'."
+            )
+        self.hamiltonian_envelope_mode = envelope_mode
+        self.pair_distance_normalization = pair_distance_normalization
+        envelope_path = getattr(self.cfg, "hamiltonian_envelope_path", None)
+        loss_weighting_mode = str(
+            getattr(self.cfg, "loss_weighting_mode", "off")
+        ).lower()
+        self.loss_weighting_mode = loss_weighting_mode
+        envelope_weight_modes = {
+            "envelope_inverse_sqrt_clipped",
+            "envelope_inverse_clipped",
+        }
+        need_envelope_table = (
+            envelope_path is not None
+            or envelope_mode != "off"
+            or pair_distance_normalization != "off"
+            or loss_weighting_mode in envelope_weight_modes
+        )
+        self.envelope_table = None
+        self.edge_type_r0 = None
+        if need_envelope_table:
+            if envelope_path is None:
+                raise ValueError(
+                    "hamiltonian_envelope_path is required when envelope-based "
+                    "modes are enabled."
+                )
+            self.envelope_table = load_slater_soft_cutoff_envelope_table(
+                envelope_path,
+                pair_order=self.mapper.edge_types,
+                dtype=self.dtype,
+                device="cpu",
+            )
+            self.edge_type_r0 = self.envelope_table.r0.clone().detach()
 
         if cfg.train_on_forces and not self.cfg.enable_forces:
             raise Exception("Forces must be enabled to train on them")
         if cfg.train_on_stress and not self.cfg.enable_stress:
             raise Exception("Stress must be enabled to train on it")
 
-        # shared, **externally-provided** mapper ------------------------------
-        self.mapper: BlockIrrepMapper = mapper
-        self.orbital_cfg = mapper.orbital_cfg
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
         self.device = torch.device("cpu")
 
@@ -245,6 +298,14 @@ class E3GNNDataset(Dataset):
             "require_exact_edge_match": bool(self.cfg.require_exact_edge_match),
             "precompute_edge_features": bool(self.cfg.precompute_edge_features),
             "separate_shifted_self": bool(self.cfg.separate_shifted_self),
+            "hamiltonian_envelope_mode": self.hamiltonian_envelope_mode,
+            "hamiltonian_envelope_path": _stat_payload(
+                Path(self.cfg.hamiltonian_envelope_path)
+                if getattr(self.cfg, "hamiltonian_envelope_path", None)
+                else None
+            ),
+            "pair_distance_normalization": self.pair_distance_normalization,
+            "loss_weighting_mode": self.loss_weighting_mode,
         }
         key_hash = hashlib.md5(
             json.dumps(key_payload, sort_keys=True).encode("utf-8")
@@ -421,6 +482,7 @@ class E3GNNDataset(Dataset):
                 edge_length_emb,
                 edge_sh,
                 num_self_edges,
+                edge_lengths,
             ) = compute_graph_features(
                 positions=snap.positions,
                 box=snap.box,
@@ -428,6 +490,11 @@ class E3GNNDataset(Dataset):
                 cfg=self.cfg,
                 sh_irreps=self.sh_irreps,
                 edge_type2idx=self.mapper.edge_type2idx,
+                edge_type_r0=(
+                    self.edge_type_r0
+                    if self.pair_distance_normalization == "pair_r0"
+                    else None
+                ),
             )
 
             strict_reverse_edge_check(edge_index, edge_shift, edge_set_name="graph")
@@ -456,6 +523,17 @@ class E3GNNDataset(Dataset):
             edge_one_hot = F.one_hot(
                 src_type * num_species + dst_type, num_classes=num_species * num_species
             ).to(dtype=self.dtype)
+            edge_envelope = None
+            edge_r0 = None
+            if self.envelope_table is not None:
+                edge_envelope = build_edge_envelope(
+                    edge_lengths=edge_lengths,
+                    edge_type_idx=edge_type_idx,
+                    envelope_table=self.envelope_table,
+                ).to(dtype=self.dtype)
+                edge_r0 = self.envelope_table.r0.index_select(0, edge_type_idx).to(
+                    dtype=self.dtype
+                )
             pred_metadata = build_prediction_edge_metadata(
                 edge_index=edge_index,
                 edge_shift=edge_shift,
@@ -489,11 +567,15 @@ class E3GNNDataset(Dataset):
                 "edge_shift": edge_shift,
                 "edge_type_idx": edge_type_idx,
                 "edge_one_hot": edge_one_hot,
+                "edge_length": edge_lengths.to(dtype=self.dtype),
                 "num_self_edges": num_self_edges,
                 "target_edges_before_cutoff": target_edges_before_cutoff,
                 "target_edges_after_cutoff": target_edges_after_cutoff,
                 **pred_metadata,
             }
+            if edge_envelope is not None:
+                x["edge_envelope"] = edge_envelope
+                x["edge_r0"] = edge_r0
             if self.cfg.precompute_edge_features:
                 x["edge_length_emb"] = edge_length_emb
                 x["edge_sh"] = edge_sh
@@ -544,6 +626,12 @@ class E3GNNDataset(Dataset):
                 x["edge_length_emb"] = x["edge_length_emb"].to(device)
             if "edge_sh" in x:
                 x["edge_sh"] = x["edge_sh"].to(device)
+            if "edge_length" in x:
+                x["edge_length"] = x["edge_length"].to(device)
+            if "edge_envelope" in x:
+                x["edge_envelope"] = x["edge_envelope"].to(device)
+            if "edge_r0" in x:
+                x["edge_r0"] = x["edge_r0"].to(device)
             if "pred_pair_edges_static" in x:
                 x["pred_pair_edges_static"] = {
                     k: v.to(device) for k, v in x["pred_pair_edges_static"].items()

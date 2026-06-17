@@ -40,6 +40,7 @@ def compute_edge_geometry_from_static_edges(
     cutoff_radius: float,
     n_radial: int,
     radial_embedding_scale: str,
+    radial_lengths: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if box is not None:
         shift_float = edge_shift.T.to(dtype=positions.dtype)
@@ -61,8 +62,15 @@ def compute_edge_geometry_from_static_edges(
         edge_sh = edge_sh.clone()
         for slc in sh_non_scalar_slices:
             edge_sh[is_zero_shift_self_edge, slc] = 0.0
+    if radial_lengths is None:
+        radial_lengths = edge_lengths
+    else:
+        radial_lengths = radial_lengths.to(
+            device=edge_lengths.device, dtype=edge_lengths.dtype
+        )
+
     edge_length_emb = soft_one_hot_linspace(
-        edge_lengths,
+        radial_lengths,
         start=0.0,
         end=cutoff_radius,
         number=n_radial,
@@ -81,7 +89,16 @@ def compute_graph_features(
     cfg: Config,
     sh_irreps: Irreps,
     edge_type2idx: Dict[str, int],
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int]:
+    edge_type_r0: torch.Tensor | None = None,
+) -> Tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    int,
+    torch.Tensor,
+]:
     """
     Returns
     -------
@@ -91,6 +108,7 @@ def compute_graph_features(
     edge_length_emb : (E_total, cfg.n_radial) float
     edge_sh : (E_total, sh_dim) float
     num_self_edges : int
+    edge_lengths : (E_total,) float
     """
 
     # 1. Create ase.Atoms object
@@ -228,7 +246,18 @@ def compute_graph_features(
         device=positions.device,
     )
 
+    if box is not None:
+        shift_float = edge_shift.T.to(dtype=positions.dtype)
+        edge_disp = positions[edge_dst] - positions[edge_src] + shift_float @ box
+    else:
+        edge_disp = positions[edge_dst] - positions[edge_src]
+    edge_lengths = torch.linalg.norm(edge_disp, dim=-1)
+
     # 9. Calculate geometric features for the final edge order
+    radial_lengths = None
+    if edge_type_r0 is not None:
+        radial_lengths = edge_lengths / edge_type_r0.index_select(0, edge_type_idx)
+
     edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
         positions=positions,
         box=box,
@@ -238,6 +267,7 @@ def compute_graph_features(
         cutoff_radius=cfg.cutoff_radius,
         n_radial=cfg.n_radial,
         radial_embedding_scale=cfg.radial_embedding_scale,
+        radial_lengths=radial_lengths,
     )
 
     return (
@@ -247,4 +277,5 @@ def compute_graph_features(
         edge_length_emb,
         edge_sh,
         len(self_edge_src),
+        edge_lengths,
     )
