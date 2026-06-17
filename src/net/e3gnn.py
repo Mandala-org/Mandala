@@ -451,6 +451,7 @@ class E3GNN(pl.LightningModule):
             pred_irrep_blocks = None
             target_irrep_blocks = None
             pair_losses: dict[str, torch.Tensor] = {}
+            metric_pred_matrix = preds_matrix[name]
             need_irrep_cache = allow_train_metrics and (
                 self.cfg.log_per_irrep_metrics
                 or (
@@ -481,6 +482,7 @@ class E3GNN(pl.LightningModule):
                 should_symmetrize = self.cfg.symmetrize_output or stage == "val"
                 if should_symmetrize:
                     p = (p + p.transpose()) * 0.5
+                metric_pred_matrix = p
 
                 p_items, t_items = p.pair_blocks, t.pair_blocks
 
@@ -532,7 +534,7 @@ class E3GNN(pl.LightningModule):
 
             if need_irrep_cache:
                 pred_irrep_blocks = build_irrep_block_matrix_cache(
-                    preds_matrix[name], self.mapper, self.all_irreps
+                    metric_pred_matrix, self.mapper, self.all_irreps
                 )
                 target_irrep_blocks = build_irrep_block_matrix_cache(
                     y[name], self.mapper, self.all_irreps
@@ -544,7 +546,7 @@ class E3GNN(pl.LightningModule):
 
             if need_hamiltonian_contribs:
                 hamiltonian_mae_contribs = compute_hamiltonian_mae_contributions(
-                    preds_matrix[name],
+                    metric_pred_matrix,
                     y[name],
                     self.mapper,
                     all_irreps=self.all_irreps,
