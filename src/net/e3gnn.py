@@ -286,6 +286,7 @@ class E3GNN(pl.LightningModule):
                 edge_partitions,
                 inverse=True,
                 eps=eps,
+                allow_prefix_trim=True,
             )
             return pred_matrix, normalized_target, pred_matrix
         raise ValueError(

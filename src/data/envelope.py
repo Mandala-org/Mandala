@@ -130,6 +130,7 @@ def scale_block_matrix_by_edge_values(
     *,
     inverse: bool = False,
     eps: float = EPS,
+    allow_prefix_trim: bool = False,
 ):
     from data.block_matrix import BlockMatrix
 
@@ -141,6 +142,11 @@ def scale_block_matrix_by_edge_values(
         if parts is None:
             raise ValueError(f"Missing edge partition for key {key!r}")
         global_idx = parts["global_idx"]
+        if allow_prefix_trim and global_idx.numel() >= blocks.shape[0]:
+            # Target matrices are allowed to be a strict prefix of the prediction
+            # graph for a given pair key; in that case we rescale only the aligned
+            # target prefix and leave the extra prediction-only edges unused here.
+            global_idx = global_idx[: blocks.shape[0]]
         if global_idx.numel() != blocks.shape[0]:
             raise ValueError(
                 f"Edge partition length mismatch for key {key!r}: "
