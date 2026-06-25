@@ -536,6 +536,13 @@ def _remap_separate_weight_tp(
         return
     matched_any = False
     for dst_idx, dst_ins, dst_w1, dst_w2 in dst_pairs:
+        dst_w1_key = f"{module_name}.weights1.{dst_idx}"
+        dst_w2_key = f"{module_name}.weights2.{dst_idx}"
+        # Exact key/shape copies prepared earlier must always win over
+        # compatibility remaps, otherwise we can corrupt an already
+        # identical load for architectures that match exactly.
+        if dst_w1_key in staged_state or dst_w2_key in staged_state:
+            continue
         best_match = None
         for src_idx, src_ins, src_w1, src_w2 in src_pairs:
             if (
@@ -556,14 +563,11 @@ def _remap_separate_weight_tp(
         new_w2 = dst_w2.detach().clone()
         _copy_overlap(src_w1, new_w1)
         _copy_overlap(src_w2, new_w2)
-        staged_state[f"{module_name}.weights1.{dst_idx}"] = new_w1
-        staged_state[f"{module_name}.weights2.{dst_idx}"] = new_w2
-        report.remapped_keys.append(f"{module_name}.weights1.{dst_idx}")
-        report.remapped_keys.append(f"{module_name}.weights2.{dst_idx}")
-        print(
-            f"[compat] remapped separate weight tp "
-            f"{module_name}.weights1.{dst_idx} and {module_name}.weights2.{dst_idx}"
-        )
+        staged_state[dst_w1_key] = new_w1
+        staged_state[dst_w2_key] = new_w2
+        report.remapped_keys.append(dst_w1_key)
+        report.remapped_keys.append(dst_w2_key)
+        print(f"[compat] remapped separate weight tp " f"{dst_w1_key} and {dst_w2_key}")
         matched_any = True
     if matched_any:
         return
