@@ -184,7 +184,7 @@ parameters:
   pair-conditioned-radial-mlp:
     value: false
   pair-distance-normalization:
-    value: off
+    value: "off"
 
   # Runtime
   device:
@@ -264,7 +264,7 @@ parameters:
   hamiltonian-envelope-mode:
     value: multiply_prediction
   loss-weighting-mode:
-    value: off
+    value: "off"
 
   # Spectral fine-tuning axes
   spectral-loss-enabled:
