@@ -42,6 +42,7 @@ from net.observable_metrics import (
     truncate_pred_block_matrix_to_target_prefix,
     validate_observable_config,
 )
+from net.spectral_loss import compute_spectral_eigenvalue_loss
 from net.checkpoint_compat import strip_mapper_keys
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import MessageBlock
@@ -109,6 +110,12 @@ class E3GNN(pl.LightningModule):
             raise ValueError(
                 "hamiltonian_envelope_mode requires matrix-space training; "
                 "it cannot be used with train_on_irrep_parts."
+            )
+        if bool(
+            getattr(cfg, "spectral_loss_enabled", False)
+        ) and "hamiltonian" not in set(cfg.matrix_targets):
+            raise ValueError(
+                "spectral_loss_enabled requires 'hamiltonian' to be present in matrix_targets."
             )
 
         # ---------- shared irreps ---------------------------------------
@@ -179,6 +186,7 @@ class E3GNN(pl.LightningModule):
 
         self._nan_loss_detected = False
         self._apply_init_weights_factor()
+        self._apply_trainable_parameter_freeze()
 
         # Print model summary if verbosity >= 1
         print_model_summary(self, verbosity=self.cfg.verbosity)
@@ -211,6 +219,20 @@ class E3GNN(pl.LightningModule):
             for param in self.parameters():
                 if param.is_floating_point():
                     param.mul_(factor)
+
+    def _apply_trainable_parameter_freeze(self) -> None:
+        if not bool(getattr(self.cfg, "freeze_backbone_train_heads_only", False)):
+            return
+        frozen_modules = [self.node_enc, self.edge_enc, self.mp_blocks]
+        for module in frozen_modules:
+            for param in module.parameters():
+                param.requires_grad = False
+        trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        frozen = sum(p.numel() for p in self.parameters() if not p.requires_grad)
+        print(
+            "--- Head-only fine-tuning enabled: "
+            f"trainable_params={trainable}, frozen_params={frozen} ---"
+        )
 
     # ------------------------ util helpers -----------------------------
     @staticmethod
@@ -249,6 +271,92 @@ class E3GNN(pl.LightningModule):
 
     def _matrix_envelope_mode(self) -> str:
         return str(getattr(self.cfg, "hamiltonian_envelope_mode", "off")).lower()
+
+    def _physicalize_predicted_matrix(
+        self,
+        *,
+        name: str,
+        pred_matrix: BlockMatrix,
+        x: Dict[str, Any],
+    ) -> BlockMatrix:
+        mode = self._matrix_envelope_mode()
+        if name not in {"hamiltonian", "overlap"} or mode == "off":
+            return pred_matrix
+        if "edge_envelope" not in x:
+            raise ValueError(
+                "hamiltonian_envelope_mode requires edge_envelope in the batch."
+            )
+        if "edge_partitions" not in x:
+            raise ValueError(
+                "hamiltonian_envelope_mode requires edge_partitions in the batch."
+            )
+        if mode in {"multiply_prediction", "normalize_target"}:
+            return scale_block_matrix_by_edge_values(
+                pred_matrix,
+                x["edge_envelope"],
+                x["edge_partitions"],
+            )
+        raise ValueError(
+            "hamiltonian_envelope_mode must be one of 'off', "
+            "'normalize_target', or 'multiply_prediction'."
+        )
+
+    def predicted_irreps_to_block_matrices(
+        self,
+        predictions: Dict[str, IrrepsBlockData],
+        x: Dict[str, Any],
+        *,
+        physical: bool = True,
+    ) -> Dict[str, BlockMatrix]:
+        matrices = {
+            name: pred.to_blocks(self.mapper) for name, pred in predictions.items()
+        }
+        if not physical:
+            return matrices
+        return {
+            name: self._physicalize_predicted_matrix(
+                name=name,
+                pred_matrix=matrix,
+                x=x,
+            )
+            for name, matrix in matrices.items()
+        }
+
+    def _spectral_loss_enabled(self) -> bool:
+        return bool(getattr(self.cfg, "spectral_loss_enabled", False))
+
+    def _compute_spectral_loss(
+        self,
+        *,
+        x: Dict[str, Any],
+        physical_pred_hamiltonian: BlockMatrix,
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        required = {
+            "spectral_kpoints_abs",
+            "spectral_shifts",
+            "spectral_gt_overlap_k",
+            "spectral_gt_eigs_ev",
+            "spectral_gt_fermi_ev",
+            "spectral_window_weights",
+        }
+        missing = sorted(key for key in required if key not in x)
+        if missing:
+            raise ValueError(
+                "spectral_loss_enabled requires cached spectral payload in the batch; "
+                f"missing keys: {missing}"
+            )
+        return compute_spectral_eigenvalue_loss(
+            pred_hamiltonian=physical_pred_hamiltonian,
+            spectral_payload=x,
+            box=x["box"],
+            huber_delta_ev=float(self.cfg.spectral_loss_huber_delta_ev),
+            overlap_psd_cleanup=bool(
+                getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", False)
+            ),
+            overlap_jitter=bool(
+                getattr(self.cfg, "spectral_loss_overlap_jitter", True)
+            ),
+        )
 
     def _apply_matrix_envelope_mode(
         self,
@@ -858,6 +966,7 @@ class E3GNN(pl.LightningModule):
         loss_E_weighted = torch.tensor(0.0, device=self.device)
         loss_N_weighted = torch.tensor(0.0, device=self.device)
         loss_F_weighted = torch.tensor(0.0, device=self.device)
+        loss_spectral_weighted = torch.tensor(0.0, device=self.device)
         observable_preds_matrix = {}
         observable_trace_alignment = x["pred_trace_alignment"]
 
@@ -959,8 +1068,31 @@ class E3GNN(pl.LightningModule):
 
         t_obs_end = time.perf_counter()
 
+        if (
+            self._spectral_loss_enabled()
+            and "hamiltonian" in observable_preds_matrix
+            and float(getattr(self.cfg, "spectral_loss_coef", 0.0)) != 0.0
+        ):
+            spectral_loss, spectral_stats = self._compute_spectral_loss(
+                x=x,
+                physical_pred_hamiltonian=observable_preds_matrix["hamiltonian"],
+            )
+            loss_spectral_weighted = float(self.cfg.spectral_loss_coef) * spectral_loss
+            metrics[f"{stage}/loss_spectral"] = spectral_loss
+            metrics[f"{stage}/loss_spectral_weighted"] = loss_spectral_weighted
+            metrics[f"{stage}/spectral_mae_ev"] = spectral_stats["spectral_mae_ev"]
+            metrics[f"{stage}/spectral_weight_sum"] = spectral_stats[
+                "spectral_weight_sum"
+            ]
+
         # --- Total Loss Aggregation ---
-        loss = loss_matrix + loss_E_weighted + loss_N_weighted + loss_F_weighted
+        loss = (
+            loss_matrix
+            + loss_E_weighted
+            + loss_N_weighted
+            + loss_F_weighted
+            + loss_spectral_weighted
+        )
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
@@ -994,6 +1126,8 @@ class E3GNN(pl.LightningModule):
         if loss_F_weighted > 0:
             metrics[f"{stage}/loss_forces"] = loss_F_weighted
             metrics[f"{stage}/loss_forces_weighted"] = loss_F_weighted
+        if loss_spectral_weighted > 0:
+            metrics[f"{stage}/loss_spectral_total"] = loss_spectral_weighted
 
         for name, loss_val in combined_matrix_losses.items():
             metrics[f"{stage}/loss_block_{name}"] = loss_val
@@ -1038,6 +1172,8 @@ class E3GNN(pl.LightningModule):
                 metrics["frac/loss_num_electrons"] = loss_N_weighted / loss
             if loss_F_weighted > 0:
                 metrics["frac/loss_forces"] = loss_F_weighted / loss
+            if loss_spectral_weighted > 0:
+                metrics["frac/loss_spectral"] = loss_spectral_weighted / loss
 
         self.log_dict(
             metrics,
@@ -1095,7 +1231,10 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.cfg.lr)
+        trainable_params = [p for p in self.parameters() if p.requires_grad]
+        if not trainable_params:
+            raise ValueError("No trainable parameters remain after freeze settings.")
+        optimizer = torch.optim.AdamW(trainable_params, lr=self.cfg.lr)
         if not self.cfg.use_lr_scheduler:
             return optimizer
 
@@ -1118,22 +1257,29 @@ class E3GNN(pl.LightningModule):
         predictions: Dict[str, IrrepsBlockData],
         positions: torch.Tensor,
         box: torch.Tensor,
+        x: Dict[str, Any] | None = None,
     ) -> "Snapshot":
+        if x is None and self._matrix_envelope_mode() != "off":
+            raise ValueError(
+                "predictions_to_snapshot requires the input batch `x` when "
+                "hamiltonian_envelope_mode is enabled."
+            )
+        block_matrices = self.predicted_irreps_to_block_matrices(
+            predictions,
+            x if x is not None else {},
+            physical=True,
+        )
         return Snapshot(
             hamiltonian=(
-                predictions["hamiltonian"].to_blocks(self.mapper)
-                if "hamiltonian" in predictions
+                block_matrices["hamiltonian"]
+                if "hamiltonian" in block_matrices
                 else None
             ),
             overlap=(
-                predictions["overlap"].to_blocks(self.mapper)
-                if "overlap" in predictions
-                else None
+                block_matrices["overlap"] if "overlap" in block_matrices else None
             ),
             density=(
-                predictions["density"].to_blocks(self.mapper)
-                if "density" in predictions
-                else None
+                block_matrices["density"] if "density" in block_matrices else None
             ),
             positions=positions,
             box=box,

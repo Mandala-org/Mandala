@@ -344,6 +344,22 @@ def _build_snapshot_from_matrices(
     )
 
 
+def _physical_predicted_block_matrices(
+    model: E3GNN,
+    predictions_irreps: dict[str, Any],
+    x: dict[str, Any],
+) -> dict[str, Any]:
+    pred_mats = model.predicted_irreps_to_block_matrices(
+        predictions_irreps,
+        x,
+        physical=True,
+    )
+    return {
+        name: analysis_eval.symmetrize_block_matrix(matrix)
+        for name, matrix in pred_mats.items()
+    }
+
+
 def _remove_if_exists(path: Path) -> None:
     try:
         path.unlink()
@@ -464,10 +480,7 @@ def _run_snapshot_case(
                     predictions_irreps["overlap"], model.mapper
                 )
             )
-        pred_mats = {
-            name: analysis_eval.symmetrize_block_matrix(pred.to_blocks(model.mapper))
-            for name, pred in predictions_irreps.items()
-        }
+        pred_mats = _physical_predicted_block_matrices(model, predictions_irreps, x)
 
     gt_mats = {name: y[name] for name in ("hamiltonian", "density", "overlap")}
     info = parse_info_out(info_path)
@@ -743,12 +756,13 @@ def _run_snapshot_case(
 
     for name, block in pred_mats_aligned.items():
         block.save(output_dir / f"pred_{name}.pt")
-    for name, block in pred_mats.items():
-        block.save(output_dir / f"pred_raw_{name}.pt")
     for stale_name in (
         "hamiltonian_aligned_correlation.png",
         "hamiltonian_support_debug.png",
         "hamiltonian_prediction_support_debug.json",
+        "pred_raw_hamiltonian.pt",
+        "pred_raw_overlap.pt",
+        "pred_raw_density.pt",
     ):
         _remove_if_exists(output_dir / stale_name)
     print("mode: snapshot")
@@ -812,10 +826,7 @@ def _run_cif_case(
                     predictions_irreps["overlap"], model.mapper
                 )
             )
-        pred_mats = {
-            name: analysis_eval.symmetrize_block_matrix(pred.to_blocks(model.mapper))
-            for name, pred in predictions_irreps.items()
-        }
+        pred_mats = _physical_predicted_block_matrices(model, predictions_irreps, x)
 
     title = args.plot_title or args.cif_path.stem
     ham_clim = (

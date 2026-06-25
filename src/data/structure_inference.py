@@ -15,6 +15,11 @@ from data.edge_alignment import (
     build_prediction_edge_metadata,
     strict_reverse_edge_check,
 )
+from data.envelope import (
+    build_edge_envelope,
+    build_edge_r0_lookup,
+    load_slater_soft_cutoff_envelope_table,
+)
 from data.graph_features import compute_graph_features
 from data.openmx_info_parser import parse_info_out
 from net.common import Config, get_torch_dtype
@@ -56,6 +61,37 @@ def build_model_input_from_structure(
 ) -> dict[str, Any]:
     dtype = get_torch_dtype(cfg.dtype)
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
+    envelope_mode = str(getattr(cfg, "hamiltonian_envelope_mode", "off")).lower()
+    pair_distance_normalization = str(
+        getattr(cfg, "pair_distance_normalization", "off")
+    ).lower()
+    loss_weighting_mode = str(getattr(cfg, "loss_weighting_mode", "off")).lower()
+    envelope_weight_modes = {
+        "envelope_inverse_sqrt_clipped",
+        "envelope_inverse_clipped",
+    }
+    need_envelope_table = (
+        getattr(cfg, "hamiltonian_envelope_path", None) is not None
+        or envelope_mode != "off"
+        or pair_distance_normalization != "off"
+        or loss_weighting_mode in envelope_weight_modes
+    )
+    envelope_table = None
+    edge_type_r0 = None
+    if need_envelope_table:
+        envelope_path = getattr(cfg, "hamiltonian_envelope_path", None)
+        if envelope_path is None:
+            raise ValueError(
+                "hamiltonian_envelope_path is required when envelope-based "
+                "evaluation features are enabled."
+            )
+        envelope_table = load_slater_soft_cutoff_envelope_table(
+            envelope_path,
+            pair_order=mapper.edge_types,
+            dtype=dtype,
+            device=positions.device,
+        )
+        edge_type_r0 = envelope_table.r0.clone().detach()
 
     (
         edge_index,
@@ -64,6 +100,7 @@ def build_model_input_from_structure(
         edge_length_emb,
         edge_sh,
         num_self_edges,
+        edge_lengths,
     ) = compute_graph_features(
         positions=positions,
         box=box,
@@ -71,6 +108,7 @@ def build_model_input_from_structure(
         cfg=cfg,
         sh_irreps=sh_irreps,
         edge_type2idx=mapper.edge_type2idx,
+        edge_type_r0=edge_type_r0,
     )
     strict_reverse_edge_check(edge_index, edge_shift, edge_set_name="graph")
 
@@ -117,9 +155,20 @@ def build_model_input_from_structure(
         "edge_shift": edge_shift,
         "edge_type_idx": edge_type_idx,
         "edge_one_hot": edge_one_hot,
+        "edge_length": edge_lengths.to(dtype=dtype),
         "num_self_edges": num_self_edges,
         **pred_metadata,
     }
+    if envelope_table is not None:
+        x["edge_envelope"] = build_edge_envelope(
+            edge_lengths=edge_lengths,
+            edge_type_idx=edge_type_idx,
+            envelope_table=envelope_table,
+        ).to(dtype=dtype)
+        x["edge_r0"] = build_edge_r0_lookup(
+            edge_type_idx=edge_type_idx,
+            envelope_table=envelope_table,
+        ).to(dtype=dtype)
     if cfg.precompute_edge_features:
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh

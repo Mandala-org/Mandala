@@ -171,6 +171,15 @@ class Config:
     loss_weighting_mode: str = "off"
     loss_weight_min: float = 0.0
     loss_weight_max: float = 100.0
+    spectral_loss_enabled: bool = False
+    spectral_loss_coef: float = 0.0
+    spectral_loss_kmesh: str = "2x2x2"
+    spectral_loss_window_ev: float = 10.0
+    spectral_loss_taper_ev: float = 2.0
+    spectral_loss_huber_delta_ev: float = 0.1
+    spectral_loss_overlap_psd_cleanup: bool = False
+    spectral_loss_overlap_jitter: bool = True
+    freeze_backbone_train_heads_only: bool = False
 
     # -------------- logging ---------------------------------------------
     run_name: str = "mandala-run"

@@ -45,11 +45,12 @@ from data.graph_features import (
     compute_graph_features,
 )
 from data.snapshot import Snapshot
+from net.spectral_loss import build_spectral_reference
 from tqdm.auto import tqdm
 
 
 SNAPSHOT_CACHE_VERSION = "v2"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v3"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v5"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
@@ -312,6 +313,25 @@ class E3GNNDataset(Dataset):
             ),
             "pair_distance_normalization": self.pair_distance_normalization,
             "loss_weighting_mode": self.loss_weighting_mode,
+            "spectral_loss_enabled": bool(
+                getattr(self.cfg, "spectral_loss_enabled", False)
+            ),
+            "spectral_loss_kmesh": str(getattr(self.cfg, "spectral_loss_kmesh", "")),
+            "spectral_loss_window_ev": float(
+                getattr(self.cfg, "spectral_loss_window_ev", 0.0)
+            ),
+            "spectral_loss_taper_ev": float(
+                getattr(self.cfg, "spectral_loss_taper_ev", 0.0)
+            ),
+            "spectral_loss_huber_delta_ev": float(
+                getattr(self.cfg, "spectral_loss_huber_delta_ev", 0.0)
+            ),
+            "spectral_loss_overlap_psd_cleanup": bool(
+                getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", False)
+            ),
+            "spectral_loss_overlap_jitter": bool(
+                getattr(self.cfg, "spectral_loss_overlap_jitter", True)
+            ),
         }
         key_hash = hashlib.md5(
             json.dumps(key_payload, sort_keys=True).encode("utf-8")
@@ -585,6 +605,28 @@ class E3GNNDataset(Dataset):
             if self.cfg.precompute_edge_features:
                 x["edge_length_emb"] = edge_length_emb
                 x["edge_sh"] = edge_sh
+            if bool(getattr(self.cfg, "spectral_loss_enabled", False)):
+                fermi_level = getattr(getattr(snap, "info", None), "fermi_level", None)
+                if fermi_level is None:
+                    raise ValueError(
+                        "spectral_loss_enabled requires snapshot.info.fermi_level to be available."
+                    )
+                spectral_payload = build_spectral_reference(
+                    hamiltonian=hamiltonian_target,
+                    overlap=overlap_target,
+                    box=snap.box,
+                    fermi_level_hartree=fermi_level,
+                    kmesh_spec=str(self.cfg.spectral_loss_kmesh),
+                    window_ev=float(self.cfg.spectral_loss_window_ev),
+                    taper_ev=float(self.cfg.spectral_loss_taper_ev),
+                    overlap_psd_cleanup=bool(
+                        getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", False)
+                    ),
+                    overlap_jitter=bool(
+                        getattr(self.cfg, "spectral_loss_overlap_jitter", True)
+                    ),
+                )
+                x.update(spectral_payload)
         return x, y
 
     # ------------------- torch Dataset interface ---------------------------
@@ -616,6 +658,10 @@ class E3GNNDataset(Dataset):
         # Explicitly move known fields
         for idx, (x, y) in enumerate(self.snapshots):
             # x
+            if "positions" in x:
+                x["positions"] = x["positions"].to(device)
+            if "box" in x and x["box"] is not None:
+                x["box"] = x["box"].to(device)
             if "node_type_idx" in x:
                 x["node_type_idx"] = x["node_type_idx"].to(device)
             if "node_one_hot" in x:
@@ -652,6 +698,16 @@ class E3GNNDataset(Dataset):
                     key: {name: value.to(device) for name, value in parts.items()}
                     for key, parts in x["edge_partitions"].items()
                 }
+            for key in (
+                "spectral_kpoints_abs",
+                "spectral_shifts",
+                "spectral_gt_overlap_k",
+                "spectral_gt_eigs_ev",
+                "spectral_gt_fermi_ev",
+                "spectral_window_weights",
+            ):
+                if key in x:
+                    x[key] = x[key].to(device)
 
             # y targets
             y["hamiltonian"] = y["hamiltonian"].to(device)
