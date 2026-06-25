@@ -179,6 +179,7 @@ class Config:
     spectral_loss_huber_delta_ev: float = 0.1
     spectral_loss_overlap_psd_cleanup: bool = False
     spectral_loss_overlap_jitter: bool = True
+    spectral_fermi_cache_path: str | None = None
     freeze_backbone_train_heads_only: bool = False
 
     # -------------- logging ---------------------------------------------

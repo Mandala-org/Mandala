@@ -45,6 +45,10 @@ from data.graph_features import (
     compute_graph_features,
 )
 from data.snapshot import Snapshot
+from data.spectral_fermi_cache import (
+    load_spectral_fermi_cache,
+    lookup_spectral_fermi_record,
+)
 from net.spectral_loss import build_spectral_reference
 from tqdm.auto import tqdm
 
@@ -170,6 +174,9 @@ class E3GNNDataset(Dataset):
         self.spectral_loss_enabled = bool(
             getattr(self.cfg, "spectral_loss_enabled", False)
         )
+        self.spectral_fermi_cache_payload: dict[str, object] | None = None
+        self.spectral_fermi_cache_hits = 0
+        self.spectral_fermi_cache_misses = 0
         if self.spectral_loss_enabled:
             print(
                 "--- Spectral loss dataset precompute enabled: "
@@ -179,6 +186,19 @@ class E3GNNDataset(Dataset):
                 f"overlap_psd_cleanup={bool(getattr(self.cfg, 'spectral_loss_overlap_psd_cleanup', False))}, "
                 f"overlap_jitter={bool(getattr(self.cfg, 'spectral_loss_overlap_jitter', True))} ---"
             )
+            spectral_fermi_cache_path = getattr(
+                self.cfg, "spectral_fermi_cache_path", None
+            )
+            if spectral_fermi_cache_path not in (None, ""):
+                self.spectral_fermi_cache_payload = load_spectral_fermi_cache(
+                    spectral_fermi_cache_path
+                )
+                print(
+                    "--- Loaded spectral Fermi cache: "
+                    f"path={spectral_fermi_cache_path}, "
+                    f"records={len(self.spectral_fermi_cache_payload['records'])}, "
+                    f"failures={len(self.spectral_fermi_cache_payload['failures'])} ---"
+                )
 
         # preprocess all snapshots
         self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
@@ -266,6 +286,45 @@ class E3GNNDataset(Dataset):
                 f"{self.preprocessed_cache_hits} hit(s), {self.preprocessed_cache_misses} miss(es), "
                 f"{total} total"
             )
+        if self.spectral_loss_enabled:
+            print(
+                "[CACHE] Spectral Fermi lookup: "
+                f"{self.spectral_fermi_cache_hits} hit(s), "
+                f"{self.spectral_fermi_cache_misses} miss(es)"
+            )
+
+    def _resolve_spectral_fermi_level(
+        self,
+        *,
+        snap: Snapshot,
+        matrix_path: Path,
+        info_path: Path,
+    ) -> tuple[torch.Tensor, str]:
+        direct = getattr(getattr(snap, "info", None), "fermi_level", None)
+        if direct is not None:
+            return direct, "snapshot.info"
+        if self.spectral_fermi_cache_payload is not None:
+            record = lookup_spectral_fermi_record(
+                self.spectral_fermi_cache_payload,
+                matrix_path,
+                info_path,
+            )
+            if record is not None:
+                self.spectral_fermi_cache_hits += 1
+                return (
+                    torch.tensor(
+                        float(record["fermi_level_hartree"]),
+                        dtype=snap.box.dtype,
+                        device=snap.box.device,
+                    ),
+                    "spectral_fermi_cache",
+                )
+            self.spectral_fermi_cache_misses += 1
+        raise ValueError(
+            "spectral_loss_enabled requires a Fermi level, but neither "
+            "snapshot.info.fermi_level nor spectral_fermi_cache_path provided one "
+            f"for matrix={matrix_path} info={info_path}."
+        )
 
     # ---------------------------------------------------------------- snapshot caching & helpers
     def _snapshot_cache_file(self, matrix_path: Path, info_path: Path) -> Path | None:
@@ -344,6 +403,11 @@ class E3GNNDataset(Dataset):
             "spectral_loss_overlap_jitter": bool(
                 getattr(self.cfg, "spectral_loss_overlap_jitter", True)
             ),
+            "spectral_fermi_cache_path": _stat_payload(
+                Path(self.cfg.spectral_fermi_cache_path)
+                if getattr(self.cfg, "spectral_fermi_cache_path", None)
+                else None
+            ),
         }
         key_hash = hashlib.md5(
             json.dumps(key_payload, sort_keys=True).encode("utf-8")
@@ -398,6 +462,8 @@ class E3GNNDataset(Dataset):
         self.preprocessed_cache_misses += 1
         sample = self._process_snapshot_to_sample(
             snapshot,
+            matrix_path=matrix_path,
+            info_path=info_path,
             snapshot_label=matrix_path.name,
         )
         if cache_file is not None and not cache_file.exists():
@@ -469,6 +535,8 @@ class E3GNNDataset(Dataset):
         self,
         snap: Snapshot,
         *,
+        matrix_path: Path,
+        info_path: Path,
         snapshot_label: str = "snapshot",
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         """
@@ -618,13 +686,14 @@ class E3GNNDataset(Dataset):
                 x["edge_length_emb"] = edge_length_emb
                 x["edge_sh"] = edge_sh
             if self.spectral_loss_enabled:
-                fermi_level = getattr(getattr(snap, "info", None), "fermi_level", None)
-                if fermi_level is None:
-                    raise ValueError(
-                        "spectral_loss_enabled requires snapshot.info.fermi_level to be available."
-                    )
+                fermi_level, fermi_source = self._resolve_spectral_fermi_level(
+                    snap=snap,
+                    matrix_path=matrix_path,
+                    info_path=info_path,
+                )
                 print(
-                    f"--- [{snapshot_label}] Starting spectral reference precompute ---",
+                    f"--- [{snapshot_label}] Starting spectral reference precompute "
+                    f"(fermi source: {fermi_source}) ---",
                     flush=True,
                 )
                 spectral_t0 = time.perf_counter()
