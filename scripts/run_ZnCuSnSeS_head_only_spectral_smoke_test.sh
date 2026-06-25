@@ -164,7 +164,7 @@ CMD=(
   --revert-decay-rate 0.5
   --revert-spike-factor 2.0
   --run-name "${RUN_NAME}"
-  --seed 43
+  --seed 44
 )
 CMD+=(--spectral-fermi-cache-path "${SPECTRAL_FERMI_CACHE_PATH}")
 
