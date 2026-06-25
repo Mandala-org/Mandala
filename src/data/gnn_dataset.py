@@ -167,6 +167,18 @@ class E3GNNDataset(Dataset):
 
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
         self.device = torch.device("cpu")
+        self.spectral_loss_enabled = bool(
+            getattr(self.cfg, "spectral_loss_enabled", False)
+        )
+        if self.spectral_loss_enabled:
+            print(
+                "--- Spectral loss dataset precompute enabled: "
+                f"kmesh={self.cfg.spectral_loss_kmesh}, "
+                f"window=±{float(self.cfg.spectral_loss_window_ev):.2f} eV, "
+                f"taper={float(self.cfg.spectral_loss_taper_ev):.2f} eV, "
+                f"overlap_psd_cleanup={bool(getattr(self.cfg, 'spectral_loss_overlap_psd_cleanup', False))}, "
+                f"overlap_jitter={bool(getattr(self.cfg, 'spectral_loss_overlap_jitter', True))} ---"
+            )
 
         # preprocess all snapshots
         self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
@@ -605,12 +617,17 @@ class E3GNNDataset(Dataset):
             if self.cfg.precompute_edge_features:
                 x["edge_length_emb"] = edge_length_emb
                 x["edge_sh"] = edge_sh
-            if bool(getattr(self.cfg, "spectral_loss_enabled", False)):
+            if self.spectral_loss_enabled:
                 fermi_level = getattr(getattr(snap, "info", None), "fermi_level", None)
                 if fermi_level is None:
                     raise ValueError(
                         "spectral_loss_enabled requires snapshot.info.fermi_level to be available."
                     )
+                print(
+                    f"--- [{snapshot_label}] Starting spectral reference precompute ---",
+                    flush=True,
+                )
+                spectral_t0 = time.perf_counter()
                 spectral_payload = build_spectral_reference(
                     hamiltonian=hamiltonian_target,
                     overlap=overlap_target,
@@ -625,6 +642,13 @@ class E3GNNDataset(Dataset):
                     overlap_jitter=bool(
                         getattr(self.cfg, "spectral_loss_overlap_jitter", True)
                     ),
+                    progress_label=snapshot_label,
+                    verbose=True,
+                )
+                print(
+                    f"--- [{snapshot_label}] Finished spectral reference precompute "
+                    f"in {time.perf_counter() - spectral_t0:.2f}s ---",
+                    flush=True,
                 )
                 x.update(spectral_payload)
         return x, y

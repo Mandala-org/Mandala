@@ -185,6 +185,7 @@ class E3GNN(pl.LightningModule):
         )
 
         self._nan_loss_detected = False
+        self._spectral_loss_debug_printed = False
         self._apply_init_weights_factor()
         self._apply_trainable_parameter_freeze()
 
@@ -345,7 +346,15 @@ class E3GNN(pl.LightningModule):
                 "spectral_loss_enabled requires cached spectral payload in the batch; "
                 f"missing keys: {missing}"
             )
-        return compute_spectral_eigenvalue_loss(
+        if not self._spectral_loss_debug_printed:
+            print(
+                "--- Running first spectral loss evaluation: "
+                f"kpoints={int(x['spectral_kpoints_abs'].shape[0])}, "
+                f"window_weight_sum={float(x['spectral_window_weights'].sum().item()):.1f}, "
+                f"huber_delta_ev={float(self.cfg.spectral_loss_huber_delta_ev):.3f} ---",
+                flush=True,
+            )
+        loss, stats = compute_spectral_eigenvalue_loss(
             pred_hamiltonian=physical_pred_hamiltonian,
             spectral_payload=x,
             box=x["box"],
@@ -357,6 +366,15 @@ class E3GNN(pl.LightningModule):
                 getattr(self.cfg, "spectral_loss_overlap_jitter", True)
             ),
         )
+        if not self._spectral_loss_debug_printed:
+            print(
+                "--- First spectral loss evaluation finished: "
+                f"loss={float(loss.detach().item()):.6f}, "
+                f"spectral_mae_ev={float(stats['spectral_mae_ev'].detach().item()):.6f} ---",
+                flush=True,
+            )
+            self._spectral_loss_debug_printed = True
+        return loss, stats
 
     def _apply_matrix_envelope_mode(
         self,

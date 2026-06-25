@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 import torch
 import torch.nn.functional as F
+from tqdm.auto import tqdm
 
 from core.periodic_fourier import (
     shiftspace_to_kspace_dense,
@@ -69,15 +71,41 @@ def build_spectral_reference(
     taper_ev: float,
     overlap_psd_cleanup: bool,
     overlap_jitter: bool,
+    progress_label: str | None = None,
+    verbose: bool = False,
 ) -> dict[str, Any]:
+    t0 = time.perf_counter()
     device = box.device
     real_dtype = box.dtype
     kmesh = parse_kmesh_spec(kmesh_spec)
+    total_kpoints = kmesh[0] * kmesh[1] * kmesh[2]
+    pbar = None
+    if verbose:
+        label = progress_label or "spectral"
+        print(
+            f"--- [{label}] Building spectral reference: "
+            f"kmesh={kmesh_spec} ({total_kpoints} k-points), "
+            f"window=±{window_ev:.2f} eV, taper={taper_ev:.2f} eV ---",
+            flush=True,
+        )
+        pbar = tqdm(total=5, desc=f"Spectral precompute [{label}]", leave=False)
+
+    def _advance(stage: str) -> None:
+        if verbose:
+            print(
+                f"--- [{progress_label or 'spectral'}] {stage} ---",
+                flush=True,
+            )
+        if pbar is not None:
+            pbar.update(1)
+
     shifts = translation_shifts_for_kmesh(kmesh, device=device)
     fractional_kpoints = fractional_kmesh_points(kmesh, device=device, dtype=real_dtype)
     kpoints_abs = _fractional_to_cartesian_kpoints(fractional_kpoints, box)
+    _advance("constructed k-mesh and Cartesian k-points")
     ham_shift = block_matrix_to_shiftspace_dense(hamiltonian, shifts=shifts)
     ovl_shift = block_matrix_to_shiftspace_dense(overlap, shifts=shifts)
+    _advance("converted Hamiltonian and overlap to shift-space dense tensors")
     ham_k = shiftspace_to_kspace_dense(
         ham_shift,
         kpoints_abs=kpoints_abs,
@@ -90,12 +118,14 @@ def build_spectral_reference(
         shifts=shifts,
         box=box,
     )
+    _advance("Fourier transformed shift-space tensors to k-space")
     gt_eigs_hartree = _generalized_eigenvalues_kspace(
         ham_k,
         ovl_k,
         psd_cleanup=overlap_psd_cleanup,
         allow_jitter=overlap_jitter,
     )
+    _advance("solved generalized eigenproblems on the reference k-mesh")
     gt_eigs_ev = gt_eigs_hartree.real * HARTREE_TO_EV
     fermi_ev = (
         float(
@@ -111,6 +141,16 @@ def build_spectral_reference(
         window_ev=window_ev,
         taper_ev=taper_ev,
     )
+    _advance("built spectral window weights around the Fermi level")
+    if pbar is not None:
+        pbar.close()
+    if verbose:
+        elapsed = time.perf_counter() - t0
+        print(
+            f"--- [{progress_label or 'spectral'}] Spectral reference ready "
+            f"in {elapsed:.2f}s; active window weight sum={float(weights.sum().item()):.1f} ---",
+            flush=True,
+        )
     return {
         "spectral_kpoints_abs": kpoints_abs.detach().cpu(),
         "spectral_shifts": shifts.detach().cpu(),
