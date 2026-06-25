@@ -16,6 +16,7 @@ RUN_NAME="zncusnses-head-only-spectral-smoke-test"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS"
 SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache"
 ENVELOPE_PATH="eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json"
+SPECTRAL_FERMI_CACHE_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/spectral_fermi_cache_cutoff11_k4x4x4_merged.pt"
 
 if [[ ! -f "${RESUME_CHECKPOINT}" ]]; then
   echo "Resume checkpoint not found: ${RESUME_CHECKPOINT}" >&2
@@ -24,6 +25,11 @@ fi
 
 if [[ ! -f "${ENVELOPE_PATH}" ]]; then
   echo "Envelope artifact not found: ${ENVELOPE_PATH}" >&2
+  exit 1
+fi
+
+if [[ ! -e "${SPECTRAL_FERMI_CACHE_PATH}" ]]; then
+  echo "Spectral Fermi cache not found: ${SPECTRAL_FERMI_CACHE_PATH}" >&2
   exit 1
 fi
 
@@ -160,6 +166,7 @@ CMD=(
   --run-name "${RUN_NAME}"
   --seed 43
 )
+CMD+=(--spectral-fermi-cache-path "${SPECTRAL_FERMI_CACHE_PATH}")
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   printf '%q ' "${CMD[@]}"
