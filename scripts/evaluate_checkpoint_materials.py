@@ -183,6 +183,21 @@ def _restore_config(checkpoint: dict[str, Any]) -> Config:
     return cfg
 
 
+def _sanitize_eval_config(cfg: Config) -> Config:
+    """
+    Remove training-only spectral settings from an evaluation config copy.
+
+    Evaluation does not need the spectral-loss objective or its cached Fermi
+    levels, and leaving them enabled would introduce an unnecessary dependency
+    on precomputed spectral artifacts.
+    """
+    cfg.dataset_device = None
+    cfg.snapshot_cache_dir = None
+    cfg.spectral_loss_enabled = False
+    cfg.spectral_fermi_cache_path = None
+    return cfg
+
+
 def _resolve_snapshot_cache_dir(cfg: Config, output_dir: Path) -> str | None:
     cache_dir = getattr(cfg, "snapshot_cache_dir", None)
     if not cache_dir:
@@ -454,11 +469,11 @@ def _run_snapshot_case(
 ) -> None:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    cfg = _sanitize_eval_config(cfg)
     matrix_path, info_path = _discover_snapshot_paths(
         args.snapshot_path, args.matrix_path, args.info_path
     )
 
-    cfg.dataset_device = None
     cfg.snapshot_cache_dir = _resolve_snapshot_cache_dir(cfg, output_dir)
     factory = DatasetFactory(cfg, convention=args.convention)
     factory.add_snapshot(matrix_path, info_path, purpose="train")
@@ -782,6 +797,7 @@ def _run_cif_case(
         raise ValueError("--cif-path is required in cif mode.")
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    cfg = _sanitize_eval_config(cfg)
 
     device = _resolve_device(args.device)
     orbital_cfg = _resolve_orbital_cfg(args, cfg)
@@ -963,9 +979,7 @@ def _run_cif_case(
 def main() -> None:
     args = setup_argparse()
     checkpoint = _load_checkpoint(args.checkpoint)
-    cfg = _restore_config(checkpoint)
-    cfg.dataset_device = None
-    cfg.snapshot_cache_dir = None
+    cfg = _sanitize_eval_config(_restore_config(checkpoint))
 
     if "hamiltonian" not in set(cfg.matrix_targets):
         raise ValueError(
