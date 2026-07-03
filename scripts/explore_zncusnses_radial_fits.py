@@ -461,6 +461,69 @@ def _slater_soft_cutoff_predict(theta: np.ndarray, x: np.ndarray) -> np.ndarray:
     return amp * np.power(1.0 + x, nu) * np.exp(-rate * x) / (1.0 + np.exp(z))
 
 
+def _slater_soft_wall_init(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    amp = max(float(np.max(y)), EPS)
+    return np.array(
+        [math.log(amp), math.log(0.2), 0.0, math.log(0.1), math.log(0.2)],
+        dtype=np.float64,
+    )
+
+
+def _slater_soft_wall_predict(theta: np.ndarray, x: np.ndarray) -> np.ndarray:
+    amp = math.exp(theta[0])
+    rate = math.exp(theta[1])
+    nu = theta[2]
+    rc = float(np.max(x)) + math.exp(theta[3])
+    gamma = math.exp(theta[4])
+    wall = np.maximum(rc - x, 1.0e-9)
+    return amp * np.power(1.0 + x, nu) * np.exp(-rate * x - gamma / wall)
+
+
+def _stretched_soft_wall_init(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    amp = max(float(np.max(y)), EPS)
+    scale = max(float(np.median(x)) if x.size else 5.0, 1.0e-3)
+    return np.array(
+        [math.log(amp), math.log(scale), math.log(1.0), math.log(0.1), math.log(0.2)],
+        dtype=np.float64,
+    )
+
+
+def _stretched_soft_wall_predict(theta: np.ndarray, x: np.ndarray) -> np.ndarray:
+    amp = math.exp(theta[0])
+    scale = math.exp(theta[1])
+    power = math.exp(theta[2])
+    rc = float(np.max(x)) + math.exp(theta[3])
+    gamma = math.exp(theta[4])
+    wall = np.maximum(rc - x, 1.0e-9)
+    return amp * np.exp(-np.power(x / max(scale, 1.0e-12), power) - gamma / wall)
+
+
+def _slater_exp_quad_soft_wall_init(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    amp = max(float(np.max(y)), EPS)
+    return np.array(
+        [
+            math.log(amp),
+            math.log(0.1),
+            math.log(0.01),
+            0.0,
+            math.log(0.1),
+            math.log(0.2),
+        ],
+        dtype=np.float64,
+    )
+
+
+def _slater_exp_quad_soft_wall_predict(theta: np.ndarray, x: np.ndarray) -> np.ndarray:
+    amp = math.exp(theta[0])
+    b = math.exp(theta[1])
+    c = math.exp(theta[2])
+    nu = theta[3]
+    rc = float(np.max(x)) + math.exp(theta[4])
+    gamma = math.exp(theta[5])
+    wall = np.maximum(rc - x, 1.0e-9)
+    return amp * np.power(1.0 + x, nu) * np.exp(-b * x - c * x * x - gamma / wall)
+
+
 def _bi_exp_soft_cutoff_init(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     amp = max(float(np.max(y)), EPS)
     r_mid = float(np.quantile(x, 0.8)) if x.size else 5.0
@@ -539,6 +602,37 @@ CURVE_FAMILIES: tuple[CurveFamily, ...] = (
         predict_fn=_slater_soft_cutoff_predict,
     ),
     CurveFamily(
+        name="slater_soft_wall",
+        param_names=("log_amp", "log_rate", "nu", "log_rc_margin", "log_gamma"),
+        init_fn=_slater_soft_wall_init,
+        predict_fn=_slater_soft_wall_predict,
+    ),
+    CurveFamily(
+        name="stretched_soft_wall",
+        param_names=(
+            "log_amp",
+            "log_scale",
+            "log_power",
+            "log_rc_margin",
+            "log_gamma",
+        ),
+        init_fn=_stretched_soft_wall_init,
+        predict_fn=_stretched_soft_wall_predict,
+    ),
+    CurveFamily(
+        name="slater_exp_quad_soft_wall",
+        param_names=(
+            "log_amp",
+            "log_b",
+            "log_c",
+            "nu",
+            "log_rc_margin",
+            "log_gamma",
+        ),
+        init_fn=_slater_exp_quad_soft_wall_init,
+        predict_fn=_slater_exp_quad_soft_wall_predict,
+    ),
+    CurveFamily(
         name="bi_exp_soft_cutoff",
         param_names=("log_amp1", "log_amp2", "log_rate1", "log_rate2", "r0", "log_tau"),
         init_fn=_bi_exp_soft_cutoff_init,
@@ -591,6 +685,8 @@ def _plot_all_pairs_scatter(
     pair_data: dict[str, dict[str, np.ndarray]],
     order: list[str],
     output_path: Path,
+    *,
+    snapshot_label: str,
 ) -> None:
     colors = _pair_colors(order)
     fig, ax = plt.subplots(1, 1, figsize=(13, 9), constrained_layout=True)
@@ -600,7 +696,7 @@ def _plot_all_pairs_scatter(
         if x.size == 0:
             continue
         ax.scatter(x, y, s=18, alpha=0.8, color=colors[pair], label=pair)
-    ax.set_title("scale_1_010 Hamiltonian block sum of squares vs edge distance")
+    ax.set_title(f"{snapshot_label} Hamiltonian block sum of squares vs edge distance")
     ax.set_xlabel("Edge distance")
     ax.set_ylabel("Hamiltonian block sum of squares")
     ax.set_yscale("log")
@@ -616,6 +712,8 @@ def _plot_family_all_pairs(
     fits: dict[str, dict[str, object]],
     order: list[str],
     output_path: Path,
+    *,
+    snapshot_label: str,
 ) -> None:
     colors = _pair_colors(order)
     fig, ax = plt.subplots(1, 1, figsize=(13, 9), constrained_layout=True)
@@ -633,7 +731,7 @@ def _plot_family_all_pairs(
         y_grid = family.predict_fn(np.asarray(fit["theta"], dtype=np.float64), x_grid)
         ax.plot(x_grid, np.maximum(y_grid, EPS), color=color, linewidth=2.2)
     ax.set_title(
-        "scale_1_010 Hamiltonian block sum of squares vs edge distance\n"
+        f"{snapshot_label} Hamiltonian block sum of squares vs edge distance\n"
         f"fit family: {family.name}"
     )
     ax.set_xlabel("Edge distance")
@@ -652,14 +750,25 @@ def _plot_family_per_pair(
     order: list[str],
     output_path: Path,
 ) -> None:
-    fig, axes = plt.subplots(3, 5, figsize=(19.2, 9.6), constrained_layout=True)
+    if len(order) <= 5:
+        fig, axes = plt.subplots(
+            1,
+            len(order),
+            figsize=(6.0 * max(len(order), 1), 4.8),
+            constrained_layout=True,
+            squeeze=False,
+        )
+    else:
+        fig, axes = plt.subplots(
+            3, 5, figsize=(19.2, 9.6), constrained_layout=True, squeeze=False
+        )
     colors = _pair_colors(order)
+    flat_axes = list(axes.flat)
     for ax, pair in zip(
         tqdm(
-            axes.flat, total=len(order), desc=f"Plotting {family.name} per-pair panels"
+            flat_axes, total=len(order), desc=f"Plotting {family.name} per-pair panels"
         ),
         order,
-        strict=True,
     ):
         x = pair_data[pair]["distance"]
         y = pair_data[pair]["magnitude"]
@@ -684,6 +793,8 @@ def _plot_family_per_pair(
         ax.set_ylabel("Sum of squares")
         ax.set_yscale("log")
         ax.grid(alpha=0.2)
+    for ax in flat_axes[len(order) :]:
+        ax.axis("off")
     fig.suptitle(f"Per-pair radial fits: {family.name}", fontsize=16)
     fig.savefig(output_path, dpi=220)
     plt.close(fig)
@@ -696,16 +807,27 @@ def _plot_family_log_residuals(
     order: list[str],
     output_path: Path,
 ) -> None:
-    fig, axes = plt.subplots(3, 5, figsize=(19.2, 9.6), constrained_layout=True)
+    if len(order) <= 5:
+        fig, axes = plt.subplots(
+            1,
+            len(order),
+            figsize=(6.0 * max(len(order), 1), 4.8),
+            constrained_layout=True,
+            squeeze=False,
+        )
+    else:
+        fig, axes = plt.subplots(
+            3, 5, figsize=(19.2, 9.6), constrained_layout=True, squeeze=False
+        )
     colors = _pair_colors(order)
+    flat_axes = list(axes.flat)
     for ax, pair in zip(
         tqdm(
-            axes.flat,
+            flat_axes,
             total=len(order),
             desc=f"Plotting {family.name} residual panels",
         ),
         order,
-        strict=True,
     ):
         x = pair_data[pair]["distance"]
         y = np.maximum(pair_data[pair]["magnitude"], EPS)
@@ -724,6 +846,8 @@ def _plot_family_log_residuals(
         ax.set_xlabel("Distance")
         ax.set_ylabel("log10(pred) - log10(gt)")
         ax.grid(alpha=0.2)
+    for ax in flat_axes[len(order) :]:
+        ax.axis("off")
     fig.suptitle(f"Per-pair log residuals: {family.name}", fontsize=16)
     fig.savefig(output_path, dpi=220)
     plt.close(fig)
@@ -771,9 +895,11 @@ def _write_markdown_summary(
     fits_by_family: dict[str, dict[str, dict[str, object]]],
     order: list[str],
     output_dir: Path,
+    *,
+    snapshot_label: str,
 ) -> None:
     lines = [
-        "# ZnCuSnSeS radial fit study",
+        f"# Radial fit study: {snapshot_label}",
         "",
         "Primary metric used for ranking fit agreement here is `log_rmse`.",
         "",
@@ -831,6 +957,7 @@ def main() -> None:
         args.matrix_path,
         args.info_path,
     )
+    snapshot_label = matrix_path.parent.name
     cache_sig = _cache_signature(
         matrix_path,
         info_path,
@@ -879,6 +1006,7 @@ def main() -> None:
         pair_data,
         order,
         output_dir / "hamiltonian_block_magnitude_vs_distance_all_pairs_data.png",
+        snapshot_label=snapshot_label,
     )
     print("Baseline scatter written.", flush=True)
 
@@ -909,6 +1037,7 @@ def main() -> None:
             family_fits,
             order,
             output_dir / f"{family.name}_all_pairs_overlay.png",
+            snapshot_label=snapshot_label,
         )
         _plot_family_per_pair(
             family,
@@ -927,7 +1056,13 @@ def main() -> None:
         print(f"Plots written for family: {family.name}", flush=True)
 
     _write_fit_summary(CURVE_FAMILIES, fits_by_family, order, output_dir)
-    _write_markdown_summary(CURVE_FAMILIES, fits_by_family, order, output_dir)
+    _write_markdown_summary(
+        CURVE_FAMILIES,
+        fits_by_family,
+        order,
+        output_dir,
+        snapshot_label=snapshot_label,
+    )
     _write_selected_envelope_artifact(
         "slater_soft_cutoff",
         fits_by_family,
