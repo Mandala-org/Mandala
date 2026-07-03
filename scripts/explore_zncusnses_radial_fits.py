@@ -114,6 +114,16 @@ def parse_args() -> argparse.Namespace:
             "payload. Defaults to <output-dir>/cache."
         ),
     )
+    parser.add_argument(
+        "--selected-envelope-family",
+        type=str,
+        default="slater_soft_cutoff",
+        choices=[family.name for family in CURVE_FAMILIES],
+        help=(
+            "Curve family to export as <family>_envelope.json for downstream "
+            "training/evaluation."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -939,6 +949,7 @@ def _write_selected_envelope_artifact(
         payload["pairs"][pair] = {
             "theta": [float(v) for v in fit["theta"]],
             "metrics": fit["metrics"],
+            "x_max": float(fit["x_max"]),
         }
     (output_dir / f"{family_name}_envelope.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True)
@@ -1025,7 +1036,11 @@ def main() -> None:
             except Exception as exc:
                 print(f"[WARN] fit failed for family={family.name} pair={pair}: {exc}")
                 continue
-            family_fits[pair] = {"theta": theta.tolist(), "metrics": metrics}
+            family_fits[pair] = {
+                "theta": theta.tolist(),
+                "metrics": metrics,
+                "x_max": float(np.max(x)),
+            }
         fits_by_family[family.name] = family_fits
         print(
             f"Finished fitting family {family.name} in {time.perf_counter() - family_start:.2f}s; writing plots...",
@@ -1064,7 +1079,7 @@ def main() -> None:
         snapshot_label=snapshot_label,
     )
     _write_selected_envelope_artifact(
-        "slater_soft_cutoff",
+        args.selected_envelope_family,
         fits_by_family,
         output_dir,
     )

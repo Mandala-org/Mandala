@@ -39,7 +39,7 @@ from data.edge_alignment import (
 )
 from data.envelope import (
     build_edge_envelope,
-    load_slater_soft_cutoff_envelope_table,
+    load_pair_envelope_table,
 )
 from data.graph_features import (
     compute_graph_features,
@@ -156,13 +156,14 @@ class E3GNNDataset(Dataset):
                     "hamiltonian_envelope_path is required when envelope-based "
                     "modes are enabled."
                 )
-            self.envelope_table = load_slater_soft_cutoff_envelope_table(
+            self.envelope_table = load_pair_envelope_table(
                 envelope_path,
                 pair_order=self.mapper.edge_types,
                 dtype=self.dtype,
                 device="cpu",
             )
-            self.edge_type_r0 = self.envelope_table.r0.clone().detach()
+            if self.pair_distance_normalization == "pair_r0":
+                self.edge_type_r0 = self.envelope_table.r0.clone().detach()
 
         if cfg.train_on_forces and not self.cfg.enable_forces:
             raise Exception("Forces must be enabled to train on them")

@@ -18,7 +18,7 @@ from data.edge_alignment import (
 from data.envelope import (
     build_edge_envelope,
     build_edge_r0_lookup,
-    load_slater_soft_cutoff_envelope_table,
+    load_pair_envelope_table,
 )
 from data.graph_features import compute_graph_features
 from data.openmx_info_parser import parse_info_out
@@ -85,13 +85,14 @@ def build_model_input_from_structure(
                 "hamiltonian_envelope_path is required when envelope-based "
                 "evaluation features are enabled."
             )
-        envelope_table = load_slater_soft_cutoff_envelope_table(
+        envelope_table = load_pair_envelope_table(
             envelope_path,
             pair_order=mapper.edge_types,
             dtype=dtype,
             device=positions.device,
         )
-        edge_type_r0 = envelope_table.r0.clone().detach()
+        if pair_distance_normalization == "pair_r0":
+            edge_type_r0 = envelope_table.r0.clone().detach()
 
     (
         edge_index,
