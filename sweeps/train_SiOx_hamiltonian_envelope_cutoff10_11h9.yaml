@@ -263,7 +263,7 @@ parameters:
   hamiltonian-envelope-mode:
     value: multiply_prediction
   loss-weighting-mode:
-    value: off
+    value: "off"
 
   # Revert / stability
   revert-on-spike:
