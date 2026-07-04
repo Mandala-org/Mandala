@@ -32,11 +32,11 @@ parameters:
   dataset-kind:
     value: siox
   data-path:
-    value: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new
   snapshot-cache-dir:
-    value: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx/snapshot_cache
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/snapshot_cache
   dataset-device:
-    value: cpu
+    value: cuda
   num-workers:
     value: 3
   num-train:
@@ -62,7 +62,7 @@ parameters:
   lr-scheduler-factor:
     value: 0.5
   lr-scheduler-patience:
-    values: [40, 60]
+    values: [40, 60, 90]
   lr-scheduler-min-lr:
     value: 1e-8
   lr-scheduler-target:
@@ -76,11 +76,16 @@ parameters:
   cutoff-radius:
     value: 10.0
   l-max:
-    value: 6
+    value: 4
   hidden-base-dim:
     value: 64
   hidden-irreps:
-    value: 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e+4x4o+4x5e+12x5o+8x6e
+    values:
+      - 32x0e+32x0o+16x1e+16x1o+16x2e+16x2o+8x3e+8x3o+8x4e
+      - 64x0e+64x0o+32x1e+32x1o+16x2e+16x2o+8x3e+8x3o+8x4e
+      - 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e
+      - 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+      - 128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+16x3e+16x3o+16x4e
   edge-type-emb-dim:
     value: 32
   emb-use-odd-features:
@@ -118,11 +123,11 @@ parameters:
   head-e3mlp-variant:
     value: normact
   neck-depth:
-    value: 2
+    values: [1, 2]
   internal-e3mlp-layers:
     value: 1
   head-e3mlp-layers:
-    value: 1
+    values: [1, 2]
   head-use-node-embeddings-for-self-edges:
     value: true
   separate-shifted-self:
@@ -176,7 +181,7 @@ parameters:
   radial-layers:
     value: [128, 128, 128]
   pair-conditioned-radial-mlp:
-    value: false
+    values: [false, true]
   pair-distance-normalization:
     value: "off"
 
@@ -274,4 +279,4 @@ parameters:
 
   # Seeds
   seed:
-    values: [43, 44, 45, 46]
+    value: 42
