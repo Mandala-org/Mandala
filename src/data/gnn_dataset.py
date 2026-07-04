@@ -638,9 +638,10 @@ class E3GNNDataset(Dataset):
                     edge_type_idx=edge_type_idx,
                     envelope_table=self.envelope_table,
                 ).to(dtype=self.dtype)
-                edge_r0 = self.envelope_table.r0.index_select(0, edge_type_idx).to(
-                    dtype=self.dtype
-                )
+                if self.pair_distance_normalization == "pair_r0":
+                    edge_r0 = self.envelope_table.r0.index_select(0, edge_type_idx).to(
+                        dtype=self.dtype
+                    )
             pred_metadata = build_prediction_edge_metadata(
                 edge_index=edge_index,
                 edge_shift=edge_shift,
@@ -682,6 +683,7 @@ class E3GNNDataset(Dataset):
             }
             if edge_envelope is not None:
                 x["edge_envelope"] = edge_envelope
+            if edge_r0 is not None:
                 x["edge_r0"] = edge_r0
             if self.cfg.precompute_edge_features:
                 x["edge_length_emb"] = edge_length_emb
