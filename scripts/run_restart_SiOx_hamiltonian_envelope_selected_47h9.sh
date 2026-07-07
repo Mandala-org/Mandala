@@ -109,7 +109,7 @@ CMD=(
   --snapshot-cache-dir "${SNAPSHOT_CACHE_DIR}"
   --dataset-device cuda
   --num-workers 3
-  --num-train 60
+  --num-train 90
   --num-val 10
   --max-wall-clock-hours 47.9
   --lr "${BASE_LR}"
