@@ -171,6 +171,13 @@ def main() -> None:
             raise ValueError(
                 f"Sweep YAML must contain a top-level mapping: {args.sweep_yaml}"
             )
+        if "parameters" in parsed_yaml:
+            raise ValueError(
+                "--sweep-yaml expects a resolved training config YAML, not a W&B sweep "
+                "specification. This file contains a top-level 'parameters' section. "
+                "Launch it with 'wandb sweep <yaml>' and then run a W&B agent, or "
+                "materialize one concrete config first."
+            )
         print(f"--- Loaded sweep YAML with keys: {sorted(parsed_yaml.keys())} ---")
     run_training(args, parsed_yaml=parsed_yaml)
 
