@@ -341,6 +341,7 @@ class Snapshot:
             "matrix_path": self.matrix_path,
             "info_path": self.info_path,
             "cutoff_radius": self.cutoff_radius,
+            "info": self.info,
             "mats": {k: v._to_payload() for k, v in self._mats.items()},
         }
 
@@ -408,6 +409,7 @@ class Snapshot:
             matrix_path=payload_top.get("matrix_path", None),
             info_path=payload_top.get("info_path", None),
             cutoff_radius=payload_top.get("cutoff_radius", None),
+            info=payload_top.get("info", None),
         )
 
     # ---------------------------------------------------------------- repr

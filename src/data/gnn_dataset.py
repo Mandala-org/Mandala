@@ -53,7 +53,7 @@ from net.spectral_loss import build_spectral_reference
 from tqdm.auto import tqdm
 
 
-SNAPSHOT_CACHE_VERSION = "v2"
+SNAPSHOT_CACHE_VERSION = "v3"
 PREPROCESSED_SAMPLE_CACHE_VERSION = "v5"
 
 
