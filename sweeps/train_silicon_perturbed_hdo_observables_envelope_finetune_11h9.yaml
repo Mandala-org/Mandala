@@ -1,0 +1,293 @@
+program: scripts/wandb_run.py
+method: grid
+metric:
+  name: val/loss_total
+  goal: minimize
+
+project: mandala-silicon-perturbed-hdo-observables-envelope-finetune
+name: silicon-perturbed-hdo-observables-envelope-finetune-11h9
+
+command:
+  - ${env}
+  - python
+  - -u
+  - ${program}
+  - ${args}
+
+parameters:
+  wandb-project:
+    value: mandala-silicon-perturbed-hdo-observables-envelope-finetune
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_hdo_observables_envelope_finetune_11h9
+  resume-from-checkpoint:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hdo_compat_from_likely_sweep_22_47h5/sleek-sweep-8-restart-lr5em4-p120/best_model.pt
+  compatibility:
+    value: true
+  resume-mode:
+    value: best
+  wandb-mode:
+    value: online
+  generate-video:
+    value: false
+  log-artifacts:
+    value: true
+
+  dataset-kind:
+    value: silicon_scales
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/snapshot_cache
+  dataset-device:
+    value: cpu
+  num-workers:
+    value: 3
+  scales:
+    values:
+      - [1]
+      - [1, 2]
+  num-train-per-scale:
+    value: 80
+  num-val-per-scale:
+    value: 20
+  max-wall-clock-hours:
+    value: 11.9
+
+  lr:
+    values:
+      - 5.0e-3
+      - 1.0e-3
+  max-epochs:
+    value: 5000
+  grad-clip-val:
+    value: 1
+  accumulate-grad-batches:
+    value: 1
+  use-lr-scheduler:
+    value: true
+  lr-scheduler-factor:
+    value: 0.5
+  lr-scheduler-patience:
+    value: 120
+  lr-scheduler-min-lr:
+    value: 1e-8
+  lr-scheduler-target:
+    value: val/loss_total
+
+  precision:
+    value: 32-true
+  convention:
+    value: e3nn
+  cutoff-radius:
+    value: 8
+  hidden-base-dim:
+    value: 32
+  hidden-irreps:
+    value: 128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+16x3e+16x3o+16x4e
+  l-max:
+    value: 4
+  edge-type-emb-dim:
+    value: 32
+  emb-use-odd-features:
+    value: true
+  edge-encoder-style:
+    value: rich
+  edge-encoder-use-sh-tensor-square:
+    value: true
+  e3layernorm:
+    value: false
+  num-layers-gnn:
+    value: 2
+  tp-type:
+    value: separate_weight
+  use-self-connection:
+    value: true
+  edge-update-node-combine:
+    value: concat
+  edge-update-residual:
+    value: false
+  node-update-message-agg:
+    value: attention
+  node-update-attention-scalar-dim:
+    value: 128
+  node-update-attention-heads:
+    value: 4
+  node-update-residual:
+    value: false
+
+  e3mlp-variant:
+    value: film
+  internal-e3mlp-variant:
+    value: film
+  head-e3mlp-variant:
+    value: film
+  neck-depth:
+    value: 2
+  internal-e3mlp-layers:
+    value: 1
+  head-e3mlp-layers:
+    value: 2
+  head-use-node-embeddings-for-self-edges:
+    value: true
+  separate-shifted-self:
+    value: true
+  head-use-tensor-square:
+    value: false
+  head-use-mlp-log-scale:
+    value: false
+  head-log-scale-mlp-n-layers:
+    value: 1
+  head-diag-output-scale:
+    value: 2
+  head-offdiag-output-scale:
+    value: 1
+  e3mlp-pre-norm:
+    value: false
+  e3mlp-norm-eps:
+    value: 1e-8
+  e3mlp-film-hidden-dim:
+    value: 128
+  e3mlp-output-scale:
+    value: 1
+  e3mlp-weight-init-scale:
+    value: 1
+  e3mlp-residual-scale:
+    value: 1
+
+  activation-odd-scalar:
+    value: tanh
+  activation-odd-gate:
+    value: tanh
+  nonlin-kind:
+    value: normact
+  activation-scalar:
+    value: leakyrelu
+  activation-gate:
+    value: softplus
+  s2act-res:
+    value: 128
+  norm-kind:
+    value: component
+  dropout:
+    value: 0
+  l1-reg-coef:
+    value: 0
+  l2-reg-coef:
+    value: 0
+  init-weights-factor:
+    value: 1
+  n-radial:
+    value: 128
+  radial-layers:
+    value: [128, 128]
+  pair-conditioned-radial-mlp:
+    value: false
+  pair-distance-normalization:
+    value: off
+
+  device:
+    value: cuda
+  gpus:
+    value: 1
+  benchmark:
+    value: false
+  adaptive-log-interval:
+    value: true
+  log-interval:
+    value: 10
+  log-data:
+    value: false
+  log-model:
+    value: false
+  log-forward:
+    value: false
+  log-per-irrep-metrics:
+    value: true
+  print-per-irrep-metrics:
+    value: false
+  log-per-irrep-images:
+    value: false
+  log-per-pair-loss-metrics:
+    value: true
+  log-hamiltonian-irrep-contrib-metrics:
+    value: true
+  log-hamiltonian-pair-contrib-metrics:
+    value: true
+  log-partial-gt-observables:
+    value: true
+  log-activation-mag:
+    value: false
+
+  matrix-targets:
+    value: ["hamiltonian", "density", "overlap"]
+  enable-energy:
+    value: true
+  enable-num-electrons:
+    value: true
+  enable-forces:
+    value: false
+  enable-stress:
+    value: false
+  train-on-energy:
+    value: true
+  train-on-num-electrons:
+    value: true
+  train-on-forces:
+    value: false
+  train-on-stress:
+    value: false
+  train-on-irrep-parts:
+    value: false
+  train-observables-on-gt:
+    value: false
+  loss-coef-observables:
+    values:
+      - 1.0e-5
+      - 1.0e-7
+  loss-coef-forces:
+    value: 0.0
+  loss-coef-stress:
+    value: 0.0
+  loss-l1-fraction:
+    values:
+      - 0.0
+      - 1.0
+  symmetrize-output:
+    value: false
+  symmetrize-hamiltonian-targets:
+    value: true
+  rescale-density-to-num-electrons:
+    value: false
+  precompute-edge-features:
+    value: true
+  radial-embedding-scale:
+    value: none
+  apply-cutoff-to-targets:
+    value: true
+  require-exact-edge-match:
+    value: true
+  allow-incomplete-dataset:
+    value: true
+
+  hamiltonian-envelope-path:
+    value: eval_outputs/silicon_perturbed_scale1_radial_fit_study/slater_exp_quad_soft_wall_envelope.json
+  hamiltonian-envelope-mode:
+    values:
+      - off
+      - multiply_prediction
+  loss-weighting-mode:
+    value: off
+
+  revert-on-spike:
+    value: true
+  revert-monitor:
+    value: val/loss_total
+  revert-decay-patience:
+    value: 4
+  revert-decay-rate:
+    value: 0.8
+  revert-spike-factor:
+    value: 2
+
+  seed:
+    value: 43
