@@ -27,7 +27,6 @@ WANDB_PROJECT="mandala-SiOx-hamiltonian-envelope-selected-95h8"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new"
 SNAPSHOT_CACHE_DIR="/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/snapshot_cache"
 ENVELOPE_PATH="eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json"
-SPECTRAL_FERMI_CACHE_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/spectral_fermi_cache_cutoff10_k2x2x2"
 BASE_LR="0.0027"
 
 if [[ ! -f "${RESUME_CHECKPOINT}" ]]; then
@@ -49,10 +48,6 @@ case "${MODE}" in
   spectral)
     if [[ -z "${SPECTRAL_COEF}" ]]; then
       echo "Spectral mode requires a coefficient argument." >&2
-      exit 1
-    fi
-    if [[ ! -e "${SPECTRAL_FERMI_CACHE_PATH}" ]]; then
-      echo "Spectral Fermi cache not found: ${SPECTRAL_FERMI_CACHE_PATH}" >&2
       exit 1
     fi
     COMPATIBILITY="true"
@@ -200,7 +195,6 @@ if [[ "${MODE}" == "spectral" ]]; then
     --spectral-loss-huber-delta-ev 0.1
     --spectral-loss-overlap-psd-cleanup false
     --spectral-loss-overlap-jitter true
-    --spectral-fermi-cache-path "${SPECTRAL_FERMI_CACHE_PATH}"
   )
 fi
 
