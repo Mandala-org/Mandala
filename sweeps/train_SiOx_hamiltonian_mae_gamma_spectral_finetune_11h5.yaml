@@ -274,9 +274,6 @@ parameters:
     value: false
   spectral-loss-overlap-jitter:
     value: true
-  spectral-fermi-cache-path:
-    value: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/spectral_fermi_cache_cutoff10_k2x2x2
-
   revert-on-spike:
     value: true
   revert-monitor:

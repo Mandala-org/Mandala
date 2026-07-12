@@ -85,6 +85,16 @@ def test_raw_row_count_matches_tensor(parsed_data):
     assert parsed_data.occupancies.shape[0] == expected_rows
 
 
+@pytest.mark.unit
+def test_chemical_potential_is_parsed_as_fermi_level(tmp_path):
+    info_path = tmp_path / "SiO2.out"
+    info_path.write_text("Chemical potential (Hartree)      -0.184928095654\n")
+
+    parsed = parse_info_out(info_path)
+
+    assert parsed.fermi_level.item() == pytest.approx(-0.184928095654)
+
+
 # --------------------------------------------------------------------------- edge-case sanity
 @pytest.mark.parametrize(
     "element, part",

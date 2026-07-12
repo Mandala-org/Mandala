@@ -28,7 +28,6 @@ WANDB_PROJECT="mandala-SiOx-hamiltonian-mae-stage2-47h25"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new"
 SNAPSHOT_CACHE_DIR="${DATA_PATH}/snapshot_cache"
 ENVELOPE_PATH="eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json"
-FERMI_CACHE="${DATA_PATH}/spectral_fermi_cache_cutoff10_k2x2x2"
 
 SOURCE_TAG="0p0027"
 COMPATIBILITY="true"
@@ -60,7 +59,7 @@ case "${MODE}" in
     esac
     START_LR="5e-5"
     COEF_TAG="${VALUE//-/m}"
-    RUN_NAME="${SOURCE_PREFIX}${SOURCE_TAG}-gamma-spec${COEF_TAG}-lr5em5-47h25"
+    RUN_NAME="${SOURCE_PREFIX}${SOURCE_TAG}-gamma-spec${COEF_TAG}-lr5em5-direct-fermi-47h25"
     ;;
   *)
     echo "Unsupported mode: ${MODE}" >&2
@@ -219,7 +218,6 @@ if [[ "${MODE}" == "spectral" ]]; then
     --spectral-loss-huber-delta-ev 0.1
     --spectral-loss-overlap-psd-cleanup false
     --spectral-loss-overlap-jitter true
-    --spectral-fermi-cache-path "${FERMI_CACHE}"
   )
 fi
 
