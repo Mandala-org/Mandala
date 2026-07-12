@@ -87,13 +87,14 @@ def parse_args() -> argparse.Namespace:
         choices=["tetrahedron", "gaussian"],
     )
     parser.add_argument("--dos-kmesh", type=str, default="4x4x4")
-    parser.add_argument("--dos-energy-min", type=float, default=-10.0)
-    parser.add_argument("--dos-energy-max", type=float, default=15.0)
+    # Absolute construction bounds; plots are later centered on E_F at +/-10 eV.
+    parser.add_argument("--dos-energy-min", type=float, default=-50.0)
+    parser.add_argument("--dos-energy-max", type=float, default=50.0)
     parser.add_argument("--num-points", type=int, default=240)
     parser.add_argument("--path-string", type=str, default=None)
     parser.add_argument("--use-gt-overlap-for-eigs", action="store_true")
-    parser.add_argument("--band-emin-ev", type=float, default=-8.0)
-    parser.add_argument("--band-emax-ev", type=float, default=8.0)
+    parser.add_argument("--band-emin-ev", type=float, default=-10.0)
+    parser.add_argument("--band-emax-ev", type=float, default=10.0)
     parser.add_argument("--band-line-alpha", type=float, default=0.2)
     parser.add_argument("--correlation-max-points", type=int, default=250000)
     parser.add_argument("--correlation-alpha", type=float, default=0.03)

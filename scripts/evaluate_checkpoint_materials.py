@@ -101,8 +101,13 @@ def setup_argparse() -> argparse.Namespace:
         choices=["tetrahedron", "gaussian"],
     )
     parser.add_argument("--dos-kmesh", type=str, default="4x4x4")
-    parser.add_argument("--dos-energy-min", type=float, default=-10.0)
-    parser.add_argument("--dos-energy-max", type=float, default=15.0)
+    # These are absolute eigenvalue bounds used while constructing the DOS.
+    # Keep them broad enough that the subsequently determined Fermi level is
+    # not pinned to an endpoint (the old -10..15 eV defaults did exactly that
+    # for the SiO2 snapshot).  The figures themselves are shown in a +/-10 eV
+    # window relative to E_F below.
+    parser.add_argument("--dos-energy-min", type=float, default=-50.0)
+    parser.add_argument("--dos-energy-max", type=float, default=50.0)
     parser.add_argument("--num-points", type=int, default=240)
     parser.add_argument("--path-string", type=str, default=None)
     parser.add_argument(
@@ -110,8 +115,8 @@ def setup_argparse() -> argparse.Namespace:
         action="store_true",
         help="Use the ground-truth overlap matrix for DOS and band-structure eigensolves in snapshot mode.",
     )
-    parser.add_argument("--band-emin-ev", type=float, default=-8.0)
-    parser.add_argument("--band-emax-ev", type=float, default=8.0)
+    parser.add_argument("--band-emin-ev", type=float, default=-10.0)
+    parser.add_argument("--band-emax-ev", type=float, default=10.0)
     parser.add_argument("--band-line-alpha", type=float, default=0.2)
     parser.add_argument("--correlation-max-points", type=int, default=250000)
     parser.add_argument("--correlation-alpha", type=float, default=0.03)

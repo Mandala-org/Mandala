@@ -2475,12 +2475,7 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
         title_text="Energy - $E_F$ (eV)" if fermi is not None else "Energy (eV)"
     )
     if fermi is not None:
-        fig.update_xaxes(
-            range=[
-                float(payload.get("energy_min_ev", float(np.min(grid)))) - float(fermi),
-                float(payload.get("energy_max_ev", float(np.max(grid)))) - float(fermi),
-            ]
-        )
+        fig.update_xaxes(range=[-10.0, 10.0])
     fig.update_yaxes(title_text="DOS")
     return fig
 

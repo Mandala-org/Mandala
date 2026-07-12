@@ -307,6 +307,21 @@ def _tetrahedron_cdf_pdf(
         cdf = cdf + dx.pow(3) / denom.unsqueeze(-1)
         pdf = pdf + 3.0 * dx.pow(2) / denom.unsqueeze(-1)
 
+    # The truncated-power expression is an exact partition of unity, but for
+    # x >= e_max it obtains CDF=1 and PDF=0 by cancellation of four potentially
+    # enormous terms.  That cancellation is numerically disastrous for flat or
+    # nearly-flat bands (a common case in large supercells).  In particular,
+    # clamping the residual PDF below turned round-off of either sign into a
+    # large positive, non-normalized DOS background.  Set the analytically
+    # known tails explicitly before clamping.
+    e_min = e[..., :1]
+    e_max = e[..., -1:]
+    below = x <= e_min
+    above = x >= e_max
+    cdf = torch.where(below, torch.zeros_like(cdf), cdf)
+    pdf = torch.where(below, torch.zeros_like(pdf), pdf)
+    cdf = torch.where(above, torch.ones_like(cdf), cdf)
+    pdf = torch.where(above, torch.zeros_like(pdf), pdf)
     cdf = torch.clamp(cdf, min=0.0, max=1.0)
     pdf = torch.clamp(pdf, min=0.0)
     return cdf, pdf
@@ -508,6 +523,9 @@ def _dos_cache_signature(
         fermi_level = float(info.fermi_level.item() * HARTREE_TO_EV)
     return {
         "kind": kind,
+        # Bump when the numerical DOS algorithm changes so stale bundles do
+        # not silently survive --force-refresh at the outer evaluation layer.
+        "algorithm_version": 2,
         "matrix_path": _path_sig(getattr(snapshot, "matrix_path", None)),
         "info_path": _path_sig(getattr(snapshot, "info_path", None)),
         "kmesh_spec": kmesh_spec,
@@ -2639,7 +2657,10 @@ def save_dos_comparison_plot(
     ax.set_ylabel("DOS")
     ax.grid(True, alpha=0.25)
     if fermi_true is not None:
-        ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+        # DOS is plotted relative to the GT Fermi level.  The scientifically
+        # useful window is symmetric around E_F; using the absolute DOS grid
+        # bounds here can hide the entire unoccupied (+E) side.
+        ax.set_xlim(-10.0, 10.0)
     else:
         ax.set_xlim(left=energy_min, right=energy_max)
     text_lines = []
@@ -2703,7 +2724,7 @@ def save_dos_comparison_plot(
         ax.set_ylabel("DOS Error")
         ax.grid(True, alpha=0.25)
         if fermi_true is not None:
-            ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+            ax.set_xlim(-10.0, 10.0)
         else:
             ax.set_xlim(left=energy_min, right=energy_max)
         ax.legend(loc="best")
@@ -2915,7 +2936,7 @@ def save_tetrahedron_dos_comparison_plot(
     ax.set_ylabel("DOS")
     ax.grid(True, alpha=0.25)
     if fermi_true is not None:
-        ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+        ax.set_xlim(-10.0, 10.0)
     else:
         ax.set_xlim(left=energy_min, right=energy_max)
     text_lines = []
@@ -2955,7 +2976,7 @@ def save_tetrahedron_dos_comparison_plot(
         ax.set_ylabel("DOS Error")
         ax.grid(True, alpha=0.25)
         if fermi_true is not None:
-            ax.set_xlim(left=energy_min - fermi_true, right=energy_max - fermi_true)
+            ax.set_xlim(-10.0, 10.0)
         else:
             ax.set_xlim(left=energy_min, right=energy_max)
         ax.legend(loc="best")
