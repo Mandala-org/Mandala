@@ -6,11 +6,13 @@ Utility functions for printing model and dataset summaries.
 """
 
 from __future__ import annotations
-from typing import Dict, Tuple, Any
+from typing import TYPE_CHECKING, Any, Dict, Tuple
 from torch import nn
 
-from data.gnn_dataset import E3GNNDataset
 from data.block_matrix import BlockMatrix, IrrepsBlockData
+
+if TYPE_CHECKING:
+    from data.gnn_dataset import E3GNNDataset
 
 
 def print_model_summary(model: nn.Module, verbosity: int = 1) -> None:

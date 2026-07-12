@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from net.time_budget import WallClockBudgetCallback
+from net.time_budget import RunBookkeepingCallback, WallClockBudgetCallback
 
 
 def test_wall_clock_budget_requests_stop_after_validation_epoch():
@@ -46,3 +46,25 @@ def test_wall_clock_budget_ignores_validation_before_training_starts():
     callback.on_validation_epoch_end(trainer, SimpleNamespace())
 
     assert trainer.should_stop is False
+
+
+def test_run_bookkeeping_callback_records_runtime_metadata(monkeypatch):
+    clock_values = iter([10.0, 11.0, 14.5, 16.0, 17.0])
+    callback = RunBookkeepingCallback(clock=lambda: next(clock_values))
+    summary = {}
+    logged = []
+    run = SimpleNamespace(summary=summary, log=lambda payload: logged.append(payload))
+    trainer = SimpleNamespace(logger=SimpleNamespace(experiment=run), current_epoch=2)
+    module = SimpleNamespace(cfg=SimpleNamespace(max_wall_clock_seconds=100.0))
+    monkeypatch.setenv("SLURM_JOB_ID", "12345")
+
+    callback.on_fit_start(trainer, module)
+    callback.on_train_epoch_start(trainer, module)
+    callback.on_train_epoch_end(trainer, module)
+    callback.on_fit_end(trainer, module)
+
+    assert summary["runtime/env/slurm_job_id"] == "12345"
+    assert summary["timing/planned_fit_budget_seconds"] == 100.0
+    assert summary["timing/last_completed_epoch"] == 2
+    assert summary["timing/termination_reason"] == "fit_completed"
+    assert logged[0]["timing/epoch_seconds"] == 3.5

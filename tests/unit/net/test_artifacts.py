@@ -61,6 +61,12 @@ def _make_batch_and_module():
                 adaptive_log_interval=False,
                 enable_energy=False,
                 enable_num_electrons=False,
+                enable_forces=False,
+                rescale_density_to_num_electrons=False,
+                require_exact_edge_match=False,
+                log_hamiltonian_irrep_contrib_metrics=False,
+                log_hamiltonian_pair_contrib_metrics=False,
+                video_max_atoms=6,
             )
             self.mapper = mapper
             self.device = torch.device("cpu")
@@ -106,7 +112,7 @@ def test_checkpoint_callback_saves_artifacts(tmp_path):
             self.logger = SimpleNamespace(experiment=DummyExperiment())
             self.optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
 
-        def save_checkpoint(self, path):
+        def save_checkpoint(self, path, **kwargs):
             saved.append(path)
             torch.save({"path": path}, path)
 
@@ -135,6 +141,55 @@ def test_checkpoint_callback_saves_artifacts(tmp_path):
     assert any("initial/mae_H" in payload for payload in logged_payloads)
     assert any("mae_H_mod" in payload for payload in logged_payloads)
     assert any("final/mae_H" in payload for payload in logged_payloads)
+
+
+def test_checkpoint_callback_saves_objective_best_checkpoints(tmp_path):
+    _, batch, module = _make_batch_and_module()
+    saved = []
+
+    class DummyExperiment:
+        def __init__(self):
+            self.summary = {}
+
+        def log(self, payload):
+            pass
+
+    class DummyTrainer:
+        def __init__(self):
+            self.current_epoch = 3
+            self.sanity_checking = False
+            self.callback_metrics = {
+                "val/loss_total": torch.tensor(1.0),
+                "val/energy_mae": torch.tensor(0.25),
+                "val/spectral_mae_ev": torch.tensor(0.08),
+            }
+            self.val_dataloaders = [[batch]]
+            self.logger = SimpleNamespace(experiment=DummyExperiment())
+            self.optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
+
+        def save_checkpoint(self, path, **kwargs):
+            saved.append(path)
+            torch.save({"path": path}, path)
+
+    trainer = DummyTrainer()
+    callback = ArtifactCheckpointCallback(tmp_path, generate_video=False)
+    callback.on_validation_epoch_end(trainer, module)
+
+    assert str(tmp_path / "best_energy_mae.pt") in saved
+    assert str(tmp_path / "best_spectrum_mae.pt") in saved
+    assert trainer.logger.experiment.summary[
+        "checkpoint/best_energy_mae_value"
+    ] == pytest.approx(0.25)
+    assert trainer.logger.experiment.summary[
+        "checkpoint/best_spectrum_mae_value"
+    ] == pytest.approx(0.08)
+
+    trainer.current_epoch = 4
+    trainer.callback_metrics["val/energy_mae"] = torch.tensor(0.4)
+    trainer.callback_metrics["val/spectral_mae_ev"] = torch.tensor(0.1)
+    callback.on_validation_epoch_end(trainer, module)
+    assert saved.count(str(tmp_path / "best_energy_mae.pt")) == 1
+    assert saved.count(str(tmp_path / "best_spectrum_mae.pt")) == 1
 
 
 def test_plot_helpers_write_files(tmp_path):
@@ -219,6 +274,9 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
                 enable_forces=True,
                 rescale_density_to_num_electrons=True,
                 require_exact_edge_match=False,
+                log_hamiltonian_irrep_contrib_metrics=False,
+                log_hamiltonian_pair_contrib_metrics=False,
+                video_max_atoms=6,
             )
             self.mapper = mapper
             self.device = torch.device("cpu")
@@ -251,7 +309,7 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
             self.logger = SimpleNamespace(experiment=DummyExperiment())
             self.optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
 
-        def save_checkpoint(self, path):
+        def save_checkpoint(self, path, **kwargs):
             torch.save({"path": path}, path)
 
     trainer = DummyTrainer()
@@ -314,7 +372,7 @@ def test_checkpoint_callback_saves_latest_on_exception(tmp_path):
             self.logger = SimpleNamespace(experiment=DummyExperiment())
             self.optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
 
-        def save_checkpoint(self, path):
+        def save_checkpoint(self, path, **kwargs):
             saved.append(path)
             torch.save({"path": path}, path)
 
@@ -369,7 +427,7 @@ def test_revert_on_spike_callback_reverts_best_and_decays_lr(tmp_path):
             self.lr_scheduler_configs = [SimpleNamespace(scheduler=scheduler)]
             self.strategy = DummyStrategy(module, optimizer)
 
-        def save_checkpoint(self, path):
+        def save_checkpoint(self, path, **kwargs):
             torch.save(
                 {
                     "state_dict": module.state_dict(),

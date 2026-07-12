@@ -738,6 +738,10 @@ def _maybe_log_wandb(run: Any, payload: dict[str, Any]) -> None:
 class ArtifactCheckpointState:
     best_score: float | None = None
     best_epoch: int | None = None
+    best_energy_score: float | None = None
+    best_energy_epoch: int | None = None
+    best_spectrum_score: float | None = None
+    best_spectrum_epoch: int | None = None
 
 
 @dataclass
@@ -948,6 +952,8 @@ class ArtifactCheckpointCallback(pl.Callback):
         self.per_irrep_dir = self.output_dir / "per_irrep_images"
         self.latest_path = self.output_dir / "latest_checkpoint.pt"
         self.best_path = self.output_dir / "best_model.pt"
+        self.best_energy_path = self.output_dir / "best_energy_mae.pt"
+        self.best_spectrum_path = self.output_dir / "best_spectrum_mae.pt"
         self.final_path = self.output_dir / "final_model.pt"
         self._last_logged_epoch = -1
         self._printed_strict_checks = False
@@ -984,7 +990,8 @@ class ArtifactCheckpointCallback(pl.Callback):
         pl_module.eval()
         x, y = batch
         enable_force_eval = bool(
-            pl_module.cfg.enable_forces and y.get("forces") is not None
+            getattr(pl_module.cfg, "enable_forces", False)
+            and y.get("forces") is not None
         )
         if enable_force_eval:
             x = dict(x)
@@ -1151,7 +1158,6 @@ class ArtifactCheckpointCallback(pl.Callback):
                 preds,
                 y,
                 pl_module.mapper,
-                require_exact_prefix=bool(pl_module.cfg.require_exact_edge_match),
             )
             pred_trace_alignment = x.get("pred_trace_alignment")
             if pred_trace_alignment is None:
@@ -1635,6 +1641,22 @@ class ArtifactCheckpointCallback(pl.Callback):
                 trainer.save_checkpoint(str(self.best_path), weights_only=False)
                 self.state.best_score = score
                 self.state.best_epoch = int(trainer.current_epoch)
+        self._maybe_save_objective_checkpoint(
+            trainer,
+            metric_name="val/energy_mae",
+            path=self.best_energy_path,
+            score_attr="best_energy_score",
+            epoch_attr="best_energy_epoch",
+            summary_prefix="checkpoint/best_energy_mae",
+        )
+        self._maybe_save_objective_checkpoint(
+            trainer,
+            metric_name="val/spectral_mae_ev",
+            path=self.best_spectrum_path,
+            score_attr="best_spectrum_score",
+            epoch_attr="best_spectrum_epoch",
+            summary_prefix="checkpoint/best_spectrum_mae",
+        )
         if self.save_latest:
             trainer.save_checkpoint(str(self.latest_path), weights_only=False)
 
@@ -1699,6 +1721,40 @@ class ArtifactCheckpointCallback(pl.Callback):
         fp = eval_result["first_payload"]
         if self.generate_video and fp is not None:
             self._save_epoch_frame(trainer, pl_module, fp["x"], fp["y"], fp["preds"])
+
+    def _maybe_save_objective_checkpoint(
+        self,
+        trainer: Any,
+        *,
+        metric_name: str,
+        path: Path,
+        score_attr: str,
+        epoch_attr: str,
+        summary_prefix: str,
+    ) -> None:
+        metric = trainer.callback_metrics.get(metric_name)
+        if metric is None:
+            return
+        score = float(
+            metric.detach().cpu().item() if torch.is_tensor(metric) else metric
+        )
+        if not np.isfinite(score):
+            return
+        best_score = getattr(self.state, score_attr)
+        if best_score is not None and score >= float(best_score):
+            return
+        trainer.save_checkpoint(str(path), weights_only=False)
+        epoch = int(trainer.current_epoch)
+        setattr(self.state, score_attr, score)
+        setattr(self.state, epoch_attr, epoch)
+        run = _get_logger_run(trainer)
+        if run is not None:
+            try:
+                run.summary[f"{summary_prefix}_path"] = str(path.resolve())
+                run.summary[f"{summary_prefix}_value"] = score
+                run.summary[f"{summary_prefix}_epoch"] = epoch
+            except Exception:
+                pass
 
     def _save_epoch_frame(self, trainer, pl_module, x, y, preds) -> None:
         epoch = int(trainer.current_epoch)

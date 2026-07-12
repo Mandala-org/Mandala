@@ -144,6 +144,7 @@ def test_build_callbacks_adds_revert_on_spike(monkeypatch, tmp_path):
         "ArtifactCheckpointCallback",
         lambda **kwargs: ("artifact", kwargs),
     )
+    monkeypatch.setattr(mod, "RunBookkeepingCallback", lambda: "bookkeeping")
     monkeypatch.setattr(
         mod,
         "RevertOnSpikeCallback",
@@ -156,9 +157,10 @@ def test_build_callbacks_adds_revert_on_spike(monkeypatch, tmp_path):
     callbacks = mod._build_callbacks(args, cfg, tmp_path, extra_callbacks=None)
 
     assert callbacks[0] == "progress"
-    assert callbacks[1][0] == "artifact"
-    assert callbacks[2][0] == "revert"
-    assert callbacks[2][1]["monitor"] == cfg.lr_scheduler_target
+    assert callbacks[1] == "bookkeeping"
+    assert callbacks[2][0] == "artifact"
+    assert callbacks[3][0] == "revert"
+    assert callbacks[3][1]["monitor"] == cfg.lr_scheduler_target
 
 
 def test_build_callbacks_adds_wall_clock_budget(monkeypatch, tmp_path):
@@ -170,6 +172,7 @@ def test_build_callbacks_adds_wall_clock_budget(monkeypatch, tmp_path):
         "ArtifactCheckpointCallback",
         lambda **kwargs: ("artifact", kwargs),
     )
+    monkeypatch.setattr(mod, "RunBookkeepingCallback", lambda: "bookkeeping")
     monkeypatch.setattr(
         mod,
         "WallClockBudgetCallback",
@@ -186,8 +189,9 @@ def test_build_callbacks_adds_wall_clock_budget(monkeypatch, tmp_path):
     callbacks = mod._build_callbacks(args, cfg, tmp_path, extra_callbacks=None)
 
     assert callbacks[0] == "progress"
-    assert callbacks[1][0] == "artifact"
-    assert callbacks[2] == ("wall_clock", {"budget_seconds": 43200.0})
+    assert callbacks[1] == "bookkeeping"
+    assert callbacks[2][0] == "artifact"
+    assert callbacks[3] == ("wall_clock", {"budget_seconds": 43200.0})
 
 
 def test_run_training_uses_wandb_run_name_for_run_dir(monkeypatch, tmp_path):

@@ -36,7 +36,10 @@ from net.run_logging import (  # noqa: E402
     log_orbital_config,
     log_snapshot_info,
 )
-from net.time_budget import WallClockBudgetCallback  # noqa: E402
+from net.time_budget import (
+    RunBookkeepingCallback,
+    WallClockBudgetCallback,
+)  # noqa: E402
 from scripts.dataset import (  # noqa: E402
     build_datasets_from_yaml,
     build_silicon_datasets,
@@ -517,6 +520,7 @@ def _build_callbacks(
             )
         )
     callbacks.append(_build_progress_bar())
+    callbacks.append(RunBookkeepingCallback())
     if getattr(args, "log_artifacts", True):
         callbacks.append(
             ArtifactCheckpointCallback(
