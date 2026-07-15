@@ -39,6 +39,7 @@ from net.observable_metrics import (
     add_observable_metrics,
     build_observable_predictions,
     observable_loss,
+    rescale_density_prediction_to_num_electrons,
     truncate_pred_block_matrix_to_target_prefix,
     validate_observable_config,
 )
@@ -93,6 +94,14 @@ class E3GNN(pl.LightningModule):
                 "train_on_irrep_parts expects matrix-space supervision and should only be used with train_target='matrix'."
             )
         validate_observable_config(cfg)
+        observable_loss_kind = str(getattr(cfg, "observable_loss_kind", "mse")).lower()
+        if observable_loss_kind not in {"mse", "mae"}:
+            raise ValueError("observable_loss_kind must be one of 'mse' or 'mae'.")
+        spectral_loss_kind = str(getattr(cfg, "spectral_loss_kind", "huber")).lower()
+        if spectral_loss_kind not in {"huber", "mse", "mae"}:
+            raise ValueError(
+                "spectral_loss_kind must be one of 'huber', 'mse', or 'mae'."
+            )
         envelope_mode = str(getattr(cfg, "hamiltonian_envelope_mode", "off")).lower()
         if envelope_mode not in {"off", "normalize_target", "multiply_prediction"}:
             raise ValueError(
@@ -351,6 +360,7 @@ class E3GNN(pl.LightningModule):
                 "--- Running first spectral loss evaluation: "
                 f"kpoints={int(x['spectral_kpoints_abs'].shape[0])}, "
                 f"window_weight_sum={float(x['spectral_window_weights'].sum().item()):.1f}, "
+                f"loss_kind={str(self.cfg.spectral_loss_kind)}, "
                 f"huber_delta_ev={float(self.cfg.spectral_loss_huber_delta_ev):.3f} ---",
                 flush=True,
             )
@@ -358,12 +368,13 @@ class E3GNN(pl.LightningModule):
             pred_hamiltonian=physical_pred_hamiltonian,
             spectral_payload=x,
             box=x["box"],
+            loss_kind=str(self.cfg.spectral_loss_kind),
             huber_delta_ev=float(self.cfg.spectral_loss_huber_delta_ev),
             overlap_psd_cleanup=bool(
-                getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", False)
+                getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", True)
             ),
             overlap_jitter=bool(
-                getattr(self.cfg, "spectral_loss_overlap_jitter", True)
+                getattr(self.cfg, "spectral_loss_overlap_jitter", False)
             ),
         )
         if not self._spectral_loss_debug_printed:
@@ -823,7 +834,7 @@ class E3GNN(pl.LightningModule):
                 p = loss_pred_matrix
                 t = loss_target_matrix
 
-                should_symmetrize = self.cfg.symmetrize_output or stage == "val"
+                should_symmetrize = self.cfg.symmetrize_output or stage != "train"
                 if should_symmetrize:
                     p = (p + p.transpose()) * 0.5
                     if self._matrix_envelope_mode() == "normalize_target":
@@ -1021,8 +1032,22 @@ class E3GNN(pl.LightningModule):
                 physical_pred_matrix,
                 target_matrix,
             )
-        observable_values = build_observable_predictions(
-            observable_preds_matrix,
+        observable_metric_preds_matrix = observable_preds_matrix
+        if bool(getattr(self.cfg, "rescale_density_to_num_electrons", False)):
+            observable_metric_preds_matrix, num_electrons_pre_rescale = (
+                rescale_density_prediction_to_num_electrons(
+                    observable_preds_matrix,
+                    trace_alignment=observable_trace_alignment,
+                    num_electrons_target=N_true,
+                    overlap_true=S_true,
+                )
+            )
+            if num_electrons_pre_rescale is not None:
+                metrics[f"{stage}/num_electrons_mae_pre_rescale"] = torch.mean(
+                    torch.abs(num_electrons_pre_rescale - N_true)
+                )
+        observable_metric_values = build_observable_predictions(
+            observable_metric_preds_matrix,
             trace_alignment=observable_trace_alignment,
             H_true=H_true,
             D_true=D_true,
@@ -1032,9 +1057,17 @@ class E3GNN(pl.LightningModule):
             metrics,
             stage=stage,
             cfg=self.cfg,
-            observable_values=observable_values,
+            observable_values=observable_metric_values,
             energy_target=E_true,
             num_electrons_target=N_true,
+        )
+        # Training losses always use the original, unscaled predictions.
+        observable_values = build_observable_predictions(
+            observable_preds_matrix,
+            trace_alignment=observable_trace_alignment,
+            H_true=H_true,
+            D_true=D_true,
+            S_true=S_true,
         )
         loss_E_weighted, loss_N_weighted = observable_loss(
             cfg=self.cfg,
@@ -1089,13 +1122,16 @@ class E3GNN(pl.LightningModule):
         if (
             self._spectral_loss_enabled()
             and "hamiltonian" in observable_preds_matrix
-            and float(getattr(self.cfg, "spectral_loss_coef", 0.0)) != 0.0
+            and (stage != "train" or bool(getattr(self.cfg, "train_on_spectral", True)))
         ):
             spectral_loss, spectral_stats = self._compute_spectral_loss(
                 x=x,
                 physical_pred_hamiltonian=observable_preds_matrix["hamiltonian"],
             )
-            loss_spectral_weighted = float(self.cfg.spectral_loss_coef) * spectral_loss
+            if bool(getattr(self.cfg, "train_on_spectral", True)):
+                loss_spectral_weighted = (
+                    float(self.cfg.spectral_loss_coef) * spectral_loss
+                )
             metrics[f"{stage}/loss_spectral"] = spectral_loss
             metrics[f"{stage}/loss_spectral_weighted"] = loss_spectral_weighted
             metrics[f"{stage}/spectral_mae_ev"] = spectral_stats["spectral_mae_ev"]
@@ -1136,10 +1172,14 @@ class E3GNN(pl.LightningModule):
         metrics[f"{stage}/loss_block_total"] = loss_matrix
 
         if loss_E_weighted > 0:
-            metrics[f"{stage}/loss_energy"] = loss_E_weighted
+            metrics[f"{stage}/loss_energy"] = loss_E_weighted / float(
+                self.cfg.loss_coef_observables
+            )
             metrics[f"{stage}/loss_energy_weighted"] = loss_E_weighted
         if loss_N_weighted > 0:
-            metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted
+            metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted / float(
+                self.cfg.loss_coef_observables
+            )
             metrics[f"{stage}/loss_num_electrons_weighted"] = loss_N_weighted
         if loss_F_weighted > 0:
             metrics[f"{stage}/loss_forces"] = loss_F_weighted
@@ -1214,6 +1254,9 @@ class E3GNN(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, stage="val")
+
+    def test_step(self, batch, batch_idx):
+        return self._shared_step(batch, batch_idx, stage="test")
 
     def on_train_epoch_start(self):
         """Log learning rate at the beginning of each training epoch."""

@@ -33,6 +33,7 @@ SOURCE_TAG="0p0027"
 COMPATIBILITY="true"
 START_LR="1e-4"
 SPECTRAL_COEF="0"
+CHECKPOINT_MONITOR="val/hamiltonian_mae"
 
 case "${MODE}" in
   continue)
@@ -58,6 +59,7 @@ case "${MODE}" in
       *) echo "Unsupported spectral coefficient: ${VALUE}" >&2; exit 1 ;;
     esac
     START_LR="5e-5"
+    CHECKPOINT_MONITOR="val/spectral_mae_ev"
     COEF_TAG="${VALUE//-/m}"
     RUN_NAME="${SOURCE_PREFIX}${SOURCE_TAG}-gamma-spec${COEF_TAG}-lr5em5-direct-fermi-47h25"
     ;;
@@ -98,6 +100,7 @@ CMD=(
   --num-workers 3
   --num-train 90
   --num-val 10
+  --data-split-seed 42
   --max-wall-clock-hours 47.25
   --lr "${START_LR}"
   --max-epochs 4000
@@ -108,6 +111,7 @@ CMD=(
   --lr-scheduler-patience 60
   --lr-scheduler-min-lr 1e-8
   --lr-scheduler-target val/loss_total
+  --checkpoint-monitor "${CHECKPOINT_MONITOR}"
   --precision 32-true
   --convention e3nn
   --cutoff-radius 10.0
@@ -216,8 +220,8 @@ if [[ "${MODE}" == "spectral" ]]; then
     --spectral-loss-window-ev 10.0
     --spectral-loss-taper-ev 2.0
     --spectral-loss-huber-delta-ev 0.1
-    --spectral-loss-overlap-psd-cleanup false
-    --spectral-loss-overlap-jitter true
+    --spectral-loss-overlap-psd-cleanup true
+    --spectral-loss-overlap-jitter false
   )
 fi
 

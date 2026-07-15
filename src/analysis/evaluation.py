@@ -525,7 +525,7 @@ def _dos_cache_signature(
         "kind": kind,
         # Bump when the numerical DOS algorithm changes so stale bundles do
         # not silently survive --force-refresh at the outer evaluation layer.
-        "algorithm_version": 2,
+        "algorithm_version": 3,
         "matrix_path": _path_sig(getattr(snapshot, "matrix_path", None)),
         "info_path": _path_sig(getattr(snapshot, "info_path", None)),
         "kmesh_spec": kmesh_spec,
@@ -548,7 +548,18 @@ def _dos_cache_signature(
 def _load_dos_cache(
     cache_path: Path,
     signature: dict[str, Any],
-) -> tuple[torch.Tensor, torch.Tensor, float, float | None, float] | None:
+) -> (
+    tuple[
+        torch.Tensor,
+        torch.Tensor,
+        float,
+        float | None,
+        float,
+        torch.Tensor | None,
+        torch.Tensor | None,
+    ]
+    | None
+):
     if not cache_path.exists():
         return None
     payload = torch.load(cache_path, map_location="cpu", weights_only=False)
@@ -562,6 +573,8 @@ def _load_dos_cache(
         float(payload["num_electrons"]),
         payload.get("dos_electron_target"),
         float(payload["fermi_level_ev"]),
+        payload.get("eigenvalues_ev"),
+        payload.get("fractional_kpoints"),
     )
 
 
@@ -573,6 +586,8 @@ def _save_dos_cache(
     num_electrons: float,
     dos_electron_target: float | None,
     fermi_level_ev: float,
+    eigenvalues_ev: torch.Tensor,
+    fractional_kpoints: torch.Tensor,
 ) -> None:
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -585,6 +600,10 @@ def _save_dos_cache(
                 None if dos_electron_target is None else float(dos_electron_target)
             ),
             "fermi_level_ev": float(fermi_level_ev),
+            # Keep the already-computed spectrum available to report builders.
+            # This does not add another eigensolve or alter the DOS result.
+            "eigenvalues_ev": eigenvalues_ev.detach().cpu(),
+            "fractional_kpoints": fractional_kpoints.detach().cpu(),
         },
         cache_path,
     )
@@ -707,7 +726,8 @@ def compute_tetrahedron_dos_and_fermi(
     if cache_path is not None:
         cached = _load_dos_cache(cache_path, signature)
         if cached is not None:
-            return cached
+            grid, dos, num_electrons, dos_target, fermi, _eigs, _kpoints = cached
+            return grid, dos, num_electrons, dos_target, fermi
     if show_progress is None:
         show_progress = sys.stderr.isatty()
     eigenvalues_ev, _fractional_kpoints = _kmesh_eigenvalues(
@@ -749,6 +769,8 @@ def compute_tetrahedron_dos_and_fermi(
             num_electrons,
             dos_electron_target,
             fermi_level_ev,
+            eigenvalues_ev,
+            _fractional_kpoints,
         )
     return grid_ev, dos, num_electrons, dos_electron_target, fermi_level_ev
 

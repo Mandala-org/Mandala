@@ -91,23 +91,59 @@ def _resolve_single_snapshot_info_path(sample_dir: Path) -> Path | None:
 def _create_datasets_from_pairs(
     train_pairs: list[tuple[Path, Path]],
     val_pairs: list[tuple[Path, Path]],
+    test_pairs: list[tuple[Path, Path]] | None,
     cfg: Config,
     *,
     convention: str = "e3nn",
 ):
     print(
-        f"--- Creating datasets from pairs: train={len(train_pairs)}, val={len(val_pairs)}, convention={convention} ---"
+        f"--- Creating datasets from pairs: train={len(train_pairs)}, val={len(val_pairs)}, "
+        f"test={len(test_pairs or [])}, convention={convention} ---"
     )
     if train_pairs:
         print(f"train[0]={train_pairs[0][0]} | {train_pairs[0][1]}")
     if val_pairs:
         print(f"val[0]={val_pairs[0][0]} | {val_pairs[0][1]}")
+    if test_pairs:
+        print(f"test[0]={test_pairs[0][0]} | {test_pairs[0][1]}")
+    split_sets = [set(train_pairs), set(val_pairs), set(test_pairs or [])]
+    if (
+        split_sets[0] & split_sets[1]
+        or split_sets[0] & split_sets[2]
+        or split_sets[1] & split_sets[2]
+    ):
+        raise ValueError(
+            "Dataset split leakage detected: train/val/test pairs overlap."
+        )
     fac = DatasetFactory(dataclasses.replace(cfg), convention=convention)
     for matrix_path, info_path in train_pairs:
         fac.add_snapshot(matrix_path, info_path, purpose="train")
     for matrix_path, info_path in val_pairs:
         fac.add_snapshot(matrix_path, info_path, purpose="val")
-    return fac.create()
+    for matrix_path, info_path in test_pairs or []:
+        fac.add_snapshot(matrix_path, info_path, purpose="test")
+    return fac.create(include_test=bool(test_pairs))
+
+
+def _split_shuffled_pairs(
+    all_pairs: list[tuple[Path, Path]],
+    *,
+    num_train: int,
+    num_val: int,
+    num_test: int,
+) -> tuple[list[tuple[Path, Path]], list[tuple[Path, Path]], list[tuple[Path, Path]]]:
+    if num_train <= 0 or num_val < 0 or num_test < 0:
+        raise ValueError("num_train must be > 0 and num_val/num_test must be >= 0")
+    required = num_train + num_val + num_test
+    if len(all_pairs) < required:
+        raise ValueError(
+            f"Requested train+val+test={required} but found only {len(all_pairs)} snapshots"
+        )
+    train_pairs = all_pairs[:num_train]
+    val_stop = num_train + num_val
+    val_pairs = all_pairs[num_train:val_stop]
+    test_pairs = all_pairs[val_stop : val_stop + num_test]
+    return train_pairs, val_pairs, test_pairs
 
 
 def build_silicon_datasets(
@@ -122,13 +158,16 @@ def build_silicon_datasets(
     val_n_snapshots: int | None = None,
     num_train: int | None = None,
     num_val: int | None = None,
-    seed: int = 42,
+    num_test: int = 0,
+    data_split_seed: int = 42,
     convention: str = "e3nn",
 ):
     data_root = Path(data_path)
-    rng = random.Random(seed)
+    rng = random.Random(data_split_seed)
     print(
-        f"--- Silicon dataset builder: data_path={data_root}, seed={seed}, num_train={num_train}, num_val={num_val}, min_temp={min_temp}, max_temp={max_temp}, val_temp={val_temp} ---"
+        f"--- Silicon dataset builder: data_path={data_root}, data_split_seed={data_split_seed}, "
+        f"num_train={num_train}, num_val={num_val}, num_test={num_test}, "
+        f"min_temp={min_temp}, max_temp={max_temp}, val_temp={val_temp} ---"
     )
 
     if num_train is not None or num_val is not None:
@@ -145,17 +184,15 @@ def build_silicon_datasets(
                 f"--- Silicon single-temp split selected: temp={val_temp}K, discovered={len(all_pairs)} ---"
             )
             rng.shuffle(all_pairs)
-            if len(all_pairs) < num_train + num_val:
-                raise ValueError(
-                    f"Requested train+val={num_train + num_val} but found only {len(all_pairs)} snapshots under {data_root}"
-                )
-            train_pairs = all_pairs[:num_train]
-            val_pairs = all_pairs[num_train : num_train + num_val]
+            train_pairs, val_pairs, test_pairs = _split_shuffled_pairs(
+                all_pairs, num_train=num_train, num_val=num_val, num_test=num_test
+            )
             print(
-                f"--- Silicon single-temp global split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+                f"--- Silicon single-temp global split selected: train={len(train_pairs)}, "
+                f"val={len(val_pairs)}, test={len(test_pairs)} ---"
             )
             return _create_datasets_from_pairs(
-                train_pairs, val_pairs, cfg, convention=convention
+                train_pairs, val_pairs, test_pairs, cfg, convention=convention
             )
 
         all_temps = list(range(min_temp, max_temp + 1, temp_step))
@@ -163,27 +200,35 @@ def build_silicon_datasets(
             raise ValueError(
                 f"No temperatures selected by min_temp={min_temp}, max_temp={max_temp}, temp_step={temp_step}"
             )
-        if num_train % len(all_temps) != 0 or num_val % len(all_temps) != 0:
+        if (
+            num_train % len(all_temps) != 0
+            or num_val % len(all_temps) != 0
+            or num_test % len(all_temps) != 0
+        ):
             raise ValueError(
                 "Balanced silicon split requires num_train and num_val to be divisible "
-                f"by the number of temperatures ({len(all_temps)}). Got num_train={num_train}, num_val={num_val}."
+                f"by the number of temperatures ({len(all_temps)}). Got "
+                f"num_train={num_train}, num_val={num_val}, num_test={num_test}."
             )
 
         train_per_temp = num_train // len(all_temps)
         val_per_temp = num_val // len(all_temps)
+        test_per_temp = num_test // len(all_temps)
         train_pairs = []
         val_pairs = []
+        test_pairs = []
         print(
             "--- Silicon balanced split selected: "
-            f"temps={len(all_temps)}, train_per_temp={train_per_temp}, val_per_temp={val_per_temp} ---"
+            f"temps={len(all_temps)}, train_per_temp={train_per_temp}, "
+            f"val_per_temp={val_per_temp}, test_per_temp={test_per_temp} ---"
         )
         for temp in all_temps:
             temp_path = data_root / f"{temp}K"
             snapshot_pairs = discover_single_snapshot_pairs(temp_path, label="silicon")
             snapshot_paths = [matrix_path for matrix_path, _ in snapshot_pairs]
-            if len(snapshot_paths) < train_per_temp + val_per_temp:
+            if len(snapshot_paths) < train_per_temp + val_per_temp + test_per_temp:
                 raise ValueError(
-                    f"Requested train+val per temp={train_per_temp + val_per_temp} "
+                    f"Requested train+val+test per temp={train_per_temp + val_per_temp + test_per_temp} "
                     f"but found only {len(snapshot_paths)} snapshots under {temp_path}"
                 )
             shuffled_paths = list(snapshot_paths)
@@ -192,9 +237,15 @@ def build_silicon_datasets(
             selected_val = shuffled_paths[
                 train_per_temp : train_per_temp + val_per_temp
             ]
+            selected_test = shuffled_paths[
+                train_per_temp
+                + val_per_temp : train_per_temp
+                + val_per_temp
+                + test_per_temp
+            ]
             print(
                 f"--- Silicon temp {temp}K: discovered={len(snapshot_paths)}, "
-                f"train={len(selected_train)}, val={len(selected_val)} ---"
+                f"train={len(selected_train)}, val={len(selected_val)}, test={len(selected_test)} ---"
             )
             pair_map = {
                 matrix_path: info_path for matrix_path, info_path in snapshot_pairs
@@ -203,9 +254,11 @@ def build_silicon_datasets(
                 train_pairs.append((Path(matrix_path), pair_map[Path(matrix_path)]))
             for matrix_path in selected_val:
                 val_pairs.append((Path(matrix_path), pair_map[Path(matrix_path)]))
+            for matrix_path in selected_test:
+                test_pairs.append((Path(matrix_path), pair_map[Path(matrix_path)]))
 
         return _create_datasets_from_pairs(
-            train_pairs, val_pairs, cfg, convention=convention
+            train_pairs, val_pairs, test_pairs, cfg, convention=convention
         )
 
     all_temps = range(min_temp, max_temp + 1, temp_step)
@@ -247,7 +300,7 @@ def build_silicon_datasets(
         val_pairs.append((Path(matrix_path), val_pair_map[Path(matrix_path)]))
 
     return _create_datasets_from_pairs(
-        train_pairs, val_pairs, cfg, convention=convention
+        train_pairs, val_pairs, [], cfg, convention=convention
     )
 
 
@@ -257,17 +310,19 @@ def build_siox_datasets(
     cfg: Config,
     num_train: int | None = None,
     num_val: int | None = None,
+    num_test: int = 0,
     val_fraction: float = 0.2,
-    seed: int = 42,
+    data_split_seed: int = 42,
     convention: str = "e3nn",
 ):
     print(
-        f"--- SiOx dataset builder: data_path={data_path}, seed={seed}, num_train={num_train}, num_val={num_val}, val_fraction={val_fraction} ---"
+        f"--- SiOx dataset builder: data_path={data_path}, data_split_seed={data_split_seed}, "
+        f"num_train={num_train}, num_val={num_val}, num_test={num_test}, val_fraction={val_fraction} ---"
     )
     if val_fraction < 0.0 or val_fraction >= 1.0:
         raise ValueError("val_fraction must be in [0, 1).")
     all_pairs = discover_siox_snapshot_pairs(Path(data_path))
-    rng = random.Random(seed)
+    rng = random.Random(data_split_seed)
     rng.shuffle(all_pairs)
     if not all_pairs:
         raise ValueError(f"No SiOx snapshots found under {data_path}")
@@ -286,20 +341,17 @@ def build_siox_datasets(
         if len(all_pairs) > 1:
             inferred_num_val = max(1, inferred_num_val)
         num_val = inferred_num_val
-        num_train = len(all_pairs) - num_val
+        num_train = len(all_pairs) - num_val - num_test
 
     assert num_train is not None and num_val is not None
-    if len(all_pairs) < num_train + num_val:
-        raise ValueError(
-            f"Requested train+val={num_train + num_val} but found only {len(all_pairs)} SiOx snapshots under {data_path}"
-        )
-    train_pairs = all_pairs[:num_train]
-    val_pairs = all_pairs[num_train : num_train + num_val]
+    train_pairs, val_pairs, test_pairs = _split_shuffled_pairs(
+        all_pairs, num_train=num_train, num_val=num_val, num_test=num_test
+    )
     print(
-        f"--- SiOx split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+        f"--- SiOx split selected: train={len(train_pairs)}, val={len(val_pairs)}, test={len(test_pairs)} ---"
     )
     return _create_datasets_from_pairs(
-        train_pairs, val_pairs, cfg, convention=convention
+        train_pairs, val_pairs, test_pairs, cfg, convention=convention
     )
 
 
@@ -309,17 +361,19 @@ def build_zncusnses_small_datasets(
     cfg: Config,
     num_train: int | None = None,
     num_val: int | None = None,
+    num_test: int = 0,
     val_fraction: float = 0.2,
-    seed: int = 42,
+    data_split_seed: int = 42,
     convention: str = "e3nn",
 ):
     print(
-        f"--- ZnCuSnSeS_small dataset builder: data_path={data_path}, seed={seed}, num_train={num_train}, num_val={num_val}, val_fraction={val_fraction} ---"
+        f"--- ZnCuSnSeS_small dataset builder: data_path={data_path}, data_split_seed={data_split_seed}, "
+        f"num_train={num_train}, num_val={num_val}, num_test={num_test}, val_fraction={val_fraction} ---"
     )
     if val_fraction < 0.0 or val_fraction >= 1.0:
         raise ValueError("val_fraction must be in [0, 1).")
     all_pairs = discover_single_snapshot_pairs(Path(data_path), label="ZnCuSnSeS_small")
-    rng = random.Random(seed)
+    rng = random.Random(data_split_seed)
     rng.shuffle(all_pairs)
     if not all_pairs:
         raise ValueError(f"No ZnCuSnSeS_small snapshots found under {data_path}")
@@ -338,20 +392,17 @@ def build_zncusnses_small_datasets(
         if len(all_pairs) > 1:
             inferred_num_val = max(1, inferred_num_val)
         num_val = inferred_num_val
-        num_train = len(all_pairs) - num_val
+        num_train = len(all_pairs) - num_val - num_test
 
     assert num_train is not None and num_val is not None
-    if len(all_pairs) < num_train + num_val:
-        raise ValueError(
-            f"Requested train+val={num_train + num_val} but found only {len(all_pairs)} ZnCuSnSeS_small snapshots under {data_path}"
-        )
-    train_pairs = all_pairs[:num_train]
-    val_pairs = all_pairs[num_train : num_train + num_val]
+    train_pairs, val_pairs, test_pairs = _split_shuffled_pairs(
+        all_pairs, num_train=num_train, num_val=num_val, num_test=num_test
+    )
     print(
-        f"--- ZnCuSnSeS_small split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+        f"--- ZnCuSnSeS_small split selected: train={len(train_pairs)}, val={len(val_pairs)}, test={len(test_pairs)} ---"
     )
     return _create_datasets_from_pairs(
-        train_pairs, val_pairs, cfg, convention=convention
+        train_pairs, val_pairs, test_pairs, cfg, convention=convention
     )
 
 
@@ -362,49 +413,56 @@ def build_zncusnses_datasets(
     scales: list[int],
     num_train_per_scale: int,
     num_val_per_scale: int,
-    seed: int = 42,
+    num_test_per_scale: int = 0,
+    data_split_seed: int = 42,
     convention: str = "e3nn",
 ):
     print(
-        f"--- ZnCuSnSeS dataset builder: data_path={data_path}, seed={seed}, scales={scales}, num_train_per_scale={num_train_per_scale}, num_val_per_scale={num_val_per_scale} ---"
+        f"--- ZnCuSnSeS dataset builder: data_path={data_path}, data_split_seed={data_split_seed}, "
+        f"scales={scales}, num_train_per_scale={num_train_per_scale}, "
+        f"num_val_per_scale={num_val_per_scale}, num_test_per_scale={num_test_per_scale} ---"
     )
     if not scales:
         raise ValueError("scales must contain at least one scale id")
     if num_train_per_scale <= 0:
         raise ValueError("num_train_per_scale must be > 0")
-    if num_val_per_scale < 0:
-        raise ValueError("num_val_per_scale must be >= 0")
+    if num_val_per_scale < 0 or num_test_per_scale < 0:
+        raise ValueError("num_val_per_scale and num_test_per_scale must be >= 0")
 
     pairs_by_scale = discover_scale_snapshot_pairs(
         Path(data_path), scales=scales, label="ZnCuSnSeS"
     )
-    rng = random.Random(seed)
+    rng = random.Random(data_split_seed)
     train_pairs: list[tuple[Path, Path]] = []
     val_pairs: list[tuple[Path, Path]] = []
+    test_pairs: list[tuple[Path, Path]] = []
 
     for scale in scales:
         scale_pairs = list(pairs_by_scale[scale])
         rng.shuffle(scale_pairs)
-        required = num_train_per_scale + num_val_per_scale
+        required = num_train_per_scale + num_val_per_scale + num_test_per_scale
         if len(scale_pairs) < required:
             raise ValueError(
-                f"Requested train+val={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
+                f"Requested train+val+test={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
             )
         selected_train = scale_pairs[:num_train_per_scale]
         selected_val = scale_pairs[
             num_train_per_scale : num_train_per_scale + num_val_per_scale
         ]
+        selected_test = scale_pairs[num_train_per_scale + num_val_per_scale : required]
         print(
-            f"--- ZnCuSnSeS scale {scale}: discovered={len(scale_pairs)}, train={len(selected_train)}, val={len(selected_val)} ---"
+            f"--- ZnCuSnSeS scale {scale}: discovered={len(scale_pairs)}, train={len(selected_train)}, "
+            f"val={len(selected_val)}, test={len(selected_test)} ---"
         )
         train_pairs.extend(selected_train)
         val_pairs.extend(selected_val)
+        test_pairs.extend(selected_test)
 
     print(
-        f"--- ZnCuSnSeS split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+        f"--- ZnCuSnSeS split selected: train={len(train_pairs)}, val={len(val_pairs)}, test={len(test_pairs)} ---"
     )
     return _create_datasets_from_pairs(
-        train_pairs, val_pairs, cfg, convention=convention
+        train_pairs, val_pairs, test_pairs, cfg, convention=convention
     )
 
 
@@ -415,54 +473,62 @@ def build_silicon_scales_datasets(
     scales: list[int],
     num_train_per_scale: int,
     num_val_per_scale: int,
-    seed: int = 42,
+    num_test_per_scale: int = 0,
+    data_split_seed: int = 42,
     convention: str = "e3nn",
 ):
     print(
-        f"--- Silicon-scales dataset builder: data_path={data_path}, seed={seed}, scales={scales}, num_train_per_scale={num_train_per_scale}, num_val_per_scale={num_val_per_scale} ---"
+        f"--- Silicon-scales dataset builder: data_path={data_path}, data_split_seed={data_split_seed}, "
+        f"scales={scales}, num_train_per_scale={num_train_per_scale}, "
+        f"num_val_per_scale={num_val_per_scale}, num_test_per_scale={num_test_per_scale} ---"
     )
     allow_incomplete_dataset = bool(getattr(cfg, "allow_incomplete_dataset", False))
     if not scales:
         raise ValueError("scales must contain at least one scale id")
     if num_train_per_scale <= 0:
         raise ValueError("num_train_per_scale must be > 0")
-    if num_val_per_scale < 0:
-        raise ValueError("num_val_per_scale must be >= 0")
+    if num_val_per_scale < 0 or num_test_per_scale < 0:
+        raise ValueError("num_val_per_scale and num_test_per_scale must be >= 0")
 
     pairs_by_scale = discover_scale_snapshot_pairs(
         Path(data_path), scales=scales, label="silicon_scales"
     )
-    rng = random.Random(seed)
+    rng = random.Random(data_split_seed)
     train_pairs: list[tuple[Path, Path]] = []
     val_pairs: list[tuple[Path, Path]] = []
+    test_pairs: list[tuple[Path, Path]] = []
 
     for scale in scales:
         scale_pairs = list(pairs_by_scale[scale])
         rng.shuffle(scale_pairs)
-        required = num_train_per_scale + num_val_per_scale
+        required = num_train_per_scale + num_val_per_scale + num_test_per_scale
         if len(scale_pairs) < required:
             if not allow_incomplete_dataset:
                 raise ValueError(
-                    f"Requested train+val={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
+                    f"Requested train+val+test={required} per scale but found only {len(scale_pairs)} snapshots under scale_{scale}"
                 )
             print(
                 f"--- Silicon_scales scale {scale}: discovered={len(scale_pairs)} is below requested {required}; using all available snapshots ---"
             )
         train_stop = min(num_train_per_scale, len(scale_pairs))
-        val_stop = min(required, len(scale_pairs))
+        val_stop = min(train_stop + num_val_per_scale, len(scale_pairs))
         selected_train = scale_pairs[:train_stop]
         selected_val = scale_pairs[train_stop:val_stop]
+        test_stop = min(required, len(scale_pairs))
+        selected_test = scale_pairs[val_stop:test_stop]
         print(
-            f"--- Silicon_scales scale {scale}: discovered={len(scale_pairs)}, train={len(selected_train)}, val={len(selected_val)} ---"
+            f"--- Silicon_scales scale {scale}: discovered={len(scale_pairs)}, train={len(selected_train)}, "
+            f"val={len(selected_val)}, test={len(selected_test)} ---"
         )
         train_pairs.extend(selected_train)
         val_pairs.extend(selected_val)
+        test_pairs.extend(selected_test)
 
     print(
-        f"--- Silicon_scales split selected: train={len(train_pairs)}, val={len(val_pairs)} ---"
+        f"--- Silicon_scales split selected: train={len(train_pairs)}, val={len(val_pairs)}, test={len(test_pairs)} ---"
     )
     return _create_datasets_from_pairs(
-        train_pairs, val_pairs, cfg, convention=convention
+        train_pairs, val_pairs, test_pairs, cfg, convention=convention
     )
 
 
@@ -516,8 +582,16 @@ def build_datasets_from_yaml(
             num_val=_optional_int(
                 _get_dataset_value(parameters, overrides, "num_val", default=None)
             ),
-            seed=int(
-                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            num_test=int(
+                _get_dataset_value(parameters, overrides, "num_test", default=0)
+            ),
+            data_split_seed=int(
+                _get_dataset_value(
+                    parameters,
+                    overrides,
+                    "data_split_seed",
+                    default=cfg.data_split_seed,
+                )
             ),
             convention=convention,
         )
@@ -531,11 +605,19 @@ def build_datasets_from_yaml(
             num_val=_optional_int(
                 _get_dataset_value(parameters, overrides, "num_val", default=None)
             ),
+            num_test=int(
+                _get_dataset_value(parameters, overrides, "num_test", default=0)
+            ),
             val_fraction=float(
                 _get_dataset_value(parameters, overrides, "val_fraction", default=0.2)
             ),
-            seed=int(
-                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            data_split_seed=int(
+                _get_dataset_value(
+                    parameters,
+                    overrides,
+                    "data_split_seed",
+                    default=cfg.data_split_seed,
+                )
             ),
             convention=convention,
         )
@@ -549,11 +631,19 @@ def build_datasets_from_yaml(
             num_val=_optional_int(
                 _get_dataset_value(parameters, overrides, "num_val", default=None)
             ),
+            num_test=int(
+                _get_dataset_value(parameters, overrides, "num_test", default=0)
+            ),
             val_fraction=float(
                 _get_dataset_value(parameters, overrides, "val_fraction", default=0.2)
             ),
-            seed=int(
-                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            data_split_seed=int(
+                _get_dataset_value(
+                    parameters,
+                    overrides,
+                    "data_split_seed",
+                    default=cfg.data_split_seed,
+                )
             ),
             convention=convention,
         )
@@ -575,8 +665,18 @@ def build_datasets_from_yaml(
                     parameters, overrides, "num_val_per_scale", default=10
                 )
             ),
-            seed=int(
-                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            num_test_per_scale=int(
+                _get_dataset_value(
+                    parameters, overrides, "num_test_per_scale", default=0
+                )
+            ),
+            data_split_seed=int(
+                _get_dataset_value(
+                    parameters,
+                    overrides,
+                    "data_split_seed",
+                    default=cfg.data_split_seed,
+                )
             ),
             convention=convention,
         )
@@ -598,8 +698,18 @@ def build_datasets_from_yaml(
                     parameters, overrides, "num_val_per_scale", default=10
                 )
             ),
-            seed=int(
-                _get_dataset_value(parameters, overrides, "seed", default=cfg.seed)
+            num_test_per_scale=int(
+                _get_dataset_value(
+                    parameters, overrides, "num_test_per_scale", default=0
+                )
+            ),
+            data_split_seed=int(
+                _get_dataset_value(
+                    parameters,
+                    overrides,
+                    "data_split_seed",
+                    default=cfg.data_split_seed,
+                )
             ),
             convention=convention,
         )

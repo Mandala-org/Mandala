@@ -145,6 +145,42 @@ def build_observable_predictions(
     return values
 
 
+def rescale_density_prediction_to_num_electrons(
+    preds_matrix: dict[str, BlockMatrix],
+    *,
+    trace_alignment,
+    num_electrons_target: torch.Tensor | None,
+    overlap_true: BlockMatrix | None,
+    eps: float = 1e-12,
+) -> tuple[dict[str, BlockMatrix], torch.Tensor | None]:
+    """Rescale predicted density to satisfy the electron-count trace exactly.
+
+    Predicted overlap is used when available, matching fully predicted H/D/S
+    inference. Ground-truth overlap is the fallback for density-only models.
+    This helper is for reported metrics only. The scale is deliberately detached
+    so density normalization cannot alter observable-guided training gradients.
+    """
+    target = _normalize_scalar_target(num_electrons_target, name="num_electrons")
+    density = preds_matrix.get("density")
+    overlap = preds_matrix.get("overlap", overlap_true)
+    if density is None or overlap is None or target is None:
+        return preds_matrix, None
+
+    predicted_count = trace_matmul_sparse_block_matrix_aligned(
+        density,
+        overlap,
+        trace_alignment,
+    )
+    eps_tensor = torch.full_like(predicted_count, float(eps))
+    safe_count = torch.where(
+        torch.abs(predicted_count) > float(eps), predicted_count, eps_tensor
+    )
+    density_scale = float((target / safe_count).detach().cpu().item())
+    scaled = dict(preds_matrix)
+    scaled["density"] = density * density_scale
+    return scaled, predicted_count
+
+
 def add_observable_metrics(
     metrics: dict[str, torch.Tensor],
     *,
@@ -222,22 +258,32 @@ def observable_loss(
     num_electrons_target = _normalize_scalar_target(
         num_electrons_target, name="num_electrons"
     )
+    loss_kind = str(getattr(cfg, "observable_loss_kind", "mse")).lower()
+    if loss_kind not in {"mse", "mae"}:
+        raise ValueError("observable_loss_kind must be one of 'mse' or 'mae'.")
+
+    def scalar_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        if loss_kind == "mae":
+            return torch.mean(torch.abs(prediction - target))
+        return mse_fn(prediction, target)
 
     if cfg.train_on_energy and energy_target is not None:
         if cfg.train_observables_on_gt:
             losses = []
             if "energy_gt_hamiltonian" in observable_values:
                 losses.append(
-                    mse_fn(observable_values["energy_gt_hamiltonian"], energy_target)
+                    scalar_loss(
+                        observable_values["energy_gt_hamiltonian"], energy_target
+                    )
                 )
             if "energy_gt_density" in observable_values:
                 losses.append(
-                    mse_fn(observable_values["energy_gt_density"], energy_target)
+                    scalar_loss(observable_values["energy_gt_density"], energy_target)
                 )
             if losses:
                 loss_E_weighted = cfg.loss_coef_observables * sum(losses) / len(losses)
         elif "energy" in observable_values:
-            loss_E_weighted = cfg.loss_coef_observables * mse_fn(
+            loss_E_weighted = cfg.loss_coef_observables * scalar_loss(
                 observable_values["energy"], energy_target
             )
 
@@ -246,14 +292,14 @@ def observable_loss(
             losses = []
             if "num_electrons_gt_overlap" in observable_values:
                 losses.append(
-                    mse_fn(
+                    scalar_loss(
                         observable_values["num_electrons_gt_overlap"],
                         num_electrons_target,
                     )
                 )
             if "num_electrons_gt_density" in observable_values:
                 losses.append(
-                    mse_fn(
+                    scalar_loss(
                         observable_values["num_electrons_gt_density"],
                         num_electrons_target,
                     )
@@ -261,7 +307,7 @@ def observable_loss(
             if losses:
                 loss_N_weighted = cfg.loss_coef_observables * sum(losses) / len(losses)
         elif "num_electrons" in observable_values:
-            loss_N_weighted = cfg.loss_coef_observables * mse_fn(
+            loss_N_weighted = cfg.loss_coef_observables * scalar_loss(
                 observable_values["num_electrons"], num_electrons_target
             )
 

@@ -40,6 +40,7 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(*_arg_names("scales"), type=str_to_list, default=None)
     parser.add_argument(*_arg_names("num_train_per_scale"), type=int, default=40)
     parser.add_argument(*_arg_names("num_val_per_scale"), type=int, default=10)
+    parser.add_argument(*_arg_names("num_test_per_scale"), type=int, default=0)
     parser.add_argument(*_arg_names("min_temp"), type=int, default=300)
     parser.add_argument(*_arg_names("max_temp"), type=int, default=3000)
     parser.add_argument(*_arg_names("temp_step"), type=int, default=300)
@@ -48,6 +49,7 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(*_arg_names("val_n_snapshots"), type=int, default=None)
     parser.add_argument(*_arg_names("num_train"), type=int, default=None)
     parser.add_argument(*_arg_names("num_val"), type=int, default=None)
+    parser.add_argument(*_arg_names("num_test"), type=int, default=0)
     parser.add_argument(*_arg_names("val_fraction"), type=float, default=0.2)
     parser.add_argument(*_arg_names("precision"), type=str, default="32-true")
     parser.add_argument(
@@ -80,9 +82,17 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         choices=["online", "offline", "disabled"],
     )
+    parser.add_argument(*_arg_names("wandb_group"), type=str, default=None)
+    parser.add_argument(*_arg_names("wandb_tags"), type=str_to_list, default=None)
     parser.add_argument(*_arg_names("sweep_yaml"), type=str, default=None)
     parser.add_argument(*_arg_names("convention"), type=str, default="e3nn")
     parser.add_argument(*_arg_names("max_wall_clock_hours"), type=float, default=None)
+    parser.add_argument(
+        *_arg_names("evaluate_test_after_fit"),
+        type=str_to_bool,
+        default=False,
+        help="Evaluate the held-out test split exactly once after fitting.",
+    )
 
     config_fields = get_type_hints(Config)
     for name, field_type in config_fields.items():

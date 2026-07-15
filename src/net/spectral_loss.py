@@ -166,12 +166,15 @@ def compute_spectral_eigenvalue_loss(
     pred_hamiltonian: BlockMatrix,
     spectral_payload: dict[str, torch.Tensor],
     box: torch.Tensor,
+    loss_kind: str,
     huber_delta_ev: float,
     overlap_psd_cleanup: bool,
     overlap_jitter: bool,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     kpoints_abs = spectral_payload["spectral_kpoints_abs"].to(device=box.device)
     shifts = spectral_payload["spectral_shifts"].to(device=box.device)
+    # Deliberately always use the ground-truth overlap. Spectral supervision is
+    # intended to isolate Hamiltonian quality even when overlap is also predicted.
     overlap_k = spectral_payload["spectral_gt_overlap_k"].to(device=box.device)
     gt_eigs_ev = spectral_payload["spectral_gt_eigs_ev"].to(device=box.device)
     weights = spectral_payload["spectral_window_weights"].to(device=box.device)
@@ -194,12 +197,20 @@ def compute_spectral_eigenvalue_loss(
     pred_rel = pred_eigs_ev - fermi_ev
     gt_rel = gt_eigs_ev - fermi_ev
     abs_err = torch.abs(pred_rel - gt_rel)
-    per_level = F.huber_loss(
-        pred_rel,
-        gt_rel,
-        reduction="none",
-        delta=huber_delta_ev,
-    )
+    loss_kind = str(loss_kind).lower()
+    if loss_kind == "mae":
+        per_level = abs_err
+    elif loss_kind == "mse":
+        per_level = torch.square(pred_rel - gt_rel)
+    elif loss_kind == "huber":
+        per_level = F.huber_loss(
+            pred_rel,
+            gt_rel,
+            reduction="none",
+            delta=huber_delta_ev,
+        )
+    else:
+        raise ValueError("spectral_loss_kind must be one of 'huber', 'mse', or 'mae'.")
     weight_sum = weights.sum()
     if (not bool(torch.isfinite(weight_sum).item())) or float(weight_sum.item()) <= 0.0:
         raise ValueError("Spectral window produced a non-positive total weight.")

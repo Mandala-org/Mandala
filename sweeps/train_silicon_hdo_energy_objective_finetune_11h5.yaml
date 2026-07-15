@@ -47,6 +47,8 @@ parameters:
     value: 80
   num-val-per-scale:
     value: 20
+  data-split-seed:
+    value: 42
   max-wall-clock-hours:
     value: 11.5
 
@@ -68,6 +70,8 @@ parameters:
     value: 1.0e-8
   lr-scheduler-target:
     value: val/loss_total
+  checkpoint-monitor:
+    value: val/energy_mae
 
   precision:
     value: 32-true
@@ -232,7 +236,7 @@ parameters:
   train-on-irrep-parts:
     value: false
   train-observables-on-gt:
-    values: [false, true]
+    value: true
   loss-coef-observables:
     values: [1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2]
   loss-coef-forces:
@@ -246,7 +250,7 @@ parameters:
   symmetrize-hamiltonian-targets:
     value: true
   rescale-density-to-num-electrons:
-    value: false
+    value: true
   precompute-edge-features:
     value: true
   radial-embedding-scale:

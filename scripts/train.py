@@ -3,8 +3,11 @@ from __future__ import annotations
 import argparse
 import ast
 import dataclasses
+import hashlib
+import json
 import os
 import math
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -61,6 +64,7 @@ def run_training(
     args = _as_namespace(run_args)
     print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
+    pl.seed_everything(int(cfg.seed), workers=True)
     requested_run_name = getattr(args, "run_name", None)
     cfg.save_dir = str(getattr(args, "checkpoint_dir", cfg.save_dir))
     resume_checkpoint = _resolve_resume_checkpoint(
@@ -76,16 +80,49 @@ def run_training(
     _print_run_summary(args, cfg, run_name, resume_checkpoint, accelerator, devices)
 
     dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
-    train_ds, val_ds, mapper = dataset_bundle
+    train_ds, val_ds, test_ds, mapper = _normalize_dataset_bundle(dataset_bundle)
+    _validate_paper_run_gate(
+        args,
+        cfg,
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        resume_checkpoint=resume_checkpoint,
+        compatibility_mode=compatibility_mode,
+    )
     run_dir = Path(getattr(args, "checkpoint_dir", cfg.save_dir)) / run_name
     if run_dir.exists() and (resume_checkpoint is None or compatibility_mode):
         raise FileExistsError(
             f"Run directory already exists: {run_dir}. Use a unique run name or resume explicitly."
         )
+    split_manifest = _write_split_manifest(
+        run_dir,
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        data_split_seed=int(cfg.data_split_seed),
+    )
+    _write_run_manifest(
+        run_dir,
+        args=args,
+        cfg=cfg,
+        split_manifest=split_manifest,
+        resume_checkpoint=resume_checkpoint,
+    )
+    _update_run_reproducibility_metadata(
+        logger,
+        args=args,
+        cfg=cfg,
+        split_manifest=split_manifest,
+        resume_checkpoint=resume_checkpoint,
+    )
     _log_dataset_and_model_context(cfg, run_dir, train_ds, mapper)
 
-    train_ds, val_ds = _maybe_move_datasets_to_device(train_ds, val_ds, cfg)
+    train_ds, val_ds, test_ds = _maybe_move_dataset_bundle_to_device(
+        train_ds, val_ds, test_ds, cfg
+    )
     train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
+    test_loader = _build_test_dataloader(test_ds, accelerator, cfg)
 
     model = E3GNN(mapper=mapper, cfg=cfg)
     compatibility_report = None
@@ -131,6 +168,28 @@ def run_training(
         setattr(args, "interrupted", True)
         print("--- Training interrupted by Ctrl+C; finishing shutdown ---", flush=True)
     metrics = _extract_metrics(trainer)
+    if bool(getattr(args, "evaluate_test_after_fit", False)):
+        if test_loader is None:
+            raise ValueError(
+                "evaluate_test_after_fit=True requires a non-empty held-out test split."
+            )
+        best_checkpoint = run_dir / "best_model.pt"
+        if not best_checkpoint.is_file():
+            raise FileNotFoundError(
+                "Held-out test evaluation requires best_model.pt; keep artifact "
+                "checkpointing enabled for paper runs."
+            )
+        print(
+            f"--- Evaluating held-out test split once from {best_checkpoint} ---",
+            flush=True,
+        )
+        trainer.test(
+            model=model,
+            dataloaders=test_loader,
+            ckpt_path=str(best_checkpoint),
+            verbose=False,
+        )
+        metrics.update(_extract_metrics(trainer))
     if objective_metric is not None and objective_metric not in metrics:
         if interrupted:
             print(
@@ -150,6 +209,52 @@ def run_training(
             "--- Training stopped after interrupt; finalization completed normally ---"
         )
     return metrics
+
+
+def _normalize_dataset_bundle(bundle):
+    if len(bundle) == 3:
+        train_ds, val_ds, mapper = bundle
+        return train_ds, val_ds, None, mapper
+    if len(bundle) == 4:
+        return bundle
+    raise ValueError(f"Expected dataset bundle of length 3 or 4, got {len(bundle)}")
+
+
+def _validate_paper_run_gate(
+    args: argparse.Namespace,
+    cfg: Config,
+    *,
+    train_ds: Any,
+    val_ds: Any,
+    test_ds: Any,
+    resume_checkpoint: Path | None,
+    compatibility_mode: bool,
+) -> None:
+    if not bool(getattr(cfg, "paper_run", False)):
+        return
+    errors = []
+    if any(ds is None or len(ds) == 0 for ds in (train_ds, val_ds, test_ds)):
+        errors.append(
+            "non-empty train, validation, and held-out test splits are required"
+        )
+    if not bool(getattr(args, "evaluate_test_after_fit", False)):
+        errors.append("evaluate_test_after_fit must be true")
+    if not bool(getattr(args, "log_artifacts", True)):
+        errors.append("artifact checkpointing must be enabled")
+    if cfg.max_wall_clock_seconds is None:
+        errors.append("a fixed max_wall_clock_seconds budget is required")
+    if bool(cfg.allow_incomplete_dataset):
+        errors.append("allow_incomplete_dataset must be false")
+    if resume_checkpoint is not None or compatibility_mode:
+        errors.append("paper ablations must start from randomly initialized weights")
+    if not str(cfg.checkpoint_monitor).startswith("val/"):
+        errors.append("checkpoint_monitor must be a predeclared validation metric")
+    for field in ("experiment_id", "ablation_name", "ablation_setting"):
+        if getattr(cfg, field) in (None, ""):
+            errors.append(f"{field} must be set")
+    if errors:
+        raise ValueError("Paper-run engineering gate failed: " + "; ".join(errors))
+    print("--- Paper-run engineering gate passed ---", flush=True)
 
 
 def _as_namespace(
@@ -285,6 +390,21 @@ def _build_logger(
         print("--- No WandB project set; logger disabled ---")
         return None
     logger_config = dataclasses.asdict(cfg)
+    for key in (
+        "dataset_kind",
+        "data_path",
+        "num_train",
+        "num_val",
+        "num_test",
+        "num_train_per_scale",
+        "num_val_per_scale",
+        "num_test_per_scale",
+        "scales",
+        "max_wall_clock_hours",
+        "evaluate_test_after_fit",
+    ):
+        if hasattr(args, key):
+            logger_config[key] = getattr(args, key)
     if run_name is None:
         logger_config.pop("run_name", None)
     print(
@@ -293,6 +413,8 @@ def _build_logger(
     return WandbLogger(
         project=wandb_project,
         name=run_name,
+        group=getattr(args, "wandb_group", None),
+        tags=getattr(args, "wandb_tags", None),
         config=logger_config,
         save_dir=str(Path(getattr(args, "checkpoint_dir", cfg.save_dir))),
     )
@@ -326,7 +448,8 @@ def _build_dataset_bundle(
             val_n_snapshots=getattr(args, "val_n_snapshots", None),
             num_train=getattr(args, "num_train", None),
             num_val=getattr(args, "num_val", None),
-            seed=cfg.seed,
+            num_test=int(getattr(args, "num_test", 0)),
+            data_split_seed=cfg.data_split_seed,
             convention=convention,
         )
     if dataset_kind == "siox":
@@ -335,8 +458,9 @@ def _build_dataset_bundle(
             cfg=cfg,
             num_train=getattr(args, "num_train", None),
             num_val=getattr(args, "num_val", None),
+            num_test=int(getattr(args, "num_test", 0)),
             val_fraction=getattr(args, "val_fraction", 0.2),
-            seed=cfg.seed,
+            data_split_seed=cfg.data_split_seed,
             convention=convention,
         )
     if dataset_kind == "silicon_scales":
@@ -349,7 +473,8 @@ def _build_dataset_bundle(
             scales=[int(x) for x in scales],
             num_train_per_scale=int(getattr(args, "num_train_per_scale", 40)),
             num_val_per_scale=int(getattr(args, "num_val_per_scale", 10)),
-            seed=cfg.seed,
+            num_test_per_scale=int(getattr(args, "num_test_per_scale", 0)),
+            data_split_seed=cfg.data_split_seed,
             convention=convention,
         )
     if dataset_kind == "ZnCuSnSeS_small":
@@ -358,8 +483,9 @@ def _build_dataset_bundle(
             cfg=cfg,
             num_train=getattr(args, "num_train", None),
             num_val=getattr(args, "num_val", None),
+            num_test=int(getattr(args, "num_test", 0)),
             val_fraction=getattr(args, "val_fraction", 0.2),
-            seed=cfg.seed,
+            data_split_seed=cfg.data_split_seed,
             convention=convention,
         )
     if dataset_kind == "ZnCuSnSeS":
@@ -372,7 +498,8 @@ def _build_dataset_bundle(
             scales=[int(x) for x in scales],
             num_train_per_scale=int(getattr(args, "num_train_per_scale", 40)),
             num_val_per_scale=int(getattr(args, "num_val_per_scale", 10)),
-            seed=cfg.seed,
+            num_test_per_scale=int(getattr(args, "num_test_per_scale", 0)),
+            data_split_seed=cfg.data_split_seed,
             convention=convention,
         )
     raise ValueError(f"Unsupported dataset_kind: {dataset_kind!r}")
@@ -434,6 +561,184 @@ def _maybe_move_datasets_to_device(
     if val_ds is not None and hasattr(val_ds, "to"):
         val_ds = val_ds.to(device)
     return train_ds, val_ds
+
+
+def _maybe_move_dataset_bundle_to_device(
+    train_ds: Any, val_ds: Any, test_ds: Any, cfg: Config
+) -> tuple[Any, Any, Any]:
+    train_ds, val_ds = _maybe_move_datasets_to_device(train_ds, val_ds, cfg)
+    dataset_device = getattr(cfg, "dataset_device", None)
+    if test_ds is not None and dataset_device not in (None, "", "cpu"):
+        test_ds = test_ds.to(torch.device(dataset_device))
+    return train_ds, val_ds, test_ds
+
+
+def _build_test_dataloader(test_ds: Any, accelerator: str, cfg: Config):
+    if test_ds is None or len(test_ds) == 0:
+        return None
+    dataset_on_device = _dataset_is_on_device(test_ds)
+    return DataLoader(
+        test_ds,
+        batch_size=1,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=accelerator == "gpu" and not dataset_on_device,
+        persistent_workers=False,
+        collate_fn=lambda b: b[0],
+    )
+
+
+def _dataset_pair_payload(ds: Any) -> list[dict[str, str]]:
+    if ds is None:
+        return []
+    return [
+        {
+            "matrix": str(Path(matrix_path).resolve()),
+            "info": str(Path(info_path).resolve()),
+        }
+        for matrix_path, info_path in getattr(ds, "snapshot_paths", [])
+    ]
+
+
+def _write_split_manifest(
+    run_dir: Path,
+    *,
+    train_ds: Any,
+    val_ds: Any,
+    test_ds: Any,
+    data_split_seed: int,
+) -> dict[str, Any]:
+    splits = {
+        "train": _dataset_pair_payload(train_ds),
+        "val": _dataset_pair_payload(val_ds),
+        "test": _dataset_pair_payload(test_ds),
+    }
+    identities = {
+        name: {(row["matrix"], row["info"]) for row in rows}
+        for name, rows in splits.items()
+    }
+    if (
+        identities["train"] & identities["val"]
+        or identities["train"] & identities["test"]
+        or identities["val"] & identities["test"]
+    ):
+        raise ValueError("Dataset leakage detected while writing split manifest.")
+    canonical = json.dumps(splits, sort_keys=True, separators=(",", ":"))
+    manifest = {
+        "schema_version": 1,
+        "data_split_seed": int(data_split_seed),
+        "split_hash_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "counts": {name: len(rows) for name, rows in splits.items()},
+        "splits": splits,
+    }
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "split_manifest.json"
+    path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(
+        f"--- Wrote fixed split manifest: path={path}, hash={manifest['split_hash_sha256']}, "
+        f"counts={manifest['counts']} ---"
+    )
+    return manifest
+
+
+def _git_provenance() -> dict[str, Any]:
+    def run_git(*args: str) -> str | None:
+        try:
+            result = subprocess.run(
+                ["git", *args],
+                cwd=project_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return None
+        return result.stdout.strip()
+
+    status = run_git("status", "--porcelain")
+    return {
+        "commit": run_git("rev-parse", "HEAD"),
+        "branch": run_git("rev-parse", "--abbrev-ref", "HEAD"),
+        "dirty": bool(status) if status is not None else None,
+    }
+
+
+def _update_run_reproducibility_metadata(
+    logger: Any,
+    *,
+    args: argparse.Namespace,
+    cfg: Config,
+    split_manifest: dict[str, Any],
+    resume_checkpoint: Path | None,
+) -> None:
+    config_json = json.dumps(
+        dataclasses.asdict(cfg), sort_keys=True, separators=(",", ":"), default=str
+    )
+    payload = {
+        "seed": int(cfg.seed),
+        "data_split_seed": int(cfg.data_split_seed),
+        "split_hash_sha256": split_manifest["split_hash_sha256"],
+        "split_counts": split_manifest["counts"],
+        "resume_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
+        "checkpoint_monitor": str(cfg.checkpoint_monitor),
+        "max_wall_clock_seconds": cfg.max_wall_clock_seconds,
+        "dataset_kind": getattr(args, "dataset_kind", None),
+        "data_path": getattr(args, "data_path", None),
+        "git": _git_provenance(),
+        "config_hash_sha256": hashlib.sha256(config_json.encode("utf-8")).hexdigest(),
+    }
+    if logger is None:
+        return
+    try:
+        run = logger.experiment
+        run.config.update(
+            {f"repro/{key}": value for key, value in payload.items()},
+            allow_val_change=True,
+        )
+        run.summary["data/split_hash_sha256"] = split_manifest["split_hash_sha256"]
+        for split, count in split_manifest["counts"].items():
+            run.summary[f"data/{split}_count"] = int(count)
+    except Exception:
+        pass
+
+
+def _write_run_manifest(
+    run_dir: Path,
+    *,
+    args: argparse.Namespace,
+    cfg: Config,
+    split_manifest: dict[str, Any],
+    resume_checkpoint: Path | None,
+) -> None:
+    payload = {
+        "schema_version": 1,
+        "config": dataclasses.asdict(cfg),
+        "dataset": {
+            key: getattr(args, key, None)
+            for key in (
+                "dataset_kind",
+                "data_path",
+                "num_train",
+                "num_val",
+                "num_test",
+                "num_train_per_scale",
+                "num_val_per_scale",
+                "num_test_per_scale",
+                "scales",
+            )
+        },
+        "split_hash_sha256": split_manifest["split_hash_sha256"],
+        "resume_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
+        "git": _git_provenance(),
+    }
+    path = run_dir / "run_manifest.json"
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+    print(f"--- Wrote run manifest: {path} ---")
 
 
 def _dataset_is_on_device(ds: Any) -> bool:
@@ -525,6 +830,7 @@ def _build_callbacks(
         callbacks.append(
             ArtifactCheckpointCallback(
                 output_dir=run_dir,
+                monitor=cfg.checkpoint_monitor,
                 generate_video=getattr(args, "generate_video", True),
                 log_per_irrep_images=cfg.log_per_irrep_images,
             )

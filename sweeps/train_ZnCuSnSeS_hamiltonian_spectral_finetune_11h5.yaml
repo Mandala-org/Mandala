@@ -282,7 +282,7 @@ parameters:
   spectral-loss-huber-delta-ev:
     values: [0.01, 0.02, 0.05, 0.1, 0.2]
   spectral-loss-overlap-psd-cleanup:
-    value: false
+    value: true
   spectral-loss-overlap-jitter:
     value: false
   spectral-fermi-cache-path:

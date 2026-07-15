@@ -62,6 +62,7 @@ CMD=(
   --scales '[1]'
   --num-train-per-scale 80
   --num-val-per-scale 20
+  --data-split-seed 42
   --max-wall-clock-hours 47.25
   --lr 3e-4
   --max-epochs 5000
@@ -72,6 +73,7 @@ CMD=(
   --lr-scheduler-patience 120
   --lr-scheduler-min-lr 1e-8
   --lr-scheduler-target val/loss_total
+  --checkpoint-monitor val/energy_mae
   --precision 32-true
   --convention e3nn
   --cutoff-radius 8
@@ -158,7 +160,7 @@ CMD=(
   --loss-l1-fraction 1
   --symmetrize-output false
   --symmetrize-hamiltonian-targets true
-  --rescale-density-to-num-electrons false
+  --rescale-density-to-num-electrons true
   --precompute-edge-features true
   --radial-embedding-scale none
   --apply-cutoff-to-targets true

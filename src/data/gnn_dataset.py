@@ -184,8 +184,8 @@ class E3GNNDataset(Dataset):
                 f"kmesh={self.cfg.spectral_loss_kmesh}, "
                 f"window=±{float(self.cfg.spectral_loss_window_ev):.2f} eV, "
                 f"taper={float(self.cfg.spectral_loss_taper_ev):.2f} eV, "
-                f"overlap_psd_cleanup={bool(getattr(self.cfg, 'spectral_loss_overlap_psd_cleanup', False))}, "
-                f"overlap_jitter={bool(getattr(self.cfg, 'spectral_loss_overlap_jitter', True))} ---"
+                f"overlap_psd_cleanup={bool(getattr(self.cfg, 'spectral_loss_overlap_psd_cleanup', True))}, "
+                f"overlap_jitter={bool(getattr(self.cfg, 'spectral_loss_overlap_jitter', False))} ---"
             )
             spectral_fermi_cache_path = getattr(
                 self.cfg, "spectral_fermi_cache_path", None
@@ -399,10 +399,10 @@ class E3GNNDataset(Dataset):
                 getattr(self.cfg, "spectral_loss_huber_delta_ev", 0.0)
             ),
             "spectral_loss_overlap_psd_cleanup": bool(
-                getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", False)
+                getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", True)
             ),
             "spectral_loss_overlap_jitter": bool(
-                getattr(self.cfg, "spectral_loss_overlap_jitter", True)
+                getattr(self.cfg, "spectral_loss_overlap_jitter", False)
             ),
             "spectral_fermi_cache_path": _stat_payload(
                 Path(self.cfg.spectral_fermi_cache_path)
@@ -709,10 +709,10 @@ class E3GNNDataset(Dataset):
                     window_ev=float(self.cfg.spectral_loss_window_ev),
                     taper_ev=float(self.cfg.spectral_loss_taper_ev),
                     overlap_psd_cleanup=bool(
-                        getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", False)
+                        getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", True)
                     ),
                     overlap_jitter=bool(
-                        getattr(self.cfg, "spectral_loss_overlap_jitter", True)
+                        getattr(self.cfg, "spectral_loss_overlap_jitter", False)
                     ),
                     progress_label=snapshot_label,
                     verbose=True,

@@ -120,6 +120,7 @@ class Config:
     revert_decay_patience: int = 20
     revert_decay_rate: float = 0.8
     revert_spike_factor: float = 2.0
+    checkpoint_monitor: str = "val/loss_total"
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0
@@ -156,11 +157,12 @@ class Config:
     train_observables_on_gt: bool = False
     symmetrize_output: bool = True  # symmetrize matrix outputs
     symmetrize_hamiltonian_targets: bool = True
-    rescale_density_to_num_electrons: bool = False
+    rescale_density_to_num_electrons: bool = True
 
     # -------------- loss weighting --------------------------------------
     loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1
     loss_coef_observables: float = 1e-5
+    observable_loss_kind: str = "mse"  # mse | mae
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
     hamiltonian_envelope_mode: str = (
@@ -172,18 +174,24 @@ class Config:
     loss_weight_min: float = 0.0
     loss_weight_max: float = 100.0
     spectral_loss_enabled: bool = False
+    train_on_spectral: bool = True
     spectral_loss_coef: float = 0.0
     spectral_loss_kmesh: str = "2x2x2"
     spectral_loss_window_ev: float = 10.0
     spectral_loss_taper_ev: float = 2.0
     spectral_loss_huber_delta_ev: float = 0.1
-    spectral_loss_overlap_psd_cleanup: bool = False
-    spectral_loss_overlap_jitter: bool = True
+    spectral_loss_kind: str = "huber"  # huber | mse | mae
+    spectral_loss_overlap_psd_cleanup: bool = True
+    spectral_loss_overlap_jitter: bool = False
     spectral_fermi_cache_path: str | None = None
     freeze_backbone_train_heads_only: bool = False
 
     # -------------- logging ---------------------------------------------
     run_name: str = "mandala-run"
+    experiment_id: str | None = None
+    ablation_name: str | None = None
+    ablation_setting: str | None = None
+    paper_run: bool = False
     verbosity: int = 1
     bench_verbosity: int = 1
     log_partial_gt_observables: bool = False
@@ -221,7 +229,8 @@ class Config:
     snapshot_cache_dir: str | None = None  # raw Snapshot .pt cache, if any
     dataset_device: str | None = None  # keep processed dataset on this device
     shuffle_snapshot_load_order: bool = True  # randomize cache warmup order
-    seed: int = 42  # random seed for reproducibility
+    data_split_seed: int = 42  # fixed seed defining train/validation/test membership
+    seed: int = 42  # run seed: initialization, dropout, and training order
     precompute_edge_features: bool = True  # precompute edge features
     radial_embedding_scale: str = "none"
     allow_incomplete_dataset: bool = False  # tolerate short snapshot lists

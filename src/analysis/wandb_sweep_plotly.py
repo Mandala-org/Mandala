@@ -637,6 +637,8 @@ def copy_evaluation_bundle_assets(
         "band_structure_pred.pt",
         "dos_comparison.pt",
         "dos_prediction.pt",
+        "tetrahedron_dos_cache_gt.pt",
+        "tetrahedron_dos_cache_pred.pt",
         "dos_comparison.png",
         "dos_prediction.png",
         "dos_error.png",
@@ -692,6 +694,8 @@ def label_for_asset(filename: str) -> str:
         "dos_error.png": "DOS error",
         "dos_comparison.pt": "DOS comparison payload",
         "dos_prediction.pt": "DOS prediction payload",
+        "tetrahedron_dos_cache_gt.pt": "Ground-truth DOS eigenvalue cache",
+        "tetrahedron_dos_cache_pred.pt": "Prediction DOS eigenvalue cache",
         "hamiltonian_block_error_metrics.pt": "Hamiltonian block error metrics",
         "hamiltonian_interactive_heatmaps.pt": "Hamiltonian interactive heatmaps",
         "snapshot_3d_error_payload.pt": "Snapshot 3D error payload",
@@ -948,11 +952,26 @@ def build_model_detail_page(
         ),
         div_id_prefix=f"band-{record.run_id}",
     )
-    correlation_html = _build_correlation_section(
+    eigenvalue_html = _build_eigenvalue_correlation_section(
         evaluation,
         include_plotlyjs=(
             False
             if (snapshot_3d_html or heatmap_html or dos_has_plotly or band_html)
+            else include_plotlyjs
+        ),
+        div_id_prefix=f"eigenvalue-{record.run_id}",
+    )
+    correlation_html = _build_correlation_section(
+        evaluation,
+        include_plotlyjs=(
+            False
+            if (
+                snapshot_3d_html
+                or heatmap_html
+                or dos_has_plotly
+                or band_html
+                or eigenvalue_html
+            )
             else include_plotlyjs
         ),
         div_id_prefix=f"corr-{record.run_id}",
@@ -1011,6 +1030,7 @@ def build_model_detail_page(
   {heatmap_html}
   {dos_html}
   {band_html}
+  {eigenvalue_html}
   {correlation_html}
   {block_error_html}
   <div class="asset-grid">
@@ -2185,6 +2205,168 @@ def _build_band_structure_figure(
         font=dict(color="#e8edf7"),
     )
     return fig
+
+
+def _saved_gamma_energies(payload: dict[str, Any]) -> np.ndarray | None:
+    """Return the saved band eigenvalues at fractional k = (0, 0, 0)."""
+    eigenvalues = _band_energies_ev(payload)
+    fractional = payload.get("fractional_kpoints")
+    if fractional is None:
+        return None
+    if torch.is_tensor(fractional):
+        fractional = fractional.detach().cpu().numpy()
+    fractional = np.asarray(fractional, dtype=float)
+    if fractional.ndim != 2 or fractional.shape[0] != eigenvalues.shape[0]:
+        return None
+    gamma_idx = int(np.argmin(np.linalg.norm(fractional, axis=1)))
+    if float(np.linalg.norm(fractional[gamma_idx])) > 1.0e-7:
+        return None
+    return np.asarray(eigenvalues[gamma_idx], dtype=float)
+
+
+def _load_dos_eigenvalues(path: Path) -> tuple[np.ndarray, float | None] | None:
+    payload = _load_plot_payload(path)
+    values = payload.get("eigenvalues_ev")
+    if values is None:
+        return None
+    if torch.is_tensor(values):
+        values = values.detach().cpu().numpy()
+    values = np.asarray(values, dtype=float)
+    if values.ndim != 2:
+        return None
+    fermi = payload.get("fermi_level_ev")
+    return values, None if fermi is None else float(fermi)
+
+
+def _eigenvalue_correlation_data(
+    evaluation: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray, str] | None:
+    copied_files = evaluation.get("copied_files", {})
+    gt_dos = copied_files.get("tetrahedron_dos_cache_gt.pt")
+    pred_dos = copied_files.get("tetrahedron_dos_cache_pred.pt")
+    if gt_dos is not None and pred_dos is not None:
+        gt_payload = _load_dos_eigenvalues(Path(gt_dos))
+        pred_payload = _load_dos_eigenvalues(Path(pred_dos))
+        if gt_payload is not None and pred_payload is not None:
+            gt, gt_fermi = gt_payload
+            pred, pred_fermi = pred_payload
+            count = min(gt.size, pred.size)
+            if count > 0:
+                gt = gt.reshape(-1)[:count]
+                pred = pred.reshape(-1)[:count]
+                if gt_fermi is not None:
+                    gt = gt - gt_fermi
+                if pred_fermi is not None:
+                    pred = pred - pred_fermi
+                return gt, pred, "DOS k-mesh"
+
+    gt_path = copied_files.get("band_structure_gt_gt_overlap.pt") or copied_files.get(
+        "band_structure_gt.pt"
+    )
+    pred_path = copied_files.get(
+        "band_structure_pred_gt_overlap.pt"
+    ) or copied_files.get("band_structure_pred.pt")
+    if gt_path is None or pred_path is None:
+        return None
+    gt = _saved_gamma_energies(_load_band_payload(Path(gt_path)))
+    pred = _saved_gamma_energies(_load_band_payload(Path(pred_path)))
+    if gt is None or pred is None:
+        return None
+    count = min(gt.size, pred.size)
+    return gt[:count], pred[:count], "Gamma"
+
+
+def _build_eigenvalue_correlation_figure(
+    evaluation: dict[str, Any],
+) -> go.Figure | None:
+    data = _eigenvalue_correlation_data(evaluation)
+    if data is None:
+        return None
+    target, prediction, source = data
+    finite = np.isfinite(target) & np.isfinite(prediction)
+    target = target[finite]
+    prediction = prediction[finite]
+    if target.size == 0:
+        return None
+    stacked = np.concatenate([target, prediction])
+    lo = float(np.min(stacked))
+    hi = float(np.max(stacked))
+    span = max(hi - lo, 1.0e-9)
+    lo -= 0.03 * span
+    hi += 0.03 * span
+    if target.size > 1 and np.std(target) > 0.0 and np.std(prediction) > 0.0:
+        r = float(np.corrcoef(target, prediction)[0, 1])
+        r2 = r * r
+    else:
+        r2 = float("nan")
+    mae = float(np.mean(np.abs(prediction - target)))
+    fig = go.Figure(
+        data=[
+            go.Scattergl(
+                x=target,
+                y=prediction,
+                mode="markers",
+                marker=dict(
+                    size=6,
+                    color="#60a5fa",
+                    opacity=0.55,
+                    line=dict(width=0),
+                ),
+                hovertemplate=(
+                    "True=%{x:.6g} eV<br>Predicted=%{y:.6g} eV" "<extra></extra>"
+                ),
+                showlegend=False,
+            ),
+            go.Scattergl(
+                x=[lo, hi],
+                y=[lo, hi],
+                mode="lines",
+                line=dict(color="#f8fafc", dash="dash", width=1.4),
+                hoverinfo="skip",
+                showlegend=False,
+            ),
+        ]
+    )
+    r2_text = f"R²={r2:.4f}" if np.isfinite(r2) else "R²=n/a"
+    fig.update_layout(
+        title=f"Eigenvalue correlation ({source}) | MAE={mae:.4g} eV | {r2_text}",
+        xaxis_title="True eigenvalue (eV relative to Fermi)",
+        yaxis_title="Predicted eigenvalue (eV relative to Fermi)",
+        margin=dict(l=60, r=25, t=60, b=55),
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e8edf7"),
+    )
+    fig.update_xaxes(range=[lo, hi])
+    fig.update_yaxes(range=[lo, hi], scaleanchor="x", scaleratio=1)
+    return fig
+
+
+def _build_eigenvalue_correlation_section(
+    evaluation: dict[str, Any],
+    *,
+    include_plotlyjs: str | bool,
+    div_id_prefix: str,
+) -> str:
+    figure = _build_eigenvalue_correlation_figure(evaluation)
+    if figure is None:
+        return ""
+    figure_html = pio.to_html(
+        figure,
+        include_plotlyjs=include_plotlyjs,
+        full_html=False,
+        default_width="100%",
+        default_height="480px",
+        div_id=f"{div_id_prefix}-corr",
+        config={"responsive": True},
+    )
+    return f"""
+  <h2>Eigenvalue Correlation</h2>
+  <div class="plotly-panel">
+    {figure_html}
+  </div>
+"""
 
 
 def _build_block_error_section(

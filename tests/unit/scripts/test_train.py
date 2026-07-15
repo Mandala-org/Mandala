@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
+import pytest
 import torch
 
 
@@ -273,3 +275,100 @@ def test_populate_config_from_args_accepts_torch_prefixed_dtype():
     cfg = mod._populate_config_from_args(args)
 
     assert cfg.dtype == torch.float32
+
+
+def test_split_manifest_is_disjoint_and_stable(tmp_path):
+    mod = _load_module()
+
+    class Dataset:
+        def __init__(self, pairs):
+            self.snapshot_paths = pairs
+
+    train = Dataset([(tmp_path / "h0", tmp_path / "i0")])
+    val = Dataset([(tmp_path / "h1", tmp_path / "i1")])
+    test = Dataset([(tmp_path / "h2", tmp_path / "i2")])
+
+    first = mod._write_split_manifest(
+        tmp_path / "run-a",
+        train_ds=train,
+        val_ds=val,
+        test_ds=test,
+        data_split_seed=42,
+    )
+    second = mod._write_split_manifest(
+        tmp_path / "run-b",
+        train_ds=train,
+        val_ds=val,
+        test_ds=test,
+        data_split_seed=42,
+    )
+
+    assert first["split_hash_sha256"] == second["split_hash_sha256"]
+    assert first["counts"] == {"train": 1, "val": 1, "test": 1}
+    on_disk = json.loads((tmp_path / "run-a" / "split_manifest.json").read_text())
+    assert on_disk["split_hash_sha256"] == first["split_hash_sha256"]
+
+
+def test_split_manifest_rejects_leakage(tmp_path):
+    mod = _load_module()
+
+    class Dataset:
+        snapshot_paths = [(tmp_path / "h", tmp_path / "i")]
+
+    with pytest.raises(ValueError, match="leakage"):
+        mod._write_split_manifest(
+            tmp_path / "run",
+            train_ds=Dataset(),
+            val_ds=Dataset(),
+            test_ds=None,
+            data_split_seed=42,
+        )
+
+
+def test_paper_run_gate_rejects_resume_and_missing_test():
+    mod = _load_module()
+    cfg = mod.Config(
+        paper_run=True,
+        experiment_id="paper-v1",
+        ablation_name="envelope",
+        ablation_setting="on",
+        max_wall_clock_seconds=10,
+        allow_incomplete_dataset=False,
+        checkpoint_monitor="val/hamiltonian_mae",
+    )
+    args = mod.argparse.Namespace(evaluate_test_after_fit=True, log_artifacts=True)
+
+    with pytest.raises(ValueError, match="Paper-run engineering gate failed"):
+        mod._validate_paper_run_gate(
+            args,
+            cfg,
+            train_ds=[1],
+            val_ds=[2],
+            test_ds=None,
+            resume_checkpoint=Path("checkpoint.pt"),
+            compatibility_mode=False,
+        )
+
+
+def test_paper_run_gate_accepts_controlled_from_scratch_run():
+    mod = _load_module()
+    cfg = mod.Config(
+        paper_run=True,
+        experiment_id="paper-v1",
+        ablation_name="envelope",
+        ablation_setting="on",
+        max_wall_clock_seconds=10,
+        allow_incomplete_dataset=False,
+        checkpoint_monitor="val/hamiltonian_mae",
+    )
+    args = mod.argparse.Namespace(evaluate_test_after_fit=True, log_artifacts=True)
+
+    mod._validate_paper_run_gate(
+        args,
+        cfg,
+        train_ds=[1],
+        val_ds=[2],
+        test_ds=[3],
+        resume_checkpoint=None,
+        compatibility_mode=False,
+    )

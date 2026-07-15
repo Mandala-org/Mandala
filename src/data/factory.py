@@ -31,7 +31,7 @@ from data.pyscf_baseline_parser import load_pyscf_metadata
 from net.common import Config
 from utils.summary import print_dataset_summary
 
-Purpose = Literal["train", "val"]
+Purpose = Literal["train", "val", "test"]
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -48,7 +48,11 @@ class DatasetFactory:
         self.convention = convention
 
         # paths grouped by purpose --------------------------------------
-        self._pairs: Dict[Purpose, List[Tuple[Path, Path]]] = {"train": [], "val": []}
+        self._pairs: Dict[Purpose, List[Tuple[Path, Path]]] = {
+            "train": [],
+            "val": [],
+            "test": [],
+        }
 
     # ------------------------------------------------------------------ public API
     def add_snapshot(
@@ -67,10 +71,10 @@ class DatasetFactory:
         info_path
             Path to the corresponding ``*.info`` / ``*.out`` file.
         purpose
-            Either ``"train"`` (default) or ``"val"``.
+            One of ``"train"`` (default), ``"val"``, or ``"test"``.
         """
-        if purpose not in ("train", "val"):
-            raise ValueError("purpose must be 'train' or 'val'")
+        if purpose not in ("train", "val", "test"):
+            raise ValueError("purpose must be 'train', 'val', or 'test'")
         pair = (Path(matrix_path), Path(info_path))
         self._pairs[purpose].append(pair)
 
@@ -82,9 +86,7 @@ class DatasetFactory:
         return parse_info_out(path)
 
     # ------------------------------------------------------------------ create
-    def create(
-        self,
-    ) -> Tuple[E3GNNDataset, Optional[E3GNNDataset], BlockIrrepMapper]:
+    def create(self, *, include_test: bool = False):
         """
         Build datasets **and** a shared mapper.
 
@@ -99,7 +101,9 @@ class DatasetFactory:
         """
         # ①  Merge all orbital configs ---------------------------------
         info_all = []
-        for _mat, info_p in self._pairs["train"] + self._pairs["val"]:
+        for _mat, info_p in (
+            self._pairs["train"] + self._pairs["val"] + self._pairs["test"]
+        ):
             info_all.append(self._load_info(info_p))
 
         # OrbitalIrrepConfig utility: union of all elements / orbitals
@@ -120,6 +124,11 @@ class DatasetFactory:
             if self._pairs["val"]
             else None
         )
+        test_ds = (
+            E3GNNDataset(self._pairs["test"], mapper, self.cfg, self.convention)
+            if self._pairs["test"]
+            else None
+        )
 
         # Print dataset summaries if verbosity >= 1
         print_dataset_summary(
@@ -129,7 +138,13 @@ class DatasetFactory:
             print_dataset_summary(
                 val_ds, name="Validation Dataset", verbosity=self.cfg.verbosity
             )
+        if test_ds:
+            print_dataset_summary(
+                test_ds, name="Test Dataset", verbosity=self.cfg.verbosity
+            )
 
+        if include_test:
+            return train_ds, val_ds, test_ds, mapper
         return train_ds, val_ds, mapper
 
 

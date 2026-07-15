@@ -45,6 +45,8 @@ parameters:
     value: 90
   num-val:
     value: 10
+  data-split-seed:
+    value: 42
   max-wall-clock-hours:
     value: 11.5
 
@@ -66,6 +68,8 @@ parameters:
     value: 1.0e-8
   lr-scheduler-target:
     value: val/loss_total
+  checkpoint-monitor:
+    value: val/spectral_mae_ev
 
   precision:
     value: 32-true
@@ -271,9 +275,9 @@ parameters:
   spectral-loss-huber-delta-ev:
     value: 0.1
   spectral-loss-overlap-psd-cleanup:
-    value: false
-  spectral-loss-overlap-jitter:
     value: true
+  spectral-loss-overlap-jitter:
+    value: false
   revert-on-spike:
     value: true
   revert-monitor:

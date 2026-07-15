@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-train", type=int, default=None)
     parser.add_argument("--num-val", type=int, default=None)
     parser.add_argument("--val-fraction", type=float, default=0.2)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--data-split-seed", type=int, default=42)
     parser.add_argument("--convention", type=str, default="e3nn")
     parser.add_argument("--snapshot-cache-dir", type=Path, default=None)
     parser.add_argument("--dataset-device", type=str, default="cpu")
@@ -92,7 +92,7 @@ def _build_dataset_bundle(args: argparse.Namespace, cfg) -> tuple[Any, Any, Any]
             cfg=cfg,
             num_train=args.num_train,
             num_val=args.num_val,
-            seed=args.seed,
+            data_split_seed=args.data_split_seed,
             convention=args.convention,
         )
     if args.dataset_kind == "siox":
@@ -102,7 +102,7 @@ def _build_dataset_bundle(args: argparse.Namespace, cfg) -> tuple[Any, Any, Any]
             num_train=args.num_train,
             num_val=args.num_val,
             val_fraction=args.val_fraction,
-            seed=args.seed,
+            data_split_seed=args.data_split_seed,
             convention=args.convention,
         )
     if args.dataset_kind == "silicon_scales":
@@ -112,7 +112,7 @@ def _build_dataset_bundle(args: argparse.Namespace, cfg) -> tuple[Any, Any, Any]
             scales=_parse_scales(args.scales),
             num_train_per_scale=args.num_train_per_scale,
             num_val_per_scale=args.num_val_per_scale,
-            seed=args.seed,
+            data_split_seed=args.data_split_seed,
             convention=args.convention,
         )
     if args.dataset_kind == "ZnCuSnSeS_small":
@@ -122,7 +122,7 @@ def _build_dataset_bundle(args: argparse.Namespace, cfg) -> tuple[Any, Any, Any]
             num_train=args.num_train,
             num_val=args.num_val,
             val_fraction=args.val_fraction,
-            seed=args.seed,
+            data_split_seed=args.data_split_seed,
             convention=args.convention,
         )
     if args.dataset_kind == "ZnCuSnSeS":
@@ -132,7 +132,7 @@ def _build_dataset_bundle(args: argparse.Namespace, cfg) -> tuple[Any, Any, Any]
             scales=_parse_scales(args.scales),
             num_train_per_scale=args.num_train_per_scale,
             num_val_per_scale=args.num_val_per_scale,
-            seed=args.seed,
+            data_split_seed=args.data_split_seed,
             convention=args.convention,
         )
     raise ValueError(f"Unsupported dataset_kind={args.dataset_kind!r}")

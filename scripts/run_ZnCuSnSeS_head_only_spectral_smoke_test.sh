@@ -155,8 +155,8 @@ CMD=(
   --spectral-loss-window-ev 10.0
   --spectral-loss-taper-ev 2.0
   --spectral-loss-huber-delta-ev 0.1
-  --spectral-loss-overlap-psd-cleanup false
-  --spectral-loss-overlap-jitter true
+  --spectral-loss-overlap-psd-cleanup true
+  --spectral-loss-overlap-jitter false
   --freeze-backbone-train-heads-only true
   --revert-on-spike true
   --revert-monitor val/loss_total

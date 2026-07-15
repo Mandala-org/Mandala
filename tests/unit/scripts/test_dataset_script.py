@@ -62,10 +62,11 @@ def test_build_silicon_datasets_single_temp_global_split_is_disjoint(
     captured = {}
 
     def fake_create_datasets_from_pairs(
-        train_pairs, val_pairs, cfg, *, convention="e3nn"
+        train_pairs, val_pairs, test_pairs, cfg, *, convention="e3nn"
     ):
         captured["train_pairs"] = train_pairs
         captured["val_pairs"] = val_pairs
+        captured["test_pairs"] = test_pairs
         captured["convention"] = convention
         return "train", "val", "mapper"
 
@@ -76,7 +77,7 @@ def test_build_silicon_datasets_single_temp_global_split_is_disjoint(
     for idx in range(12):
         sample = temp_root / f"{idx}"
         sample.mkdir(parents=True)
-        (sample / "Si_DM").write_text("matrix")
+        (sample / "HS.out").write_text("matrix")
         (sample / "info.dat").write_text("info")
 
     result = mod.build_silicon_datasets(
@@ -87,7 +88,7 @@ def test_build_silicon_datasets_single_temp_global_split_is_disjoint(
         val_temp=3000,
         num_train=10,
         num_val=2,
-        seed=0,
+        data_split_seed=0,
     )
 
     assert result == ("train", "val", "mapper")
@@ -107,10 +108,11 @@ def test_build_silicon_datasets_balanced_multi_temp_split_is_disjoint(
     captured = {}
 
     def fake_create_datasets_from_pairs(
-        train_pairs, val_pairs, cfg, *, convention="e3nn"
+        train_pairs, val_pairs, test_pairs, cfg, *, convention="e3nn"
     ):
         captured["train_pairs"] = train_pairs
         captured["val_pairs"] = val_pairs
+        captured["test_pairs"] = test_pairs
         captured["convention"] = convention
         return "train", "val", "mapper"
 
@@ -122,7 +124,7 @@ def test_build_silicon_datasets_balanced_multi_temp_split_is_disjoint(
         for idx in range(5):
             sample = temp_root / f"{idx}"
             sample.mkdir(parents=True)
-            (sample / "Si_DM").write_text("matrix")
+            (sample / "HS.out").write_text("matrix")
             (sample / "info.dat").write_text("info")
 
     result = mod.build_silicon_datasets(
@@ -133,7 +135,7 @@ def test_build_silicon_datasets_balanced_multi_temp_split_is_disjoint(
         temp_step=300,
         num_train=8,
         num_val=2,
-        seed=0,
+        data_split_seed=0,
     )
 
     assert result == ("train", "val", "mapper")
@@ -154,3 +156,36 @@ def test_build_silicon_datasets_balanced_multi_temp_split_is_disjoint(
     assert (
         sum("600K" in str(matrix_path) for matrix_path, _ in captured["val_pairs"]) == 1
     )
+
+
+def test_siox_fixed_split_has_held_out_test_and_ignores_run_seed(monkeypatch, tmp_path):
+    mod = _load_module()
+    captured = []
+
+    def fake_create(train, val, test, cfg, *, convention="e3nn"):
+        captured.append((list(train), list(val), list(test), cfg.seed))
+        return "train", "val", "test", "mapper"
+
+    monkeypatch.setattr(mod, "_create_datasets_from_pairs", fake_create)
+    for idx in range(12):
+        sample = tmp_path / str(idx)
+        sample.mkdir()
+        (sample / "HS.out").write_text("matrix")
+        (sample / "SiO2.out").write_text("info")
+
+    for run_seed in (1, 999):
+        mod.build_siox_datasets(
+            data_path=tmp_path,
+            cfg=mod.Config(seed=run_seed),
+            num_train=8,
+            num_val=2,
+            num_test=2,
+            data_split_seed=17,
+        )
+
+    assert captured[0][:3] == captured[1][:3]
+    train, val, test, _ = captured[0]
+    assert len(train) == 8 and len(val) == 2 and len(test) == 2
+    assert set(train).isdisjoint(val)
+    assert set(train).isdisjoint(test)
+    assert set(val).isdisjoint(test)
