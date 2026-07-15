@@ -6,6 +6,7 @@ metric:
 
 project: mandala-silicon-hdo-energy-objective-finetune
 name: silicon-hdo-energy-objective-finetune-11h5
+run_cap: 16
 command:
   - ${env}
   - python
@@ -50,10 +51,10 @@ parameters:
   data-split-seed:
     value: 42
   max-wall-clock-hours:
-    value: 11.5
+    value: 11.9
 
   lr:
-    values: [3.0e-4, 1.0e-3]
+    values: [3.0e-3, 1.0e-2]
   max-epochs:
     value: 5000
   grad-clip-val:
@@ -238,7 +239,9 @@ parameters:
   train-observables-on-gt:
     value: true
   loss-coef-observables:
-    values: [1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2]
+    values: [3.0e-2, 1.0e-1, 3.0e-1, 1.0]
+  observable-loss-kind:
+    value: mae
   loss-coef-forces:
     value: 0.0
   loss-coef-stress:
@@ -277,4 +280,4 @@ parameters:
   revert-spike-factor:
     value: 2
   seed:
-    value: 43
+    values: [41, 42]

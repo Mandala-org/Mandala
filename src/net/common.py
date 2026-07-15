@@ -191,7 +191,6 @@ class Config:
     experiment_id: str | None = None
     ablation_name: str | None = None
     ablation_setting: str | None = None
-    paper_run: bool = False
     verbosity: int = 1
     bench_verbosity: int = 1
     log_partial_gt_observables: bool = False

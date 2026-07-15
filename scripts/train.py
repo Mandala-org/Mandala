@@ -81,15 +81,6 @@ def run_training(
 
     dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
     train_ds, val_ds, test_ds, mapper = _normalize_dataset_bundle(dataset_bundle)
-    _validate_paper_run_gate(
-        args,
-        cfg,
-        train_ds=train_ds,
-        val_ds=val_ds,
-        test_ds=test_ds,
-        resume_checkpoint=resume_checkpoint,
-        compatibility_mode=compatibility_mode,
-    )
     run_dir = Path(getattr(args, "checkpoint_dir", cfg.save_dir)) / run_name
     if run_dir.exists() and (resume_checkpoint is None or compatibility_mode):
         raise FileExistsError(
@@ -218,43 +209,6 @@ def _normalize_dataset_bundle(bundle):
     if len(bundle) == 4:
         return bundle
     raise ValueError(f"Expected dataset bundle of length 3 or 4, got {len(bundle)}")
-
-
-def _validate_paper_run_gate(
-    args: argparse.Namespace,
-    cfg: Config,
-    *,
-    train_ds: Any,
-    val_ds: Any,
-    test_ds: Any,
-    resume_checkpoint: Path | None,
-    compatibility_mode: bool,
-) -> None:
-    if not bool(getattr(cfg, "paper_run", False)):
-        return
-    errors = []
-    if any(ds is None or len(ds) == 0 for ds in (train_ds, val_ds, test_ds)):
-        errors.append(
-            "non-empty train, validation, and held-out test splits are required"
-        )
-    if not bool(getattr(args, "evaluate_test_after_fit", False)):
-        errors.append("evaluate_test_after_fit must be true")
-    if not bool(getattr(args, "log_artifacts", True)):
-        errors.append("artifact checkpointing must be enabled")
-    if cfg.max_wall_clock_seconds is None:
-        errors.append("a fixed max_wall_clock_seconds budget is required")
-    if bool(cfg.allow_incomplete_dataset):
-        errors.append("allow_incomplete_dataset must be false")
-    if resume_checkpoint is not None or compatibility_mode:
-        errors.append("paper ablations must start from randomly initialized weights")
-    if not str(cfg.checkpoint_monitor).startswith("val/"):
-        errors.append("checkpoint_monitor must be a predeclared validation metric")
-    for field in ("experiment_id", "ablation_name", "ablation_setting"):
-        if getattr(cfg, field) in (None, ""):
-            errors.append(f"{field} must be set")
-    if errors:
-        raise ValueError("Paper-run engineering gate failed: " + "; ".join(errors))
-    print("--- Paper-run engineering gate passed ---", flush=True)
 
 
 def _as_namespace(

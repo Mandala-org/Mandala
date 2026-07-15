@@ -6,6 +6,7 @@ metric:
 
 project: mandala-SiOx-hamiltonian-mae-gamma-spectral-finetune
 name: SiOx-hamiltonian-mae-gamma-spectral-finetune-11h5
+run_cap: 16
 command:
   - ${env}
   - python
@@ -48,10 +49,10 @@ parameters:
   data-split-seed:
     value: 42
   max-wall-clock-hours:
-    value: 11.5
+    value: 11.9
 
   lr:
-    values: [5.0e-5, 1.0e-4]
+    values: [5.0e-4, 2.0e-3]
   max-epochs:
     value: 3000
   grad-clip-val:
@@ -265,7 +266,11 @@ parameters:
   spectral-loss-enabled:
     value: true
   spectral-loss-coef:
-    values: [3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2]
+    values: [3.0e-2, 1.0e-1, 3.0e-1, 1.0]
+  spectral-loss-kind:
+    value: mae
+  train-on-spectral:
+    value: true
   spectral-loss-kmesh:
     value: 1x1x1
   spectral-loss-window-ev:
@@ -289,4 +294,4 @@ parameters:
   revert-spike-factor:
     value: 2.0
   seed:
-    value: 42
+    values: [41, 42]

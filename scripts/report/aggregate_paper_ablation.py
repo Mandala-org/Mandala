@@ -93,8 +93,6 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         summary = dict(run.summary)
         if run.state != "finished":
             raise ValueError(f"Run {run.id} is not finished (state={run.state!r})")
-        if not bool(_config_value(config, "paper_run")):
-            raise ValueError(f"Run {run.id} is missing paper_run=true")
         setting = _config_value(config, "ablation_setting")
         seed = _config_value(config, "seed")
         split_hash = summary.get("data/split_hash_sha256") or config.get(

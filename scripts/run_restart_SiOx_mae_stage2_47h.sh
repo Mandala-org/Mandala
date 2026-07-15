@@ -2,11 +2,12 @@
 
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
+if [[ $# -lt 2 || $# -gt 3 ]]; then
   echo "Usage:" >&2
   echo "  $0 continue <0p0027|0p0015>" >&2
   echo "  $0 reset <1e-4|2e-4>" >&2
-  echo "  $0 spectral <1e-3|3e-3>" >&2
+  echo "  $0 control <5e-4|2e-3|1e-2>" >&2
+  echo "  $0 spectral <3e-2|1e-1|3e-1> [lr]" >&2
   exit 1
 fi
 
@@ -55,13 +56,27 @@ case "${MODE}" in
     ;;
   spectral)
     case "${VALUE}" in
-      1e-3|3e-3) SPECTRAL_COEF="${VALUE}" ;;
+      3e-2|1e-1|3e-1) SPECTRAL_COEF="${VALUE}" ;;
       *) echo "Unsupported spectral coefficient: ${VALUE}" >&2; exit 1 ;;
     esac
-    START_LR="5e-5"
+    START_LR="${3:-5e-4}"
+    case "${START_LR}" in
+      5e-4|2e-3|1e-2) ;;
+      *) echo "Unsupported spectral LR: ${START_LR}" >&2; exit 1 ;;
+    esac
     CHECKPOINT_MONITOR="val/spectral_mae_ev"
     COEF_TAG="${VALUE//-/m}"
-    RUN_NAME="${SOURCE_PREFIX}${SOURCE_TAG}-gamma-spec${COEF_TAG}-lr5em5-direct-fermi-47h25"
+    LR_TAG="${START_LR//-/m}"
+    RUN_NAME="${SOURCE_PREFIX}${SOURCE_TAG}-gamma-spec${COEF_TAG}-lr${LR_TAG}-mae-47h9"
+    ;;
+  control)
+    case "${VALUE}" in
+      5e-4|2e-3|1e-2) START_LR="${VALUE}" ;;
+      *) echo "Unsupported control LR: ${VALUE}" >&2; exit 1 ;;
+    esac
+    LR_TAG="${VALUE//-/m}"
+    CHECKPOINT_MONITOR="val/spectral_mae_ev"
+    RUN_NAME="${SOURCE_PREFIX}${SOURCE_TAG}-gamma-control-lr${LR_TAG}-47h9"
     ;;
   *)
     echo "Unsupported mode: ${MODE}" >&2
@@ -101,7 +116,7 @@ CMD=(
   --num-train 90
   --num-val 10
   --data-split-seed 42
-  --max-wall-clock-hours 47.25
+  --max-wall-clock-hours 47.9
   --lr "${START_LR}"
   --max-epochs 4000
   --grad-clip-val 2.0
@@ -209,13 +224,28 @@ CMD=(
   --revert-spike-factor 2.0
   --spectral-loss-enabled false
   --spectral-loss-coef 0.0
+  --spectral-loss-kind mae
   --seed 42
 )
 
-if [[ "${MODE}" == "spectral" ]]; then
+if [[ "${MODE}" == "control" ]]; then
+  CMD+=(
+    --spectral-loss-enabled true
+    --spectral-loss-coef 0.0
+    --train-on-spectral false
+    --spectral-loss-kmesh 1x1x1
+    --spectral-loss-window-ev 10.0
+    --spectral-loss-taper-ev 2.0
+    --spectral-loss-kind mae
+    --spectral-loss-overlap-psd-cleanup true
+    --spectral-loss-overlap-jitter false
+  )
+elif [[ "${MODE}" == "spectral" ]]; then
   CMD+=(
     --spectral-loss-enabled true
     --spectral-loss-coef "${SPECTRAL_COEF}"
+    --spectral-loss-kind mae
+    --train-on-spectral true
     --spectral-loss-kmesh 1x1x1
     --spectral-loss-window-ev 10.0
     --spectral-loss-taper-ev 2.0
