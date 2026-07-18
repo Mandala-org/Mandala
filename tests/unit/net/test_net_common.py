@@ -28,5 +28,8 @@ def test_hyperparams_defaults():
         "gate_scalars_mlp",
         "gate_magnitudes",
     }
-    assert cfg.e3mlp_variant == "basic"
-    assert cfg.loss_coef_observables > 0
+    assert cfg.e3mlp_variant == "film"
+    assert cfg.internal_e3mlp_variant == "resnormact"
+    assert cfg.head_e3mlp_variant == "normact"
+    assert cfg.loss_coef_observables == 0
+    assert cfg.checkpoint_monitor == "val/hamiltonian_mae"

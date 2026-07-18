@@ -1,0 +1,60 @@
+program: scripts/wandb_run.py
+method: grid
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+project: paper_siox_spectral_guidance_11h5
+name: paper_siox_spectral_guidance_11h5
+run_cap: 10
+command:
+- ${env}
+- python
+- -u
+- ${program}
+- ${args}
+parameters:
+  dataset-kind:
+    value: siox
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/snapshot_cache
+  dataset-device:
+    value: cuda
+  cutoff-radius:
+    value: 10.0
+  l-max:
+    value: 4
+  hidden-irreps:
+    value: 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e
+  lr:
+    value: 0.0133
+  wandb-project:
+    value: paper_siox_spectral_guidance_11h5
+  wandb-group:
+    value: paper_siox_spectral_guidance_11h5
+  wandb-tags:
+    value:
+    - paper_ablation
+    - fresh_initialization
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_siox_spectral_guidance_11h5
+  experiment-id:
+    value: paper_round1_20260718
+  ablation-name:
+    value: paper_siox_spectral_guidance_11h5
+  ablation-setting-from:
+    value: spectral_loss_coef
+  spectral-loss-coef:
+    values:
+    - 0.0
+    - 0.003
+  seed:
+    values:
+    - 41
+    - 42
+    - 43
+    - 44
+    - 45
+  spectral-loss-enabled:
+    value: true

@@ -39,17 +39,19 @@ class Config:
     """
 
     # radii (unified cutoff - no small/large graph split)
-    cutoff_radius: float = 7.0
+    cutoff_radius: float = 11.0
 
     # -------------- representation shape --------------------------------
-    l_max: int = 4
+    l_max: int = 6
     hidden_base_dim: int = 64  # multiplicity at ℓ = 0
-    hidden_irreps: str | None = None  # explicit hidden irreps override
+    hidden_irreps: str | None = (
+        "128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+" "16x4e+4x4o+4x5e+12x5o+8x6e"
+    )
     edge_type_emb_dim: int = 32  # edge type embedding size
     emb_use_odd_features: bool = True  # use odd parity
     edge_encoder_style: str = "rich"  # "rich" | "distance"
-    edge_encoder_use_sh_tensor_square: bool = False
-    e3layernorm: bool = True
+    edge_encoder_use_sh_tensor_square: bool = True
+    e3layernorm: bool = False
 
     # node_type_emb_dim: int = 32  # node type embedding size
 
@@ -61,23 +63,23 @@ class Config:
     tp_type: str = "separate_weight"
 
     # use self-connection (element-specific features)
-    use_self_connection: bool = True
+    use_self_connection: bool = False
 
     edge_update_node_combine: str = "concat"  # "concat" | "sum" | "tensor_product"
-    edge_update_residual: bool = True  # use residual connections in edge update
+    edge_update_residual: bool = False  # use residual connections in edge update
 
-    node_update_message_agg: str = "sum"  # "sum" | "average" | "attention"
+    node_update_message_agg: str = "attention"  # "sum" | "average" | "attention"
     node_update_attention_scalar_dim: int = 64
     node_update_attention_heads: int = 4
-    node_update_residual: bool = True  # use residual connections in node update
+    node_update_residual: bool = False  # use residual connections in node update
 
     head_use_mlp_log_scale: bool = False  # whether to use MLP log scaling in the head
 
-    neck_depth: int = 1
-    internal_e3mlp_layers: int = 0
+    neck_depth: int = 2
+    internal_e3mlp_layers: int = 1
     head_e3mlp_layers: int = 1
     head_use_node_embeddings_for_self_edges: bool = True
-    separate_shifted_self: bool = False
+    separate_shifted_self: bool = True
     head_use_tensor_square: bool = False
     head_pair_mode: str = "split"  # "split" | "shared_conditioned"
     head_diag_output_scale: float = 1.0
@@ -86,15 +88,15 @@ class Config:
     head_log_scale_mlp_n_layers: int = 1
 
     # -------------- non-linearity & norm --------------------------------
-    e3mlp_variant: str = "basic"  # "basic" or study-style variants
-    internal_e3mlp_variant: str | None = None
-    head_e3mlp_variant: str | None = None
+    e3mlp_variant: str = "film"  # "basic" or study-style variants
+    internal_e3mlp_variant: str | None = "resnormact"
+    head_e3mlp_variant: str | None = "normact"
     e3mlp_output_scale: float = 1.0
     e3mlp_weight_init_scale: float = 1.0
     e3mlp_residual_scale: float = 0.25
     e3mlp_pre_norm: bool = False
     e3mlp_norm_eps: float = 1e-8
-    e3mlp_film_hidden_dim: int = 128
+    e3mlp_film_hidden_dim: int = 64
     activation_odd_scalar: str = "tanh"
     activation_odd_gate: str = "tanh"
     nonlin_kind: str = (
@@ -106,33 +108,33 @@ class Config:
     norm_kind: str = "component"  # for NormActivation: "component" | "norm"
 
     # ---------------------- training ------------------------------------
-    lr: float = 3e-2
-    max_epochs: int = 100
-    max_wall_clock_seconds: float | None = None
+    lr: float = 0.010803383053097332
+    max_epochs: int = 10000
+    max_wall_clock_seconds: float | None = 11.5 * 3600.0
     batch_size: int = 1
     use_lr_scheduler: bool = True
     lr_scheduler_factor: float = 0.5
     lr_scheduler_patience: int = 60
     lr_scheduler_min_lr: float = 1e-8
-    lr_scheduler_target: str = "val/loss_total"
+    lr_scheduler_target: str = "val/hamiltonian_mae"
     revert_on_spike: bool = True
-    revert_monitor: str | None = None
-    revert_decay_patience: int = 20
-    revert_decay_rate: float = 0.8
+    revert_monitor: str | None = "val/hamiltonian_mae"
+    revert_decay_patience: int = 4
+    revert_decay_rate: float = 0.5
     revert_spike_factor: float = 2.0
-    checkpoint_monitor: str = "val/loss_total"
+    checkpoint_monitor: str = "val/hamiltonian_mae"
     # -------------- regularisation --------------------------------------
     dropout: float = 0.0  # dropout on *all* irrep coefficients
     l1_reg_coef: float = 0.0
     l2_reg_coef: float = 0.0
     init_weights_factor: float = 1.0
-    grad_clip_val: float | None = 0.5
+    grad_clip_val: float | None = 2.0
     accumulate_grad_batches: int = 1  # gradient accumulation steps
 
     # -------------- radial basis ----------------------------------------
-    n_radial: int = 64
+    n_radial: int = 128
     radial_layers: Sequence[int] = field(
-        default_factory=lambda: (128,)
+        default_factory=lambda: (128, 128, 128)
     )  # e.g. (128,) -> 2-layer MLP
     pair_conditioned_radial_mlp: bool = False
     pair_distance_normalization: str = "off"  # off | pair_r0
@@ -141,28 +143,26 @@ class Config:
     # --------- additional outputs --------------------------------------
     enable_forces: bool = False
     enable_stress: bool = False
-    enable_energy: bool = True
-    enable_num_electrons: bool = True
+    enable_energy: bool = False
+    enable_num_electrons: bool = False
 
     # -------------- training targets -----------------------------------
     train_target: str = "matrix"  # matrix-only in the current workflow
     partial_train: str | None = None  # None | "diag" | "shifted_self" | "offdiag"
     train_on_forces: bool = False
     train_on_stress: bool = False
-    train_on_energy: bool = True
-    train_on_num_electrons: bool = True
-    matrix_targets: list = field(
-        default_factory=lambda: ["hamiltonian", "overlap", "density"]
-    )
+    train_on_energy: bool = False
+    train_on_num_electrons: bool = False
+    matrix_targets: list = field(default_factory=lambda: ["hamiltonian"])
     train_observables_on_gt: bool = False
-    symmetrize_output: bool = True  # symmetrize matrix outputs
+    symmetrize_output: bool = False  # symmetrize matrix outputs
     symmetrize_hamiltonian_targets: bool = True
-    rescale_density_to_num_electrons: bool = True
+    rescale_density_to_num_electrons: bool = False
 
     # -------------- loss weighting --------------------------------------
     loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1
-    loss_coef_observables: float = 1e-5
-    observable_loss_kind: str = "mse"  # mse | mae
+    loss_coef_observables: float = 0.0
+    observable_loss_kind: str = "mae"  # mse | mae
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0
     hamiltonian_envelope_mode: str = (
@@ -176,13 +176,13 @@ class Config:
     spectral_loss_enabled: bool = False
     train_on_spectral: bool = True
     spectral_loss_coef: float = 0.0
-    spectral_loss_kmesh: str = "2x2x2"
+    spectral_loss_kmesh: str = "1x1x1"
     spectral_loss_window_ev: float = 10.0
     spectral_loss_taper_ev: float = 2.0
     spectral_loss_huber_delta_ev: float = 0.1
     spectral_loss_kind: str = "huber"  # huber | mse | mae
-    spectral_loss_overlap_psd_cleanup: bool = True
-    spectral_loss_overlap_jitter: bool = False
+    spectral_loss_overlap_psd_cleanup: bool = False
+    spectral_loss_overlap_jitter: bool = True
     spectral_fermi_cache_path: str | None = None
     freeze_backbone_train_heads_only: bool = False
 
@@ -191,10 +191,11 @@ class Config:
     experiment_id: str | None = None
     ablation_name: str | None = None
     ablation_setting: str | None = None
+    ablation_setting_from: str | None = None
     verbosity: int = 1
     bench_verbosity: int = 1
-    log_partial_gt_observables: bool = False
-    log_per_irrep_metrics: bool = False
+    log_partial_gt_observables: bool = True
+    log_per_irrep_metrics: bool = True
     print_per_irrep_metrics: bool = False
     log_per_irrep_images: bool = False
     log_train_metrics: bool = False
@@ -208,19 +209,17 @@ class Config:
     log_on_epoch: bool = True  # log metrics on epoch
     log_data: bool = False
     log_forward: bool = False
-    benchmark: bool = True
-    log_interval: int = 1
-    adaptive_log_interval: bool = False
+    benchmark: bool = False
+    log_interval: int = 10
+    adaptive_log_interval: bool = True
     video_max_atoms: int | None = 6
 
     # -------------- misc ------------------------------------------------
     safety_checks: bool = False  # enable strict checks on input data
     dtype: torch.dtype = torch.float32  # default data type for all layers
-    device: str = "cpu"  # default device for all layers
-    gpus: int = 0  # number of GPUs
-    num_workers: int | None = (
-        None  # auto: allocated cores - 1, or explicit total workers
-    )
+    device: str = "cuda"  # default device for all layers
+    gpus: int = 1  # number of GPUs
+    num_workers: int | None = 3
     save_dir: str = "checkpoints"  # directory to save model checkpoints
     log_model: bool = False  # whether to log the model to WandB
 

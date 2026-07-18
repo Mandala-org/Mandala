@@ -1,0 +1,55 @@
+program: scripts/wandb_run.py
+method: grid
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+project: paper_zncusnses_envelope_11h5
+name: paper_zncusnses_envelope_11h5
+run_cap: 10
+command:
+- ${env}
+- python
+- -u
+- ${program}
+- ${args}
+parameters:
+  dataset-kind:
+    value: ZnCuSnSeS
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache
+  dataset-device:
+    value: cpu
+  scales:
+    value:
+    - 1
+  wandb-project:
+    value: paper_zncusnses_envelope_11h5
+  wandb-group:
+    value: paper_zncusnses_envelope_11h5
+  wandb-tags:
+    value:
+    - paper_ablation
+    - fresh_initialization
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_envelope_11h5
+  experiment-id:
+    value: paper_round1_20260718
+  ablation-name:
+    value: paper_zncusnses_envelope_11h5
+  ablation-setting-from:
+    value: hamiltonian_envelope_mode
+  hamiltonian-envelope-mode:
+    values:
+    - 'off'
+    - multiply_prediction
+  seed:
+    values:
+    - 41
+    - 42
+    - 43
+    - 44
+    - 45
+  hamiltonian-envelope-path:
+    value: eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json

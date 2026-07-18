@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 import typing
 from pathlib import Path
@@ -27,7 +28,7 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         *_arg_names("dataset_kind"),
         type=str,
-        default="silicon",
+        default="ZnCuSnSeS",
         choices=[
             "silicon",
             "silicon_scales",
@@ -38,24 +39,26 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(*_arg_names("data_path"), type=str, default=None)
     parser.add_argument(*_arg_names("scales"), type=str_to_list, default=None)
-    parser.add_argument(*_arg_names("num_train_per_scale"), type=int, default=40)
-    parser.add_argument(*_arg_names("num_val_per_scale"), type=int, default=10)
-    parser.add_argument(*_arg_names("num_test_per_scale"), type=int, default=0)
+    parser.add_argument(*_arg_names("num_train_per_scale"), type=int, default=70)
+    parser.add_argument(*_arg_names("num_val_per_scale"), type=int, default=15)
+    parser.add_argument(*_arg_names("num_test_per_scale"), type=int, default=15)
     parser.add_argument(*_arg_names("min_temp"), type=int, default=300)
     parser.add_argument(*_arg_names("max_temp"), type=int, default=3000)
     parser.add_argument(*_arg_names("temp_step"), type=int, default=300)
     parser.add_argument(*_arg_names("n_snapshots_per_temp"), type=int, default=50)
     parser.add_argument(*_arg_names("val_temp"), type=int, default=1500)
     parser.add_argument(*_arg_names("val_n_snapshots"), type=int, default=None)
-    parser.add_argument(*_arg_names("num_train"), type=int, default=None)
-    parser.add_argument(*_arg_names("num_val"), type=int, default=None)
-    parser.add_argument(*_arg_names("num_test"), type=int, default=0)
+    parser.add_argument(*_arg_names("num_train"), type=int, default=120)
+    parser.add_argument(*_arg_names("num_val"), type=int, default=20)
+    parser.add_argument(*_arg_names("num_test"), type=int, default=25)
     parser.add_argument(*_arg_names("val_fraction"), type=float, default=0.2)
     parser.add_argument(*_arg_names("precision"), type=str, default="32-true")
     parser.add_argument(
         *_arg_names("checkpoint_dir"),
         type=str,
-        default="checkpoints/main",
+        default=(
+            "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_runs"
+        ),
     )
     parser.add_argument(*_arg_names("resume_from_checkpoint"), type=str, default=None)
     parser.add_argument(*_arg_names("resume_from_wandb"), type=str, default=None)
@@ -74,23 +77,23 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
         default="latest",
         choices=["latest", "best", "final"],
     )
-    parser.add_argument(*_arg_names("generate_video"), type=str_to_bool, default=True)
+    parser.add_argument(*_arg_names("generate_video"), type=str_to_bool, default=False)
     parser.add_argument(*_arg_names("log_artifacts"), type=str_to_bool, default=True)
     parser.add_argument(
         *_arg_names("wandb_mode"),
         type=str,
-        default=None,
+        default="online",
         choices=["online", "offline", "disabled"],
     )
     parser.add_argument(*_arg_names("wandb_group"), type=str, default=None)
     parser.add_argument(*_arg_names("wandb_tags"), type=str_to_list, default=None)
     parser.add_argument(*_arg_names("sweep_yaml"), type=str, default=None)
     parser.add_argument(*_arg_names("convention"), type=str, default="e3nn")
-    parser.add_argument(*_arg_names("max_wall_clock_hours"), type=float, default=None)
+    parser.add_argument(*_arg_names("max_wall_clock_hours"), type=float, default=11.5)
     parser.add_argument(
         *_arg_names("evaluate_test_after_fit"),
         type=str_to_bool,
-        default=False,
+        default=True,
         help="Evaluate the held-out test split exactly once after fitting.",
     )
 
@@ -159,6 +162,7 @@ def main() -> None:
         )
     if args.resume_from_wandb is not None:
         _apply_wandb_resume_metadata(args)
+    _resolve_ablation_metadata(args)
     _normalize_wall_clock_args(args)
     _validate_required_args(args)
     print("=== wandb_run.py starting ===")
@@ -190,6 +194,55 @@ def main() -> None:
             )
         print(f"--- Loaded sweep YAML with keys: {sorted(parsed_yaml.keys())} ---")
     run_training(args, parsed_yaml=parsed_yaml)
+
+
+def _resolve_ablation_metadata(args: argparse.Namespace) -> None:
+    source = getattr(args, "ablation_setting_from", None)
+    if source in (None, ""):
+        return
+
+    source_attr = str(source).strip().replace("-", "_")
+    if not hasattr(args, source_attr):
+        raise ValueError(
+            f"ablation_setting_from={source!r} does not name a known configuration option"
+        )
+    value = getattr(args, source_attr)
+    if value is None:
+        raise ValueError(
+            f"ablation_setting_from={source!r} resolved to None; a concrete value is required"
+        )
+
+    setting = _ablation_value_label(value)
+    args.ablation_setting = setting
+    if getattr(args, "run_name", None) not in (None, "", "mandala-run"):
+        return
+
+    ablation_name = getattr(args, "ablation_name", None)
+    experiment_id = getattr(args, "experiment_id", None)
+    if not ablation_name or not str(ablation_name).startswith("paper_"):
+        raise ValueError(
+            "Automatic ablation run naming requires ablation_name to start with 'paper_'"
+        )
+    if not experiment_id or not str(experiment_id).startswith("paper_"):
+        raise ValueError(
+            "Automatic ablation run naming requires experiment_id to start with 'paper_'"
+        )
+    args.run_name = f"{_slug(str(ablation_name))}_{_slug(setting)}_seed{int(args.seed)}"
+
+
+def _ablation_value_label(value: object) -> str:
+    if isinstance(value, bool):
+        return "enabled" if value else "disabled"
+    if isinstance(value, float):
+        return f"{value:.12g}"
+    return str(value)
+
+
+def _slug(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower()
+    if not slug:
+        raise ValueError(f"Cannot construct a run-name component from {value!r}")
+    return slug
 
 
 def str_to_bool(value):

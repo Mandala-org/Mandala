@@ -131,11 +131,8 @@ def test_main_passes_parsed_yaml_to_run_training(monkeypatch, tmp_path):
     sweep_yaml = tmp_path / "sweep.yaml"
     sweep_yaml.write_text(
         """
-parameters:
-  dataset-kind:
-    value: silicon
-  data-path:
-    value: /tmp/data
+dataset-kind: silicon
+data-path: /tmp/data
 """
     )
     captured = {}
@@ -163,7 +160,55 @@ parameters:
     mod.main()
 
     assert captured["args"].data_path == "/tmp/data"
-    assert captured["parsed_yaml"]["parameters"]["dataset-kind"]["value"] == "silicon"
+    assert captured["parsed_yaml"]["dataset-kind"] == "silicon"
+
+
+def test_ablation_metadata_derives_setting_and_paper_run_name():
+    mod = _load_module()
+    args = mod.setup_argparse(
+        [
+            "--data-path",
+            "/tmp/data",
+            "--experiment-id",
+            "paper_round1",
+            "--ablation-name",
+            "paper_envelope",
+            "--ablation-setting-from",
+            "hamiltonian_envelope_mode",
+            "--hamiltonian-envelope-mode",
+            "multiply_prediction",
+            "--seed",
+            "43",
+        ]
+    )
+
+    mod._resolve_ablation_metadata(args)
+
+    assert args.ablation_setting == "multiply_prediction"
+    assert args.run_name == "paper_envelope_multiply_prediction_seed43"
+
+
+def test_ablation_metadata_uses_readable_boolean_labels():
+    mod = _load_module()
+    args = mod.setup_argparse(
+        [
+            "--data-path",
+            "/tmp/data",
+            "--experiment-id",
+            "paper_round1",
+            "--ablation-name",
+            "paper_pair_radial",
+            "--ablation-setting-from",
+            "pair_conditioned_radial_mlp",
+            "--pair-conditioned-radial-mlp",
+            "false",
+        ]
+    )
+
+    mod._resolve_ablation_metadata(args)
+
+    assert args.ablation_setting == "disabled"
+    assert args.run_name == "paper_pair_radial_disabled_seed42"
 
 
 def test_normalize_wall_clock_args_rejects_both_units():
