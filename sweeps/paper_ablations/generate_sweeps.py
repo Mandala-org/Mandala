@@ -90,7 +90,7 @@ def sweep(
             "wandb-group": fixed(project),
             "wandb-tags": fixed(["paper_ablation", "fresh_initialization"]),
             "checkpoint-dir": fixed(str(CHECKPOINT_ROOT / project)),
-            "experiment-id": fixed("paper_round1_20260718"),
+            "experiment-id": fixed("paper_round1b_20260718"),
             "ablation-name": fixed(project),
             "ablation-setting-from": fixed(treatment_parameter),
             treatment_parameter.replace("_", "-"): varied(treatment_values),
@@ -120,15 +120,15 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
         "slater_exp_quad_soft_wall_envelope.json"
     )
     return {
-        "paper_zncusnses_envelope_11h5.yaml": sweep(
-            slug="zncusnses_envelope_11h5",
+        "paper_zncusnses_envelope_12h.yaml": sweep(
+            slug="zncusnses_envelope_12h",
             dataset_kind="zncusnses",
             treatment_parameter="hamiltonian_envelope_mode",
             treatment_values=["off", "multiply_prediction"],
             extra_parameters={"hamiltonian-envelope-path": zn_envelope},
         ),
-        "paper_zncusnses_pair_radial_mlp_11h5.yaml": sweep(
-            slug="zncusnses_pair_radial_mlp_11h5",
+        "paper_zncusnses_pair_radial_mlp_12h.yaml": sweep(
+            slug="zncusnses_pair_radial_mlp_12h",
             dataset_kind="zncusnses",
             treatment_parameter="pair_conditioned_radial_mlp",
             treatment_values=[False, True],
@@ -137,18 +137,14 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
                 "hamiltonian-envelope-mode": fixed("multiply_prediction"),
             },
         ),
-        "paper_zncusnses_edge_sh_square_11h5.yaml": sweep(
-            slug="zncusnses_edge_sh_square_11h5",
-            dataset_kind="zncusnses",
+        "paper_silicon_edge_sh_square_12h.yaml": sweep(
+            slug="silicon_edge_sh_square_12h",
+            dataset_kind="silicon",
             treatment_parameter="edge_encoder_use_sh_tensor_square",
             treatment_values=[False, True],
-            extra_parameters={
-                "hamiltonian-envelope-path": zn_envelope,
-                "hamiltonian-envelope-mode": fixed("multiply_prediction"),
-            },
         ),
-        "paper_zncusnses_node_aggregation_11h5.yaml": sweep(
-            slug="zncusnses_node_aggregation_11h5",
+        "paper_zncusnses_node_aggregation_12h.yaml": sweep(
+            slug="zncusnses_node_aggregation_12h",
             dataset_kind="zncusnses",
             treatment_parameter="node_update_message_agg",
             treatment_values=["sum", "attention"],
@@ -157,8 +153,8 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
                 "hamiltonian-envelope-mode": fixed("multiply_prediction"),
             },
         ),
-        "paper_zncusnses_shifted_self_11h5.yaml": sweep(
-            slug="zncusnses_shifted_self_11h5",
+        "paper_zncusnses_shifted_self_12h.yaml": sweep(
+            slug="zncusnses_shifted_self_12h",
             dataset_kind="zncusnses",
             treatment_parameter="separate_shifted_self",
             treatment_values=[False, True],
@@ -167,31 +163,42 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
                 "hamiltonian-envelope-mode": fixed("multiply_prediction"),
             },
         ),
-        "paper_siox_envelope_11h5.yaml": sweep(
-            slug="siox_envelope_11h5",
+        "paper_siox_envelope_12h.yaml": sweep(
+            slug="siox_envelope_12h",
             dataset_kind="siox",
             treatment_parameter="hamiltonian_envelope_mode",
             treatment_values=["off", "multiply_prediction"],
             extra_parameters={"hamiltonian-envelope-path": siox_envelope},
         ),
-        "paper_siox_spectral_guidance_11h5.yaml": sweep(
-            slug="siox_spectral_guidance_11h5",
-            dataset_kind="siox",
+        "paper_silicon_spectral_guidance_12h.yaml": sweep(
+            slug="silicon_spectral_guidance_12h",
+            dataset_kind="silicon",
             treatment_parameter="spectral_loss_coef",
             treatment_values=[0.0, 0.003],
             extra_parameters={"spectral-loss-enabled": fixed(True)},
         ),
-        "paper_silicon_observable_guidance_11h5.yaml": sweep(
-            slug="silicon_observable_guidance_11h5",
-            dataset_kind="silicon",
+        "paper_zncusnses_spectral_guidance_12h.yaml": sweep(
+            slug="zncusnses_spectral_guidance_12h",
+            dataset_kind="zncusnses",
+            treatment_parameter="spectral_loss_coef",
+            treatment_values=[0.0, 0.003],
+            extra_parameters={
+                "spectral-loss-enabled": fixed(True),
+                "hamiltonian-envelope-path": zn_envelope,
+                "hamiltonian-envelope-mode": fixed("multiply_prediction"),
+            },
+        ),
+        "paper_siox_energy_guidance_12h.yaml": sweep(
+            slug="siox_energy_guidance_12h",
+            dataset_kind="siox",
             treatment_parameter="loss_coef_observables",
             treatment_values=[0.0, 0.003],
             extra_parameters={
-                "matrix-targets": fixed(["hamiltonian", "density", "overlap"]),
                 "enable-energy": fixed(True),
-                "enable-num-electrons": fixed(True),
                 "train-on-energy": fixed(True),
-                "train-on-num-electrons": fixed(True),
+                "train-on-num-electrons": fixed(False),
+                "train-observables-on-gt": fixed(True),
+                "allow-zero-observable-loss-control": fixed(True),
             },
         ),
     }

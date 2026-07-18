@@ -3,8 +3,8 @@ method: grid
 metric:
   name: val/hamiltonian_mae
   goal: minimize
-project: paper_silicon_observable_guidance_11h5
-name: paper_silicon_observable_guidance_11h5
+project: paper_silicon_spectral_guidance_12h
+name: paper_silicon_spectral_guidance_12h
 run_cap: 10
 command:
 - ${env}
@@ -41,22 +41,22 @@ parameters:
   lr-scheduler-patience:
     value: 120
   wandb-project:
-    value: paper_silicon_observable_guidance_11h5
+    value: paper_silicon_spectral_guidance_12h
   wandb-group:
-    value: paper_silicon_observable_guidance_11h5
+    value: paper_silicon_spectral_guidance_12h
   wandb-tags:
     value:
     - paper_ablation
     - fresh_initialization
   checkpoint-dir:
-    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_silicon_observable_guidance_11h5
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_silicon_spectral_guidance_12h
   experiment-id:
-    value: paper_round1_20260718
+    value: paper_round1b_20260718
   ablation-name:
-    value: paper_silicon_observable_guidance_11h5
+    value: paper_silicon_spectral_guidance_12h
   ablation-setting-from:
-    value: loss_coef_observables
-  loss-coef-observables:
+    value: spectral_loss_coef
+  spectral-loss-coef:
     values:
     - 0.0
     - 0.003
@@ -67,16 +67,5 @@ parameters:
     - 43
     - 44
     - 45
-  matrix-targets:
-    value:
-    - hamiltonian
-    - density
-    - overlap
-  enable-energy:
-    value: true
-  enable-num-electrons:
-    value: true
-  train-on-energy:
-    value: true
-  train-on-num-electrons:
+  spectral-loss-enabled:
     value: true

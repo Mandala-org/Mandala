@@ -1,0 +1,69 @@
+program: scripts/wandb_run.py
+method: grid
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+project: paper_silicon_edge_sh_square_12h
+name: paper_silicon_edge_sh_square_12h
+run_cap: 10
+command:
+- ${env}
+- python
+- -u
+- ${program}
+- ${args}
+parameters:
+  dataset-kind:
+    value: silicon_scales
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/snapshot_cache
+  dataset-device:
+    value: cpu
+  scales:
+    value:
+    - 1
+  num-train-per-scale:
+    value: 70
+  num-val-per-scale:
+    value: 13
+  num-test-per-scale:
+    value: 13
+  cutoff-radius:
+    value: 8.0
+  l-max:
+    value: 4
+  hidden-irreps:
+    value: 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e
+  lr:
+    value: 0.003
+  lr-scheduler-patience:
+    value: 120
+  wandb-project:
+    value: paper_silicon_edge_sh_square_12h
+  wandb-group:
+    value: paper_silicon_edge_sh_square_12h
+  wandb-tags:
+    value:
+    - paper_ablation
+    - fresh_initialization
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_silicon_edge_sh_square_12h
+  experiment-id:
+    value: paper_round1b_20260718
+  ablation-name:
+    value: paper_silicon_edge_sh_square_12h
+  ablation-setting-from:
+    value: edge_encoder_use_sh_tensor_square
+  edge-encoder-use-sh-tensor-square:
+    values:
+    - false
+    - true
+  seed:
+    values:
+    - 41
+    - 42
+    - 43
+    - 44
+    - 45

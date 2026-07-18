@@ -87,6 +87,7 @@ def test_forward_smoke(edge_encoder_style):
     cfg = Config(
         num_layers_gnn=1,
         edge_encoder_style=edge_encoder_style,
+        matrix_targets=["hamiltonian", "overlap", "density"],
         safety_checks=True,
     )
 
@@ -134,6 +135,7 @@ def test_forward_smoke_onthefly_deeph_e3():
         edge_encoder_style="distance",
         precompute_edge_features=False,
         cutoff_radius=3.0,
+        matrix_targets=["hamiltonian", "overlap", "density"],
         safety_checks=True,
         verbosity=0,
     )
@@ -143,7 +145,7 @@ def test_forward_smoke_onthefly_deeph_e3():
         [[0.0, 0.0, 0.0], [0.0, 0.0, 0.8], [0.0, 0.7, 0.0]],
         dtype=cfg.dtype,
     )
-    edge_index, edge_shift, edge_type_idx, _, _, num_self_edges = (
+    edge_index, edge_shift, edge_type_idx, _, _, num_self_edges, _ = (
         compute_graph_features(
             positions=positions,
             box=None,
@@ -176,8 +178,10 @@ def test_forward_smoke_onthefly_deeph_e3():
 def test_forward_h2o_cutoff5_with_split_head():
     cfg = Config(
         cutoff_radius=5.0,
+        matrix_targets=["hamiltonian", "overlap", "density"],
         separate_shifted_self=True,
         head_use_node_embeddings_for_self_edges=True,
+        allow_openmx_positions_box_from_out=True,
         safety_checks=True,
         verbosity=0,
     )
@@ -311,6 +315,7 @@ def test_irrep_metrics_logged_for_all_matrix_targets():
         train_on_energy=False,
         train_on_num_electrons=False,
         log_per_irrep_metrics=True,
+        log_train_metrics=True,
         symmetrize_output=False,
         safety_checks=True,
         verbosity=0,
@@ -365,15 +370,15 @@ def test_irrep_metrics_logged_for_all_matrix_targets():
 
     assert loss.item() == pytest.approx(0.0, abs=1e-7)
     assert any(
-        key.startswith("train/hamiltonian_irrep_") and key.endswith("_l1_elem")
+        key.startswith("train/hamiltonian_irrep_") and key.endswith("_l2_block_abs")
         for key in logged_metrics
     )
     assert any(
-        key.startswith("train/overlap_irrep_") and key.endswith("_l1_elem")
+        key.startswith("train/overlap_irrep_") and key.endswith("_l2_block_abs")
         for key in logged_metrics
     )
     assert any(
-        key.startswith("train/density_irrep_") and key.endswith("_l1_elem")
+        key.startswith("train/density_irrep_") and key.endswith("_l2_block_abs")
         for key in logged_metrics
     )
 
@@ -603,6 +608,41 @@ def test_invalid_observable_training_configs_raise():
                 verbosity=0,
             ),
         )
+
+
+@pytest.mark.unit
+def test_zero_weight_energy_guidance_control_is_valid():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    mapper = BlockIrrepMapper(orb_cfg)
+
+    with pytest.raises(ValueError, match="allow_zero_observable_loss_control"):
+        E3GNN(
+            mapper,
+            Config(
+                matrix_targets=["hamiltonian"],
+                enable_energy=True,
+                train_on_energy=True,
+                train_observables_on_gt=True,
+                loss_coef_observables=0.0,
+                verbosity=0,
+            ),
+        )
+
+    model = E3GNN(
+        mapper,
+        Config(
+            matrix_targets=["hamiltonian"],
+            enable_energy=True,
+            train_on_energy=True,
+            train_observables_on_gt=True,
+            loss_coef_observables=0.0,
+            allow_zero_observable_loss_control=True,
+            verbosity=0,
+        ),
+    )
+
+    assert model.cfg.train_on_energy is True
+    assert model.cfg.loss_coef_observables == 0.0
 
 
 @pytest.mark.unit

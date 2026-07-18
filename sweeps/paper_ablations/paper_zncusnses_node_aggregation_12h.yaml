@@ -3,8 +3,8 @@ method: grid
 metric:
   name: val/hamiltonian_mae
   goal: minimize
-project: paper_zncusnses_node_aggregation_11h5
-name: paper_zncusnses_node_aggregation_11h5
+project: paper_zncusnses_node_aggregation_12h
+name: paper_zncusnses_node_aggregation_12h
 run_cap: 10
 command:
 - ${env}
@@ -25,19 +25,19 @@ parameters:
     value:
     - 1
   wandb-project:
-    value: paper_zncusnses_node_aggregation_11h5
+    value: paper_zncusnses_node_aggregation_12h
   wandb-group:
-    value: paper_zncusnses_node_aggregation_11h5
+    value: paper_zncusnses_node_aggregation_12h
   wandb-tags:
     value:
     - paper_ablation
     - fresh_initialization
   checkpoint-dir:
-    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_node_aggregation_11h5
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_node_aggregation_12h
   experiment-id:
-    value: paper_round1_20260718
+    value: paper_round1b_20260718
   ablation-name:
-    value: paper_zncusnses_node_aggregation_11h5
+    value: paper_zncusnses_node_aggregation_12h
   ablation-setting-from:
     value: node_update_message_agg
   node-update-message-agg:

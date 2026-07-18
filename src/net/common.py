@@ -110,7 +110,7 @@ class Config:
     # ---------------------- training ------------------------------------
     lr: float = 0.010803383053097332
     max_epochs: int = 10000
-    max_wall_clock_seconds: float | None = 11.5 * 3600.0
+    max_wall_clock_seconds: float | None = 12.0 * 3600.0
     batch_size: int = 1
     use_lr_scheduler: bool = True
     lr_scheduler_factor: float = 0.5
@@ -162,6 +162,7 @@ class Config:
     # -------------- loss weighting --------------------------------------
     loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1
     loss_coef_observables: float = 0.0
+    allow_zero_observable_loss_control: bool = False
     observable_loss_kind: str = "mae"  # mse | mae
     loss_coef_forces: float = 0.0
     loss_coef_stress: float = 0.0

@@ -73,13 +73,26 @@ class E3GNN(pl.LightningModule):
         # automatically by PyTorch Lightning.
         self.mapper: BlockIrrepMapper = mapper
 
-        if cfg.train_on_energy and cfg.loss_coef_observables == 0.0:
+        allow_zero_observable_control = bool(
+            getattr(cfg, "allow_zero_observable_loss_control", False)
+        )
+        if (
+            cfg.train_on_energy
+            and cfg.loss_coef_observables == 0.0
+            and not allow_zero_observable_control
+        ):
             raise ValueError(
-                "If training on energy, loss_coef_observables must be nonzero."
+                "If training on energy, loss_coef_observables must be nonzero unless "
+                "allow_zero_observable_loss_control=True."
             )
-        if cfg.train_on_num_electrons and cfg.loss_coef_observables == 0.0:
+        if (
+            cfg.train_on_num_electrons
+            and cfg.loss_coef_observables == 0.0
+            and not allow_zero_observable_control
+        ):
             raise ValueError(
-                "If training on number of electrons, loss_coef_observables must be nonzero."
+                "If training on number of electrons, loss_coef_observables must be "
+                "nonzero unless allow_zero_observable_loss_control=True."
             )
         if cfg.train_on_forces and cfg.loss_coef_forces == 0.0:
             raise ValueError("If training on forces, loss_coef_forces must be nonzero.")

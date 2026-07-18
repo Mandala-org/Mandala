@@ -3,8 +3,8 @@ method: grid
 metric:
   name: val/hamiltonian_mae
   goal: minimize
-project: paper_siox_spectral_guidance_11h5
-name: paper_siox_spectral_guidance_11h5
+project: paper_siox_energy_guidance_12h
+name: paper_siox_energy_guidance_12h
 run_cap: 10
 command:
 - ${env}
@@ -30,22 +30,22 @@ parameters:
   lr:
     value: 0.0133
   wandb-project:
-    value: paper_siox_spectral_guidance_11h5
+    value: paper_siox_energy_guidance_12h
   wandb-group:
-    value: paper_siox_spectral_guidance_11h5
+    value: paper_siox_energy_guidance_12h
   wandb-tags:
     value:
     - paper_ablation
     - fresh_initialization
   checkpoint-dir:
-    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_siox_spectral_guidance_11h5
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_siox_energy_guidance_12h
   experiment-id:
-    value: paper_round1_20260718
+    value: paper_round1b_20260718
   ablation-name:
-    value: paper_siox_spectral_guidance_11h5
+    value: paper_siox_energy_guidance_12h
   ablation-setting-from:
-    value: spectral_loss_coef
-  spectral-loss-coef:
+    value: loss_coef_observables
+  loss-coef-observables:
     values:
     - 0.0
     - 0.003
@@ -56,5 +56,13 @@ parameters:
     - 43
     - 44
     - 45
-  spectral-loss-enabled:
+  enable-energy:
+    value: true
+  train-on-energy:
+    value: true
+  train-on-num-electrons:
+    value: false
+  train-observables-on-gt:
+    value: true
+  allow-zero-observable-loss-control:
     value: true

@@ -20,12 +20,13 @@ The first round consists of:
 
 - ZnCuSnSeS: envelope factorization.
 - ZnCuSnSeS: pair-conditioned radial MLP.
-- ZnCuSnSeS: spherical-harmonic tensor-square edge encoding.
+- Perturbed silicon: spherical-harmonic tensor-square edge encoding.
 - ZnCuSnSeS: sum versus attention node aggregation.
 - ZnCuSnSeS: separate shifted-self handling.
 - SiOx: envelope factorization.
-- SiOx: Gamma-point spectral guidance (`0` versus `0.003`).
-- Perturbed silicon: energy/electron-count observable guidance (`0` versus `0.003`).
+- Perturbed silicon: Gamma-point spectral guidance (`0` versus `0.003`).
+- ZnCuSnSeS: Gamma-point spectral guidance (`0` versus `0.003`).
+- SiOx: energy guidance using ground-truth density (`0` versus `0.003`).
 
 The baseline labels emitted by the runner are `off`, `disabled`, `sum`, or `0`,
 as appropriate. Boolean treatments are recorded as `disabled`/`enabled`; numeric
@@ -35,20 +36,19 @@ coefficients retain their numeric text. Run names have the form
 The shared defaults include the selected two-layer attention backbone, rich edge
 encoding, SH tensor-square features, split pair heads, separate shifted-self
 handling, MSE matrix loss, strict edge matching, `val/hamiltonian_mae` scheduling
-and checkpointing, an 11.5-hour wall-clock budget, and fresh initialization.
+and checkpointing, a 12-hour wall-clock budget, and fresh initialization.
 Dataset-specific YAML overrides are limited to paths, split sizes, cutoffs,
 representations, learning rates, and the mechanism under test.
 
 Create a sweep with `wandb sweep sweeps/paper_ablations/<file>.yaml`. Run enough
 agents to complete its ten jobs; `run_cap: 10` prevents additional assignments.
-To register all eight sweeps in one pass, run:
+To register all nine sweeps in one pass, run:
 
 ```bash
 bash sweeps/paper_ablations/create_all_sweeps.sh
 ```
 
-Record the eight printed sweep IDs. Launching two agents for each ID uses all 16
-nodes and completes five 11.5-hour waves, or approximately 57.5 wall-clock hours.
+Record the nine printed sweep IDs. Each sweep contains ten 12-hour runs.
 
 After a sweep finishes, validate its paired design with:
 

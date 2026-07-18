@@ -89,7 +89,7 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(*_arg_names("wandb_tags"), type=str_to_list, default=None)
     parser.add_argument(*_arg_names("sweep_yaml"), type=str, default=None)
     parser.add_argument(*_arg_names("convention"), type=str, default="e3nn")
-    parser.add_argument(*_arg_names("max_wall_clock_hours"), type=float, default=11.5)
+    parser.add_argument(*_arg_names("max_wall_clock_hours"), type=float, default=12.0)
     parser.add_argument(
         *_arg_names("evaluate_test_after_fit"),
         type=str_to_bool,

@@ -3,8 +3,8 @@ method: grid
 metric:
   name: val/hamiltonian_mae
   goal: minimize
-project: paper_zncusnses_edge_sh_square_11h5
-name: paper_zncusnses_edge_sh_square_11h5
+project: paper_zncusnses_envelope_12h
+name: paper_zncusnses_envelope_12h
 run_cap: 10
 command:
 - ${env}
@@ -25,25 +25,25 @@ parameters:
     value:
     - 1
   wandb-project:
-    value: paper_zncusnses_edge_sh_square_11h5
+    value: paper_zncusnses_envelope_12h
   wandb-group:
-    value: paper_zncusnses_edge_sh_square_11h5
+    value: paper_zncusnses_envelope_12h
   wandb-tags:
     value:
     - paper_ablation
     - fresh_initialization
   checkpoint-dir:
-    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_edge_sh_square_11h5
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_envelope_12h
   experiment-id:
-    value: paper_round1_20260718
+    value: paper_round1b_20260718
   ablation-name:
-    value: paper_zncusnses_edge_sh_square_11h5
+    value: paper_zncusnses_envelope_12h
   ablation-setting-from:
-    value: edge_encoder_use_sh_tensor_square
-  edge-encoder-use-sh-tensor-square:
+    value: hamiltonian_envelope_mode
+  hamiltonian-envelope-mode:
     values:
-    - false
-    - true
+    - 'off'
+    - multiply_prediction
   seed:
     values:
     - 41
@@ -53,5 +53,3 @@ parameters:
     - 45
   hamiltonian-envelope-path:
     value: eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json
-  hamiltonian-envelope-mode:
-    value: multiply_prediction
