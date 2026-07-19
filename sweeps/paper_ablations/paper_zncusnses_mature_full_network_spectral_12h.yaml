@@ -3,8 +3,8 @@ method: grid
 metric:
   name: val/hamiltonian_mae
   goal: minimize
-project: paper_zncusnses_mature_head_spectral_12h
-name: paper_zncusnses_mature_head_spectral_12h
+project: paper_zncusnses_mature_full_network_spectral_12h
+name: paper_zncusnses_mature_full_network_spectral_12h
 run_cap: 10
 command:
 - ${env}
@@ -25,15 +25,15 @@ parameters:
     value:
     - 1
   wandb-project:
-    value: paper_zncusnses_mature_head_spectral_12h
+    value: paper_zncusnses_mature_full_network_spectral_12h
   wandb-group:
-    value: paper_zncusnses_mature_head_spectral_12h
+    value: paper_zncusnses_mature_full_network_spectral_12h
   wandb-tags:
     value:
     - paper_ablation
     - checkpoint_finetuning
   checkpoint-dir:
-    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_mature_head_spectral_12h
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_mature_full_network_spectral_12h
   resume-from-checkpoint:
     value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_hamiltonian_envelope_stageA_selected_47h5/dandy-sweep-34-restart47h5/best_model.pt
   resume-mode:
@@ -47,7 +47,7 @@ parameters:
   experiment-id:
     value: paper_round2_20260719
   ablation-name:
-    value: paper_zncusnses_mature_head_spectral_12h
+    value: paper_zncusnses_mature_full_network_spectral_12h
   ablation-setting-from:
     value: spectral_loss_coef
   spectral-loss-coef:
@@ -67,8 +67,6 @@ parameters:
     value: 30000
   accumulate-grad-batches:
     value: 4
-  freeze-backbone-train-heads-only:
-    value: true
   hamiltonian-envelope-path:
     value: eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json
   hamiltonian-envelope-mode:

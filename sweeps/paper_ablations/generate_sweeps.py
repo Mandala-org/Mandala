@@ -273,8 +273,8 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
                 "experiment-id": fixed("paper_round2_20260719"),
             },
         ),
-        "paper_zncusnses_mature_head_spectral_12h.yaml": finetune_sweep(
-            slug="zncusnses_mature_head_spectral_12h",
+        "paper_zncusnses_mature_full_network_spectral_12h.yaml": finetune_sweep(
+            slug="zncusnses_mature_full_network_spectral_12h",
             dataset_kind="zncusnses",
             treatment_parameter="spectral_loss_coef",
             treatment_values=[0.0, 1.0e-3],
@@ -285,7 +285,6 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
                 "lr": fixed(1.0e-5),
                 "max-epochs": fixed(30000),
                 "accumulate-grad-batches": fixed(4),
-                "freeze-backbone-train-heads-only": fixed(True),
                 "hamiltonian-envelope-path": zn_envelope,
                 "hamiltonian-envelope-mode": fixed("multiply_prediction"),
                 "spectral-loss-enabled": fixed(True),
