@@ -111,6 +111,50 @@ def sweep(
     }
 
 
+def finetune_sweep(
+    *,
+    slug: str,
+    dataset_kind: str,
+    treatment_parameter: str,
+    treatment_values: list[Any],
+    resume_from_checkpoint: str,
+    max_wall_clock_hours: float,
+    extra_parameters: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    project = f"paper_{slug}"
+    params = deepcopy(dataset_parameters(dataset_kind))
+    params.update(
+        {
+            "wandb-project": fixed(project),
+            "wandb-group": fixed(project),
+            "wandb-tags": fixed(["paper_ablation", "checkpoint_finetuning"]),
+            "checkpoint-dir": fixed(str(CHECKPOINT_ROOT / project)),
+            "resume-from-checkpoint": fixed(resume_from_checkpoint),
+            "resume-mode": fixed("best"),
+            "compatibility": fixed(True),
+            "max-wall-clock-hours": fixed(max_wall_clock_hours),
+            "data-split-seed": fixed(42),
+            "experiment-id": fixed("paper_round2_20260719"),
+            "ablation-name": fixed(project),
+            "ablation-setting-from": fixed(treatment_parameter),
+            treatment_parameter.replace("_", "-"): varied(treatment_values),
+            "seed": varied(SEEDS),
+        }
+    )
+    if extra_parameters:
+        params.update(extra_parameters)
+    return {
+        "program": "scripts/wandb_run.py",
+        "method": "grid",
+        "metric": {"name": "val/hamiltonian_mae", "goal": "minimize"},
+        "project": project,
+        "name": project,
+        "run_cap": len(treatment_values) * len(SEEDS),
+        "command": ["${env}", "python", "-u", "${program}", "${args}"],
+        "parameters": params,
+    }
+
+
 def build_sweeps() -> dict[str, dict[str, Any]]:
     zn_envelope = fixed(
         "eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json"
@@ -118,6 +162,22 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
     siox_envelope = fixed(
         "eval_outputs/SiOx_0_50372000_radial_fit_study/"
         "slater_exp_quad_soft_wall_envelope.json"
+    )
+    zn_mature_checkpoint = (
+        "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/"
+        "ZnCuSnSeS_hamiltonian_envelope_stageA_selected_47h5/"
+        "dandy-sweep-34-restart47h5/best_model.pt"
+    )
+    silicon_sleek75_checkpoint = (
+        "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/"
+        "silicon_perturbed_scales_hamiltonian_compat_11h5/"
+        "sleek-sweep-75/best_model.pt"
+    )
+    siox_mature_checkpoint = (
+        "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/"
+        "SiOx_hamiltonian_envelope_selected_95h8_mae/"
+        "dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027/"
+        "best_model.pt"
     )
     return {
         "paper_zncusnses_envelope_12h.yaml": sweep(
@@ -199,6 +259,118 @@ def build_sweeps() -> dict[str, dict[str, Any]]:
                 "train-on-num-electrons": fixed(False),
                 "train-observables-on-gt": fixed(True),
                 "allow-zero-observable-loss-control": fixed(True),
+            },
+        ),
+        "paper_zncusnses_envelope_47h.yaml": sweep(
+            slug="zncusnses_envelope_47h",
+            dataset_kind="zncusnses",
+            treatment_parameter="hamiltonian_envelope_mode",
+            treatment_values=["off", "multiply_prediction"],
+            extra_parameters={
+                "hamiltonian-envelope-path": zn_envelope,
+                "max-wall-clock-hours": fixed(47.0),
+                "max-epochs": fixed(30000),
+                "experiment-id": fixed("paper_round2_20260719"),
+            },
+        ),
+        "paper_zncusnses_mature_head_spectral_12h.yaml": finetune_sweep(
+            slug="zncusnses_mature_head_spectral_12h",
+            dataset_kind="zncusnses",
+            treatment_parameter="spectral_loss_coef",
+            treatment_values=[0.0, 1.0e-3],
+            resume_from_checkpoint=zn_mature_checkpoint,
+            max_wall_clock_hours=12.0,
+            extra_parameters={
+                "scales": fixed([1]),
+                "lr": fixed(1.0e-5),
+                "max-epochs": fixed(30000),
+                "accumulate-grad-batches": fixed(4),
+                "freeze-backbone-train-heads-only": fixed(True),
+                "hamiltonian-envelope-path": zn_envelope,
+                "hamiltonian-envelope-mode": fixed("multiply_prediction"),
+                "spectral-loss-enabled": fixed(True),
+                "train-on-spectral": fixed(True),
+                "spectral-loss-kind": fixed("huber"),
+                "spectral-loss-kmesh": fixed("2x2x2"),
+                "spectral-loss-window-ev": fixed(10.0),
+                "spectral-loss-taper-ev": fixed(2.0),
+                "spectral-loss-huber-delta-ev": fixed(0.1),
+                "spectral-loss-overlap-psd-cleanup": fixed(True),
+                "spectral-loss-overlap-jitter": fixed(False),
+                "checkpoint-monitor": fixed("val/hamiltonian_mae"),
+            },
+        ),
+        "paper_silicon_sleek75_energy_guidance_47h.yaml": finetune_sweep(
+            slug="silicon_sleek75_energy_guidance_47h",
+            dataset_kind="silicon",
+            treatment_parameter="loss_coef_observables",
+            treatment_values=[0.0, 1.0e-3],
+            resume_from_checkpoint=silicon_sleek75_checkpoint,
+            max_wall_clock_hours=47.0,
+            extra_parameters={
+                "scales": fixed([1]),
+                "lr": fixed(3.0e-4),
+                "max-epochs": fixed(30000),
+                "hidden-base-dim": fixed(32),
+                "hidden-irreps": fixed(
+                    "128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+" "16x3e+16x3o+16x4e"
+                ),
+                "use-self-connection": fixed(True),
+                "node-update-attention-scalar-dim": fixed(128),
+                "internal-e3mlp-variant": fixed("film"),
+                "head-e3mlp-variant": fixed("film"),
+                "neck-depth": fixed(2),
+                "head-e3mlp-layers": fixed(2),
+                "head-diag-output-scale": fixed(2.0),
+                "e3mlp-film-hidden-dim": fixed(128),
+                "e3mlp-residual-scale": fixed(1.0),
+                "radial-layers": fixed([128, 128]),
+                "matrix-targets": fixed(["hamiltonian", "density", "overlap"]),
+                "loss-l1-fraction": fixed(1.0),
+                "observable-loss-kind": fixed("mae"),
+                "enable-energy": fixed(True),
+                "enable-num-electrons": fixed(True),
+                "train-on-energy": fixed(True),
+                "train-on-num-electrons": fixed(False),
+                "train-observables-on-gt": fixed(False),
+                "allow-zero-observable-loss-control": fixed(True),
+                "lr-scheduler-target": fixed("val/loss_total"),
+                "lr-scheduler-patience": fixed(120),
+                "revert-monitor": fixed("val/loss_total"),
+                "revert-decay-rate": fixed(0.8),
+                "checkpoint-monitor": fixed("val/hamiltonian_mae"),
+            },
+        ),
+        "paper_siox_mature_energy_guidance_12h.yaml": finetune_sweep(
+            slug="siox_mature_energy_guidance_12h",
+            dataset_kind="siox",
+            treatment_parameter="loss_coef_observables",
+            treatment_values=[0.0, 1.0e-4, 1.0e-3],
+            resume_from_checkpoint=siox_mature_checkpoint,
+            max_wall_clock_hours=12.0,
+            extra_parameters={
+                "num-train": fixed(120),
+                "num-val": fixed(20),
+                "num-test": fixed(25),
+                "lr": fixed(5.0e-5),
+                "max-epochs": fixed(30000),
+                "hidden-irreps": fixed(
+                    "128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+" "16x3e+16x3o+8x4e"
+                ),
+                "neck-depth": fixed(1),
+                "matrix-targets": fixed(["hamiltonian"]),
+                "loss-l1-fraction": fixed(1.0),
+                "observable-loss-kind": fixed("mae"),
+                "enable-energy": fixed(True),
+                "enable-num-electrons": fixed(False),
+                "train-on-energy": fixed(True),
+                "train-on-num-electrons": fixed(False),
+                "train-observables-on-gt": fixed(True),
+                "allow-zero-observable-loss-control": fixed(True),
+                "hamiltonian-envelope-path": siox_envelope,
+                "hamiltonian-envelope-mode": fixed("multiply_prediction"),
+                "lr-scheduler-target": fixed("val/loss_total"),
+                "checkpoint-monitor": fixed("val/hamiltonian_mae"),
             },
         ),
     }

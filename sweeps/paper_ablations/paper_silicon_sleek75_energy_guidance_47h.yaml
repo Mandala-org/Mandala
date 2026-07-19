@@ -1,0 +1,134 @@
+program: scripts/wandb_run.py
+method: grid
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+project: paper_silicon_sleek75_energy_guidance_47h
+name: paper_silicon_sleek75_energy_guidance_47h
+run_cap: 10
+command:
+- ${env}
+- python
+- -u
+- ${program}
+- ${args}
+parameters:
+  dataset-kind:
+    value: silicon_scales
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/snapshot_cache
+  dataset-device:
+    value: cpu
+  scales:
+    value:
+    - 1
+  num-train-per-scale:
+    value: 70
+  num-val-per-scale:
+    value: 13
+  num-test-per-scale:
+    value: 13
+  cutoff-radius:
+    value: 8.0
+  l-max:
+    value: 4
+  hidden-irreps:
+    value: 128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+16x3e+16x3o+16x4e
+  lr:
+    value: 0.0003
+  lr-scheduler-patience:
+    value: 120
+  wandb-project:
+    value: paper_silicon_sleek75_energy_guidance_47h
+  wandb-group:
+    value: paper_silicon_sleek75_energy_guidance_47h
+  wandb-tags:
+    value:
+    - paper_ablation
+    - checkpoint_finetuning
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_silicon_sleek75_energy_guidance_47h
+  resume-from-checkpoint:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_perturbed_scales_hamiltonian_compat_11h5/sleek-sweep-75/best_model.pt
+  resume-mode:
+    value: best
+  compatibility:
+    value: true
+  max-wall-clock-hours:
+    value: 47.0
+  data-split-seed:
+    value: 42
+  experiment-id:
+    value: paper_round2_20260719
+  ablation-name:
+    value: paper_silicon_sleek75_energy_guidance_47h
+  ablation-setting-from:
+    value: loss_coef_observables
+  loss-coef-observables:
+    values:
+    - 0.0
+    - 0.001
+  seed:
+    values:
+    - 41
+    - 42
+    - 43
+    - 44
+    - 45
+  max-epochs:
+    value: 30000
+  hidden-base-dim:
+    value: 32
+  use-self-connection:
+    value: true
+  node-update-attention-scalar-dim:
+    value: 128
+  internal-e3mlp-variant:
+    value: film
+  head-e3mlp-variant:
+    value: film
+  neck-depth:
+    value: 2
+  head-e3mlp-layers:
+    value: 2
+  head-diag-output-scale:
+    value: 2.0
+  e3mlp-film-hidden-dim:
+    value: 128
+  e3mlp-residual-scale:
+    value: 1.0
+  radial-layers:
+    value:
+    - 128
+    - 128
+  matrix-targets:
+    value:
+    - hamiltonian
+    - density
+    - overlap
+  loss-l1-fraction:
+    value: 1.0
+  observable-loss-kind:
+    value: mae
+  enable-energy:
+    value: true
+  enable-num-electrons:
+    value: true
+  train-on-energy:
+    value: true
+  train-on-num-electrons:
+    value: false
+  train-observables-on-gt:
+    value: false
+  allow-zero-observable-loss-control:
+    value: true
+  lr-scheduler-target:
+    value: val/loss_total
+  revert-monitor:
+    value: val/loss_total
+  revert-decay-rate:
+    value: 0.8
+  checkpoint-monitor:
+    value: val/hamiltonian_mae

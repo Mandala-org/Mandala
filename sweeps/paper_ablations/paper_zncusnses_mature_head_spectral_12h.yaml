@@ -1,0 +1,95 @@
+program: scripts/wandb_run.py
+method: grid
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+project: paper_zncusnses_mature_head_spectral_12h
+name: paper_zncusnses_mature_head_spectral_12h
+run_cap: 10
+command:
+- ${env}
+- python
+- -u
+- ${program}
+- ${args}
+parameters:
+  dataset-kind:
+    value: ZnCuSnSeS
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache
+  dataset-device:
+    value: cpu
+  scales:
+    value:
+    - 1
+  wandb-project:
+    value: paper_zncusnses_mature_head_spectral_12h
+  wandb-group:
+    value: paper_zncusnses_mature_head_spectral_12h
+  wandb-tags:
+    value:
+    - paper_ablation
+    - checkpoint_finetuning
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_zncusnses_mature_head_spectral_12h
+  resume-from-checkpoint:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_hamiltonian_envelope_stageA_selected_47h5/dandy-sweep-34-restart47h5/best_model.pt
+  resume-mode:
+    value: best
+  compatibility:
+    value: true
+  max-wall-clock-hours:
+    value: 12.0
+  data-split-seed:
+    value: 42
+  experiment-id:
+    value: paper_round2_20260719
+  ablation-name:
+    value: paper_zncusnses_mature_head_spectral_12h
+  ablation-setting-from:
+    value: spectral_loss_coef
+  spectral-loss-coef:
+    values:
+    - 0.0
+    - 0.001
+  seed:
+    values:
+    - 41
+    - 42
+    - 43
+    - 44
+    - 45
+  lr:
+    value: 1.0e-05
+  max-epochs:
+    value: 30000
+  accumulate-grad-batches:
+    value: 4
+  freeze-backbone-train-heads-only:
+    value: true
+  hamiltonian-envelope-path:
+    value: eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json
+  hamiltonian-envelope-mode:
+    value: multiply_prediction
+  spectral-loss-enabled:
+    value: true
+  train-on-spectral:
+    value: true
+  spectral-loss-kind:
+    value: huber
+  spectral-loss-kmesh:
+    value: 2x2x2
+  spectral-loss-window-ev:
+    value: 10.0
+  spectral-loss-taper-ev:
+    value: 2.0
+  spectral-loss-huber-delta-ev:
+    value: 0.1
+  spectral-loss-overlap-psd-cleanup:
+    value: true
+  spectral-loss-overlap-jitter:
+    value: false
+  checkpoint-monitor:
+    value: val/hamiltonian_mae
