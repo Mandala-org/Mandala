@@ -37,7 +37,7 @@ parameters:
   hidden-irreps:
     value: 128x0e+128x0o+64x1e+64x1o+32x2e+32x2o+16x3e+16x3o+16x4e
   lr:
-    value: 0.0003
+    value: 0.002
   lr-scheduler-patience:
     value: 120
   wandb-project:
@@ -121,13 +121,13 @@ parameters:
   train-on-num-electrons:
     value: false
   train-observables-on-gt:
-    value: false
+    value: true
   allow-zero-observable-loss-control:
     value: true
   lr-scheduler-target:
-    value: val/loss_total
+    value: val/hamiltonian_mae
   revert-monitor:
-    value: val/loss_total
+    value: val/hamiltonian_mae
   revert-decay-rate:
     value: 0.8
   checkpoint-monitor:

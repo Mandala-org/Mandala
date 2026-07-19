@@ -28,7 +28,7 @@ parameters:
   hidden-irreps:
     value: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
   lr:
-    value: 5.0e-05
+    value: 0.0005
   wandb-project:
     value: paper_siox_mature_energy_guidance_12h
   wandb-group:
@@ -86,8 +86,6 @@ parameters:
     value: mae
   enable-energy:
     value: true
-  enable-num-electrons:
-    value: false
   train-on-energy:
     value: true
   train-on-num-electrons:
@@ -101,6 +99,8 @@ parameters:
   hamiltonian-envelope-mode:
     value: multiply_prediction
   lr-scheduler-target:
-    value: val/loss_total
+    value: val/hamiltonian_mae
+  revert-monitor:
+    value: val/hamiltonian_mae
   checkpoint-monitor:
     value: val/hamiltonian_mae

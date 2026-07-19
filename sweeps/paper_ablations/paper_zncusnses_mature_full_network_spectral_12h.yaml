@@ -62,11 +62,9 @@ parameters:
     - 44
     - 45
   lr:
-    value: 1.0e-05
+    value: 0.003
   max-epochs:
     value: 30000
-  accumulate-grad-batches:
-    value: 4
   hamiltonian-envelope-path:
     value: eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json
   hamiltonian-envelope-mode:
@@ -89,5 +87,9 @@ parameters:
     value: true
   spectral-loss-overlap-jitter:
     value: false
+  lr-scheduler-target:
+    value: val/hamiltonian_mae
+  revert-monitor:
+    value: val/hamiltonian_mae
   checkpoint-monitor:
     value: val/hamiltonian_mae
