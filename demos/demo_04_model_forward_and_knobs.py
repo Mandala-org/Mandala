@@ -18,6 +18,7 @@ info_path = REPO_ROOT / "data" / "small" / "H2O" / "original" / "H2O.info.out"
 
 cfg = Config(
     cutoff_radius=7.0,
+    allow_openmx_positions_box_from_out=True,
     matrix_targets=["hamiltonian", "overlap", "density"],
     train_target="matrix",
     num_layers_gnn=1,
@@ -43,7 +44,7 @@ x, y = train_ds[0]
 
 model = E3GNN(mapper=mapper, cfg=cfg)
 t0 = time.perf_counter()
-preds = model(x)
+preds = model.predict_matrices(x)
 t1 = time.perf_counter()
 
 # %%
@@ -54,7 +55,7 @@ print("head_e3mlp_variant:", cfg.head_e3mlp_variant)
 print("parameter_count:", sum(p.numel() for p in model.parameters()))
 print("forward_time_sec:", round(t1 - t0, 4))
 
-print("Head outputs")
+print("Predicted block matrices")
 for name, pred in preds.items():
     print(
         name,
@@ -67,6 +68,7 @@ for name, pred in preds.items():
 # %%
 cfg_alt = Config(
     cutoff_radius=7.0,
+    allow_openmx_positions_box_from_out=True,
     matrix_targets=["hamiltonian"],
     train_target="matrix",
     num_layers_gnn=1,
@@ -86,7 +88,7 @@ cfg_alt = Config(
 )
 
 model_alt = E3GNN(mapper=mapper, cfg=cfg_alt)
-preds_alt = model_alt(x)
+preds_alt = model_alt.predict_matrices(x)
 
 print("Alternative knobs")
 print("tp_type:", cfg_alt.tp_type)

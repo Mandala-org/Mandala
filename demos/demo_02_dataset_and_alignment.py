@@ -16,6 +16,7 @@ info_path = REPO_ROOT / "data" / "small" / "H2O" / "original" / "H2O.info.out"
 
 cfg_matrix = Config(
     cutoff_radius=7.0,
+    allow_openmx_positions_box_from_out=True,
     train_target="matrix",
     matrix_targets=["hamiltonian", "overlap", "density"],
     apply_cutoff_to_targets=True,
@@ -33,6 +34,7 @@ x_matrix, y_matrix = train_matrix_ds[0]
 # %%
 cfg_irreps = Config(
     cutoff_radius=7.0,
+    allow_openmx_positions_box_from_out=True,
     train_target="irreps",
     matrix_targets=["hamiltonian", "overlap", "density"],
     apply_cutoff_to_targets=True,

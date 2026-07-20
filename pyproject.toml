@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mandala"
 version = "0.0.1"
 description = "E(3)-equivariant GNN for sparse DFT matrices"
+license = { file = "LICENSE" }
 dependencies = [
     "torch>=2.1",
     "torch-scatter>=2.1",
@@ -27,7 +28,7 @@ dependencies = [
     "scipy",
     "imageio[ffmpeg]",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.11"
 
 [project.optional-dependencies]
 dev = [

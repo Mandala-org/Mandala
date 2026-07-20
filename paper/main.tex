@@ -9,6 +9,20 @@
 \usepackage{longtable}
 \usepackage{array}
 \usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue!65!black},
+  commentstyle=\color{green!40!black},
+  stringstyle=\color{orange!55!black},
+  frame=single,
+  breaklines=true,
+  columns=fullflexible,
+  showstringspaces=false
+}
 
 \journal{Computer Physics Communications}
 
@@ -21,7 +35,7 @@
 
 \begin{frontmatter}
 
-\title{MANDALA: An E(3)-Equivariant Graph Neural Network Framework for Learning Sparse Electronic-Structure Hamiltonian and Density Matrices with Energy and Force Supervision}
+\title{MANDALA: An E(3)-Equivariant Graph Neural Network Framework for Learning Sparse Electronic-Structure Hamiltonian and Density Matrices with Operator-Derived Observable Guidance}
 
 \author[casus,hzdr,uwr]{Bartosz Brzoza}
 \author[casus,hzdr,wut]{Wiktoria Szopa}
@@ -29,7 +43,9 @@
 \author[casus,hzdr]{Vincent Martinetto}
 \author[hzdr]{Mani Lokamani}
 \author[casus,hzdr]{Thomas D. Kühne}
-\author[casus,hzdr]{Attila Cangi}
+\author[casus,hzdr]{Attila Cangi\corref{cor1}}
+\ead{a.cangi@hzdr.de}
+\cortext[cor1]{Corresponding author}
 
 \address[casus]{Center for Advanced Systems Understanding, 02826 Görlitz, Germany}
 \address[hzdr]{Helmholtz-Zentrum Dresden-Rossendorf, 01328 Dresden, Germany}
@@ -40,13 +56,15 @@
 Electronic-structure calculations based on Kohn-Sham density functional theory remain indispensable in computational materials science and chemistry. Their computational cost, however, limits accessible system sizes and simulation times. It also makes systematic exploration of model architectures and training strategies on top of such data expensive. At the same time, conventional machine-learning interatomic models usually target only energies and forces, which leaves out the operator-level electronic information required for many scientifically relevant analyses. \texttt{Mandala} was developed to address this gap by providing a framework for learning sparse electronic-structure operators directly, while preserving access to derived observables and Hamiltonian-based analysis.
 We present \texttt{Mandala}, a modular software framework for learning block-sparse electronic-structure matrices with E(3)-equivariant graph neural networks. The framework is built around a unified representation of atom-resolved Hamiltonian, overlap, and density matrices, together with reusable abstractions for basis conversion, sparse block handling, irrep mapping, graph construction, model definition, and training. This design allows \texttt{Mandala} to support multiple electronic-structure backends, heterogeneous chemical compositions, and a wide range of neural architecture variants within one workflow.
 
-A distinguishing feature of \texttt{Mandala} is that it does not stop at matrix reconstruction. Predicted operators can be contracted to obtain energy observables and electron counts, differentiated with respect to atomic coordinates to obtain forces, and differentiated with respect to the simulation cell to obtain stress tensors. The predicted Hamiltonian also preserves access to Hamiltonian-based post-processing, including band-structure analysis. This allows the software to bridge electronic-structure learning and observable-guided atomistic modeling while retaining a representation tied to quantum-mechanical operators rather than only scalar targets.
+A distinguishing feature of \texttt{Mandala} is that it does not stop at matrix reconstruction. Predicted operators can be contracted to obtain the band-energy observable and electron count, while the predicted Hamiltonian preserves access to electronic post-processing, including band-structure analysis. This allows the software to bridge electronic-structure learning and observable-guided modeling while retaining a representation tied to quantum-mechanical operators rather than only scalar or vector targets.
 
-\texttt{Mandala} combines a modular software architecture with an operator-centered learning formulation for sparse electronic-structure prediction. The present paper emphasizes the sparse matrix data model, the observable-guidance loss design, and the broad hyperparameter and architecture search space exposed by the framework. In this form, \texttt{Mandala} is intended to support machine-learning workflows that go beyond conventional atomistic interatomic potentials by resolving electronic structure together with atomistic response within one scalable implementation.
+In a completed five-seed ZnCuSnSeS ablation, multiplying the predicted Hamiltonian by a fitted distance envelope reduced the median validation Hamiltonian mean absolute error by 5.6\% relative to the unfactorized model and improved four of five paired runs.
+
+\texttt{Mandala} combines a modular software architecture with an operator-centered learning formulation for sparse electronic-structure prediction. The present paper emphasizes the block sparse matrix data model, the observable-guidance loss design, and the broad hyperparameter and architecture search space exposed by the framework. In this form, \texttt{Mandala} is intended to support machine-learning workflows that go beyond conventional atomistic interatomic potentials by resolving electronic structure and operator-derived observables within one scalable implementation.
 \end{abstract}
 
 \begin{keyword}
-Electronic structure \sep Density functional theory \sep Equivariant graph neural networks \sep Sparse matrix learning \sep Energy and force prediction \sep Scientific machine learning
+Electronic structure \sep Density functional theory \sep Equivariant graph neural networks \sep Sparse matrix learning \sep Operator-derived observables \sep Scientific machine learning
 \end{keyword}
 
 \end{frontmatter}
@@ -57,11 +75,11 @@ Electronic structure \sep Density functional theory \sep Equivariant graph neura
 \noindent
 {\em Program Title:} \texttt{Mandala} \\
 {\em CPC Library link to program files:} [TODO: to be added by the Technical Editor] \\
-{\em Developer's repository link:} \texttt{https://github.com/\texttt{Mandala}-org/\texttt{Mandala}} \\
+{\em Developer's repository link:} \url{https://github.com/Mandala-org/Mandala} \\
 {\em Licensing provisions:} Apache-2.0 \\
 {\em Programming language:} Python \\
-{\em Nature of problem:} Electronic-structure calculations based on Kohn-Sham density functional theory are the central computational method in computational materials science and chemistry, but their computational cost limits accessible system sizes, trajectory lengths, and large-scale model-selection studies. Atomistic simulations based on machine-learned interatomic potentials alleviate this cost for energies and forces, yet they generally do not expose the electronic operators needed for richer observables or electronic post-processing and cannot be used to model processes that involve electronic charge transfer reliably. A complementary route is to learn sparse representations of electronic-structure matrices themselves. Such a computational method must support multiple atom types, changing orbital bases, periodic boundary conditions, equivariant geometric processing, and physically meaningful observable targets such as energies, forces, and stress. \\
-{\em Solution method:} \texttt{Mandala} represents Hamiltonian, overlap, and density matrices as atom-pair-resolved sparse block tensors and maps these blocks to irreducible E(3) representations compatible with equivariant neural networks. The package combines parser modules for electronic-structure data, basis-conversion utilities, a shared irrep mapper, graph construction routines, and configurable E(3)-equivariant message-passing models. Multi-head prediction allows simultaneous learning of several matrices, while observable-level quantities are evaluated from the predicted operators using sparse traces. Observable-guidance losses can be added during training, while forces and stress are obtained through automatic differentiation of predicted energies with respect to atomic coordinates and cell vectors. The framework is organized to support extensibility, architecture search, and reproducible training workflows. \\
+{\em Nature of problem:} Electronic-structure calculations based on Kohn-Sham density functional theory are the central computational method in computational materials science and chemistry, but their computational cost limits accessible system sizes, trajectory lengths, and large-scale model-selection studies. Atomistic simulations based on machine-learned interatomic potentials alleviate this cost for energies and forces, yet they generally do not expose the electronic operators needed for richer observables or electronic post-processing and cannot be used to model processes that involve electronic charge transfer reliably. A complementary route is to learn sparse representations of electronic-structure matrices themselves. Such a computational method must support multiple atom types, changing orbital bases, periodic boundary conditions, equivariant geometric processing, and physically meaningful operator-derived observables. \\
+{\em Solution method:} \texttt{Mandala} represents Hamiltonian, overlap, and density matrices as atom-pair-resolved sparse block tensors and maps these blocks to irreducible E(3) representations compatible with equivariant neural networks. The package combines parser modules for electronic-structure data, basis-conversion utilities, a shared irrep mapper, graph construction routines, and configurable E(3)-equivariant message-passing models. Multi-head prediction allows simultaneous learning of several matrices, while band-energy and electron-count observables are evaluated from the predicted operators using differentiable sparse traces and may be included as training objectives. The framework is organized to support extensibility, architecture search, and reproducible training workflows. \\
 {\em Additional comments including restrictions and unusual features:} The framework is optimized for sparse matrix learning of electronic structure in atomistic systems with localized orbital bases and periodic or non-periodic geometries. A distinctive feature of \texttt{Mandala} is the combination of operator-level learning with optional observable guidance derived from those operators, which allows the same software stack to serve both electronic-structure emulation and observable-guided atomistic applications. The package is designed to accommodate multiple data backends together with a broad search space of equivariant architectures and training objectives.
 \end{small}
 
@@ -77,13 +95,13 @@ Examples include systems in which charge transfer, orbital hybridization, defect
 
 \texttt{Mandala} is designed around this operator-learning viewpoint. The framework targets block-sparse matrix quantities arising in localized-orbital electronic-structure calculations, in particular the Hamiltonian, overlap, and density matrices. Instead of treating these objects as dense global arrays, \texttt{Mandala} represents them as atom-pair-resolved sparse blocks and combines this representation with E(3)-equivariant graph neural networks. The resulting learning problem respects both the locality of the underlying electronic structure and the geometric transformation laws imposed by three-dimensional space.
 
-The development of \texttt{Mandala} is motivated by three specific design goals. First, it should be modular at the level of both scientific abstractions and code organization. Data ingestion, basis conversion, graph construction, irrep mapping, model definition, and training logic should be independently replaceable while still composing into a single workflow. Second, the framework should support supervision beyond raw matrix reconstruction. When Hamiltonian, overlap, and density matrices are predicted jointly, physically relevant observables such as energies and the electron charge density can be computed directly from the predicted operators, while atomic forces and, for periodic systems, stress tensors follow from differentiation with respect to atomic coordinates and cell vectors. Third, the framework should make architecture exploration an inherent capability rather than an afterthought. Choices such as irreducible feature content, message-passing depth, tensor-product design, head structure, residual connections, normalization, and observable losses must all be accessible through a coherent configuration and sweep interface.
+The development of \texttt{Mandala} is motivated by three specific design goals. First, it should be modular at the level of both scientific abstractions and code organization. Data ingestion, basis conversion, graph construction, irrep mapping, model definition, and training logic should be independently replaceable while still composing into a single workflow. Second, the framework should support supervision beyond raw matrix reconstruction. When Hamiltonian, overlap, and density matrices are predicted jointly, the band-energy observable and electron count can be computed directly from the predicted operators and included in the training objective. Third, the framework should make architecture exploration an inherent capability rather than an afterthought. Choices such as irreducible feature content, message-passing depth, tensor-product design, head structure, residual connections, normalization, and observable losses must all be accessible through a coherent configuration and sweep interface.
 
 Related operator-learning efforts include the DeepH family of Hamiltonian-learning models for localized-basis DFT, including their original message-passing formulation, extensions to magnetic superstructures, an explicitly E(3)-equivariant formulation, hybrid-functional Hamiltonians, and conversion pathways from plane-wave data to localized-orbital Hamiltonians \cite{deeph2022,deeph_magnetic_2023,deephe3_2023,deeph_hybrid_2024,deeph_pw_2024,deeph_review_2025}. These works demonstrate the promise of Hamiltonian learning at scale and provide a close point of comparison for the operator-centric aims of \texttt{Mandala}, while our emphasis here is on a reusable software framework that unifies sparse operator prediction, observable guidance, multi-backend data handling, and broad architecture exploration.
 
 These goals distinguish \texttt{Mandala} from earlier machine-learning workflows in two ways. Relative to purely observable-driven interatomic potential models (MLIPs), \texttt{Mandala} preserves an operator-level representation that remains useful for electronic-structure analysis. Relative to monolithic research scripts built around one specific dataset or one fixed neural architecture, it provides a reusable framework in which data formats, physical targets, and model variants can be exchanged without rewriting the entire code path. In this sense, \texttt{Mandala} is intended as a unified software environment for sparse operator learning, observable guidance, and architecture exploration.
 
-The following sections describe the sparse matrix data model, the E(3)-equivariant learning formulation, the observable-aware loss construction, the force-training pathway, and the software abstractions that make these components composable.
+The following sections describe the sparse matrix data model, the E(3)-equivariant learning formulation, the observable-aware loss construction, and the software abstractions that make these components composable.
 
 
 \section{Theoretical Background}
@@ -399,7 +417,7 @@ transpose. In the code these maps are materialized by the
 \texttt{BlockIrrepMapper}. The same component is reused by the data pipeline,
 the model heads, and the evaluation routines.
 
-Once the network predicts a consistent set of sparse operators, observable
+Once the network predicts a consistent set of sparse operators, selected
 quantities are obtained directly from those operators rather than through a
 separate surrogate model. For sparse block matrices, the trace of a product is
 evaluated as
@@ -412,8 +430,7 @@ A_{ij}^{\bm{L}} B_{ji}^{-\bm{L}}
 \right),
 \end{equation}
 which is exactly the sparse contraction implemented by \texttt{Mandala}. This gives
-direct access to electron counts, energy observables, and
-derivative observables such as forces and stress, all from the same predicted
+direct access to electron counts and band-energy observables from the same predicted
 operator set. The resulting workflow differs from direct scalar regression:
 internal consistency between matrices and observables is built into the model
 formulation rather than imposed only at the level of post hoc analysis.
@@ -427,13 +444,12 @@ formulation rather than imposed only at the level of post hoc analysis.
 consists of parsing electronic-structure outputs, harmonizing basis
 conventions, building sparse operators and graphs, predicting irrep vectors,
 reconstructing operators, and evaluating observables.
-Figure~\ref{fig:overall_workflow} summarizes this end-to-end workflow, while
-Figure~\ref{fig:data_preprocessing} highlights the data-loading and sample-construction
-path in more detail.
+Figure~\ref{fig:data_preprocessing} summarizes the data-loading and
+sample-construction path.
 The central data abstractions are \texttt{BlockMatrix},
 \texttt{IrrepsBlockData}, and \texttt{Snapshot}. A \texttt{Snapshot} contains
-all matrices and metadata associated with one geometry, including positions,
-cell, optional forces, and optional stress targets. This keeps Hamiltonian,
+all matrices and metadata associated with one geometry, including positions and
+the simulation cell. This keeps Hamiltonian,
 overlap, and density predictions tied to a single physically consistent basis
 and sparse indexing scheme.
 
@@ -509,20 +525,22 @@ band-structure analysis within the same sparse-operator workflow through
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{tikz/fig1_overall_workflow.pdf}
-\caption{Overall \texttt{Mandala} workflow. Backend data are converted into unified
-\texttt{Snapshot} objects, transformed into graph-aligned datasets, processed by the
-equivariant model, and used both for training and for postprocessing and analysis.}
-\label{fig:overall_workflow}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{tikz/fig2_data_preprocessing.pdf}
-\caption{Data loading, handling, and preprocessing. The figure emphasizes the
-transition from backend-specific parsers to unified \texttt{Snapshot} objects,
-\texttt{DatasetFactory}-driven dataset construction, and
-\texttt{E3GNNDataset}-level graph sample assembly.}
+\includegraphics[width=\textwidth]{figures/fig2_data_preprocessing.png}
+\caption{Data loading, harmonization, and graph-sample construction in
+\texttt{Mandala}. Electronic-structure outputs from OpenMX, FHI-aims, and PySCF
+are converted by backend-specific parsers into a unified \texttt{Snapshot}
+representation containing geometry, periodic-cell information, sparse atom-pair
+blocks of the Hamiltonian $H$, overlap $S$, and density matrix $D$, and available
+observable metadata. Snapshot preparation establishes canonical edge ordering,
+harmonizes backend basis and spherical-harmonic conventions, applies optional
+distance filtering, and evaluates energy and electron-count targets. Dataset
+construction is coordinated by \texttt{DatasetFactory}; shared state provides a
+global \texttt{BlockIrrepMapper}, merged orbital metadata, reusable data splits,
+and snapshot-cache reuse. \texttt{E3GNNDataset} finally assembles graph-aligned
+samples with atomic species and positions, periodic edge indices and shifts,
+edge classes, radial embeddings $\phi(r_{ij})$, and spherical harmonics
+$Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Targets contain sparse matrix blocks or
+irrep vectors and, when available, band energy and electron count.}
 \label{fig:data_preprocessing}
 \end{figure}
 \subsection{E(3)-equivariant message passing, readout heads, and architecture variants}
@@ -530,10 +548,9 @@ transition from backend-specific parsers to unified \texttt{Snapshot} objects,
 
 The network is composed of node encoders, edge encoders, a stack of equivariant
 message-passing blocks, and matrix-specific readout heads. Figure~\ref{fig:model_architecture}
-summarizes the computational structure of the base model, while
-Figure~\ref{fig:search_space} summarizes the configuration-driven search space exposed by
-the software. We first introduce the base architecture and then describe the
-additional variants that extend it. If $z_i$ denotes the atomic-species index of atom $i$, the
+summarizes the computational structure and configuration points of the model.
+We first introduce the base architecture and then describe the additional variants
+that extend it. If $z_i$ denotes the atomic-species index of atom $i$, the
 initial node representation is
 \begin{equation}
 \bm{h}_i^{(0)}
@@ -736,11 +753,22 @@ performed without changing the surrounding training and evaluation workflow.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{tikz/fig3_model_architecture.pdf}
-\caption{Computational structure of the E(3)-equivariant model. System inputs are
-encoded into node and edge features, propagated through repeated equivariant
-message-passing blocks, and mapped by operator-specific heads back to sparse
-matrix blocks.}
+\includegraphics[width=\textwidth]{figures/fig3_model_architecture.png}
+\caption{E(3)-equivariant message-passing architecture and sparse-operator
+readout. Atomic species, positions, and lattice vectors are transformed into
+periodic relative displacements, distances, radial features
+$\phi(r_{ij})$, and real spherical harmonics
+$Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Node and alternative edge encoders
+initialize irrep-valued latent features. Each repeated \texttt{MessageBlock}
+constructs equivariant edge messages from source-node, target-node, edge, radial,
+and angular features; aggregates the messages to update nodes; and updates edge
+features, with optional residual and self-connection paths. The implementation
+supports separate-weight or fully connected tensor products, several equivariant
+nonlinearities, and extended E(3)-MLP variants. Operator-specific Hamiltonian,
+overlap, and density heads map the final latent representation to output irreps,
+with optional tensor-square, scalar, magnitude-factorized, and edge-class-specific
+branches. The \texttt{BlockIrrepMapper} then converts the predicted irrep vectors
+into aligned sparse blocks $\widehat H$, $\widehat S$, and $\widehat D$.}
 \label{fig:model_architecture}
 \end{figure}
 \subsection{Sparse operator algebra, symmetrization, gauge correction, and density normalization}
@@ -833,15 +861,24 @@ evaluation and Hamiltonian-based analyses such as band-structure calculation.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{tikz/fig6_postprocessing_analysis.pdf}
-\caption{Physics-aware postprocessing and electronic-structure analysis from
-predicted sparse operators. The workflow makes the roles of $\widehat{H}$,
-$\widehat{S}$, and $\widehat{D}$ explicit and shows how symmetrization, gauge
-correction, density normalization, and generalized-eigenproblem solution connect
-to diagnostics and spectral analysis.}
+\includegraphics[width=\textwidth]{figures/fig6_postprocessing_analysis.png}
+\caption{Physics-aware postprocessing and electronic-structure analysis of
+predicted sparse operators. The predicted Hamiltonian $\widehat H$, overlap
+$\widehat S$, and density matrix $\widehat D$ are first symmetrized using
+reverse-edge-aligned sparse blocks. The Hamiltonian branch removes an arbitrary
+overlap-proportional energy offset through the gauge correction
+$\widetilde H=H_{\mathrm{sym}}-\mu_H S_{\mathrm{sym}}$. The density branch
+rescales $D_{\mathrm{sym}}$ to enforce the target electron count through
+$\widetilde D=N_e D_{\mathrm{sym}}/\Tr(D_{\mathrm{sym}}S_{\mathrm{sym}})$
+and reports the remaining electron-count discrepancy. The corrected Hamiltonian
+and overlap define the generalized eigenproblem
+$\widetilde H C=S_{\mathrm{sym}}C\varepsilon$. The resulting physically
+processed operators support block-, irrep-, and distance-resolved matrix
+diagnostics, density-of-states and spectral calculations, and band-structure and
+related analyses while retaining the sparse representation.}
 \label{fig:postprocessing_analysis}
 \end{figure}
-\subsection{Observable guidance with energies, electron counts, forces, and stress}
+\subsection{Observable guidance with band energies and electron counts}
 \label{subsec:training_objectives}
 
 \texttt{Mandala} supports pure matrix learning, mixed matrix-and-observable learning, and
@@ -854,9 +891,7 @@ general training objective is
 =
 \sum_{X \in \mathcal{M}} \lambda_X \Loss_X^{\mathrm{matrix}}
 + \lambda_E \Loss^{E}
-+ \lambda_N \Loss^{N}
-+ \lambda_F \Loss^{F}
-+ \lambda_{\sigma} \Loss^{\sigma}.
++ \lambda_N \Loss^{N}.
 \end{equation}
 The matrix terms compare predicted and reference sparse operators, typically by
 a weighted combination of $\ell_1$ and $\ell_2$ errors,
@@ -924,60 +959,45 @@ and
 enabling diagnostic and training modes
 that separate errors due to different predicted operators.
 
-Forces are obtained by automatic differentiation of the predicted scalar energy
-with respect to atomic coordinates,
+The current implementation also exposes experimental derivatives of the
+operator-derived band energy with respect to atomic coordinates and the cell,
 \begin{equation}
-\widehat{\bm{F}}_I
+\bm{F}^{\mathrm{band}}_I
 =
 -\frac{\partial \widehat{E}}{\partial \bm{R}_I},
-\end{equation}
-and the corresponding force loss is
-\begin{equation}
-\Loss^F
+\qquad
+\sigma^{\mathrm{band}}
 =
-\frac{1}{3N_{\mathrm{atoms}}}
-\sum_I
-\left\|
-\widehat{\bm{F}}_I - \bm{F}_I^{\mathrm{ref}}
-\right\|_2^2.
-\end{equation}
-No separate force head is required: forces are constrained through the same
-predicted operators that define the energy.
-
-For periodic systems, stress guidance is obtained by differentiating the
-predicted energy with respect to the cell matrix $h$. If
-$\Omega = \det(h)$ is the cell volume, \texttt{Mandala} uses
-\begin{equation}
-\widehat{\sigma}
-=
-\frac{1}{\Omega} h^{\top}
+\frac{1}{\Omega}h^{\top}
 \frac{\partial \widehat{E}}{\partial h},
+\qquad \Omega=\det(h).
 \end{equation}
-with optional symmetrization
-\begin{equation}
-\widehat{\sigma}
-\leftarrow
-\frac{1}{2}\left(\widehat{\sigma}+\widehat{\sigma}^{\top}\right),
-\end{equation}
-and defines the stress loss as
-\begin{equation}
-\Loss^{\sigma}
-=
-\frac{1}{9}
-\left\|
-\widehat{\sigma} - \sigma^{\mathrm{ref}}
-\right\|_F^2.
-\end{equation}
-This completes the observable-guidance picture. A single operator-valued model
-can be trained under simultaneous constraints from matrix entries, energies,
-electron counts, forces, and stress tensors.
+These derivatives are not total-energy forces or stresses because
+$\widehat E=\Tr(\widehat D\widehat H)$ omits the remaining contributions to the
+Kohn--Sham total energy. They are therefore not presented here as validated
+supervision targets. \emph{Energy derivatives (forces, stress) currently
+implemented as the derivative of the band energy. Total energy implementation
+is planned.}
+
+The supported observable-guidance objective in this work is thus restricted to
+matrix entries, the band-energy observable, and the electron count.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{tikz/fig4_observable_guidance.pdf}
-\caption{Observable-guided training from predicted operators. The same predicted
-operator set supports direct matrix supervision together with energy,
-electron-count, force, and stress guidance.}
+\includegraphics[width=\textwidth]{figures/fig4_observable_guidance.png}
+\caption{Observable-guided training from predicted sparse operators. Reference
+Hamiltonian, overlap, and density targets, represented as aligned sparse blocks or
+irrep coefficients, directly supervise the predicted operators $\widehat H$,
+$\widehat S$, and $\widehat D$. The same operator set yields the band-energy
+observable $\widehat E=\Tr(\widehat D\widehat H)$ and electron count
+$\widehat N_e=\Tr(\widehat D\widehat S)$ through differentiable sparse trace
+contractions. Experimental force and stress outputs are derivatives of the band
+energy only and are not total-energy derivatives. All supported matrix and
+observable terms are combined in a weighted objective. Configuration controls
+select per-target matrix weights, observable terms, partial-reference traces,
+density-specific weighting, and training schedules, allowing pure matrix
+supervision or joint matrix-, band-energy-, and electron-count-guided training
+without separate observable heads.}
 \label{fig:observable_guidance}
 \end{figure}
 \subsection{Configuration-driven architecture search}
@@ -993,8 +1013,8 @@ Search dimensions include hidden irreps, angular cutoff, radial basis size,
 message-passing depth, encoder style, tensor-product type, normalization and
 nonlinearity families, node and edge update variants, residual pathways, neck
 and head depth, separate treatment of shifted-self blocks, tensor-square readout
-options, scalar-specific branches, observable-loss coefficients, force and
-stress weights, and the subset of matrix targets predicted jointly. This wide
+options, scalar-specific branches, observable-loss coefficients, and the subset
+of matrix targets predicted jointly. This wide
 configuration surface is one of the main scientific strengths of the framework:
 it enables controlled comparisons between architecture families without forcing
 changes to the data model, parser layer, or observable-evaluation stack. The
@@ -1002,15 +1022,28 @@ importance of systematic hyperparameter exploration in machine-learned
 electronic-structure models has also been emphasized in related work on
 training-free optimization strategies \cite{hyperparameterpaper}.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{tikz/fig5_architecture_search_space.pdf}
-\caption{Configuration-driven architecture search space exposed by
-\texttt{Mandala}. Representation choices, encoders, message-passing layers,
-tensor-product variants, readout heads, and objective terms are controlled
-within one common configuration interface.}
-\label{fig:search_space}
-\end{figure}
+\subsection{Current limitations and development roadmap}
+\label{subsec:limitations}
+
+The present implementation is designed for localized-orbital electronic-structure
+data that can be represented by real-valued, atom-pair-resolved sparse blocks.
+Orbital definitions must be known for every chemical species.
+Locality is controlled through a finite cutoff radius;
+consequently, accuracy and computational cost depend on whether the selected
+cutoff captures the relevant operator range. Periodic spectral analysis further
+requires consistent lattice-shift support and a numerically well-conditioned
+overlap matrix.
+
+The current training and logging workflows are primarily optimized for one
+structure per batch, and larger-batch and distributed-data behavior requires
+additional validation. The configuration surface is intentionally broad, but
+not every combination is equally mature; the controlled ablations reported in
+this work are therefore important for identifying supported reference settings.
+Most importantly, the scalar $\Tr(DH)$ is a band-energy observable rather than
+the complete Kohn--Sham total energy. Its coordinate and cell derivatives cannot
+be interpreted as total-energy forces and stresses. Adding all total-energy
+contributions and validating their derivatives is a planned extension.
+
 \subsection{Verification, reproducibility, and extensibility}
 \label{subsec:verification}
 
@@ -1030,14 +1063,151 @@ training objectives can be incorporated without changing the core operator data
 model. This design allows \texttt{Mandala} to function both as a reusable
 scientific software package and as a framework for rapid methodological
 experimentation.
+
+\section{Initial Results}
+\label{sec:results}
+
+\subsection{Completed ZnCuSnSeS envelope-factorization ablation}
+
+We report one completed controlled ablation using ZnCuSnSeS structures at scale
+one. The baseline predicts Hamiltonian blocks directly
+(\texttt{hamiltonian\_envelope\_mode=off}), while the treatment multiplies the
+predicted blocks by a fitted pair-distance envelope
+(\texttt{multiply\_prediction}). Both treatments use seeds 41--45 and the same
+fixed data split. The ten runs share the split hash
+recorded with the seed-level source data distributed alongside the paper; the
+run records are also available from the
+\href{https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/sweeps/up109kk9}{W\&B sweep}.
+
+The median validation Hamiltonian MAE decreases from 0.005221~Ha without the
+envelope to 0.004930~Ha with prediction factorization, a relative reduction of
+5.6\%. The corresponding means are 0.005167 and 0.004941~Ha, respectively, a
+4.4\% reduction. The treatment improves four of the five paired seeds. The mean
+paired difference (treatment minus baseline) is $-2.26\times 10^{-4}$~Ha, with a
+95\% $t$ interval from $-4.86\times 10^{-4}$ to
+$3.37\times 10^{-5}$~Ha. Thus, the completed experiment provides encouraging
+evidence for the envelope factorization, while the interval and small number of
+seeds motivate a restrained interpretation rather than a claim of definitive
+statistical separation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/result_envelope_real.png}
+\caption{Real results for the ZnCuSnSeS envelope-factorization ablation. Colored
+points show the final W\&B validation Hamiltonian MAE for seeds 41--45, and gray
+lines connect paired seeds. Horizontal black marks denote medians; vertical
+black intervals are percentile bootstrap intervals for the median. The fitted
+envelope reduces the median error by 5.6\% and wins four of five paired runs.}
+\label{fig:result-envelope-real}
+\end{figure}
+
+\subsection{Temporary result slots for running ablations}
+
+\noindent\fcolorbox{red!80!black}{red!8}{\parbox{0.94\linewidth}{
+\centering\bfseries\large PLACEHOLDER --- SYNTHETIC DATA --- NOT SCIENTIFIC RESULTS\\
+The values in Fig.~\ref{fig:result-placeholders} are deliberately fabricated in
+arbitrary units and must be replaced before submission.}}
+\par\medskip
+
+The four temporary slots correspond to the nearest-term unfinished studies:
+\begin{enumerate}
+\item SiO$_x$ energy guidance: \texttt{loss\_coef\_observables=0} versus
+      \texttt{0.003}, with Hamiltonian and band-energy validation errors.
+\item Mature ZnCuSnSeS spectral fine-tuning:
+      \texttt{spectral\_loss\_coef=0} versus \texttt{0.001}, with Hamiltonian
+      and spectral validation errors. Duplicate sweep instances will be
+      consolidated before analysis.
+\item ZnCuSnSeS node aggregation: \texttt{sum} versus \texttt{attention}.
+\item ZnCuSnSeS shifted-self handling:
+      \texttt{separate\_shifted\_self=false} versus \texttt{true}.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/result_ablations_placeholder.png}
+\caption{\textbf{PLACEHOLDER --- SYNTHETIC DATA --- NOT RESULTS.} Layout preview
+for four running ablations. Every displayed value is fabricated in arbitrary
+units solely to reserve the intended paired-seed presentation. The final plots
+will use five paired seeds per treatment and the indicated W\&B validation
+metrics.}
+\label{fig:result-placeholders}
+\end{figure}
+
+\clearpage
+\section{Public Interface and Usage Examples}
+\label{sec:usage-examples}
+
+The current codebase keeps evaluation deliberately lightweight: stateless helper
+functions compose the existing scientific data objects and model classes without
+introducing a new checkpoint contract. A calculation can be loaded and its sparse
+operator-derived quantities examined directly:
+
+\begin{lstlisting}
+from data.snapshot import Snapshot
+
+snapshot = Snapshot.from_openmx(
+    "sample.matrix", "sample.info.out", convention="e3nn"
+)
+print(snapshot.get_energy())
+print(snapshot.get_number_of_electrons())
+\end{lstlisting}
+
+A trained model is restored with its saved configuration and orbital metadata,
+then applied directly to the same snapshot:
+
+\begin{lstlisting}
+import torch
+from net.evaluation import predict_snapshot, restore_model_for_snapshot
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = restore_model_for_snapshot("best_model.pt", snapshot, device=device)
+predictions = predict_snapshot(model, snapshot)
+predicted_hamiltonian = predictions["hamiltonian"]
+\end{lstlisting}
+
+Operator-derived analysis remains explicit about any reference operator mixed
+with a prediction. For example, a Hamiltonian-only model may evaluate the band
+energy using the reference density:
+
+\begin{lstlisting}
+from core.sparse_math import trace_matmul_sparse_block_matrix
+
+band_energy = trace_matmul_sparse_block_matrix(
+    predicted_hamiltonian, snapshot.density
+)
+\end{lstlisting}
+
+Likewise, the predicted Hamiltonian can be combined explicitly with a reference
+overlap matrix for generalized-eigenvalue band-structure analysis:
+
+\begin{lstlisting}
+from net.evaluation import predictions_to_snapshot
+
+predicted = predictions_to_snapshot(
+    predictions, snapshot, reference_matrices=("overlap", "density")
+)
+bands = predicted.get_band_structure(
+    path="GXWKG",
+    npoints=200,
+)
+print(bands.eigenvalues.shape)
+\end{lstlisting}
+
+This interface keeps common workflows short without hiding whether an observable
+uses predicted or reference operators.
+
 \section{Conclusion}
 \label{sec:conclusion}
 
 \texttt{Mandala} is a scientific software framework for learning sparse electronic-structure operators with E(3)-equivariant graph neural networks. Its defining features are the explicit sparse block representation of Hamiltonian, overlap, and density matrices; the modular software layers that connect parsing, basis harmonization, irrep mapping, graph construction, model definition, and training; and the ability to supervise not only matrices themselves but also observables derived from them.
 
-The framework is designed to connect two communities that are often separated in practice. From the electronic-structure side, it retains access to operator-level information and basis-aware quantities. From the atomistic machine-learning side, it inherits the flexibility of modern equivariant message passing, multitask learning, and automated hyperparameter search. By combining these perspectives, \texttt{Mandala} supports workflows in which one can train on matrix fidelity, energy-observable fidelity, electron-count fidelity, force fidelity, and stress fidelity within one coherent implementation.
+The framework is designed to connect two communities that are often separated in practice. From the electronic-structure side, it retains access to operator-level information and basis-aware quantities. From the atomistic machine-learning side, it inherits the flexibility of modern equivariant message passing, multitask learning, and automated hyperparameter search. By combining these perspectives, \texttt{Mandala} supports workflows in which one can train on matrix fidelity, band-energy-observable fidelity, and electron-count fidelity within one coherent implementation.
 
-In this sense, \texttt{Mandala} is aimed at simulation settings that go beyond conventional machine-learning interatomic potentials: it combines access to atomistic forces with access to the predicted electronic structure itself, including Hamiltonian-derived quantities such as band structure and related observables. This makes the framework particularly relevant for problems in which explicitly electronic effects, such as charge transfer or electronically driven changes in bonding, are part of the physics that must be modeled rather than treated only indirectly. In its current form, \texttt{Mandala} is positioned as a modular platform for operator-level machine learning in electronic-structure simulation and for systematic exploration of equivariant architectures built on that operator-centered representation.
+In this sense, \texttt{Mandala} is aimed at simulation settings that go beyond conventional machine-learning interatomic potentials by retaining access to the predicted electronic structure, including Hamiltonian-derived quantities such as band structure and related observables. This makes the framework particularly relevant for problems in which explicitly electronic effects, such as charge transfer or electronically driven changes in bonding, are part of the physics that must be modeled rather than treated only indirectly. In its current form, \texttt{Mandala} is positioned as a modular platform for operator-level machine learning in electronic-structure simulation and for systematic exploration of equivariant architectures built on that operator-centered representation.
+The completed paired-seed envelope ablation gives an initial quantitative
+example of this exploration capability, reducing median validation Hamiltonian
+MAE by 5.6\% while also illustrating the need to report paired variability and
+uncertainty for architecture comparisons.
 \section*{Acknowledgments}
 
 This work was partially supported by the Center for Advanced Systems Understanding (CASUS), financed by the German Federal Ministry of Education and Research and by the Saxon state government out of the state budget approved by the Saxon State Parliament, and by the University of Wroc\l aw. Computational resources were provided by the \texttt{hemera} and \texttt{rosi} clusters of HZDR.

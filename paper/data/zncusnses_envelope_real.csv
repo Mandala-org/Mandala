@@ -1,0 +1,11 @@
+seed,treatment,val_hamiltonian_mae,run_id,split_hash,source
+41,off,0.0050290306098759174,6u0ahu9u,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/6u0ahu9u
+41,multiply_prediction,0.004839523229748011,br659etx,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/br659etx
+42,off,0.005221172701567411,zesulx4y,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/zesulx4y
+42,multiply_prediction,0.004868716467171907,vwe20bg3,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/vwe20bg3
+43,off,0.004870131146162748,kcszsult,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/kcszsult
+43,multiply_prediction,0.0049299211241304874,3fbh94u5,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/3fbh94u5
+44,off,0.005439434666186571,zzsu6u0a,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/zzsu6u0a
+44,multiply_prediction,0.00494632450863719,1p928fiq,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/1p928fiq
+45,off,0.005277513992041349,flxxcatb,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/flxxcatb
+45,multiply_prediction,0.005121896509081125,npffketo,7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d,https://wandb.ai/b-brzoza/paper_zncusnses_envelope_12h/runs/npffketo

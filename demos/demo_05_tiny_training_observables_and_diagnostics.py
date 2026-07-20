@@ -22,7 +22,8 @@ from net.artifacts import (
 )
 from net.common import Config
 from net.e3gnn import E3GNN
-from net.observable_metrics import build_observable_predictions, observable_loss
+from net.evaluation import evaluate_sample
+from net.observable_metrics import observable_loss
 
 # %%
 matrix_path = REPO_ROOT / "data" / "small" / "H2O" / "original" / "H2O.matrix"
@@ -32,6 +33,7 @@ output_dir.mkdir(parents=True, exist_ok=True)
 
 cfg = Config(
     cutoff_radius=7.0,
+    allow_openmx_positions_box_from_out=True,
     matrix_targets=["hamiltonian", "overlap", "density"],
     train_target="matrix",
     train_on_energy=True,
@@ -69,17 +71,9 @@ for step in range(cfg.max_epochs):
     optimizer.step()
     loss_history.append(float(loss.item()))
 
-predictions = model(x)
-predictions_matrix = {
-    name: pred.to_blocks(mapper) for name, pred in predictions.items()
-}
-observable_values = build_observable_predictions(
-    predictions_matrix,
-    pred_trace_alignment=x["pred_trace_alignment"],
-    H_true=y["hamiltonian"],
-    D_true=y["density"],
-    S_true=y["overlap"],
-)
+evaluation = evaluate_sample(model, x, y)
+predictions_matrix = evaluation["predictions"]
+observable_values = evaluation["observables"]
 energy_loss, num_electron_loss = observable_loss(
     cfg=cfg,
     observable_values=observable_values,

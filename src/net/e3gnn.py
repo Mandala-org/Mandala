@@ -345,6 +345,31 @@ class E3GNN(pl.LightningModule):
             for name, matrix in matrices.items()
         }
 
+    def predict_matrices(
+        self,
+        x: Dict[str, Any],
+        *,
+        physical: bool = True,
+    ) -> Dict[str, BlockMatrix]:
+        """Run inference and return predicted sparse block matrices.
+
+        This is a convenience wrapper around ``forward`` and
+        ``predicted_irreps_to_block_matrices``. It does not move ``x`` between
+        devices; callers should prepare the input on the model's device.
+        """
+        was_training = self.training
+        self.eval()
+        try:
+            with torch.inference_mode():
+                predictions = self(x)
+            return self.predicted_irreps_to_block_matrices(
+                predictions,
+                x,
+                physical=physical,
+            )
+        finally:
+            self.train(was_training)
+
     def _spectral_loss_enabled(self) -> bool:
         return bool(getattr(self.cfg, "spectral_loss_enabled", False))
 

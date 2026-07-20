@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.4.4)  28 APR 2026 15:17
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.4.4)  20 JUL 2026 13:22
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -85,7 +85,8 @@ File: pdftex.def 2022/09/22 v1.2b Graphics/color driver for pdftex
 \@enLab=\toks19
 \@sep=\skip50
 \@@sep=\skip51
- (./main.spl) (/usr/share/texlive/texmf-dist/tex/latex/natbib/natbib.sty
+
+(/usr/share/texlive/texmf-dist/tex/latex/natbib/natbib.sty
 Package: natbib 2010/09/13 8.31b (PWD, AO)
 \bibhang=\skip52
 \bibsep=\skip53
@@ -378,40 +379,87 @@ Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 2
 )
 \Hy@SectionHShift=\skip63
 )
-(./main.aux)
+(/usr/share/texlive/texmf-dist/tex/latex/xcolor/xcolor.sty
+Package: xcolor 2023/11/15 v3.01 LaTeX color extensions (UK)
+
+(/usr/share/texlive/texmf-dist/tex/latex/graphics-cfg/color.cfg
+File: color.cfg 2016/01/02 v1.6 sample color configuration
+)
+Package xcolor Info: Driver file: pdftex.def on input line 274.
+
+(/usr/share/texlive/texmf-dist/tex/latex/graphics/mathcolor.ltx)
+Package xcolor Info: Model `cmy' substituted by `cmy0' on input line 1350.
+Package xcolor Info: Model `hsb' substituted by `rgb' on input line 1354.
+Package xcolor Info: Model `RGB' extended on input line 1366.
+Package xcolor Info: Model `HTML' substituted by `rgb' on input line 1368.
+Package xcolor Info: Model `Hsb' substituted by `hsb' on input line 1369.
+Package xcolor Info: Model `tHsb' substituted by `hsb' on input line 1370.
+Package xcolor Info: Model `HSB' substituted by `hsb' on input line 1371.
+Package xcolor Info: Model `Gray' substituted by `gray' on input line 1372.
+Package xcolor Info: Model `wave' substituted by `hsb' on input line 1373.
+)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/listings.sty
+\lst@mode=\count303
+\lst@gtempboxa=\box69
+\lst@token=\toks30
+\lst@length=\count304
+\lst@currlwidth=\dimen177
+\lst@column=\count305
+\lst@pos=\count306
+\lst@lostspace=\dimen178
+\lst@width=\dimen179
+\lst@newlines=\count307
+\lst@lineno=\count308
+\lst@maxwidth=\dimen180
+
+(/usr/share/texlive/texmf-dist/tex/latex/listings/lstmisc.sty
+File: lstmisc.sty 2023/02/27 1.9 (Carsten Heinz)
+\c@lstnumber=\count309
+\lst@skipnumbers=\count310
+\lst@framebox=\box70
+)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/listings.cfg
+File: listings.cfg 2023/02/27 1.9 listings configuration
+))
+Package: listings 2023/02/27 1.9 (Carsten Heinz)
+
+(/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang1.sty
+File: lstlang1.sty 2023/02/27 1.9 listings language file
+)
+No file main.aux.
 \openout1 = `main.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
- (/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 34.
+LaTeX Font Info:    ... okay on input line 34.
+(/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count303
-\scratchdimen=\dimen177
-\scratchbox=\box69
-\nofMPsegments=\count304
-\nofMParguments=\count305
-\everyMPshowfont=\toks30
-\MPscratchCnt=\count306
-\MPscratchDim=\dimen178
-\MPnumerator=\count307
-\makeMPintoPDFobject=\count308
-\everyMPtoPDFconversion=\toks31
+\scratchcounter=\count311
+\scratchdimen=\dimen181
+\scratchbox=\box71
+\nofMPsegments=\count312
+\nofMParguments=\count313
+\everyMPshowfont=\toks31
+\MPscratchCnt=\count314
+\MPscratchDim=\dimen182
+\MPnumerator=\count315
+\makeMPintoPDFobject=\count316
+\everyMPtoPDFconversion=\toks32
 ) (/usr/share/texlive/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
 Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
@@ -421,19 +469,18 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
-Package hyperref Info: Link coloring OFF on input line 20.
-
-(./main.out) (./main.out)
+Package hyperref Info: Link coloring OFF on input line 34.
 \@outlinefile=\write4
 \openout4 = `main.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 52.
+\c@lstlisting=\count317
+LaTeX Font Info:    Trying to load font information for U+msa on input line 70.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 52.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 70.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
@@ -443,351 +490,433 @@ Overfull \hbox (2.61108pt too wide) has occurred while \output is active
 []
  []
 
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `\<def>-command' on input line 70.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `\cnotenum' on input line 70.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `\<def>-command' on input line 70.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `\@corref' on input line 70.
+
 [1
 
 
-{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] [2] [3]
-Overfull \hbox (16.67633pt too wide) in paragraph at lines 78--79
+{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] [2]
+
+Package natbib Warning: Citation `HoKo1964' on page 3 undefined on input line 9
+0.
+
+
+Package natbib Warning: Citation `KoSh1965' on page 3 undefined on input line 9
+0.
+
+
+Package natbib Warning: Citation `deepdive' on page 3 undefined on input line 9
+0.
+
+
+Package natbib Warning: Citation `malapaper' on page 3 undefined on input line
+90.
+
+
+Package natbib Warning: Citation `temperaturepaper' on page 3 undefined on inpu
+t line 90.
+
+
+Package natbib Warning: Citation `sizetransferpaper' on page 3 undefined on inp
+ut line 90.
+
+
+Package natbib Warning: Citation `ofdftpaper' on page 3 undefined on input line
+ 90.
+
+
+Package natbib Warning: Citation `ghasemi2021' on page 3 undefined on input lin
+e 90.
+
+
+Package natbib Warning: Citation `chandrasekaran_solving_2019' on page 3 undefi
+ned on input line 90.
+
+
+Package natbib Warning: Citation `TsMi2020' on page 3 undefined on input line 9
+0.
+
+
+Package natbib Warning: Citation `Shao_2023' on page 3 undefined on input line
+90.
+
+
+Package natbib Warning: Citation `BrVo2017' on page 3 undefined on input line 9
+0.
+
+[3]
+
+Package natbib Warning: Citation `KoKoBe22' on page 4 undefined on input line 9
+3.
+
+
+Package natbib Warning: Citation `Rackers_2023' on page 4 undefined on input li
+ne 93.
+
+
+Overfull \hbox (16.67633pt too wide) in paragraph at lines 96--97
 \OT1/cmr/m/n/12 work tar-gets block-sparse ma-trix quan-ti-ties aris-ing in loc
 alized-orbital electronic-
  []
 
 [4]
-Overfull \hbox (4.65157pt too wide) in paragraph at lines 82--83
+
+Package natbib Warning: Citation `deeph2022' on page 5 undefined on input line
+100.
+
+
+Package natbib Warning: Citation `deeph_magnetic_2023' on page 5 undefined on i
+nput line 100.
+
+
+Package natbib Warning: Citation `deephe3_2023' on page 5 undefined on input li
+ne 100.
+
+
+Package natbib Warning: Citation `deeph_hybrid_2024' on page 5 undefined on inp
+ut line 100.
+
+
+Package natbib Warning: Citation `deeph_pw_2024' on page 5 undefined on input l
+ine 100.
+
+
+Package natbib Warning: Citation `deeph_review_2025' on page 5 undefined on inp
+ut line 100.
+
+
+Overfull \hbox (4.65157pt too wide) in paragraph at lines 100--101
 []\OT1/cmr/m/n/12 Related operator-learning ef-forts in-clude the DeepH fam-ily
  of Hamiltonian-
  []
 
-[5] [6] [7] [8] [9] [10]
-Overfull \hbox (2.69514pt too wide) in paragraph at lines 396--401
+[5]
+
+Package natbib Warning: Citation `born_zur_1927' on page 6 undefined on input l
+ine 127.
+
+
+Package natbib Warning: Citation `HoKo1964' on page 6 undefined on input line 1
+62.
+
+
+Package natbib Warning: Citation `KoSh1965' on page 6 undefined on input line 1
+63.
+
+[6] [7] [8]
+
+Package natbib Warning: Citation `KoKoBe22' on page 9 undefined on input line 3
+46.
+
+
+Package natbib Warning: Citation `Rackers_2023' on page 9 undefined on input li
+ne 346.
+
+[9] [10]
+Overfull \hbox (2.69514pt too wide) in paragraph at lines 414--419
 \OT1/cmr/m/n/12 trans-pose. In the code these maps are ma-te-ri-al-ized by the
 \OT1/cmtt/m/n/12 BlockIrrepMapper\OT1/cmr/m/n/12 .
  []
 
 [11]
-Overfull \hbox (1.68994pt too wide) in paragraph at lines 440--446
+
+LaTeX Warning: Reference `fig:data_preprocessing' on page 12 undefined on input
+ line 447.
+
+
+Package natbib Warning: Citation `ozaki2003' on page 12 undefined on input line
+ 461.
+
+
+Package natbib Warning: Citation `ozakikino2004' on page 12 undefined on input
+line 461.
+
+
+Package natbib Warning: Citation `blum2009' on page 12 undefined on input line
+461.
+
+
+Package natbib Warning: Citation `pyscf2020' on page 12 undefined on input line
+ 461.
+
+
+Overfull \hbox (1.68994pt too wide) in paragraph at lines 456--462
 \OT1/cmr/m/n/12 equiv-ari-ant stack. In the cur-rent frame-work, OpenMX, FHI-ai
 ms, and PySCF
  []
 
 [12]
-Overfull \hbox (8.71252pt too wide) in paragraph at lines 505--509
+Overfull \hbox (8.71252pt too wide) in paragraph at lines 521--525
 []\OT1/cmr/m/n/12 The same snapshot-level rep-re-sen-ta-tion pre-serves ac-cess
  to operator-derived
  []
 
-<tikz/fig1_overall_workflow.pdf, id=246, 570.5235pt x 276.4498pt>
-File: tikz/fig1_overall_workflow.pdf Graphic file (type pdf)
-<use tikz/fig1_overall_workflow.pdf>
-Package pdftex.def Info: tikz/fig1_overall_workflow.pdf  used on input line 512
-.
-(pdftex.def)             Requested size: 390.0pt x 188.9831pt.
-<tikz/fig2_data_preprocessing.pdf, id=247, 573.49658pt x 288.547pt>
-File: tikz/fig2_data_preprocessing.pdf Graphic file (type pdf)
-<use tikz/fig2_data_preprocessing.pdf>
-Package pdftex.def Info: tikz/fig2_data_preprocessing.pdf  used on input line 5
-21.
-(pdftex.def)             Requested size: 390.0pt x 196.23137pt.
-[13 <./tikz/fig1_overall_workflow.pdf>] [14 <./tikz/fig2_data_preprocessing.pdf
->] [15] [16]
-<tikz/fig3_model_architecture.pdf, id=410, 626.66322pt x 711.32854pt>
-File: tikz/fig3_model_architecture.pdf Graphic file (type pdf)
-<use tikz/fig3_model_architecture.pdf>
-Package pdftex.def Info: tikz/fig3_model_architecture.pdf  used on input line 7
-39.
-(pdftex.def)             Requested size: 390.0pt x 442.69064pt.
- [17] [18 <./tikz/fig3_model_architecture.pdf>] [19]
-Overfull \hbox (0.48344pt too wide) in paragraph at lines 829--833
+<figures/fig2_data_preprocessing.png, id=123, 1255.089pt x 825.0825pt>
+File: figures/fig2_data_preprocessing.png Graphic file (type png)
+<use figures/fig2_data_preprocessing.png>
+Package pdftex.def Info: figures/fig2_data_preprocessing.png  used on input lin
+e 528.
+(pdftex.def)             Requested size: 390.0pt x 256.37724pt.
+[13]
+
+LaTeX Warning: Reference `fig:model_architecture' on page 14 undefined on input
+ line 550.
+
+[14 <./figures/fig2_data_preprocessing.png (PNG copy)>] [15] [16]
+<figures/fig3_model_architecture.png, id=165, 1269.3021pt x 843.15pt>
+File: figures/fig3_model_architecture.png Graphic file (type png)
+<use figures/fig3_model_architecture.png>
+Package pdftex.def Info: figures/fig3_model_architecture.png  used on input lin
+e 756.
+(pdftex.def)             Requested size: 390.0pt x 259.05801pt.
+ [17] [18 <./figures/fig3_model_architecture.png (PNG copy)>]
+
+LaTeX Warning: Reference `subsubsec:gauge_invariance' on page 19 undefined on i
+nput line 825.
+
+
+Overfull \hbox (0.48344pt too wide) in paragraph at lines 857--861
 \OT1/cmr/m/n/12 ob-serv-able eval-u-a-tion and Hamiltonian-based anal-y-ses suc
 h as band-structure
  []
 
-<tikz/fig6_postprocessing_analysis.pdf, id=520, 533.48509pt x 354.77545pt>
-File: tikz/fig6_postprocessing_analysis.pdf Graphic file (type pdf)
-<use tikz/fig6_postprocessing_analysis.pdf>
-Package pdftex.def Info: tikz/fig6_postprocessing_analysis.pdf  used on input l
-ine 836.
-(pdftex.def)             Requested size: 390.0pt x 259.36285pt.
-[20 <./tikz/fig6_postprocessing_analysis.pdf>] [21]
-<tikz/fig4_observable_guidance.pdf, id=610, 590.6306pt x 309.61874pt>
-File: tikz/fig4_observable_guidance.pdf Graphic file (type pdf)
-<use tikz/fig4_observable_guidance.pdf>
-Package pdftex.def Info: tikz/fig4_observable_guidance.pdf  used on input line
-977.
-(pdftex.def)             Requested size: 390.0pt x 204.44348pt.
+[19]
+<figures/fig6_postprocessing_analysis.png, id=191, 1276.0473pt x 838.0911pt>
+File: figures/fig6_postprocessing_analysis.png Graphic file (type png)
+<use figures/fig6_postprocessing_analysis.png>
+Package pdftex.def Info: figures/fig6_postprocessing_analysis.png  used on inpu
+t line 864.
+(pdftex.def)             Requested size: 390.0pt x 256.14812pt.
+
+
+LaTeX Warning: Reference `fig:observable_guidance' on page 20 undefined on inpu
+t line 886.
+
+[20 <./figures/fig6_postprocessing_analysis.png (PNG copy)>] [21]
+<figures/fig4_observable_guidance.png, id=211, 1261.1115pt x 853.7496pt>
+File: figures/fig4_observable_guidance.png Graphic file (type png)
+<use figures/fig4_observable_guidance.png>
+Package pdftex.def Info: figures/fig4_observable_guidance.png  used on input li
+ne 987.
+(pdftex.def)             Requested size: 390.0pt x 264.02132pt.
  [22]
-<tikz/fig5_architecture_search_space.pdf, id=621, 524.94919pt x 288.547pt>
-File: tikz/fig5_architecture_search_space.pdf Graphic file (type pdf)
-<use tikz/fig5_architecture_search_space.pdf>
-Package pdftex.def Info: tikz/fig5_architecture_search_space.pdf  used on input
- line 1007.
-(pdftex.def)             Requested size: 390.0pt x 214.37117pt.
- [23 <./tikz/fig4_observable_guidance.pdf>] [24 <./tikz/fig5_architecture_searc
-h_space.pdf>] [25]
-(./appendix.tex
+
+Package natbib Warning: Citation `hyperparameterpaper' on page 23 undefined on
+input line 1023.
+
+[23 <./figures/fig4_observable_guidance.png (PNG copy)>] [24]
+Overfull \hbox (114.76181pt too wide) in paragraph at lines 1072--1081
+\OT1/cmr/m/n/12 at scale one. The base-line pre-dicts Hamil-to-nian blocks di-r
+ectly (\OT1/cmtt/m/n/12 hamiltonian[]envelope[]mode=off\OT1/cmr/m/n/12 ),
+ []
+
+<figures/result_envelope_real.png, id=230, 520.344pt x 346.896pt>
+File: figures/result_envelope_real.png Graphic file (type png)
+<use figures/result_envelope_real.png>
+Package pdftex.def Info: figures/result_envelope_real.png  used on input line 1
+095.
+(pdftex.def)             Requested size: 319.80286pt x 213.21008pt.
+[25]
+
+LaTeX Warning: Reference `fig:result-placeholders' on page 26 undefined on inpu
+t line 1109.
+
+<figures/result_ablations_placeholder.png, id=239, 831.105pt x 585.387pt>
+File: figures/result_ablations_placeholder.png Graphic file (type png)
+<use figures/result_ablations_placeholder.png>
+Package pdftex.def Info: figures/result_ablations_placeholder.png  used on inpu
+t line 1127.
+(pdftex.def)             Requested size: 390.0pt x 274.69424pt.
+[26 <./figures/result_envelope_real.png>] [27 <./figures/result_ablations_place
+holder.png>] [28
+
+] [29] [30] (./appendix.tex
 LaTeX Font Info:    Font shape `OT1/cmtt/bx/n' in size <12> not available
-(Font)              Font shape `OT1/cmtt/m/n' tried instead on input line 9.
+(Font)              Font shape `OT1/cmtt/m/n' tried instead on input line 13.
 
-Overfull \hbox (52.07562pt too wide) in paragraph at lines 10--11
-[]\OT1/cmtt/m/n/12 DatasetFactory.add[]snapshot(matrix[]path, info[]path,
+Underfull \hbox (badness 10000) in paragraph at lines 14--15
+[]$\OT1/cmtt/m/n/12 DatasetFactory . add _ snapshot(matrix _ path ,[]
  []
 
 
-Overfull \hbox (62.58395pt too wide) in paragraph at lines 25--26
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 64\OT1/cmr/m/n/12 . Num-ber of ra-d
-ial ba-sis chan-nels in \OT1/cmtt/m/n/12 soft[]one[]hot[]linspace(...)\OT1/cmr/
-m/n/12 .
- []
-
-[26
-
-]
-Overfull \hbox (130.48499pt too wide) in paragraph at lines 37--38
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 separate[]weight\OT1/cmr/m/n/12 . V
-al-ues: \OT1/cmtt/m/n/12 separate[]weight \OT1/cmr/m/n/12 uses \OT1/cmtt/m/n/12
- SeparateWeightTensorProduct\OT1/cmr/m/n/12 ,
- []
-
-[27]
-Overfull \hbox (4.85416pt too wide) in paragraph at lines 51--52
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 0\OT1/cmr/m/n/12 . Ad-di-tional equ
-iv-ari-ant re-fine-ment depth
+Underfull \hbox (badness 1990) in paragraph at lines 14--15
+\OT1/cmtt/m/n/12 info _ path ,[] purpose = . . .)$ \OT1/cmr/m/n/12 reg-is-ters
+ma-trix/info pairs for dataset
  []
 
 
-Overfull \hbox (3.58945pt too wide) in paragraph at lines 57--58
+Underfull \hbox (badness 2173) in paragraph at lines 23--24
+[]\OT1/cmr/m/n/12 Default: an ex-plicit rep-re-sen-ta-tion through $\OML/cmm/m/
+it/12 l \OT1/cmr/m/n/12 = 6$:
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 23--24
+\OT1/cmtt/m/n/12 128x0e + 16x0o + 8x1e + 64x1o + 24x2e + 8x2o + 8x3e + 24x3o +
+16x4e + 4x4o +
+ []
+
+[31
+
+] [32] [33]
+Underfull \hbox (badness 1062) in paragraph at lines 64--65
 []\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 1.0\OT1/cmr/m/n/12 . Post-scale ap-
-plied to off-diagonal
- []
-
-[28]
-Overfull \hbox (29.50595pt too wide) in paragraph at lines 66--67
-\OT1/cmr/m/n/12 ni-tudes; \OT1/cmtt/m/n/12 film \OT1/cmr/m/n/12 con-di-tions bl
-ocks with in-vari-ant FiLM pa-ram-e-ters; \OT1/cmtt/m/n/12 resnormact
+plied to off-
  []
 
 
-Overfull \hbox (11.63644pt too wide) in paragraph at lines 74--75
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 1.0\OT1/cmr/m/n/12 . Mul-ti-plica-t
-ive scale on ini-tial weights
+Underfull \hbox (badness 10000) in paragraph at lines 74--75
+[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 resnormact\OT1/cmr/m/n/12 . Val-ues
+ mir-ror
  []
 
 
-Overfull \hbox (1.4071pt too wide) in paragraph at lines 75--76
+Underfull \hbox (badness 1137) in paragraph at lines 74--75
+\OT1/cmtt/m/n/12 e3mlp[]variant\OT1/cmr/m/n/12 ; this over-rides the re-fine-me
+nt MLPs in-side mes-
+ []
+
+
+Underfull \hbox (badness 1502) in paragraph at lines 82--83
 []\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 0.25\OT1/cmr/m/n/12 . Ini-tial laye
-r-scale or resid-ual strength
+r-scale or resid-ual
  []
 
 
-Overfull \hbox (13.5497pt too wide) in paragraph at lines 76--77
+Underfull \hbox (badness 2368) in paragraph at lines 83--84
 []\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 False\OT1/cmr/m/n/12 . Whether vari
--ant blocks use pre-normalization
+-ant blocks use pre-
  []
 
 
-Overfull \hbox (1.61346pt too wide) in paragraph at lines 77--78
+Underfull \hbox (badness 10000) in paragraph at lines 84--85
 []\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 1e-8\OT1/cmr/m/n/12 . Nu-mer-i-cal
-ep-silon for \OT1/cmtt/m/n/12 EquivariantRMSNorm\OT1/cmr/m/n/12 .
+ep-silon for
  []
 
-[29]
-Overfull \hbox (1.2532pt too wide) in paragraph at lines 92--92
-[]\OT1/cmr/m/it/12 Prediction Tar-gets, Ob-serv-able Guid-ance, and Physics-Awa
-re
+[34]
+Underfull \hbox (badness 1642) in paragraph at lines 99--99
+[]\OT1/cmr/m/it/12 Prediction Tar-gets, Ob-serv-able Guid-ance, and Physics-
  []
 
-
-Overfull \hbox (58.30157pt too wide) in paragraph at lines 95--96
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 [hamiltonian, overlap, density]\OT1
-/cmr/m/n/12 . Val-ues: \OT1/cmtt/m/n/12 hamiltonian\OT1/cmr/m/n/12 ,
+[35] [36]
+Underfull \hbox (badness 10000) in paragraph at lines 120--121
+[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 off\OT1/cmr/m/n/12 . Val-ues: \OT1/
+cmtt/m/n/12 off\OT1/cmr/m/n/12 ,
  []
 
-
-Overfull \hbox (1.56946pt too wide) in paragraph at lines 96--97
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 matrix\OT1/cmr/m/n/12 . Val-ues: \O
-T1/cmtt/m/n/12 matrix \OT1/cmr/m/n/12 ap-plies su-per-vi-sion in block-
+[37]
+Underfull \hbox (badness 1132) in paragraph at lines 148--149
+[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 val/hamiltonian[]mae\OT1/cmr/m/n/12
+ . Logged met-ric
  []
 
-[30]
-Overfull \hbox (17.285pt too wide) in paragraph at lines 104--105
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 True\OT1/cmr/m/n/12 . Boolean switc
-h for adding an electron-
- []
-
-[31]
-Overfull \hbox (13.26538pt too wide) in paragraph at lines 127--128
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 1e-5\OT1/cmr/m/n/12 . Shared weight
- for en-ergy and electron-
- []
-
-
-Overfull \hbox (57.38611pt too wide) in paragraph at lines 130--131
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 True\OT1/cmr/m/n/12 . Boolean switc
-h. When en-abled, \OT1/cmtt/m/n/12 ReduceLROnPlateau
- []
-
-
-Overfull \hbox (1.9651pt too wide) in paragraph at lines 135--136
-[]\OT1/cmr/m/n/12 Default: \OT1/cmtt/m/n/12 True\OT1/cmr/m/n/12 . Boolean switc
-h for the revert-to-best check-
- []
-
-[32] [33] [34]
-Overfull \hbox (4.19576pt too wide) in paragraph at lines 184--185
+[38] [39]
+Underfull \hbox (badness 3058) in paragraph at lines 199--200
 []\OT1/cmtt/m/n/12 train[]on[]energy=True \OT1/cmr/m/n/12 with \OT1/cmtt/m/n/12
- train[]observables[]on[]gt=False \OT1/cmr/m/n/12 re-quires
+ train[]observables[]on[]gt=False \OT1/cmr/m/n/12 re-
  []
 
 
-Overfull \hbox (2.87pt too wide) in paragraph at lines 185--186
+Overfull \hbox (2.87pt too wide) in paragraph at lines 200--201
 []\OT1/cmtt/m/n/12 train[]on[]num[]electrons=True \OT1/cmr/m/n/12 with \OT1/cmt
 t/m/n/12 train[]observables[]on[]gt=False
  []
 
-
-Overfull \hbox (108.27124pt too wide) in paragraph at lines 186--187
+[40]
+Underfull \hbox (badness 2269) in paragraph at lines 201--202
 []\OT1/cmtt/m/n/12 train[]on[]energy=True \OT1/cmr/m/n/12 or \OT1/cmtt/m/n/12 t
-rain[]on[]num[]electrons=True \OT1/cmr/m/n/12 re-quires \OT1/cmtt/m/n/12 loss[]
-coef[]observables
+rain[]on[]num[]electrons=True \OT1/cmr/m/n/12 re-quires
  []
 
 
-Overfull \hbox (8.35475pt too wide) in paragraph at lines 188--189
-[]\OT1/cmtt/m/n/12 train[]on[]stress=True \OT1/cmr/m/n/12 cur-rently val-i-date
-s \OT1/cmtt/m/n/12 loss[]coef[]stress != 0\OT1/cmr/m/n/12 , but
- []
-
-
-Overfull \hbox (50.97964pt too wide) in paragraph at lines 189--190
+Underfull \hbox (badness 10000) in paragraph at lines 202--203
 []\OT1/cmtt/m/n/12 train[]on[]irrep[]parts=True \OT1/cmr/m/n/12 can-not be com-
-bined with \OT1/cmtt/m/n/12 train[]target="irreps"\OT1/cmr/m/n/12 .
+bined with
  []
 
 
-Overfull \hbox (78.93741pt too wide) in paragraph at lines 190--191
+Underfull \hbox (badness 10000) in paragraph at lines 203--204
 []\OT1/cmtt/m/n/12 partial[]train="offdiag" \OT1/cmr/m/n/12 be-haves dif-fer-en
-tly de-pend-ing on \OT1/cmtt/m/n/12 separate[]shifted[]self\OT1/cmr/m/n/12 .
+tly de-pend-ing on
  []
 
-) (./main.bbl
-Underfull \hbox (badness 6188) in paragraph at lines 21--28
-[]\OT1/cmr/m/n/12 L. Fiedler, K. Shah, M. Buss-mann, A. Cangi, []Deep dive
- []
+)
+No file main.bbl.
 
+Package natbib Warning: There were undefined citations.
 
-Underfull \hbox (badness 10000) in paragraph at lines 21--28
-\OT1/cmr/m/n/12 into ma-chine learn-ing den-sity func-tional the-ory for ma-te-
-ri-
- []
-
-
-Underfull \hbox (badness 1708) in paragraph at lines 21--28
-\OT1/cmr/m/n/12 als sci-ence and chem-istry[], Phys. Rev. Mater. 6 (2022) 04030
-1.
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 21--28
-\OT1/cmr/m/n/12 URL []$\OT1/cmtt/m/n/12 https : / / link . aps . org / doi / 10
- . 1103 / PhysRevMaterials . 6 .
- []
-
-[35]
-Underfull \hbox (badness 10000) in paragraph at lines 59--67
-\OT1/cmr/m/n/12 URL []$\OT1/cmtt/m/n/12 https : / / link . aps . org / doi / 10
- . 1103 / PhysRevResearch . 4 .
- []
-
-
-Underfull \hbox (badness 1708) in paragraph at lines 85--93
-\OT1/cmr/m/n/12 Func-tion, Elec-tron Den-sity Gen-er-a-tion, and At-om-iza-tion
- En-ergy
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 85--93
-\OT1/cmr/m/n/12 URL []$\OT1/cmtt/m/n/12 https : / / link . aps . org / doi / 10
- . 1103 / PhysRevLett . 125 .
- []
-
-[36]
-Underfull \hbox (badness 4120) in paragraph at lines 111--119
-[]\OT1/cmr/m/n/12 E. Ko-cer, T. W. Ko, J. Behler, []Neu-ral net-work po-ten-tia
-ls:
- []
-
-
-Underfull \hbox (badness 5862) in paragraph at lines 111--119
-\OT1/cmr/m/n/12 A con-cise overview of meth-ods[], An-nual Re-view of Phys-i-ca
-l
- []
-
-
-Underfull \hbox (badness 1776) in paragraph at lines 111--119
-\OT1/cmr/m/n/12 Chem-istry 73 (Vol-ume 73, 2022) (2022) 163--186.  []$\OT1/cmtt
-/m/n/12 doi : https :
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 111--119
-\OT1/cmr/m/n/12 URL []$\OT1/cmtt/m/n/12 https : / / www . annualreviews . org /
- content / journals / 10 .
- []
-
-[37] [38]) [39] (./main.aux)
+[41] (./main.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
-Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 1E9D0E40C13F8D640A869AD9F8338960;7999.
+
+
+LaTeX Warning: There were undefined references.
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+
+Package rerunfilecheck Warning: File `main.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+Package rerunfilecheck Info: Checksums for `main.out':
+(rerunfilecheck)             Before: <no file>
+(rerunfilecheck)             After:  BDA24BAFB77D2F56F42D288C83C92680;9189.
  )
 Here is how much of TeX's memory you used:
- 11154 strings out of 476182
- 168636 string characters out of 5795596
- 1937975 words of memory out of 5000000
- 32805 multiletter control sequences out of 15000+600000
- 572599 words of font info for 90 fonts, out of 8000000 for 9000
+ 13333 strings out of 476182
+ 197213 string characters out of 5795596
+ 2062975 words of memory out of 5000000
+ 34962 multiletter control sequences out of 15000+600000
+ 575373 words of font info for 100 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 75i,13n,79p,1189b,646s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></us
-r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr/share
-/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texli
-ve/texmf-dist/fonts/type1/public/amsfonts/cm/cmitt10.pfb></usr/share/texlive/te
-xmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-di
-st/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fon
-ts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type
-1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/publi
-c/amsfonts/cm/cmmib10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/ams
-fonts/cmextra/cmmib8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsf
-onts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm
-/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.
-pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></us
-r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/
-texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texliv
-e/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf
--dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/share/texlive/texmf-dist/
-fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/share/texlive/texmf-dist/fonts/
-type1/public/amsfonts/cm/cmti7.pfb></usr/share/texlive/texmf-dist/fonts/type1/p
-ublic/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/
-amsfonts/cm/cmtt12.pfb></usr/share/texmf/fonts/type1/public/lm/lmbx7.pfb></usr/
-share/texmf/fonts/type1/public/lm/lmbx9.pfb></usr/share/texmf/fonts/type1/publi
-c/lm/lmex10.pfb></usr/share/texmf/fonts/type1/public/lm/lmmi5.pfb></usr/share/t
-exmf/fonts/type1/public/lm/lmmi6.pfb></usr/share/texmf/fonts/type1/public/lm/lm
-mi7.pfb></usr/share/texmf/fonts/type1/public/lm/lmmi9.pfb></usr/share/texmf/fon
-ts/type1/public/lm/lmr5.pfb></usr/share/texmf/fonts/type1/public/lm/lmr6.pfb></
-usr/share/texmf/fonts/type1/public/lm/lmr7.pfb></usr/share/texmf/fonts/type1/pu
-blic/lm/lmr9.pfb></usr/share/texmf/fonts/type1/public/lm/lmss8.pfb></usr/share/
-texmf/fonts/type1/public/lm/lmss9.pfb></usr/share/texmf/fonts/type1/public/lm/l
-mssbx10.pfb></usr/share/texmf/fonts/type1/public/lm/lmsy5.pfb></usr/share/texmf
-/fonts/type1/public/lm/lmsy6.pfb></usr/share/texmf/fonts/type1/public/lm/lmsy7.
-pfb></usr/share/texmf/fonts/type1/public/lm/lmsy9.pfb></usr/share/texmf/fonts/t
-ype1/public/lm/lmtk10.pfb></usr/share/texmf/fonts/type1/public/lm/lmtt8.pfb></u
-sr/share/texmf/fonts/type1/public/lm/lmtt9.pfb></usr/share/texlive/texmf-dist/f
-onts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (39 pages, 819693 bytes).
+ 75i,13n,79p,1672b,2005s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></us
+r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/shar
+e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr/share/texli
+ve/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmitt10.pfb></usr/share/texlive/texmf-di
+st/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fon
+ts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fonts/typ
+e1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/publ
+ic/amsfonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsf
+onts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm
+/cmmib10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra
+/cmmib8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10
+.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></
+usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/sha
+re/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/share/texli
+ve/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf
+-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fo
+nts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/ty
+pe1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/pub
+lic/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/ams
+fonts/cm/cmti10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/
+cm/cmti12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmt
+i7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb
+></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb></usr
+/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
+Output written on main.pdf (41 pages, 9086491 bytes).
 PDF statistics:
- 1071 PDF objects out of 1200 (max. 8388607)
- 871 compressed objects within 9 object streams
- 190 named destinations out of 1000 (max. 500000)
- 239 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 532 PDF objects out of 1000 (max. 8388607)
+ 422 compressed objects within 5 object streams
+ 202 named destinations out of 1000 (max. 500000)
+ 31 words of extra memory for PDF output out of 10000 (max. 10000000)

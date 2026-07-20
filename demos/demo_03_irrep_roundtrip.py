@@ -14,6 +14,7 @@ from net.common import Config
 # %%
 cfg = Config(
     cutoff_radius=7.0,
+    allow_openmx_positions_box_from_out=True,
     verbosity=0,
 )
 

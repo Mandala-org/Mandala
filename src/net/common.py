@@ -143,8 +143,8 @@ class Config:
     # --------- additional outputs --------------------------------------
     enable_forces: bool = False
     enable_stress: bool = False
-    enable_energy: bool = False
-    enable_num_electrons: bool = False
+    enable_energy: bool = True
+    enable_num_electrons: bool = True
 
     # -------------- training targets -----------------------------------
     train_target: str = "matrix"  # matrix-only in the current workflow
@@ -154,13 +154,13 @@ class Config:
     train_on_energy: bool = False
     train_on_num_electrons: bool = False
     matrix_targets: list = field(default_factory=lambda: ["hamiltonian"])
-    train_observables_on_gt: bool = False
+    train_observables_on_gt: bool = True
     symmetrize_output: bool = False  # symmetrize matrix outputs
     symmetrize_hamiltonian_targets: bool = True
     rescale_density_to_num_electrons: bool = False
 
     # -------------- loss weighting --------------------------------------
-    loss_l1_fraction: float = 0.0  # 0.0 for L2, 1.0 for L1
+    loss_l1_fraction: float = 1.0  # 0.0 for L2, 1.0 for L1
     loss_coef_observables: float = 0.0
     allow_zero_observable_loss_control: bool = False
     observable_loss_kind: str = "mae"  # mse | mae
