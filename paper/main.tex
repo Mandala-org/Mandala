@@ -43,10 +43,11 @@
 \author[casus,hzdr]{Vincent Martinetto}
 \author[hzdr]{Mani Lokamani}
 \author[casus,hzdr]{Thomas D. Kühne}
-% TODO: corresponding author doesn't show in the pdf
 \author[casus,hzdr]{Attila Cangi\corref{cor1}}
 \ead{a.cangi@hzdr.de}
 \cortext[cor1]{Corresponding author}
+
+% TODO: Add Varadarajan
 
 \address[casus]{Center for Advanced Systems Understanding, 02826 Görlitz, Germany}
 \address[hzdr]{Helmholtz-Zentrum Dresden-Rossendorf, 01328 Dresden, Germany}
@@ -1079,8 +1080,18 @@ scientific software package and as a framework for rapid methodological
 experimentation.
 
 \section{Results and ablations}
-\label{sec:results}
+% TODO: separate Results and ablations
+% Hamiltonian prediction - separate results by metric/observable
+% Mention somewhere we evaluate the framework on a complex systems like
+% We're demonstrating a specific effect on spefic system, we want to showcase general capability of the framework
 
+%
+% 1. Hamiltonian of ZnCuSnSeS - MAE and Hamiltonian cutout
+% 2. DOS and Band energy of SiO2 - DOS picture
+% 3. Band structure and DOS of silicon - band structure picture (combined plot)
+% 4. Density plot from .cube for silicon
+\label{sec:results}
+% TODO: box plots for ablations, confidence intervals
 \subsection{ZnCuSnSeS envelope-factorization ablation}
 
 We performed a controlled ablation using perturbed ZnCuSnSeS structures.
@@ -1159,7 +1170,7 @@ from data.snapshot import Snapshot
 snapshot = Snapshot.from_openmx(
     "sample.matrix", "sample.info.out", convention="e3nn"
 )
-print(snapshot.get_energy())
+print(snapshot.get_band_energy())
 print(snapshot.get_number_of_electrons())
 \end{lstlisting}
 
