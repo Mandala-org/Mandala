@@ -40,8 +40,7 @@ This appendix summarizes the current Mandala configuration surface.
 
 \begin{description}
 \item[\texttt{num\_layers\_gnn}] Default: \texttt{2}. Number of message-passing blocks.
-\item[\texttt{tp\_type}] Default: \texttt{separate\_weight}. Values: \texttt{separate\_weight} uses the internal separate-weight tensor product, and \texttt{fully\_connected} uses e3nn's implementation.
-% TODO: Mention it's the DeepH-E3 implementation
+\item[\texttt{tp\_type}] Default: \texttt{separate\_weight}. Values: \texttt{separate\_weight} uses Mandala's DeepH-E3-style separate-weight tensor-product implementation, and \texttt{fully\_connected} uses e3nn's implementation.
 \item[\texttt{use\_self\_connection}] Default: \texttt{False}. Enables learned scalar-conditioned skip/self-connection tensor products in node and edge updates.
 \item[\texttt{edge\_update\_residual}] Default: \texttt{False}. Adds residual connection to the edge update output when dimensions match.
 \item[\texttt{node\_update\_residual}] Default: \texttt{False}. Adds residual connection to the node update output when dimensions match.

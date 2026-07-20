@@ -19,13 +19,6 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def bootstrap_median_ci(values: np.ndarray, *, seed: int = 7) -> tuple[float, float]:
-    rng = np.random.default_rng(seed)
-    samples = rng.choice(values, size=(20_000, len(values)), replace=True)
-    medians = np.median(samples, axis=1)
-    return tuple(np.quantile(medians, [0.025, 0.975]))
-
-
 def plot_real_envelope() -> None:
     rows = read_csv(DATA / "zncusnses_envelope_real.csv")
     by_treatment: dict[str, dict[int, float]] = defaultdict(dict)
@@ -49,29 +42,22 @@ def plot_real_envelope() -> None:
     }
 
     fig, ax = plt.subplots(figsize=(7.2, 4.8), constrained_layout=True)
-    for seed_index, _seed in enumerate(SEEDS):
-        pair = [values[treatment][seed_index] for treatment in treatments]
-        ax.plot(x, pair, color="#aab2b8", linewidth=1.1, zorder=1)
-        ax.scatter(
-            x, pair, color=colors, s=42, edgecolor="white", linewidth=0.7, zorder=3
-        )
+    boxes = ax.boxplot(
+        [values[treatment] for treatment in treatments],
+        positions=x,
+        widths=0.56,
+        patch_artist=True,
+        medianprops={"color": "#111111", "linewidth": 2.0},
+        whiskerprops={"color": "#444444"},
+        capprops={"color": "#444444"},
+        flierprops={"marker": "o", "markerfacecolor": "#444444", "markersize": 4},
+    )
+    for box, color in zip(boxes["boxes"], colors):
+        box.set_facecolor(color)
+        box.set_alpha(0.82)
 
     for index, treatment in enumerate(treatments):
-        treatment_values = values[treatment]
-        median = float(np.median(treatment_values))
-        ci_low, ci_high = bootstrap_median_ci(treatment_values, seed=17 + index)
-        ax.errorbar(
-            index,
-            median,
-            yerr=[[median - ci_low], [ci_high - median]],
-            fmt="_",
-            markersize=24,
-            markeredgewidth=3,
-            color="#111111",
-            capsize=5,
-            linewidth=1.6,
-            zorder=4,
-        )
+        median = float(np.median(values[treatment]))
         ax.annotate(
             f"median {median:.6f}",
             (index, median),
@@ -100,7 +86,7 @@ def plot_real_envelope() -> None:
     )
     ax.set_xticks(x, labels)
     ax.set_ylabel("Validation Hamiltonian MAE")
-    ax.set_title("ZnCuSnSeS envelope factorization (real W&B results)", pad=12)
+    ax.set_title("ZnCuSnSeS envelope factorization (real W&B results; n = 5)", pad=12)
     ax.grid(axis="y", alpha=0.25)
     ax.spines[["top", "right"]].set_visible(False)
     fig.savefig(FIGURES / "result_envelope_real.png", dpi=240)
@@ -125,7 +111,6 @@ def plot_placeholder_ablations() -> None:
         study_rows = grouped[study]
         parameter = study_rows[0]["parameter"]
         treatments = list(dict.fromkeys(row["treatment"] for row in study_rows))
-        x = np.arange(len(treatments), dtype=float)
         primary_by_treatment = {
             treatment: {
                 int(row["seed"]): float(row["synthetic_val_hamiltonian_mae_au"])
@@ -143,52 +128,26 @@ def plot_placeholder_ablations() -> None:
             for values in primary_by_treatment.values()
             for value in values.values()
         )
-        for seed in SEEDS:
-            pair = [primary_by_treatment[treatment][seed] for treatment in treatments]
-            ax.plot(x, pair, color="#a8adb2", linewidth=0.9, alpha=0.8)
-            ax.scatter(x, pair, color="#365f8d", s=24, zorder=3)
-        medians = [
-            np.median(list(primary_by_treatment[treatment].values()))
-            for treatment in treatments
-        ]
-        ax.scatter(
-            x, medians, marker="_", s=380, linewidths=2.8, color="black", zorder=4
+        boxes = ax.boxplot(
+            [
+                list(primary_by_treatment[treatment].values())
+                for treatment in treatments
+            ],
+            widths=0.56,
+            patch_artist=True,
+            medianprops={"color": "#111111", "linewidth": 1.8},
+            whiskerprops={"color": "#555555"},
+            capprops={"color": "#555555"},
         )
-        ax.set_xticks(x, treatments)
+        for box, color in zip(boxes["boxes"], ("#315b7d", "#2f8f6b")):
+            box.set_facecolor(color)
+            box.set_alpha(0.78)
+        ax.set_xticks(np.arange(1, len(treatments) + 1), treatments)
         ax.set_xlabel(parameter)
         ax.set_ylabel("Synthetic val/hamiltonian_mae proxy (a.u.)", color="#365f8d")
         ax.tick_params(axis="y", labelcolor="#365f8d")
         ax.set_title(study, fontsize=11)
         ax.grid(axis="y", alpha=0.2)
-
-        secondary_metric = next(
-            (row["secondary_metric"] for row in study_rows if row["secondary_metric"]),
-            None,
-        )
-        if secondary_metric is not None:
-            secondary_ax = ax.twinx()
-            secondary_by_treatment = {
-                treatment: [
-                    float(row["synthetic_secondary_au"])
-                    for row in study_rows
-                    if row["treatment"] == treatment
-                ]
-                for treatment in treatments
-            }
-            for treatment_index, treatment in enumerate(treatments):
-                jitter = np.linspace(-0.055, 0.055, len(SEEDS))
-                secondary_ax.scatter(
-                    treatment_index + jitter,
-                    secondary_by_treatment[treatment],
-                    marker="x",
-                    color="#b45f06",
-                    s=28,
-                    linewidth=1.2,
-                )
-            secondary_ax.set_ylabel(
-                f"Synthetic {secondary_metric} proxy (a.u.)", color="#b45f06"
-            )
-            secondary_ax.tick_params(axis="y", labelcolor="#b45f06")
 
         ax.text(
             0.5,

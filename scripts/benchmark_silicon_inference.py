@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
         "--scales",
         type=str,
         default="2",
-        help="Comma-separated scale directories; default '2' has 100 snapshots.",
+        help="Comma-separated scale directories; default is scale 2.",
     )
     parser.add_argument("--num-snapshots", type=int, default=100)
     parser.add_argument("--num-passes", type=int, default=10)
