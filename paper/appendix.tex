@@ -5,14 +5,14 @@
 \section{Configuration Inventory}
 \label{app:config-inventory}
 
-This appendix summarizes the current Mandala configuration surface. It focuses on the live options that affect the present implementation and omits legacy-only study fields that are no longer part of the paper-facing API.
+This appendix summarizes the current Mandala configuration surface.
 
-\subsection{Top-Level Runtime Settings Outside \texttt{Config}}
+% \subsection{Top-Level Runtime Settings Outside \texttt{Config}}
 
-\begin{description}
-\item[\texttt{convention}] Values: \texttt{e3nn} by default, or backend-specific conventions such as \texttt{openmx}, \texttt{fhi-aims}, and \texttt{pyscf} through parser and basis-conversion paths. This chooses the orbital and real-spherical-harmonics convention used after loading.
-\item[Snapshot registration] \nolinkurl{DatasetFactory.add_snapshot(matrix_path, info_path, purpose=...)} registers matrix/info pairs for dataset creation. Backend type is inferred from the source file suffixes.
-\end{description}
+% \begin{description}
+% \item[\texttt{convention}] Values: \texttt{e3nn} by default, or backend-specific conventions such as \texttt{openmx}, \texttt{fhi-aims}, and \texttt{pyscf} through parser and basis-conversion paths. This chooses the orbital and real-spherical-harmonics convention used after loading.
+% \item[Snapshot registration] \nolinkurl{DatasetFactory.add_snapshot(matrix_path, info_path, purpose=...)} registers matrix/info pairs for dataset creation. Backend type is inferred from the source file suffixes.
+% \end{description}
 
 \subsection{Geometry, Basis, and Graph Construction}
 
@@ -41,6 +41,7 @@ This appendix summarizes the current Mandala configuration surface. It focuses o
 \begin{description}
 \item[\texttt{num\_layers\_gnn}] Default: \texttt{2}. Number of message-passing blocks.
 \item[\texttt{tp\_type}] Default: \texttt{separate\_weight}. Values: \texttt{separate\_weight} uses the internal separate-weight tensor product, and \texttt{fully\_connected} uses e3nn's implementation.
+% TODO: Mention it's the DeepH-E3 implementation
 \item[\texttt{use\_self\_connection}] Default: \texttt{False}. Enables learned scalar-conditioned skip/self-connection tensor products in node and edge updates.
 \item[\texttt{edge\_update\_residual}] Default: \texttt{False}. Adds residual connection to the edge update output when dimensions match.
 \item[\texttt{node\_update\_residual}] Default: \texttt{False}. Adds residual connection to the node update output when dimensions match.
@@ -127,8 +128,8 @@ This appendix summarizes the current Mandala configuration surface. It focuses o
 \subsection{Optimization, Regularization, and Training Stability}
 
 \begin{description}
-\item[\texttt{lr}] Default: \texttt{0.010803383053097332}. Learning rate for \texttt{AdamW}.
-\item[\texttt{max\_epochs}] Default: \texttt{10000}. Intended training horizon.
+\item[\texttt{lr}] Default: \texttt{0.01}. Learning rate for \texttt{AdamW}.
+\item[\texttt{max\_epochs}] Default: \texttt{1000}. Intended training horizon.
 \item[\texttt{max\_wall\_clock\_seconds}] Default: \texttt{43200} (12 hours). Wall-clock training budget; \texttt{None} disables it.
 \item[\texttt{batch\_size}] Default: \texttt{1}. Batch size for dataset loaders.
 \item[\texttt{accumulate\_grad\_batches}] Default: \texttt{1}. Gradient accumulation factor.
@@ -203,7 +204,6 @@ This appendix summarizes the current Mandala configuration surface. It focuses o
 \item \texttt{partial\_train="offdiag"} behaves differently depending on \texttt{separate\_shifted\_self}.
 \item \texttt{hidden\_irreps} overrides the automatic \texttt{build\_hidden\_irreps(l\_max, hidden\_base\_dim, emb\_use\_odd\_features)} logic completely.
 \item \texttt{rescale\_density\_to\_num\_electrons=True} affects artifact and metric evaluation.
-\item Force- and stress-related fields are retained for experimental development, but their present derivatives are derivatives of the band energy, not the Kohn--Sham total energy, and they are not part of the validated paper-facing objective.
 \end{enumerate}
 
 \endgroup
