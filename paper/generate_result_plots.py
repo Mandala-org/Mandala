@@ -19,8 +19,8 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def plot_real_envelope() -> None:
-    rows = read_csv(DATA / "zncusnses_envelope_real.csv")
+def plot_envelope_ablation() -> None:
+    rows = read_csv(DATA / "zncusnses_envelope_ablation.csv")
     by_treatment: dict[str, dict[int, float]] = defaultdict(dict)
     split_hashes = set()
     for row in rows:
@@ -86,10 +86,10 @@ def plot_real_envelope() -> None:
     )
     ax.set_xticks(x, labels)
     ax.set_ylabel("Validation Hamiltonian MAE")
-    ax.set_title("ZnCuSnSeS envelope factorization (real W&B results; n = 5)", pad=12)
+    ax.set_title("ZnCuSnSeS envelope factorization (n=10)", pad=12)
     ax.grid(axis="y", alpha=0.25)
     ax.spines[["top", "right"]].set_visible(False)
-    fig.savefig(FIGURES / "result_envelope_real.png", dpi=240)
+    fig.savefig(FIGURES / "result_envelope_ablation.png", dpi=240)
     plt.close(fig)
 
 
@@ -177,6 +177,6 @@ def plot_placeholder_ablations() -> None:
 
 if __name__ == "__main__":
     FIGURES.mkdir(parents=True, exist_ok=True)
-    plot_real_envelope()
+    plot_envelope_ablation()
     plot_placeholder_ablations()
-    print("Generated real and placeholder result plots.")
+    print("Generated ablation plots.")
