@@ -211,20 +211,19 @@ This appendix summarizes the current Mandala configuration surface.
 \section{Configurations of the Evaluated Models}
 \label{app:evaluated-model-configurations}
 
-The following records contain the exact launch command and resolved
-configuration stored by Weights \& Biases for each model used in
-Section~\ref{sec:results}. Each record also identifies the run, checkpoint
-history through the resume argument, and source-code revision. The redundant
-serialized \texttt{cfg} representation stored by Weights \& Biases is omitted;
-all of its settings are retained as structured entries under
-\texttt{configuration}.
+The following listings contain the resolved configuration stored by Weights
+\& Biases for each model used in Section~\ref{sec:results}. Run identifiers,
+service metadata, and launch commands are omitted. Explicit filesystem paths
+are replaced by \texttt{...}. The redundant serialized \texttt{cfg}
+representation is also omitted; its settings are retained as structured
+entries under \texttt{configuration}.
 
 \subsection{ZnCu$_2$Sn(SeS)$_2$ Model}
 \label{app:model-config-zncusnses}
 
 \lstinputlisting[
   language={},
-  basicstyle=\ttfamily\scriptsize,
+  basicstyle=\ttfamily\tiny,
   breaklines=true,
   breakatwhitespace=false,
   columns=fullflexible,
@@ -236,20 +235,19 @@ all of its settings are retained as structured entries under
 
 \lstinputlisting[
   language={},
-  basicstyle=\ttfamily\scriptsize,
+  basicstyle=\ttfamily\tiny,
   breaklines=true,
   breakatwhitespace=false,
   columns=fullflexible,
   frame=single
 ]{data/evaluated_model_configs/siox.yaml}
 
-\clearpage
 \subsection{Perturbed-Silicon Model}
 \label{app:model-config-silicon}
 
 \lstinputlisting[
   language={},
-  basicstyle=\ttfamily\scriptsize,
+  basicstyle=\ttfamily\tiny,
   breaklines=true,
   breakatwhitespace=false,
   columns=fullflexible,

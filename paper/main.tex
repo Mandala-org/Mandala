@@ -1227,12 +1227,22 @@ periodic-image contributions kept shift-resolved.}
 \label{fig:silicon-density}
 \end{figure}
 
-The discrete distance groups in Fig.~\ref{fig:silicon-density-errors} correspond
-to coordination shells of the perturbed crystal. Hamiltonian blocks have their
-smallest relative errors over the strongly coupled intermediate shells and
-larger relative errors near the cutoff, where the target blocks are weak. The
-density matrix shows greater shell-to-shell variation because its longer-range
-blocks encode the occupied electronic subspace rather than the operator alone.
+For each atom pair and periodic shift, the Hamiltonian or density contribution
+is a $13\times13$ block in the local orbital basis. For a predicted block
+$\widehat{M}$ and its reference $M$, the relative block error shown in
+Fig.~\ref{fig:silicon-density-errors} is
+\begin{equation}
+\epsilon_{\mathrm{rel}}(\widehat{M},M)
+=\frac{\frac{1}{169}\sum_{a,b}|\widehat{M}_{ab}-M_{ab}|}
+{\max\!\left(\frac{1}{169}\sum_{a,b}|M_{ab}|,10^{-12}\right)}.
+\end{equation}
+The discrete distance groups
+correspond to coordination shells of the perturbed crystal. Hamiltonian blocks
+have their smallest relative errors over the strongly coupled intermediate
+shells and larger relative errors near the cutoff, where normalization by weak
+target blocks magnifies the ratio. The density matrix shows greater
+shell-to-shell variation because its longer-range blocks encode the occupied
+electronic subspace rather than the operator alone.
 
 \begin{figure}[H]
 \centering
@@ -1392,10 +1402,11 @@ corresponding runs and analyses are complete.
 This work was partially supported by the Center for Advanced Systems Understanding (CASUS), financed by the German Federal Ministry of Education and Research and by the Saxon state government out of the state budget approved by the Saxon State Parliament, and by the University of Wroc\l aw. Computational resources were provided by the \texttt{hemera} and \texttt{rosi} clusters of HZDR.
 
 \clearpage
-\appendix
-\input{appendix}
-
 \bibliographystyle{elsarticle-num}
 \bibliography{references.bib}
+
+\clearpage
+\appendix
+\input{appendix}
 
 \end{document}

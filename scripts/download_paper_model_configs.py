@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import shlex
 from pathlib import Path
 
 import wandb
@@ -25,30 +24,21 @@ PAPER_RUNS = {
 
 def _export_run(api: wandb.Api, run_path: str, output_path: Path) -> None:
     run = api.run(run_path)
-    metadata = run.metadata or {}
-    git_metadata = metadata.get("git") or {}
 
     # W&B stores ``cfg`` as a Python repr of the same settings exposed as
     # individual structured keys.  Keeping the structured keys avoids a large,
     # redundant, non-YAML value while preserving every resolved setting.
-    resolved_config = {
-        key: value for key, value in sorted(run.config.items()) if key != "cfg"
-    }
-    payload = {
-        "source": {
-            "wandb_url": run.url,
-            "entity": run.entity,
-            "project": run.project,
-            "run_id": run.id,
-            "run_name": run.name,
-            "git_commit": git_metadata.get("commit"),
-            "program": metadata.get("program"),
-        },
-        "launch_command": shlex.join(
-            [str(metadata.get("program", "python")), *metadata.get("args", [])]
-        ),
-        "configuration": resolved_config,
-    }
+    excluded_keys = {"cfg", "run_name", "wandb_project"}
+    resolved_config = {}
+    for key, value in sorted(run.config.items()):
+        if key in excluded_keys:
+            continue
+        if value is not None and (
+            key == "save_dir" or key.endswith("_path") or key.endswith("_dir")
+        ):
+            value = "..."
+        resolved_config[key] = value
+    payload = {"configuration": resolved_config}
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(

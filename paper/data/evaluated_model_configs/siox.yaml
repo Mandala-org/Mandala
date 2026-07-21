@@ -1,15 +1,3 @@
-source:
-  wandb_url: https://wandb.ai/b-brzoza/mandala-SiOx-hamiltonian-mae-stage2-47h25/runs/ebg4g3h3
-  entity: b-brzoza
-  project: mandala-SiOx-hamiltonian-mae-stage2-47h25
-  run_id: ebg4g3h3
-  run_name: dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25
-  git_commit: a5e2ede390fa9765e1d6a00394e1ffc9f8ff8473
-  program: /data/home2/brzoza73/casus/mandala/scripts/wandb_run.py
-launch_command: /data/home2/brzoza73/casus/mandala/scripts/wandb_run.py --wandb-project mandala-SiOx-hamiltonian-mae-stage2-47h25 --checkpoint-dir /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/SiOx_hamiltonian_mae_stage2_47h25 --resume-from-checkpoint /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/SiOx_hamiltonian_envelope_selected_95h8_mae/dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027/best_model.pt --compatibility true --resume-mode best --wandb-mode online --run-name dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25 --generate-video false --log-artifacts true --dataset-kind siox --data-path /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/snapshot_cache --dataset-device cuda --num-workers 3 --num-train 90 --num-val 10 --max-wall-clock-hours 47.25 --lr 2e-4 --max-epochs 4000 --grad-clip-val 2.0 --accumulate-grad-batches 1 --use-lr-scheduler
-  true --lr-scheduler-factor 0.5 --lr-scheduler-patience 60 --lr-scheduler-min-lr 1e-8 --lr-scheduler-target val/loss_total --precision 32-true --convention e3nn --cutoff-radius 10.0 --l-max 4 --hidden-base-dim 64 --hidden-irreps 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e --edge-type-emb-dim 32 --emb-use-odd-features true --edge-encoder-style rich --edge-encoder-use-sh-tensor-square true --e3layernorm false --num-layers-gnn 2 --tp-type separate_weight --use-self-connection false --edge-update-node-combine concat --edge-update-residual false --node-update-message-agg attention --node-update-attention-scalar-dim 64 --node-update-attention-heads 4 --node-update-residual false --e3mlp-variant film --internal-e3mlp-variant resnormact --head-e3mlp-variant normact --neck-depth 1 --internal-e3mlp-layers 1 --head-e3mlp-layers 1 --head-use-node-embeddings-for-self-edges true --separate-shifted-self true --head-use-tensor-square false --head-use-mlp-log-scale false --head-log-scale-mlp-n-layers
-  1 --head-diag-output-scale 1.0 --head-offdiag-output-scale 1.0 --e3mlp-pre-norm false --e3mlp-norm-eps 1e-8 --e3mlp-film-hidden-dim 64 --e3mlp-output-scale 1.0 --e3mlp-weight-init-scale 1.0 --e3mlp-residual-scale 0.25 --activation-odd-scalar tanh --activation-odd-gate tanh --nonlin-kind normact --activation-scalar leakyrelu --activation-gate softplus --s2act-res 128 --norm-kind component --dropout 0.0 --l1-reg-coef 0.0 --l2-reg-coef 0.0 --n-radial 128 --radial-layers '[128, 128, 128]' --pair-conditioned-radial-mlp false --pair-distance-normalization off --device cuda --gpus 1 --benchmark false --adaptive-log-interval true --log-interval 10 --log-data false --log-model false --log-forward false --log-per-irrep-metrics true --print-per-irrep-metrics false --log-per-irrep-images false --log-hamiltonian-irrep-contrib-metrics true --log-hamiltonian-pair-contrib-metrics true --log-partial-gt-observables true --matrix-targets '["hamiltonian"]' --enable-energy true --enable-num-electrons false
-  --enable-forces false --train-on-energy false --train-on-num-electrons false --train-on-forces false --train-on-irrep-parts false --train-observables-on-gt false --loss-coef-observables 0.0 --loss-coef-forces 0.0 --loss-l1-fraction 1.0 --symmetrize-output false --symmetrize-hamiltonian-targets true --rescale-density-to-num-electrons false --precompute-edge-features true --radial-embedding-scale none --apply-cutoff-to-targets true --require-exact-edge-match true --allow-incomplete-dataset false --hamiltonian-envelope-path eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json --hamiltonian-envelope-mode multiply_prediction --loss-weighting-mode off --revert-on-spike true --revert-monitor val/loss_total --revert-decay-patience 4 --revert-decay-rate 0.5 --revert-spike-factor 2.0 --spectral-loss-enabled false --spectral-loss-coef 0.0 --seed 42
 configuration:
   accumulate_grad_batches: 1
   activation_gate: softplus
@@ -52,7 +40,7 @@ configuration:
   grad_clip_val: 2
   hamiltonian_envelope_eps: 1.0e-12
   hamiltonian_envelope_mode: multiply_prediction
-  hamiltonian_envelope_path: eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json
+  hamiltonian_envelope_path: '...'
   head_diag_output_scale: 1
   head_e3mlp_layers: 1
   head_e3mlp_variant: normact
@@ -131,14 +119,13 @@ configuration:
   revert_monitor: val/loss_total
   revert_on_spike: true
   revert_spike_factor: 2
-  run_name: dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25
   s2act_res: 128
   safety_checks: false
-  save_dir: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/SiOx_hamiltonian_mae_stage2_47h25
+  save_dir: '...'
   seed: 42
   separate_shifted_self: true
   shuffle_snapshot_load_order: true
-  snapshot_cache_dir: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/snapshot_cache
+  snapshot_cache_dir: '...'
   spectral_fermi_cache_path: null
   spectral_loss_coef: 0
   spectral_loss_enabled: false
@@ -165,4 +152,3 @@ configuration:
   use_self_connection: false
   verbosity: 1
   video_max_atoms: 6
-  wandb_project: mandala-SiOx-hamiltonian-mae-stage2-47h25
