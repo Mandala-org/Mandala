@@ -56,7 +56,13 @@ def strip_mapper_keys(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Te
 
 
 def load_checkpoint_payload(checkpoint_path: str | Path) -> dict[str, Any]:
-    checkpoint = torch.load(Path(checkpoint_path).expanduser(), map_location="cpu")
+    # Mandala checkpoints include the trusted Config dataclass alongside tensors.
+    # PyTorch 2.6 defaults to weights_only=True, which rejects that payload.
+    checkpoint = torch.load(
+        Path(checkpoint_path).expanduser(),
+        map_location="cpu",
+        weights_only=False,
+    )
     if not isinstance(checkpoint, dict):
         raise TypeError("Checkpoint payload must be a mapping.")
     return checkpoint

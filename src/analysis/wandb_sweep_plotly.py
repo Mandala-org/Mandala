@@ -609,12 +609,33 @@ def copy_evaluation_bundle_assets(
     destination_dir.mkdir(parents=True, exist_ok=True)
     preferred_images = [
         "band_structure_comparison.png",
+        "band_structure_and_dos_comparison.png",
         "band_structure_prediction.png",
         "hamiltonian_first_atoms_comparison.png",
         "hamiltonian_first_atoms_prediction.png",
         "density_first_atoms_comparison.png",
         "density_first_atoms_prediction.png",
     ]
+    for matrix_name in ("hamiltonian", "density"):
+        preferred_images.extend(
+            f"{matrix_name}_{view}_clim_{clim}.png"
+            for view in (
+                "shift_resolved_worst_abs",
+                "sum_pbc_worst_abs",
+                "first6_sum_pbc",
+                "first6_shift_resolved",
+            )
+            for clim in ("1e-04", "1e-03", "1e-02")
+        )
+    preferred_images.extend(
+        f"hamiltonian_block_{diagnostic}_log.png"
+        for diagnostic in (
+            "absolute_error_vs_edge_length",
+            "relative_error_vs_edge_length",
+            "absolute_error_vs_block_magnitude",
+            "relative_error_vs_block_magnitude",
+        )
+    )
     image_assets = []
     file_assets = []
     for filename in preferred_images:
@@ -646,6 +667,7 @@ def copy_evaluation_bundle_assets(
         "hamiltonian_correlation.png",
         "hamiltonian_block_error_metrics.pt",
         "hamiltonian_interactive_heatmaps.pt",
+        "density_interactive_heatmaps.pt",
         "snapshot_3d_error_payload.pt",
         "density_block_error_metrics.pt",
         "density_correlation.pt",
@@ -688,6 +710,7 @@ def copy_evaluation_bundle_assets(
 def label_for_asset(filename: str) -> str:
     mapping = {
         "band_structure_comparison.png": "Band structure comparison",
+        "band_structure_and_dos_comparison.png": "Band structure and DOS comparison",
         "band_structure_prediction.png": "Band structure prediction",
         "dos_comparison.png": "DOS comparison",
         "dos_prediction.png": "DOS prediction",
@@ -698,6 +721,7 @@ def label_for_asset(filename: str) -> str:
         "tetrahedron_dos_cache_pred.pt": "Prediction DOS eigenvalue cache",
         "hamiltonian_block_error_metrics.pt": "Hamiltonian block error metrics",
         "hamiltonian_interactive_heatmaps.pt": "Hamiltonian interactive heatmaps",
+        "density_interactive_heatmaps.pt": "Density interactive heatmaps",
         "snapshot_3d_error_payload.pt": "Snapshot 3D error payload",
         "density_block_error_metrics.pt": "Density block error metrics",
         "hamiltonian_first_atoms_comparison.png": "Hamiltonian heatmap",
@@ -2327,7 +2351,7 @@ def _build_eigenvalue_correlation_figure(
             ),
         ]
     )
-    r2_text = f"R²={r2:.4f}" if np.isfinite(r2) else "R²=n/a"
+    r2_text = f"R²={r2:.6f}" if np.isfinite(r2) else "R²=n/a"
     fig.update_layout(
         title=f"Eigenvalue correlation ({source}) | MAE={mae:.4g} eV | {r2_text}",
         xaxis_title="True eigenvalue (eV relative to Fermi)",
@@ -2511,7 +2535,6 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
         dos_pred = _series_from_payload(payload, "dos_pred")
         dos_error = _series_from_payload(payload, "dos_error")
         fermi_true = payload.get("fermi_true_ev")
-        fermi_pred = payload.get("fermi_pred_ev")
         fig.add_trace(
             go.Scattergl(
                 x=grid_true,
@@ -2530,26 +2553,6 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
                 name="Prediction",
             )
         )
-        if fermi_true is not None:
-            fig.add_vline(
-                x=0.0,
-                line=dict(color="rgba(0,0,0,0.9)", dash="dash", width=1.2),
-                annotation_text="GT $E_F$",
-                annotation_position="top left",
-            )
-        if fermi_pred is not None:
-            fig.add_vline(
-                x=(
-                    float(fermi_pred - fermi_true)
-                    if fermi_true is not None
-                    else float(fermi_pred)
-                ),
-                line=dict(color="#1f5aa6", dash="dot", width=1.2),
-                annotation_text=(
-                    "Pred $E_F - E_F^{GT}$" if fermi_true is not None else "Pred $E_F$"
-                ),
-                annotation_position="top right",
-            )
         fig2 = make_subplots(
             rows=2,
             cols=1,
@@ -2707,7 +2710,7 @@ def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
     fig.update_layout(
         title=str(payload.get("title", "Correlation"))
         + (
-            f" | R^2 = {float(r2):.4f}"
+            f" | R^2 = {float(r2):.6f}"
             if r2 is not None and np.isfinite(float(r2))
             else ""
         ),

@@ -596,14 +596,27 @@ def _run_snapshot_case(
         max_atoms=args.max_atoms,
         clim=ham_clim,
     )
-    analysis_eval.save_hamiltonian_interactive_heatmap_payload(
+    hamiltonian_heatmap_payload = (
+        analysis_eval.save_hamiltonian_interactive_heatmap_payload(
+            pred_mats_aligned["hamiltonian"],
+            gt_mats["hamiltonian"],
+            positions=positions,
+            box=box,
+            output_path=output_dir / "hamiltonian_interactive_heatmaps.pt",
+            default_clim=ham_clim,
+            max_nodes=6,
+        )
+    )
+    analysis_eval.save_matrix_heatmap_suite(
         pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
         positions=positions,
         box=box,
-        output_path=output_dir / "hamiltonian_interactive_heatmaps.pt",
-        default_clim=ham_clim,
-        max_nodes=6,
+        output_dir=output_dir,
+        prefix="hamiltonian",
+        matrix_label="Hamiltonian",
+        max_atoms=6,
+        payload=hamiltonian_heatmap_payload,
     )
     analysis_eval.save_snapshot_3d_error_payload(
         pred_mats_aligned["hamiltonian"],
@@ -621,12 +634,18 @@ def _run_snapshot_case(
         alpha=args.correlation_alpha,
         seed=args.correlation_sample_seed,
     )
-    analysis_eval.save_block_error_scatter_data(
+    hamiltonian_block_payload = analysis_eval.save_block_error_scatter_data(
         pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
         positions=positions,
         box=box,
         output_path=output_dir / "hamiltonian_block_error_metrics.pt",
+    )
+    analysis_eval.save_block_error_diagnostic_plots(
+        hamiltonian_block_payload,
+        output_dir=output_dir,
+        prefix="hamiltonian",
+        matrix_label="Hamiltonian",
     )
     if "density" in pred_mats and "density" in predicted_matrix_names:
         analysis_eval.save_comparison_plot(
@@ -636,6 +655,28 @@ def _run_snapshot_case(
             title=f"Density comparison: {title}",
             max_atoms=args.max_atoms,
             clim=density_clim,
+        )
+        density_heatmap_payload = (
+            analysis_eval.save_hamiltonian_interactive_heatmap_payload(
+                pred_mats_aligned["density"],
+                gt_mats["density"],
+                positions=positions,
+                box=box,
+                output_path=output_dir / "density_interactive_heatmaps.pt",
+                default_clim=density_clim,
+                max_nodes=6,
+            )
+        )
+        analysis_eval.save_matrix_heatmap_suite(
+            pred_mats_aligned["density"],
+            gt_mats["density"],
+            positions=positions,
+            box=box,
+            output_dir=output_dir,
+            prefix="density",
+            matrix_label="Density",
+            max_atoms=6,
+            payload=density_heatmap_payload,
         )
         analysis_eval.save_correlation_plot(
             pred_mats_aligned["density"],
@@ -657,6 +698,7 @@ def _run_snapshot_case(
         _remove_if_exists(output_dir / "density_correlation.png")
         _remove_if_exists(output_dir / "density_first_atoms_comparison.png")
         _remove_if_exists(output_dir / "density_block_error_metrics.pt")
+        _remove_if_exists(output_dir / "density_interactive_heatmaps.pt")
         print(
             "--- Density prediction unavailable; skipping density comparison and diagnostics ---"
         )
@@ -762,6 +804,19 @@ def _run_snapshot_case(
         title=f"Band structure comparison: {title}",
         emin_ev=args.band_emin_ev,
         emax_ev=args.band_emax_ev,
+        line_alpha=args.band_line_alpha,
+    )
+    dos_payload = torch.load(
+        output_dir / "dos_comparison.pt", map_location="cpu", weights_only=False
+    )
+    analysis_eval.save_band_structure_and_dos_comparison_plot(
+        gt_band,
+        pred_band,
+        dos_payload,
+        output_dir / "band_structure_and_dos_comparison.png",
+        title=f"Band structure and DOS: {title}",
+        emin_ev=-10.0,
+        emax_ev=10.0,
         line_alpha=args.band_line_alpha,
     )
 
