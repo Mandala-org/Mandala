@@ -134,6 +134,8 @@ def test_report_dos_and_correlation_styles_use_requested_contract():
     assert dos.data[1].line.color == "#D62728"
     assert dos.data[1].line.dash == "dash"
     assert dos.data[2].line.color == "#0072B2"
+    assert dos.data[3].name == "Fermi level"
+    assert tuple(dos.data[3].x) == (0.0, 0.0)
     assert tuple(dos.layout.xaxis.range) == (-15.0, 25.0)
     assert dos.layout.xaxis2.title.text == "E-E_F (eV)"
 
@@ -150,6 +152,8 @@ def test_report_dos_and_correlation_styles_use_requested_contract():
             "mae": 0.003,
             "unit": "eV",
             "r2": 0.99,
+            "target": [-0.8, 0.1, 0.9],
+            "pred": [-0.7, 0.0, 0.8],
         }
     )
     assert correlation is not None
@@ -157,4 +161,6 @@ def test_report_dos_and_correlation_styles_use_requested_contract():
     assert correlation.data[0].colorbar.title.text == "Count"
     assert correlation.data[0].colorscale[0][1] == "#FFFFB2"
     assert correlation.data[0].colorscale[-1][1] == "#BD0026"
+    assert correlation.data[1].marker.color == "#000000"
+    assert correlation.data[1].marker.size == 4
     assert "MAE = 0.003 eV" in correlation.layout.title.text

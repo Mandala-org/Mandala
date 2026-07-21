@@ -2373,6 +2373,23 @@ def _build_band_structure_figure(
                 col=1,
             )
 
+    if payloads:
+        first_payload = payloads[0][1]
+        linear_k = np.asarray(first_payload["linear_k"], dtype=float)
+        fig.add_trace(
+            go.Scattergl(
+                x=[float(linear_k[0]), float(linear_k[-1])],
+                y=[0.0, 0.0],
+                mode="lines",
+                line=dict(color="#FFFFFF", width=1.2, dash="dot"),
+                name="Fermi level",
+                hoverinfo="skip",
+                showlegend=True,
+            ),
+            row=1,
+            col=1,
+        )
+
     fig.update_yaxes(title_text="E-E_F (eV)", row=1, col=1)
     if emin_ev is not None and emax_ev is not None:
         fig.update_yaxes(range=[float(emin_ev), float(emax_ev)], row=1, col=1)
@@ -2766,6 +2783,36 @@ def _build_dos_figure(
             row=2,
             col=1,
         )
+        top_min = float(np.nanmin(np.concatenate([dos_true, dos_pred])))
+        top_max = float(np.nanmax(np.concatenate([dos_true, dos_pred])))
+        error_min = float(np.nanmin(dos_error))
+        error_max = float(np.nanmax(dos_error))
+        fig2.add_trace(
+            go.Scattergl(
+                x=[0.0, 0.0],
+                y=[top_min, top_max],
+                mode="lines",
+                line=dict(color="#FFFFFF", width=1.2, dash="dot"),
+                name="Fermi level",
+                showlegend=True,
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=1,
+        )
+        fig2.add_trace(
+            go.Scattergl(
+                x=[0.0, 0.0],
+                y=[error_min, error_max],
+                mode="lines",
+                line=dict(color="#FFFFFF", width=1.2, dash="dot"),
+                name="Fermi level",
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=2,
+            col=1,
+        )
         fig2.add_hline(
             y=0.0,
             row=1,
@@ -2941,7 +2988,7 @@ def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
                 x=target[:count],
                 y=pred[:count],
                 mode="markers",
-                marker=dict(color="#000000", size=2),
+                marker=dict(color="#000000", size=4),
                 hoverinfo="skip",
                 showlegend=False,
             )

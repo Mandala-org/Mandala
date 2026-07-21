@@ -1700,6 +1700,13 @@ def save_block_error_diagnostic_plots(
             rasterized=True,
         )
         ax.set_yscale("log")
+        if filename.startswith("relative_error"):
+            data_min = float(np.min(y)) if y.size else 1.0e-3
+            data_max = float(np.max(y)) if y.size else 1.0e-1
+            ax.set_ylim(
+                min(data_min * 0.8, 1.0e-3),
+                max(data_max * 1.2, 1.0e-1),
+            )
         if log_x:
             ax.set_xscale("log")
         ax.set_xlabel(x_label)
@@ -2598,7 +2605,7 @@ def save_correlation_plot(
     ax.scatter(
         target_np,
         pred_np,
-        s=0.3,
+        s=1.2,
         color="#000000",
         linewidths=0.0,
         rasterized=True,
@@ -2735,7 +2742,7 @@ def save_eigenvalue_correlation_plot(
     ax.scatter(
         true.numpy(),
         pred.numpy(),
-        s=0.3,
+        s=1.2,
         color="#000000",
         linewidths=0.0,
         rasterized=True,
@@ -2817,12 +2824,20 @@ def save_dos_comparison_and_error_plot(
         ls="--",
         label="Prediction",
     )
+    ax_top.axvline(
+        0.0,
+        color="#000000",
+        ls=":",
+        lw=1.4,
+        label="Fermi level",
+    )
     ax_top.set_ylabel("DOS")
     ax_top.set_title(title)
     ax_top.grid(True)
     ax_top.legend(loc="upper right")
     ax_error.plot(gt_x, error, color=DOS_ERROR_COLOR, lw=1.4)
     ax_error.axhline(0.0, color="black", ls="--", lw=1.0)
+    ax_error.axvline(0.0, color="#000000", ls=":", lw=1.4)
     ax_error.set_xlabel(r"$E-E_F$ (eV)")
     ax_error.set_ylabel("DOS error")
     ax_error.grid(True)
@@ -2900,10 +2915,12 @@ def save_dos_comparison_plot(
         lw=1.4,
         ls="--",
     )
+    ax.axvline(0.0, color="#000000", ls=":", lw=1.4, label="Fermi level")
     ax.set_title(title)
     ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
     ax.grid(True)
+    ax.legend(loc="upper right")
     if fermi_true is not None:
         # DOS is plotted relative to the GT Fermi level.  The scientifically
         # useful window is symmetric around E_F; using the absolute DOS grid
@@ -3176,10 +3193,12 @@ def save_tetrahedron_dos_comparison_plot(
         lw=1.4,
         ls="--",
     )
+    ax.axvline(0.0, color="#000000", ls=":", lw=1.4, label="Fermi level")
     ax.set_title(title)
     ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
     ax.grid(True)
+    ax.legend(loc="upper right")
     if fermi_true is not None:
         ax.set_xlim(SPECTRAL_ENERGY_MIN_EV, SPECTRAL_ENERGY_MAX_EV)
     else:
@@ -3491,6 +3510,13 @@ def save_band_structure_and_dos_comparison_plot(
         )
     for xpos in tick_positions.tolist():
         ax_band.axvline(xpos, color="0.82", lw=0.8, zorder=0)
+    ax_band.axhline(
+        0.0,
+        color="#000000",
+        ls=":",
+        lw=1.4,
+        label="Fermi level",
+    )
     ax_band.set_xlim(float(linear_k[0]), float(linear_k[-1]))
     ax_band.set_ylim(float(emin_ev), float(emax_ev))
     ax_band.set_xticks(tick_positions, labels=tick_labels, fontsize=11)
@@ -3501,6 +3527,7 @@ def save_band_structure_and_dos_comparison_plot(
 
     ax_dos.plot(dos_true, grid_true, color=GROUND_TRUTH_COLOR, lw=1.8, ls="-")
     ax_dos.plot(dos_pred, grid_pred, color=PREDICTION_COLOR, lw=1.4, ls="--")
+    ax_dos.axhline(0.0, color="#000000", ls=":", lw=1.4)
     ax_dos.set_xlim(left=0.0)
     ax_dos.set_ylim(float(emin_ev), float(emax_ev))
     ax_dos.set_xlabel("DOS")
