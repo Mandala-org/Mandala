@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,11 @@ import torch
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+
+from data.block_matrix import BlockMatrix  # noqa: E402
+from utils.units import HARTREE_TO_EV  # noqa: E402
+
 EVAL_ROOT = ROOT / "eval_outputs"
 OUT_ROOT = ROOT / "analysis_outputs"
 
@@ -62,13 +68,24 @@ def _metric_row(path: Path) -> dict[str, Any]:
         "model_or_bundle": _model_label(path),
         "evidence": "artifact-only",
         "hamiltonian_mae": None,
+        "hamiltonian_mae_unit": "eV",
+        "hamiltonian_mse": None,
+        "hamiltonian_mse_unit": "eV^2",
         "hamiltonian_rmse": None,
+        "hamiltonian_rmse_unit": "eV",
         "hamiltonian_corr": None,
         "hamiltonian_r2": None,
         "block_abs_mae_mean": None,
         "block_rel_mae_mean": None,
         "density_mae": None,
+        "density_mae_unit": "native",
+        "density_mse": None,
+        "density_mse_unit": "native^2",
         "density_corr": None,
+        "overlap_mae": None,
+        "overlap_mae_unit": "dimensionless",
+        "overlap_mse": None,
+        "overlap_mse_unit": "dimensionless^2",
         "dos_l1": None,
         "dos_fermi_abs_error_ev": None,
         "dos_electron_abs_error": None,
@@ -84,14 +101,33 @@ def _metric_row(path: Path) -> dict[str, Any]:
         "notes": [],
     }
 
+    metric_path = path / "evaluation_matrix_metrics.json"
+    if metric_path.exists():
+        try:
+            metric_payload = json.loads(metric_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            metric_payload = {}
+            row["notes"].append("invalid matrix metric sidecar")
+        if not isinstance(metric_payload, dict):
+            metric_payload = {}
+            row["notes"].append("invalid matrix metric sidecar")
+        metrics = metric_payload.get("metrics", {})
+        if not isinstance(metrics, dict):
+            metrics = {}
+            row["notes"].append("invalid matrix metric mapping")
+        row["hamiltonian_mae"] = _scalar(metrics.get("val/hamiltonian_mae"))
+        row["hamiltonian_mse"] = _scalar(metrics.get("val/hamiltonian_mse"))
+        row["hamiltonian_rmse"] = (
+            None if row["hamiltonian_mse"] is None else row["hamiltonian_mse"] ** 0.5
+        )
+        row["density_mae"] = _scalar(metrics.get("val/density_mae"))
+        row["density_mse"] = _scalar(metrics.get("val/density_mse"))
+        row["overlap_mae"] = _scalar(metrics.get("val/overlap_mae"))
+        row["overlap_mse"] = _scalar(metrics.get("val/overlap_mse"))
+
     corr_path = path / "hamiltonian_correlation.pt"
     if corr_path.exists():
         data = _load(corr_path)
-        pred, target = data.get("pred"), data.get("target")
-        if isinstance(pred, torch.Tensor) and isinstance(target, torch.Tensor):
-            error = pred.to(torch.float64) - target.to(torch.float64)
-            row["hamiltonian_mae"] = float(error.abs().mean())
-            row["hamiltonian_rmse"] = float(torch.sqrt((error.square()).mean()))
         row["hamiltonian_corr"] = _scalar(data.get("corr"))
         row["hamiltonian_r2"] = _scalar(data.get("r2"))
 
@@ -105,15 +141,33 @@ def _metric_row(path: Path) -> dict[str, Any]:
             values = data.get(key)
             if isinstance(values, list) and values:
                 row[out] = float(torch.as_tensor(values, dtype=torch.float64).mean())
+        # Backfill old bundles without the exact metric artifact.  Weight each
+        # per-edge block MAE by its number of orbital matrix elements; never use
+        # the dense correlation payload, which folds periodic images together.
+        if row["hamiltonian_mae"] is None:
+            pred_path = path / "pred_hamiltonian.pt"
+            pair_keys = data.get("pair_key", [])
+            edge_maes = data.get("abs_mae", [])
+            if pred_path.exists() and len(pair_keys) == len(edge_maes):
+                pred_matrix = BlockMatrix.load(pred_path)
+                absolute_sum = 0.0
+                scalar_count = 0
+                for pair_key, edge_mae in zip(pair_keys, edge_maes):
+                    rows, cols = pred_matrix.orbital_cfg.block_dims(str(pair_key))
+                    count = int(rows * cols)
+                    absolute_sum += float(edge_mae) * count
+                    scalar_count += count
+                if scalar_count:
+                    row["hamiltonian_mae"] = (
+                        absolute_sum / scalar_count
+                    ) * HARTREE_TO_EV
+                    row["notes"].append(
+                        "Hamiltonian MAE reconstructed from block sidecar; rerun for exact MSE"
+                    )
 
     density_corr_path = path / "density_correlation.pt"
     if density_corr_path.exists():
         data = _load(density_corr_path)
-        pred, target = data.get("pred"), data.get("target")
-        if isinstance(pred, torch.Tensor) and isinstance(target, torch.Tensor):
-            row["density_mae"] = float(
-                (pred.to(torch.float64) - target.to(torch.float64)).abs().mean()
-            )
         row["density_corr"] = _scalar(data.get("corr"))
 
     dos_path = path / "dos_comparison.pt"
@@ -169,6 +223,8 @@ def _metric_row(path: Path) -> dict[str, Any]:
 
     if not corr_path.exists():
         row["notes"].append("no Hamiltonian correlation sidecar")
+    if not metric_path.exists():
+        row["notes"].append("no exact matrix metric sidecar; rerun evaluation")
     row["notes"] = "; ".join(row["notes"])
     return row
 

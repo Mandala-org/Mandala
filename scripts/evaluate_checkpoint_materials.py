@@ -29,6 +29,7 @@ from data.structure_inference import (  # noqa: E402
 )
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
+from utils.units import HARTREE_TO_EV  # noqa: E402
 
 
 def setup_argparse() -> argparse.Namespace:
@@ -104,8 +105,8 @@ def setup_argparse() -> argparse.Namespace:
     # These are absolute eigenvalue bounds used while constructing the DOS.
     # Keep them broad enough that the subsequently determined Fermi level is
     # not pinned to an endpoint (the old -10..15 eV defaults did exactly that
-    # for the SiO2 snapshot).  The figures themselves are shown in a +/-10 eV
-    # window relative to E_F below.
+    # for the SiO2 snapshot). The DOS and eigenvalue-correlation figures use a
+    # -15..25 eV display window relative to E_F.
     parser.add_argument("--dos-energy-min", type=float, default=-50.0)
     parser.add_argument("--dos-energy-max", type=float, default=50.0)
     parser.add_argument("--num-points", type=int, default=240)
@@ -117,10 +118,22 @@ def setup_argparse() -> argparse.Namespace:
     )
     parser.add_argument("--band-emin-ev", type=float, default=-10.0)
     parser.add_argument("--band-emax-ev", type=float, default=10.0)
-    parser.add_argument("--band-line-alpha", type=float, default=0.2)
-    parser.add_argument("--correlation-max-points", type=int, default=250000)
-    parser.add_argument("--correlation-alpha", type=float, default=0.03)
+    parser.add_argument("--band-line-alpha", type=float, default=1.0)
+    parser.add_argument("--correlation-max-points", type=int, default=0)
+    parser.add_argument("--correlation-alpha", type=float, default=1.0)
     parser.add_argument("--correlation-sample-seed", type=int, default=0)
+    parser.add_argument("--ground-truth-color", type=str, default="#000000")
+    parser.add_argument("--prediction-color", type=str, default="#D62728")
+    parser.add_argument("--error-color", type=str, default="#0072B2")
+    parser.add_argument("--block-error-color", type=str, default="#003B73")
+    parser.add_argument(
+        "--matrix-all-atoms",
+        action="store_true",
+        help=(
+            "Render one central-cell, shift-resolved matrix view containing all "
+            "atoms instead of first/worst fragments."
+        ),
+    )
     parser.add_argument("--chunk-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument(
@@ -387,6 +400,37 @@ def _remove_if_exists(path: Path) -> None:
         pass
 
 
+def _remove_matrix_plot_suite(output_dir: Path, prefix: str) -> None:
+    """Remove stale matrix comparison PNGs before regenerating a bundle."""
+    for pattern in (
+        f"{prefix}_*sum_pbc*.png",
+        f"{prefix}_*shift_resolved*.png",
+        f"{prefix}_worst*_clim_*.png",
+        f"{prefix}_first*_clim_*.png",
+        f"{prefix}_all_clim_*.png",
+    ):
+        for path in output_dir.glob(pattern):
+            path.unlink()
+
+
+def _material_plot_title(path: Path, explicit_title: str | None) -> str:
+    """Return a stable, human-readable material label for every plot."""
+    if explicit_title:
+        return explicit_title
+    value = str(path).lower()
+    if "siox" in value or "sio2" in value:
+        return "SiOx"
+    if "zncu" in value:
+        return "ZnCuSnSeS"
+    if "perturbed" in value:
+        return "Silicon"
+    if "300k" in value:
+        return "Silicon 300K"
+    if "silicon" in value or path.name.lower().startswith("si"):
+        return "Silicon"
+    return path.stem.replace("_", " ")
+
+
 def _filter_block_matrix_by_distance_analysis(
     block_matrix,
     *,
@@ -551,6 +595,57 @@ def _run_snapshot_case(
             )
         )
 
+    matrix_metrics: dict[str, dict[str, Any]] = {}
+    logged_metrics: dict[str, float] = {}
+    for name, pred_matrix in pred_mats_aligned.items():
+        if name not in predicted_matrix_names:
+            continue
+        raw = analysis_eval.compute_shift_resolved_matrix_metrics(
+            pred_matrix, gt_mats[name]
+        )
+        if name == "hamiltonian":
+            mae_scale = HARTREE_TO_EV
+            mse_scale = HARTREE_TO_EV**2
+            mae_unit = "eV"
+            mse_unit = "eV^2"
+            raw_mae_unit = "Ha"
+            raw_mse_unit = "Ha^2"
+        else:
+            mae_scale = 1.0
+            mse_scale = 1.0
+            mae_unit = "dimensionless" if name == "overlap" else "native"
+            mse_unit = "dimensionless^2" if name == "overlap" else "native^2"
+            raw_mae_unit = mae_unit
+            raw_mse_unit = mse_unit
+        mae = float(raw["mae"]) * mae_scale
+        mse = float(raw["mse"]) * mse_scale
+        logged_metrics[f"val/{name}_mae"] = mae
+        logged_metrics[f"val/{name}_mse"] = mse
+        matrix_metrics[name] = {
+            "mae": mae,
+            "mse": mse,
+            "units": {"mae": mae_unit, "mse": mse_unit},
+            "raw_mae": float(raw["mae"]),
+            "raw_mse": float(raw["mse"]),
+            "raw_units": {"mae": raw_mae_unit, "mse": raw_mse_unit},
+            "scalar_count": int(raw["scalar_count"]),
+            "edge_count": int(raw["edge_count"]),
+            "absolute_error_sum_raw": float(raw["absolute_error_sum"]),
+            "squared_error_sum_raw": float(raw["squared_error_sum"]),
+        }
+    metric_payload = {
+        "schema_version": 1,
+        "definition": (
+            "element-weighted shift-resolved real-space block error after "
+            "prediction alignment"
+        ),
+        "metrics": logged_metrics,
+        "matrices": matrix_metrics,
+    }
+    (output_dir / "evaluation_matrix_metrics.json").write_text(
+        json.dumps(metric_payload, indent=2) + "\n", encoding="utf-8"
+    )
+
     density_for_eigs = pred_mats_aligned.get("density", gt_mats["density"])
     overlap_for_eigs = (
         gt_band_snapshot.overlap
@@ -577,7 +672,9 @@ def _run_snapshot_case(
         info=info,
     )
 
-    title = args.plot_title or matrix_path.parent.name
+    title = _material_plot_title(matrix_path.parent, args.plot_title)
+    for matrix_name in ("hamiltonian", "density", "overlap"):
+        _remove_matrix_plot_suite(output_dir, matrix_name)
     ham_clim = (
         args.hamiltonian_clim
         if args.hamiltonian_clim is not None
@@ -588,14 +685,7 @@ def _run_snapshot_case(
         if args.density_clim is not None
         else (args.plot_clim if args.plot_clim is not None else 0.1)
     )
-    analysis_eval.save_comparison_plot(
-        pred_mats_aligned["hamiltonian"],
-        gt_mats["hamiltonian"],
-        output_dir / "hamiltonian_first_atoms_comparison.png",
-        title=f"Hamiltonian comparison: {title}",
-        max_atoms=args.max_atoms,
-        clim=ham_clim,
-    )
+    _remove_if_exists(output_dir / "hamiltonian_first_atoms_comparison.png")
     hamiltonian_heatmap_payload = (
         analysis_eval.save_hamiltonian_interactive_heatmap_payload(
             pred_mats_aligned["hamiltonian"],
@@ -605,6 +695,7 @@ def _run_snapshot_case(
             output_path=output_dir / "hamiltonian_interactive_heatmaps.pt",
             default_clim=ham_clim,
             max_nodes=6,
+            include_all_atoms=args.matrix_all_atoms,
         )
     )
     analysis_eval.save_matrix_heatmap_suite(
@@ -616,6 +707,7 @@ def _run_snapshot_case(
         prefix="hamiltonian",
         matrix_label="Hamiltonian",
         max_atoms=6,
+        all_atoms=args.matrix_all_atoms,
         payload=hamiltonian_heatmap_payload,
     )
     analysis_eval.save_snapshot_3d_error_payload(
@@ -625,6 +717,13 @@ def _run_snapshot_case(
         box=box,
         output_path=output_dir / "snapshot_3d_error_payload.pt",
     )
+    analysis_eval.save_snapshot_3d_error_payload(
+        pred_mats_aligned["hamiltonian"],
+        gt_mats["hamiltonian"],
+        positions=positions,
+        box=box,
+        output_path=output_dir / "snapshot_3d_error_payload_hamiltonian.pt",
+    )
     analysis_eval.save_correlation_plot(
         pred_mats_aligned["hamiltonian"],
         gt_mats["hamiltonian"],
@@ -633,6 +732,8 @@ def _run_snapshot_case(
         max_points=args.correlation_max_points,
         alpha=args.correlation_alpha,
         seed=args.correlation_sample_seed,
+        value_scale=HARTREE_TO_EV,
+        value_unit="eV",
     )
     hamiltonian_block_payload = analysis_eval.save_block_error_scatter_data(
         pred_mats_aligned["hamiltonian"],
@@ -648,14 +749,7 @@ def _run_snapshot_case(
         matrix_label="Hamiltonian",
     )
     if "density" in pred_mats and "density" in predicted_matrix_names:
-        analysis_eval.save_comparison_plot(
-            pred_mats_aligned["density"],
-            gt_mats["density"],
-            output_dir / "density_first_atoms_comparison.png",
-            title=f"Density comparison: {title}",
-            max_atoms=args.max_atoms,
-            clim=density_clim,
-        )
+        _remove_if_exists(output_dir / "density_first_atoms_comparison.png")
         density_heatmap_payload = (
             analysis_eval.save_hamiltonian_interactive_heatmap_payload(
                 pred_mats_aligned["density"],
@@ -665,6 +759,7 @@ def _run_snapshot_case(
                 output_path=output_dir / "density_interactive_heatmaps.pt",
                 default_clim=density_clim,
                 max_nodes=6,
+                include_all_atoms=args.matrix_all_atoms,
             )
         )
         analysis_eval.save_matrix_heatmap_suite(
@@ -676,7 +771,15 @@ def _run_snapshot_case(
             prefix="density",
             matrix_label="Density",
             max_atoms=6,
+            all_atoms=args.matrix_all_atoms,
             payload=density_heatmap_payload,
+        )
+        analysis_eval.save_snapshot_3d_error_payload(
+            pred_mats_aligned["density"],
+            gt_mats["density"],
+            positions=positions,
+            box=box,
+            output_path=output_dir / "snapshot_3d_error_payload_density.pt",
         )
         analysis_eval.save_correlation_plot(
             pred_mats_aligned["density"],
@@ -686,23 +789,77 @@ def _run_snapshot_case(
             max_points=args.correlation_max_points,
             alpha=args.correlation_alpha,
             seed=args.correlation_sample_seed,
+            value_unit="native",
         )
-        analysis_eval.save_block_error_scatter_data(
+        density_block_payload = analysis_eval.save_block_error_scatter_data(
             pred_mats_aligned["density"],
             gt_mats["density"],
             positions=positions,
             box=box,
             output_path=output_dir / "density_block_error_metrics.pt",
         )
+        analysis_eval.save_block_error_diagnostic_plots(
+            density_block_payload,
+            output_dir=output_dir,
+            prefix="density",
+            matrix_label="Density",
+        )
     else:
         _remove_if_exists(output_dir / "density_correlation.png")
         _remove_if_exists(output_dir / "density_first_atoms_comparison.png")
         _remove_if_exists(output_dir / "density_block_error_metrics.pt")
         _remove_if_exists(output_dir / "density_interactive_heatmaps.pt")
+        _remove_if_exists(output_dir / "snapshot_3d_error_payload_density.pt")
+        for stale_path in output_dir.glob("density_*_clim_*.png"):
+            _remove_if_exists(stale_path)
         print(
             "--- Density prediction unavailable; skipping density comparison and diagnostics ---"
         )
     if "overlap" in pred_mats and "overlap" in predicted_matrix_names:
+        overlap_heatmap_payload = (
+            analysis_eval.save_hamiltonian_interactive_heatmap_payload(
+                pred_mats_aligned["overlap"],
+                gt_mats["overlap"],
+                positions=positions,
+                box=box,
+                output_path=output_dir / "overlap_interactive_heatmaps.pt",
+                default_clim=0.1,
+                max_nodes=6,
+                include_all_atoms=args.matrix_all_atoms,
+            )
+        )
+        analysis_eval.save_matrix_heatmap_suite(
+            pred_mats_aligned["overlap"],
+            gt_mats["overlap"],
+            positions=positions,
+            box=box,
+            output_dir=output_dir,
+            prefix="overlap",
+            matrix_label="Overlap",
+            max_atoms=6,
+            all_atoms=args.matrix_all_atoms,
+            payload=overlap_heatmap_payload,
+        )
+        analysis_eval.save_snapshot_3d_error_payload(
+            pred_mats_aligned["overlap"],
+            gt_mats["overlap"],
+            positions=positions,
+            box=box,
+            output_path=output_dir / "snapshot_3d_error_payload_overlap.pt",
+        )
+        overlap_block_payload = analysis_eval.save_block_error_scatter_data(
+            pred_mats_aligned["overlap"],
+            gt_mats["overlap"],
+            positions=positions,
+            box=box,
+            output_path=output_dir / "overlap_block_error_metrics.pt",
+        )
+        analysis_eval.save_block_error_diagnostic_plots(
+            overlap_block_payload,
+            output_dir=output_dir,
+            prefix="overlap",
+            matrix_label="Overlap",
+        )
         analysis_eval.save_correlation_plot(
             pred_mats_aligned["overlap"],
             gt_mats["overlap"],
@@ -711,9 +868,15 @@ def _run_snapshot_case(
             max_points=args.correlation_max_points,
             alpha=args.correlation_alpha,
             seed=args.correlation_sample_seed,
+            value_unit="dimensionless",
         )
     else:
         _remove_if_exists(output_dir / "overlap_correlation.png")
+        _remove_if_exists(output_dir / "overlap_interactive_heatmaps.pt")
+        _remove_if_exists(output_dir / "overlap_block_error_metrics.pt")
+        _remove_if_exists(output_dir / "snapshot_3d_error_payload_overlap.pt")
+        for stale_path in output_dir.glob("overlap_*_clim_*.png"):
+            _remove_if_exists(stale_path)
 
     num_electrons_true = float(gt_snapshot.get_number_of_electrons().item())
     num_electrons_pred = (
@@ -838,6 +1001,7 @@ def _run_snapshot_case(
     print("output_dir:", output_dir)
     print("dos_method:", args.dos_method)
     print("dos_kmesh:", args.dos_kmesh)
+    print("matrix_metrics:", logged_metrics)
     print("dos_metrics:", dos_metrics)
 
 
@@ -895,7 +1059,7 @@ def _run_cif_case(
             )
         pred_mats = _physical_predicted_block_matrices(model, predictions_irreps, x)
 
-    title = args.plot_title or args.cif_path.stem
+    title = _material_plot_title(args.cif_path, args.plot_title)
     ham_clim = (
         args.hamiltonian_clim
         if args.hamiltonian_clim is not None
@@ -1027,8 +1191,49 @@ def _run_cif_case(
     print("dos_kmesh:", args.dos_kmesh)
 
 
+def _write_evaluation_manifest(args: argparse.Namespace) -> None:
+    manifest_path = args.output_dir / "evaluation_manifest.json"
+    payload: dict[str, Any] = {}
+    if manifest_path.exists():
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+    payload.setdefault(
+        "source",
+        {
+            "kind": "checkpoint",
+            "checkpoint_path": str(args.checkpoint.resolve()),
+            "label": args.checkpoint.stem,
+            "run_id": None,
+            "run_name": None,
+            "run_url": None,
+        },
+    )
+    settings = {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+        if key != "checkpoint"
+    }
+    payload.update(
+        {
+            "mode": args.mode,
+            "checkpoint": str(args.checkpoint.resolve()),
+            "output_dir": str(args.output_dir.resolve()),
+            "settings": settings,
+        }
+    )
+    manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     args = setup_argparse()
+    analysis_eval.configure_plot_style(
+        ground_truth_color=args.ground_truth_color,
+        prediction_color=args.prediction_color,
+        error_color=args.error_color,
+        block_error_color=args.block_error_color,
+    )
     checkpoint = _load_checkpoint(args.checkpoint)
     cfg = _sanitize_eval_config(_restore_config(checkpoint))
 
@@ -1041,6 +1246,7 @@ def main() -> None:
         _run_snapshot_case(args, checkpoint, cfg)
     else:
         _run_cif_case(args, checkpoint, cfg)
+    _write_evaluation_manifest(args)
 
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@ def parse_args() -> argparse.Namespace:
         choices=["tetrahedron", "gaussian"],
     )
     parser.add_argument("--dos-kmesh", type=str, default="4x4x4")
-    # Absolute construction bounds; plots are later centered on E_F at +/-10 eV.
+    # Absolute construction bounds; DOS diagnostics are later centered on E_F.
     parser.add_argument("--dos-energy-min", type=float, default=-50.0)
     parser.add_argument("--dos-energy-max", type=float, default=50.0)
     parser.add_argument("--num-points", type=int, default=240)
@@ -95,10 +95,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-gt-overlap-for-eigs", action="store_true")
     parser.add_argument("--band-emin-ev", type=float, default=-10.0)
     parser.add_argument("--band-emax-ev", type=float, default=10.0)
-    parser.add_argument("--band-line-alpha", type=float, default=0.2)
-    parser.add_argument("--correlation-max-points", type=int, default=250000)
-    parser.add_argument("--correlation-alpha", type=float, default=0.03)
+    parser.add_argument("--band-line-alpha", type=float, default=1.0)
+    parser.add_argument("--correlation-max-points", type=int, default=0)
+    parser.add_argument("--correlation-alpha", type=float, default=1.0)
     parser.add_argument("--correlation-sample-seed", type=int, default=0)
+    parser.add_argument("--ground-truth-color", type=str, default="#000000")
+    parser.add_argument("--prediction-color", type=str, default="#D62728")
+    parser.add_argument("--error-color", type=str, default="#0072B2")
+    parser.add_argument("--block-error-color", type=str, default="#003B73")
+    parser.add_argument(
+        "--matrix-all-atoms",
+        action="store_true",
+        help=(
+            "Render one central-cell, shift-resolved matrix view containing all "
+            "atoms instead of first/worst fragments."
+        ),
+    )
     parser.add_argument("--chunk-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument("--overlap-psd-cleanup", action="store_true")
@@ -130,6 +142,12 @@ def main() -> None:
     cache_dir.mkdir(parents=True, exist_ok=True)
     eval_args = _build_eval_namespace(
         args, resolved["checkpoint_path"], cache_dir, eval_mod
+    )
+    eval_mod.analysis_eval.configure_plot_style(
+        ground_truth_color=eval_args.ground_truth_color,
+        prediction_color=eval_args.prediction_color,
+        error_color=eval_args.error_color,
+        block_error_color=eval_args.block_error_color,
     )
     checkpoint = eval_mod._load_checkpoint(eval_args.checkpoint)
     cfg = eval_mod._restore_config(checkpoint)
@@ -295,6 +313,11 @@ def _build_eval_namespace(
         correlation_max_points=args.correlation_max_points,
         correlation_alpha=args.correlation_alpha,
         correlation_sample_seed=args.correlation_sample_seed,
+        ground_truth_color=args.ground_truth_color,
+        prediction_color=args.prediction_color,
+        error_color=args.error_color,
+        block_error_color=args.block_error_color,
+        matrix_all_atoms=args.matrix_all_atoms,
         chunk_size=args.chunk_size,
         num_workers=args.num_workers,
         overlap_psd_cleanup=args.overlap_psd_cleanup,
@@ -341,6 +364,11 @@ def _settings_for_cache(args: argparse.Namespace) -> dict[str, Any]:
         "correlation_max_points": args.correlation_max_points,
         "correlation_alpha": args.correlation_alpha,
         "correlation_sample_seed": args.correlation_sample_seed,
+        "ground_truth_color": args.ground_truth_color,
+        "prediction_color": args.prediction_color,
+        "error_color": args.error_color,
+        "block_error_color": args.block_error_color,
+        "matrix_all_atoms": args.matrix_all_atoms,
         "chunk_size": args.chunk_size,
         "num_workers": args.num_workers,
         "overlap_psd_cleanup": args.overlap_psd_cleanup,
