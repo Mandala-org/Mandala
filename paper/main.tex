@@ -1080,86 +1080,177 @@ experimentation.
 \section{Results}
 \label{sec:results}
 
-We illustrate the operator-level predictions on a held-out validation
-structure from each of three chemically and structurally distinct data sets.
-These examples are intended as representative case studies of Mandala models' performance rather than a comprehensive benchmark.
-Average validation errors for the held-out validation sets are provided.
+Performance of the \texttt{Mandala} framework is evaluated on three electronic-structure data sets that span distinct sources of electronic-structure complexity:
+multiple chemical species in ZnCu$_2$Sn(SeS)$_2$, configurational disorder in
+glassy SiO$_2$, and required spectral precision in modeling of band structure of a silicon crystal. The reported validation errors are aggregate values averaged over the
+full validation split for the selected models. Each figure is generated for
+one representative structure from the corresponding validation split.
 
-\subsection{Multicomponent ZnCuSnSeS Hamiltonian}
+\subsection{Multicomponent ZnCu$_2$Sn(SeS)$_2$}
+
+ZnCu$_2$Sn(SeS)$_2$ combines five elements and chemically distinct cation and
+anion environments in one periodic material. Its electronic structure contains
+many element-pair channels with different orbital content, so a single model
+must resolve both the heterogeneous local chemistry and the coupling between
+those environments. The aggregate validation result is summarized in
+Table~\ref{tab:zncusnses-validation}.
+
+\begin{table}[H]
+\centering
+\caption{Aggregate validation metric for ZnCu$_2$Sn(SeS)$_2$ at the selected
+checkpoint.}
+\label{tab:zncusnses-validation}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+Hamiltonian MAE & 0.003013~eV \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:zncusnses-hamiltonian} resolves a representative prediction into
+atom-pair matrix blocks. The $\pm0.01$~eV range is narrow compared with the
+Hamiltonian elements and exposes residual structure in both on-site and
+off-site blocks. The correlation in Fig.~\ref{fig:zncusnses-correlation} includes
+all shift-resolved elements of the same structure and gives $R^2=0.999475$.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_zncusnses_hamiltonian_first6.png}
-\caption{Reference, predicted, and residual Hamiltonian fragments for the
-first six atoms of a held-out ZnCuSnSeS validation structure. The common color
-range is $\pm0.01$~eV.}
+\caption{Hamiltonian fragments for the first six atoms of a representative
+ZnCu$_2$Sn(SeS)$_2$ validation structure. The common color range is
+$\pm0.01$~eV.}
 \label{fig:zncusnses-hamiltonian}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.68\textwidth]{figures/results/paper_zncusnses_hamiltonian_correlation.png}
-\caption{Element-wise Hamiltonian correlation for the same ZnCuSnSeS
-structure. The heat map shows bin counts on a logarithmic scale, the dashed line denotes equality.}
+\caption{Element-wise Hamiltonian correlation for the representative
+ZnCu$_2$Sn(SeS)$_2$ structure. Counts use a logarithmic color scale; all
+matrix elements are overlaid as points.}
 \label{fig:zncusnses-correlation}
 \end{figure}
 
 \subsection{Electronic density of states of SiO$_2$}
 
-The SiO$_2$ example contains 150 atoms and represents a disordered SiO$_x$
-configuration. We therefore evaluate its density of states using Gaussian
-broadening ($\sigma=0.2$~eV) on a $2\times2\times2$ reciprocal-space mesh.
-The predicted and reference curves reproduce the same broad features across
-the displayed $-15$ to $25$~eV window, while the lower panel exposes the
-energy-resolved residual directly (Fig.~\ref{fig:sio2-dos}).
+The SiO$_2$ data set consists of 150-atom glass structures. Variations in bond
+lengths, bond angles, and coordination environments replace the small set of
+symmetry-equivalent neighborhoods present in a crystal. This makes the data set
+a test of whether the local equivariant representation remains accurate across
+a broad distribution of amorphous environments. Table~\ref{tab:sio2-validation}
+reports the aggregate validation metrics. For this Hamiltonian-only model, the
+band energy is evaluated by contracting the predicted Hamiltonian with the
+reference density.
+
+\begin{table}[H]
+\centering
+\caption{Aggregate validation metrics for glassy SiO$_2$ at the selected
+checkpoint. Band-energy errors refer to the complete 150-atom structures.}
+\label{tab:sio2-validation}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+Hamiltonian MAE & 0.002002~eV \\
+Band-energy MAE & 22.80~eV (0.2002\%)\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The density of states in Fig.~\ref{fig:sio2-dos} tests the collective spectral
+consequence of the predicted matrix rather than individual matrix elements.
+The principal occupied and unoccupied features are retained over the displayed
+energy interval despite the absence of crystalline order. The residual is
+largest where narrow variations in the reference DOS amplify small shifts of
+the eigenvalue distribution.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.88\textwidth]{figures/results/paper_sio2_dos_comparison_and_error.png}
-\caption{Reference and predicted density of states for a held-out SiO$_2$
-validation structure (top), together with their difference (bottom).
-Energies are referenced to the respective Fermi levels. The calculation uses
-Gaussian broadening with $\sigma=0.2$~eV on a $2\times2\times2$ k-point mesh.}
+\caption{Density of states and its prediction error for a representative
+glassy SiO$_2$ validation structure. The calculation uses Gaussian broadening
+with $\sigma=0.2$~eV on a $2\times2\times2$ k-point mesh. The dotted line marks
+the Fermi level.}
 \label{fig:sio2-dos}
 \end{figure}
 
 \subsection{Band structure, density of states, and density matrix of silicon}
 
-For crystalline silicon, the selected joint Hamiltonian--density--overlap model
-reaches a Hamiltonian MAE of $3.84\times10^{-4}$~eV, a density-matrix MAE of
-$5.27\times10^{-5}$, and an overlap-matrix MAE of
-$1.14\times10^{-5}$ on the displayed validation structure. The band structure
-is evaluated along the
-$L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$ path,
-and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh. The
-reference and predicted dispersions and DOS are nearly coincident in
-Fig.~\ref{fig:silicon-bands-dos}.
+The perturbed-silicon data set retains the diamond-crystal topology while
+introducing small atomic displacements. Its single-species composition and
+regular coordination remove the chemical and configurational complexity of the
+other two systems, allowing the attainable precision of the equivariant model
+to be assessed on a simpler crystalline electronic structure. The aggregate
+validation metrics of the joint Hamiltonian--density--overlap model are given
+in Table~\ref{tab:silicon-validation}.
+
+\begin{table}[H]
+\centering
+\caption{Aggregate validation metrics for perturbed silicon at the selected
+checkpoint.}
+\label{tab:silicon-validation}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+Hamiltonian MAE & $5.228\times10^{-4}$~eV \\
+Density-matrix MAE & $5.736\times10^{-5}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The predicted Hamiltonian and overlap determine the bands and DOS in
+Fig.~\ref{fig:silicon-bands-dos}. Agreement across occupied and low-lying
+unoccupied bands shows that the matrix accuracy is preserved through the
+generalized eigenvalue problem. The valence-band maximum and conduction-band
+dispersion around the high-symmetry points are reproduced without fitting the
+bands as direct targets.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_silicon_band_structure_and_dos.png}
-\caption{Band structure and density of states for a held-out perturbed-silicon
-validation structure. Reference values are black solid lines and predictions
-are red dashed lines. The DOS is integrated using a $4\times4\times4$
-tetrahedron mesh.}
+\caption{Band structure and density of states for a representative
+perturbed-silicon validation structure. The path is
+$L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$,
+and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh.
+The dotted line marks the Fermi level.}
 \label{fig:silicon-bands-dos}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_silicon_density_first6.png}
-\caption{Reference, predicted, and residual density-matrix fragments for the
-first six atoms of the crystalline silicon validation structure. The common
-color range is $\pm0.01$.}
+\caption{Density-matrix fragments for the first six atoms of the representative
+silicon validation structure. The common color range is $\pm0.01$, with
+periodic-image contributions kept shift-resolved.}
 \label{fig:silicon-density}
 \end{figure}
 
+The discrete distance groups in Fig.~\ref{fig:silicon-density-errors} correspond
+to coordination shells of the perturbed crystal. Hamiltonian blocks have their
+smallest relative errors over the strongly coupled intermediate shells and
+larger relative errors near the cutoff, where the target blocks are weak. The
+density matrix shows greater shell-to-shell variation because its longer-range
+blocks encode the occupied electronic subspace rather than the operator alone.
+
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.72\textwidth]{figures/results/paper_silicon_hamiltonian_relative_error_vs_edge_length.png}
-\caption{Relative Hamiltonian block error as a function of atom-pair edge
-length for the same perturbed-silicon structure. Each point represents one
-shift-resolved atom-pair block.}
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/results/paper_silicon_hamiltonian_relative_error_vs_edge_length.png}
+\small (a) Hamiltonian
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/results/paper_silicon_density_relative_error_vs_edge_length.png}
+\small (b) Density
+\end{minipage}
+\caption{Relative block error by atom-pair distance for the representative
+perturbed-silicon structure. Each point is one shift-resolved block. Both axes
+span at least $10^{-3}$ to $10^{-1}$ to permit a direct comparison of the two
+matrix targets.}
 \label{fig:silicon-density-errors}
 \end{figure}
 
