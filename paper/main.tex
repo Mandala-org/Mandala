@@ -1100,8 +1100,7 @@ range is $\pm0.01$~eV.}
 \centering
 \includegraphics[width=0.68\textwidth]{figures/results/paper_zncusnses_hamiltonian_correlation.png}
 \caption{Element-wise Hamiltonian correlation for the same ZnCuSnSeS
-structure. The heat map shows bin counts on a logarithmic scale, black points
-overlay all matrix elements, and the dashed line denotes equality.}
+structure. The heat map shows bin counts on a logarithmic scale, the dashed line denotes equality.}
 \label{fig:zncusnses-correlation}
 \end{figure}
 
@@ -1120,7 +1119,7 @@ energy-resolved residual directly (Fig.~\ref{fig:sio2-dos}).
 \caption{Reference and predicted density of states for a held-out SiO$_2$
 validation structure (top), together with their difference (bottom).
 Energies are referenced to the respective Fermi levels. The calculation uses
-Gaussian broadening with $\sigma=0.2$~eV on a $2\times2\times2$ mesh.}
+Gaussian broadening with $\sigma=0.2$~eV on a $2\times2\times2$ k-point mesh.}
 \label{fig:sio2-dos}
 \end{figure}
 
@@ -1132,7 +1131,7 @@ $5.27\times10^{-5}$, and an overlap-matrix MAE of
 $1.14\times10^{-5}$ on the displayed validation structure. The band structure
 is evaluated along the
 $L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$ path,
-and the DOS uses tetrahedron integration on a $4\times4\times4$ mesh. The
+and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh. The
 reference and predicted dispersions and DOS are nearly coincident in
 Fig.~\ref{fig:silicon-bands-dos}.
 
@@ -1146,18 +1145,12 @@ tetrahedron mesh.}
 \label{fig:silicon-bands-dos}
 \end{figure}
 
-Figures~\ref{fig:silicon-density} and
-\ref{fig:silicon-density-errors} provide complementary real-space diagnostics.
-The density residual remains faint on a $\pm0.01$ scale, while the relative
-Hamiltonian block errors remain small through the populated neighbor shells and
-rise for the weakest long-range blocks near the cutoff.
-
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_silicon_density_first6.png}
 \caption{Reference, predicted, and residual density-matrix fragments for the
-first six atoms of the perturbed-silicon validation structure. The common
-color range is $\pm0.01$ in the native density-matrix units.}
+first six atoms of the crystalline silicon validation structure. The common
+color range is $\pm0.01$.}
 \label{fig:silicon-density}
 \end{figure}
 
