@@ -206,3 +206,52 @@ This appendix summarizes the current Mandala configuration surface.
 \end{enumerate}
 
 \endgroup
+
+\clearpage
+\section{Configurations of the Evaluated Models}
+\label{app:evaluated-model-configurations}
+
+The following records contain the exact launch command and resolved
+configuration stored by Weights \& Biases for each model used in
+Section~\ref{sec:results}. Each record also identifies the run, checkpoint
+history through the resume argument, and source-code revision. The redundant
+serialized \texttt{cfg} representation stored by Weights \& Biases is omitted;
+all of its settings are retained as structured entries under
+\texttt{configuration}.
+
+\subsection{ZnCu$_2$Sn(SeS)$_2$ Model}
+\label{app:model-config-zncusnses}
+
+\lstinputlisting[
+  language={},
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  frame=single
+]{data/evaluated_model_configs/zncu2sn_ses2.yaml}
+
+\subsection{SiO$_x$ Model}
+\label{app:model-config-siox}
+
+\lstinputlisting[
+  language={},
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  frame=single
+]{data/evaluated_model_configs/siox.yaml}
+
+\clearpage
+\subsection{Perturbed-Silicon Model}
+\label{app:model-config-silicon}
+
+\lstinputlisting[
+  language={},
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  frame=single
+]{data/evaluated_model_configs/silicon_perturbed.yaml}

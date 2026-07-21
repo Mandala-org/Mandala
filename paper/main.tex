@@ -1082,7 +1082,7 @@ experimentation.
 
 Performance of the \texttt{Mandala} framework is evaluated on three electronic-structure data sets that span distinct sources of electronic-structure complexity:
 multiple chemical species in ZnCu$_2$Sn(SeS)$_2$, configurational disorder in
-glassy SiO$_2$, and required spectral precision in modeling of band structure of a silicon crystal. The reported validation errors are aggregate values averaged over the
+glassy SiO$_2$, and required spectral precision for band structure modeling of a silicon crystal. The reported validation errors are aggregate values averaged over the
 full validation split for the selected models. Each figure is generated for
 one representative structure from the corresponding validation split.
 
@@ -1093,12 +1093,12 @@ anion environments in one periodic material. Its electronic structure contains
 many element-pair channels with different orbital content, so a single model
 must resolve both the heterogeneous local chemistry and the coupling between
 those environments. The aggregate validation result is summarized in
-Table~\ref{tab:zncusnses-validation}.
+Table~\ref{tab:zncusnses-validation}; the complete configuration of the
+evaluated model is provided in \mbox{\ref{app:model-config-zncusnses}}.
 
 \begin{table}[H]
 \centering
-\caption{Aggregate validation metric for ZnCu$_2$Sn(SeS)$_2$ at the selected
-checkpoint.}
+\caption{Validation metric for the ZnCu$_2$Sn(SeS)$_2$ model.}
 \label{tab:zncusnses-validation}
 \begin{tabular}{lc}
 \toprule
@@ -1135,34 +1135,33 @@ matrix elements are overlaid as points.}
 
 \subsection{Electronic density of states of SiO$_2$}
 
-The SiO$_2$ data set consists of 150-atom glass structures. Variations in bond
+The SiO$_2$ dataset consists of 150-atom glass structures. Variations in bond
 lengths, bond angles, and coordination environments replace the small set of
-symmetry-equivalent neighborhoods present in a crystal. This makes the data set
+symmetry-equivalent neighborhoods present in a crystal. This makes the dataset
 a test of whether the local equivariant representation remains accurate across
 a broad distribution of amorphous environments. Table~\ref{tab:sio2-validation}
 reports the aggregate validation metrics. For this Hamiltonian-only model, the
 band energy is evaluated by contracting the predicted Hamiltonian with the
-reference density.
+reference density. Its complete configuration is provided in
+\mbox{\ref{app:model-config-siox}}.
 
 \begin{table}[H]
 \centering
-\caption{Aggregate validation metrics for glassy SiO$_2$ at the selected
-checkpoint. Band-energy errors refer to the complete 150-atom structures.}
+\caption{Validation metrics for the glassy SiO$_2$ model.}
 \label{tab:sio2-validation}
 \begin{tabular}{lc}
 \toprule
 Metric & Value \\
 \midrule
 Hamiltonian MAE & 0.002002~eV \\
-Band-energy MAE & 22.80~eV (0.2002\%)\\
+Band-energy MAE & 0.15eV/atom \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 The density of states in Fig.~\ref{fig:sio2-dos} tests the collective spectral
 consequence of the predicted matrix rather than individual matrix elements.
-The principal occupied and unoccupied features are retained over the displayed
-energy interval despite the absence of crystalline order. The residual is
+The residual is
 largest where narrow variations in the reference DOS amplify small shifts of
 the eigenvalue distribution.
 
@@ -1178,18 +1177,18 @@ the Fermi level.}
 
 \subsection{Band structure, density of states, and density matrix of silicon}
 
-The perturbed-silicon data set retains the diamond-crystal topology while
-introducing small atomic displacements. Its single-species composition and
+The perturbed-silicon dataset retains the diamond-crystal topology while
+introducing small atomic displacements ($\sigma = 0.02\r{A}$ and $\sigma = 0.05\r{A}$). Its single-species composition and
 regular coordination remove the chemical and configurational complexity of the
 other two systems, allowing the attainable precision of the equivariant model
 to be assessed on a simpler crystalline electronic structure. The aggregate
 validation metrics of the joint Hamiltonian--density--overlap model are given
-in Table~\ref{tab:silicon-validation}.
+in Table~\ref{tab:silicon-validation}; its complete configuration is provided
+in \mbox{\ref{app:model-config-silicon}}.
 
 \begin{table}[H]
 \centering
-\caption{Aggregate validation metrics for perturbed silicon at the selected
-checkpoint.}
+\caption{Validation metrics for the perturbed silicon model.}
 \label{tab:silicon-validation}
 \begin{tabular}{lc}
 \toprule
@@ -1248,9 +1247,7 @@ blocks encode the occupied electronic subspace rather than the operator alone.
 \small (b) Density
 \end{minipage}
 \caption{Relative block error by atom-pair distance for the representative
-perturbed-silicon structure. Each point is one shift-resolved block. Both axes
-span at least $10^{-3}$ to $10^{-1}$ to permit a direct comparison of the two
-matrix targets.}
+perturbed-silicon structure. Each point is one shift-resolved block.}
 \label{fig:silicon-density-errors}
 \end{figure}
 
