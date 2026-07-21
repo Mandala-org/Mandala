@@ -15,6 +15,7 @@ import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap, LogNorm
 import torch
 
 from core.block_irrep_mapper import BlockIrrepMapper
@@ -31,6 +32,31 @@ from net.artifacts import compute_dos_from_eigenvalues, compute_generalized_eige
 from utils.units import HARTREE_TO_EV
 
 DEFAULT_PATH_STRING = "GXWKGLUWLK,UX"
+
+# Keep the same, deliberately dissimilar colours anywhere reference and model
+# spectra are overlaid.  These remain distinguishable in common CVD palettes.
+GROUND_TRUTH_COLOR = "#000000"
+PREDICTION_COLOR = "#D62728"
+DOS_ERROR_COLOR = "#0072B2"
+BLOCK_ERROR_COLOR = "#003B73"
+SPECTRAL_ENERGY_MIN_EV = -15.0
+SPECTRAL_ENERGY_MAX_EV = 25.0
+
+
+def configure_plot_style(
+    *,
+    ground_truth_color: str = GROUND_TRUTH_COLOR,
+    prediction_color: str = PREDICTION_COLOR,
+    error_color: str = DOS_ERROR_COLOR,
+    block_error_color: str = BLOCK_ERROR_COLOR,
+) -> None:
+    """Configure colors used by evaluation plots generated in this process."""
+    global GROUND_TRUTH_COLOR, PREDICTION_COLOR, DOS_ERROR_COLOR, BLOCK_ERROR_COLOR
+    GROUND_TRUTH_COLOR = str(ground_truth_color)
+    PREDICTION_COLOR = str(prediction_color)
+    DOS_ERROR_COLOR = str(error_color)
+    BLOCK_ERROR_COLOR = str(block_error_color)
+
 
 _BAND_MP_STATE: dict[str, Any] | None = None
 _TETRA_MP_STATE: dict[str, Any] | None = None
@@ -875,20 +901,20 @@ def save_band_structure_plot(
         ax.plot(
             linear_k.numpy(),
             energies_ev[:, band_idx].numpy(),
-            color="#1f5aa6",
+            color=PREDICTION_COLOR,
             lw=1.1,
-            alpha=line_alpha,
+            ls="--",
         )
     for xpos in tick_positions.tolist():
         ax.axvline(xpos, color="0.80", lw=0.8, zorder=0)
-    ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+    ax.axhline(0.0, color="black", ls="--", lw=1.0)
     ax.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
     ax.set_ylim(emin_ev, emax_ev)
     ax.set_xticks(tick_positions.numpy())
     ax.set_xticklabels(tick_labels, fontsize=11)
-    ax.set_ylabel(r"$E - E_F$ (eV)")
+    ax.set_ylabel(r"$E-E_F$ (eV)")
     ax.set_title(title)
-    ax.grid(True, axis="y", alpha=0.2)
+    ax.grid(True, axis="y")
     if fermi_level_ev is not None:
         ax.text(
             0.98,
@@ -897,7 +923,7 @@ def save_band_structure_plot(
             transform=ax.transAxes,
             ha="right",
             va="bottom",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
     fig.tight_layout()
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
@@ -927,11 +953,11 @@ def save_dos_plot(
         )
 
     fig, ax = plt.subplots(1, 1, figsize=(9.0, 5.8))
-    ax.plot(grid_ev.numpy(), dos.numpy(), color="#1f5aa6", lw=1.8)
+    ax.plot(grid_ev.numpy(), dos.numpy(), color=PREDICTION_COLOR, lw=1.8)
     ax.set_title(title)
-    ax.set_xlabel("Energy (eV)")
+    ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
-    ax.grid(True, alpha=0.25)
+    ax.grid(True)
 
     if fermi_level_ev is not None:
         ax.axvline(fermi_level_ev, color="black", ls=":", lw=1.5, label="Fermi level")
@@ -943,7 +969,7 @@ def save_dos_plot(
             transform=ax.transAxes,
             ha="left",
             va="top",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
     if fermi_level_ev is not None:
         ax.text(
@@ -953,7 +979,7 @@ def save_dos_plot(
             transform=ax.transAxes,
             ha="right",
             va="bottom",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
     fig.tight_layout()
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
@@ -1016,20 +1042,20 @@ def save_band_and_dos_plot(
         ax_band.plot(
             linear_k.numpy(),
             energies_ev[:, band_idx].numpy(),
-            color="#1f5aa6",
+            color=PREDICTION_COLOR,
             lw=1.05,
-            alpha=line_alpha,
+            ls="--",
         )
     for xpos in tick_positions.tolist():
         ax_band.axvline(xpos, color="0.80", lw=0.8, zorder=0)
-    ax_band.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+    ax_band.axhline(0.0, color="black", ls="--", lw=1.0)
     ax_band.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
     ax_band.set_ylim(emin_ev, emax_ev)
     ax_band.set_xticks(tick_positions.numpy())
     ax_band.set_xticklabels(tick_labels, fontsize=11)
-    ax_band.set_ylabel(r"$E - E_F$ (eV)")
+    ax_band.set_ylabel(r"$E-E_F$ (eV)")
     ax_band.set_title(title)
-    ax_band.grid(True, axis="y", alpha=0.2)
+    ax_band.grid(True, axis="y")
     if band_fermi_ev is not None:
         ax_band.text(
             0.98,
@@ -1038,32 +1064,33 @@ def save_band_and_dos_plot(
             transform=ax_band.transAxes,
             ha="right",
             va="bottom",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
 
     ax_dos.plot(
         dos.numpy(),
         dos_grid_shifted.numpy(),
-        color="#1f5aa6",
+        color=PREDICTION_COLOR,
         lw=1.8,
-        label="Our DOS",
+        ls="--",
+        label="Prediction",
     )
     if dos_reference is not None:
         ref_energy, ref_dos, _ref_cumulative = dos_reference
         ax_dos.plot(
             ref_dos.numpy(),
             ref_energy.numpy(),
-            color="tab:orange",
+            color=GROUND_TRUTH_COLOR,
             lw=1.2,
-            ls="--",
-            label="OpenMX DOS",
+            ls="-",
+            label="Ground truth",
         )
     if band_fermi_ev is not None:
         ax_dos.axhline(0.0, color="black", ls=":", lw=1.5, label="Fermi level")
-    ax_dos.axvline(0.0, color="black", ls="--", lw=1.1, alpha=0.85)
+    ax_dos.axvline(0.0, color="black", ls="--", lw=1.1)
     ax_dos.set_xlabel("DOS")
     ax_dos.set_title("DOS")
-    ax_dos.grid(True, alpha=0.25)
+    ax_dos.grid(True)
     if num_electrons is not None:
         ax_dos.text(
             0.98,
@@ -1072,9 +1099,8 @@ def save_band_and_dos_plot(
             transform=ax_dos.transAxes,
             ha="right",
             va="bottom",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
-    ax_dos.legend(loc="best")
     fig.tight_layout()
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
@@ -1212,6 +1238,57 @@ def align_prediction_to_target(
         basis=pred.basis,
     )
     return aligned_pred, debug
+
+
+def compute_shift_resolved_matrix_metrics(
+    pred,
+    target,
+) -> dict[str, float | int]:
+    """Return global element-weighted errors over real-space sparse blocks.
+
+    Periodic translations remain separate here.  Converting through
+    ``BlockMatrix.to_dense()`` would instead sum them into a Gamma-point matrix
+    and would not reproduce the validation Hamiltonian metric.
+    """
+
+    absolute_error_sum = 0.0
+    squared_error_sum = 0.0
+    scalar_count = 0
+    edge_count = 0
+    for pair_key, target_blocks in target.pair_blocks.items():
+        if pair_key not in pred.pair_blocks:
+            raise ValueError(f"Key {pair_key!r} not found in prediction.")
+        pred_blocks = pred.pair_blocks[pair_key]
+        pred_edges = pred.pair_edges[pair_key]
+        target_edges = target.pair_edges[pair_key]
+        if pred_blocks.shape != target_blocks.shape:
+            raise ValueError(
+                f"Metric requires matching block shapes for key {pair_key!r}, "
+                f"got pred={tuple(pred_blocks.shape)} and "
+                f"target={tuple(target_blocks.shape)}."
+            )
+        if pred_edges.shape != target_edges.shape or not torch.equal(
+            pred_edges.detach().cpu(), target_edges.detach().cpu()
+        ):
+            raise ValueError(
+                f"Metric requires exactly aligned shift-resolved edges for key {pair_key!r}."
+            )
+        error = pred_blocks.to(torch.float64) - target_blocks.to(torch.float64)
+        absolute_error_sum += float(error.abs().sum().item())
+        squared_error_sum += float(error.square().sum().item())
+        scalar_count += int(error.numel())
+        edge_count += int(error.shape[0])
+
+    if scalar_count <= 0:
+        raise ValueError("Cannot compute matrix metrics with zero scalar elements.")
+    return {
+        "mae": absolute_error_sum / scalar_count,
+        "mse": squared_error_sum / scalar_count,
+        "absolute_error_sum": absolute_error_sum,
+        "squared_error_sum": squared_error_sum,
+        "scalar_count": scalar_count,
+        "edge_count": edge_count,
+    }
 
 
 def _dense_zero_support_stats(
@@ -1415,7 +1492,7 @@ def save_prediction_support_debug_artifacts(
         output_dir / f"{prefix}_aligned_correlation.png",
         title=f"{title} (training-style aligned)",
         max_points=250000,
-        alpha=0.03,
+        alpha=1.0,
         seed=0,
     )
 
@@ -1441,14 +1518,14 @@ def save_prediction_support_debug_artifacts(
     axes[0].set_title("Prediction-only edge lengths")
     axes[0].set_xlabel("Distance")
     axes[0].set_ylabel("Count")
-    axes[0].grid(True, alpha=0.25)
+    axes[0].grid(True)
     if pred_only_magnitudes:
         log_mag = np.log10(np.clip(np.asarray(pred_only_magnitudes), 1e-16, None))
         axes[1].hist(log_mag, bins=min(40, max(10, len(log_mag) // 4)))
     axes[1].set_title("Prediction-only block mean |value|")
     axes[1].set_xlabel("log10(mean |pred block|)")
     axes[1].set_ylabel("Count")
-    axes[1].grid(True, alpha=0.25)
+    axes[1].grid(True)
     fig.suptitle(f"{title}: support diagnostics")
     fig.tight_layout()
     fig.savefig(
@@ -1617,8 +1694,8 @@ def save_block_error_diagnostic_plots(
             x,
             y,
             s=12,
-            color="#60a5fa",
-            alpha=0.35,
+            color=BLOCK_ERROR_COLOR,
+            alpha=1.0,
             edgecolors="none",
             rasterized=True,
         )
@@ -1628,7 +1705,7 @@ def save_block_error_diagnostic_plots(
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.set_title(f"{matrix_label}: {subtitle.lower()}")
-        ax.grid(True, which="both", alpha=0.22)
+        ax.grid(True, which="both")
         fig.tight_layout()
         fig.savefig(
             output_dir / f"{prefix}_block_{filename}_log.png",
@@ -1677,57 +1754,6 @@ def _node_image_label(atom_idx: int, shift: tuple[int, int, int]) -> str:
 
 def _orbital_dims_for_atoms(atoms: tuple[str, ...], orbital_cfg: Any) -> list[int]:
     return [int(orbital_cfg.element_to_irreps[atom].dim) for atom in atoms]
-
-
-def _dense_atom_subset(
-    dense: torch.Tensor,
-    atoms: tuple[str, ...],
-    orbital_cfg: Any,
-    atom_indices: list[int],
-) -> tuple[torch.Tensor, list[int]]:
-    dims_all = _orbital_dims_for_atoms(atoms, orbital_cfg)
-    offsets = [0]
-    for dim in dims_all[:-1]:
-        offsets.append(offsets[-1] + dim)
-    chunks: list[torch.Tensor] = []
-    dims_selected: list[int] = []
-    for row_atom in atom_indices:
-        row_dim = dims_all[row_atom]
-        row_start = offsets[row_atom]
-        row_chunks = []
-        for col_atom in atom_indices:
-            col_dim = dims_all[col_atom]
-            col_start = offsets[col_atom]
-            row_chunks.append(
-                dense[
-                    row_start : row_start + row_dim,
-                    col_start : col_start + col_dim,
-                ]
-            )
-        chunks.append(torch.cat(row_chunks, dim=1))
-        dims_selected.append(row_dim)
-    return torch.cat(chunks, dim=0), dims_selected
-
-
-def _pair_dense_block(
-    dense: torch.Tensor,
-    atoms: tuple[str, ...],
-    orbital_cfg: Any,
-    src_atom: int,
-    dst_atom: int,
-) -> torch.Tensor:
-    dims_all = _orbital_dims_for_atoms(atoms, orbital_cfg)
-    offsets = [0]
-    for dim in dims_all[:-1]:
-        offsets.append(offsets[-1] + dim)
-    row_dim = dims_all[src_atom]
-    col_dim = dims_all[dst_atom]
-    row_start = offsets[src_atom]
-    col_start = offsets[dst_atom]
-    return dense[
-        row_start : row_start + row_dim,
-        col_start : col_start + col_dim,
-    ]
 
 
 def _cutout_axes_meta(labels: list[str], dims: list[int]) -> dict[str, Any]:
@@ -2071,29 +2097,6 @@ def _shift_resolved_closest_selection(
     ]
 
 
-def _sum_pbc_closest_selection(
-    records: list[dict[str, Any]],
-    *,
-    anchor_atom: int,
-    max_neighbors: int,
-) -> list[int]:
-    nearest_by_atom: dict[int, float] = {}
-    for record in records:
-        if int(record["src_atom"]) != int(anchor_atom):
-            continue
-        dst_atom = int(record["dst_atom"])
-        if dst_atom == int(anchor_atom):
-            continue
-        dist = float(record["edge_length"])
-        prev = nearest_by_atom.get(dst_atom)
-        if prev is None or dist < prev:
-            nearest_by_atom[dst_atom] = dist
-    ordered = sorted(nearest_by_atom.items(), key=lambda item: (item[1], item[0]))
-    return [int(anchor_atom)] + [
-        atom for atom, _dist in ordered[: max(0, int(max_neighbors))]
-    ]
-
-
 def _shift_resolved_ranked_selection(
     sorted_records: list[dict[str, Any]],
     *,
@@ -2113,54 +2116,6 @@ def _shift_resolved_ranked_selection(
             if len(nodes) >= int(max_nodes):
                 return nodes
     return nodes
-
-
-def _sum_pair_error_records(
-    pred_dense: torch.Tensor,
-    target_dense: torch.Tensor,
-    atoms: tuple[str, ...],
-    orbital_cfg: Any,
-) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
-    eps = 1.0e-12
-    atom_count = len(atoms)
-    for src_atom in range(atom_count):
-        for dst_atom in range(atom_count):
-            pred_block = _pair_dense_block(
-                pred_dense, atoms, orbital_cfg, src_atom, dst_atom
-            )
-            target_block = _pair_dense_block(
-                target_dense, atoms, orbital_cfg, src_atom, dst_atom
-            )
-            mae = _block_mean_abs(pred_block - target_block)
-            magnitude = _block_mean_abs(target_block)
-            records.append(
-                {
-                    "src_atom": src_atom,
-                    "dst_atom": dst_atom,
-                    "abs_mae": mae,
-                    "rel_mae": mae / max(magnitude, eps),
-                }
-            )
-    return records
-
-
-def _sum_pbc_ranked_selection(
-    sorted_pair_records: list[dict[str, Any]],
-    *,
-    max_nodes: int,
-) -> list[int]:
-    atoms: list[int] = []
-    seen = set()
-    for record in sorted_pair_records:
-        for atom_idx in (int(record["src_atom"]), int(record["dst_atom"])):
-            if atom_idx in seen:
-                continue
-            atoms.append(atom_idx)
-            seen.add(atom_idx)
-            if len(atoms) >= int(max_nodes):
-                return atoms
-    return atoms
 
 
 def _build_shift_resolved_dense_cutout(
@@ -2212,35 +2167,6 @@ def _random_shift_resolved_selections(
     return selections
 
 
-def _random_sum_pbc_selections(
-    pair_records: list[dict[str, Any]],
-    *,
-    max_nodes: int,
-    count: int,
-) -> list[list[int]]:
-    selections = []
-    base_records = list(pair_records)
-    for seed in range(int(count)):
-        shuffled = list(base_records)
-        random.Random(seed).shuffle(shuffled)
-        selection = _sum_pbc_ranked_selection(shuffled, max_nodes=max_nodes)
-        if selection:
-            selections.append(selection)
-    return selections
-
-
-def _sum_pbc_records_for_atoms(
-    pair_records: list[dict[str, Any]],
-    selected_atoms: list[int],
-) -> list[dict[str, Any]]:
-    selected = set(int(atom) for atom in selected_atoms)
-    return [
-        rec
-        for rec in pair_records
-        if int(rec["src_atom"]) in selected and int(rec["dst_atom"]) in selected
-    ]
-
-
 def _shift_resolved_records_for_nodes(
     records: list[dict[str, Any]],
     selected_nodes: list[tuple[int, tuple[int, int, int]]],
@@ -2264,17 +2190,10 @@ def build_hamiltonian_interactive_heatmap_payload(
     max_nodes: int = 6,
     random_count: int = 12,
     closest_neighbor_count: int = 5,
+    include_all_atoms: bool = False,
 ) -> dict[str, Any]:
-    pred_dense_full = pred.to_dense().detach().cpu().to(torch.float64)
-    target_dense_full = target.to_dense().detach().cpu().to(torch.float64)
     records = _edge_error_records(pred, target, positions=positions, box=box)
     atom_count = len(target.atoms)
-    pair_records = _sum_pair_error_records(
-        pred_dense_full,
-        target_dense_full,
-        target.atoms,
-        target.orbital_cfg,
-    )
 
     sorted_abs_edges = sorted(
         records,
@@ -2294,24 +2213,11 @@ def build_hamiltonian_interactive_heatmap_payload(
             rec["shift"],
         ),
     )
-    sorted_abs_pairs = sorted(
-        pair_records,
-        key=lambda rec: (-float(rec["abs_mae"]), rec["src_atom"], rec["dst_atom"]),
-    )
-    sorted_rel_pairs = sorted(
-        pair_records,
-        key=lambda rec: (-float(rec["rel_mae"]), rec["src_atom"], rec["dst_atom"]),
-    )
-
     payload: dict[str, Any] = {
         "default_clim": float(default_clim),
         "atom_count": int(atom_count),
         "max_nodes": int(max_nodes),
         "closest_neighbor_count": int(closest_neighbor_count),
-        "sum_pbc": {
-            "closest_neighbors": {},
-            "random": [],
-        },
         "shift_resolved": {
             "closest_neighbors": {},
             "random": [],
@@ -2332,43 +2238,27 @@ def build_hamiltonian_interactive_heatmap_payload(
         container.append(cutout)
         max_abs_value = max(max_abs_value, float(cutout["abs_max"]))
 
-    for anchor_atom in range(atom_count):
-        sum_atoms = _sum_pbc_closest_selection(
-            records,
-            anchor_atom=anchor_atom,
-            max_neighbors=closest_neighbor_count,
+    if include_all_atoms:
+        all_nodes = [(atom_idx, (0, 0, 0)) for atom_idx in range(atom_count)]
+        gt_dense, dims = _build_shift_resolved_dense_cutout(target, all_nodes)
+        pred_dense, _ = _build_shift_resolved_dense_cutout(pred, all_nodes)
+        register_cutout(
+            payload["shift_resolved"],
+            "all",
+            _make_cutout_payload(
+                gt_dense.detach().cpu().to(torch.float64),
+                pred_dense.detach().cpu().to(torch.float64),
+                [str(atom_idx) for atom_idx in range(atom_count)],
+                dims,
+                selection_label="All atoms, central-cell shift-resolved matrix error",
+                worst_edges=[],
+            ),
         )
-        if sum_atoms:
-            sum_records = _sum_pbc_records_for_atoms(pair_records, sum_atoms)
-            gt_dense, dims = _dense_atom_subset(
-                target_dense_full,
-                target.atoms,
-                target.orbital_cfg,
-                sum_atoms,
-            )
-            pred_dense, _ = _dense_atom_subset(
-                pred_dense_full,
-                pred.atoms,
-                pred.orbital_cfg,
-                sum_atoms,
-            )
-            register_cutout(
-                payload["sum_pbc"]["closest_neighbors"],
-                str(anchor_atom),
-                _make_cutout_payload(
-                    gt_dense,
-                    pred_dense,
-                    [str(atom_idx) for atom_idx in sum_atoms],
-                    dims,
-                    selection_label=f"Closest neighbors around atom {anchor_atom}",
-                    worst_edges=_top_edge_records(
-                        sum_records,
-                        max_items=10,
-                        include_shift=False,
-                    ),
-                ),
-            )
+        payload["shift_resolved"] = {"all": payload["shift_resolved"]["all"]}
+        payload["max_clim"] = float(max(max_abs_value, float(default_clim)))
+        return payload
 
+    for anchor_atom in range(atom_count):
         shift_nodes = _shift_resolved_closest_selection(
             records,
             anchor_atom=anchor_atom,
@@ -2398,43 +2288,6 @@ def build_hamiltonian_interactive_heatmap_payload(
                 ),
             )
 
-    worst_abs_atoms = _sum_pbc_ranked_selection(sorted_abs_pairs, max_nodes=max_nodes)
-    worst_rel_atoms = _sum_pbc_ranked_selection(sorted_rel_pairs, max_nodes=max_nodes)
-    for key, atoms_selected, label in (
-        ("worst_abs", worst_abs_atoms, "Worst absolute pair errors"),
-        ("worst_rel", worst_rel_atoms, "Worst relative pair errors"),
-    ):
-        if atoms_selected:
-            sum_records = _sum_pbc_records_for_atoms(pair_records, atoms_selected)
-            gt_dense, dims = _dense_atom_subset(
-                target_dense_full,
-                target.atoms,
-                target.orbital_cfg,
-                atoms_selected,
-            )
-            pred_dense, _ = _dense_atom_subset(
-                pred_dense_full,
-                pred.atoms,
-                pred.orbital_cfg,
-                atoms_selected,
-            )
-            register_cutout(
-                payload["sum_pbc"],
-                key,
-                _make_cutout_payload(
-                    gt_dense,
-                    pred_dense,
-                    [str(atom_idx) for atom_idx in atoms_selected],
-                    dims,
-                    selection_label=label,
-                    worst_edges=_top_edge_records(
-                        sum_records,
-                        max_items=10,
-                        include_shift=False,
-                    ),
-                ),
-            )
-
     worst_abs_nodes = _shift_resolved_ranked_selection(
         sorted_abs_edges,
         max_nodes=max_nodes,
@@ -2444,7 +2297,7 @@ def build_hamiltonian_interactive_heatmap_payload(
         max_nodes=max_nodes,
     )
     for key, nodes_selected, label in (
-        ("worst_abs", worst_abs_nodes, "Worst absolute edge errors"),
+        ("worst_abs", worst_abs_nodes, "Worst matrix edge errors"),
         ("worst_rel", worst_rel_nodes, "Worst relative edge errors"),
     ):
         if nodes_selected:
@@ -2470,40 +2323,6 @@ def build_hamiltonian_interactive_heatmap_payload(
                     ),
                 ),
             )
-
-    for atom_selection in _random_sum_pbc_selections(
-        pair_records,
-        max_nodes=max_nodes,
-        count=random_count,
-    ):
-        sum_records = _sum_pbc_records_for_atoms(pair_records, atom_selection)
-        gt_dense, dims = _dense_atom_subset(
-            target_dense_full,
-            target.atoms,
-            target.orbital_cfg,
-            atom_selection,
-        )
-        pred_dense, _ = _dense_atom_subset(
-            pred_dense_full,
-            pred.atoms,
-            pred.orbital_cfg,
-            atom_selection,
-        )
-        register_random(
-            payload["sum_pbc"]["random"],
-            _make_cutout_payload(
-                gt_dense,
-                pred_dense,
-                [str(atom_idx) for atom_idx in atom_selection],
-                dims,
-                selection_label="Random summed-PBC selection",
-                worst_edges=_top_edge_records(
-                    sum_records,
-                    max_items=10,
-                    include_shift=False,
-                ),
-            ),
-        )
 
     for node_selection in _random_shift_resolved_selections(
         records,
@@ -2547,6 +2366,7 @@ def save_hamiltonian_interactive_heatmap_payload(
     max_nodes: int = 6,
     random_count: int = 12,
     closest_neighbor_count: int = 5,
+    include_all_atoms: bool = False,
 ) -> dict[str, Any]:
     payload = build_hamiltonian_interactive_heatmap_payload(
         pred,
@@ -2557,6 +2377,7 @@ def save_hamiltonian_interactive_heatmap_payload(
         max_nodes=max_nodes,
         random_count=random_count,
         closest_neighbor_count=closest_neighbor_count,
+        include_all_atoms=include_all_atoms,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(payload, output_path)
@@ -2568,12 +2389,25 @@ def _save_heatmap_triptych(
     output_path: Path,
     *,
     title: str,
-    clim: float,
+    clim: float | str,
 ) -> None:
     axes_meta = cutout.get("axes", {})
     tick_positions = np.asarray(axes_meta.get("tick_positions", []), dtype=float)
     tick_labels = [str(value) for value in axes_meta.get("labels", [])]
     boundaries = [float(value) - 0.5 for value in axes_meta.get("boundaries", [])[1:-1]]
+
+    if clim == "auto":
+        all_values = np.concatenate(
+            [
+                np.asarray(cutout[key], dtype=float).ravel()
+                for key in ("gt", "pred", "diff")
+            ]
+        )
+        finite = all_values[np.isfinite(all_values)]
+        resolved_clim = float(np.max(np.abs(finite))) if finite.size else 1.0
+        resolved_clim = max(resolved_clim, np.finfo(float).eps)
+    else:
+        resolved_clim = float(clim)
 
     fig, axes = plt.subplots(1, 3, figsize=(15.2, 5.1), constrained_layout=True)
     image = None
@@ -2583,17 +2417,19 @@ def _save_heatmap_triptych(
         ("Ground truth", "Prediction", "Difference"),
     ):
         values = np.asarray(cutout[key], dtype=float)
-        image = ax.imshow(values, cmap="bwr", vmin=-clim, vmax=clim, origin="upper")
+        image = ax.imshow(
+            values, cmap="bwr", vmin=-resolved_clim, vmax=resolved_clim, origin="upper"
+        )
         ax.set_title(subtitle)
         if tick_positions.size and len(tick_labels) == tick_positions.size:
             ax.set_xticks(tick_positions, labels=tick_labels, rotation=35, ha="right")
             ax.set_yticks(tick_positions, labels=tick_labels)
         for boundary in boundaries:
-            ax.axvline(boundary, color="black", lw=0.35, alpha=0.35)
-            ax.axhline(boundary, color="black", lw=0.35, alpha=0.35)
+            ax.axvline(boundary, color="black", lw=0.35)
+            ax.axhline(boundary, color="black", lw=0.35)
     assert image is not None
     fig.colorbar(image, ax=axes, fraction=0.022, pad=0.02, label="Matrix value")
-    fig.suptitle(f"{title} (clim = {clim:g})")
+    fig.suptitle(title if clim == "auto" else f"{title} (clim = {resolved_clim:g})")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
@@ -2609,78 +2445,81 @@ def save_matrix_heatmap_suite(
     prefix: str,
     matrix_label: str,
     max_atoms: int = 6,
-    clims: tuple[float, ...] = (1.0e-4, 1.0e-3, 1.0e-2),
+    all_atoms: bool = False,
+    clims: tuple[float | str, ...] = ("auto", 0.5, 0.1, 0.05, 0.01),
     payload: dict[str, Any] | None = None,
 ) -> None:
     """Save report-selected and fixed first-atom matrix heatmap triptychs."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    # Remove files emitted by the former PBC-summed/verbose-name suites when
+    # regenerating into an existing evaluation directory.
+    for pattern in (
+        f"{prefix}_*sum_pbc*.png",
+        f"{prefix}_*shift_resolved*.png",
+        f"{prefix}_worst*_clim_*.png",
+        f"{prefix}_first*_clim_*.png",
+        f"{prefix}_all_clim_*.png",
+    ):
+        for stale_path in output_dir.glob(pattern):
+            stale_path.unlink()
     if payload is None:
         payload = build_hamiltonian_interactive_heatmap_payload(
             pred,
             target,
             positions=positions,
             box=box,
-            default_clim=clims[-1],
+            default_clim=float(
+                next(value for value in reversed(clims) if value != "auto")
+            ),
             max_nodes=max_atoms,
         )
 
     cutouts: list[tuple[str, str, dict[str, Any]]] = []
-    for family, family_label in (
-        ("shift_resolved", "Shift-resolved worst absolute error"),
-        ("sum_pbc", "Summed-PBC worst absolute error"),
-    ):
-        cutout = payload.get(family, {}).get("worst_abs")
+    if not all_atoms:
+        cutout = payload.get("shift_resolved", {}).get("worst_abs")
         if cutout is not None:
-            cutouts.append((f"{family}_worst_abs", family_label, cutout))
+            cutouts.append(("worst", "worst matrix error fragment", cutout))
 
-    atom_count = min(int(max_atoms), len(target.atoms))
+    atom_count = (
+        len(target.atoms) if all_atoms else min(int(max_atoms), len(target.atoms))
+    )
     atom_indices = list(range(atom_count))
-    target_dense = target.to_dense().detach().cpu().to(torch.float64)
-    pred_dense = pred.to_dense().detach().cpu().to(torch.float64)
-    gt_sum, dims = _dense_atom_subset(
-        target_dense, target.atoms, target.orbital_cfg, atom_indices
-    )
-    pred_sum, _ = _dense_atom_subset(
-        pred_dense, pred.atoms, pred.orbital_cfg, atom_indices
-    )
     labels = [str(atom_idx) for atom_idx in atom_indices]
-    cutouts.append(
-        (
-            f"first{atom_count}_sum_pbc",
-            f"First {atom_count} atoms, summed PBC",
-            _make_cutout_payload(
-                gt_sum,
-                pred_sum,
-                labels,
-                dims,
-                selection_label=f"First {atom_count} atoms, summed PBC",
-            ),
-        )
-    )
     node_images = [(atom_idx, (0, 0, 0)) for atom_idx in atom_indices]
     gt_shift, shift_dims = _build_shift_resolved_dense_cutout(target, node_images)
     pred_shift, _ = _build_shift_resolved_dense_cutout(pred, node_images)
     cutouts.append(
         (
-            f"first{atom_count}_shift_resolved",
-            f"First {atom_count} atoms, zero-cell shift resolved",
+            "all" if all_atoms else f"first{atom_count}",
+            (
+                "matrix error"
+                if all_atoms
+                else f"first {atom_count} atoms fragment matrix error"
+            ),
             _make_cutout_payload(
                 gt_shift.detach().cpu().to(torch.float64),
                 pred_shift.detach().cpu().to(torch.float64),
                 labels,
                 shift_dims,
-                selection_label=f"First {atom_count} atoms, zero-cell shift resolved",
+                selection_label=(
+                    "All atoms, central-cell shift-resolved matrix error"
+                    if all_atoms
+                    else f"First {atom_count} atoms fragment matrix error"
+                ),
             ),
         )
     )
 
     for cutout_name, cutout_label, cutout in cutouts:
         for clim in clims:
-            clim_label = f"{clim:.0e}".replace("+", "")
+            clim_label = (
+                "auto" if clim == "auto" else f"{float(clim):g}".replace(".", "p")
+            )
             _save_heatmap_triptych(
                 cutout,
                 output_dir / f"{prefix}_{cutout_name}_clim_{clim_label}.png",
                 title=f"{matrix_label}: {cutout_label}",
-                clim=float(clim),
+                clim=clim,
             )
 
 
@@ -2693,59 +2532,93 @@ def save_correlation_plot(
     max_points: int,
     alpha: float,
     seed: int,
+    value_scale: float = 1.0,
+    value_unit: str = "native",
+    bins: int = 60,
 ) -> None:
+    """Plot all aligned shift-resolved matrix elements as count density."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    from net.artifacts import _as_dense
-
-    pred_dense = _as_dense(pred).flatten()
-    target_dense = _as_dense(target).flatten()
-    if pred_dense.numel() != target_dense.numel():
-        raise ValueError(
-            f"Correlation plot requires matching element counts, got {pred_dense.numel()} vs {target_dense.numel()}"
-        )
-    n = pred_dense.numel()
-    if max_points > 0 and n > max_points:
-        generator = torch.Generator(device="cpu")
-        generator.manual_seed(int(seed))
-        perm = torch.randperm(n, generator=generator)[: int(max_points)]
-        pred_dense = pred_dense.index_select(0, perm)
-        target_dense = target_dense.index_select(0, perm)
-    pred_np = pred_dense.cpu().numpy()
-    target_np = target_dense.cpu().numpy()
+    del max_points, alpha, seed  # Retained in the API for command compatibility.
+    pred_parts: list[torch.Tensor] = []
+    target_parts: list[torch.Tensor] = []
+    for key, target_blocks in target.pair_blocks.items():
+        if key not in pred.pair_blocks:
+            raise ValueError(f"Key {key!r} not found in correlation prediction.")
+        pred_blocks = pred.pair_blocks[key]
+        if pred_blocks.shape != target_blocks.shape:
+            raise ValueError(
+                f"Correlation plot requires matching shift-resolved blocks for {key!r}."
+            )
+        if not torch.equal(
+            pred.pair_edges[key].detach().cpu(), target.pair_edges[key].detach().cpu()
+        ):
+            raise ValueError(
+                f"Correlation plot requires matching shift-resolved edges for {key!r}."
+            )
+        pred_parts.append(pred_blocks.detach().cpu().to(torch.float64).reshape(-1))
+        target_parts.append(target_blocks.detach().cpu().to(torch.float64).reshape(-1))
+    if not pred_parts:
+        raise ValueError("Correlation plot has no matrix elements.")
+    pred_values = torch.cat(pred_parts) * float(value_scale)
+    target_values = torch.cat(target_parts) * float(value_scale)
+    pred_np = pred_values.numpy()
+    target_np = target_values.numpy()
     stacked = np.concatenate([pred_np, target_np], axis=0)
-    bound = float(np.quantile(np.abs(stacked), 0.9999))
+    bound = float(np.max(np.abs(stacked)))
     if not np.isfinite(bound) or bound <= 0.0:
-        bound = float(max(abs(pred_np).max(), abs(target_np).max()))
+        bound = 1.0
     lo = -bound
     hi = bound
-    corr = float(torch.corrcoef(torch.stack([target_dense, pred_dense]))[0, 1].item())
+    corr = float(torch.corrcoef(torch.stack([target_values, pred_values]))[0, 1].item())
     r2 = float(corr * corr)
+    mae = float(torch.mean(torch.abs(pred_values - target_values)).item())
+    counts, x_edges, y_edges = np.histogram2d(
+        target_np,
+        pred_np,
+        bins=int(bins),
+        range=((lo, hi), (lo, hi)),
+    )
+    masked_counts = np.ma.masked_less_equal(counts.T, 0.0)
+    hot_counts = LinearSegmentedColormap.from_list(
+        "mandala_yellow_red_counts", ("#FFFFB2", "#FD8D3C", "#BD0026")
+    )
+    hot_counts.set_bad("#FFFFFF")
 
-    fig, ax = plt.subplots(1, 1, figsize=(6.0, 6.0))
+    fig, ax = plt.subplots(1, 1, figsize=(7.5, 6.0))
+    image = ax.pcolormesh(
+        x_edges,
+        y_edges,
+        masked_counts,
+        cmap=hot_counts,
+        norm=LogNorm(vmin=1.0, vmax=max(float(counts.max()), 1.000001)),
+        shading="auto",
+        rasterized=True,
+    )
+    fig.colorbar(image, ax=ax, label="Count")
     ax.scatter(
         target_np,
         pred_np,
-        s=3,
-        alpha=alpha,
-        color="#1f5aa6",
-        edgecolors="none",
+        s=0.3,
+        color="#000000",
+        linewidths=0.0,
         rasterized=True,
+        zorder=2,
     )
-    ax.plot([lo, hi], [lo, hi], color="black", lw=1.2, ls="--", alpha=0.8)
+    ax.plot([lo, hi], [lo, hi], color="#666666", lw=1.0, ls="--")
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
+    ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("Ground truth")
     ax.set_ylabel("Prediction")
     ax.set_title(title)
-    ax.grid(True, alpha=0.2)
     ax.text(
         0.02,
         0.98,
-        f"R^2 = {r2:.6f}\nN = {pred_np.size}",
+        f"MAE = {mae:.6g} {value_unit}\nR² = {r2:.6f}",
         transform=ax.transAxes,
         ha="left",
         va="top",
-        bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+        bbox=dict(facecolor="white", edgecolor="none"),
     )
     fig.tight_layout()
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
@@ -2754,14 +2627,19 @@ def save_correlation_plot(
         {
             "kind": "correlation",
             "title": title,
-            "pred": pred_dense.detach().cpu(),
-            "target": target_dense.detach().cpu(),
             "corr": corr,
             "r2": r2,
+            "mae": mae,
+            "unit": value_unit,
             "bound": bound,
             "lo": lo,
             "hi": hi,
-            "sampled_points": int(pred_dense.numel()),
+            "point_count": int(pred_values.numel()),
+            "target": target_values.to(torch.float32),
+            "pred": pred_values.to(torch.float32),
+            "histogram_counts": counts,
+            "x_edges": x_edges,
+            "y_edges": y_edges,
         },
         output_path.with_suffix(".pt"),
     )
@@ -2797,6 +2675,161 @@ def compute_dos_data(
         e_max=float(energy_max),
     )
     return eig, eig, grid, dos
+
+
+def save_eigenvalue_correlation_plot(
+    eig_true_ev: torch.Tensor,
+    eig_pred_ev: torch.Tensor,
+    output_path: Path,
+    *,
+    title: str,
+    energy_min: float = SPECTRAL_ENERGY_MIN_EV,
+    energy_max: float = SPECTRAL_ENERGY_MAX_EV,
+    bins: int = 60,
+) -> dict[str, float | int] | None:
+    """Save the static counterpart of the report's eigenvalue correlation."""
+    true = torch.as_tensor(eig_true_ev).detach().cpu().to(torch.float64).reshape(-1)
+    pred = torch.as_tensor(eig_pred_ev).detach().cpu().to(torch.float64).reshape(-1)
+    count = min(true.numel(), pred.numel())
+    true, pred = true[:count], pred[:count]
+    finite = (
+        torch.isfinite(true)
+        & torch.isfinite(pred)
+        & (true >= float(energy_min))
+        & (true <= float(energy_max))
+        & (pred >= float(energy_min))
+        & (pred <= float(energy_max))
+    )
+    true, pred = true[finite], pred[finite]
+    if true.numel() == 0:
+        return
+    mae = float(torch.mean(torch.abs(pred - true)).item())
+    corr = float(torch.corrcoef(torch.stack((true, pred)))[0, 1].item())
+    r2 = corr * corr
+    counts, x_edges, y_edges = np.histogram2d(
+        true.numpy(),
+        pred.numpy(),
+        bins=int(bins),
+        range=(
+            (float(energy_min), float(energy_max)),
+            (float(energy_min), float(energy_max)),
+        ),
+    )
+    masked_counts = np.ma.masked_less_equal(counts.T, 0.0)
+    hot_counts = LinearSegmentedColormap.from_list(
+        "mandala_eigen_yellow_red_counts", ("#FFFFB2", "#FD8D3C", "#BD0026")
+    )
+    hot_counts.set_bad("#FFFFFF")
+
+    fig, ax = plt.subplots(figsize=(7.5, 6.0))
+    image = ax.pcolormesh(
+        x_edges,
+        y_edges,
+        masked_counts,
+        cmap=hot_counts,
+        norm=LogNorm(vmin=1.0, vmax=max(float(counts.max()), 1.000001)),
+        shading="auto",
+        rasterized=True,
+    )
+    fig.colorbar(image, ax=ax, label="Count")
+    ax.scatter(
+        true.numpy(),
+        pred.numpy(),
+        s=0.3,
+        color="#000000",
+        linewidths=0.0,
+        rasterized=True,
+        zorder=2,
+    )
+    ax.plot(
+        [energy_min, energy_max],
+        [energy_min, energy_max],
+        color="#666666",
+        ls="--",
+        lw=1.0,
+    )
+    ax.set(
+        xlim=(energy_min, energy_max),
+        ylim=(energy_min, energy_max),
+        xlabel=r"Ground truth $E-E_F$ (eV)",
+        ylabel=r"Prediction $E-E_F$ (eV)",
+        title=title,
+    )
+    ax.set_aspect("equal", adjustable="box")
+    ax.text(
+        0.03,
+        0.97,
+        f"MAE = {mae:.4g} eV\nR² = {r2:.6f}",
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        bbox=dict(facecolor="white", edgecolor="none"),
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+    return {
+        "mae_ev": mae,
+        "r2": r2,
+        "point_count": int(true.numel()),
+        "energy_min_ev": float(energy_min),
+        "energy_max_ev": float(energy_max),
+    }
+
+
+def save_dos_comparison_and_error_plot(
+    grid_true: torch.Tensor,
+    dos_true: torch.Tensor,
+    grid_pred: torch.Tensor,
+    dos_pred: torch.Tensor,
+    output_path: Path,
+    *,
+    title: str,
+    energy_min: float = SPECTRAL_ENERGY_MIN_EV,
+    energy_max: float = SPECTRAL_ENERGY_MAX_EV,
+) -> None:
+    """Save aligned DOS curves above their pointwise prediction error."""
+    gt_x = torch.as_tensor(grid_true).detach().cpu().numpy()
+    pred_x = torch.as_tensor(grid_pred).detach().cpu().numpy()
+    gt_y = torch.as_tensor(dos_true).detach().cpu().numpy()
+    pred_y = torch.as_tensor(dos_pred).detach().cpu().numpy()
+    # Usually both methods share a grid. Interpolation makes the helper robust
+    # to independently generated curves without changing either stored curve.
+    pred_on_gt = np.interp(gt_x, pred_x, pred_y, left=np.nan, right=np.nan)
+    error = pred_on_gt - gt_y
+
+    fig, (ax_top, ax_error) = plt.subplots(
+        2,
+        1,
+        figsize=(9.2, 7.2),
+        sharex=True,
+        gridspec_kw={"height_ratios": (2.2, 1.0), "hspace": 0.08},
+    )
+    ax_top.plot(
+        gt_x, gt_y, color=GROUND_TRUTH_COLOR, lw=1.8, ls="-", label="Ground truth"
+    )
+    ax_top.plot(
+        pred_x,
+        pred_y,
+        color=PREDICTION_COLOR,
+        lw=1.5,
+        ls="--",
+        label="Prediction",
+    )
+    ax_top.set_ylabel("DOS")
+    ax_top.set_title(title)
+    ax_top.grid(True)
+    ax_top.legend(loc="upper right")
+    ax_error.plot(gt_x, error, color=DOS_ERROR_COLOR, lw=1.4)
+    ax_error.axhline(0.0, color="black", ls="--", lw=1.0)
+    ax_error.set_xlabel(r"$E-E_F$ (eV)")
+    ax_error.set_ylabel("DOS error")
+    ax_error.grid(True)
+    ax_error.set_xlim(float(energy_min), float(energy_max))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
 
 
 def save_dos_comparison_plot(
@@ -2852,20 +2885,30 @@ def save_dos_comparison_plot(
 
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
     ax.plot(
-        plot_grid_true.numpy(), dos_true.cpu().numpy(), label="Ground Truth", lw=1.8
+        plot_grid_true.numpy(),
+        dos_true.cpu().numpy(),
+        label="Ground truth",
+        color=GROUND_TRUTH_COLOR,
+        lw=1.8,
+        ls="-",
     )
-    ax.plot(plot_grid_pred.numpy(), dos_pred.cpu().numpy(), label="Prediction", lw=1.4)
+    ax.plot(
+        plot_grid_pred.numpy(),
+        dos_pred.cpu().numpy(),
+        label="Prediction",
+        color=PREDICTION_COLOR,
+        lw=1.4,
+        ls="--",
+    )
     ax.set_title(title)
-    ax.set_xlabel(
-        "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
-    )
+    ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
-    ax.grid(True, alpha=0.25)
+    ax.grid(True)
     if fermi_true is not None:
         # DOS is plotted relative to the GT Fermi level.  The scientifically
         # useful window is symmetric around E_F; using the absolute DOS grid
         # bounds here can hide the entire unoccupied (+E) side.
-        ax.set_xlim(-10.0, 10.0)
+        ax.set_xlim(SPECTRAL_ENERGY_MIN_EV, SPECTRAL_ENERGY_MAX_EV)
     else:
         ax.set_xlim(left=energy_min, right=energy_max)
     text_lines = []
@@ -2881,12 +2924,25 @@ def save_dos_comparison_plot(
             transform=ax.transAxes,
             ha="left",
             va="top",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
-    ax.legend(loc="best")
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    save_dos_comparison_and_error_plot(
+        plot_grid_true,
+        dos_true,
+        plot_grid_pred,
+        dos_pred,
+        output_path.parent / "dos_comparison_and_error.png",
+        title=title,
+    )
+    save_eigenvalue_correlation_plot(
+        eig_true[:min_len] - (0.0 if fermi_true is None else float(fermi_true)),
+        eig_pred[:min_len] - (0.0 if fermi_pred is None else float(fermi_pred)),
+        output_path.parent / "eigenvalue_correlation.png",
+        title=title.replace("DOS comparison", "Eigenvalue correlation"),
+    )
     torch.save(
         {
             "kind": "dos_comparison",
@@ -2917,22 +2973,19 @@ def save_dos_comparison_plot(
         ax.plot(
             plot_grid_true.numpy(),
             dos_error.cpu().numpy(),
-            color="#b23a48",
+            color=DOS_ERROR_COLOR,
             lw=1.4,
             label="Prediction - Ground Truth",
         )
-        ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+        ax.axhline(0.0, color="black", ls="--", lw=1.0)
         ax.set_title(title.replace("comparison", "error"))
-        ax.set_xlabel(
-            "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
-        )
+        ax.set_xlabel(r"$E-E_F$ (eV)")
         ax.set_ylabel("DOS Error")
-        ax.grid(True, alpha=0.25)
+        ax.grid(True)
         if fermi_true is not None:
-            ax.set_xlim(-10.0, 10.0)
+            ax.set_xlim(SPECTRAL_ENERGY_MIN_EV, SPECTRAL_ENERGY_MAX_EV)
         else:
             ax.set_xlim(left=energy_min, right=energy_max)
-        ax.legend(loc="best")
         fig.tight_layout()
         fig.savefig(error_output_path, dpi=200, bbox_inches="tight")
         plt.close(fig)
@@ -2979,20 +3032,19 @@ def save_dos_prediction_plot(
         energy_max=energy_max,
     )
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
-    ax.plot(grid.numpy(), dos.numpy(), lw=1.6, color="#1f5aa6")
+    ax.plot(grid.numpy(), dos.numpy(), lw=1.6, color=PREDICTION_COLOR, ls="--")
     if fermi is not None:
         ax.axvline(
             fermi,
-            color="#1f5aa6",
+            color=PREDICTION_COLOR,
             ls=":",
             lw=1.4,
-            alpha=0.9,
             label=f"$E_F$ = {fermi:.3f} eV",
         )
     ax.set_title(title)
-    ax.set_xlabel("Energy (eV)")
+    ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
-    ax.grid(True, alpha=0.25)
+    ax.grid(True)
     ax.set_xlim(left=energy_min, right=energy_max)
     if num_electrons is not None:
         ax.text(
@@ -3002,10 +3054,8 @@ def save_dos_prediction_plot(
             transform=ax.transAxes,
             ha="left",
             va="top",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
-    if fermi is not None:
-        ax.legend(loc="best")
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -3110,16 +3160,28 @@ def save_tetrahedron_dos_comparison_plot(
         plot_grid_pred = plot_grid_pred - float(fermi_true)
 
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
-    ax.plot(plot_grid_true.numpy(), dos_true.numpy(), label="Ground Truth", lw=1.8)
-    ax.plot(plot_grid_pred.numpy(), dos_pred.numpy(), label="Prediction", lw=1.4)
-    ax.set_title(title)
-    ax.set_xlabel(
-        "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
+    ax.plot(
+        plot_grid_true.numpy(),
+        dos_true.numpy(),
+        label="Ground truth",
+        color=GROUND_TRUTH_COLOR,
+        lw=1.8,
+        ls="-",
     )
+    ax.plot(
+        plot_grid_pred.numpy(),
+        dos_pred.numpy(),
+        label="Prediction",
+        color=PREDICTION_COLOR,
+        lw=1.4,
+        ls="--",
+    )
+    ax.set_title(title)
+    ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
-    ax.grid(True, alpha=0.25)
+    ax.grid(True)
     if fermi_true is not None:
-        ax.set_xlim(-10.0, 10.0)
+        ax.set_xlim(SPECTRAL_ENERGY_MIN_EV, SPECTRAL_ENERGY_MAX_EV)
     else:
         ax.set_xlim(left=energy_min, right=energy_max)
     text_lines = []
@@ -3135,34 +3197,57 @@ def save_tetrahedron_dos_comparison_plot(
             transform=ax.transAxes,
             ha="left",
             va="top",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
-    ax.legend(loc="best")
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    save_dos_comparison_and_error_plot(
+        plot_grid_true,
+        dos_true,
+        plot_grid_pred,
+        dos_pred,
+        output_path.parent / "dos_comparison_and_error.png",
+        title=title,
+    )
+    if (
+        cache_path_true is not None
+        and cache_path_true.exists()
+        and cache_path_pred is not None
+        and cache_path_pred.exists()
+    ):
+        gt_cache = torch.load(cache_path_true, map_location="cpu", weights_only=False)
+        pred_cache = torch.load(cache_path_pred, map_location="cpu", weights_only=False)
+        if (
+            gt_cache.get("eigenvalues_ev") is not None
+            and pred_cache.get("eigenvalues_ev") is not None
+        ):
+            save_eigenvalue_correlation_plot(
+                gt_cache["eigenvalues_ev"] - float(gt_cache.get("fermi_level_ev", 0.0)),
+                pred_cache["eigenvalues_ev"]
+                - float(pred_cache.get("fermi_level_ev", 0.0)),
+                output_path.parent / "eigenvalue_correlation.png",
+                title=title.replace("DOS comparison", "Eigenvalue correlation"),
+            )
     if error_output_path is not None:
         error_output_path.parent.mkdir(parents=True, exist_ok=True)
         fig, ax = plt.subplots(1, 1, figsize=(9, 4.8))
         ax.plot(
             plot_grid_true.numpy(),
             (dos_pred - dos_true).numpy(),
-            color="#b23a48",
+            color=DOS_ERROR_COLOR,
             lw=1.4,
             label="Prediction - Ground Truth",
         )
-        ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+        ax.axhline(0.0, color="black", ls="--", lw=1.0)
         ax.set_title(title.replace("comparison", "error"))
-        ax.set_xlabel(
-            "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
-        )
+        ax.set_xlabel(r"$E-E_F$ (eV)")
         ax.set_ylabel("DOS Error")
-        ax.grid(True, alpha=0.25)
+        ax.grid(True)
         if fermi_true is not None:
-            ax.set_xlim(-10.0, 10.0)
+            ax.set_xlim(SPECTRAL_ENERGY_MIN_EV, SPECTRAL_ENERGY_MAX_EV)
         else:
             ax.set_xlim(left=energy_min, right=energy_max)
-        ax.legend(loc="best")
         fig.tight_layout()
         fig.savefig(error_output_path, dpi=200, bbox_inches="tight")
         plt.close(fig)
@@ -3254,20 +3339,19 @@ def save_tetrahedron_dos_prediction_plot(
         energy_max=energy_max,
     )
     fig, ax = plt.subplots(1, 1, figsize=(9, 5.5))
-    ax.plot(grid.numpy(), dos.numpy(), lw=1.6, color="#1f5aa6")
+    ax.plot(grid.numpy(), dos.numpy(), lw=1.6, color=PREDICTION_COLOR, ls="--")
     if fermi is not None:
         ax.axvline(
             fermi,
-            color="#1f5aa6",
+            color=PREDICTION_COLOR,
             ls=":",
             lw=1.4,
-            alpha=0.9,
             label=f"$E_F$ = {fermi:.3f} eV",
         )
     ax.set_title(title)
-    ax.set_xlabel("Energy (eV)")
+    ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
-    ax.grid(True, alpha=0.25)
+    ax.grid(True)
     ax.set_xlim(left=energy_min, right=energy_max)
     if num_electrons is not None:
         ax.text(
@@ -3277,10 +3361,8 @@ def save_tetrahedron_dos_prediction_plot(
             transform=ax.transAxes,
             ha="left",
             va="top",
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"),
+            bbox=dict(facecolor="white", edgecolor="none"),
         )
-    if fermi is not None:
-        ax.legend(loc="best")
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -3324,28 +3406,28 @@ def save_band_structure_comparison_plot(
     tick_labels = [display_k_label(label) for label in gt_band.tick_labels]
 
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.8), sharey=True)
-    for ax, energies, color, subtitle in [
-        (axes[0], gt_e, "black", "Ground truth"),
-        (axes[1], pred_e, "#1f5aa6", "Prediction"),
+    for ax, energies, color, line_style, subtitle in [
+        (axes[0], gt_e, GROUND_TRUTH_COLOR, "-", "Ground truth"),
+        (axes[1], pred_e, PREDICTION_COLOR, "--", "Prediction"),
     ]:
         for idx in range(energies.shape[1]):
             ax.plot(
                 linear_k.numpy(),
                 energies[:, idx].numpy(),
                 color=color,
-                lw=1.0 if color != "black" else 1.2,
-                alpha=line_alpha,
+                lw=1.0 if color == PREDICTION_COLOR else 1.2,
+                ls=line_style,
             )
         for xpos in tick_positions.tolist():
             ax.axvline(xpos, color="0.82", lw=0.8, zorder=0)
-        ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+        ax.axhline(0.0, color="black", ls="--", lw=1.0)
         ax.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
         ax.set_ylim(emin_ev, emax_ev)
         ax.set_xticks(tick_positions.numpy())
         ax.set_xticklabels(tick_labels, fontsize=11)
         ax.set_title(subtitle)
-        ax.grid(True, axis="y", alpha=0.2)
-    axes[0].set_ylabel(r"$E - E_F$ (eV)")
+        ax.grid(True, axis="y")
+    axes[0].set_ylabel(r"$E-E_F$ (eV)")
     fig.suptitle(title)
     fig.tight_layout()
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
@@ -3389,23 +3471,22 @@ def save_band_structure_and_dos_comparison_plot(
         sharey=True,
         gridspec_kw={"width_ratios": (4.2, 1.35), "wspace": 0.08},
     )
-    band_alpha = max(float(line_alpha), 0.35)
     for band_idx in range(gt_e.shape[1]):
         ax_band.plot(
             linear_k,
             gt_e[:, band_idx].numpy(),
-            color="black",
+            color=GROUND_TRUTH_COLOR,
             lw=1.15,
-            alpha=band_alpha,
+            ls="-",
             label="Ground truth" if band_idx == 0 else None,
         )
     for band_idx in range(pred_e.shape[1]):
         ax_band.plot(
             linear_k,
             pred_e[:, band_idx].numpy(),
-            color="#1f5aa6",
+            color=PREDICTION_COLOR,
             lw=0.95,
-            alpha=band_alpha,
+            ls="--",
             label="Prediction" if band_idx == 0 else None,
         )
     for xpos in tick_positions.tolist():
@@ -3413,19 +3494,18 @@ def save_band_structure_and_dos_comparison_plot(
     ax_band.set_xlim(float(linear_k[0]), float(linear_k[-1]))
     ax_band.set_ylim(float(emin_ev), float(emax_ev))
     ax_band.set_xticks(tick_positions, labels=tick_labels, fontsize=11)
-    ax_band.set_ylabel(r"$E - E_F^{GT}$ (eV)")
+    ax_band.set_ylabel(r"$E-E_F$ (eV)")
     ax_band.set_title("Band structure")
-    ax_band.grid(True, axis="y", alpha=0.2)
-    ax_band.legend(loc="best")
+    ax_band.grid(True, axis="y")
+    ax_band.legend(loc="upper right")
 
-    ax_dos.plot(dos_true, grid_true, color="black", lw=1.8, label="Ground truth")
-    ax_dos.plot(dos_pred, grid_pred, color="#1f5aa6", lw=1.4, label="Prediction")
+    ax_dos.plot(dos_true, grid_true, color=GROUND_TRUTH_COLOR, lw=1.8, ls="-")
+    ax_dos.plot(dos_pred, grid_pred, color=PREDICTION_COLOR, lw=1.4, ls="--")
     ax_dos.set_xlim(left=0.0)
     ax_dos.set_ylim(float(emin_ev), float(emax_ev))
     ax_dos.set_xlabel("DOS")
     ax_dos.set_title("Density of states")
-    ax_dos.grid(True, alpha=0.2)
-    ax_dos.legend(loc="best")
+    ax_dos.grid(True)
 
     fig.suptitle(title)
     fig.subplots_adjust(top=0.88)
@@ -3456,20 +3536,20 @@ def save_band_structure_prediction_plot(
         ax.plot(
             linear_k.numpy(),
             energies[:, idx].numpy(),
-            color="#1f5aa6",
+            color=PREDICTION_COLOR,
             lw=1.1,
-            alpha=line_alpha,
+            ls="--",
         )
     for xpos in tick_positions.tolist():
         ax.axvline(xpos, color="0.80", lw=0.8, zorder=0)
-    ax.axhline(0.0, color="black", ls="--", lw=1.0, alpha=0.7)
+    ax.axhline(0.0, color="black", ls="--", lw=1.0)
     ax.set_xlim(float(linear_k[0].item()), float(linear_k[-1].item()))
     ax.set_ylim(emin_ev, emax_ev)
     ax.set_xticks(tick_positions.numpy())
     ax.set_xticklabels(tick_labels, fontsize=11)
-    ax.set_ylabel(r"$E - E_F$ (eV)")
+    ax.set_ylabel(r"$E-E_F$ (eV)")
     ax.set_title(title)
-    ax.grid(True, axis="y", alpha=0.2)
+    ax.grid(True, axis="y")
     fig.tight_layout()
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
     plt.close(fig)

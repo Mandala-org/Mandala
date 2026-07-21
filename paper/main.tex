@@ -1077,18 +1077,102 @@ model. This design allows \texttt{Mandala} to function both as a reusable
 scientific software package and as a framework for rapid methodological
 experimentation.
 
-\section{Results and ablations}
-% TODO: separate Results and ablations
-% Hamiltonian prediction - separate results by metric/observable
-% Mention somewhere we evaluate the framework on a complex systems like
-% We're demonstrating a specific effect on spefic system, we want to showcase general capability of the framework
-
-%
-% 1. Hamiltonian of ZnCuSnSeS - MAE and Hamiltonian cutout
-% 2. DOS and Band energy of SiO2 - DOS picture
-% 3. Band structure and DOS of silicon - band structure picture (combined plot)
-% 4. Density plot from .cube for silicon
+\section{Results}
 \label{sec:results}
+
+We illustrate the operator-level predictions on a held-out validation
+structure from each of three chemically and structurally distinct data sets.
+These examples are intended as representative case studies of Mandala models' performance rather than a comprehensive benchmark.
+Average validation errors for the held-out validation sets are provided.
+
+\subsection{Multicomponent ZnCuSnSeS Hamiltonian}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/results/paper_zncusnses_hamiltonian_first6.png}
+\caption{Reference, predicted, and residual Hamiltonian fragments for the
+first six atoms of a held-out ZnCuSnSeS validation structure. The common color
+range is $\pm0.01$~eV.}
+\label{fig:zncusnses-hamiltonian}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.68\textwidth]{figures/results/paper_zncusnses_hamiltonian_correlation.png}
+\caption{Element-wise Hamiltonian correlation for the same ZnCuSnSeS
+structure. The heat map shows bin counts on a logarithmic scale, black points
+overlay all matrix elements, and the dashed line denotes equality.}
+\label{fig:zncusnses-correlation}
+\end{figure}
+
+\subsection{Electronic density of states of SiO$_2$}
+
+The SiO$_2$ example contains 150 atoms and represents a disordered SiO$_x$
+configuration. We therefore evaluate its density of states using Gaussian
+broadening ($\sigma=0.2$~eV) on a $2\times2\times2$ reciprocal-space mesh.
+The predicted and reference curves reproduce the same broad features across
+the displayed $-15$ to $25$~eV window, while the lower panel exposes the
+energy-resolved residual directly (Fig.~\ref{fig:sio2-dos}).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.88\textwidth]{figures/results/paper_sio2_dos_comparison_and_error.png}
+\caption{Reference and predicted density of states for a held-out SiO$_2$
+validation structure (top), together with their difference (bottom).
+Energies are referenced to the respective Fermi levels. The calculation uses
+Gaussian broadening with $\sigma=0.2$~eV on a $2\times2\times2$ mesh.}
+\label{fig:sio2-dos}
+\end{figure}
+
+\subsection{Band structure, density of states, and density matrix of silicon}
+
+For crystalline silicon, the selected joint Hamiltonian--density--overlap model
+reaches a Hamiltonian MAE of $3.84\times10^{-4}$~eV, a density-matrix MAE of
+$5.27\times10^{-5}$, and an overlap-matrix MAE of
+$1.14\times10^{-5}$ on the displayed validation structure. The band structure
+is evaluated along the
+$L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$ path,
+and the DOS uses tetrahedron integration on a $4\times4\times4$ mesh. The
+reference and predicted dispersions and DOS are nearly coincident in
+Fig.~\ref{fig:silicon-bands-dos}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/results/paper_silicon_band_structure_and_dos.png}
+\caption{Band structure and density of states for a held-out perturbed-silicon
+validation structure. Reference values are black solid lines and predictions
+are red dashed lines. The DOS is integrated using a $4\times4\times4$
+tetrahedron mesh.}
+\label{fig:silicon-bands-dos}
+\end{figure}
+
+Figures~\ref{fig:silicon-density} and
+\ref{fig:silicon-density-errors} provide complementary real-space diagnostics.
+The density residual remains faint on a $\pm0.01$ scale, while the relative
+Hamiltonian block errors remain small through the populated neighbor shells and
+rise for the weakest long-range blocks near the cutoff.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/results/paper_silicon_density_first6.png}
+\caption{Reference, predicted, and residual density-matrix fragments for the
+first six atoms of the perturbed-silicon validation structure. The common
+color range is $\pm0.01$ in the native density-matrix units.}
+\label{fig:silicon-density}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/results/paper_silicon_hamiltonian_relative_error_vs_edge_length.png}
+\caption{Relative Hamiltonian block error as a function of atom-pair edge
+length for the same perturbed-silicon structure. Each point represents one
+shift-resolved atom-pair block.}
+\label{fig:silicon-density-errors}
+\end{figure}
+
+\section{Ablations}
+\label{sec:ablations}
+
 \subsection{ZnCuSnSeS envelope-factorization ablation}
 
 We performed a controlled ablation using perturbed ZnCuSnSeS structures.
@@ -1098,13 +1182,13 @@ predicted blocks by a fitted pair-distance envelope
 (\texttt{multiply\_prediction}). Both treatments use the same set of seeds and the same
 fixed data split.
 
-The median validation Hamiltonian MAE decreases from 0.005221~Ha without the
-envelope to 0.004930~Ha with prediction factorization, a relative reduction of
-5.6\%. The corresponding means are 0.005167 and 0.004941~Ha, respectively, a
+The median validation Hamiltonian MAE decreases from 0.005221~eV without the
+envelope to 0.004930~eV with prediction factorization, a relative reduction of
+5.6\%. The corresponding means are 0.005167 and 0.004941~eV, respectively, a
 4.4\% reduction. The treatment improves four of the five paired seeds. The mean
-paired difference (treatment minus baseline) is $-2.26\times 10^{-4}$~Ha, with a
+paired difference (treatment minus baseline) is $-2.26\times 10^{-4}$~eV, with a
 95\% $t$ interval from $-4.86\times 10^{-4}$ to
-$3.37\times 10^{-5}$~Ha. Thus, the completed experiment provides encouraging
+$3.37\times 10^{-5}$~eV. Thus, the completed experiment provides encouraging
 evidence for the envelope factorization, while the interval and small number of
 seeds motivate a restrained interpretation rather than a claim of definitive
 statistical separation.

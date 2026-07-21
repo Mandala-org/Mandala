@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import math
 import json
+import re
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -13,6 +14,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
 import torch
+from plotly.offline.offline import get_plotlyjs
 from plotly.subplots import make_subplots
 
 from analysis.wandb_sweep_core import (
@@ -73,7 +75,7 @@ def build_histogram_figure(
                     x=numeric_values,
                     nbinsx=min(max(bins, 4), max(10, numeric_values.size)),
                     marker=dict(color="#2c7fb8"),
-                    opacity=0.85,
+                    opacity=1.0,
                     showlegend=False,
                     hovertemplate="x=%{x}<br>count=%{y}<extra></extra>",
                 ),
@@ -100,7 +102,7 @@ def build_histogram_figure(
                     x=x_pos,
                     line_width=2,
                     line_color=run_styles[run.run_id]["color"],
-                    opacity=0.95,
+                    opacity=1.0,
                     row=row,
                     col=col,
                 )
@@ -122,7 +124,7 @@ def build_histogram_figure(
                     x=positions,
                     y=heights,
                     marker=dict(color="#2c7fb8"),
-                    opacity=0.85,
+                    opacity=1.0,
                     showlegend=False,
                     hovertemplate="%{customdata}<br>count=%{y}<extra></extra>",
                     customdata=ordered_labels,
@@ -158,7 +160,7 @@ def build_histogram_figure(
                     x=x_pos,
                     line_width=2,
                     line_color=run_styles[run.run_id]["color"],
-                    opacity=0.95,
+                    opacity=1.0,
                     row=row,
                     col=col,
                 )
@@ -264,7 +266,7 @@ def build_scatter_figure(
                                     run_styles[record.run_id]["color"]
                                     for record, _, _ in non_top_points
                                 ],
-                                opacity=0.34,
+                                opacity=1.0,
                                 line=dict(width=0),
                             ),
                             customdata=[
@@ -310,7 +312,7 @@ def build_scatter_figure(
                             mode="lines",
                             line=dict(width=0),
                             fill="tonexty",
-                            fillcolor="rgba(0,0,0,0.08)",
+                            fillcolor="#e5e7eb",
                             showlegend=False,
                             hoverinfo="skip",
                         ),
@@ -322,7 +324,7 @@ def build_scatter_figure(
                             x=x_grid,
                             y=y_center,
                             mode="lines",
-                            line=dict(color="rgba(0,0,0,0.28)", width=1.2),
+                            line=dict(color="#6b7280", width=1.2),
                             showlegend=False,
                             hoverinfo="skip",
                         ),
@@ -363,7 +365,7 @@ def build_scatter_figure(
                                     run_styles[run.run_id]["color"]
                                     for run, _x, _y in highlighted
                                 ],
-                                opacity=0.99,
+                                opacity=1.0,
                                 line=dict(color="black", width=1),
                             ),
                             customdata=[
@@ -426,10 +428,7 @@ def build_scatter_figure(
                                 run_styles[record.run_id]["color"]
                                 for record, _x, _y, _label in non_top_points
                             ],
-                            opacity=[
-                                run_styles[record.run_id]["alpha"]
-                                for record, _x, _y, _label in non_top_points
-                            ],
+                            opacity=1.0,
                             line=dict(width=0),
                         ),
                         customdata=[
@@ -463,7 +462,7 @@ def build_scatter_figure(
                                 run_styles[record.run_id]["color"]
                                 for record, _x, _y, _label in top_points
                             ],
-                            opacity=0.98,
+                            opacity=1.0,
                             line=dict(color="black", width=1),
                         ),
                         customdata=[
@@ -611,30 +610,22 @@ def copy_evaluation_bundle_assets(
         "band_structure_comparison.png",
         "band_structure_and_dos_comparison.png",
         "band_structure_prediction.png",
+        "dos_comparison_and_error.png",
+        "eigenvalue_correlation.png",
+        "dos_comparison.png",
+        "dos_prediction.png",
+        "dos_error.png",
         "hamiltonian_first_atoms_comparison.png",
         "hamiltonian_first_atoms_prediction.png",
         "density_first_atoms_comparison.png",
         "density_first_atoms_prediction.png",
     ]
-    for matrix_name in ("hamiltonian", "density"):
-        preferred_images.extend(
-            f"{matrix_name}_{view}_clim_{clim}.png"
-            for view in (
-                "shift_resolved_worst_abs",
-                "sum_pbc_worst_abs",
-                "first6_sum_pbc",
-                "first6_shift_resolved",
-            )
-            for clim in ("1e-04", "1e-03", "1e-02")
-        )
     preferred_images.extend(
-        f"hamiltonian_block_{diagnostic}_log.png"
-        for diagnostic in (
-            "absolute_error_vs_edge_length",
-            "relative_error_vs_edge_length",
-            "absolute_error_vs_block_magnitude",
-            "relative_error_vs_block_magnitude",
-        )
+        path.name
+        for path in sorted(source_dir.glob("*.png"))
+        if path.name not in preferred_images
+        and "sum_pbc" not in path.name
+        and "shift_resolved" not in path.name
     )
     image_assets = []
     file_assets = []
@@ -652,6 +643,7 @@ def copy_evaluation_bundle_assets(
         )
     extra_files = [
         "evaluation_manifest.json",
+        "evaluation_matrix_metrics.json",
         "band_structure_gt_gt_overlap.pt",
         "band_structure_pred_gt_overlap.pt",
         "band_structure_gt.pt",
@@ -669,11 +661,17 @@ def copy_evaluation_bundle_assets(
         "hamiltonian_interactive_heatmaps.pt",
         "density_interactive_heatmaps.pt",
         "snapshot_3d_error_payload.pt",
+        "snapshot_3d_error_payload_hamiltonian.pt",
+        "snapshot_3d_error_payload_density.pt",
+        "snapshot_3d_error_payload_overlap.pt",
+        "overlap_interactive_heatmaps.pt",
         "density_block_error_metrics.pt",
         "density_correlation.pt",
         "density_correlation.png",
         "overlap_correlation.pt",
         "overlap_correlation.png",
+        "overlap_block_error_metrics.pt",
+        "eigenvalue_correlation.png",
         "pred_hamiltonian.pt",
         "pred_raw_hamiltonian.pt",
         "pred_density.pt",
@@ -739,6 +737,133 @@ def label_for_asset(filename: str) -> str:
         "overlap_correlation.pt": "Overlap correlation payload",
     }
     return mapping.get(filename, filename)
+
+
+def _load_evaluation_matrix_metrics(evaluation: dict[str, Any]) -> dict[str, Any]:
+    path = evaluation.get("copied_files", {}).get("evaluation_matrix_metrics.json")
+    if path is None:
+        return {}
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _available_evaluation_matrices(
+    evaluation: dict[str, Any], matrix_metrics: dict[str, Any]
+) -> list[str]:
+    copied_files = evaluation.get("copied_files", {})
+    metric_matrices = matrix_metrics.get("matrices", {})
+    available: list[str] = []
+    for matrix_name in ("hamiltonian", "overlap", "density"):
+        has_snapshot = bool(
+            copied_files.get(f"snapshot_3d_error_payload_{matrix_name}.pt")
+            or (
+                matrix_name == "hamiltonian"
+                and copied_files.get("snapshot_3d_error_payload.pt")
+            )
+        )
+        has_heatmap = bool(copied_files.get(f"{matrix_name}_interactive_heatmaps.pt"))
+        if matrix_name in metric_matrices or has_snapshot or has_heatmap:
+            available.append(matrix_name)
+    return available
+
+
+def _format_report_metric(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    try:
+        return f"{float(value):.6g}"
+    except (TypeError, ValueError):
+        return html.escape(str(value))
+
+
+def _build_matrix_metrics_section(matrix_metrics: dict[str, Any]) -> str:
+    matrices = matrix_metrics.get("matrices", {})
+    rows = []
+    for matrix_name in ("hamiltonian", "overlap", "density"):
+        values = matrices.get(matrix_name)
+        if not isinstance(values, dict):
+            continue
+        units = values.get("units", {})
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(matrix_name.title())}</td>"
+            f"<td>{_format_report_metric(values.get('mae'))} {html.escape(str(units.get('mae', '')))}</td>"
+            f"<td>{_format_report_metric(values.get('mse'))} {html.escape(str(units.get('mse', '')))}</td>"
+            f"<td>{int(values.get('scalar_count', 0)):,}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    definition = matrix_metrics.get("definition", "")
+    definition_html = (
+        f'<div class="meta-line">Definition: {html.escape(str(definition))}</div>'
+        if definition
+        else ""
+    )
+    return f"""
+  <h2>Matrix Error Metrics</h2>
+  {definition_html}
+  <table>
+    <thead><tr><th>Matrix</th><th>MAE</th><th>MSE</th><th>Scalar elements</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table>
+"""
+
+
+def _build_matrix_selector_sections(
+    run_id: str,
+    matrix_names: list[str],
+    snapshot_sections: dict[str, str],
+    heatmap_sections: dict[str, str],
+) -> tuple[str, str]:
+    active_names = [
+        name
+        for name in matrix_names
+        if snapshot_sections.get(name) or heatmap_sections.get(name)
+    ]
+    if not active_names:
+        return "", ""
+    safe_run_id = re.sub(r"[^A-Za-z0-9_-]+", "-", run_id)
+    selector_id = f"evaluation-matrix-{safe_run_id}"
+    options = "".join(
+        f'<option value="{html.escape(name)}">{html.escape(name.title())}</option>'
+        for name in active_names
+    )
+    selector = f"""
+  <div class="matrix-selector">
+    <label for="{html.escape(selector_id)}">Analyzed matrix</label>
+    <select id="{html.escape(selector_id)}">{options}</select>
+  </div>
+"""
+    panels = "".join(
+        f'<div class="evaluation-matrix-panel" data-evaluation-matrix="{html.escape(name)}"'
+        f'{"" if idx == 0 else " hidden"}>'
+        f'{snapshot_sections.get(name, "")}{heatmap_sections.get(name, "")}</div>'
+        for idx, name in enumerate(active_names)
+    )
+    script = f"""
+  <script>
+  (function() {{
+    const selector = document.getElementById({json.dumps(selector_id)});
+    if (!selector) return;
+    const panels = Array.from(document.querySelectorAll(".evaluation-matrix-panel"));
+    function updateMatrix() {{
+      panels.forEach((panel) => {{
+        panel.hidden = panel.dataset.evaluationMatrix !== selector.value;
+      }});
+      window.setTimeout(function() {{
+        window.dispatchEvent(new Event("resize"));
+      }}, 0);
+    }}
+    selector.addEventListener("change", updateMatrix);
+    updateMatrix();
+  }})();
+  </script>
+"""
+    return selector, panels + script
 
 
 def build_html_report(
@@ -933,89 +1058,71 @@ def build_model_detail_page(
     file_assets = evaluation.get("file_assets", [])
     manifest = evaluation.get("manifest", {})
     settings = manifest.get("settings", {})
+    matrix_metrics = _load_evaluation_matrix_metrics(evaluation)
     config_rows = "\n".join(
         f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(display_value(value)))}</td></tr>"
         for key, value in sorted(record.config.items())
     )
-    snapshot_3d_html = _build_snapshot_3d_section(
-        evaluation,
-        include_plotlyjs=include_plotlyjs,
-        div_id_prefix=f"snapshot-3d-{record.run_id}",
-    )
-    copied_files = evaluation.get("copied_files", {})
-    dos_has_plotly = any(
-        copied_files.get(name) is not None
-        for name in ("dos_comparison.pt", "dos_prediction.pt")
-    )
-    correlation_has_plotly = any(
-        copied_files.get(name) is not None
-        for name in (
-            "hamiltonian_correlation.pt",
-            "density_correlation.pt",
-            "overlap_correlation.pt",
+    matrix_names = _available_evaluation_matrices(evaluation, matrix_metrics)
+    if include_plotlyjs in (True, "inline"):
+        plotly_loader_html = f"<script>{get_plotlyjs()}</script>"
+    elif include_plotlyjs == "cdn":
+        plotly_loader_html = (
+            '<script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>'
         )
-    )
-    heatmap_html = _build_hamiltonian_heatmap_section(
-        evaluation,
-        include_plotlyjs=False if snapshot_3d_html else include_plotlyjs,
-        div_id_prefix=f"ham-heatmap-{record.run_id}",
+    else:
+        plotly_loader_html = ""
+    snapshot_sections: dict[str, str] = {}
+    for matrix_name in matrix_names:
+        section = _build_snapshot_3d_section(
+            evaluation,
+            include_plotlyjs=False,
+            div_id_prefix=f"snapshot-3d-{matrix_name}-{record.run_id}",
+            matrix_name=matrix_name,
+        )
+        snapshot_sections[matrix_name] = section
+    heatmap_sections: dict[str, str] = {}
+    for matrix_name in matrix_names:
+        section = _build_hamiltonian_heatmap_section(
+            evaluation,
+            include_plotlyjs=False,
+            div_id_prefix=f"matrix-heatmap-{matrix_name}-{record.run_id}",
+            matrix_name=matrix_name,
+        )
+        heatmap_sections[matrix_name] = section
+    matrix_selector_html, matrix_analysis_html = _build_matrix_selector_sections(
+        record.run_id,
+        matrix_names,
+        snapshot_sections,
+        heatmap_sections,
     )
     dos_html = _build_dos_section(
         evaluation,
-        include_plotlyjs=(
-            False if (snapshot_3d_html or heatmap_html) else include_plotlyjs
-        ),
+        include_plotlyjs=False,
         div_id_prefix=f"dos-{record.run_id}",
     )
     band_html = _build_interactive_band_section(
         evaluation,
-        include_plotlyjs=(
-            False
-            if (snapshot_3d_html or heatmap_html or dos_has_plotly)
-            else include_plotlyjs
-        ),
+        include_plotlyjs=False,
         div_id_prefix=f"band-{record.run_id}",
     )
     eigenvalue_html = _build_eigenvalue_correlation_section(
         evaluation,
-        include_plotlyjs=(
-            False
-            if (snapshot_3d_html or heatmap_html or dos_has_plotly or band_html)
-            else include_plotlyjs
-        ),
+        include_plotlyjs=False,
         div_id_prefix=f"eigenvalue-{record.run_id}",
     )
     correlation_html = _build_correlation_section(
         evaluation,
-        include_plotlyjs=(
-            False
-            if (
-                snapshot_3d_html
-                or heatmap_html
-                or dos_has_plotly
-                or band_html
-                or eigenvalue_html
-            )
-            else include_plotlyjs
-        ),
+        include_plotlyjs=False,
         div_id_prefix=f"corr-{record.run_id}",
     )
     block_error_html = _build_block_error_section(
         evaluation,
-        include_plotlyjs=(
-            False
-            if (
-                snapshot_3d_html
-                or heatmap_html
-                or dos_has_plotly
-                or band_html
-                or correlation_has_plotly
-            )
-            else include_plotlyjs
-        ),
+        include_plotlyjs=False,
         div_id_prefix=f"block-{record.run_id}",
     )
-    if image_assets:
+    matrix_metrics_html = _build_matrix_metrics_section(matrix_metrics)
+    if image_assets or file_assets or matrix_analysis_html or matrix_metrics_html:
         evaluation_html = "\n".join(
             f"""
 <div class="asset-card">
@@ -1050,8 +1157,9 @@ def build_model_detail_page(
 <div class="panel">
   <h2>Precomputed Evaluation</h2>
   <div class="meta-line">Source bundle: <code>{html.escape(str(evaluation.get("source_dir", "")))}</code></div>
-  {snapshot_3d_html}
-  {heatmap_html}
+  {matrix_selector_html}
+  {matrix_metrics_html}
+  {matrix_analysis_html}
   {dos_html}
   {band_html}
   {eigenvalue_html}
@@ -1076,7 +1184,11 @@ def build_model_detail_page(
 """
     if block_error_html and not image_assets:
         evaluation_section += block_error_html
-    score_label = rank_metric or "Score"
+    report_hmae = matrix_metrics.get("metrics", {}).get("val/hamiltonian_mae")
+    score_label = (
+        "val/hamiltonian_mae" if report_hmae is not None else (rank_metric or "Score")
+    )
+    score_value = report_hmae if report_hmae is not None else record.score
     backlink_html = (
         f'<a class="crumb" href="{html.escape(backlink_href)}">{html.escape(backlink_label or "Back")}</a>'
         if backlink_href is not None
@@ -1093,6 +1205,7 @@ def build_model_detail_page(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(record.name or record.run_id)} - W&amp;B Run Report</title>
+  {plotly_loader_html}
   <style>
     :root {{
       color-scheme: dark;
@@ -1156,6 +1269,9 @@ def build_model_detail_page(
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
+    }}
+    .correlation-grid {{
+      grid-template-columns: repeat(auto-fit, minmax(620px, 1fr));
     }}
     .metric-card {{
       background: rgba(9, 14, 28, 0.72);
@@ -1267,6 +1383,23 @@ def build_model_detail_page(
       width: 16px;
       height: 16px;
     }}
+    .matrix-selector {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 4px 0 18px;
+      color: #cbd5e1;
+    }}
+    .matrix-selector select {{
+      min-width: 220px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(9, 14, 28, 0.82);
+      color: #f8fafc;
+      padding: 10px 12px;
+      font-size: 14px;
+    }}
+    .evaluation-matrix-panel[hidden] {{ display: none; }}
     .heatmap-controls button {{
       cursor: pointer;
       align-self: end;
@@ -1302,7 +1435,7 @@ def build_model_detail_page(
     <div class="lead">Run detail page for <code>{html.escape(record.run_id)}</code></div>
     <div class="summary-grid">
       <div class="card"><div class="k">Metric</div><div class="v">{html.escape(score_label)}</div></div>
-      <div class="card"><div class="k">Score</div><div class="v">{record.score if record.score is not None else "n/a"}</div></div>
+      <div class="card"><div class="k">Score</div><div class="v">{_format_report_metric(score_value)}</div></div>
       <div class="card"><div class="k">State</div><div class="v">{html.escape(record.state)}</div></div>
       <div class="card"><div class="k">Evaluation</div><div class="v">{html.escape(_evaluation_status_label(record, run_page_index))}</div></div>
     </div>
@@ -1379,9 +1512,12 @@ def _build_snapshot_3d_section(
     *,
     include_plotlyjs: str | bool,
     div_id_prefix: str,
+    matrix_name: str = "hamiltonian",
 ) -> str:
     copied_files = evaluation.get("copied_files", {})
-    payload_path = copied_files.get("snapshot_3d_error_payload.pt")
+    payload_path = copied_files.get(f"snapshot_3d_error_payload_{matrix_name}.pt")
+    if payload_path is None and matrix_name == "hamiltonian":
+        payload_path = copied_files.get("snapshot_3d_error_payload.pt")
     if payload_path is None:
         return ""
     payload = _load_snapshot_3d_payload(Path(payload_path))
@@ -1518,7 +1654,7 @@ def _build_snapshot_3d_section(
         x: x,
         y: y,
         z: z,
-        line: {{color: "rgba(148,163,184,0.7)", width: 4}},
+        line: {{color: "rgb(148,163,184)", width: 4}},
         hoverinfo: "skip",
         showlegend: false,
       }};
@@ -1633,8 +1769,8 @@ def _build_snapshot_3d_section(
         hoverinfo: "skip",
         showlegend: false,
         marker: {{
-          size: 1,
-          opacity: 0,
+          size: 0.1,
+          opacity: 1.0,
           color: [cmin],
           colorscale: colorscale,
           cmin: cmin,
@@ -1679,7 +1815,7 @@ def _build_snapshot_3d_section(
             text: bin.hover,
             hovertemplate: "%{{text}}<extra></extra>",
             line: {{color: color, width: 4}},
-            opacity: 0.72,
+            opacity: 1.0,
             showlegend: false,
           }};
         }})
@@ -1708,7 +1844,7 @@ def _build_snapshot_3d_section(
           colorscale: colorscale,
           cmin: cmin,
           cmax: cmax,
-          opacity: 0.96,
+          opacity: 1.0,
           showscale: showScale,
           colorbar: showScale ? {{
             title: `${{cfg.useLog ? "log10 " : ""}}${{cfg.metric}}`,
@@ -1735,9 +1871,9 @@ def _build_snapshot_3d_section(
         marker: {{
           size: 4,
           symbol: "diamond",
-          color: "rgba(148,163,184,0.55)",
-          opacity: 0.55,
-          line: {{color: "rgba(255,255,255,0.45)", width: 1}},
+          color: "rgb(148,163,184)",
+          opacity: 1.0,
+          line: {{color: "rgb(255,255,255)", width: 1}},
         }},
         name: "Ghosts",
       }};
@@ -1806,8 +1942,10 @@ def _load_hamiltonian_heatmap_payload(path: Path) -> dict[str, Any]:
 
 
 def _fallback_heatmap_cutout(payload: dict[str, Any]) -> dict[str, Any] | None:
-    for family in ("sum_pbc", "shift_resolved"):
+    for family in ("shift_resolved",):
         family_payload = payload.get(family, {})
+        if family_payload.get("all") is not None:
+            return family_payload["all"]
         for key in ("worst_abs", "worst_rel"):
             cutout = family_payload.get(key)
             if cutout is not None:
@@ -1902,9 +2040,10 @@ def _build_hamiltonian_heatmap_section(
     *,
     include_plotlyjs: str | bool,
     div_id_prefix: str,
+    matrix_name: str = "hamiltonian",
 ) -> str:
     copied_files = evaluation.get("copied_files", {})
-    payload_path = copied_files.get("hamiltonian_interactive_heatmaps.pt")
+    payload_path = copied_files.get(f"{matrix_name}_interactive_heatmaps.pt")
     if payload_path is None:
         return ""
     payload = _load_hamiltonian_heatmap_payload(Path(payload_path))
@@ -1945,21 +2084,41 @@ def _build_hamiltonian_heatmap_section(
     log_max = math.log10(max_clim)
     log_initial = math.log10(initial_clim)
     log_step = max((log_max - log_min) / 200.0, 1.0e-3)
+    has_all_atoms = payload.get("shift_resolved", {}).get("all") is not None
+    if has_all_atoms:
+        selection_options = '<option value="all" selected>All atoms</option>'
+        side_panel_html = ""
+    else:
+        selection_options = """
+        <option value="worst_abs">Worst matrix error</option>
+        <option value="worst_rel">Worst relative error</option>
+        <option value="closest_neighbors">Closest neighbors</option>
+        <option value="random">Random</option>
+        """
+        side_panel_html = f"""
+    <div class="heatmap-side">
+      <div class="metric-card">
+        <div class="metric-title">Worst Edges</div>
+        <table class="worst-edge-table">
+          <thead><tr><th>#</th><th>Edge</th><th>Abs</th><th>Rel</th></tr></thead>
+          <tbody id="{html.escape(edges_body_id)}">
+            {initial_edges_html}
+          </tbody>
+        </table>
+      </div>
+    </div>
+        """
     return f"""
-  <h2>Interactive Hamiltonian Heatmaps</h2>
+  <h2>Interactive matrix heatmaps</h2>
   <div class="heatmap-controls">
     <label>View
       <select id="{html.escape(family_id)}">
-        <option value="sum_pbc">Sum PBC</option>
         <option value="shift_resolved">Shift resolved</option>
       </select>
     </label>
     <label>Selection
       <select id="{html.escape(strategy_id)}">
-        <option value="worst_abs">Worst absolute error</option>
-        <option value="worst_rel">Worst relative error</option>
-        <option value="closest_neighbors">Closest neighbors</option>
-        <option value="random">Random</option>
+        {selection_options}
       </select>
     </label>
     <label>Anchor atom
@@ -1978,17 +2137,7 @@ def _build_hamiltonian_heatmap_section(
     <div class="plotly-panel heatmap-main">
       {figure_html}
     </div>
-    <div class="heatmap-side">
-      <div class="metric-card">
-        <div class="metric-title">Worst Edges</div>
-        <table class="worst-edge-table">
-          <thead><tr><th>#</th><th>Edge</th><th>Abs</th><th>Rel</th></tr></thead>
-          <tbody id="{html.escape(edges_body_id)}">
-            {initial_edges_html}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    {side_panel_html}
   </div>
   <script>
   (function() {{
@@ -2022,7 +2171,7 @@ def _build_hamiltonian_heatmap_section(
     }}
 
     function currentCutout() {{
-      const familyPayload = payload[familyEl.value] || payload.sum_pbc || {{}};
+      const familyPayload = payload[familyEl.value] || payload.shift_resolved || {{}};
       if (strategyEl.value === "closest_neighbors") {{
         const key = String(Math.max(0, Math.min(Number(atomEl.value || 0), Number(payload.atom_count || 1) - 1)));
         return (familyPayload.closest_neighbors || {{}})[key] || fallbackCutout(familyPayload);
@@ -2164,22 +2313,27 @@ def _build_band_structure_figure(
     ) or copied_files.get("band_structure_pred.pt")
     if gt_path is None and pred_path is None:
         return None
+    spectral_title = _evaluation_spectral_title(evaluation)
+    plot_style = _evaluation_plot_style(evaluation)
 
     payloads: list[tuple[str, dict[str, Any], str]] = []
     if gt_path is not None:
-        payloads.append(("Ground truth", _load_band_payload(Path(gt_path)), "#e5e7eb"))
+        payloads.append(("Ground truth", _load_band_payload(Path(gt_path)), "#FFFFFF"))
     if pred_path is not None:
-        payloads.append(("Prediction", _load_band_payload(Path(pred_path)), "#60a5fa"))
+        payloads.append(
+            (
+                "Prediction",
+                _load_band_payload(Path(pred_path)),
+                plot_style["prediction"],
+            )
+        )
 
     fig = make_subplots(
         rows=1,
-        cols=len(payloads),
-        shared_xaxes=True,
-        shared_yaxes=True,
-        subplot_titles=[title for title, _payload, _color in payloads],
+        cols=1,
     )
 
-    for idx, (title, payload, color) in enumerate(payloads, start=1):
+    for _idx, (trace_name, payload, color) in enumerate(payloads, start=1):
         linear_k = np.asarray(payload["linear_k"], dtype=float)
         energies = _band_energies_ev(payload)
         for band_idx in range(energies.shape[1]):
@@ -2188,13 +2342,18 @@ def _build_band_structure_figure(
                     x=linear_k,
                     y=energies[:, band_idx],
                     mode="lines",
-                    line=dict(color=color, width=1.1),
-                    opacity=0.28 if title != "Ground truth" else 0.42,
+                    line=dict(
+                        color=color,
+                        width=1.1,
+                        dash="solid" if trace_name == "Ground truth" else "dash",
+                    ),
+                    opacity=1.0,
+                    name=trace_name,
                     hoverinfo="skip",
-                    showlegend=False,
+                    showlegend=band_idx == 0,
                 ),
                 row=1,
-                col=idx,
+                col=1,
             )
         tick_positions = np.asarray(payload["tick_positions"], dtype=float).tolist()
         tick_labels = [str(label) for label in payload["tick_labels"]]
@@ -2203,23 +2362,22 @@ def _build_band_structure_figure(
             tickvals=tick_positions,
             ticktext=tick_labels,
             row=1,
-            col=idx,
+            col=1,
         )
         for xpos in tick_positions:
             fig.add_vline(
                 x=xpos,
-                line_color="rgba(148,163,184,0.25)",
+                line_color="#94a3b8",
                 line_width=1,
                 row=1,
-                col=idx,
+                col=1,
             )
-        if idx > 1:
-            fig.update_xaxes(matches="x", row=1, col=idx)
 
-    fig.update_yaxes(title_text="Energy relative to Fermi (eV)", row=1, col=1)
+    fig.update_yaxes(title_text="E-E_F (eV)", row=1, col=1)
     if emin_ev is not None and emax_ev is not None:
         fig.update_yaxes(range=[float(emin_ev), float(emax_ev)], row=1, col=1)
     fig.update_layout(
+        title=spectral_title,
         height=420,
         autosize=True,
         margin=dict(l=50, r=25, t=55, b=40),
@@ -2227,6 +2385,7 @@ def _build_band_structure_figure(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#e8edf7"),
+        legend=dict(x=0.99, y=0.99, xanchor="right", yanchor="top"),
     )
     return fig
 
@@ -2307,45 +2466,62 @@ def _build_eigenvalue_correlation_figure(
     if data is None:
         return None
     target, prediction, source = data
-    finite = np.isfinite(target) & np.isfinite(prediction)
+    energy_min = -15.0
+    energy_max = 25.0
+    finite = (
+        np.isfinite(target)
+        & np.isfinite(prediction)
+        & (target >= energy_min)
+        & (target <= energy_max)
+        & (prediction >= energy_min)
+        & (prediction <= energy_max)
+    )
     target = target[finite]
     prediction = prediction[finite]
     if target.size == 0:
         return None
-    stacked = np.concatenate([target, prediction])
-    lo = float(np.min(stacked))
-    hi = float(np.max(stacked))
-    span = max(hi - lo, 1.0e-9)
-    lo -= 0.03 * span
-    hi += 0.03 * span
     if target.size > 1 and np.std(target) > 0.0 and np.std(prediction) > 0.0:
         r = float(np.corrcoef(target, prediction)[0, 1])
         r2 = r * r
     else:
         r2 = float("nan")
     mae = float(np.mean(np.abs(prediction - target)))
+    counts, x_edges, y_edges = np.histogram2d(
+        target,
+        prediction,
+        bins=60,
+        range=((energy_min, energy_max), (energy_min, energy_max)),
+    )
+    counts = counts.T
+    counts[counts <= 0.0] = np.nan
+    x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
+    y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
     fig = go.Figure(
         data=[
+            go.Heatmap(
+                x=x_centers,
+                y=y_centers,
+                z=counts,
+                colorscale=[[0.0, "#FFFFB2"], [0.5, "#FD8D3C"], [1.0, "#BD0026"]],
+                colorbar=dict(title="Count"),
+                hovertemplate=(
+                    "Ground truth=%{x:.5g} eV<br>Prediction=%{y:.5g} eV"
+                    "<br>Count=%{z:.0f}<extra></extra>"
+                ),
+            ),
             go.Scattergl(
                 x=target,
                 y=prediction,
                 mode="markers",
-                marker=dict(
-                    size=6,
-                    color="#60a5fa",
-                    opacity=0.55,
-                    line=dict(width=0),
-                ),
-                hovertemplate=(
-                    "True=%{x:.6g} eV<br>Predicted=%{y:.6g} eV" "<extra></extra>"
-                ),
+                marker=dict(color="#000000", size=2),
+                hoverinfo="skip",
                 showlegend=False,
             ),
             go.Scattergl(
-                x=[lo, hi],
-                y=[lo, hi],
+                x=[energy_min, energy_max],
+                y=[energy_min, energy_max],
                 mode="lines",
-                line=dict(color="#f8fafc", dash="dash", width=1.4),
+                line=dict(color="#666666", dash="dash", width=1.0),
                 hoverinfo="skip",
                 showlegend=False,
             ),
@@ -2354,16 +2530,17 @@ def _build_eigenvalue_correlation_figure(
     r2_text = f"R²={r2:.6f}" if np.isfinite(r2) else "R²=n/a"
     fig.update_layout(
         title=f"Eigenvalue correlation ({source}) | MAE={mae:.4g} eV | {r2_text}",
-        xaxis_title="True eigenvalue (eV relative to Fermi)",
-        yaxis_title="Predicted eigenvalue (eV relative to Fermi)",
-        margin=dict(l=60, r=25, t=60, b=55),
-        template="plotly_dark",
+        xaxis_title="Ground truth E-E_F (eV)",
+        yaxis_title="Prediction E-E_F (eV)",
+        height=560,
+        margin=dict(l=60, r=110, t=60, b=55),
+        template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#e8edf7"),
+        plot_bgcolor="#FFFFFF",
+        font=dict(color="#111111"),
     )
-    fig.update_xaxes(range=[lo, hi])
-    fig.update_yaxes(range=[lo, hi], scaleanchor="x", scaleratio=1)
+    fig.update_xaxes(range=[energy_min, energy_max])
+    fig.update_yaxes(range=[energy_min, energy_max], scaleanchor="x", scaleratio=1)
     return fig
 
 
@@ -2400,9 +2577,11 @@ def _build_block_error_section(
     div_id_prefix: str,
 ) -> str:
     copied_files = evaluation.get("copied_files", {})
+    block_error_color = _evaluation_plot_style(evaluation)["block_error"]
     metric_files = [
         ("Hamiltonian", copied_files.get("hamiltonian_block_error_metrics.pt")),
         ("Density", copied_files.get("density_block_error_metrics.pt")),
+        ("Overlap", copied_files.get("overlap_block_error_metrics.pt")),
     ]
     metric_files = [(name, path) for name, path in metric_files if path is not None]
     if not metric_files:
@@ -2423,6 +2602,7 @@ def _build_block_error_section(
                     title=f"{name}: absolute block error vs edge length",
                     x_label="Edge length (Angstrom)",
                     y_label="Mean absolute block error",
+                    color=block_error_color,
                 ),
                 False,
                 False,
@@ -2436,6 +2616,7 @@ def _build_block_error_section(
                     title=f"{name}: relative block error vs edge length",
                     x_label="Edge length (Angstrom)",
                     y_label="Relative block error",
+                    color=block_error_color,
                 ),
                 False,
                 False,
@@ -2449,6 +2630,7 @@ def _build_block_error_section(
                     title=f"{name}: absolute block error vs block magnitude",
                     x_label="Target block magnitude",
                     y_label="Mean absolute block error",
+                    color=block_error_color,
                 ),
                 True,
                 False,
@@ -2462,6 +2644,7 @@ def _build_block_error_section(
                     title=f"{name}: relative block error vs block magnitude",
                     x_label="Target block magnitude",
                     y_label="Relative block error",
+                    color=block_error_color,
                 ),
                 True,
                 False,
@@ -2522,10 +2705,18 @@ def _load_plot_payload(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
+def _build_dos_figure(
+    payload: dict[str, Any], *, plot_style: dict[str, str] | None = None
+) -> go.Figure | None:
     kind = str(payload.get("kind", ""))
     if kind not in {"dos_comparison", "dos_prediction"}:
         return None
+    plot_style = plot_style or {
+        "ground_truth": "#000000",
+        "prediction": "#D62728",
+        "error": "#0072B2",
+        "block_error": "#003B73",
+    }
 
     fig = go.Figure()
     if kind == "dos_comparison":
@@ -2534,14 +2725,14 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
         grid_pred = _series_from_payload(payload, "grid_pred")
         dos_pred = _series_from_payload(payload, "dos_pred")
         dos_error = _series_from_payload(payload, "dos_error")
-        fermi_true = payload.get("fermi_true_ev")
         fig.add_trace(
             go.Scattergl(
                 x=grid_true,
                 y=dos_true,
                 mode="lines",
-                line=dict(color="#e5e7eb", width=1.9),
+                line=dict(color=plot_style["ground_truth"], width=1.9, dash="solid"),
                 name="Ground truth",
+                showlegend=True,
             )
         )
         fig.add_trace(
@@ -2549,8 +2740,9 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
                 x=grid_pred,
                 y=dos_pred,
                 mode="lines",
-                line=dict(color="#60a5fa", width=1.6),
+                line=dict(color=plot_style["prediction"], width=1.6, dash="dash"),
                 name="Prediction",
+                showlegend=True,
             )
         )
         fig2 = make_subplots(
@@ -2567,7 +2759,7 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
                 x=grid_true,
                 y=dos_error,
                 mode="lines",
-                line=dict(color="#f97316", width=1.4),
+                line=dict(color=plot_style["error"], width=1.4),
                 name="Prediction - Ground truth",
                 showlegend=False,
             ),
@@ -2578,25 +2770,23 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
             y=0.0,
             row=1,
             col=1,
-            line=dict(color="rgba(255,255,255,0.25)", dash="dash", width=1.0),
+            line=dict(color="#777777", dash="dash", width=1.0),
         )
         fig2.add_hline(
             y=0.0,
             row=2,
             col=1,
-            line=dict(color="rgba(255,255,255,0.35)", dash="dash", width=1.0),
+            line=dict(color="#777777", dash="dash", width=1.0),
         )
         fig2.update_yaxes(title_text="DOS", row=1, col=1)
         fig2.update_yaxes(title_text="DOS error", row=2, col=1)
         fig2.update_xaxes(
-            title_text=(
-                "Energy - $E_F^{GT}$ (eV)" if fermi_true is not None else "Energy (eV)"
-            ),
+            title_text="E-E_F (eV)",
             row=2,
             col=1,
         )
         fig2.update_layout(
-            title=str(payload.get("title", "DOS comparison")),
+            title=_normalize_spectral_title(payload.get("title")),
             height=560,
             autosize=True,
             margin=dict(l=50, r=25, t=55, b=40),
@@ -2604,25 +2794,12 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#e8edf7"),
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0.0
-            ),
+            showlegend=True,
+            legend=dict(x=0.99, y=0.99, xanchor="right", yanchor="top"),
         )
-        if fermi_true is not None:
-            x_range = [
-                float(np.min(grid_true)),
-                float(np.max(grid_true)),
-            ]
-            fig2.update_xaxes(
-                range=x_range,
-                row=1,
-                col=1,
-            )
-            fig2.update_xaxes(
-                range=x_range,
-                row=2,
-                col=1,
-            )
+        x_range = [-15.0, 25.0]
+        fig2.update_xaxes(range=x_range, row=1, col=1)
+        fig2.update_xaxes(range=x_range, row=2, col=1)
         return fig2
 
     grid = _series_from_payload(payload, "grid")
@@ -2635,19 +2812,20 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
             x=grid,
             y=dos,
             mode="lines",
-            line=dict(color="#60a5fa", width=1.8),
+            line=dict(color=plot_style["prediction"], width=1.8, dash="dash"),
             name="DOS",
+            showlegend=False,
         )
     )
     if fermi is not None:
         fig.add_vline(
             x=0.0,
-            line=dict(color="rgba(255,255,255,0.9)", dash="dash", width=1.2),
+            line=dict(color="#777777", dash="dash", width=1.2),
             annotation_text="$E_F$",
             annotation_position="top left",
         )
     fig.update_layout(
-        title=str(payload.get("title", "DOS")),
+        title=_normalize_spectral_title(payload.get("title")),
         height=420,
         autosize=True,
         margin=dict(l=50, r=25, t=55, b=40),
@@ -2655,31 +2833,85 @@ def _build_dos_figure(payload: dict[str, Any]) -> go.Figure | None:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#e8edf7"),
+        showlegend=False,
     )
-    fig.update_xaxes(
-        title_text="Energy - $E_F$ (eV)" if fermi is not None else "Energy (eV)"
-    )
+    fig.update_xaxes(title_text="E-E_F (eV)")
     if fermi is not None:
         fig.update_xaxes(range=[-10.0, 10.0])
     fig.update_yaxes(title_text="DOS")
     return fig
 
 
+def _normalize_spectral_title(title: Any) -> str:
+    text = str(title or "").strip()
+    if ":" in text:
+        material = text.split(":", 1)[1].strip()
+        if material:
+            return f"Band structure and DOS: {material}"
+    return text or "Band structure and DOS"
+
+
+def _evaluation_spectral_title(evaluation: dict[str, Any]) -> str:
+    copied_files = evaluation.get("copied_files", {})
+    for filename in ("dos_comparison.pt", "dos_prediction.pt"):
+        path = copied_files.get(filename)
+        if path is None:
+            continue
+        try:
+            return _normalize_spectral_title(
+                _load_plot_payload(Path(path)).get("title")
+            )
+        except (OSError, TypeError, KeyError):
+            continue
+    return "Band structure and DOS"
+
+
+def _evaluation_plot_style(evaluation: dict[str, Any]) -> dict[str, str]:
+    settings = evaluation.get("manifest", {}).get("settings", {})
+    return {
+        "ground_truth": str(settings.get("ground_truth_color") or "#000000"),
+        "prediction": str(settings.get("prediction_color") or "#D62728"),
+        "error": str(settings.get("error_color") or "#0072B2"),
+        "block_error": str(settings.get("block_error_color") or "#003B73"),
+    }
+
+
 def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
     if str(payload.get("kind", "")) != "correlation":
         return None
-    pred = _series_from_payload(payload, "pred")
-    target = _series_from_payload(payload, "target")
-    if pred.size == 0 or target.size == 0:
-        return None
     bound = float(payload.get("bound", 0.0))
-    if not np.isfinite(bound) or bound <= 0.0:
-        stacked = np.concatenate([pred, target], axis=0)
-        bound = float(np.quantile(np.abs(stacked), 0.9999))
     lo = float(payload.get("lo", -bound))
     hi = float(payload.get("hi", bound))
+    counts_value = payload.get("histogram_counts")
+    x_edges_value = payload.get("x_edges")
+    y_edges_value = payload.get("y_edges")
+    if (
+        counts_value is not None
+        and x_edges_value is not None
+        and y_edges_value is not None
+    ):
+        counts = np.asarray(counts_value, dtype=float).T
+        x_edges = np.asarray(x_edges_value, dtype=float)
+        y_edges = np.asarray(y_edges_value, dtype=float)
+    else:
+        pred = _series_from_payload(payload, "pred")
+        target = _series_from_payload(payload, "target")
+        if pred.size == 0 or target.size == 0:
+            return None
+        if not np.isfinite(bound) or bound <= 0.0:
+            bound = float(np.max(np.abs(np.concatenate([pred, target]))))
+            lo, hi = -bound, bound
+        counts_raw, x_edges, y_edges = np.histogram2d(
+            target, pred, bins=60, range=((lo, hi), (lo, hi))
+        )
+        counts = counts_raw.T
+    counts[counts <= 0.0] = np.nan
+    x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
+    y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
     corr = payload.get("corr")
     r2 = payload.get("r2")
+    mae = payload.get("mae")
+    unit = str(payload.get("unit") or "native")
     if r2 is None and corr is not None:
         try:
             r2 = float(corr) * float(corr)
@@ -2687,22 +2919,39 @@ def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
             r2 = None
     fig = go.Figure(
         data=[
-            go.Scattergl(
-                x=target,
-                y=pred,
-                mode="markers",
-                marker=dict(size=4, color="#60a5fa", opacity=0.3, line=dict(width=0)),
-                hovertemplate="GT=%{x:.6g}<br>Pred=%{y:.6g}<extra></extra>",
-                showlegend=False,
+            go.Heatmap(
+                x=x_centers,
+                y=y_centers,
+                z=counts,
+                colorscale=[[0.0, "#FFFFB2"], [0.5, "#FD8D3C"], [1.0, "#BD0026"]],
+                colorbar=dict(title="Count"),
+                hovertemplate=(
+                    "Ground truth=%{x:.6g}<br>Prediction=%{y:.6g}"
+                    "<br>Count=%{z:.0f}<extra></extra>"
+                ),
             )
         ]
     )
+    pred = _series_from_payload(payload, "pred")
+    target = _series_from_payload(payload, "target")
+    if pred.size and target.size:
+        count = min(pred.size, target.size)
+        fig.add_trace(
+            go.Scattergl(
+                x=target[:count],
+                y=pred[:count],
+                mode="markers",
+                marker=dict(color="#000000", size=2),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
     fig.add_trace(
         go.Scattergl(
             x=[lo, hi],
             y=[lo, hi],
             mode="lines",
-            line=dict(color="rgba(0,0,0,0.9)", dash="dash", width=1.2),
+            line=dict(color="#666666", dash="dash", width=1.0),
             hoverinfo="skip",
             showlegend=False,
         )
@@ -2710,17 +2959,23 @@ def _build_correlation_figure(payload: dict[str, Any]) -> go.Figure | None:
     fig.update_layout(
         title=str(payload.get("title", "Correlation"))
         + (
-            f" | R^2 = {float(r2):.6f}"
+            f" | MAE = {float(mae):.6g} {unit}"
+            if mae is not None and np.isfinite(float(mae))
+            else ""
+        )
+        + (
+            f" | R² = {float(r2):.6f}"
             if r2 is not None and np.isfinite(float(r2))
             else ""
         ),
         xaxis_title="Ground truth",
         yaxis_title="Prediction",
-        margin=dict(l=50, r=25, t=55, b=45),
-        template="plotly_dark",
+        height=560,
+        margin=dict(l=55, r=110, t=60, b=50),
+        template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#e8edf7"),
+        plot_bgcolor="#FFFFFF",
+        font=dict(color="#111111"),
     )
     fig.update_xaxes(range=[lo, hi])
     fig.update_yaxes(range=[lo, hi], scaleanchor="x", scaleratio=1)
@@ -2748,7 +3003,9 @@ def _build_dos_section(
     )
     if payload_path is not None:
         payload = _load_plot_payload(Path(payload_path))
-        figure = _build_dos_figure(payload)
+        figure = _build_dos_figure(
+            payload, plot_style=_evaluation_plot_style(evaluation)
+        )
         if figure is not None:
             figure_height = (
                 "560px" if str(payload.get("kind")) == "dos_comparison" else "420px"
@@ -2793,7 +3050,7 @@ def _build_correlation_section(
     items = [
         (
             "Hamiltonian",
-            None,
+            copied_files.get("hamiltonian_correlation.pt"),
             "hamiltonian_correlation.png",
         ),
         (
@@ -2810,17 +3067,6 @@ def _build_correlation_section(
     sections = []
     first_plot_uses_js = True if include_plotlyjs else False
     for idx, (name, payload_path, fallback_png) in enumerate(items, start=1):
-        if name == "Hamiltonian":
-            if copied_files.get(fallback_png) is not None:
-                sections.append(
-                    f"""
-  <div class="metric-card">
-    <div class="metric-title">Hamiltonian correlation</div>
-    {_fallback_image_html(f"run_assets/{asset_namespace}/{fallback_png}", "Hamiltonian correlation", height="430px")}
-  </div>
-"""
-                )
-            continue
         if payload_path is not None:
             payload = _load_plot_payload(Path(payload_path))
             figure = _build_correlation_figure(payload)
@@ -2831,7 +3077,7 @@ def _build_correlation_section(
                 include_plotlyjs=include_plotlyjs if first_plot_uses_js else False,
                 full_html=False,
                 default_width="100%",
-                default_height="430px",
+                default_height="560px",
                 div_id=f"{div_id_prefix}-corr-{idx}",
                 config={"responsive": True},
             )
@@ -2857,7 +3103,7 @@ def _build_correlation_section(
         return ""
     return f"""
   <h2>Correlation Diagnostics</h2>
-  <div class="metric-grid">
+  <div class="metric-grid correlation-grid">
     {"".join(sections)}
   </div>
 """
@@ -2896,6 +3142,7 @@ def _make_block_error_figure(
     title: str,
     x_label: str,
     y_label: str,
+    color: str = "#003B73",
 ) -> go.Figure:
     x = _series_from_payload(payload, x_key)
     y = _series_from_payload(payload, y_key)
@@ -2924,7 +3171,7 @@ def _make_block_error_figure(
                 x=x,
                 y=y,
                 mode="markers",
-                marker=dict(size=6, color="#60a5fa", opacity=0.35, line=dict(width=0)),
+                marker=dict(size=6, color=color, opacity=1.0, line=dict(width=0)),
                 hovertemplate="%{customdata}<extra></extra>",
                 customdata=hover,
                 showlegend=False,

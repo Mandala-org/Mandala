@@ -87,5 +87,6 @@ data/small/ZnCuSnSeS/
 data/small/Si_perturbed_scale1/
 data/small/Si_perturbed_scale1_030/
 data/small/Si_perturbed_scale1_078/
-
+data/paper
+analysis_outputs/
 *.zip
