@@ -53,14 +53,14 @@ dev = [
 ignore = ["E741", "E402", "F541"]
 
 [tool.pytest.ini_options]
-addopts = ['-n', '2', '--strict-config', '--strict-markers']
+addopts = ['--strict-config', '--strict-markers']
 markers = [
     "unit: fast, isolated tests",
     "integration: slower workflow tests on real data",
     "physics: tests of physical constraints",
     "equivariance: representation and rotation-equivariance contracts",
     "workflow: end-to-end training or command workflow tests",
-    "slow: individually justified tests that may take over 60 seconds",
+    "slow: individually justified tests that may take over 60 seconds (reason required)",
     "gpu: tests requiring a CUDA-capable GPU",
     "large_data: tests requiring non-minimal repository data",
     "network: tests requiring external network access",
