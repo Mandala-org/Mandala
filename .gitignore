@@ -91,6 +91,9 @@ data/paper
 analysis_outputs/
 *.zip
 
+# Generated structures for inference-scaling benchmarks
+benchmark_data/silicon_scaling/
+
 # Workflow documents
 test_audit/
 docs/*report*

@@ -22,7 +22,7 @@ def _sphere_mesh(
     *,
     longitude_count: int,
     latitude_count: int,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return vertices and triangular faces for one UV sphere."""
     longitude = np.linspace(0.0, 2.0 * np.pi, longitude_count, endpoint=False)
     latitude = np.linspace(0.0, np.pi, latitude_count)
@@ -34,6 +34,7 @@ def _sphere_mesh(
             np.cos(lat_grid).ravel(),
         )
     )
+    normals = vertices.copy()
     vertices = center[None, :] + radius * vertices
 
     faces: list[tuple[int, int, int]] = []
@@ -44,7 +45,7 @@ def _sphere_mesh(
             next_lon = (lon_idx + 1) % longitude_count
             faces.append((row + lon_idx, next_row + lon_idx, next_row + next_lon))
             faces.append((row + lon_idx, next_row + next_lon, row + next_lon))
-    return vertices, np.asarray(faces, dtype=np.int32)
+    return vertices, np.asarray(faces, dtype=np.int32), normals
 
 
 def _element_mesh(
@@ -53,12 +54,13 @@ def _element_mesh(
     *,
     longitude_count: int,
     latitude_count: int,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     vertices: list[np.ndarray] = []
     faces: list[np.ndarray] = []
+    normals: list[np.ndarray] = []
     vertex_offset = 0
     for center, radius in zip(centers, radii, strict=True):
-        sphere_vertices, sphere_faces = _sphere_mesh(
+        sphere_vertices, sphere_faces, sphere_normals = _sphere_mesh(
             center,
             radius,
             longitude_count=longitude_count,
@@ -66,8 +68,31 @@ def _element_mesh(
         )
         vertices.append(sphere_vertices)
         faces.append(sphere_faces + vertex_offset)
+        normals.append(sphere_normals)
         vertex_offset += sphere_vertices.shape[0]
-    return np.concatenate(vertices), np.concatenate(faces)
+    return np.concatenate(vertices), np.concatenate(faces), np.concatenate(normals)
+
+
+def _studio_vertex_colors(base_color: np.ndarray, normals: np.ndarray) -> list[str]:
+    """Bake a soft three-light studio rig into RGB vertex colors."""
+    light_directions = np.asarray(
+        [
+            [0.45, 0.70, 0.55],  # broad key light
+            [-0.75, 0.30, 0.45],  # cooler fill light
+            [0.10, -0.65, 0.75],  # top/back rim light
+        ],
+        dtype=float,
+    )
+    light_directions /= np.linalg.norm(light_directions, axis=1, keepdims=True)
+    strengths = np.asarray([0.58, 0.25, 0.22])
+    diffuse = np.maximum(normals @ light_directions.T, 0.0) @ strengths
+    illumination = np.clip(0.38 + diffuse, 0.28, 1.18)
+
+    rgb = np.clip(base_color[None, :] * illumination[:, None], 0.0, 255.0)
+    # A gentle cool fill keeps shadowed sides readable without washing out colors.
+    rgb += np.maximum(0.0, 0.55 - illumination[:, None]) * np.asarray([12, 16, 24])
+    rgb = np.clip(rgb, 0.0, 255.0).astype(np.uint8)
+    return [f"rgb({r},{g},{b})" for r, g, b in rgb]
 
 
 def _cell_segments(cell: np.ndarray) -> np.ndarray:
@@ -130,7 +155,7 @@ def build_crystal_figure(
     figure = go.Figure()
     symbols = atoms.get_chemical_symbols()
     for atomic_number in sorted(centers_by_element):
-        vertices, faces = _element_mesh(
+        vertices, faces, normals = _element_mesh(
             centers_by_element[atomic_number],
             radii_by_element[atomic_number],
             longitude_count=max(8, sphere_resolution),
@@ -146,19 +171,19 @@ def build_crystal_figure(
                 i=faces[:, 0],
                 j=faces[:, 1],
                 k=faces[:, 2],
-                color=f"rgb({color[0]},{color[1]},{color[2]})",
+                vertexcolor=_studio_vertex_colors(color, normals),
                 name=element,
                 showlegend=True,
                 hoverinfo="name",
                 flatshading=False,
                 lighting={
-                    "ambient": 0.28,
-                    "diffuse": 0.82,
-                    "specular": 0.38,
-                    "roughness": 0.32,
-                    "fresnel": 0.08,
+                    "ambient": 0.62,
+                    "diffuse": 0.48,
+                    "specular": 0.52,
+                    "roughness": 0.24,
+                    "fresnel": 0.12,
                 },
-                lightposition={"x": 100, "y": 160, "z": 220},
+                lightposition={"x": 140, "y": 220, "z": 260},
             )
         )
 
@@ -176,7 +201,7 @@ def build_crystal_figure(
         )
     )
 
-    camera_distance = 1.65
+    camera_distance = 1.18
     axis_style = {
         "visible": False,
         "showbackground": False,
@@ -225,7 +250,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output-png", type=Path)
     parser.add_argument("--title")
     parser.add_argument("--radius-scale", type=float, default=0.55)
-    parser.add_argument("--sphere-resolution", type=int, default=18)
+    parser.add_argument("--sphere-resolution", type=int, default=36)
     parser.add_argument("--width", type=int, default=1200)
     parser.add_argument("--height", type=int, default=900)
     return parser.parse_args()
