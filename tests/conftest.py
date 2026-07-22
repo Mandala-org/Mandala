@@ -1,4 +1,5 @@
 import pytest
+import os
 from collections import Counter
 from pathlib import Path
 import torch
@@ -11,6 +12,50 @@ from data.factory import DatasetFactory
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
 from net.common import Config
+
+
+_CATEGORY_BY_DIRECTORY = {
+    "unit": "unit",
+    "integration": "integration",
+    "physics": "physics",
+    "equivariance": "equivariance",
+    "workflow": "workflow",
+    "analysis": "integration",
+    "gpu": "gpu",
+    "large_data": "large_data",
+}
+
+
+def pytest_collection_modifyitems(config, items):
+    """Classify every test and gate suites requiring special infrastructure."""
+    for item in items:
+        relative = Path(str(item.path)).parts
+        try:
+            tests_index = relative.index("tests")
+            directory = relative[tests_index + 1]
+        except (ValueError, IndexError):
+            continue
+        category = _CATEGORY_BY_DIRECTORY.get(directory)
+        if category is not None and item.get_closest_marker(category) is None:
+            item.add_marker(getattr(pytest.mark, category))
+
+        slow = item.get_closest_marker("slow")
+        if slow is not None and not (slow.args or slow.kwargs.get("reason")):
+            raise pytest.UsageError(
+                f"{item.nodeid}: @pytest.mark.slow requires a justification."
+            )
+        if item.get_closest_marker("gpu") and os.getenv("MANDALA_RUN_GPU_TESTS") != "1":
+            item.add_marker(
+                pytest.mark.skip(reason="GPU suite requires MANDALA_RUN_GPU_TESTS=1.")
+            )
+        if item.get_closest_marker("large_data") and not os.getenv(
+            "MANDALA_LARGE_DATA_ROOT"
+        ):
+            item.add_marker(
+                pytest.mark.skip(
+                    reason="Large-data suite requires MANDALA_LARGE_DATA_ROOT."
+                )
+            )
 
 
 @pytest.fixture(scope="session")
@@ -140,19 +185,28 @@ def small_angular_dataset_e3nn(small_angular_snapshot_e3nn):
 def h2o_snapshot(h2o_orbital_cfg):
     sample = Path("./data/small/H2O/original/H2O.matrix")
     atoms = list("HHHHOO")
-    cfg = Config(cutoff_radius=5.0)
-    return parse_openmx_scfout(
-        sample, atoms, h2o_orbital_cfg, convention="openmx", cfg=cfg
-    )
+    return parse_openmx_scfout(sample, atoms, h2o_orbital_cfg, convention="openmx")
 
 
 @pytest.fixture(scope="session")
-def h2o_snapshot_e3nn(h2o_orbital_cfg):
-    sample = Path("./data/small/H2O/original/H2O.matrix")
-    atoms = list("HHHHOO")
-    cfg = Config(cutoff_radius=5.0)
-    return parse_openmx_scfout(
-        sample, atoms, h2o_orbital_cfg, convention="e3nn", cfg=cfg
+def h2o_rotation_pair():
+    base = Path("data/small/H2O")
+    cfg = Config(allow_openmx_positions_box_from_out=True)
+    original = Snapshot.from_openmx(
+        base / "original/H2O.matrix",
+        base / "original/H2O.info.out",
+        cfg=cfg,
+        convention="openmx",
+    )
+    rotated = Snapshot.from_openmx(
+        base / "rotated/H2O.matrix",
+        base / "rotated/H2O.info.out",
+        cfg=cfg,
+        convention="openmx",
+    )
+    return (
+        original.reduce_orbitals("1s1p").to_e3nn(),
+        rotated.reduce_orbitals("1s1p").to_e3nn(),
     )
 
 
@@ -168,15 +222,6 @@ def si_snapshot():
         convention="openmx",
         cfg=cfg,
     )
-
-
-@pytest.fixture(scope="session")
-def silicon_pair():
-    # Use the silicon data in the repository
-    base = Path("data") / "big" / "silicon" / "900K"
-    mat = base / "Si_DM"
-    info = base / "info.txt"
-    return mat, info
 
 
 @pytest.fixture(scope="session")

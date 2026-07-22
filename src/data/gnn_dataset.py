@@ -131,6 +131,9 @@ class E3GNNDataset(Dataset):
 
         self.dtype = self.cfg.dtype
 
+        if self.cfg.train_target not in {"matrix", "irreps"}:
+            raise ValueError("train_target must be one of 'matrix' or 'irreps'.")
+
         envelope_mode = str(
             getattr(self.cfg, "hamiltonian_envelope_mode", "off")
         ).lower()
@@ -727,9 +730,21 @@ class E3GNNDataset(Dataset):
                 "density",
             }.issubset(available_matrices)
             y = {
-                "hamiltonian": hamiltonian_target,
-                "overlap": overlap_target,
-                "density": density_target,
+                "hamiltonian": (
+                    hamiltonian_target
+                    if self.cfg.train_target == "matrix"
+                    else hamiltonian_target.to_vectors(self.mapper)
+                ),
+                "overlap": (
+                    overlap_target
+                    if self.cfg.train_target == "matrix"
+                    else overlap_target.to_vectors(self.mapper)
+                ),
+                "density": (
+                    density_target
+                    if self.cfg.train_target == "matrix"
+                    else density_target.to_vectors(self.mapper)
+                ),
                 "energy": snap.get_energy() if has_observable_inputs else None,
                 "num_electrons": (
                     snap.get_number_of_electrons() if has_observable_inputs else None

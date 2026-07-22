@@ -106,6 +106,8 @@ class E3GNN(pl.LightningModule):
             raise ValueError(
                 "train_on_irrep_parts expects matrix-space supervision and should only be used with train_target='matrix'."
             )
+        if cfg.train_target not in {"matrix", "irreps"}:
+            raise ValueError("train_target must be one of 'matrix' or 'irreps'.")
         validate_observable_config(cfg)
         observable_loss_kind = str(getattr(cfg, "observable_loss_kind", "mse")).lower()
         if observable_loss_kind not in {"mse", "mae"}:
@@ -132,6 +134,19 @@ class E3GNN(pl.LightningModule):
             raise ValueError(
                 "hamiltonian_envelope_mode requires matrix-space training; "
                 "it cannot be used with train_on_irrep_parts."
+            )
+        if cfg.train_target == "irreps" and envelope_mode != "off":
+            raise ValueError(
+                "hamiltonian_envelope_mode requires matrix-space supervision and "
+                "cannot be used with train_target='irreps'."
+            )
+        if (
+            cfg.train_target == "irreps"
+            and str(cfg.loss_weighting_mode).lower() != "off"
+        ):
+            raise ValueError(
+                "loss_weighting_mode requires matrix-edge supervision and cannot "
+                "be used with train_target='irreps'."
             )
         if bool(
             getattr(cfg, "spectral_loss_enabled", False)
@@ -776,6 +791,15 @@ class E3GNN(pl.LightningModule):
         matrix_maes = {}
         combined_matrix_losses = {}
         combined_pair_losses: dict[str, dict[str, torch.Tensor]] = {}
+        target_matrices: dict[str, BlockMatrix] = {
+            name: (
+                y[name].to_blocks(self.mapper)
+                if self.cfg.train_target == "irreps"
+                else y[name]
+            )
+            for name in ("hamiltonian", "overlap", "density")
+            if name in y
+        }
         hamiltonian_mae_contribs: dict[str, object] | None = None
         irrep_block_cache_by_name: dict[
             str, tuple[dict[str, BlockMatrix], dict[str, BlockMatrix]]
@@ -827,7 +851,8 @@ class E3GNN(pl.LightningModule):
             target_irrep_blocks = None
             pair_losses: dict[str, torch.Tensor] = {}
             raw_pred_matrix = preds_matrix[name]
-            raw_target_matrix = y[name]
+            raw_target = y[name]
+            raw_target_matrix = target_matrices[name]
             loss_pred_matrix, loss_target_matrix, metric_pred_matrix = (
                 self._apply_matrix_envelope_mode(
                     name=name,
@@ -868,6 +893,47 @@ class E3GNN(pl.LightningModule):
                 )
                 metric_mse_val = loss_mse_val
                 metric_mae_val = loss_mae_val
+            elif self.cfg.train_target == "irreps":
+                loss_mse_val = torch.tensor(0.0, device=self.device)
+                loss_mae_val = torch.tensor(0.0, device=self.device)
+                for key, targets in raw_target.pair_vectors.items():
+                    if key not in preds_irreps[name].pair_vectors:
+                        raise ValueError(
+                            f"Key {key} not found in predicted irreps for {name}."
+                        )
+                    preds = preds_irreps[name].pair_vectors[key]
+                    target_n = targets.shape[0]
+                    if preds.shape[0] < target_n:
+                        raise ValueError(
+                            f"Predicted vectors for matrix {name}, key {key} are too "
+                            f"short: pred_len={preds.shape[0]} target_len={target_n}"
+                        )
+                    pred_edges = preds_irreps[name].pair_edges[key][:, :target_n]
+                    target_edges = raw_target.pair_edges[key][:, :target_n]
+                    if self.cfg.safety_checks:
+                        assert torch.equal(
+                            pred_edges, target_edges
+                        ), f"Edge mismatch in irrep loss for matrix {name}, key {key}."
+                    partial_mask = self._partial_train_mask(target_edges)
+                    preds = preds[:target_n][partial_mask]
+                    targets = targets[partial_mask]
+                    if preds.shape[0] == 0:
+                        continue
+                    pair_mse = self._mse(preds, targets)
+                    pair_mae = self._mae(preds, targets)
+                    loss_mse_val += pair_mse
+                    loss_mae_val += pair_mae
+                    pair_losses[key] = (
+                        1 - self.cfg.loss_l1_fraction
+                    ) * pair_mse + self.cfg.loss_l1_fraction * pair_mae
+
+                if stage != "train" or self.cfg.symmetrize_output:
+                    metric_pred_matrix = (
+                        metric_pred_matrix + metric_pred_matrix.transpose()
+                    ) * 0.5
+                metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
+                    metric_pred_matrix, raw_target_matrix, name
+                )
             else:
                 p = loss_pred_matrix
                 t = loss_target_matrix
@@ -1046,15 +1112,17 @@ class E3GNN(pl.LightningModule):
             or self.cfg.log_partial_gt_observables
             or self.cfg.train_observables_on_gt
         )
-        if needs_gt_observables and {"hamiltonian", "density", "overlap"}.issubset(y):
-            H_true = y["hamiltonian"]
-            D_true = y["density"]
-            S_true = y["overlap"]
+        if needs_gt_observables and {"hamiltonian", "density", "overlap"}.issubset(
+            target_matrices
+        ):
+            H_true = target_matrices["hamiltonian"]
+            D_true = target_matrices["density"]
+            S_true = target_matrices["overlap"]
 
         E_true = y.get("energy")
         N_true = y.get("num_electrons")
         for name, pred_matrix in preds_matrix.items():
-            target_matrix = y.get(name)
+            target_matrix = target_matrices.get(name)
             if target_matrix is None:
                 continue
             physical_pred_matrix = pred_matrix
@@ -1139,14 +1207,14 @@ class E3GNN(pl.LightningModule):
                             preds_matrix[name], self.mapper, self.all_irreps
                         ),
                         build_irrep_block_matrix_cache(
-                            y[name], self.mapper, self.all_irreps
+                            target_matrices[name], self.mapper, self.all_irreps
                         ),
                     )
                     irrep_block_cache_by_name[name] = cache
                 pred_irrep_blocks, target_irrep_blocks = cache
                 irrep_metrics = compute_irrep_metrics(
                     preds_matrix[name],
-                    y[name],
+                    target_matrices[name],
                     self.all_irreps,
                     self.mapper,
                     pred_irrep_blocks=pred_irrep_blocks,
@@ -1358,6 +1426,13 @@ class E3GNN(pl.LightningModule):
         box: torch.Tensor,
         x: Dict[str, Any] | None = None,
     ) -> "Snapshot":
+        required = {"hamiltonian", "overlap", "density"}
+        missing = sorted(required.difference(predictions))
+        if missing:
+            raise ValueError(
+                "Energy-derived force/stress evaluation requires predictions for "
+                f"hamiltonian, overlap, and density; missing: {', '.join(missing)}."
+            )
         if x is None and self._matrix_envelope_mode() != "off":
             raise ValueError(
                 "predictions_to_snapshot requires the input batch `x` when "

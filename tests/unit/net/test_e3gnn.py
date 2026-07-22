@@ -9,7 +9,6 @@ from net.common import Config as ProductionConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from net.e3gnn import E3GNN
 from e3nn.o3 import Irreps
-from data.factory import DatasetFactory
 from data.block_matrix import IrrepsBlockData
 from data.graph_features import compute_graph_features
 
@@ -193,7 +192,7 @@ def test_forward_smoke_onthefly_deeph_e3():
 
 
 @pytest.mark.integration
-def test_forward_h2o_cutoff5_with_split_head():
+def test_forward_cutoff5_with_split_head(small_angular_dataset_e3nn):
     cfg = Config(
         cutoff_radius=5.0,
         matrix_targets=["hamiltonian", "overlap", "density"],
@@ -203,12 +202,7 @@ def test_forward_h2o_cutoff5_with_split_head():
         safety_checks=True,
         verbosity=0,
     )
-    factory = DatasetFactory(cfg)
-    factory.add_snapshot(
-        "data/small/H2O/original/H2O.matrix",
-        "data/small/H2O/original/H2O.info.out",
-    )
-    train_ds, _, mapper = factory.create()
+    train_ds, mapper, _ = small_angular_dataset_e3nn
     model = E3GNN(mapper, cfg)
     x, _ = train_ds[0]
 

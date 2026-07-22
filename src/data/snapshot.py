@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import re
+import copy
 from pathlib import Path
 from typing import Dict, Any, Mapping
 import torch
@@ -979,9 +980,21 @@ class Snapshot:
     def __getitem__(self, item: str) -> BlockMatrix:
         return self._mats[item]
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> "Snapshot":
+        """Deep-copy without invoking dynamic matrix attribute lookup recursively."""
+        existing = memo.get(id(self))
+        if existing is not None:
+            return existing
+        clone = object.__new__(type(self))
+        memo[id(self)] = clone
+        for name, value in self.__dict__.items():
+            setattr(clone, name, copy.deepcopy(value, memo))
+        return clone
+
     def __getattr__(self, name: str) -> Any:
-        if name in self._mats:
-            return self._mats[name]
+        mats = self.__dict__.get("_mats")
+        if mats is not None and name in mats:
+            return mats[name]
         raise AttributeError(name)
 
     # -------------------------------------------------------------------- constructors

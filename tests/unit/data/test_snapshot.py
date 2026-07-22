@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 from collections import Counter
 import math
+import copy
 
 from core.sparse_math import trace_matmul_sparse_snap_vectorized
 from data.snapshot import Snapshot
@@ -76,6 +77,21 @@ def test_save_load_roundtrip(tmp_path, small_angular_snapshot_e3nn):
     assert torch.allclose(
         snap2.get_number_of_electrons(), snap.get_number_of_electrons(), atol=1e-6
     )
+
+
+@pytest.mark.unit
+def test_deepcopy_is_independent_and_preserves_dynamic_matrix_aliases(
+    small_angular_snapshot_e3nn,
+):
+    snap = small_angular_snapshot_e3nn
+    cloned = copy.deepcopy(snap)
+
+    assert cloned is not snap
+    assert cloned.hamiltonian is cloned["hamiltonian"]
+    assert cloned.hamiltonian is not snap.hamiltonian
+    original = snap.hamiltonian.pair_blocks["H-H"].clone()
+    cloned.hamiltonian.pair_blocks["H-H"][0, 0, 0] += 1.0
+    assert torch.equal(snap.hamiltonian.pair_blocks["H-H"], original)
 
 
 @pytest.mark.unit

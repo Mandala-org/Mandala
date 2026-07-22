@@ -1,12 +1,14 @@
 import pytest
 from pathlib import Path
 from types import SimpleNamespace
+import copy
 import torch
 
 
 from net.common import Config
 from net.e3gnn import E3GNN
 from data.factory import DatasetFactory
+from data.gnn_dataset import E3GNNDataset
 from data.snapshot import Snapshot
 
 
@@ -82,21 +84,41 @@ matrix_target_subsets = [
 ]
 
 
+@pytest.mark.integration
+def test_dataset_emits_irrep_targets(
+    small_angular_snapshot_e3nn, small_angular_dataset_e3nn, monkeypatch
+):
+    _, mapper, base_cfg = small_angular_dataset_e3nn
+    cfg = copy.deepcopy(base_cfg)
+    cfg.train_target = "irreps"
+    monkeypatch.setattr(
+        Snapshot, "from_openmx", lambda *args, **kwargs: small_angular_snapshot_e3nn
+    )
+
+    dataset = E3GNNDataset(
+        [(Path("synthetic.matrix"), Path("synthetic.out"))], mapper, cfg
+    )
+    _, targets = dataset[0]
+
+    for name in ("hamiltonian", "overlap", "density"):
+        assert hasattr(targets[name], "pair_vectors")
+        assert not hasattr(targets[name], "pair_blocks")
+
+
+@pytest.mark.integration
+def test_irrep_targets_reject_matrix_specific_envelope(small_angular_dataset_e3nn):
+    _, mapper, base_cfg = small_angular_dataset_e3nn
+    cfg = copy.deepcopy(base_cfg)
+    cfg.train_target = "irreps"
+    cfg.hamiltonian_envelope_mode = "multiply_prediction"
+
+    with pytest.raises(ValueError, match="matrix-space supervision"):
+        E3GNN(mapper, cfg)
+
+
 @pytest.mark.parametrize(
     "train_target",
-    [
-        "matrix",
-        pytest.param(
-            "irreps",
-            marks=pytest.mark.skip(
-                reason=(
-                    "Deferred legacy supervision path: Config documents matrix-only "
-                    "training, and E3GNN._shared_step currently requires BlockMatrix "
-                    "targets after converting predictions to matrix space."
-                )
-            ),
-        ),
-    ],
+    ["matrix", "irreps"],
 )
 @pytest.mark.parametrize("matrix_targets", matrix_target_subsets)
 def test_model_training_configurations(prepared_data, train_target, matrix_targets):

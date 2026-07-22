@@ -90,6 +90,7 @@ def test_training_step_with_force_loss(tiny_dataset):
         matrix_targets=["hamiltonian", "overlap", "density"],
     )
     model = E3GNN(mapper, cfg)
+    model.log_dict = lambda *args, **kwargs: None
     batch = train_ds[0]
 
     loss = model.training_step(batch, 0)

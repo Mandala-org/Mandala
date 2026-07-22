@@ -19,6 +19,17 @@ def _load_module():
     return module
 
 
+def test_resolve_resume_checkpoint_prefers_requested_named_file(tmp_path):
+    mod = _load_module()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    latest = run_dir / "latest_checkpoint.pt"
+    latest.write_text("checkpoint")
+
+    assert mod._resolve_resume_checkpoint(str(run_dir), "latest") == latest.resolve()
+    assert mod._resolve_resume_checkpoint(str(latest), "best") == latest.resolve()
+
+
 def test_populate_config_from_args_normalizes_string_list_fields():
     mod = _load_module()
     args = mod.argparse.Namespace(

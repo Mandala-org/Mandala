@@ -12,13 +12,9 @@ Python, and assert element-wise equality with the “rotated” reference.
 """
 
 import pytest
-from pathlib import Path
 import math
 
 import torch
-
-from data.snapshot import Snapshot
-from net.common import Config
 
 
 def _rotation_matrix() -> torch.Tensor:
@@ -26,27 +22,6 @@ def _rotation_matrix() -> torch.Tensor:
     theta = -math.pi / 6.0
     c, s = math.cos(theta), math.sin(theta)
     return torch.tensor([[c, 0.0, s], [0.0, 1, 0.0], [-s, 0.0, c]], dtype=torch.float32)
-
-
-def _load_pair():
-    base = Path("./data/small/H2O")
-    cfg = Config(allow_openmx_positions_box_from_out=True)
-    snap_orig = Snapshot.from_openmx(
-        base / "original" / "H2O.matrix",
-        base / "original" / "H2O.info.out",
-        cfg=cfg,
-        convention="openmx",
-    )
-    snap_rot_ref = Snapshot.from_openmx(
-        base / "rotated" / "H2O.matrix",
-        base / "rotated" / "H2O.info.out",
-        cfg=cfg,
-        convention="openmx",
-    )
-    return (
-        snap_orig.reduce_orbitals("1s1p").to_e3nn(),
-        snap_rot_ref.reduce_orbitals("1s1p").to_e3nn(),
-    )
 
 
 def _assert_snapshot_equal(a, b, *, atol=1e-5):
@@ -63,12 +38,12 @@ def _assert_snapshot_equal(a, b, *, atol=1e-5):
 
 
 @pytest.mark.physics
-def test_pre_rotated_files_match_in_code_rotation():
+def test_pre_rotated_files_match_in_code_rotation(h2o_rotation_pair):
     """
     Rotate the *original* snapshot by the known matrix and compare to the
     reference “rotated” file published in the dataset.
     """
-    snap_orig, snap_rot_ref = _load_pair()
+    snap_orig, snap_rot_ref = h2o_rotation_pair
 
     R = _rotation_matrix()
     snap_rot_calc = snap_orig.rotate(R)

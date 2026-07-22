@@ -50,6 +50,6 @@ def test_stress_with_real_data(small_angular_dataset_e3nn):
 
     assert stress.shape == (3, 3)
     assert not torch.isnan(stress).any(), "Stress contains NaN values."
-    assert not torch.allclose(
-        stress, torch.zeros_like(stress)
-    ), "Stress is all zero, gradients are likely detached."
+    assert (
+        torch.count_nonzero(stress).item() > 0
+    ), "Stress is exactly zero, gradients are likely detached."

@@ -16,23 +16,28 @@ from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.workflow]
+# This one-batch workflow intentionally avoids worker processes and external loggers.
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.workflow,
+    pytest.mark.filterwarnings(
+        "ignore:The 'train_dataloader' does not have many workers.*"
+    ),
+    pytest.mark.filterwarnings(
+        "ignore:The 'val_dataloader' does not have many workers.*"
+    ),
+    pytest.mark.filterwarnings(
+        r"ignore:You called `self.log\('lr'.*but have no logger configured.*"
+    ),
+    pytest.mark.filterwarnings(
+        r"ignore:You called `self.log\('grad_norm'.*but have no logger configured.*"
+    ),
+]
 
 
 @pytest.mark.parametrize(
     "train_target",
-    [
-        pytest.param(
-            "irreps",
-            marks=pytest.mark.skip(
-                reason=(
-                    "Deferred legacy supervision path: the current workflow is "
-                    "documented and implemented as matrix-only."
-                )
-            ),
-        ),
-        "matrix",
-    ],
+    ["irreps", "matrix"],
 )
 def test_full_training_workflow(
     train_target, tmp_path, monkeypatch, small_angular_snapshot_e3nn
@@ -101,7 +106,7 @@ def test_full_training_workflow(
         )
 
     train_loader = _dl(train_ds, shuffle=True)
-    val_loader = _dl(val_ds, shuffle=True)
+    val_loader = _dl(val_ds, shuffle=False)
 
     # 3. Create the model
     model = E3GNN(mapper=mapper, cfg=cfg)

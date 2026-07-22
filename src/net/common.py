@@ -147,7 +147,7 @@ class Config:
     enable_num_electrons: bool = True
 
     # -------------- training targets -----------------------------------
-    train_target: str = "matrix"  # matrix-only in the current workflow
+    train_target: str = "matrix"  # matrix | irreps
     partial_train: str | None = None  # None | "diag" | "shifted_self" | "offdiag"
     train_on_forces: bool = False
     train_on_stress: bool = False

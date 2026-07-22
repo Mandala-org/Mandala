@@ -1,19 +1,14 @@
 import pytest
-from pathlib import Path
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
-from data.openmx_parser import parse_openmx_scfout
 from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
 
 
 @pytest.mark.unit
-def test_parse_returns_snapshot(h2o_orbital_cfg):
-    sample = Path("./data/small/H2O/original/H2O.matrix")
-    atoms = list("HHHHOO")
-
-    snap = parse_openmx_scfout(sample, atoms, h2o_orbital_cfg)
+def test_parse_returns_snapshot(h2o_snapshot):
+    snap = h2o_snapshot
     assert isinstance(snap, Snapshot)
 
     ham = snap.hamiltonian
@@ -28,11 +23,8 @@ def test_parse_returns_snapshot(h2o_orbital_cfg):
 
 
 @pytest.mark.unit
-def test_parse(h2o_orbital_cfg: OrbitalIrrepConfig):
-    sample = Path("./data/small/H2O/original/H2O.matrix")
-    atoms = list("HHHHOO")  # global order
-
-    mats = parse_openmx_scfout(sample, atoms, h2o_orbital_cfg)
+def test_parse(h2o_orbital_cfg: OrbitalIrrepConfig, h2o_snapshot):
+    mats = h2o_snapshot
     assert mats["hamiltonian"] is not None
     assert mats["overlap"] is not None
     assert mats["density"] is not None
@@ -71,11 +63,8 @@ def test_parse(h2o_orbital_cfg: OrbitalIrrepConfig):
 
 
 @pytest.mark.unit
-def test_parse_pbc_shapes(h2o_orbital_cfg: OrbitalIrrepConfig):
-    sample = Path("./data/small/H2O/original/H2O.matrix")
-    atoms = list("HHHHOO")
-
-    mats = parse_openmx_scfout(sample, atoms, h2o_orbital_cfg)
+def test_parse_pbc_shapes(h2o_snapshot):
+    mats = h2o_snapshot
     density = mats["density"]
     # ensure that duplicate Rn blocks were not summed: count of H‑H edges is 16 (fully connected dir graph)
     assert density["H-H"].shape == (712, 9, 9)
