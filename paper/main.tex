@@ -55,7 +55,7 @@
 
 \begin{abstract}
 Electronic-structure calculations based on Kohn-Sham density functional theory remain indispensable in computational materials science and chemistry. Their computational cost, however, limits accessible system sizes and simulation times.
-At the same time, conventional machine-learning interatomic potentials (MLIPS) which are becoming the workhorse of large-scale materials modeling usually target only energies and forces, which leaves out the quantum-operator-level electronic information required for many scientifically relevant analyses. %TODO: such as ... please add examples. They can be taken from the MALA conceptual paper.
+At the same time, conventional machine-learning interatomic potentials (MLIPs), which are becoming the workhorse of large-scale materials modeling, usually target only energies and forces. They therefore leave out the quantum-operator-level information required to reconstruct band structures, densities of states, spatial charge distributions, and other electronic observables.
 \texttt{Mandala} is a modular software framework for learning block-sparse electronic-structure matrices with E(3)-equivariant graph neural networks. The framework is built around a unified representation of atom-resolved Hamiltonian, overlap, and density matrices, together with reusable abstractions for basis conversion, sparse block handling, irreducible representation (irrep) mapping, graph construction, model definition, and training. This design allows \texttt{Mandala} to support heterogeneous chemical compositions, a wide range of neural architecture variants within one workflow, and multiple electronic-structure backends.
 A distinguishing feature of \texttt{Mandala} is that it does not stop at matrix reconstruction. Predicted operators can be contracted and post-processed to obtain quantities like the band-energy, the density of states, the band structure, and electron density. This allows the software to bridge electronic-structure learning and observable-guided modeling while retaining a representation tied to quantum-mechanical operators rather than only scalar or vector targets as in MLIPs.
 In this form, \texttt{Mandala} is intended to complement atomistic interatomic potential workflows by resolving electronic structure and operator-derived observables within one scalable implementation.
@@ -111,23 +111,23 @@ The remainder of this paper is organized as follows. Section~\ref{sec:background
 
 At the most fundamental nonrelativistic level, an atomistic system is described by the stationary many-body electronic Schr\"odinger equation for all electrons and all nuclei within the Born-Oppenheimer approximation~\cite{born_zur_1927},
 \begin{equation}
-\left[ \hat{T}_e(\underline{\bm{r}}) + \hat{V}_{ee}(\underline{\bm{r}}) + \hat{V}_{ei}(\underline{\bm{r}};\underline{\bm{R}}) + E_{ii}(\underline{\bm{R}}) \right] \Psi(\underline{\bm{r}};\underline{\bm{R}})
+\left[ T_e(\underline{\bm{r}}) + V_{ee}(\underline{\bm{r}}) + V_{ei}(\underline{\bm{r}};\underline{\bm{R}}) + E_{ii}(\underline{\bm{R}}) \right] \Psi(\underline{\bm{r}};\underline{\bm{R}})
 =
 E \Psi(\underline{\bm{r}};\underline{\bm{R}}),
 \end{equation}
 where $\Psi(\underline{\bm{r}};\underline{\bm{R}})$ denotes the many-body wavefunction, $\underline{\bm{r}}$ the collection of electronic coordinates, and $\underline{\bm{R}}$ the collection of ionic coordinates. The semicolon indicates that the dependence on ionic coordinates is parametric.
 The electronic Schrödinger equation is composed of the kinetic energy of the electrons
 \begin{equation}
-\hat{T}_e(\underline{\bm{r}}) = -\frac{1}{2}\sum_{j=1}^{N_e} \nabla_j^2,
+T_e(\underline{\bm{r}}) = -\frac{1}{2}\sum_{j=1}^{N_e} \nabla_j^2,
 \end{equation}
 the electron-electron interaction
 \begin{equation}
-\hat{V}_{ee}(\underline{\bm{r}}) =
+V_{ee}(\underline{\bm{r}}) =
 \frac{1}{2}\sum_{j=1}^{N_e}\sum_{k \ne j}^{N_e}\frac{1}{|\bm{r}_j-\bm{r}_k|},
 \end{equation}
 the electron-ion interaction
 \begin{equation}
-\hat{V}_{ei}(\underline{\bm{r}};\underline{\bm{R}}) =
+V_{ei}(\underline{\bm{r}};\underline{\bm{R}}) =
 -\sum_{j=1}^{N_e}\sum_{\alpha=1}^{N_i}\frac{Z_{\alpha}}{|\bm{r}_j-\bm{R}_{\alpha}|},
 \end{equation}
 and the ion-ion interaction
@@ -138,7 +138,7 @@ E_{ii}(\underline{\bm{R}}) =
 \end{equation}
 The ion-ion interaction amounts to a constant energy shift for fixed ionic configuration, while the other terms depend only parametrically on $\underline{\bm{R}}$. In the following, this parametric dependence is not always written explicitly. Also note that we adopt atomic units throughout, with $\hbar = m_e = e^2 = 1$, so that energies are measured in Hartree and lengths in Bohr radii.
 
-The central task in electronic structure theory is therefore solving the interacting many-electron problem defined by $\hat{T}_e + \hat{V}_{ee} + \hat{V}_{ei}$ for a fixed ionic geometry.
+The central task in electronic structure theory is therefore solving the interacting many-electron problem defined by $T_e + V_{ee} + V_{ei}$ for a fixed ionic geometry.
 
 DFT is the most popular method for solving this problem. It replaces the many-electron wavefunction by the electron density $n(\bm{r})$ as the central variable \cite{HoKo1964}. In the Kohn-Sham construction \cite{KoSh1965}, the interacting electron problem is then mapped onto a fictitious system of non-interacting electrons governed by the Kohn-Sham equations
 \begin{equation}
@@ -182,7 +182,7 @@ leads to the generalized eigenvalue problem
 \end{equation}
 with
 \begin{equation}
-H_{\mu \nu} = \langle \chi_{\mu} | \hat{H} | \chi_{\nu} \rangle,
+H_{\mu \nu} = \langle \chi_{\mu} | H | \chi_{\nu} \rangle,
 \qquad
 S_{\mu \nu} = \langle \chi_{\mu} | \chi_{\nu} \rangle.
 \end{equation}
@@ -253,8 +253,6 @@ where $\langle A,B\rangle_F = \sum_{\mu \nu} A_{\mu \nu} B_{\mu \nu}$ is the Fro
 \subsection{E(3) symmetry, equivariance, and irreducible representations}
 \label{subsec:egnn_background}
 
-% TODO: @Bartek: Does this or the next section need to cite e3nn papers such as (https://arxiv.org/abs/2207.09453)? Maybe not, but just checking.
-
 Atomistic systems in three-dimensional space are naturally acted on by the Euclidean group $\mathrm{E}(3)=\mathbb{R}^3 \rtimes \mathrm{O}(3)$, combining translations, rotations, and reflections.
 For a group element $g=(Q,\bm{t})$, with $Q \in \mathrm{O}(3)$ and $\bm{t}\in\mathbb{R}^3$, atomic positions transform as
 \begin{equation}
@@ -283,7 +281,7 @@ Node and edge features are updated through maps that commute with the group acti
 layers.
 Geometric information enters through relative displacement vectors and their spherical-harmonic expansions, while translational invariance is enforced by expressing all geometry in relative coordinates.
 Reflections are tracked through the parity label $p$, while rotations act within each $\ell$ channel.
-In this way, \texttt{Mandala} preserves directional information throughout the network without sacrificing the required covariance laws.
+In this way, \texttt{Mandala} preserves directional information throughout the network without sacrificing the required covariance laws. The implementation uses the \texttt{e3nn} library for irreducible representations, spherical harmonics, and equivariant tensor-product operations~\cite{GeigerSmidt2022}.
 
 
 \subsection{Tensor products, spherical harmonics, and the Wigner-Eckart viewpoint}
@@ -530,7 +528,7 @@ For a target operator $X$, the head predicts irrep vectors
 \end{equation}
 followed by inverse irrep-to-block conversion
 \begin{equation}
-\widehat{X}_{ij}^{\bm{L}}
+X_{ij}^{\bm{L},\mathrm{pred}}
 =
 Q_{a_i a_j}^{\top}\widehat{\bm{x}}_{ij}^{\bm{L},X}.
 \end{equation}
@@ -585,12 +583,12 @@ L_{\mathrm{mag}}^{X}(\bm{t}_{e})
 \bigr)
 \right),
 \end{equation}
-and reconstructs the actual block prediction as
+and reconstructs the block prediction as
 \begin{equation}
-\widehat{X}_{e}^{\mathrm{actual}}
+\bm{x}_{e}^{X,\mathrm{pred}}
 =
 \widehat{m}_{e}^{X}\,
-\widehat{X}_{e}^{\mathrm{norm}}.
+\widehat{\bm{x}}_{e,\mathrm{norm}}^{X}.
 \end{equation}
 Because heads share the same equivariant latent representation, \texttt{Mandala} can predict Hamiltonian, overlap, and density matrices jointly with only modest additional readout cost.
 
@@ -603,12 +601,9 @@ The encoder and head stages are likewise configurable. Edge encoders support var
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/fig3_model_architecture.png}
-\caption{E(3)-equivariant message-passing architecture and sparse-operator readout. Atomic species, positions, and lattice vectors are transformed into periodic relative displacements, distances, radial features $\phi(r_{ij})$, and real spherical harmonics $Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Node and alternative edge encoders initialize irrep-valued latent features. Each repeated \texttt{MessageBlock} constructs equivariant edge messages from source-node, target-node, edge, radial, and angular features; aggregates the messages to update nodes; and updates edge features, with optional residual and self-connection paths. The implementation supports separate-weight or fully connected tensor products, several equivariant nonlinearities, and extended E(3)-MLP variants. Operator-specific Hamiltonian, overlap, and density heads map the final latent representation to output irreps, with optional tensor-square, scalar, magnitude-factorized, and edge-class-specific branches. The \texttt{BlockIrrepMapper} then converts the predicted irrep vectors into aligned sparse blocks $\widehat H$, $\widehat S$, and $\widehat D$.}
+\caption{E(3)-equivariant message-passing architecture and sparse-operator readout. Atomic species, positions, and lattice vectors are transformed into periodic relative displacements, distances, radial features $\phi(r_{ij})$, and real spherical harmonics $Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Node and alternative edge encoders initialize irrep-valued latent features. Each repeated \texttt{MessageBlock} constructs equivariant edge messages from source-node, target-node, edge, radial, and angular features; aggregates the messages to update nodes; and updates edge features, with optional residual and self-connection paths. The implementation supports separate-weight or fully connected tensor products, several equivariant nonlinearities, and extended E(3)-MLP variants. Operator-specific Hamiltonian, overlap, and density heads map the final latent representation to output irreps, with optional tensor-square, scalar, magnitude-factorized, and edge-class-specific branches. The \texttt{BlockIrrepMapper} then converts the predicted irrep vectors into aligned sparse blocks $H^{\mathrm{pred}}$, $S^{\mathrm{pred}}$, and $D^{\mathrm{pred}}$.}
 \label{fig:model_architecture}
 \end{figure}
-
-
-%TODO: Fix notation of operators. Sometimes hats are used for H, S, D, and sometimes not. I noticed this here, but also the previous sections need to be checked. Please make the notation consistent. I think we can just remove all hats from operators to keep the notation simple and readable.
 
 
 \subsection{Sparse operator algebra, symmetrization, gauge correction, and density normalization}
@@ -672,13 +667,13 @@ H^{\mathrm{pred}} - \mu_H S,
 so that purely gauge-like Hamiltonian offsets are removed before reporting gauge-corrected operator errors.
 
 The framework also supports density normalization to the correct number of electrons.
-If a predicted density $\widehat{D}$ and overlap $\widehat{S}$ produce $\widehat{N}_e = \Tr(\widehat{D}\widehat{S})$, then a normalized density is obtained by the scalar rescaling
+If a predicted density $D^{\mathrm{pred}}$ and overlap $S^{\mathrm{pred}}$ produce $N_e^{\mathrm{pred}} = \Tr(D^{\mathrm{pred}}S^{\mathrm{pred}})$, then a normalized density is obtained by the scalar rescaling
 \begin{equation}
-\widehat{D}_{\mathrm{norm}}
+D_{\mathrm{norm}}^{\mathrm{pred}}
 =
-\beta \widehat{D},
+\beta D^{\mathrm{pred}},
 \qquad
-\beta = \frac{N_e^{\mathrm{target}}}{\Tr(\widehat{D}\widehat{S})}.
+\beta = \frac{N_e^{\mathrm{target}}}{\Tr(D^{\mathrm{pred}}S^{\mathrm{pred}})}.
 \end{equation}
 This provides a simple and effective way to enforce electron-count consistency.
 
@@ -688,7 +683,7 @@ It turns raw network outputs into physically interpretable operators ready for o
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/fig6_postprocessing_analysis.png}
-\caption{Physics-aware postprocessing and electronic-structure analysis of predicted sparse operators. The predicted Hamiltonian $\widehat H$, overlap $\widehat S$, and density matrix $\widehat D$ are first symmetrized using reverse-edge-aligned sparse blocks. The Hamiltonian branch removes an arbitrary overlap-proportional energy offset through the gauge correction $\widetilde H=H_{\mathrm{sym}}-\mu_H S_{\mathrm{sym}}$. The density branch rescales $D_{\mathrm{sym}}$ to enforce the target electron count through $\widetilde D=N_e D_{\mathrm{sym}}/\Tr(D_{\mathrm{sym}}S_{\mathrm{sym}})$ and reports the remaining electron-count discrepancy. The corrected Hamiltonian and overlap define the generalized eigenproblem $\widetilde H C=S_{\mathrm{sym}}C\varepsilon$. The resulting physically processed operators support block-, irrep-, and distance-resolved matrix diagnostics, density-of-states and spectral calculations, and band-structure and related analyses while retaining the sparse representation.}
+\caption{Physics-aware postprocessing and electronic-structure analysis of predicted sparse operators. The predicted Hamiltonian $H^{\mathrm{pred}}$, overlap $S^{\mathrm{pred}}$, and density matrix $D^{\mathrm{pred}}$ are first symmetrized using reverse-edge-aligned sparse blocks. The Hamiltonian branch removes an arbitrary overlap-proportional energy offset through the gauge correction $\widetilde H=H_{\mathrm{sym}}-\mu_H S_{\mathrm{sym}}$. The density branch rescales $D_{\mathrm{sym}}$ to enforce the target electron count through $\widetilde D=N_e D_{\mathrm{sym}}/\Tr(D_{\mathrm{sym}}S_{\mathrm{sym}})$ and reports the remaining electron-count discrepancy. The corrected Hamiltonian and overlap define the generalized eigenproblem $\widetilde H C=S_{\mathrm{sym}}C\varepsilon$. The resulting physically processed operators support block-, irrep-, and distance-resolved matrix diagnostics, density-of-states and spectral calculations, and band-structure and related analyses while retaining the sparse representation.}
 \label{fig:postprocessing_analysis}
 \end{figure}
 
@@ -710,60 +705,60 @@ The matrix terms compare predicted and reference sparse operators, typically by 
 \begin{equation}
 \Loss_X^{\mathrm{matrix}}
 =
-\eta \, \mathrm{MAE}(\widehat{X},X)
-+ (1-\eta)\, \mathrm{MSE}(\widehat{X},X),
+\eta \, \mathrm{MAE}(X^{\mathrm{pred}},X^{\mathrm{ref}})
++ (1-\eta)\, \mathrm{MSE}(X^{\mathrm{pred}},X^{\mathrm{ref}}),
 \end{equation}
 with $\eta$ controlled by configuration.
 
 Observable guidance is defined on quantities derived from the predicted operators.
 In the operator-centered workflow used throughout \texttt{Mandala}, the band energy and the number of electrons are
 \begin{equation}
-\widehat{E_b} = \Tr(\widehat{D}\widehat{H}),
+E_b^{\mathrm{pred}} = \Tr(D^{\mathrm{pred}}H^{\mathrm{pred}}),
 \qquad
-\widehat{N}_e = \Tr(\widehat{D}\widehat{S}),
+N_e^{\mathrm{pred}} = \Tr(D^{\mathrm{pred}}S^{\mathrm{pred}}),
 \end{equation}
 which gives
 \begin{equation}
-\Loss^E = \mathrm{MSE}(\widehat{E_b},E^{\mathrm{ref}}),
+\Loss^E = \mathrm{MSE}(E_b^{\mathrm{pred}},E_b^{\mathrm{ref}}),
 \qquad
-\Loss^N = \mathrm{MSE}(\widehat{N}_e,N_e^{\mathrm{ref}}).
+\Loss^N = \mathrm{MSE}(N_e^{\mathrm{pred}},N_e^{\mathrm{ref}}).
 \end{equation}
 In the sparse aligned implementation, these quantities are evaluated as
 \begin{align}
-\widehat{E_b}
+E_b^{\mathrm{pred}}
 &=
 \sum_k \sum_n
 \mathrm{tr}\!\left(
-\widehat{H}_{k,n}\,
-\widehat{D}_{k^{\mathrm{rev}},P_k(n)}
+H_{k,n}^{\mathrm{pred}}\,
+D_{k^{\mathrm{rev}},P_k(n)}^{\mathrm{pred}}
 \right), \\
-\widehat{N}_e
+N_e^{\mathrm{pred}}
 &=
 \sum_k \sum_n
 \mathrm{tr}\!\left(
-\widehat{D}_{k,n}\,
-\widehat{S}_{k^{\mathrm{rev}},P_k(n)}
+D_{k,n}^{\mathrm{pred}}\,
+S_{k^{\mathrm{rev}},P_k(n)}^{\mathrm{pred}}
 \right).
 \end{align}
 The framework also supports mixed observable guidance paths in which one of the operators entering the trace is replaced by the reference operator, for example the diagnostic contractions
 \begin{equation}
-\widehat{E}_{H|D^{\mathrm{ref}}}
+E_{H|D^{\mathrm{ref}}}^{\mathrm{pred}}
 =
-\Tr\!\left(\widehat{H} D^{\mathrm{ref}}\right),
+\Tr\!\left(H^{\mathrm{pred}} D^{\mathrm{ref}}\right),
 \qquad
-\widehat{E}_{D|H^{\mathrm{ref}}}
+E_{D|H^{\mathrm{ref}}}^{\mathrm{pred}}
 =
-\Tr\!\left(H^{\mathrm{ref}} \widehat{D}\right),
+\Tr\!\left(H^{\mathrm{ref}} D^{\mathrm{pred}}\right),
 \end{equation}
 and
 \begin{equation}
-\widehat{N}_{D|S^{\mathrm{ref}}}
+N_{D|S^{\mathrm{ref}}}^{\mathrm{pred}}
 =
-\Tr\!\left(\widehat{D} S^{\mathrm{ref}}\right),
+\Tr\!\left(D^{\mathrm{pred}} S^{\mathrm{ref}}\right),
 \qquad
-\widehat{N}_{S|D^{\mathrm{ref}}}
+N_{S|D^{\mathrm{ref}}}^{\mathrm{pred}}
 =
-\Tr\!\left(D^{\mathrm{ref}} \widehat{S}\right),
+\Tr\!\left(D^{\mathrm{ref}} S^{\mathrm{pred}}\right),
 \end{equation}
 enabling diagnostic and training modes that separate errors due to different predicted operators.
 
@@ -771,15 +766,15 @@ The current implementation also exposes experimental derivatives of the operator
 \begin{equation}
 \bm{F}^{\mathrm{band}}_I
 =
--\frac{\partial \widehat{E_b}}{\partial \bm{R}_I},
+-\frac{\partial E_b^{\mathrm{pred}}}{\partial \bm{R}_I},
 \qquad
 \sigma^{\mathrm{band}}
 =
 \frac{1}{\Omega}h^{\top}
-\frac{\partial \widehat{E_b}}{\partial h},
+\frac{\partial E_b^{\mathrm{pred}}}{\partial h},
 \qquad \Omega=\det(h).
 \end{equation}
-These derivatives are not total-energy forces or stresses because $\widehat E_b=\Tr(\widehat D\widehat H)$ omits the remaining contributions to the Kohn--Sham total energy.
+These derivatives are not total-energy forces or stresses because $E_b^{\mathrm{pred}}=\Tr(D^{\mathrm{pred}}H^{\mathrm{pred}})$ omits the remaining contributions to the Kohn--Sham total energy.
 They are therefore not presented here as validated supervision targets.
 
 The supported observable-guidance objective in this work is thus restricted to matrix entries, the band-energy, and the electron count.
@@ -788,7 +783,7 @@ Once the remaining total-energy contributions are implemented, the existing auto
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/fig4_observable_guidance.png}
-\caption{Observable-guided training from predicted sparse operators. Reference Hamiltonian, overlap, and density targets, represented as aligned sparse blocks or irrep coefficients, directly supervise the predicted operators $\widehat H$, $\widehat S$, and $\widehat D$. The same operator set yields the band-energy observable $\widehat E_b=\Tr(\widehat D\widehat H)$ and electron count $\widehat N_e=\Tr(\widehat D\widehat S)$ through differentiable sparse trace contractions. Experimental force and stress outputs are derivatives of the band energy only and are not total-energy derivatives. For periodic calculations, an optional spectral term can additionally compare generalized-eigenvalue spectra on a specified k-point mesh. All supported matrix and observable terms are combined in a weighted objective. Configuration controls select per-target matrix weights, observable terms, partial-reference traces, density-specific weighting, and training schedules, allowing pure matrix supervision or joint matrix-, band-energy-, and electron-count-guided training without separate observable heads.}
+\caption{Observable-guided training from predicted sparse operators. Reference Hamiltonian, overlap, and density targets, represented as aligned sparse blocks or irrep coefficients, directly supervise the predicted operators $H^{\mathrm{pred}}$, $S^{\mathrm{pred}}$, and $D^{\mathrm{pred}}$. The same operator set yields the band-energy observable $E_b^{\mathrm{pred}}=\Tr(D^{\mathrm{pred}}H^{\mathrm{pred}})$ and electron count $N_e^{\mathrm{pred}}=\Tr(D^{\mathrm{pred}}S^{\mathrm{pred}})$ through differentiable sparse trace contractions. Experimental force and stress outputs are derivatives of the band energy only and are not total-energy derivatives. For periodic calculations, an optional spectral term can additionally compare generalized-eigenvalue spectra on a specified k-point mesh. All supported matrix and observable terms are combined in a weighted objective. Configuration controls select per-target matrix weights, observable terms, partial-reference traces, density-specific weighting, and training schedules, allowing pure matrix supervision or joint matrix-, band-energy-, and electron-count-guided training without separate observable heads.}
 \label{fig:observable_guidance}
 \end{figure}
 
@@ -846,7 +841,7 @@ Each figure is generated for one representative structure from the corresponding
 
 ZnCu$_2$Sn(SeS)$_2$ combines five elements and chemically distinct cation and anion environments in one periodic material.
 Its electronic structure contains many element-pair channels with different orbital content, so a single model must resolve both the heterogeneous local chemistry and the coupling between those environments.
-The aggregate validation result is summarized in Table~\ref{tab:zncusnses-validation}; the complete configuration of the evaluated model is provided in \mbox{\ref{app:model-config-zncusnses}}.
+The aggregate validation result is summarized in Table~\ref{tab:zncusnses-validation}; the complete configuration of the evaluated model is provided in \mbox{\ref{app:model-config-zncusnses}}. The relative error normalizes the aggregate MAE by the mean absolute reference Hamiltonian element, $0.1022$~eV, in the representative validation structure used for the figures.
 
 \begin{table}[H]
 \centering
@@ -857,12 +852,10 @@ The aggregate validation result is summarized in Table~\ref{tab:zncusnses-valida
 Metric & Value \\
 \midrule
 Hamiltonian MAE & 0.003013~eV \\
+Relative Hamiltonian MAE & 2.95\% \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-%TODO: Also add the corresponding relative percentage error to the table.
-
 
 Figure~\ref{fig:zncusnses-hamiltonian} resolves a representative prediction into atom-pair matrix blocks. The $\pm0.01$~eV range is narrow compared with the Hamiltonian elements and exposes residual structure in both on-site and off-site blocks.
 The correlation in Fig.~\ref{fig:zncusnses-correlation} includes all shift-resolved elements of the same structure and gives $R^2=0.999475$.
@@ -886,7 +879,7 @@ The correlation in Fig.~\ref{fig:zncusnses-correlation} includes all shift-resol
 
 The SiO$_2$ dataset consists of 150-atom glass structures. Variations in bond lengths, bond angles, and coordination environments replace the small set of symmetry-equivalent neighborhoods present in a crystal.
 This makes the dataset a test of whether the local equivariant representation remains accurate across a broad distribution of amorphous environments.
-Table~\ref{tab:sio2-validation} reports the aggregate validation metrics. For this Hamiltonian-only model, the band energy is evaluated by contracting the predicted Hamiltonian with the reference density.
+Table~\ref{tab:sio2-validation} reports the aggregate validation metrics. For this Hamiltonian-only model, the band energy is evaluated by contracting the predicted Hamiltonian with the reference density. The Hamiltonian percentage normalizes the aggregate MAE by the representative structure's mean absolute reference element, $0.1163$~eV. The band-energy percentage uses the corresponding reference band-energy magnitude, $76.11$~eV/atom.
 Its complete configuration is provided in \mbox{\ref{app:model-config-siox}}.
 
 \begin{table}[H]
@@ -898,13 +891,12 @@ Its complete configuration is provided in \mbox{\ref{app:model-config-siox}}.
 Metric & Value \\
 \midrule
 Hamiltonian MAE & 0.002002~eV \\
-Band-energy MAE & 0.15eV/atom \\
+Relative Hamiltonian MAE & 1.72\% \\
+Band-energy MAE & 0.15~eV/atom \\
+Relative band-energy MAE & 0.20\% \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-%TODO: Also add the corresponding relative percentage error to the table.
-
 
 The density of states in Fig.~\ref{fig:sio2-dos} tests the collective spectral consequence of the predicted matrix rather than individual matrix elements.
 The residual is largest where narrow variations in the reference DOS amplify small shifts of the eigenvalue distribution.
@@ -912,17 +904,14 @@ The residual is largest where narrow variations in the reference DOS amplify sma
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.88\textwidth]{figures/results/paper_sio2_dos_comparison_and_error.png}
-\caption{Density of states and its prediction error for a representative glassy SiO$_2$ validation structure. The calculation uses Gaussian broadening with $\sigma=0.2$~eV on a $2\times2\times2$ k-point mesh. The dotted line marks the Fermi level.}
+\caption{Density of states and its prediction error for a representative glassy SiO$_2$ validation structure. The calculation uses Gaussian broadening with $\sigma=0.2$~eV on a $2\times2\times2$ k-point mesh. The solid black line marks the Fermi level.}
 \label{fig:sio2-dos}
 \end{figure}
-
-%TODO: Make the vertical lines of the Fermi level more visible. Maybe use a more visible color.
-
 
 \subsection{Band structure, density of states, and density matrix of silicon}
 
 The perturbed-silicon dataset retains the diamond-crystal topology while introducing small atomic displacements ($\sigma = 0.02\r{A}$ and $\sigma = 0.05\r{A}$). Its single-species composition and regular coordination remove the chemical and configurational complexity of the other two systems, allowing the attainable precision of the equivariant model to be assessed on a simpler crystalline electronic structure.
-The aggregate validation metrics of the joint Hamiltonian--density--overlap model are given in Table~\ref{tab:silicon-validation}; its complete configuration is provided in \mbox{\ref{app:model-config-silicon}}.
+The aggregate validation metrics of the joint Hamiltonian--density--overlap model are given in Table~\ref{tab:silicon-validation}; its complete configuration is provided in \mbox{\ref{app:model-config-silicon}}. The percentage errors normalize the aggregate MAEs by the representative structure's mean absolute reference values, $0.1227$~eV for the Hamiltonian and $2.951\times10^{-3}$ for the density matrix.
 
 \begin{table}[H]
 \centering
@@ -933,12 +922,12 @@ The aggregate validation metrics of the joint Hamiltonian--density--overlap mode
 Metric & Value \\
 \midrule
 Hamiltonian MAE & $5.228\times10^{-4}$~eV \\
+Relative Hamiltonian MAE & 0.426\% \\
 Density-matrix MAE & $5.736\times10^{-5}$ \\
+Relative density-matrix MAE & 1.94\% \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-%TODO: Also add the corresponding relative percentage error to the table.
 
 The predicted Hamiltonian and overlap determine the bands and DOS in Fig.~\ref{fig:silicon-bands-dos}. Agreement across occupied and low-lying unoccupied bands shows that the matrix accuracy is preserved through the generalized eigenvalue problem.
 The valence-band maximum and conduction-band dispersion around the high-symmetry points are reproduced without fitting the bands as direct targets.
@@ -946,25 +935,23 @@ The valence-band maximum and conduction-band dispersion around the high-symmetry
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_silicon_band_structure_and_dos.png}
-\caption{Band structure and density of states for a representative perturbed-silicon validation structure. The path is $L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$, and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh. The dotted line marks the Fermi level.}
+\caption{Band structure and density of states for a representative perturbed-silicon validation structure. The path is $L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$, and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh. The solid black line marks the Fermi level.}
 \label{fig:silicon-bands-dos}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/results/paper_silicon_density_first6.png}
-\caption{Density-matrix fragments for the first six atoms of the representative silicon validation structure. The common color range is $\pm0.01$, with periodic-image contributions kept shift-resolved.}
+\includegraphics[width=\textwidth]{figures/results/paper_silicon_density_all.png}
+\caption{The centeral density matrix of the eight-atom representative silicon validation structure. Each atom-pair contribution is an $n\times n$ local-orbital block, with $n=13$ for this calculation. The common color range is $\pm0.01$.}
 \label{fig:silicon-density}
 \end{figure}
 
-For each atom pair and periodic shift, the Hamiltonian or density contribution is a $13\times13$ block in the local orbital basis.
-%TODO: Please check the following sentence referencing Figure 9.
-An example of the density matrix is shown in Figure~\ref{fig:silicon-density}, where ground-truth is compared to predicted density matrix and the error is shown for a subset of the full density matrix.
-For a predicted block $\widehat{M}$ and its reference $M$, the relative block error shown in Fig.~\ref{fig:silicon-density-errors} is
+For each atom pair and periodic shift, a Hamiltonian or density contribution is an $n\times n$ block in the local orbital basis, where $n$ is the number of orbitals associated with each atom for the chosen basis. Figure~\ref{fig:silicon-density} compares the complete reference and predicted density matrices of the representative structure and shows their element-wise error without collapsing periodic-image contributions.
+For a predicted block $M^{\mathrm{pred}}$ and its reference $M^{\mathrm{ref}}$, the relative block error shown in Fig.~\ref{fig:silicon-density-errors} is
 \begin{equation}
-\epsilon_{\mathrm{rel}}(\widehat{M},M)
-=\frac{\frac{1}{169}\sum_{a,b}|\widehat{M}_{ab}-M_{ab}|}
-{\max\!\left(\frac{1}{169}\sum_{a,b}|M_{ab}|,10^{-12}\right)}.
+\epsilon_{\mathrm{rel}}(M^{\mathrm{pred}},M^{\mathrm{ref}})
+=\frac{\frac{1}{n^2}\sum_{a,b}|M^{\mathrm{pred}}_{ab}-M^{\mathrm{ref}}_{ab}|}
+{\max\!\left(\frac{1}{n^2}\sum_{a,b}|M^{\mathrm{ref}}_{ab}|,10^{-12}\right)}.
 \end{equation}
 The discrete distance groups correspond to coordination shells of the perturbed crystal.
 Hamiltonian blocks have their smallest relative errors over the strongly coupled intermediate shells and larger relative errors near the cutoff, where normalization by weak target blocks magnifies the ratio.
