@@ -128,7 +128,7 @@ def test_checkpoint_callback_saves_artifacts(tmp_path):
     callback.on_validation_epoch_end(trainer, module)
     callback.on_fit_end(trainer, module)
 
-    assert str(tmp_path / "latest_checkpoint.pt") in saved
+    assert (tmp_path / "latest_checkpoint.pt").exists()
     assert str(tmp_path / "best_model.pt") in saved
     assert str(tmp_path / "final_model.pt") in saved
     assert (tmp_path / "dos_comparison_final.png").exists()
@@ -175,8 +175,8 @@ def test_checkpoint_callback_saves_objective_best_checkpoints(tmp_path):
     callback = ArtifactCheckpointCallback(tmp_path, generate_video=False)
     callback.on_validation_epoch_end(trainer, module)
 
-    assert str(tmp_path / "best_energy_mae.pt") in saved
-    assert str(tmp_path / "best_spectrum_mae.pt") in saved
+    assert (tmp_path / "best_energy_mae.pt").exists()
+    assert (tmp_path / "best_spectrum_mae.pt").exists()
     assert trainer.logger.experiment.summary[
         "checkpoint/best_energy_mae_value"
     ] == pytest.approx(0.25)
@@ -188,8 +188,52 @@ def test_checkpoint_callback_saves_objective_best_checkpoints(tmp_path):
     trainer.callback_metrics["val/energy_mae"] = torch.tensor(0.4)
     trainer.callback_metrics["val/spectral_mae_ev"] = torch.tensor(0.1)
     callback.on_validation_epoch_end(trainer, module)
-    assert saved.count(str(tmp_path / "best_energy_mae.pt")) == 1
-    assert saved.count(str(tmp_path / "best_spectrum_mae.pt")) == 1
+    assert len(saved) == 2
+
+
+def test_checkpoint_callback_reuses_captured_validation_predictions(tmp_path):
+    _, batch, module = _make_batch_and_module()
+    x, y = batch
+    call_count = 0
+    original_call = module.__class__.__call__
+
+    def counted_call(self, batch_x):
+        nonlocal call_count
+        call_count += 1
+        return original_call(self, batch_x)
+
+    module.__class__.__call__ = counted_call
+
+    class DummyExperiment:
+        summary = {}
+
+        def log(self, payload):
+            pass
+
+    class DummyTrainer:
+        current_epoch = 0
+        global_step = 0
+        sanity_checking = False
+        callback_metrics = {"val/loss_total": torch.tensor(1.0)}
+        val_dataloaders = [[batch]]
+        logger = SimpleNamespace(experiment=DummyExperiment())
+        optimizers = [SimpleNamespace(param_groups=[{"lr": 1e-3}])]
+
+        def save_checkpoint(self, path, **kwargs):
+            torch.save({"path": path}, path)
+
+    trainer = DummyTrainer()
+    callback = ArtifactCheckpointCallback(tmp_path, generate_video=False)
+    callback.reference_batch = batch
+    callback.on_validation_epoch_start(trainer, module)
+    predictions = module(x)
+    module._artifact_validation_payloads.append((x, y, predictions))
+    calls_before_epoch_end = call_count
+
+    callback.on_validation_epoch_end(trainer, module)
+    callback.on_fit_end(trainer, module)
+
+    assert call_count == calls_before_epoch_end
 
 
 def test_plot_helpers_write_files(tmp_path):
@@ -446,7 +490,7 @@ def test_revert_on_spike_callback_reverts_best_and_decays_lr(tmp_path):
     )
 
     callback.on_fit_start(trainer, module)
-    callback.on_validation_end(trainer, module)
+    callback.on_validation_epoch_end(trainer, module)
     assert (tmp_path / "best_model.pt").exists()
     assert callback.state.best_score == 1.0
 
@@ -454,7 +498,7 @@ def test_revert_on_spike_callback_reverts_best_and_decays_lr(tmp_path):
         module.weight.fill_(9.0)
     trainer.current_epoch = 1
     trainer.callback_metrics["val/loss_total"] = torch.tensor(2.5)
-    callback.on_validation_end(trainer, module)
+    callback.on_validation_epoch_end(trainer, module)
     assert callback.state.bad_epochs == 1
     assert float(module.weight.item()) == 9.0
 
@@ -462,7 +506,7 @@ def test_revert_on_spike_callback_reverts_best_and_decays_lr(tmp_path):
         module.weight.fill_(11.0)
     trainer.current_epoch = 2
     trainer.callback_metrics["val/loss_total"] = torch.tensor(2.8)
-    callback.on_validation_end(trainer, module)
+    callback.on_validation_epoch_end(trainer, module)
 
     assert callback.state.bad_epochs == 0
     assert callback.state.revert_count == 1

@@ -334,7 +334,11 @@ def build_prediction_edge_metadata(
             "offdiag_local_idx": torch.nonzero(is_offdiag, as_tuple=False).flatten(),
         }
 
-    pred_trace_alignment = build_trace_alignment_from_pair_edges(pred_pair_edges_static)
+    pred_reverse_alignment = build_trace_alignment_from_pair_edges(
+        pred_pair_edges_static
+    )
+    pred_trace_alignment = pred_reverse_alignment
+    target_reverse_alignment = None
     if target_pair_edges is not None:
         trimmed_pair_edges: dict[str, torch.Tensor] = {}
         for key, target_edges in target_pair_edges.items():
@@ -351,11 +355,16 @@ def build_prediction_edge_metadata(
                 )
             trimmed_pair_edges[key] = pred_edges[:, :target_n]
         pred_trace_alignment = build_trace_alignment_from_pair_edges(trimmed_pair_edges)
+        target_reverse_alignment = build_trace_alignment_from_pair_edges(
+            target_pair_edges
+        )
     return {
         "pred_pair_edges_static": pred_pair_edges_static,
         "pred_lookup_static": pred_lookup_static,
         "pred_edge_keys": tuple(pred_edge_keys),
         "pred_edge_key_set": set(pred_edge_keys),
         "pred_trace_alignment": pred_trace_alignment,
+        "pred_reverse_alignment": pred_reverse_alignment,
+        "target_reverse_alignment": target_reverse_alignment,
         "edge_partitions": edge_partitions,
     }

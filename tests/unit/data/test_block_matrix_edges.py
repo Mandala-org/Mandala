@@ -3,6 +3,7 @@ import torch
 from collections import Counter
 from data.block_matrix import BlockMatrix
 from core.orbital_irrep_config import OrbitalIrrepConfig
+from core.sparse_math import build_trace_alignment_from_pair_edges
 
 
 @pytest.fixture
@@ -127,6 +128,11 @@ def test_transpose_symmetric():
     assert torch.allclose(bm_t.pair_blocks["A-A"][1], blocks[2].transpose(-1, -2))
     # Block 2 in result should be Block 1 of input (transposed)
     assert torch.allclose(bm_t.pair_blocks["A-A"][2], blocks[1].transpose(-1, -2))
+
+    alignment = build_trace_alignment_from_pair_edges(bm.pair_edges)
+    bm_t_aligned = bm.transpose_aligned(alignment)
+    assert torch.equal(bm_t_aligned.pair_edges["A-A"], bm_t.pair_edges["A-A"])
+    assert torch.allclose(bm_t_aligned.pair_blocks["A-A"], bm_t.pair_blocks["A-A"])
 
 
 def test_reorder_edges(mock_block_matrix):

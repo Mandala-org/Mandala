@@ -33,3 +33,4 @@ def test_hyperparams_defaults():
     assert cfg.head_e3mlp_variant == "normact"
     assert cfg.loss_coef_observables == 0
     assert cfg.checkpoint_monitor == "val/hamiltonian_mae"
+    assert cfg.log_grad_norm is False

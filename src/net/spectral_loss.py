@@ -9,14 +9,19 @@ import torch.nn.functional as F
 from tqdm.auto import tqdm
 
 from core.periodic_fourier import (
+    phase_matrix,
     shiftspace_to_kspace_dense,
     translation_shifts_for_kmesh,
 )
 from data.block_matrix import BlockMatrix
 from data.kspace_snapshot import (
     _fractional_to_cartesian_kpoints,
+    _generalized_eigenvalues_from_cholesky,
     _generalized_eigenvalues_kspace,
+    _prepare_overlap_cholesky_kspace,
+    block_matrix_to_shiftspace_dense_aligned,
     block_matrix_to_shiftspace_dense,
+    build_shiftspace_scatter_metadata,
 )
 from utils.units import HARTREE_TO_EV
 
@@ -105,25 +110,35 @@ def build_spectral_reference(
     _advance("constructed k-mesh and Cartesian k-points")
     ham_shift = block_matrix_to_shiftspace_dense(hamiltonian, shifts=shifts)
     ovl_shift = block_matrix_to_shiftspace_dense(overlap, shifts=shifts)
+    scatter_metadata, dense_shape = build_shiftspace_scatter_metadata(
+        hamiltonian,
+        shifts=shifts,
+    )
     _advance("converted Hamiltonian and overlap to shift-space dense tensors")
+    spectral_phase = phase_matrix(kpoints_abs, shifts, box)
     ham_k = shiftspace_to_kspace_dense(
         ham_shift,
         kpoints_abs=kpoints_abs,
         shifts=shifts,
         box=box,
+        phase=spectral_phase,
     )
     ovl_k = shiftspace_to_kspace_dense(
         ovl_shift,
         kpoints_abs=kpoints_abs,
         shifts=shifts,
         box=box,
+        phase=spectral_phase,
     )
     _advance("Fourier transformed shift-space tensors to k-space")
-    gt_eigs_hartree = _generalized_eigenvalues_kspace(
-        ham_k,
+    overlap_cholesky = _prepare_overlap_cholesky_kspace(
         ovl_k,
         psd_cleanup=overlap_psd_cleanup,
         allow_jitter=overlap_jitter,
+    )
+    gt_eigs_hartree = _generalized_eigenvalues_from_cholesky(
+        ham_k,
+        overlap_cholesky,
     )
     _advance("solved generalized eigenproblems on the reference k-mesh")
     gt_eigs_ev = gt_eigs_hartree.real * HARTREE_TO_EV
@@ -141,6 +156,9 @@ def build_spectral_reference(
         window_ev=window_ev,
         taper_ev=taper_ev,
     )
+    weight_sum = weights.sum()
+    if (not bool(torch.isfinite(weight_sum).item())) or float(weight_sum.item()) <= 0.0:
+        raise ValueError("Spectral window produced a non-positive total weight.")
     _advance("built spectral window weights around the Fermi level")
     if pbar is not None:
         pbar.close()
@@ -155,9 +173,17 @@ def build_spectral_reference(
         "spectral_kpoints_abs": kpoints_abs.detach().cpu(),
         "spectral_shifts": shifts.detach().cpu(),
         "spectral_gt_overlap_k": ovl_k.detach().cpu(),
+        "spectral_gt_overlap_cholesky": overlap_cholesky.detach().cpu(),
+        "spectral_phase": spectral_phase.detach().cpu(),
+        "spectral_scatter_metadata": {
+            key: (source.detach().cpu(), destination.detach().cpu())
+            for key, (source, destination) in scatter_metadata.items()
+        },
+        "spectral_dense_shape": dense_shape,
         "spectral_gt_eigs_ev": gt_eigs_ev.detach().cpu(),
         "spectral_gt_fermi_ev": torch.tensor(fermi_ev, dtype=real_dtype).cpu(),
         "spectral_window_weights": weights.detach().cpu(),
+        "spectral_weight_sum": weight_sum.detach().cpu(),
     }
 
 
@@ -180,19 +206,39 @@ def compute_spectral_eigenvalue_loss(
     weights = spectral_payload["spectral_window_weights"].to(device=box.device)
     fermi_ev = spectral_payload["spectral_gt_fermi_ev"].to(device=box.device)
 
-    pred_shift = block_matrix_to_shiftspace_dense(pred_hamiltonian, shifts=shifts)
+    scatter_metadata = spectral_payload.get("spectral_scatter_metadata")
+    dense_shape = spectral_payload.get("spectral_dense_shape")
+    if scatter_metadata is not None and dense_shape is not None:
+        pred_shift = block_matrix_to_shiftspace_dense_aligned(
+            pred_hamiltonian,
+            scatter_metadata=scatter_metadata,
+            dense_shape=tuple(dense_shape),
+        )
+    else:
+        pred_shift = block_matrix_to_shiftspace_dense(pred_hamiltonian, shifts=shifts)
+    phase = spectral_payload.get("spectral_phase")
+    if phase is not None:
+        phase = phase.to(device=box.device)
     pred_h_k = shiftspace_to_kspace_dense(
         pred_shift,
         kpoints_abs=kpoints_abs,
         shifts=shifts,
         box=box,
+        phase=phase,
     )
-    pred_eigs_h = _generalized_eigenvalues_kspace(
-        pred_h_k,
-        overlap_k,
-        psd_cleanup=overlap_psd_cleanup,
-        allow_jitter=overlap_jitter,
-    )
+    overlap_cholesky = spectral_payload.get("spectral_gt_overlap_cholesky")
+    if overlap_cholesky is None:
+        pred_eigs_h = _generalized_eigenvalues_kspace(
+            pred_h_k,
+            overlap_k,
+            psd_cleanup=overlap_psd_cleanup,
+            allow_jitter=overlap_jitter,
+        )
+    else:
+        pred_eigs_h = _generalized_eigenvalues_from_cholesky(
+            pred_h_k,
+            overlap_cholesky.to(device=box.device),
+        )
     pred_eigs_ev = pred_eigs_h.real * HARTREE_TO_EV
     pred_rel = pred_eigs_ev - fermi_ev
     gt_rel = gt_eigs_ev - fermi_ev
@@ -211,9 +257,15 @@ def compute_spectral_eigenvalue_loss(
         )
     else:
         raise ValueError("spectral_loss_kind must be one of 'huber', 'mse', or 'mae'.")
-    weight_sum = weights.sum()
-    if (not bool(torch.isfinite(weight_sum).item())) or float(weight_sum.item()) <= 0.0:
-        raise ValueError("Spectral window produced a non-positive total weight.")
+    weight_sum = spectral_payload.get("spectral_weight_sum")
+    if weight_sum is None:
+        weight_sum = weights.sum()
+        if (not bool(torch.isfinite(weight_sum).item())) or float(
+            weight_sum.item()
+        ) <= 0.0:
+            raise ValueError("Spectral window produced a non-positive total weight.")
+    else:
+        weight_sum = weight_sum.to(device=box.device)
     loss = torch.sum(per_level * weights) / weight_sum
     mae = torch.sum(abs_err * weights) / weight_sum
     return loss, {

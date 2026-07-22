@@ -6,6 +6,7 @@ import torch
 
 __all__ = [
     "translation_shifts_for_kmesh",
+    "phase_matrix",
     "kspace_to_shiftspace_dense",
     "shiftspace_to_kspace_dense",
 ]
@@ -38,7 +39,7 @@ def translation_shifts_for_kmesh(
     return torch.stack([mx.reshape(-1), my.reshape(-1), mz.reshape(-1)], dim=1)
 
 
-def _phase_matrix(
+def phase_matrix(
     kpoints_abs: torch.Tensor,
     shifts: torch.Tensor,
     box: torch.Tensor,
@@ -82,7 +83,7 @@ def kspace_to_shiftspace_dense(
         raise ValueError(
             f"kpoint count mismatch: matrices have Nk={nk}, kpoints have {kpoints_abs.shape[0]}"
         )
-    phase = _phase_matrix(kpoints_abs, shifts, box)
+    phase = phase_matrix(kpoints_abs, shifts, box)
     mats = matrices_k.to(phase.dtype)
     out = torch.einsum("rk,kij->rij", phase.conj(), mats) / float(nk)
     return out.real if not torch.is_complex(matrices_k) else out
@@ -94,6 +95,7 @@ def shiftspace_to_kspace_dense(
     kpoints_abs: torch.Tensor,
     shifts: torch.Tensor,
     box: torch.Tensor,
+    phase: torch.Tensor | None = None,
 ) -> torch.Tensor:
     if matrices_shift.ndim != 3:
         raise ValueError(
@@ -105,7 +107,14 @@ def shiftspace_to_kspace_dense(
             "shift count mismatch: "
             f"matrices have {matrices_shift.shape[0]}, shifts have {shifts.shape[0]}"
         )
-    phase = _phase_matrix(kpoints_abs, shifts, box)
+    if phase is None:
+        phase = phase_matrix(kpoints_abs, shifts, box)
+    elif phase.shape != (shifts.shape[0], kpoints_abs.shape[0]):
+        raise ValueError(
+            "phase must have shape (Nshift,Nk), got "
+            f"{tuple(phase.shape)} for Nshift={shifts.shape[0]}, "
+            f"Nk={kpoints_abs.shape[0]}"
+        )
     mats = matrices_shift.to(phase.dtype)
     out = torch.einsum("rk,rij->kij", phase, mats)
     return out

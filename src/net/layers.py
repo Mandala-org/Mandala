@@ -251,6 +251,14 @@ class EquiConv(nn.Module):
             act="silu",
             dtype=self.cfg.dtype,
         )
+        radial_weight_index = []
+        for idx, (mul, ir) in enumerate(self.irreps_out):
+            radial_weight_index.extend([idx] * (mul * ir.dim))
+        self.register_buffer(
+            "_radial_weight_index",
+            torch.tensor(radial_weight_index, dtype=torch.long),
+            persistent=False,
+        )
 
     def forward(
         self,
@@ -320,21 +328,10 @@ class EquiConv(nn.Module):
             edge_length_emb = torch.cat([edge_length_emb, pair_emb], dim=-1)
         weights = self.radial_mlp(edge_length_emb)
 
-        # Apply weights per irrep
-        z_weighted = []
-        start = 0
-        for idx, (mul, ir) in enumerate(self.irreps_out):
-            size = mul * ir.dim
-            z_slice = z[:, start : start + size]
-            # Broadcast weight to all components of this irrep
-            w = weights[:, idx : idx + 1]
-            z_weighted.append(z_slice * w)
-            start += size
-
-        if len(z_weighted) == 0:
+        if self._radial_weight_index.numel() == 0:
             return torch.zeros(z.shape[0], 0, dtype=z.dtype, device=z.device)
-
-        return torch.cat(z_weighted, dim=-1)
+        component_weights = weights.index_select(1, self._radial_weight_index)
+        return z * component_weights
 
 
 # ════════════════════════════════════════════════════════════════════════

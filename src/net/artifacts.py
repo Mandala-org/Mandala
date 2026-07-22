@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
+import shutil
+import tempfile
 from typing import Any, Iterable
 
 import numpy as np
@@ -764,6 +767,7 @@ class RevertOnSpikeCallback(pl.Callback):
         spike_factor: float = 2.0,
         restore_optimizer_state: bool = True,
         restore_lr_schedulers: bool = True,
+        save_best_checkpoint: bool = True,
     ) -> None:
         if patience < 1:
             raise ValueError("patience must be >= 1")
@@ -779,6 +783,7 @@ class RevertOnSpikeCallback(pl.Callback):
         self.spike_factor = float(spike_factor)
         self.restore_optimizer_state = restore_optimizer_state
         self.restore_lr_schedulers = restore_lr_schedulers
+        self.save_best_checkpoint = bool(save_best_checkpoint)
         self.best_path = self.output_dir / "best_model.pt"
         self.state = RevertOnSpikeState()
 
@@ -885,7 +890,7 @@ class RevertOnSpikeCallback(pl.Callback):
     def on_fit_start(self, trainer, pl_module) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def on_validation_end(self, trainer, pl_module) -> None:
+    def on_validation_epoch_end(self, trainer, pl_module) -> None:
         if trainer.sanity_checking:
             return
         metric = trainer.callback_metrics.get(self.monitor)
@@ -897,7 +902,8 @@ class RevertOnSpikeCallback(pl.Callback):
             self.state.best_score = score
             self.state.best_epoch = int(trainer.current_epoch)
             self.state.bad_epochs = 0
-            self._save_best_checkpoint(trainer)
+            if self.save_best_checkpoint:
+                self._save_best_checkpoint(trainer)
             return
 
         if self._is_spike(score):
@@ -957,6 +963,9 @@ class ArtifactCheckpointCallback(pl.Callback):
         self.final_path = self.output_dir / "final_model.pt"
         self._last_logged_epoch = -1
         self._printed_strict_checks = False
+        self._last_eval_result: dict[str, Any] | None = None
+        self._last_eval_epoch: int | None = None
+        self._last_eval_global_step: int | None = None
 
     def _is_better(self, score: float) -> bool:
         if self.state.best_score is None:
@@ -1104,7 +1113,11 @@ class ArtifactCheckpointCallback(pl.Callback):
         metrics_preds["density"] = metrics_preds["density"] * density_scale
         return metrics_preds, num_electrons_mae_pre_correction
 
-    def _evaluate_epoch_split(self, trainer: Any, pl_module) -> dict[str, Any] | None:
+    def _evaluate_prediction_payloads(
+        self,
+        pl_module,
+        payloads: Iterable[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    ) -> dict[str, Any] | None:
         all_irreps = get_all_irreps(pl_module.mapper)
         detailed_sum = {
             "mae": 0.0,
@@ -1146,14 +1159,10 @@ class ArtifactCheckpointCallback(pl.Callback):
         hamiltonian_contrib_count = 0
         hamiltonian_contrib_irrep_sums: dict[str, float] = {}
         hamiltonian_contrib_pair_sums: dict[str, float] = {}
-        irrep_block_cache_by_name: dict[
-            str, tuple[dict[str, BlockMatrix], dict[str, BlockMatrix]]
-        ] = {}
         first_payload = None
         n_batches = 0
 
-        for batch in self._iter_eval_batches(trainer):
-            x, y, preds = self._predict(pl_module, batch)
+        for x, y, preds in payloads:
             aligned_preds = self._truncate_pred_matrices(
                 preds,
                 y,
@@ -1194,17 +1203,14 @@ class ArtifactCheckpointCallback(pl.Callback):
                 for key, value in basic.items():
                     basic_acc[key] = basic_acc.get(key, 0.0) + float(value)
 
-                cache = irrep_block_cache_by_name.get(name)
-                if cache is None:
-                    cache = (
-                        build_irrep_block_matrix_cache(
-                            pred_mat, pl_module.mapper, all_irreps
-                        ),
-                        build_irrep_block_matrix_cache(
-                            target_mat, pl_module.mapper, all_irreps
-                        ),
-                    )
-                    irrep_block_cache_by_name[name] = cache
+                cache = (
+                    build_irrep_block_matrix_cache(
+                        pred_mat, pl_module.mapper, all_irreps
+                    ),
+                    build_irrep_block_matrix_cache(
+                        target_mat, pl_module.mapper, all_irreps
+                    ),
+                )
                 pred_irrep_blocks, target_irrep_blocks = cache
 
                 per_irrep = compute_irrep_metrics(
@@ -1419,6 +1425,30 @@ class ArtifactCheckpointCallback(pl.Callback):
             "num_batches": n_batches,
         }
 
+    def _evaluate_epoch_split(self, trainer: Any, pl_module) -> dict[str, Any] | None:
+        def _payloads():
+            for batch in self._iter_eval_batches(trainer):
+                yield self._predict(pl_module, batch)
+
+        return self._evaluate_prediction_payloads(pl_module, _payloads())
+
+    @staticmethod
+    def _copy_checkpoint(source: Path, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            dir=destination.parent,
+            prefix=f"{destination.stem}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            shutil.copy2(source, tmp_path)
+            os.replace(tmp_path, destination)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
     def _build_epoch_wandb_payload(
         self,
         epoch_idx: int,
@@ -1631,17 +1661,27 @@ class ArtifactCheckpointCallback(pl.Callback):
                 payload["initial/mse_F"] = initial_eval["forces_mse"]
             _maybe_log_wandb(run, payload)
 
+    def on_validation_epoch_start(self, trainer, pl_module) -> None:
+        capture = bool(
+            not trainer.sanity_checking
+            and self.reference_batch is not None
+            and self._should_log_now(int(trainer.current_epoch), pl_module)
+        )
+        pl_module._capture_artifact_validation = capture
+        pl_module._artifact_validation_payloads = []
+
     def on_validation_epoch_end(self, trainer, pl_module) -> None:
         if trainer.sanity_checking:
             return
+        checkpoint_paths: list[Path] = []
         metric = trainer.callback_metrics.get(self.monitor)
         if metric is not None:
             score = float(metric.detach().cpu().item())
             if self.save_best and self._is_better(score):
-                trainer.save_checkpoint(str(self.best_path), weights_only=False)
                 self.state.best_score = score
                 self.state.best_epoch = int(trainer.current_epoch)
-        self._maybe_save_objective_checkpoint(
+                checkpoint_paths.append(self.best_path)
+        objective_path = self._update_objective_checkpoint_state(
             trainer,
             metric_name="val/energy_mae",
             path=self.best_energy_path,
@@ -1649,7 +1689,9 @@ class ArtifactCheckpointCallback(pl.Callback):
             epoch_attr="best_energy_epoch",
             summary_prefix="checkpoint/best_energy_mae",
         )
-        self._maybe_save_objective_checkpoint(
+        if objective_path is not None:
+            checkpoint_paths.append(objective_path)
+        objective_path = self._update_objective_checkpoint_state(
             trainer,
             metric_name="val/spectral_mae_ev",
             path=self.best_spectrum_path,
@@ -1657,16 +1699,39 @@ class ArtifactCheckpointCallback(pl.Callback):
             epoch_attr="best_spectrum_epoch",
             summary_prefix="checkpoint/best_spectrum_mae",
         )
+        if objective_path is not None:
+            checkpoint_paths.append(objective_path)
         if self.save_latest:
-            trainer.save_checkpoint(str(self.latest_path), weights_only=False)
+            checkpoint_paths.append(self.latest_path)
+        if checkpoint_paths:
+            primary_path = checkpoint_paths[0]
+            trainer.save_checkpoint(str(primary_path), weights_only=False)
+            for destination in checkpoint_paths[1:]:
+                self._copy_checkpoint(primary_path, destination)
 
         if self.reference_batch is None or not self._should_log_now(
             int(trainer.current_epoch), pl_module
         ):
+            pl_module._capture_artifact_validation = False
+            pl_module._artifact_validation_payloads = []
             return
-        eval_result = self._evaluate_epoch_split(trainer, pl_module)
+        captured_payloads = getattr(pl_module, "_artifact_validation_payloads", [])
+        if captured_payloads:
+            eval_result = self._evaluate_prediction_payloads(
+                pl_module,
+                captured_payloads,
+            )
+        else:
+            # Direct callback users and unusual trainer integrations may not invoke
+            # validation-batch hooks. Preserve correctness in that uncommon path.
+            eval_result = self._evaluate_epoch_split(trainer, pl_module)
+        pl_module._capture_artifact_validation = False
+        pl_module._artifact_validation_payloads = []
         if eval_result is None:
             return
+        self._last_eval_result = eval_result
+        self._last_eval_epoch = int(trainer.current_epoch)
+        self._last_eval_global_step = int(getattr(trainer, "global_step", 0))
         train_loss = float(
             trainer.callback_metrics.get("train/loss_total", torch.tensor(0.0))
             .detach()
@@ -1722,7 +1787,7 @@ class ArtifactCheckpointCallback(pl.Callback):
         if self.generate_video and fp is not None:
             self._save_epoch_frame(trainer, pl_module, fp["x"], fp["y"], fp["preds"])
 
-    def _maybe_save_objective_checkpoint(
+    def _update_objective_checkpoint_state(
         self,
         trainer: Any,
         *,
@@ -1731,19 +1796,18 @@ class ArtifactCheckpointCallback(pl.Callback):
         score_attr: str,
         epoch_attr: str,
         summary_prefix: str,
-    ) -> None:
+    ) -> Path | None:
         metric = trainer.callback_metrics.get(metric_name)
         if metric is None:
-            return
+            return None
         score = float(
             metric.detach().cpu().item() if torch.is_tensor(metric) else metric
         )
         if not np.isfinite(score):
-            return
+            return None
         best_score = getattr(self.state, score_attr)
         if best_score is not None and score >= float(best_score):
-            return
-        trainer.save_checkpoint(str(path), weights_only=False)
+            return None
         epoch = int(trainer.current_epoch)
         setattr(self.state, score_attr, score)
         setattr(self.state, epoch_attr, epoch)
@@ -1755,6 +1819,7 @@ class ArtifactCheckpointCallback(pl.Callback):
                 run.summary[f"{summary_prefix}_epoch"] = epoch
             except Exception:
                 pass
+        return path
 
     def _save_epoch_frame(self, trainer, pl_module, x, y, preds) -> None:
         epoch = int(trainer.current_epoch)
@@ -1783,7 +1848,11 @@ class ArtifactCheckpointCallback(pl.Callback):
 
         if self.reference_batch is None:
             return
-        eval_result = self._evaluate_epoch_split(trainer, pl_module)
+        eval_result = self._last_eval_result
+        if self._last_eval_epoch != int(
+            trainer.current_epoch
+        ) or self._last_eval_global_step != int(getattr(trainer, "global_step", 0)):
+            eval_result = self._evaluate_epoch_split(trainer, pl_module)
         if eval_result is None:
             return
         fp = eval_result["first_payload"]

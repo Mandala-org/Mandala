@@ -544,8 +544,11 @@ class E3GNN(pl.LightningModule):
                 f"Block tensors must have shape (E, D1, D2), got {tuple(preds.shape)}"
             )
 
-        per_edge_mse = torch.mean((preds - targets) ** 2, dim=(1, 2))
-        per_edge_mae = torch.mean(torch.abs(preds - targets), dim=(1, 2))
+        diff = preds - targets
+        mse_diff = diff if self.cfg.loss_l1_fraction < 1.0 else diff.detach()
+        mae_diff = diff if self.cfg.loss_l1_fraction > 0.0 else diff.detach()
+        per_edge_mse = torch.mean(torch.square(mse_diff), dim=(1, 2))
+        per_edge_mae = torch.mean(torch.abs(mae_diff), dim=(1, 2))
         if edge_weights is None:
             return per_edge_mse.mean(), per_edge_mae.mean()
 
@@ -557,8 +560,6 @@ class E3GNN(pl.LightningModule):
             )
         edge_weights = edge_weights.to(device=preds.device, dtype=preds.dtype)
         weight_sum = edge_weights.sum()
-        if not torch.isfinite(weight_sum) or float(weight_sum) <= 0.0:
-            raise ValueError("Edge weights must have a positive finite sum.")
         weighted_mse = torch.sum(edge_weights * per_edge_mse) / weight_sum
         weighted_mae = torch.sum(edge_weights * per_edge_mae) / weight_sum
         return weighted_mse, weighted_mae
@@ -601,10 +602,9 @@ class E3GNN(pl.LightningModule):
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh
 
-    def _partial_train_mask(self, edges_5d: torch.Tensor) -> torch.Tensor:
-        mask = torch.ones(edges_5d.shape[1], dtype=torch.bool, device=edges_5d.device)
+    def _partial_train_mask(self, edges_5d: torch.Tensor) -> torch.Tensor | None:
         if self.cfg.partial_train is None:
-            return mask
+            return None
 
         sx, sy, sz, i, j = edges_5d
         is_diag = (i == j) & (sx == 0) & (sy == 0) & (sz == 0)
@@ -694,11 +694,11 @@ class E3GNN(pl.LightningModule):
                     ), f"Edge mismatch in irrep-part loss for key {pair_key}, irrep {irrep_key}."
 
                 partial_mask = self._partial_train_mask(target_edges)
-                if not partial_mask.any():
-                    continue
-
-                pred_selected = pred_blocks[:target_n][partial_mask]
-                target_selected = target_blocks[:target_n][partial_mask]
+                pred_selected = pred_blocks[:target_n]
+                target_selected = target_blocks[:target_n]
+                if partial_mask is not None:
+                    pred_selected = pred_selected[partial_mask]
+                    target_selected = target_selected[partial_mask]
                 if pred_selected.shape[0] == 0:
                     continue
 
@@ -751,8 +751,9 @@ class E3GNN(pl.LightningModule):
 
     # ------------------------------------------------------------------ forward
     def forward(self, x: Dict[str, Any]):
-        # initialize activation magnitudes storage
-        self._activation_mags: dict[str, torch.Tensor] = OrderedDict()
+        self._activation_mags: dict[str, torch.Tensor] | None = (
+            OrderedDict() if self.cfg.log_activation_mag else None
+        )
 
         preds_raw = self._forward_core(x)
 
@@ -761,7 +762,7 @@ class E3GNN(pl.LightningModule):
         }
 
         # expose activation magnitudes for callbacks
-        self._last_activation_mags = self._activation_mags
+        self._last_activation_mags = self._activation_mags or {}
         return preds_wrapped
 
     # ==================== Lightning steps ====================================
@@ -773,24 +774,23 @@ class E3GNN(pl.LightningModule):
         x, y = batch
         metrics = {}
 
-        # --- forward timing (message-passing + heads) -------------------
-        t_fwd_start = time.perf_counter()
+        record_timings = bool(self.cfg.benchmark)
+        t_fwd_start = time.perf_counter() if record_timings else 0.0
         preds_irreps = self(x)
-        t_fwd_end = time.perf_counter()
+        t_fwd_end = time.perf_counter() if record_timings else 0.0
 
         # --- block mapping timing ---------------------------------------
-        t_map_start = time.perf_counter()
+        t_map_start = time.perf_counter() if record_timings else 0.0
         preds_matrix = {
             name: preds_irreps[name].to_blocks(self.mapper)
             for name in self.cfg.matrix_targets
         }
-        t_map_end = time.perf_counter()
+        t_map_end = time.perf_counter() if record_timings else 0.0
 
         # --- Matrix Loss Calculation ------------------------------------
-        matrix_mses = {}
-        matrix_maes = {}
         combined_matrix_losses = {}
         combined_pair_losses: dict[str, dict[str, torch.Tensor]] = {}
+        physical_pred_matrices: dict[str, BlockMatrix] = {}
         target_matrices: dict[str, BlockMatrix] = {
             name: (
                 y[name].to_blocks(self.mapper)
@@ -837,13 +837,26 @@ class E3GNN(pl.LightningModule):
                         pred_edges, target_edges
                     ), f"Edge mismatch in metric block loss for matrix {matrix_name}, key {key}."
                 partial_mask = self._partial_train_mask(target_edges)
-                preds = preds[partial_mask]
-                targets = targets[partial_mask]
+                if partial_mask is not None:
+                    preds = preds[partial_mask]
+                    targets = targets[partial_mask]
                 if preds.shape[0] == 0:
                     continue
-                mse_val += self._mse(preds, targets)
-                mae_val += self._mae(preds, targets)
+                diff = (preds - targets).detach()
+                mse_val += torch.mean(torch.square(diff))
+                mae_val += torch.mean(torch.abs(diff))
             return mse_val, mae_val
+
+        def _symmetrize_aligned(
+            matrix: BlockMatrix,
+            alignment: dict[str, tuple[str, torch.Tensor]] | None,
+        ) -> BlockMatrix:
+            if alignment is None:
+                raise ValueError(
+                    "Symmetrization requires precomputed reverse alignment."
+                )
+            transposed = matrix.transpose_aligned(alignment)
+            return matrix.add_aligned(transposed) * 0.5
 
         for name in self.cfg.matrix_targets:
             per_irrep_metrics: dict[str, dict[str, torch.Tensor]] = {}
@@ -861,6 +874,7 @@ class E3GNN(pl.LightningModule):
                     x=x,
                 )
             )
+            physical_pred_matrices[name] = metric_pred_matrix
             matrix_edge_weights = (
                 edge_loss_weights if name in {"hamiltonian", "overlap"} else None
             )
@@ -915,8 +929,10 @@ class E3GNN(pl.LightningModule):
                             pred_edges, target_edges
                         ), f"Edge mismatch in irrep loss for matrix {name}, key {key}."
                     partial_mask = self._partial_train_mask(target_edges)
-                    preds = preds[:target_n][partial_mask]
-                    targets = targets[partial_mask]
+                    preds = preds[:target_n]
+                    if partial_mask is not None:
+                        preds = preds[partial_mask]
+                        targets = targets[partial_mask]
                     if preds.shape[0] == 0:
                         continue
                     pair_mse = self._mse(preds, targets)
@@ -928,26 +944,47 @@ class E3GNN(pl.LightningModule):
                     ) * pair_mse + self.cfg.loss_l1_fraction * pair_mae
 
                 if stage != "train" or self.cfg.symmetrize_output:
-                    metric_pred_matrix = (
-                        metric_pred_matrix + metric_pred_matrix.transpose()
-                    ) * 0.5
+                    metric_pred_matrix = _symmetrize_aligned(
+                        metric_pred_matrix,
+                        x.get(
+                            "pred_reverse_alignment",
+                            x.get("pred_trace_alignment"),
+                        ),
+                    )
                 metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
                     metric_pred_matrix, raw_target_matrix, name
                 )
             else:
                 p = loss_pred_matrix
                 t = loss_target_matrix
+                loss_and_metric_share_prediction = metric_pred_matrix is p
 
                 should_symmetrize = self.cfg.symmetrize_output or stage != "train"
                 if should_symmetrize:
-                    p = (p + p.transpose()) * 0.5
+                    p = _symmetrize_aligned(
+                        p,
+                        x.get("pred_reverse_alignment", x.get("pred_trace_alignment")),
+                    )
                     if self._matrix_envelope_mode() == "normalize_target":
-                        t = (t + t.transpose()) * 0.5
+                        t = _symmetrize_aligned(
+                            t,
+                            x.get(
+                                "target_reverse_alignment",
+                                x.get("pred_trace_alignment"),
+                            ),
+                        )
 
                 if should_symmetrize:
-                    metric_pred_matrix = (
-                        metric_pred_matrix + metric_pred_matrix.transpose()
-                    ) * 0.5
+                    if loss_and_metric_share_prediction:
+                        metric_pred_matrix = p
+                    else:
+                        metric_pred_matrix = _symmetrize_aligned(
+                            metric_pred_matrix,
+                            x.get(
+                                "pred_reverse_alignment",
+                                x.get("pred_trace_alignment"),
+                            ),
+                        )
 
                 p_items, t_items = p.pair_blocks, t.pair_blocks
 
@@ -980,8 +1017,9 @@ class E3GNN(pl.LightningModule):
                         ), f"Edge mismatch in block loss for matrix {name}, key {key}."
 
                     partial_mask = self._partial_train_mask(target_edges)
-                    preds = preds[partial_mask]
-                    targets = targets[partial_mask]
+                    if partial_mask is not None:
+                        preds = preds[partial_mask]
+                        targets = targets[partial_mask]
                     if preds.shape[0] == 0:
                         continue
 
@@ -989,7 +1027,9 @@ class E3GNN(pl.LightningModule):
                     if matrix_edge_weights is not None:
                         selected_global_idx = x["edge_partitions"][key]["global_idx"][
                             :target_n
-                        ][partial_mask]
+                        ]
+                        if partial_mask is not None:
+                            selected_global_idx = selected_global_idx[partial_mask]
                         edge_weights_selected = matrix_edge_weights.index_select(
                             0, selected_global_idx
                         )
@@ -1007,14 +1047,20 @@ class E3GNN(pl.LightningModule):
                         + self.cfg.loss_l1_fraction * weighted_pair_mae
                     )
 
-                metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
-                    metric_pred_matrix,
-                    raw_target_matrix,
-                    name,
-                )
+                if (
+                    metric_pred_matrix is p
+                    and t is raw_target_matrix
+                    and matrix_edge_weights is None
+                ):
+                    metric_mse_val = loss_mse_val.detach()
+                    metric_mae_val = loss_mae_val.detach()
+                else:
+                    metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
+                        metric_pred_matrix,
+                        raw_target_matrix,
+                        name,
+                    )
 
-            matrix_mses[name] = metric_mse_val
-            matrix_maes[name] = metric_mae_val
             combined_pair_losses[name] = pair_losses
 
             if need_irrep_cache:
@@ -1086,16 +1132,9 @@ class E3GNN(pl.LightningModule):
             ) * mse_for_loss + self.cfg.loss_l1_fraction * mae_for_loss
 
         loss_matrix = sum(combined_matrix_losses.values())
-        if self._stop_training_on_nonfinite_loss(
-            loss_matrix,
-            stage=stage,
-            batch_idx=batch_idx,
-            phase="matrix",
-        ):
-            return None
 
         # --- Observable Evaluation --------------------------------------
-        t_obs_start = time.perf_counter()
+        t_obs_start = time.perf_counter() if record_timings else 0.0
         loss_E_weighted = torch.tensor(0.0, device=self.device)
         loss_N_weighted = torch.tensor(0.0, device=self.device)
         loss_F_weighted = torch.tensor(0.0, device=self.device)
@@ -1121,24 +1160,23 @@ class E3GNN(pl.LightningModule):
 
         E_true = y.get("energy")
         N_true = y.get("num_electrons")
-        for name, pred_matrix in preds_matrix.items():
+        for name, pred_matrix in physical_pred_matrices.items():
             target_matrix = target_matrices.get(name)
             if target_matrix is None:
                 continue
-            physical_pred_matrix = pred_matrix
-            if name in {"hamiltonian", "overlap"}:
-                mode = self._matrix_envelope_mode()
-                if mode in {"multiply_prediction", "normalize_target"}:
-                    physical_pred_matrix = scale_block_matrix_by_edge_values(
-                        pred_matrix,
-                        x["edge_envelope"],
-                        x["edge_partitions"],
-                    )
             observable_preds_matrix[name] = truncate_pred_block_matrix_to_target_prefix(
-                physical_pred_matrix,
+                pred_matrix,
                 target_matrix,
             )
+        observable_values = build_observable_predictions(
+            observable_preds_matrix,
+            trace_alignment=observable_trace_alignment,
+            H_true=H_true,
+            D_true=D_true,
+            S_true=S_true,
+        )
         observable_metric_preds_matrix = observable_preds_matrix
+        observable_metric_values = observable_values
         if bool(getattr(self.cfg, "rescale_density_to_num_electrons", False)):
             observable_metric_preds_matrix, num_electrons_pre_rescale = (
                 rescale_density_prediction_to_num_electrons(
@@ -1152,13 +1190,13 @@ class E3GNN(pl.LightningModule):
                 metrics[f"{stage}/num_electrons_mae_pre_rescale"] = torch.mean(
                     torch.abs(num_electrons_pre_rescale - N_true)
                 )
-        observable_metric_values = build_observable_predictions(
-            observable_metric_preds_matrix,
-            trace_alignment=observable_trace_alignment,
-            H_true=H_true,
-            D_true=D_true,
-            S_true=S_true,
-        )
+            observable_metric_values = build_observable_predictions(
+                observable_metric_preds_matrix,
+                trace_alignment=observable_trace_alignment,
+                H_true=H_true,
+                D_true=D_true,
+                S_true=S_true,
+            )
         add_observable_metrics(
             metrics,
             stage=stage,
@@ -1168,13 +1206,6 @@ class E3GNN(pl.LightningModule):
             num_electrons_target=N_true,
         )
         # Training losses always use the original, unscaled predictions.
-        observable_values = build_observable_predictions(
-            observable_preds_matrix,
-            trace_alignment=observable_trace_alignment,
-            H_true=H_true,
-            D_true=D_true,
-            S_true=S_true,
-        )
         loss_E_weighted, loss_N_weighted = observable_loss(
             cfg=self.cfg,
             observable_values=observable_values,
@@ -1183,7 +1214,45 @@ class E3GNN(pl.LightningModule):
             mse_fn=self._mse,
             device=self.device,
         )
+        energy_loss_active = bool(
+            self.cfg.train_on_energy
+            and float(self.cfg.loss_coef_observables) != 0.0
+            and E_true is not None
+            and (
+                (
+                    self.cfg.train_observables_on_gt
+                    and any(key.startswith("energy_gt_") for key in observable_values)
+                )
+                or (
+                    not self.cfg.train_observables_on_gt
+                    and "energy" in observable_values
+                )
+            )
+        )
+        num_electrons_loss_active = bool(
+            self.cfg.train_on_num_electrons
+            and float(self.cfg.loss_coef_observables) != 0.0
+            and N_true is not None
+            and (
+                (
+                    self.cfg.train_observables_on_gt
+                    and any(
+                        key.startswith("num_electrons_gt_") for key in observable_values
+                    )
+                )
+                or (
+                    not self.cfg.train_observables_on_gt
+                    and "num_electrons" in observable_values
+                )
+            )
+        )
 
+        force_loss_active = bool(
+            self.cfg.enable_forces
+            and self.cfg.train_on_forces
+            and float(self.cfg.loss_coef_forces) != 0.0
+            and y.get("forces") is not None
+        )
         if self.cfg.enable_forces and y.get("forces") is not None:
             forces_pred = self.get_forces(preds_irreps, x["positions"], x["box"])
             forces_true = y["forces"]
@@ -1223,8 +1292,9 @@ class E3GNN(pl.LightningModule):
                 for key, value in irrep_metrics.items():
                     metrics[f"{stage}/{name}_irrep_{key}"] = value
 
-        t_obs_end = time.perf_counter()
+        t_obs_end = time.perf_counter() if record_timings else 0.0
 
+        spectral_loss_active = False
         if (
             self._spectral_loss_enabled()
             and "hamiltonian" in observable_preds_matrix
@@ -1238,6 +1308,7 @@ class E3GNN(pl.LightningModule):
                 loss_spectral_weighted = (
                     float(self.cfg.spectral_loss_coef) * spectral_loss
                 )
+                spectral_loss_active = float(self.cfg.spectral_loss_coef) != 0.0
             metrics[f"{stage}/loss_spectral"] = spectral_loss
             metrics[f"{stage}/loss_spectral_weighted"] = loss_spectral_weighted
             metrics[f"{stage}/spectral_mae_ev"] = spectral_stats["spectral_mae_ev"]
@@ -1277,20 +1348,20 @@ class E3GNN(pl.LightningModule):
         metrics[f"{stage}/loss_matrix_total"] = loss_matrix
         metrics[f"{stage}/loss_block_total"] = loss_matrix
 
-        if loss_E_weighted > 0:
+        if energy_loss_active:
             metrics[f"{stage}/loss_energy"] = loss_E_weighted / float(
                 self.cfg.loss_coef_observables
             )
             metrics[f"{stage}/loss_energy_weighted"] = loss_E_weighted
-        if loss_N_weighted > 0:
+        if num_electrons_loss_active:
             metrics[f"{stage}/loss_num_electrons"] = loss_N_weighted / float(
                 self.cfg.loss_coef_observables
             )
             metrics[f"{stage}/loss_num_electrons_weighted"] = loss_N_weighted
-        if loss_F_weighted > 0:
+        if force_loss_active:
             metrics[f"{stage}/loss_forces"] = loss_F_weighted
             metrics[f"{stage}/loss_forces_weighted"] = loss_F_weighted
-        if loss_spectral_weighted > 0:
+        if spectral_loss_active:
             metrics[f"{stage}/loss_spectral_total"] = loss_spectral_weighted
 
         for name, loss_val in combined_matrix_losses.items():
@@ -1321,23 +1392,24 @@ class E3GNN(pl.LightningModule):
                         abs_sum / denom
                     ) * HARTREE_TO_EV
 
-        if stage == "train" and loss > 1e-12:
+        if stage == "train":
+            fraction_denom = loss.clamp_min(1e-12)
             for name, val in combined_matrix_losses.items():
-                metrics[f"frac/loss_{name}"] = val / loss
+                metrics[f"frac/loss_{name}"] = val / fraction_denom
             if self.cfg.log_per_pair_loss_metrics:
                 for matrix_name, pair_losses in combined_pair_losses.items():
                     for pair_key, pair_loss in pair_losses.items():
                         metrics[f"frac/loss_{matrix_name}_{pair_key}"] = (
-                            pair_loss / loss
+                            pair_loss / fraction_denom
                         )
-            if loss_E_weighted > 0:
-                metrics["frac/loss_energy"] = loss_E_weighted / loss
-            if loss_N_weighted > 0:
-                metrics["frac/loss_num_electrons"] = loss_N_weighted / loss
-            if loss_F_weighted > 0:
-                metrics["frac/loss_forces"] = loss_F_weighted / loss
-            if loss_spectral_weighted > 0:
-                metrics["frac/loss_spectral"] = loss_spectral_weighted / loss
+            if energy_loss_active:
+                metrics["frac/loss_energy"] = loss_E_weighted / fraction_denom
+            if num_electrons_loss_active:
+                metrics["frac/loss_num_electrons"] = loss_N_weighted / fraction_denom
+            if force_loss_active:
+                metrics["frac/loss_forces"] = loss_F_weighted / fraction_denom
+            if spectral_loss_active:
+                metrics["frac/loss_spectral"] = loss_spectral_weighted / fraction_denom
 
         self.log_dict(
             metrics,
@@ -1348,11 +1420,16 @@ class E3GNN(pl.LightningModule):
         )
 
         # record per-batch timings for callback
-        self._last_batch_times = {
-            "forward": t_fwd_end - t_fwd_start,
-            "map": t_map_end - t_map_start,
-            "obs": t_obs_end - t_obs_start,
-        }
+        if record_timings:
+            self._last_batch_times = {
+                "forward": t_fwd_end - t_fwd_start,
+                "map": t_map_end - t_map_start,
+                "obs": t_obs_end - t_obs_start,
+            }
+        if stage == "val" and bool(
+            getattr(self, "_capture_artifact_validation", False)
+        ):
+            self._artifact_validation_payloads.append((x, y, preds_irreps))
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -1368,6 +1445,7 @@ class E3GNN(pl.LightningModule):
         """Log learning rate at the beginning of each training epoch."""
         if self.trainer.sanity_checking:
             return
+        self._grad_norm_logged_this_epoch = False
         # Get the first optimizer
         optimizer = self.optimizers()
         if not isinstance(optimizer, list):
@@ -1377,6 +1455,10 @@ class E3GNN(pl.LightningModule):
         self.log("lr", lr, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_before_optimizer_step(self, optimizer) -> None:
+        if not bool(getattr(self.cfg, "log_grad_norm", False)):
+            return
+        if bool(getattr(self, "_grad_norm_logged_this_epoch", False)):
+            return
         total_norm_sq = torch.tensor(0.0, device=self.device)
         saw_grad = False
         for param in self.parameters():
@@ -1386,6 +1468,7 @@ class E3GNN(pl.LightningModule):
             total_norm_sq = total_norm_sq + torch.sum(grad * grad)
             saw_grad = True
         if saw_grad:
+            self._grad_norm_logged_this_epoch = True
             self.log(
                 "grad_norm",
                 torch.sqrt(total_norm_sq),

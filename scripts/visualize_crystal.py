@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 from collections import defaultdict
 from pathlib import Path
+import shutil
+import subprocess
 
 import numpy as np
 import plotly.graph_objects as go
@@ -251,9 +253,31 @@ def main() -> None:
                 args.output_png, width=args.width, height=args.height, scale=2
             )
         except Exception as exc:
-            raise RuntimeError(
-                "PNG export requires Plotly's Kaleido package; the HTML output was written."
-            ) from exc
+            chrome = shutil.which("google-chrome") or shutil.which("chromium")
+            if chrome is None:
+                raise RuntimeError(
+                    "PNG export requires Plotly's Kaleido package or a Chrome/Chromium "
+                    "executable; the HTML output was written."
+                ) from exc
+            command = [
+                chrome,
+                "--headless=new",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--hide-scrollbars",
+                "--enable-webgl",
+                "--use-angle=swiftshader",
+                "--virtual-time-budget=5000",
+                f"--window-size={args.width},{args.height}",
+                f"--screenshot={args.output_png.resolve()}",
+                args.output_html.resolve().as_uri(),
+            ]
+            completed = subprocess.run(command, capture_output=True, text=True)
+            if completed.returncode != 0 or not args.output_png.is_file():
+                raise RuntimeError(
+                    "Both Kaleido and the headless Chrome PNG fallback failed. "
+                    f"Chrome stderr: {completed.stderr.strip()}"
+                ) from exc
 
 
 if __name__ == "__main__":

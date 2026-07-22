@@ -204,6 +204,7 @@ class Config:
     log_hamiltonian_irrep_contrib_metrics: bool = True
     log_hamiltonian_pair_contrib_metrics: bool = True
     log_activation_mag: bool = False
+    log_grad_norm: bool = False
     wandb_project: str | None = None
     log_every_n_steps: int = 1
     log_on_step: bool = False  # log metrics on step, not just epoch
@@ -661,6 +662,38 @@ class SeparateWeightTensorProduct(nn.Module):
         self.weights1 = nn.ParameterList(weights1)
         self.weights2 = nn.ParameterList(weights2)
 
+        # Paths use only a small number of multiplicity-shape combinations. Group
+        # equal shapes so the outer products are formed by a handful of batched
+        # kernels rather than one CUDA kernel per tensor-product instruction.
+        groups: dict[tuple[tuple[int, ...], tuple[int, ...]], list[int]] = {}
+        for idx, (weight1, weight2) in enumerate(zip(weights1, weights2)):
+            groups.setdefault((tuple(weight1.shape), tuple(weight2.shape)), []).append(
+                idx
+            )
+        self._weight_shape_groups = tuple(tuple(indices) for indices in groups.values())
+
+        grouped_offsets: dict[int, tuple[int, int]] = {}
+        grouped_size = 0
+        for indices in self._weight_shape_groups:
+            path_size = weights1[indices[0]].numel() // weights1[indices[0]].shape[0]
+            path_size *= weights1[indices[0]].shape[0] * weights2[indices[0]].shape[0]
+            for group_pos, path_idx in enumerate(indices):
+                grouped_offsets[path_idx] = (
+                    grouped_size + group_pos * path_size,
+                    path_size,
+                )
+            grouped_size += len(indices) * path_size
+
+        original_order = []
+        for path_idx in range(len(weights1)):
+            start, length = grouped_offsets[path_idx]
+            original_order.extend(range(start, start + length))
+        self.register_buffer(
+            "_weight_original_order",
+            torch.tensor(original_order, dtype=torch.long),
+            persistent=False,
+        )
+
     def forward(self, x1, x2):
         """
         Compute tensor product with separate weights.
@@ -677,10 +710,14 @@ class SeparateWeightTensorProduct(nn.Module):
             batch_size = x1.shape[0]
             return torch.zeros(batch_size, 0, dtype=x1.dtype, device=x1.device)
 
-        weights = []
-        for weight1, weight2 in zip(self.weights1, self.weights2):
-            # Outer product of weights: (mul1, mul_out) (x) (mul2, mul_out)
-            weight = weight1[:, None, :] * weight2[None, :, :]
-            weights.append(weight.view(-1))
-        weights = torch.cat(weights)
+        grouped_weights = []
+        for indices in self._weight_shape_groups:
+            weight1 = torch.stack([self.weights1[idx] for idx in indices], dim=0)
+            weight2 = torch.stack([self.weights2[idx] for idx in indices], dim=0)
+            # (paths,mul1,mul_out) x (paths,mul2,mul_out)
+            weight = weight1[:, :, None, :] * weight2[:, None, :, :]
+            grouped_weights.append(weight.reshape(-1))
+        weights = torch.cat(grouped_weights).index_select(
+            0, self._weight_original_order
+        )
         return self.tp(x1, x2, weights)

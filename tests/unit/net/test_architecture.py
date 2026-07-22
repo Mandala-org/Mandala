@@ -68,6 +68,40 @@ def test_separate_weight_tp_forward():
 
 
 @pytest.mark.unit
+def test_separate_weight_tp_grouped_weights_match_pathwise_output_and_gradients():
+    torch.manual_seed(7)
+    tp = SeparateWeightTensorProduct(
+        Irreps("3x0e + 2x1o + 3x2e"),
+        Irreps("1x0e + 1x1o + 1x2e"),
+        Irreps("3x0e + 2x1o + 3x2e"),
+    ).double()
+    x1 = tp.tp.irreps_in1.randn(4, -1, dtype=torch.float64).requires_grad_(True)
+    x2 = tp.tp.irreps_in2.randn(4, -1, dtype=torch.float64).requires_grad_(True)
+    parameters = [*tp.weights1, *tp.weights2]
+
+    actual = tp(x1, x2)
+    actual_grads = torch.autograd.grad(actual.square().sum(), [x1, x2, *parameters])
+
+    ref_x1 = x1.detach().clone().requires_grad_(True)
+    ref_x2 = x2.detach().clone().requires_grad_(True)
+    pathwise_weights = torch.cat(
+        [
+            (weight1[:, None, :] * weight2[None, :, :]).reshape(-1)
+            for weight1, weight2 in zip(tp.weights1, tp.weights2)
+        ]
+    )
+    expected = tp.tp(ref_x1, ref_x2, pathwise_weights)
+    expected_grads = torch.autograd.grad(
+        expected.square().sum(),
+        [ref_x1, ref_x2, *parameters],
+    )
+
+    assert torch.allclose(actual, expected, atol=1e-12, rtol=1e-12)
+    for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+        assert torch.allclose(actual_grad, expected_grad, atol=1e-11, rtol=1e-11)
+
+
+@pytest.mark.unit
 def test_separate_weight_tp_equivariance():
     """Test that SeparateWeightTensorProduct is equivariant."""
     irreps_in1 = Irreps("8x0e + 4x1o")
@@ -156,6 +190,50 @@ def test_equiconv_forward():
     out = conv(fea_in1, fea_in2, edge_length_emb)
 
     assert out.shape == (batch_size, conv.irreps_out.dim)
+
+
+@pytest.mark.unit
+def test_equiconv_vectorized_radial_scaling_matches_pathwise_output_and_gradients():
+    torch.manual_seed(11)
+    cfg = Config(tp_type="separate_weight", n_radial=8, radial_layers=(12,))
+    conv = EquiConv(
+        n_radial=cfg.n_radial,
+        irreps_in1=Irreps("4x0e + 2x1e"),
+        irreps_in2=Irreps("1x0e + 1x1o"),
+        irreps_out=Irreps("4x0e + 2x1o"),
+        cfg=cfg,
+        nonlin=False,
+    ).double()
+    x1 = conv.tp.tp.irreps_in1.randn(5, -1, dtype=torch.float64).requires_grad_(True)
+    x2 = conv.tp.tp.irreps_in2.randn(5, -1, dtype=torch.float64).requires_grad_(True)
+    radial = torch.randn(5, cfg.n_radial, dtype=torch.float64, requires_grad=True)
+    parameters = list(conv.parameters())
+
+    actual = conv(x1, x2, radial)
+    actual_grads = torch.autograd.grad(
+        actual.square().sum(), [x1, x2, radial, *parameters]
+    )
+
+    ref_x1 = x1.detach().clone().requires_grad_(True)
+    ref_x2 = x2.detach().clone().requires_grad_(True)
+    ref_radial = radial.detach().clone().requires_grad_(True)
+    z = conv.tp(ref_x1, ref_x2)
+    weights = conv.radial_mlp(ref_radial)
+    chunks = []
+    start = 0
+    for idx, (mul, irrep) in enumerate(conv.irreps_out):
+        width = mul * irrep.dim
+        chunks.append(z[:, start : start + width] * weights[:, idx : idx + 1])
+        start += width
+    expected = torch.cat(chunks, dim=-1)
+    expected_grads = torch.autograd.grad(
+        expected.square().sum(),
+        [ref_x1, ref_x2, ref_radial, *parameters],
+    )
+
+    assert torch.allclose(actual, expected, atol=1e-12, rtol=1e-12)
+    for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+        assert torch.allclose(actual_grad, expected_grad, atol=1e-11, rtol=1e-11)
 
 
 @pytest.mark.unit

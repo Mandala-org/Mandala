@@ -52,6 +52,33 @@ def test_load_preprocessed_sample_reports_and_deletes_bad_cache(
 
 
 @pytest.mark.unit
+def test_preprocessed_cache_hit_bypasses_raw_snapshot_loading(monkeypatch, tmp_path):
+    ds = object.__new__(E3GNNDataset)
+    ds.preprocessed_cache_hits = 0
+    matrix_path = tmp_path / "HS.out"
+    info_path = tmp_path / "sample.out"
+    cache_path = tmp_path / "sample.pt"
+    cache_path.write_bytes(b"cached")
+    expected = ({"cached": True}, {"target": True})
+
+    monkeypatch.setattr(
+        E3GNNDataset,
+        "_preprocessed_sample_cache_file",
+        lambda self, matrix, info: cache_path,
+    )
+    monkeypatch.setattr(
+        E3GNNDataset,
+        "_load_preprocessed_sample",
+        lambda self, path: expected,
+    )
+
+    result = ds._load_preprocessed_sample_if_available(matrix_path, info_path)
+
+    assert result is expected
+    assert ds.preprocessed_cache_hits == 1
+
+
+@pytest.mark.unit
 def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
     monkeypatch,
 ):
@@ -100,12 +127,18 @@ def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
         call_order.append(matrix_path.name)
         return object()
 
-    def fake_load_or_build(self, matrix_path, info_path, snapshot):
+    def fake_load_cached(self, matrix_path, info_path):
+        return None
+
+    def fake_build_and_cache(self, matrix_path, info_path, snapshot):
         return ({"matrix": matrix_path.name}, {"info": info_path.name})
 
     monkeypatch.setattr(E3GNNDataset, "_load_snapshot", fake_load_snapshot)
     monkeypatch.setattr(
-        E3GNNDataset, "_load_or_build_preprocessed_sample", fake_load_or_build
+        E3GNNDataset, "_load_preprocessed_sample_if_available", fake_load_cached
+    )
+    monkeypatch.setattr(
+        E3GNNDataset, "_build_and_cache_preprocessed_sample", fake_build_and_cache
     )
 
     E3GNNDataset.__init__(ds, ds.snapshot_paths, mapper, cfg, "e3nn")

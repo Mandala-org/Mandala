@@ -248,6 +248,40 @@ def test_partial_train_mask(partial_train, separate_shifted_self, expected):
 
 
 @pytest.mark.unit
+def test_partial_train_mask_is_none_when_filtering_is_disabled():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    model = E3GNN(
+        BlockIrrepMapper(orb_cfg),
+        Config(num_layers_gnn=1, partial_train=None, verbosity=0),
+    )
+    edges_5d = torch.zeros(5, 3, dtype=torch.long)
+
+    assert model._partial_train_mask(edges_5d) is None
+
+
+@pytest.mark.unit
+def test_grad_norm_logging_is_disabled_by_default_and_runs_once_per_epoch():
+    orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    model = E3GNN(
+        BlockIrrepMapper(orb_cfg),
+        Config(num_layers_gnn=1, log_grad_norm=False, verbosity=0),
+    )
+    parameter = next(model.parameters())
+    parameter.grad = torch.ones_like(parameter)
+    logged = []
+    model.log = lambda key, value, **kwargs: logged.append((key, value))
+
+    model.on_before_optimizer_step(object())
+    assert logged == []
+
+    model.cfg.log_grad_norm = True
+    model._grad_norm_logged_this_epoch = False
+    model.on_before_optimizer_step(object())
+    model.on_before_optimizer_step(object())
+    assert [key for key, _ in logged] == ["grad_norm"]
+
+
+@pytest.mark.unit
 def test_irrep_part_loss_zero_on_matching_target():
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e + 1x1o"})
     mapper = BlockIrrepMapper(orb_cfg)

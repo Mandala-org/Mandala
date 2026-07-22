@@ -171,9 +171,10 @@ def test_build_callbacks_adds_revert_on_spike(monkeypatch, tmp_path):
 
     assert callbacks[0] == "progress"
     assert callbacks[1] == "bookkeeping"
-    assert callbacks[2][0] == "artifact"
-    assert callbacks[3][0] == "revert"
-    assert callbacks[3][1]["monitor"] == cfg.lr_scheduler_target
+    assert callbacks[2][0] == "revert"
+    assert callbacks[3][0] == "artifact"
+    assert callbacks[2][1]["monitor"] == cfg.lr_scheduler_target
+    assert callbacks[2][1]["save_best_checkpoint"] is False
 
 
 def test_build_callbacks_adds_wall_clock_budget(monkeypatch, tmp_path):

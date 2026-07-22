@@ -807,25 +807,31 @@ def _build_callbacks(
         )
     callbacks.append(_build_progress_bar())
     callbacks.append(RunBookkeepingCallback())
+    artifact_callback = None
     if getattr(args, "log_artifacts", True):
-        callbacks.append(
-            ArtifactCheckpointCallback(
-                output_dir=run_dir,
-                monitor=cfg.checkpoint_monitor,
-                generate_video=getattr(args, "generate_video", True),
-                log_per_irrep_images=cfg.log_per_irrep_images,
-            )
+        artifact_callback = ArtifactCheckpointCallback(
+            output_dir=run_dir,
+            monitor=cfg.checkpoint_monitor,
+            generate_video=getattr(args, "generate_video", True),
+            log_per_irrep_images=cfg.log_per_irrep_images,
         )
     if cfg.revert_on_spike:
+        revert_monitor = cfg.revert_monitor or cfg.lr_scheduler_target
         callbacks.append(
             RevertOnSpikeCallback(
                 output_dir=run_dir,
-                monitor=cfg.revert_monitor or cfg.lr_scheduler_target,
+                monitor=revert_monitor,
                 patience=cfg.revert_decay_patience,
                 decay_rate=cfg.revert_decay_rate,
                 spike_factor=cfg.revert_spike_factor,
+                save_best_checkpoint=not (
+                    artifact_callback is not None
+                    and revert_monitor == cfg.checkpoint_monitor
+                ),
             )
         )
+    if artifact_callback is not None:
+        callbacks.append(artifact_callback)
     if cfg.max_wall_clock_seconds is not None:
         callbacks.append(
             WallClockBudgetCallback(budget_seconds=cfg.max_wall_clock_seconds)

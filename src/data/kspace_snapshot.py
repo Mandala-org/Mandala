@@ -136,6 +136,20 @@ def _generalized_eigenvalues_kspace(
     allow_jitter: bool = False,
 ) -> torch.Tensor:
     H = 0.5 * (hamiltonian_k + hamiltonian_k.transpose(-1, -2).conj())
+    L = _prepare_overlap_cholesky_kspace(
+        overlap_k,
+        psd_cleanup=psd_cleanup,
+        allow_jitter=allow_jitter,
+    )
+    return _generalized_eigenvalues_from_cholesky(H, L)
+
+
+def _prepare_overlap_cholesky_kspace(
+    overlap_k: torch.Tensor | None,
+    *,
+    psd_cleanup: bool = False,
+    allow_jitter: bool = False,
+) -> torch.Tensor:
     if overlap_k is None:
         raise ValueError(
             "Band-structure eigensolve requires an overlap matrix; "
@@ -180,14 +194,7 @@ def _generalized_eigenvalues_kspace(
             if jitter > 0.0:
                 print(f"[OVERLAP] k-space retrying Cholesky with jitter={jitter:.1e}")
             L = torch.linalg.cholesky(S_reg)
-            tmp = torch.linalg.solve(L, H)
-            A = (
-                torch.linalg.solve(L, tmp.transpose(-1, -2).conj())
-                .transpose(-1, -2)
-                .conj()
-            )
-            A = 0.5 * (A + A.transpose(-1, -2).conj())
-            return torch.linalg.eigvalsh(A)
+            return L
         except torch.linalg.LinAlgError:
             print(f"[OVERLAP] k-space Cholesky failed at jitter={jitter:.1e}")
             continue
@@ -196,6 +203,29 @@ def _generalized_eigenvalues_kspace(
         "k-space generalized eigensolve failed: overlap Cholesky did not succeed"
         + (" even after jitter retries." if allow_jitter else ".")
     )
+
+
+def _generalized_eigenvalues_from_cholesky(
+    hamiltonian_k: torch.Tensor,
+    overlap_cholesky: torch.Tensor,
+) -> torch.Tensor:
+    H = 0.5 * (hamiltonian_k + hamiltonian_k.transpose(-1, -2).conj())
+    tmp = torch.linalg.solve_triangular(
+        overlap_cholesky,
+        H,
+        upper=False,
+    )
+    A = (
+        torch.linalg.solve_triangular(
+            overlap_cholesky,
+            tmp.transpose(-1, -2).conj(),
+            upper=False,
+        )
+        .transpose(-1, -2)
+        .conj()
+    )
+    A = 0.5 * (A + A.transpose(-1, -2).conj())
+    return torch.linalg.eigvalsh(A)
 
 
 def block_matrix_to_shiftspace_dense(
@@ -226,6 +256,79 @@ def block_matrix_to_shiftspace_dense(
             r0 = int(offsets[i])
             c0 = int(offsets[j])
             out[s_idx, r0 : r0 + di, c0 : c0 + dj] = blocks[idx]
+    return out
+
+
+def build_shiftspace_scatter_metadata(
+    mat: BlockMatrix,
+    *,
+    shifts: torch.Tensor,
+) -> tuple[dict[str, tuple[torch.Tensor, torch.Tensor]], tuple[int, int, int]]:
+    """Precompute flat source/destination indices for dense shift-space assembly."""
+    total_dim = sum(mat.orbital_cfg.block_dims(f"{el}-{el}")[0] for el in mat.atoms)
+    device = next(iter(mat.pair_blocks.values())).device
+    offsets = _global_offsets(mat.atoms, mat.orbital_cfg, device=device)
+    shift_to_idx = {
+        tuple(map(int, shift.tolist())): idx for idx, shift in enumerate(shifts)
+    }
+    metadata: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+
+    for key, edges in mat.pair_edges.items():
+        blocks = mat.pair_blocks[key]
+        block_rows, block_cols = blocks.shape[1:]
+        source_parts: list[torch.Tensor] = []
+        destination_parts: list[torch.Tensor] = []
+        block_offsets = torch.arange(
+            block_rows * block_cols,
+            dtype=torch.long,
+            device=device,
+        )
+        row_offsets = torch.arange(block_rows, device=device)[:, None] * total_dim
+        col_offsets = torch.arange(block_cols, device=device)[None, :]
+        block_dense_offsets = (row_offsets + col_offsets).reshape(-1)
+        for block_idx, edge in enumerate(edges.t().tolist()):
+            sx, sy, sz, atom_i, atom_j = edge
+            shift_idx = shift_to_idx.get((int(sx), int(sy), int(sz)))
+            if shift_idx is None:
+                continue
+            source_parts.append(block_offsets + block_idx * block_rows * block_cols)
+            dense_start = (
+                shift_idx * total_dim * total_dim
+                + int(offsets[atom_i]) * total_dim
+                + int(offsets[atom_j])
+            )
+            destination_parts.append(block_dense_offsets + dense_start)
+        if source_parts:
+            source_idx = torch.cat(source_parts)
+            destination_idx = torch.cat(destination_parts)
+            if torch.unique(destination_idx).numel() != destination_idx.numel():
+                raise ValueError(
+                    f"Duplicate dense spectral destinations found for pair key {key!r}."
+                )
+            metadata[key] = (source_idx, destination_idx)
+
+    return metadata, (int(shifts.shape[0]), total_dim, total_dim)
+
+
+def block_matrix_to_shiftspace_dense_aligned(
+    mat: BlockMatrix,
+    *,
+    scatter_metadata: dict[str, tuple[torch.Tensor, torch.Tensor]],
+    dense_shape: tuple[int, int, int],
+) -> torch.Tensor:
+    """Assemble a dense shift-space tensor with precomputed placement indices."""
+    first_blocks = next(iter(mat.pair_blocks.values()))
+    out = torch.zeros(
+        dense_shape,
+        dtype=first_blocks.dtype,
+        device=first_blocks.device,
+    )
+    out_flat = out.reshape(-1)
+    for key, (source_idx, destination_idx) in scatter_metadata.items():
+        if key not in mat.pair_blocks:
+            raise ValueError(f"Missing predicted pair blocks for spectral key {key!r}.")
+        values = mat.pair_blocks[key].reshape(-1).index_select(0, source_idx)
+        out_flat.index_copy_(0, destination_idx, values)
     return out
 
 

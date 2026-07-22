@@ -25,7 +25,7 @@ from typing import Dict, List, Sequence, Tuple
 
 import torch
 import torch.nn.functional as F
-import time  # needed for __getitem__ timing
+import time
 from torch.utils.data import Dataset
 from e3nn.o3 import Irreps
 
@@ -56,7 +56,7 @@ from tqdm.auto import tqdm
 
 
 SNAPSHOT_CACHE_VERSION = "v3"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v5"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v6"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
@@ -225,6 +225,7 @@ class E3GNNDataset(Dataset):
         self.snapshot_cache_misses = 0
         self.preprocessed_cache_hits = 0
         self.preprocessed_cache_misses = 0
+        self.loader_times: list[float] | None = None
         self.skipped_snapshot_paths: list[tuple[Path, Path, str]] = []
         load_indices = list(range(len(self.snapshot_paths)))
         if getattr(self.cfg, "shuffle_snapshot_load_order", True):
@@ -241,10 +242,17 @@ class E3GNNDataset(Dataset):
         for idx in tqdm(load_indices, desc="Loading snapshots"):
             matrix_path, info_path = self.snapshot_paths[idx]
             try:
-                snapshot = self._load_snapshot(matrix_path, info_path)
-                sample = self._load_or_build_preprocessed_sample(
-                    matrix_path, info_path, snapshot
+                sample = self._load_preprocessed_sample_if_available(
+                    matrix_path,
+                    info_path,
                 )
+                if sample is None:
+                    snapshot = self._load_snapshot(matrix_path, info_path)
+                    sample = self._build_and_cache_preprocessed_sample(
+                        matrix_path,
+                        info_path,
+                        snapshot,
+                    )
             except Exception as exc:
                 if not bool(getattr(self.cfg, "allow_incomplete_dataset", False)):
                     raise RuntimeError(
@@ -466,19 +474,27 @@ class E3GNNDataset(Dataset):
             if tmp_path.exists():
                 tmp_path.unlink()
 
-    def _load_or_build_preprocessed_sample(
+    def _load_preprocessed_sample_if_available(
+        self,
+        matrix_path: Path,
+        info_path: Path,
+    ) -> tuple[dict, dict] | None:
+        cache_file = self._preprocessed_sample_cache_file(matrix_path, info_path)
+        if cache_file is None or not cache_file.exists():
+            return None
+        cached = self._load_preprocessed_sample(cache_file)
+        if cached is None:
+            return None
+        self.preprocessed_cache_hits += 1
+        return cached
+
+    def _build_and_cache_preprocessed_sample(
         self,
         matrix_path: Path,
         info_path: Path,
         snapshot: Snapshot,
     ) -> tuple[dict, dict]:
         cache_file = self._preprocessed_sample_cache_file(matrix_path, info_path)
-        if cache_file is not None and cache_file.exists():
-            cached = self._load_preprocessed_sample(cache_file)
-            if cached is not None:
-                self.preprocessed_cache_hits += 1
-                return cached
-
         self.preprocessed_cache_misses += 1
         sample = self._process_snapshot_to_sample(
             snapshot,
@@ -824,13 +840,11 @@ class E3GNNDataset(Dataset):
     ) -> Tuple[
         Dict[str, torch.Tensor], Dict[str, torch.Tensor], Dict[str, torch.Tensor]
     ]:
+        if self.loader_times is None:
+            return self.snapshots[idx]
         t0 = time.perf_counter()
         snapshot = self.snapshots[idx]
-        t1 = time.perf_counter()
-        try:
-            self.loader_times.append(t1 - t0)
-        except Exception:
-            pass
+        self.loader_times.append(time.perf_counter() - t0)
         return snapshot
 
     def to(self, device: torch.device | str) -> E3GNNDataset:
@@ -874,11 +888,17 @@ class E3GNNDataset(Dataset):
                 x["pred_pair_edges_static"] = {
                     k: v.to(device) for k, v in x["pred_pair_edges_static"].items()
                 }
-            if "pred_trace_alignment" in x:
-                x["pred_trace_alignment"] = {
-                    k: (rev_key, idx.to(device))
-                    for k, (rev_key, idx) in x["pred_trace_alignment"].items()
-                }
+            for alignment_key in (
+                "pred_trace_alignment",
+                "pred_reverse_alignment",
+                "target_reverse_alignment",
+            ):
+                alignment = x.get(alignment_key)
+                if alignment is not None:
+                    x[alignment_key] = {
+                        k: (rev_key, idx.to(device))
+                        for k, (rev_key, idx) in alignment.items()
+                    }
             if "edge_partitions" in x:
                 x["edge_partitions"] = {
                     key: {name: value.to(device) for name, value in parts.items()}
@@ -888,12 +908,22 @@ class E3GNNDataset(Dataset):
                 "spectral_kpoints_abs",
                 "spectral_shifts",
                 "spectral_gt_overlap_k",
+                "spectral_gt_overlap_cholesky",
+                "spectral_phase",
                 "spectral_gt_eigs_ev",
                 "spectral_gt_fermi_ev",
                 "spectral_window_weights",
+                "spectral_weight_sum",
             ):
                 if key in x:
                     x[key] = x[key].to(device)
+            if "spectral_scatter_metadata" in x:
+                x["spectral_scatter_metadata"] = {
+                    key: (source.to(device), destination.to(device))
+                    for key, (source, destination) in x[
+                        "spectral_scatter_metadata"
+                    ].items()
+                }
 
             # Matrix containers are infrastructure-required, while observables
             # may legitimately be unavailable (for example Hamiltonian-only
