@@ -132,6 +132,26 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument(
+        "--num-shards",
+        type=int,
+        default=1,
+        help="Split the deterministic snapshot list across independent jobs.",
+    )
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=0,
+        help="Zero-based shard handled by this process.",
+    )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help=(
+            "Skip published snapshot directories. Individual snapshots are "
+            "published only after conversion and validation."
+        ),
+    )
+    parser.add_argument(
         "--include-overlap",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -150,6 +170,10 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.num_workers < 1:
         parser.error("--num-workers must be positive")
+    if args.num_shards < 1:
+        parser.error("--num-shards must be positive")
+    if not 0 <= args.shard_index < args.num_shards:
+        parser.error("--shard-index must satisfy 0 <= index < num_shards")
     if args.dataset_kind != "zncusnses" and args.scales:
         parser.error("--scales is only valid with --dataset-kind zncusnses")
     return args
@@ -158,19 +182,35 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     tasks, single_snapshot = _discover_tasks(args)
+    if single_snapshot and args.num_shards != 1:
+        raise ValueError("A single snapshot cannot be split across multiple shards")
+    total_discovered = len(tasks)
+    tasks = tasks[args.shard_index :: args.num_shards]
+    if not tasks:
+        raise ValueError(
+            f"Shard {args.shard_index}/{args.num_shards} contains no snapshots "
+            f"from a dataset of size {total_discovered}"
+        )
     existing = [task.output_dir for task in tasks if task.output_dir.exists()]
-    if existing:
+    if existing and not args.skip_existing:
         examples = "\n".join(f"  {path}" for path in existing[:10])
         raise FileExistsError(
             f"Refusing to overwrite {len(existing)} existing output snapshot(s):\n"
             f"{examples}"
         )
+    if args.skip_existing:
+        existing_set = set(existing)
+        tasks = [task for task in tasks if task.output_dir not in existing_set]
 
     print("=== OpenMX -> DeepH-E3 conversion ===", flush=True)
     print(f"input_dir: {args.input_dir.expanduser().resolve()}")
     print(f"output_dir: {args.output_dir.expanduser().resolve()}")
     print(f"dataset_kind: {args.dataset_kind}")
-    print(f"snapshots: {len(tasks)}")
+    print(f"discovered snapshots: {total_discovered}")
+    print(f"shard: {args.shard_index}/{args.num_shards}")
+    print(f"snapshots assigned to shard: {len(tasks) + len(existing)}")
+    print(f"existing snapshots skipped: {len(existing)}")
+    print(f"snapshots to convert: {len(tasks)}")
     print(f"workers: {args.num_workers}")
     print(f"include_overlap: {args.include_overlap}")
     print(f"include_density: {args.include_density}")
@@ -219,23 +259,36 @@ def main() -> None:
         "format": "deeph_e3_processed",
         "source_root": str(args.input_dir.expanduser().resolve()),
         "dataset_kind": args.dataset_kind,
+        "num_shards": args.num_shards,
+        "shard_index": args.shard_index,
+        "total_discovered_snapshots": total_discovered,
+        "existing_snapshots_skipped": len(existing),
         "include_overlap": args.include_overlap,
         "include_density": args.include_density,
         "strict_validation": args.validate,
         "snapshots": [summary.to_dict() for summary in summaries],
     }
-    manifest_path = (
-        args.output_dir.with_name(args.output_dir.name + "_conversion_manifest.json")
-        if single_snapshot
-        else args.output_dir / "conversion_manifest.json"
-    )
+    if single_snapshot:
+        manifest_path = args.output_dir.with_name(
+            args.output_dir.name + "_conversion_manifest.json"
+        )
+    elif args.num_shards == 1:
+        manifest_path = args.output_dir / "conversion_manifest.json"
+    else:
+        manifest_path = args.output_dir / (
+            f"conversion_manifest.shard-{args.shard_index:05d}-of-"
+            f"{args.num_shards:05d}.json"
+        )
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)
         handle.write("\n")
 
     total_blocks = sum(summary.num_hamiltonian_blocks for summary in summaries)
-    max_error = max(summary.hamiltonian_roundtrip_max_abs_ha for summary in summaries)
+    max_error = max(
+        (summary.hamiltonian_roundtrip_max_abs_ha for summary in summaries),
+        default=float("nan"),
+    )
     print("\n=== Conversion complete ===")
     print(f"converted snapshots: {len(summaries)}")
     print(f"Hamiltonian blocks: {total_blocks}")
