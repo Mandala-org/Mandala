@@ -55,7 +55,7 @@
 
 \begin{abstract}
 Electronic-structure calculations based on Kohn-Sham density functional theory remain indispensable in computational materials science and chemistry. Their computational cost, however, limits accessible system sizes and simulation times.
-At the same time, conventional machine-learning interatomic models (MLIPS) which are becoming the workhorse of large-scale materials modeling usually target only energies and forces, which leaves out the quantum-operator-level electronic information required for many scientifically relevant analyses %TODO: such as ... please add examples. They can be taken from the MALA conceptual paper.
+At the same time, conventional machine-learning interatomic potentials (MLIPS) which are becoming the workhorse of large-scale materials modeling usually target only energies and forces, which leaves out the quantum-operator-level electronic information required for many scientifically relevant analyses. %TODO: such as ... please add examples. They can be taken from the MALA conceptual paper.
 \texttt{Mandala} is a modular software framework for learning block-sparse electronic-structure matrices with E(3)-equivariant graph neural networks. The framework is built around a unified representation of atom-resolved Hamiltonian, overlap, and density matrices, together with reusable abstractions for basis conversion, sparse block handling, irreducible representation (irrep) mapping, graph construction, model definition, and training. This design allows \texttt{Mandala} to support heterogeneous chemical compositions, a wide range of neural architecture variants within one workflow, and multiple electronic-structure backends.
 A distinguishing feature of \texttt{Mandala} is that it does not stop at matrix reconstruction. Predicted operators can be contracted and post-processed to obtain quantities like the band-energy, the density of states, the band structure, and electron density. This allows the software to bridge electronic-structure learning and observable-guided modeling while retaining a representation tied to quantum-mechanical operators rather than only scalar or vector targets as in MLIPs.
 In this form, \texttt{Mandala} is intended to complement atomistic interatomic potential workflows by resolving electronic structure and operator-derived observables within one scalable implementation.
@@ -87,21 +87,20 @@ The framework is organized to support extensibility, architecture search, and re
 \section{Introduction}
 \label{sec:introduction}
 
-Kohn-Sham density functional theory (DFT) is the standard method of electronic-structure simulation because it offers a practical compromise between physical fidelity and computational cost across chemistry, condensed-matter physics, and materials science \cite{HoKo1964,KoSh1965}. Even so, both cubic scaling with system size and repeated self-consistent solution of the Kohn-Sham equations remains a major bottleneck in workflows that require large supercells, long molecular-dynamics trajectories, broad compositional screening, or repeated re-evaluation under changing thermodynamic conditions. This cost has motivated sustained interest in machine-learned surrogates for atomistic and quantum-mechanical simulation. Relevant directions include learned potential-energy surfaces and interatomic forces, as well as learned electron densities, wave-function-related quantities, kinetic-energy functionals, and reduced electronic representations~\cite{deepdive,malapaper,temperaturepaper,sizetransferpaper,ofdftpaper,ghasemi2021,chandrasekaran_solving_2019,TsMi2020,Shao_2023,BrVo2017}.
+Kohn--Sham density functional theory (DFT) is the standard method of electronic-structure simulation because it offers a practical compromise between physical fidelity and computational cost across chemistry, condensed-matter physics, and materials science \cite{HoKo1964,KoSh1965}. Even so, both cubic scaling with system size and repeated self-consistent solution of the Kohn--Sham equations remains a major bottleneck in workflows that require large supercells, long molecular-dynamics trajectories, broad compositional screening, or repeated re-evaluation under changing thermodynamic conditions. This cost has motivated sustained interest in machine-learned surrogates for atomistic and quantum-mechanical simulation \cite{deepdive}. Relevant directions include machine-learned interatomic potentials (MLIPs) for potential-energy surfaces and forces \cite{BehlerParrinello2007,BartokGAP2010,ZhangDeepMD2018,BatznerNequIP2022,BatatiaMACE2022}, wave-function-related quantities \cite{PfauFermiNet2020,HermannPauliNet2020}, learned electron densities \cite{BrVo2017,GrisafiElectronDensity2019,malapaper,Rackers_2023}, kinetic-energy functional learning for orbital-free DFT \cite{ALGHADEER2021127621,ghasemi2021}, and other reduced electronic representations such as the local density of states and reduced density matrices \cite{malapaper,Shao_2023,chandrasekaran_solving_2019,temperaturepaper,sizetransferpaper}.
 
-Many successful atomistic machine-learning approaches bypass the explicit electronic structure and instead learn scalar or vector observables such as energies and forces.
-This strategy is highly effective for interatomic potentials, from early neural-network potential formulations to modern equivariant graph models, and recent work has shown that equivariant neural architectures are especially well suited for energy and force prediction because they can encode rotational structure directly in the model rather than relying entirely on handcrafted invariants or data augmentation \cite{KoKoBe22,Rackers_2023}. However, learning only energies and forces also limits direct access to the electronic structure itself, including operator-valued quantities and Hamiltonian-derived analyses such as band structure. For applications that remain fundamentally electronic-structure-centered, it is attractive to learn the operators themselves.
+The most widely used machine-learning approach in chemistry, condensed-matter physics, and materials science is to train machine-learned interatomic potentials (MLIPs), which bypass explicit electronic-structure calculations and instead learn observables such as energies and forces. The strategy is highly effective, from early neural-network potentials to modern equivariant graph models \cite{BehlerParrinello2007,BartokGAP2010,ZhangDeepMD2018,BatznerNequIP2022,BatatiaMACE2022}. Recent work has shown that equivariant neural architectures are especially well suited for energy and force prediction because they can encode rotational structure directly in the model rather than relying entirely on handcrafted invariants or data augmentation \cite{KoKoBe22,BatznerMusaelianKozinskyNRP2023,KoOngNatCompSci2023}. However, learning only energies and forces limits direct access to the electronic structure itself, including operator-valued quantities and Hamiltonian-derived analyses such as band structure. For applications that remain fundamentally electronic-structure-centered, it is therefore attractive to learn the operators themselves.
 Examples include systems in which charge transfer, orbital hybridization, defect-localized states, response to external fields, or band-structure-level analysis are central to the scientific question. In such settings, access to the underlying electronic operators is not merely auxiliary metadata but part of the modeling target itself.
 
 \texttt{Mandala} is designed around this operator-learning viewpoint. The framework targets block-sparse matrix quantities arising in localized-orbital electronic-structure calculations, in particular the Hamiltonian, overlap, and density matrices. Instead of treating these objects as dense global arrays, \texttt{Mandala} represents them as atom-pair-resolved sparse blocks and combines this representation with E(3)-equivariant graph neural networks. The resulting learning problem respects both the locality of the underlying electronic structure and the geometric transformation laws imposed by three-dimensional space.
 
 The development of \texttt{Mandala} is motivated by three specific design goals. First, it should be modular at the level of both scientific abstractions and code organization. Data ingestion, basis conversion, graph construction, irrep mapping, model definition, and training logic should be independently replaceable while still composing into a single workflow. Second, the framework should support supervision beyond raw matrix reconstruction. In addition to differentiable sparse-trace observables, periodic Hamiltonian and overlap predictions can optionally be guided by a spectral loss that compares generalized-eigenvalue information on a selected k-point mesh. When Hamiltonian, overlap, and density matrices are predicted jointly, the band-energy observable and electron count can be computed directly from the predicted operators and included in the training objective. Third, the framework should make architecture exploration an inherent capability rather than an afterthought. Choices such as irreducible feature content, message-passing depth, tensor-product design, head structure, residual connections, normalization, and observable losses must all be accessible through a coherent configuration and sweep interface.
 
-Related operator-learning efforts include the DeepH family of Hamiltonian-learning models for localized-basis DFT, including their original message-passing formulation, extensions to magnetic superstructures, an explicitly E(3)-equivariant formulation, hybrid-functional Hamiltonians, and conversion pathways from plane-wave data to localized-orbital Hamiltonians \cite{deeph2022,deeph_magnetic_2023,deephe3_2023,deeph_hybrid_2024,deeph_pw_2024,deeph_review_2025}. These works demonstrate the promise of Hamiltonian learning at scale and provide a close point of comparison for the operator-centric aims of \texttt{Mandala}, while our emphasis here is on a reusable software framework that unifies sparse operator prediction, observable guidance, multi-backend data handling, and broad architecture exploration.
+Related operator-learning efforts include the DeepH family of Hamiltonian-learning models for localized-basis DFT, including their original message-passing formulation, extensions to magnetic superstructures, an explicitly E(3)-equivariant formulation, hybrid-functional Hamiltonians, and conversion pathways from plane-wave data to localized-orbital Hamiltonians \cite{deeph2022,deeph_magnetic_2023,deephe3_2023,deeph_hybrid_2024,deeph_pw_2024,deeph_review_2025}. Closely related is MACE-H, which combines many-body message passing with equivariant processing for Hamiltonian prediction \cite{maceh_2026}. These works demonstrate the promise of Hamiltonian learning at scale, while our emphasis here is on a reusable software framework that unifies sparse operator prediction, observable guidance, multi-backend data handling, and broad architecture exploration.
 
-These goals distinguish \texttt{Mandala} from earlier machine-learning workflows in two ways. Relative to purely observable-driven interatomic potential models (MLIPs), \texttt{Mandala} preserves an operator-level representation that remains useful for electronic-structure analysis. Relative to monolithic research scripts built around one specific dataset or one fixed neural architecture, it provides a reusable framework in which data formats, physical targets, and model variants can be exchanged without rewriting the entire code path. In this sense, \texttt{Mandala} is intended as a unified software environment for sparse operator learning, observable guidance, and architecture exploration.
+These goals distinguish \texttt{Mandala} from earlier machine-learning workflows in two ways. Relative to purely observable-driven MLIPs, \texttt{Mandala} preserves an operator-level representation that remains useful for electronic-structure analysis. Relative to monolithic research scripts built around one specific dataset or one fixed neural architecture, it provides a reusable framework in which data formats, physical targets, and model variants can be exchanged without rewriting the entire code path. In this sense, \texttt{Mandala} is intended as a unified software environment for sparse operator learning, observable guidance, and architecture exploration.
 
-The following sections describe the sparse matrix data model, the E(3)-equivariant learning formulation, the observable-aware loss construction, and the software abstractions that make these components composable.
+The remainder of this paper is organized as follows. Section~\ref{sec:background} provides the necessary theoretical background. Section~\ref{sec:implementation} describes the sparse-matrix data model, the E(3)-equivariant learning formulation, the observable-aware loss construction, and the software abstractions. Section~\ref{sec:results} showcases \texttt{Mandala}'s capabilities by predicting the Hamiltonian matrix, density matrix, density of states, and band structure for selected systems, including the chalcogenide ZnCu$_2$Sn(SeS)$_2$, amorphous silicon oxide, and bulk silicon. Section~\ref{sec:ablations} presents an ablation study, and the Appendix provides additional model details.
 
 
 \section{Theoretical Background}
@@ -110,94 +109,67 @@ The following sections describe the sparse matrix data model, the E(3)-equivaria
 \subsection{From the full electron-nuclear Schr\"odinger equation to Kohn-Sham DFT}
 \label{subsec:dft_background}
 
-At the most fundamental nonrelativistic level, an atomistic system is described by
-the stationary many-body Schr\"odinger equation for all electrons and all nuclei,
+At the most fundamental nonrelativistic level, an atomistic system is described by the stationary many-body electronic Schr\"odinger equation for all electrons and all nuclei within the Born-Oppenheimer approximation~\cite{born_zur_1927},
 \begin{equation}
-\hat{H}(\underline{\bm{r}};\underline{\bm{R}}) \Psi(\underline{\bm{r}};\underline{\bm{R}})
+\left[ \hat{T}_e(\underline{\bm{r}}) + \hat{V}_{ee}(\underline{\bm{r}}) + \hat{V}_{ei}(\underline{\bm{r}};\underline{\bm{R}}) + E_{ii}(\underline{\bm{R}}) \right] \Psi(\underline{\bm{r}};\underline{\bm{R}})
 =
 E \Psi(\underline{\bm{r}};\underline{\bm{R}}),
 \end{equation}
-where $\Psi(\underline{\bm{r}};\underline{\bm{R}})$ denotes the many-body wavefunction, $\underline{\bm{r}}$ the
-collection of electronic coordinates, and $\underline{\bm{R}}$ the collection of ionic
-coordinates. The semicolon indicates that the dependence on ionic coordinates
-is parametric within the Born-Oppenheimer approximation. We adopt atomic units throughout,
-with $\hbar = m_e = e^2 = 1$, so that energies are measured in Hartree and
-lengths in Bohr radii.
-
-Under the Born-Oppenheimer approximation \cite{born_zur_1927}, the electronic
-Hamiltonian is written as
-\begin{equation}
-\hat{H}(\underline{\bm{r}};\underline{\bm{R}})
-=
-\hat{T}_e(\underline{\bm{r}}) + \hat{V}_{ee}(\underline{\bm{r}}) + \hat{V}_{ei}(\underline{\bm{r}};\underline{\bm{R}}) + E_{ii}(\underline{\bm{R}}),
-\end{equation}
-with
+where $\Psi(\underline{\bm{r}};\underline{\bm{R}})$ denotes the many-body wavefunction, $\underline{\bm{r}}$ the collection of electronic coordinates, and $\underline{\bm{R}}$ the collection of ionic coordinates. The semicolon indicates that the dependence on ionic coordinates is parametric.
+The electronic Schrödinger equation is composed of the kinetic energy of the electrons
 \begin{equation}
 \hat{T}_e(\underline{\bm{r}}) = -\frac{1}{2}\sum_{j=1}^{N_e} \nabla_j^2,
 \end{equation}
+the electron-electron interaction
 \begin{equation}
 \hat{V}_{ee}(\underline{\bm{r}}) =
 \frac{1}{2}\sum_{j=1}^{N_e}\sum_{k \ne j}^{N_e}\frac{1}{|\bm{r}_j-\bm{r}_k|},
 \end{equation}
+the electron-ion interaction
 \begin{equation}
 \hat{V}_{ei}(\underline{\bm{r}};\underline{\bm{R}}) =
 -\sum_{j=1}^{N_e}\sum_{\alpha=1}^{N_i}\frac{Z_{\alpha}}{|\bm{r}_j-\bm{R}_{\alpha}|},
 \end{equation}
-and
+and the ion-ion interaction
 \begin{equation}
 E_{ii}(\underline{\bm{R}}) =
 \frac{1}{2}\sum_{\alpha=1}^{N_i}\sum_{\beta \ne \alpha}^{N_i}
 \frac{Z_{\alpha} Z_{\beta}}{|\bm{R}_{\alpha}-\bm{R}_{\beta}|}.
 \end{equation}
-The ion-ion term amounts to a constant energy shift for fixed ionic
-configuration, while the Hamiltonian and wavefunction depend only
-parametrically on $\bm{R}$. In the following, this parametric dependence is
-not always written explicitly.
+The ion-ion interaction amounts to a constant energy shift for fixed ionic configuration, while the other terms depend only parametrically on $\underline{\bm{R}}$. In the following, this parametric dependence is not always written explicitly. Also note that we adopt atomic units throughout, with $\hbar = m_e = e^2 = 1$, so that energies are measured in Hartree and lengths in Bohr radii.
 
-The central remaining difficulty is therefore the interacting many-electron
-problem defined by $\hat{T}_e + \hat{V}_{ee} + \hat{V}_{ei}$ at fixed ionic
-geometry.
+The central task in electronic structure theory is therefore solving the interacting many-electron problem defined by $\hat{T}_e + \hat{V}_{ee} + \hat{V}_{ei}$ for a fixed ionic geometry.
 
-Density functional theory (DFT) replaces the many-electron wavefunction by the
-electron density $n(\bm{r})$ as the central variable \cite{HoKo1964}. In the Kohn-Sham
-construction \cite{KoSh1965}, the interacting electron problem is mapped onto a
-fictitious system of non-interacting electrons governed by
+DFT is the most popular method for solving this problem. It replaces the many-electron wavefunction by the electron density $n(\bm{r})$ as the central variable \cite{HoKo1964}. In the Kohn-Sham construction \cite{KoSh1965}, the interacting electron problem is then mapped onto a fictitious system of non-interacting electrons governed by the Kohn-Sham equations
 \begin{equation}
-\left[
--\frac{1}{2}\nabla^2 + v_S(\bm{r})
-\right]\psi_j(\bm{r}) = \epsilon_j \psi_j(\bm{r}),
+H \psi_j(\bm{r}) = \epsilon_j \psi_j(\bm{r}),
 \end{equation}
-where $j=1,\dots,N_e$ labels the Kohn-Sham orbitals. The corresponding
-electronic density is
+where $H = -\frac{1}{2}\nabla^2 + v_S(\bm{r})$ denotes the Kohn-Sham Hamiltonian and $j=1,\dots,N_e$ labels the Kohn-Sham orbitals. Solving the Kohn-Sham equations yields the corresponding electronic density
 \begin{equation}
-n(\bm{r}) = \sum_{j=1}^{N_e} |\psi_j(\bm{r})|^2.
+n(\bm{r}) = \sum_{j=1}^{N_e} |\psi_j(\bm{r})|^2
 \end{equation}
-The Kohn-Sham potential is
+which equals the electronic density of the interacting many-body system. The equality of both densities is achieved by the Kohn-Sham potential
 \begin{equation}
 v_S(\bm{r}) =
 \frac{\delta E_H[n]}{\delta n(\bm{r})}
 + \frac{\delta E_{XC}[n]}{\delta n(\bm{r})}
 + v_{ei}(\bm{r}),
 \end{equation}
-where $E_H[n]$ is the Hartree energy, $E_{XC}[n]$ the exchange-correlation
-energy, and
+where $E_H[n]$ is the Hartree energy, $E_{XC}[n]$ the exchange-correlation energy, and
 \begin{equation}
-v_{ei}(\bm{r}) = -\sum_{\alpha} \frac{Z_{\alpha}}{|\bm{r}-\bm{R}_{\alpha}|}.
+v_{ei}(\bm{r}) = -\sum_{\alpha} \frac{Z_{\alpha}}{|\bm{r}-\bm{R}_{\alpha}|}
 \end{equation}
-Although the Kohn-Sham construction is formally exact, practical calculations
-rely on approximations to $E_{XC}$.
-
-In this notation, the ground-state energy functional is written as
+the external potential. Although the Kohn-Sham construction is formally exact, practical calculations rely on approximations the to exchange-correlation energy.
+In this notation, the ground-state energy is written as
 \begin{equation}
 E[n] =
 T_S[n] + E_H[n] + E_{XC}[n]
 + \int d\bm{r}\, n(\bm{r}) v_{ei}(\bm{r})
 + E_{ii},
 \end{equation}
-where $T_S[n]$ is the Kohn-Sham kinetic energy. This is the DFT-level starting
-point that \texttt{Mandala} connects to localized-orbital operator learning.
+where $T_S[n]$ is the Kohn-Sham kinetic energy.
 
-\texttt{Mandala} operates on localized-orbital matrix representations of this problem.
+\texttt{Mandala} connects to the electronic structure problem at the level of Kohn-Sham DFT and operates on localized-orbital matrix representations of this problem.
 Expanding the Kohn-Sham orbitals in a finite basis $\{\chi_{\mu}\}$,
 \begin{equation}
 \psi_j(\bm{r}) = \sum_{\mu} C_{\mu j}\chi_{\mu}(\bm{r}),
@@ -210,7 +182,7 @@ leads to the generalized eigenvalue problem
 \end{equation}
 with
 \begin{equation}
-H_{\mu \nu} = \langle \chi_{\mu} | \hat{H}_{\mathrm{KS}} | \chi_{\nu} \rangle,
+H_{\mu \nu} = \langle \chi_{\mu} | \hat{H} | \chi_{\nu} \rangle,
 \qquad
 S_{\mu \nu} = \langle \chi_{\mu} | \chi_{\nu} \rangle.
 \end{equation}
@@ -218,60 +190,43 @@ The one-particle density matrix is
 \begin{equation}
 D_{\mu \nu} = \sum_j f_j C_{\mu j} C_{\nu j}^{*},
 \end{equation}
-where $f_j$ denotes the orbital occupation. In a nonorthogonal basis, the
-electron count is
+where $f_j$ denotes the orbital occupation. In a nonorthogonal basis, the electron count is
 \begin{equation}
 N_e = \Tr(DS),
 \end{equation}
-while the band energy observable is obtained from
+while the band energy is obtained from
 \begin{equation}
 E_{\mathrm{b}} = \Tr(DH).
 \end{equation}
-In this work, \texttt{Mandala} uses the trace expressions above as
-operator-derived observables associated with the predicted matrices.
+In this work, \texttt{Mandala} uses the trace expressions above as operator-derived observables associated with the predicted matrices.
 
-Localized basis sets also induce block sparsity. If orbital $\mu$ belongs to
-atom $i$ and orbital $\nu$ belongs to atom $j$, then matrix entries can be
-organized into atom-pair blocks $X_{ij}^{\bm{L}}$, where
-$X \in \{H,S,D\}$ and $\bm{L} \in \mathbb{Z}^3$ indexes periodic lattice
-images. This sparse block structure is the operator domain learned by \texttt{Mandala}.
+Localized basis sets also induce block sparsity. If orbital $\mu$ belongs to atom $i$ and orbital $\nu$ belongs to atom $j$, then matrix entries can be organized into atom-pair blocks $X_{ij}^{\bm{L}}$, where $X \in \{H,S,D\}$ and $\bm{L} \in \mathbb{Z}^3$ indexes periodic lattice images. This sparse block structure is the operator domain learned by \texttt{Mandala}.
+
 
 \subsubsection{Hamiltonian gauge invariance and the overlap-shift correction}
 \label{subsubsec:gauge_invariance}
 
-In a nonorthogonal basis, the generalized eigenproblem is invariant under a
-rigid shift of the Hamiltonian by a multiple of the overlap matrix. Let
+In a nonorthogonal basis, the generalized eigenvalue problem is invariant under a rigid shift of the Hamiltonian by a multiple of the overlap matrix. Given the generalized eigenvalue equation,
 \begin{equation}
 H C = S C \varepsilon,
 \end{equation}
-and define a shifted Hamiltonian
+we can define a shifted Hamiltonian:
 \begin{equation}
 \widetilde{H} = H - \alpha S.
 \end{equation}
-Then
+Applying this to the eigenvectors yields:
 \begin{equation}
-\widetilde{H} C
-=
-(H-\alpha S) C
-=
-S C \varepsilon - \alpha S C
-=
-S C (\varepsilon - \alpha I).
+\widetilde{H} C = (H-\alpha S) C = S C \varepsilon - \alpha S C = S C (\varepsilon - \alpha I).
 \end{equation}
-Therefore the generalized eigenvectors are unchanged, while all eigenvalues are
-shifted by the same constant $\alpha$. This proves that the choice of zero of
-energy can be represented, in matrix form, as the transformation
-$H \mapsto H - \alpha S$. For a fixed electron number and a geometry-independent
-shift $\alpha$, one also finds
-\begin{equation}
-\Tr(D\widetilde{H}) = \Tr(DH) - \alpha \Tr(DS) = \Tr(DH) - \alpha N_e,
-\end{equation}
-so only the absolute energy reference changes.
+Therefore, the generalized eigenvectors remain unchanged, while all eigenvalues are uniformly shifted by the constant $\alpha$. This demonstrates that setting the energy reference point can be represented in matrix form by the transformation $H \mapsto H - \alpha S$.
 
-\texttt{Mandala} exploits this gauge freedom through the overlap-shift correction
-$\mu_H$, which is chosen to minimize the mean-squared discrepancy between a
-predicted Hamiltonian and a reference Hamiltonian after subtraction of a
-multiple of the overlap matrix:
+Furthermore, for a fixed number of electrons ($N_e$) and a geometry-independent shift $\alpha$, the expectation value of the energy evaluates to:
+\begin{equation}
+\operatorname{Tr}(D\widetilde{H}) = \operatorname{Tr}(DH) - \alpha \operatorname{Tr}(DS) = \operatorname{Tr}(DH) - \alpha N_e.
+\end{equation}
+This confirms that the physical state is preserved and only the absolute energy reference is altered.
+
+\texttt{Mandala} exploits this gauge freedom through the overlap-shift correction $\mu_H$, which is chosen to minimize the mean-squared discrepancy between a predicted Hamiltonian and a reference Hamiltonian after subtraction of a multiple of the overlap matrix:
 \begin{equation}
 \mu_H
 =
@@ -292,138 +247,102 @@ H^{\mathrm{pred}} - H^{\mathrm{ref}}, S
 \left\langle S, S \right\rangle_F
 },
 \end{equation}
-where $\langle A,B\rangle_F = \sum_{\mu \nu} A_{\mu \nu} B_{\mu \nu}$ is the
-Frobenius inner product, evaluated in \texttt{Mandala} blockwise over the aligned sparse
-representation. The corrected Hamiltonian
-$H^{\mathrm{pred}} - \mu_H S$ therefore removes a pure gauge offset without
-altering the physically relevant eigenvectors.
+where $\langle A,B\rangle_F = \sum_{\mu \nu} A_{\mu \nu} B_{\mu \nu}$ is the Frobenius inner product, evaluated in \texttt{Mandala} blockwise over the aligned sparse representation. The corrected Hamiltonian $H^{\mathrm{pred}} - \mu_H S$ therefore removes a pure gauge offset without altering the physically relevant eigenvectors.
+
+
 \subsection{E(3) symmetry, equivariance, and irreducible representations}
 \label{subsec:egnn_background}
 
-Atomistic systems in three-dimensional space are naturally acted on by the
-Euclidean group $\mathrm{E}(3)=\mathbb{R}^3 \rtimes \mathrm{O}(3)$, combining
-translations, rotations, and reflections. For a group element
-$g=(Q,\bm{t})$, with $Q \in \mathrm{O}(3)$ and $\bm{t}\in\mathbb{R}^3$, atomic
-positions transform as
+% TODO: @Bartek: Does this or the next section need to cite e3nn papers such as (https://arxiv.org/abs/2207.09453)? Maybe not, but just checking.
+
+Atomistic systems in three-dimensional space are naturally acted on by the Euclidean group $\mathrm{E}(3)=\mathbb{R}^3 \rtimes \mathrm{O}(3)$, combining translations, rotations, and reflections.
+For a group element $g=(Q,\bm{t})$, with $Q \in \mathrm{O}(3)$ and $\bm{t}\in\mathbb{R}^3$, atomic positions transform as
 \begin{equation}
 \bm{R}_i \mapsto g \cdot \bm{R}_i = Q \bm{R}_i + \bm{t}.
 \end{equation}
-A model output $f(X)$ is invariant if
-$f(g \cdot X)=f(X)$, and equivariant if
+A model output $f(X)$ is invariant if $f(g \cdot X)=f(X)$, and equivariant if
 \begin{equation}
 f(g \cdot X) = \rho_{\mathrm{out}}(g)\, f(X),
 \end{equation}
 for a representation $\rho_{\mathrm{out}}$ appropriate to the predicted object.
-Scalar observables such as total energies are invariant. Vectors such as forces
-transform covariantly, and operator-valued quantities inherit structured
-transformation rules from the orbital basis in which they are expressed.
+Scalar observables such as total energies are invariant. Vectors such as forces transform covariantly, and operator-valued quantities inherit structured transformation rules from the orbital basis in which they are expressed.
 
-In equivariant neural networks, hidden features are not treated as generic
-channels. Instead, they are decomposed into irreducible representations
-(irreps) of $\mathrm{O}(3)$, labeled by angular momentum $\ell$ and parity
-$p \in \{+1,-1\}$. A feature space therefore takes the form
+In equivariant neural networks, hidden features are not treated as generic channels. Instead, they are decomposed into irreducible representations (irreps) of $\mathrm{O}(3)$, labeled by angular momentum $\ell$ and parity $p \in \{+1,-1\}$. A feature space therefore takes the form
 \begin{equation}
 \mathcal{H}
 =
 \bigoplus_{\ell,p} m_{\ell,p} \, D^{(\ell,p)},
 \end{equation}
 where $m_{\ell,p}$ is the multiplicity of irrep $(\ell,p)$ and
-$D^{(\ell,p)}$ is the corresponding representation matrix. Scalars correspond
-to $(\ell=0,p=+1)$, ordinary vectors to $(\ell=1,p=-1)$, and higher-rank
-objects are built from larger $\ell$ channels. This representation-theoretic
-bookkeeping is particularly natural for localized atomic orbitals, whose
-angular content is already organized by orbital angular momentum.
+$D^{(\ell,p)}$ is the corresponding representation matrix.
+Scalars correspond to $(\ell=0,p=+1)$, ordinary vectors to $(\ell=1,p=-1)$, and higher-rank objects are built from larger $\ell$ channels.
+This representation-theoretic bookkeeping is particularly natural for localized atomic orbitals, whose angular content is already organized by orbital angular momentum.
 
-The key architectural consequence is that every learned operation must respect
-the decomposition into irreps. Node and edge features are updated through maps
-that commute with the group action, rather than by unrestricted dense linear
-layers. Geometric information enters through relative displacement vectors and
-their spherical-harmonic expansions, while translational invariance is enforced
-by expressing all geometry in relative coordinates. Reflections are tracked
-through the parity label $p$, while rotations act within each $\ell$ channel.
-In this way, \texttt{Mandala}
-preserves directional information throughout the network without sacrificing the
-required covariance laws \cite{KoKoBe22,Rackers_2023}.
+The key architectural consequence is that every learned operation must respect the decomposition into irreps.
+Node and edge features are updated through maps that commute with the group action, rather than by unrestricted dense linear
+layers.
+Geometric information enters through relative displacement vectors and their spherical-harmonic expansions, while translational invariance is enforced by expressing all geometry in relative coordinates.
+Reflections are tracked through the parity label $p$, while rotations act within each $\ell$ channel.
+In this way, \texttt{Mandala} preserves directional information throughout the network without sacrificing the required covariance laws.
+
+
 \subsection{Tensor products, spherical harmonics, and the Wigner-Eckart viewpoint}
 \label{subsec:tensor_products_background}
 
-The basic algebraic operation of an equivariant graph neural network is the
-tensor product of irreps. If two feature channels transform according to
-$D^{(\ell_1,p_1)}$ and $D^{(\ell_2,p_2)}$, then their tensor product
-decomposes as
+The basic algebraic operation of an equivariant graph neural network is the tensor product of irreps.
+If two feature channels transform according to
+$D^{(\ell_1,p_1)}$ and $D^{(\ell_2,p_2)}$, then their tensor product decomposes as
 \begin{equation}
 D^{(\ell_1,p_1)} \otimes D^{(\ell_2,p_2)}
 =
 \bigoplus_{L=|\ell_1-\ell_2|}^{\ell_1+\ell_2}
 D^{(L,p_1 p_2)}.
 \end{equation}
-This Clebsch-Gordan structure determines which output irreps may be produced by
-combining two input channels. In practical terms, it is the algebraic rule that
-governs message passing, nonlinear mixing of hidden features, and the final
-projection from latent features to matrix coefficients.
 
-Edge geometry is injected through spherical harmonics
-$Y_{\ell m}(\hat{\bm{r}}_{ij})$, evaluated on normalized relative displacement
-directions. Because spherical harmonics transform irreducibly under rotations,
-they provide the canonical angular basis for equivariant edge messages. A
-typical equivariant interaction therefore combines learned node or edge
-features with spherical-harmonic features through tensor products, while radial
-functions modulate the interaction strength as a function of distance.
+This Clebsch-Gordan structure determines which output irreps may be produced by combining two input channels.
+In practical terms, it is the algebraic rule that governs message passing, nonlinear mixing of hidden features, and the final projection from latent features to matrix coefficients.
 
-The same representation-theoretic structure appears in matrix elements of
-operators between angular-momentum-carrying orbitals. For a spherical tensor
-operator $T^{(k)}_q$, the Wigner-Eckart theorem states that
+Edge geometry is injected through spherical harmonics $Y_{\ell m}(\hat{\bm{r}}_{ij})$, evaluated on normalized relative displacement
+directions.
+Because spherical harmonics transform irreducibly under rotations, they provide the canonical angular basis for equivariant edge messages.
+A typical equivariant interaction therefore combines learned node or edge features with spherical-harmonic features through tensor products, while radial functions modulate the interaction strength as a function of distance.
+
+The same representation-theoretic structure appears in matrix elements of operators between angular-momentum-carrying orbitals. For a spherical tensor operator $T^{(k)}_q$, the Wigner-Eckart theorem states that
 \begin{equation}
 \langle \alpha \ell m | T^{(k)}_q | \alpha' \ell' m' \rangle
 =
 \langle \ell' m'; k q | \ell m \rangle
 \langle \alpha \ell \| T^{(k)} \| \alpha' \ell' \rangle,
 \end{equation}
-where $\ell$ and $\ell'$ denote orbital angular momenta, $m$ and $m'$ their
-magnetic quantum numbers, $T^{(k)}_q$ is the $q$th component of a spherical
-tensor operator of rank $k$, $\alpha$ and $\alpha'$ collect any additional
-quantum numbers needed to specify the states, and
-$\langle \ell' m'; k q | \ell m \rangle$ is a Clebsch-Gordan coefficient. The
-double-bar matrix element
-$\langle \alpha \ell \| T^{(k)} \| \alpha' \ell' \rangle$ is the corresponding
-reduced matrix element. In other words, the Clebsch--Gordan coefficient fixes
-the purely geometric way that angular components couple under rotations, while
-the reduced matrix element is the remaining rotationally invariant coefficient.
-It may depend on atomic species, radial basis functions, interatomic distance,
-and the local chemical environment, but not on the choice of coordinate axes.
-\texttt{Mandala} uses this viewpoint operationally: the angular
-coupling structure is fixed analytically by the irrep mapping, while the neural
-network learns the reduced coefficients associated with each orbital pair and
-chemical environment. This is precisely why the matrix-block prediction problem
-can be posed naturally in an irrep basis rather than directly in Cartesian
-matrix entries.
+where $\ell$ and $\ell'$ denote orbital angular momenta, $m$ and $m'$ their magnetic quantum numbers, $T^{(k)}_q$ is the $q$th component of a spherical tensor operator of rank $k$, $\alpha$ and $\alpha'$ collect any additional quantum numbers needed to specify the states, and $\langle \ell' m'; k q | \ell m \rangle$ is a Clebsch-Gordan coefficient.
+The double-bar matrix element $\langle \alpha \ell \| T^{(k)} \| \alpha' \ell' \rangle$ is the corresponding reduced matrix element.
+In other words, the Clebsch--Gordan coefficient fixes the purely geometric way that angular components couple under rotations, while the reduced matrix element is the remaining rotationally invariant coefficient.
+It may depend on atomic species, radial basis functions, interatomic distance, and the local chemical environment, but not on the choice of coordinate axes.
+
+\texttt{Mandala} uses this viewpoint operationally: the angular coupling structure is fixed analytically by the irrep mapping, while the neural network learns the reduced coefficients associated with each orbital pair and chemical environment.
+This is precisely why the matrix-block prediction problem can be posed naturally in an irrep basis rather than directly in Cartesian matrix entries.
+
+
 \subsection{From equivariant local features to sparse operator prediction}
 \label{subsec:matrix_observable_background}
 
-\texttt{Mandala} represents each operator $X \in \{H,S,D\}$ as a sparse family of
-atom-pair blocks $X_{ij}^{\bm{L}}$, where $i$ and $j$ index atoms and
-$\bm{L}$ labels periodic images. The block representation is converted into an
-irrep representation by a fixed change of basis,
+\texttt{Mandala} represents each operator $X \in \{H,S,D\}$ as a sparse family of atom-pair blocks $X_{ij}^{\bm{L}}$, where $i$ and $j$ index atoms and $\bm{L}$ labels periodic images.
+The block representation is converted into an irrep representation by a fixed change of basis,
 \begin{equation}
 \bm{x}_{ij}^{\bm{L}} = Q_{a_i a_j} \, \mathrm{vec}\!\left(X_{ij}^{\bm{L}}\right),
 \end{equation}
-where $a_i$ and $a_j$ denote the atomic species of atoms $i$ and $j$, and
-$Q_{a_i a_j}$ is the species-pair-specific block-to-irrep transform. The
-inverse map reconstructs matrix blocks from predicted irrep vectors,
+where $a_i$ and $a_j$ denote the atomic species of atoms $i$ and $j$, and $Q_{a_i a_j}$ is the species-pair-specific block-to-irrep transform.
+The inverse map reconstructs matrix blocks from predicted irrep vectors,
 \begin{equation}
 \mathrm{vec}\!\left(X_{ij}^{\bm{L}}\right)
 =
 Q_{a_i a_j}^{-1} \bm{x}_{ij}^{\bm{L}},
 \end{equation}
-which, in the orthonormal convention used internally, is implemented as a
-transpose. In the code these maps are materialized by the
-\texttt{BlockIrrepMapper}. The same component is reused by the data pipeline,
-the model heads, and the evaluation routines.
+which, in the orthonormal convention used internally, is implemented as a transpose.
+In the code these maps are materialized by the \texttt{BlockIrrepMapper}. The same component is reused by the data pipeline, the model heads, and the evaluation routines.
 
-Once the network predicts a consistent set of sparse operators, selected
-quantities are obtained directly from those operators rather than through a
-separate surrogate model. For sparse block matrices, the trace of a product is
-evaluated as
+Once the network predicts a consistent set of sparse operators, selected quantities are obtained directly from those operators rather than through a separate surrogate model.
+For sparse block matrices, the trace of a product is evaluated as a sparse contraction
 \begin{equation}
 \Tr(AB)
 =
@@ -432,49 +351,37 @@ evaluated as
 A_{ij}^{\bm{L}} B_{ji}^{-\bm{L}}
 \right),
 \end{equation}
-which is exactly the sparse contraction implemented by \texttt{Mandala}. This gives
-direct access to electron counts and band-energy observables from the same predicted
-operator set. The resulting workflow differs from direct scalar regression:
-internal consistency between matrices and observables is built into the model
-formulation rather than imposed only at the level of post hoc analysis.
+implemented in \texttt{Mandala}. This gives direct access to electron counts and band-energy observables from the same predicted operator set.
+In this way, internal consistency between matrices and observables is built into the model directly.
+
+
 \section{Numerical Implementation}
 \label{sec:implementation}
 
 \subsection{Software design goals, sparse data model, and periodic graph construction}
 \label{subsec:workflow}
 
-\texttt{Mandala} is organized as a layered scientific software stack whose core workflow
-consists of parsing electronic-structure outputs, harmonizing basis
-conventions, building sparse operators and graphs, predicting irrep vectors,
-reconstructing operators, and evaluating observables.
-Figure~\ref{fig:data_preprocessing} summarizes the data-loading and
-sample-construction path.
-The central data abstractions are \texttt{BlockMatrix},
-\texttt{IrrepsBlockData}, and \texttt{Snapshot}. A \texttt{Snapshot} contains
-all matrices and metadata associated with one geometry, including positions and
-the simulation cell. This keeps Hamiltonian,
-overlap, and density predictions tied to a single physically consistent basis
-and sparse indexing scheme.
+\texttt{Mandala} is organized as a layered scientific software stack whose core workflow consists of parsing electronic-structure outputs, harmonizing basis conventions, building sparse operators and graphs, predicting irrep vectors, reconstructing operators, and evaluating observables.
 
-The sparse operator representation stores blocks by ordered species pair and by
-explicit edge metadata $(\bm{L},i,j)$, where $\bm{L}\in\mathbb{Z}^3$ is the
-lattice-image shift. Basis-conversion modules map backend-specific orbital
-orderings and sign conventions into the common internal representation expected
-by the equivariant stack. In the current framework, OpenMX, FHI-aims, and
-PySCF parsers and convention mappers are available \cite{ozaki2003,ozakikino2004,blum2009,pyscf2020}.
+Figure~\ref{fig:data_preprocessing} summarizes the data-loading and sample-construction path.
+The central data abstractions are \texttt{BlockMatrix}, \texttt{IrrepsBlockData}, and \texttt{Snapshot}.
+A \texttt{Snapshot} contains all matrices and metadata associated with one geometry, including positions and the simulation cell.
+This keeps Hamiltonian, overlap, and density predictions tied to a single physically consistent basis and sparse indexing scheme.
 
-Graph construction mirrors the sparse operator indexing. Nodes correspond to
-atoms, while edges correspond to self-interactions and neighbor interactions
-inside a cutoff radius. For periodic systems, each edge carries an integer
-shift vector $\bm{L}$ and a relative displacement
+The sparse operator representation stores blocks by ordered species pair and by explicit edge metadata $(\bm{L},i,j)$, where $\bm{L}\in\mathbb{Z}^3$ is the lattice-image shift.
+Basis-conversion modules map backend-specific orbital orderings and sign conventions into the common internal representation expected by the equivariant stack.
+In the current framework, OpenMX~\cite{ozaki2003,ozakikino2004}, FHI-aims~\cite{blum2009}, and PySCF~\cite{pyscf2020} parsers and convention mappers are available.
+
+Graph construction mirrors the sparse operator indexing. Nodes correspond to atoms, while edges correspond to self-interactions and neighbor interactions inside a cutoff radius.
+For periodic systems, each edge carries an integer shift vector $\bm{L}$ and a relative displacement
 \begin{equation}
 \bm{r}_{ij}^{\bm{L}}
 =
 \bm{R}_j - \bm{R}_i + \sum_{\alpha=1}^{3} L_{\alpha} \bm{a}_{\alpha},
 \end{equation}
-where $\{\bm{a}_{\alpha}\}$ are the cell vectors. These displacements are used
-to construct radial embeddings and spherical-harmonic features. The directed
-periodic edge set is therefore
+where $\{\bm{a}_{\alpha}\}$ are the cell vectors.
+These displacements are used to construct radial embeddings and spherical-harmonic features.
+The directed periodic edge set is therefore
 \begin{equation}
 \mathcal{E}
 =
@@ -513,66 +420,42 @@ i=j,\;
 i\neq j
 \right\}.
 \end{align}
-To preserve
-exact agreement between
-graph edges and sparse matrix blocks, \texttt{Mandala} imposes a canonical ordering of
-edges by distance and lattice shift, with reverse-edge lookup tables used for
-sparse traces and symmetrization. This explicit reverse alignment is essential
-for both physical correctness and reproducibility under periodic boundary
-conditions.
+To preserve exact agreement between graph edges and sparse matrix blocks, \texttt{Mandala} imposes a canonical ordering of edges by distance and lattice shift, with reverse-edge lookup tables used for sparse traces and symmetrization.
+This explicit reverse alignment is essential for both physical correctness and reproducibility under periodic boundary conditions.
 
-The same snapshot-level representation preserves access to operator-derived
-postprocessing. In particular, the predicted Hamiltonian may be used for
-band-structure analysis within the same sparse-operator workflow through
-\texttt{Snapshot.get\_band\_structure()}.
+The same snapshot-level representation preserves access to operator-derived postprocessing.
+In particular, the predicted Hamiltonian may be used for band-structure analysis within the same sparse-operator workflow through \texttt{Snapshot.get\_band\_structure()}.
 
 % TODO: Figures look too small
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/fig2_data_preprocessing.png}
-\caption{Data loading, harmonization, and graph-sample construction in
-\texttt{Mandala}. Electronic-structure outputs from OpenMX, FHI-aims, and PySCF
-are converted by backend-specific parsers into a unified \texttt{Snapshot}
-representation containing geometry, periodic-cell information, sparse atom-pair
-blocks of the Hamiltonian $H$, overlap $S$, and density matrix $D$, and available
-observable metadata. Snapshot preparation establishes canonical edge ordering,
-harmonizes backend basis and spherical-harmonic conventions, applies optional
-distance filtering, and evaluates energy and electron-count targets. Dataset
-construction is coordinated by \texttt{DatasetFactory}; shared state provides a
-global \texttt{BlockIrrepMapper}, merged orbital metadata, reusable data splits,
-and snapshot cache for performance. \texttt{E3GNNDataset} finally assembles graph-aligned
-samples with atomic species and positions, periodic edge indices and shifts,
-edge classes, radial embeddings $\phi(r_{ij})$, and spherical harmonics
-$Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Targets contain sparse matrix blocks or
-irrep vectors and, when available, band energy and electron count.}
+\caption{Data loading, harmonization, and graph-sample construction in \texttt{Mandala}. Electronic-structure outputs from OpenMX, FHI-aims, and PySCF are converted by backend-specific parsers into a unified \texttt{Snapshot} representation containing geometry, periodic-cell information, sparse atom-pair blocks of the Hamiltonian $H$, overlap $S$, and density matrix $D$, and available observable metadata. Snapshot preparation establishes canonical edge ordering, harmonizes backend basis and spherical-harmonic conventions, applies optional distance filtering, and evaluates energy and electron-count targets. Dataset construction is coordinated by \texttt{DatasetFactory}; shared state provides a global \texttt{BlockIrrepMapper}, merged orbital metadata, reusable data splits, and snapshot cache for performance. \texttt{E3GNNDataset} finally assembles graph-aligned samples with atomic species and positions, periodic edge indices and shifts, edge classes, radial embeddings $\phi(r_{ij})$, and spherical harmonics $Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Targets contain sparse matrix blocks or irrep vectors and, when available, band energy and electron count.}
 \label{fig:data_preprocessing}
 \end{figure}
+
+
 \subsection{E(3)-equivariant message passing, readout heads, and architecture variants}
 \label{subsec:architecture}
 
-The network is composed of node encoders, edge encoders, a stack of equivariant
-message-passing blocks, and matrix-specific readout heads. Figure~\ref{fig:model_architecture}
-summarizes the computational structure and configuration points of the model.
-We first introduce the base architecture and then describe the additional variants
-that extend it. If $z_i$ denotes the atomic-species index of atom $i$, the
-initial node representation is
+The network is composed of node encoders, edge encoders, a stack of equivariant message-passing blocks, and matrix-specific readout heads.
+Figure~\ref{fig:model_architecture} summarizes the computational structure and configuration points of the model.
+We first introduce the base architecture and then describe the additional variants that extend it.
+If $z_i$ denotes the atomic-species index of atom $i$, the initial node representation is
 \begin{equation}
 \bm{h}_i^{(0)}
 =
 \mathrm{Emb}_{\mathrm{atom}}(z_i)
 \in d_0 \times 0e,
 \end{equation}
-so node encoders initialize scalar chemical features. One available edge-encoder variant first forms an edge-type embedding
-$\bm{u}_{ij}=\mathrm{Emb}_{\mathrm{edge}}(t_{ij})$ and a geometric feature
-$\bm{g}_{ij}=\varphi(r_{ij}) \oplus Y(\hat{\bm{r}}_{ij})$, and then applies
+so node encoders initialize scalar chemical features. One available edge-encoder variant first forms an edge-type embedding $\bm{u}_{ij}=\mathrm{Emb}_{\mathrm{edge}}(t_{ij})$ and a geometric feature $\bm{g}_{ij}=\varphi(r_{ij}) \oplus Y(\hat{\bm{r}}_{ij})$, and then applies
 \begin{equation}
 \bm{e}_{ij}^{(0)}
 =
 \mathrm{TP}_{\mathrm{enc}}\!\left(\bm{u}_{ij},\bm{g}_{ij}\right).
 \end{equation}
-If $\bm{h}_i^{(t)}$ denotes node features and
-$\bm{e}_{ij}^{(t)}$ denotes edge features at layer $t$, a generic \texttt{Mandala}
+If $\bm{h}_i^{(t)}$ denotes node features and $\bm{e}_{ij}^{(t)}$ denotes edge features at layer $t$, a generic \texttt{Mandala}
 message-passing step may be written as
 \begin{align}
 \bm{m}_{ij}^{(t)} &=
@@ -588,23 +471,11 @@ Y(\hat{\bm{r}}_{ij}), \varphi(r_{ij})
 \mathrm{Agg}_{j \in \mathcal{N}(i)} \, \bm{m}_{ij}^{(t)}
 \right),
 \end{align}
-Here, $\bm{h}_i^{(t)}$ denotes the irrep-valued latent feature carried by node
-$i$ at message-passing layer $t$, $\bm{e}_{ij}^{(t)}$ denotes the corresponding
-edge feature for the directed edge $i \rightarrow j$, $\bm{m}_{ij}^{(t)}$ is
-the edge message constructed at that layer, $\hat{\bm{r}}_{ij}$ is the unit
-vector along the relative displacement between atoms $i$ and $j$,
-$Y(\hat{\bm{r}}_{ij})$ denotes the spherical-harmonic embedding of that
-direction, and $\varphi(r_{ij})$ denotes a radial distance embedding. The
-neighbor set $\mathcal{N}(i)$ contains the atoms connected to node $i$ within
-the graph cutoff.
-In this base form, $\Phi_{\mathrm{edge}}^{(t)}$ and $\Phi_{\mathrm{node}}^{(t)}$ are
-equivariant maps assembled from tensor products, equivariant linear layers,
-radial MLPs, parity-aware nonlinearities, and optional residual connections,
-while $\mathrm{Agg}$ denotes a configurable aggregation rule such as summation
-or attention.
+Here, $\bm{h}_i^{(t)}$ denotes the irrep-valued latent feature carried by node $i$ at message-passing layer $t$, $\bm{e}_{ij}^{(t)}$ denotes the corresponding edge feature for the directed edge $i \rightarrow j$, $\bm{m}_{ij}^{(t)}$ is the edge message constructed at that layer, $\hat{\bm{r}}_{ij}$ is the unit vector along the relative displacement between atoms $i$ and $j$, $Y(\hat{\bm{r}}_{ij})$ denotes the spherical-harmonic embedding of that direction, and $\varphi(r_{ij})$ denotes a radial distance embedding.
+The neighbor set $\mathcal{N}(i)$ contains the atoms connected to node $i$ within the graph cutoff.
+In this base form, $\Phi_{\mathrm{edge}}^{(t)}$ and $\Phi_{\mathrm{node}}^{(t)}$ are equivariant maps assembled from tensor products, equivariant linear layers, radial MLPs, parity-aware nonlinearities, and optional residual connections, while $\mathrm{Agg}$ denotes a configurable aggregation rule such as summation or attention.
 
-In the concrete implementation, these updates are built from equivariant
-convolutions with radial weighting. Writing the concatenated local feature as
+In the concrete implementation, these updates are built from equivariant convolutions with radial weighting. Writing the concatenated local feature as
 \begin{equation}
 \bm{f}_{ij}^{(t)}
 =
@@ -631,8 +502,7 @@ and a radial MLP that returns one scalar coefficient per output irrep block,
 =
 \mathrm{MLP}_{\mathrm{rad}}\!\left(\varphi(r_{ij})\right).
 \end{equation}
-If $\widetilde{\bm{z}}_{ij}^{(t,a)}$ denotes the $a$th output irrep slice, the
-weighted equivariant convolution is
+If $\widetilde{\bm{z}}_{ij}^{(t,a)}$ denotes the $a$th output irrep slice, the weighted equivariant convolution is
 \begin{equation}
 \bm{q}_{ij}^{(t,a)}
 =
@@ -645,13 +515,11 @@ The node update then aggregates edge messages as
 \sum_{j\in\mathcal{N}(i)}
 \bm{q}_{ji}^{(t)},
 \end{equation}
-while edge and node updates both admit optional self-connections and residual
-paths. In the sequential message block used by the code, node features are first
-updated from the current edges and only then are edge features updated using the
-new node state.
+while edge and node updates both admit optional self-connections and residual paths.
+In the sequential message block used by the code, node features are first updated from the current edges and only then are edge features updated using the new node state.
 
-The readout stage maps final latent features to the irrep content required by
-each matrix target. For a target operator $X$, the head predicts irrep vectors
+The readout stage maps final latent features to the irrep content required by each matrix target.
+For a target operator $X$, the head predicts irrep vectors
 \begin{equation}
 \widehat{\bm{x}}_{ij}^{\bm{L},X}
 =
@@ -668,8 +536,7 @@ followed by inverse irrep-to-block conversion
 =
 Q_{a_i a_j}^{\top}\widehat{\bm{x}}_{ij}^{\bm{L},X}.
 \end{equation}
-For richer readout variants, the edge used by the head may first be transformed
-through a tensor-square map,
+For richer readout variants, the edge used by the head may first be transformed through a tensor-square map,
 \begin{equation}
 \bm{t}_{ij}^{(L)}
 =
@@ -703,10 +570,7 @@ When the onsite node-embedding override is enabled, zero-shift self-edges use
 \leftarrow
 \bm{h}_{i}^{(L)}
 \end{equation}
-instead of the corresponding edge embedding. The most elaborate readout
-variants further split scalar and non-scalar output channels or factorize each
-predicted block into a normalized equivariant direction and a positive scalar
-magnitude. In the latter case one predicts
+instead of the corresponding edge embedding. The most elaborate readout variants further split scalar and non-scalar output channels or factorize each predicted block into a normalized equivariant direction and a positive scalar magnitude. In the latter case one predicts
 \begin{equation}
 \widehat{\bm{x}}_{e,\mathrm{norm}}^{X}
 =
@@ -730,68 +594,38 @@ and reconstructs the actual block prediction as
 \widehat{m}_{e}^{X}\,
 \widehat{X}_{e}^{\mathrm{norm}}.
 \end{equation}
-Because heads share the same equivariant latent representation, \texttt{Mandala} can
-predict Hamiltonian, overlap, and density matrices jointly with only modest
-additional readout cost.
+Because heads share the same equivariant latent representation, \texttt{Mandala} can predict Hamiltonian, overlap, and density matrices jointly with only modest additional readout cost.
 
-Starting from this base architecture, \texttt{Mandala} exposes a broad family of
-variants within the same software interface. Search dimensions include the hidden irrep content, the
-angular cutoff $\ell_{\max}$, the number of message-passing layers, the radial
-basis size, the depth of the neck and head MLPs, and the choice of tensor
-product implementation. The message-passing blocks support alternative edge
-updates (tensor-product, concatenation-based, and replacement-style variants),
-alternative node updates (sum, concatenation, and replacement variants),
-alternative aggregation mechanisms (including attention-style aggregation),
-pre- and post-linear transformations, optional self-connections, and optional
-node and edge residual paths.
+Starting from this base architecture, \texttt{Mandala} exposes a broad family of variants within the same software interface.
+Search dimensions include the hidden irrep content, the angular cutoff $\ell_{\max}$, the number of message-passing layers, the radial basis size, the depth of the neck and head MLPs, and the choice of tensor product implementation.
+The message-passing blocks support alternative edge updates (tensor-product, concatenation-based, and replacement-style variants), alternative node updates (sum, concatenation, and replacement variants), alternative aggregation mechanisms (including attention-style aggregation), pre- and post-linear transformations, optional self-connections, and optional node and edge residual paths.
 
-The encoder and head stages are likewise configurable. Edge encoders support
-various variants, together with optional tensor-square
-feature expansion of spherical-harmonics. Readout heads support direct
-equivariant projections, deeper equivariant MLP heads, optional tensor-square
-preconditioning of hidden features, scalar-specific auxiliary branches, optional
-log-scale or magnitude factorization for output amplitudes, optional use of node
-embeddings for self-edges, and separate treatment of diagonal, shifted-self,
-and off-diagonal blocks. Because all of these variants share the same
-block-sparse data model and irrep mapping layer, architecture search can be
-performed without changing the surrounding training and evaluation workflow.
+The encoder and head stages are likewise configurable. Edge encoders support various variants, together with optional tensor-square feature expansion of spherical-harmonics. Readout heads support direct equivariant projections, deeper equivariant MLP heads, optional tensor-square preconditioning of hidden features, scalar-specific auxiliary branches, optional log-scale or magnitude factorization for output amplitudes, optional use of node embeddings for self-edges, and separate treatment of diagonal, shifted-self, and off-diagonal blocks. Because all of these variants share the same block-sparse data model and irrep mapping layer, architecture search can be performed without changing the surrounding training and evaluation workflow.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/fig3_model_architecture.png}
-\caption{E(3)-equivariant message-passing architecture and sparse-operator
-readout. Atomic species, positions, and lattice vectors are transformed into
-periodic relative displacements, distances, radial features
-$\phi(r_{ij})$, and real spherical harmonics
-$Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Node and alternative edge encoders
-initialize irrep-valued latent features. Each repeated \texttt{MessageBlock}
-constructs equivariant edge messages from source-node, target-node, edge, radial,
-and angular features; aggregates the messages to update nodes; and updates edge
-features, with optional residual and self-connection paths. The implementation
-supports separate-weight or fully connected tensor products, several equivariant
-nonlinearities, and extended E(3)-MLP variants. Operator-specific Hamiltonian,
-overlap, and density heads map the final latent representation to output irreps,
-with optional tensor-square, scalar, magnitude-factorized, and edge-class-specific
-branches. The \texttt{BlockIrrepMapper} then converts the predicted irrep vectors
-into aligned sparse blocks $\widehat H$, $\widehat S$, and $\widehat D$.}
+\caption{E(3)-equivariant message-passing architecture and sparse-operator readout. Atomic species, positions, and lattice vectors are transformed into periodic relative displacements, distances, radial features $\phi(r_{ij})$, and real spherical harmonics $Y_{\ell m}(\widehat{\mathbf r}_{ij})$. Node and alternative edge encoders initialize irrep-valued latent features. Each repeated \texttt{MessageBlock} constructs equivariant edge messages from source-node, target-node, edge, radial, and angular features; aggregates the messages to update nodes; and updates edge features, with optional residual and self-connection paths. The implementation supports separate-weight or fully connected tensor products, several equivariant nonlinearities, and extended E(3)-MLP variants. Operator-specific Hamiltonian, overlap, and density heads map the final latent representation to output irreps, with optional tensor-square, scalar, magnitude-factorized, and edge-class-specific branches. The \texttt{BlockIrrepMapper} then converts the predicted irrep vectors into aligned sparse blocks $\widehat H$, $\widehat S$, and $\widehat D$.}
 \label{fig:model_architecture}
 \end{figure}
+
+
+%TODO: Fix notation of operators. Sometimes hats are used for H, S, D, and sometimes not. I noticed this here, but also the previous sections need to be checked. Please make the notation consistent. I think we can just remove all hats from operators to keep the notation simple and readable.
+
+
 \subsection{Sparse operator algebra, symmetrization, gauge correction, and density normalization}
 \label{subsec:postprocessing}
 
 Sparse operator manipulations are implemented directly on aligned block data.
-Given two sparse operators $A$ and $B$ with reverse-edge alignment already
-established, \texttt{Mandala} evaluates their trace contraction as
+Given two sparse operators $A$ and $B$ with reverse-edge alignment already established, \texttt{Mandala} evaluates their trace contraction as
 \begin{equation}
 \Tr(AB)
 =
 \sum_{(\bm{L},i,j)}
 \mathrm{tr}\!\left(A_{ij}^{\bm{L}} B_{ji}^{-\bm{L}}\right),
 \end{equation}
-without assembling dense global matrices. This operator algebra is reused for
-energy and electron-count evaluation, loss construction, and diagnostic
-analysis. For efficient vectorized evaluation, the implementation precomputes a
-reverse-edge alignment permutation. For each pair key $k$ with reverse key
+without assembling dense global matrices. This operator algebra is reused for energy and electron-count evaluation, loss construction, and diagnostic analysis.
+For efficient vectorized evaluation, the implementation precomputes a reverse-edge alignment permutation. For each pair key $k$ with reverse key
 $k^{\mathrm{rev}}$, the permutation $P_k$ is defined by
 \begin{equation}
 P_k(n)=m
@@ -811,10 +645,8 @@ B_{k^{\mathrm{rev}},P_k(n)}
 \right).
 \end{equation}
 
-For matrix targets expected to be symmetric or Hermitian in the chosen basis,
-\texttt{Mandala} supports explicit sparse symmetrization after block reconstruction. In
-the real-valued convention used by the implementation, this takes the
-form
+For matrix targets expected to be symmetric or Hermitian in the chosen basis, \texttt{Mandala} supports explicit sparse symmetrization after block reconstruction.
+In the real-valued convention used by the implementation, this takes the form
 \begin{equation}
 X_{ij}^{\bm{L}}
 \leftarrow
@@ -823,12 +655,9 @@ X_{ij}^{\bm{L}}
 X_{ij}^{\bm{L}} + \left(X_{ji}^{-\bm{L}}\right)^{\top}
 \right).
 \end{equation}
-This operation is carried out using precomputed reverse-edge permutations, so
-that symmetry is enforced consistently across periodic images and self-edges.
+This operation is carried out using precomputed reverse-edge permutations, so that symmetry is enforced consistently across periodic images and self-edges.
 
-Hamiltonian gauge freedom is handled operationally through the overlap-shift
-correction described in Section~\ref{subsubsec:gauge_invariance}. In practical
-evaluation and analysis workflows, \texttt{Mandala} computes
+Hamiltonian gauge freedom is handled operationally through the overlap-shift correction described in Section~\ref{subsubsec:gauge_invariance}. In practical evaluation and analysis workflows, \texttt{Mandala} computes
 \begin{equation}
 \widetilde{H}^{\mathrm{pred}}
 =
@@ -842,14 +671,10 @@ H^{\mathrm{pred}} - \mu_H S,
 \left\langle S, S \right\rangle_F
 },
 \end{equation}
-so that purely gauge-like Hamiltonian offsets are removed before reporting
-gauge-corrected operator errors.
+so that purely gauge-like Hamiltonian offsets are removed before reporting gauge-corrected operator errors.
 
-The framework also supports density normalization to the correct number of
-electrons. If a predicted density $\widehat{D}$ and overlap $\widehat{S}$
-produce
-$\widehat{N}_e = \Tr(\widehat{D}\widehat{S})$, then a normalized density is
-obtained by the scalar rescaling
+The framework also supports density normalization to the correct number of electrons.
+If a predicted density $\widehat{D}$ and overlap $\widehat{S}$ produce $\widehat{N}_e = \Tr(\widehat{D}\widehat{S})$, then a normalized density is obtained by the scalar rescaling
 \begin{equation}
 \widehat{D}_{\mathrm{norm}}
 =
@@ -859,38 +684,23 @@ obtained by the scalar rescaling
 \end{equation}
 This provides a simple and effective way to enforce electron-count consistency.
 
-Together, sparse trace evaluation, symmetry restoration, gauge correction, and
-density normalization define a compact postprocessing layer. It turns raw
-network outputs into physically interpretable operators ready for observable
-evaluation and Hamiltonian-based analyses such as band-structure calculation.
+Together, sparse trace evaluation, symmetry restoration, gauge correction, and density normalization define a compact postprocessing layer as illustrated in Figure~\ref{fig:postprocessing_analysis}.
+It turns raw network outputs into physically interpretable operators ready for observable evaluation and Hamiltonian-based analyses such as band-structure calculation.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/fig6_postprocessing_analysis.png}
-\caption{Physics-aware postprocessing and electronic-structure analysis of
-predicted sparse operators. The predicted Hamiltonian $\widehat H$, overlap
-$\widehat S$, and density matrix $\widehat D$ are first symmetrized using
-reverse-edge-aligned sparse blocks. The Hamiltonian branch removes an arbitrary
-overlap-proportional energy offset through the gauge correction
-$\widetilde H=H_{\mathrm{sym}}-\mu_H S_{\mathrm{sym}}$. The density branch
-rescales $D_{\mathrm{sym}}$ to enforce the target electron count through
-$\widetilde D=N_e D_{\mathrm{sym}}/\Tr(D_{\mathrm{sym}}S_{\mathrm{sym}})$
-and reports the remaining electron-count discrepancy. The corrected Hamiltonian
-and overlap define the generalized eigenproblem
-$\widetilde H C=S_{\mathrm{sym}}C\varepsilon$. The resulting physically
-processed operators support block-, irrep-, and distance-resolved matrix
-diagnostics, density-of-states and spectral calculations, and band-structure and
-related analyses while retaining the sparse representation.}
+\caption{Physics-aware postprocessing and electronic-structure analysis of predicted sparse operators. The predicted Hamiltonian $\widehat H$, overlap $\widehat S$, and density matrix $\widehat D$ are first symmetrized using reverse-edge-aligned sparse blocks. The Hamiltonian branch removes an arbitrary overlap-proportional energy offset through the gauge correction $\widetilde H=H_{\mathrm{sym}}-\mu_H S_{\mathrm{sym}}$. The density branch rescales $D_{\mathrm{sym}}$ to enforce the target electron count through $\widetilde D=N_e D_{\mathrm{sym}}/\Tr(D_{\mathrm{sym}}S_{\mathrm{sym}})$ and reports the remaining electron-count discrepancy. The corrected Hamiltonian and overlap define the generalized eigenproblem $\widetilde H C=S_{\mathrm{sym}}C\varepsilon$. The resulting physically processed operators support block-, irrep-, and distance-resolved matrix diagnostics, density-of-states and spectral calculations, and band-structure and related analyses while retaining the sparse representation.}
 \label{fig:postprocessing_analysis}
 \end{figure}
+
+
 \subsection{Observable guidance with band energies and electron counts}
 \label{subsec:training_objectives}
 
-\texttt{Mandala} supports pure matrix learning, mixed matrix-and-observable learning, and
-fully observable-guided training from one common operator-prediction pipeline.
+\texttt{Mandala} supports pure matrix learning, mixed matrix-and-observable learning, and fully observable-guided training from one common operator-prediction pipeline.
 Figure~\ref{fig:observable_guidance} summarizes the corresponding training flow.
-For a chosen set of matrix targets $\mathcal{M} \subseteq \{H,S,D\}$, the
-general training objective is
+For a chosen set of matrix targets $\mathcal{M} \subseteq \{H,S,D\}$, the general training objective is
 \begin{equation}
 \Loss
 =
@@ -898,8 +708,7 @@ general training objective is
 + \lambda_E \Loss^{E}
 + \lambda_N \Loss^{N}.
 \end{equation}
-The matrix terms compare predicted and reference sparse operators, typically by
-a weighted combination of $\ell_1$ and $\ell_2$ errors,
+The matrix terms compare predicted and reference sparse operators, typically by a weighted combination of $\ell_1$ and $\ell_2$ errors,
 \begin{equation}
 \Loss_X^{\mathrm{matrix}}
 =
@@ -908,9 +717,8 @@ a weighted combination of $\ell_1$ and $\ell_2$ errors,
 \end{equation}
 with $\eta$ controlled by configuration.
 
-Observable guidance is defined on quantities derived from the predicted
-operators. In the operator-centered workflow used throughout \texttt{Mandala}, the
-band energy and the number of electrons are
+Observable guidance is defined on quantities derived from the predicted operators.
+In the operator-centered workflow used throughout \texttt{Mandala}, the band energy and the number of electrons are
 \begin{equation}
 \widehat{E_b} = \Tr(\widehat{D}\widehat{H}),
 \qquad
@@ -939,9 +747,7 @@ In the sparse aligned implementation, these quantities are evaluated as
 \widehat{S}_{k^{\mathrm{rev}},P_k(n)}
 \right).
 \end{align}
-The framework also supports mixed observable guidance paths in which one of the
-operators entering the trace is replaced by the reference operator, for example
-the diagnostic contractions
+The framework also supports mixed observable guidance paths in which one of the operators entering the trace is replaced by the reference operator, for example the diagnostic contractions
 \begin{equation}
 \widehat{E}_{H|D^{\mathrm{ref}}}
 =
@@ -961,11 +767,9 @@ and
 =
 \Tr\!\left(D^{\mathrm{ref}} \widehat{S}\right),
 \end{equation}
-enabling diagnostic and training modes
-that separate errors due to different predicted operators.
+enabling diagnostic and training modes that separate errors due to different predicted operators.
 
-The current implementation also exposes experimental derivatives of the
-operator-derived band energy with respect to atomic coordinates and the cell,
+The current implementation also exposes experimental derivatives of the operator-derived band energy with respect to atomic coordinates and the cell,
 \begin{equation}
 \bm{F}^{\mathrm{band}}_I
 =
@@ -977,124 +781,74 @@ operator-derived band energy with respect to atomic coordinates and the cell,
 \frac{\partial \widehat{E_b}}{\partial h},
 \qquad \Omega=\det(h).
 \end{equation}
-These derivatives are not total-energy forces or stresses because
-$\widehat E_b=\Tr(\widehat D\widehat H)$ omits the remaining contributions to the
-Kohn--Sham total energy. They are therefore not presented here as validated
-supervision targets.
+These derivatives are not total-energy forces or stresses because $\widehat E_b=\Tr(\widehat D\widehat H)$ omits the remaining contributions to the Kohn--Sham total energy.
+They are therefore not presented here as validated supervision targets.
 
-The supported observable-guidance objective in this work is thus restricted to
-matrix entries, the band-energy observable, and the electron count.
-Once the remaining total-energy contributions are implemented, the existing
-automatic-differentiation pathway can be extended to total-energy force and
-stress supervision without changing the sparse-operator representation.
+The supported observable-guidance objective in this work is thus restricted to matrix entries, the band-energy, and the electron count.
+Once the remaining total-energy contributions are implemented, the existing automatic-differentiation pathway can be extended to total-energy force and stress supervision without changing the sparse-operator representation.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/fig4_observable_guidance.png}
-\caption{Observable-guided training from predicted sparse operators. Reference
-Hamiltonian, overlap, and density targets, represented as aligned sparse blocks or
-irrep coefficients, directly supervise the predicted operators $\widehat H$,
-$\widehat S$, and $\widehat D$. The same operator set yields the band-energy
-observable $\widehat E_b=\Tr(\widehat D\widehat H)$ and electron count
-$\widehat N_e=\Tr(\widehat D\widehat S)$ through differentiable sparse trace
-contractions. Experimental force and stress outputs are derivatives of the band
-energy only and are not total-energy derivatives. For periodic calculations,
-an optional spectral term can additionally compare generalized-eigenvalue
-spectra on a specified k-point mesh. All supported matrix and observable terms
-are combined in a weighted objective. Configuration controls
-select per-target matrix weights, observable terms, partial-reference traces,
-density-specific weighting, and training schedules, allowing pure matrix
-supervision or joint matrix-, band-energy-, and electron-count-guided training
-without separate observable heads.
-}
+\caption{Observable-guided training from predicted sparse operators. Reference Hamiltonian, overlap, and density targets, represented as aligned sparse blocks or irrep coefficients, directly supervise the predicted operators $\widehat H$, $\widehat S$, and $\widehat D$. The same operator set yields the band-energy observable $\widehat E_b=\Tr(\widehat D\widehat H)$ and electron count $\widehat N_e=\Tr(\widehat D\widehat S)$ through differentiable sparse trace contractions. Experimental force and stress outputs are derivatives of the band energy only and are not total-energy derivatives. For periodic calculations, an optional spectral term can additionally compare generalized-eigenvalue spectra on a specified k-point mesh. All supported matrix and observable terms are combined in a weighted objective. Configuration controls select per-target matrix weights, observable terms, partial-reference traces, density-specific weighting, and training schedules, allowing pure matrix supervision or joint matrix-, band-energy-, and electron-count-guided training without separate observable heads.}
 \label{fig:observable_guidance}
 \end{figure}
+
+
 \subsection{Configuration-driven architecture search}
 \label{subsec:search}
 
-Because the same sparse operator workflow supports many architectural choices,
-\texttt{Mandala} treats model search as a primary scientific use case rather than as an
-auxiliary engineering convenience. All major representation, encoder,
-message-passing, readout, and loss-weighting choices are exposed as structured
-configuration parameters and can therefore be swept systematically. We use
-Weights \& Biases (W\&B) to launch and track sweeps, retain run configurations
-and checkpoint references, and compare completed trials~\cite{wandb}. Its free
-academic license made this exploration practical for the present work.
+Because the same sparse operator workflow supports many architectural choices, \texttt{Mandala} treats model search as a primary scientific use case rather than as an auxiliary engineering convenience.
+All major representation, encoder, message-passing, readout, and loss-weighting choices are exposed as structured configuration parameters and can therefore be swept systematically.
+We use Weights \& Biases (W\&B) to launch and track sweeps, retain run configurations and checkpoint references, and compare completed trials~\cite{wandb}.
+Its free academic license made this exploration practical for the present work.
 
-Search dimensions include hidden irreps, angular cutoff, radial basis size,
-message-passing depth, encoder style, tensor-product type, normalization and
-nonlinearity families, node and edge update variants, residual pathways, neck
-and head depth, separate treatment of shifted-self blocks, tensor-square readout
-options, scalar-specific branches, observable-loss coefficients, and the subset
-of matrix targets predicted jointly. This wide
-configuration surface is one of the main scientific strengths of the framework:
-it enables controlled comparisons between architecture families without forcing
-changes to the data model, parser layer, or observable-evaluation stack. The
-importance of systematic hyperparameter exploration in machine-learned
-electronic-structure models has also been emphasized in related work on
-training-free optimization strategies \cite{hyperparameterpaper}.
+Search dimensions include hidden irreps, angular cutoff, radial basis size, message-passing depth, encoder style, tensor-product type, normalization and nonlinearity families, node and edge update variants, residual pathways, neck and head depth, separate treatment of shifted-self blocks, tensor-square readout options, scalar-specific branches, observable-loss coefficients, and the subset of matrix targets predicted jointly.
+This wide configuration surface is one of the main scientific strengths of the framework:
+it enables controlled comparisons between architecture families without forcing changes to the data model, parser layer, or observable-evaluation stack.
+The importance of systematic hyperparameter exploration in machine-learned electronic-structure models has also been emphasized in related work on training-free optimization strategies \cite{hyperparameterpaper}.
+
 
 \subsection{Current limitations and development roadmap}
 \label{subsec:limitations}
 
-The present implementation is designed for localized-orbital electronic-structure
-data that can be represented by real-valued, atom-pair-resolved sparse blocks.
+The present implementation is designed for localized-orbital electronic-structure data that can be represented by real-valued, atom-pair-resolved sparse blocks.
 Orbital definitions must be known for every chemical species.
-Locality is controlled through a finite cutoff radius;
-consequently, accuracy and computational cost depend on whether the selected
-cutoff captures the relevant operator range. Periodic spectral analysis further
-requires consistent lattice-shift support and a numerically well-conditioned
-overlap matrix.
+Locality is controlled through a finite cutoff radius; consequently, accuracy and computational cost depend on whether the selected cutoff captures the relevant operator range.
+Periodic spectral analysis further requires consistent lattice-shift support and a numerically well-conditioned overlap matrix.
 
-The current training and logging workflows are primarily optimized for one
-structure per batch which is typical for these kinds of networks,
-and larger-batch and distributed-data behavior requires
-additional validation. The configuration surface is intentionally broad, but
-not every combination is equally mature; the controlled ablations reported in
-this work are therefore important for identifying supported reference settings.
-Most importantly, the scalar $\Tr(DH)$ is a band-energy observable rather than
-the complete Kohn--Sham total energy. Its coordinate and cell derivatives cannot
-be interpreted as total-energy forces and stresses. Adding all total-energy
-contributions and validating their derivatives is a planned extension.
+The current training and logging workflows are primarily optimized for one structure per batch which is typical for these kinds of networks, and larger-batch and distributed-data behavior requires additional validation.
+The configuration surface is intentionally broad, but not every combination is equally mature; the controlled ablations reported in this work are therefore important for identifying supported reference settings.
+Most importantly, the scalar $\Tr(DH)$ is a band-energy observable rather than the complete Kohn--Sham total energy.
+Its coordinate and cell derivatives cannot be interpreted as total-energy forces and stresses.
+Adding all total-energy contributions and validating their derivatives is a planned extension.
+
 
 \subsection{Verification, reproducibility, and extensibility}
 \label{subsec:verification}
 
-\texttt{Mandala} includes tests and validation routines covering data parsing, basis
-harmonization, sparse operator alignment, block-to-irrep mapping, graph
-construction, equivariant tensor-product paths, observable evaluation, and
-end-to-end training workflows. These checks are especially important in a code
-base where subtle mistakes in basis ordering, reverse-edge alignment, or irrep
-bookkeeping can produce apparently plausible but physically inconsistent
-results.
+\texttt{Mandala} includes tests and validation routines covering data parsing, basis harmonization, sparse operator alignment, block-to-irrep mapping, graph construction, equivariant tensor-product paths, observable evaluation, and end-to-end training workflows.
+These checks are especially important in a code base where subtle mistakes in basis ordering, reverse-edge alignment, or irrep bookkeeping can produce apparently plausible but physically inconsistent results.
 
-Reproducibility follows from configuration-driven runs, explicit snapshot
-serialization, deterministic sparse edge ordering, and checkpointed training.
-Extensibility follows from the layered structure described above: new electronic
-structure backends, new observable definitions, new equivariant blocks, and new
-training objectives can be incorporated without changing the core operator data
-model. This design allows \texttt{Mandala} to function both as a reusable
-scientific software package and as a framework for rapid methodological
-experimentation.
+Reproducibility follows from configuration-driven runs, explicit snapshot serialization, deterministic sparse edge ordering, and checkpointed training.
+Extensibility follows from the layered structure described above: new electronic structure backends, new observable definitions, new equivariant blocks, and new training objectives can be incorporated without changing the core operator data model.
+This design allows \texttt{Mandala} to function both as a reusable scientific software package and as a framework for rapid methodological experimentation.
+
 
 \section{Results}
 \label{sec:results}
 
-Performance of the \texttt{Mandala} framework is evaluated on three electronic-structure data sets that span distinct sources of electronic-structure complexity:
-multiple chemical species in ZnCu$_2$Sn(SeS)$_2$, configurational disorder in
-glassy SiO$_2$, and required spectral precision for band structure modeling of a silicon crystal. The reported validation errors are aggregate values averaged over the
-full validation split for the selected models. Each figure is generated for
-one representative structure from the corresponding validation split.
+The performance of the \texttt{Mandala} framework is evaluated on three electronic-structure data sets that span distinct sources of electronic-structure complexity:
+multiple chemical species in the chalcogenide ZnCu$_2$Sn(SeS)$_2$, configurational disorder in amorphous SiO$_2$, and required spectral precision for band structure modeling of a bulk silicon crystal.
+The reported validation errors are aggregate values averaged over the full validation split for the selected models.
+Each figure is generated for one representative structure from the corresponding validation split.
+
 
 \subsection{Multicomponent ZnCu$_2$Sn(SeS)$_2$}
 
-ZnCu$_2$Sn(SeS)$_2$ combines five elements and chemically distinct cation and
-anion environments in one periodic material. Its electronic structure contains
-many element-pair channels with different orbital content, so a single model
-must resolve both the heterogeneous local chemistry and the coupling between
-those environments. The aggregate validation result is summarized in
-Table~\ref{tab:zncusnses-validation}; the complete configuration of the
-evaluated model is provided in \mbox{\ref{app:model-config-zncusnses}}.
+ZnCu$_2$Sn(SeS)$_2$ combines five elements and chemically distinct cation and anion environments in one periodic material.
+Its electronic structure contains many element-pair channels with different orbital content, so a single model must resolve both the heterogeneous local chemistry and the coupling between those environments.
+The aggregate validation result is summarized in Table~\ref{tab:zncusnses-validation}; the complete configuration of the evaluated model is provided in \mbox{\ref{app:model-config-zncusnses}}.
 
 \begin{table}[H]
 \centering
@@ -1109,41 +863,33 @@ Hamiltonian MAE & 0.003013~eV \\
 \end{tabular}
 \end{table}
 
-Figure~\ref{fig:zncusnses-hamiltonian} resolves a representative prediction into
-atom-pair matrix blocks. The $\pm0.01$~eV range is narrow compared with the
-Hamiltonian elements and exposes residual structure in both on-site and
-off-site blocks. The correlation in Fig.~\ref{fig:zncusnses-correlation} includes
-all shift-resolved elements of the same structure and gives $R^2=0.999475$.
+%TODO: Also add the corresponding relative percentage error to the table.
+
+
+Figure~\ref{fig:zncusnses-hamiltonian} resolves a representative prediction into atom-pair matrix blocks. The $\pm0.01$~eV range is narrow compared with the Hamiltonian elements and exposes residual structure in both on-site and off-site blocks.
+The correlation in Fig.~\ref{fig:zncusnses-correlation} includes all shift-resolved elements of the same structure and gives $R^2=0.999475$.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_zncusnses_hamiltonian_first6.png}
-\caption{Hamiltonian fragments for the first six atoms of a representative
-ZnCu$_2$Sn(SeS)$_2$ validation structure. The common color range is
-$\pm0.01$~eV.}
+\caption{Hamiltonian fragments for the first six atoms of a representative ZnCu$_2$Sn(SeS)$_2$ validation structure. The common color range is $\pm0.01$~eV.}
 \label{fig:zncusnses-hamiltonian}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.68\textwidth]{figures/results/paper_zncusnses_hamiltonian_correlation.png}
-\caption{Element-wise Hamiltonian correlation for the representative
-ZnCu$_2$Sn(SeS)$_2$ structure. Counts use a logarithmic color scale; all
-matrix elements are overlaid as points.}
+\caption{Element-wise Hamiltonian correlation for the representative ZnCu$_2$Sn(SeS)$_2$ structure. Counts use a logarithmic color scale; all matrix elements are overlaid as points.}
 \label{fig:zncusnses-correlation}
 \end{figure}
 
+
 \subsection{Electronic density of states of SiO$_2$}
 
-The SiO$_2$ dataset consists of 150-atom glass structures. Variations in bond
-lengths, bond angles, and coordination environments replace the small set of
-symmetry-equivalent neighborhoods present in a crystal. This makes the dataset
-a test of whether the local equivariant representation remains accurate across
-a broad distribution of amorphous environments. Table~\ref{tab:sio2-validation}
-reports the aggregate validation metrics. For this Hamiltonian-only model, the
-band energy is evaluated by contracting the predicted Hamiltonian with the
-reference density. Its complete configuration is provided in
-\mbox{\ref{app:model-config-siox}}.
+The SiO$_2$ dataset consists of 150-atom glass structures. Variations in bond lengths, bond angles, and coordination environments replace the small set of symmetry-equivalent neighborhoods present in a crystal.
+This makes the dataset a test of whether the local equivariant representation remains accurate across a broad distribution of amorphous environments.
+Table~\ref{tab:sio2-validation} reports the aggregate validation metrics. For this Hamiltonian-only model, the band energy is evaluated by contracting the predicted Hamiltonian with the reference density.
+Its complete configuration is provided in \mbox{\ref{app:model-config-siox}}.
 
 \begin{table}[H]
 \centering
@@ -1159,32 +905,26 @@ Band-energy MAE & 0.15eV/atom \\
 \end{tabular}
 \end{table}
 
-The density of states in Fig.~\ref{fig:sio2-dos} tests the collective spectral
-consequence of the predicted matrix rather than individual matrix elements.
-The residual is
-largest where narrow variations in the reference DOS amplify small shifts of
-the eigenvalue distribution.
+%TODO: Also add the corresponding relative percentage error to the table.
+
+
+The density of states in Fig.~\ref{fig:sio2-dos} tests the collective spectral consequence of the predicted matrix rather than individual matrix elements.
+The residual is largest where narrow variations in the reference DOS amplify small shifts of the eigenvalue distribution.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.88\textwidth]{figures/results/paper_sio2_dos_comparison_and_error.png}
-\caption{Density of states and its prediction error for a representative
-glassy SiO$_2$ validation structure. The calculation uses Gaussian broadening
-with $\sigma=0.2$~eV on a $2\times2\times2$ k-point mesh. The dotted line marks
-the Fermi level.}
+\caption{Density of states and its prediction error for a representative glassy SiO$_2$ validation structure. The calculation uses Gaussian broadening with $\sigma=0.2$~eV on a $2\times2\times2$ k-point mesh. The dotted line marks the Fermi level.}
 \label{fig:sio2-dos}
 \end{figure}
 
+%TODO: Make the vertical lines of the Fermi level more visible. Maybe use a more visible color.
+
+
 \subsection{Band structure, density of states, and density matrix of silicon}
 
-The perturbed-silicon dataset retains the diamond-crystal topology while
-introducing small atomic displacements ($\sigma = 0.02\r{A}$ and $\sigma = 0.05\r{A}$). Its single-species composition and
-regular coordination remove the chemical and configurational complexity of the
-other two systems, allowing the attainable precision of the equivariant model
-to be assessed on a simpler crystalline electronic structure. The aggregate
-validation metrics of the joint Hamiltonian--density--overlap model are given
-in Table~\ref{tab:silicon-validation}; its complete configuration is provided
-in \mbox{\ref{app:model-config-silicon}}.
+The perturbed-silicon dataset retains the diamond-crystal topology while introducing small atomic displacements ($\sigma = 0.02\r{A}$ and $\sigma = 0.05\r{A}$). Its single-species composition and regular coordination remove the chemical and configurational complexity of the other two systems, allowing the attainable precision of the equivariant model to be assessed on a simpler crystalline electronic structure.
+The aggregate validation metrics of the joint Hamiltonian--density--overlap model are given in Table~\ref{tab:silicon-validation}; its complete configuration is provided in \mbox{\ref{app:model-config-silicon}}.
 
 \begin{table}[H]
 \centering
@@ -1200,49 +940,37 @@ Density-matrix MAE & $5.736\times10^{-5}$ \\
 \end{tabular}
 \end{table}
 
-The predicted Hamiltonian and overlap determine the bands and DOS in
-Fig.~\ref{fig:silicon-bands-dos}. Agreement across occupied and low-lying
-unoccupied bands shows that the matrix accuracy is preserved through the
-generalized eigenvalue problem. The valence-band maximum and conduction-band
-dispersion around the high-symmetry points are reproduced without fitting the
-bands as direct targets.
+%TODO: Also add the corresponding relative percentage error to the table.
+
+The predicted Hamiltonian and overlap determine the bands and DOS in Fig.~\ref{fig:silicon-bands-dos}. Agreement across occupied and low-lying unoccupied bands shows that the matrix accuracy is preserved through the generalized eigenvalue problem.
+The valence-band maximum and conduction-band dispersion around the high-symmetry points are reproduced without fitting the bands as direct targets.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_silicon_band_structure_and_dos.png}
-\caption{Band structure and density of states for a representative
-perturbed-silicon validation structure. The path is
-$L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$,
-and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh.
-The dotted line marks the Fermi level.}
+\caption{Band structure and density of states for a representative perturbed-silicon validation structure. The path is $L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$, and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh. The dotted line marks the Fermi level.}
 \label{fig:silicon-bands-dos}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_silicon_density_first6.png}
-\caption{Density-matrix fragments for the first six atoms of the representative
-silicon validation structure. The common color range is $\pm0.01$, with
-periodic-image contributions kept shift-resolved.}
+\caption{Density-matrix fragments for the first six atoms of the representative silicon validation structure. The common color range is $\pm0.01$, with periodic-image contributions kept shift-resolved.}
 \label{fig:silicon-density}
 \end{figure}
 
-For each atom pair and periodic shift, the Hamiltonian or density contribution
-is a $13\times13$ block in the local orbital basis. For a predicted block
-$\widehat{M}$ and its reference $M$, the relative block error shown in
-Fig.~\ref{fig:silicon-density-errors} is
+For each atom pair and periodic shift, the Hamiltonian or density contribution is a $13\times13$ block in the local orbital basis.
+%TODO: Please check the following sentence referencing Figure 9.
+An example of the density matrix is shown in Figure~\ref{fig:silicon-density}, where ground-truth is compared to predicted density matrix and the error is shown for a subset of the full density matrix.
+For a predicted block $\widehat{M}$ and its reference $M$, the relative block error shown in Fig.~\ref{fig:silicon-density-errors} is
 \begin{equation}
 \epsilon_{\mathrm{rel}}(\widehat{M},M)
 =\frac{\frac{1}{169}\sum_{a,b}|\widehat{M}_{ab}-M_{ab}|}
 {\max\!\left(\frac{1}{169}\sum_{a,b}|M_{ab}|,10^{-12}\right)}.
 \end{equation}
-The discrete distance groups
-correspond to coordination shells of the perturbed crystal. Hamiltonian blocks
-have their smallest relative errors over the strongly coupled intermediate
-shells and larger relative errors near the cutoff, where normalization by weak
-target blocks magnifies the ratio. The density matrix shows greater
-shell-to-shell variation because its longer-range blocks encode the occupied
-electronic subspace rather than the operator alone.
+The discrete distance groups correspond to coordination shells of the perturbed crystal.
+Hamiltonian blocks have their smallest relative errors over the strongly coupled intermediate shells and larger relative errors near the cutoff, where normalization by weak target blocks magnifies the ratio.
+The density matrix shows greater shell-to-shell variation because its longer-range blocks encode the occupied electronic subspace rather than the operator alone.
 
 \begin{figure}[H]
 \centering
@@ -1256,10 +984,10 @@ electronic subspace rather than the operator alone.
 \includegraphics[width=\linewidth]{figures/results/paper_silicon_density_relative_error_vs_edge_length.png}
 \small (b) Density
 \end{minipage}
-\caption{Relative block error by atom-pair distance for the representative
-perturbed-silicon structure. Each point is one shift-resolved block.}
+\caption{Relative block error by atom-pair distance for the representative perturbed-silicon structure. Each point is one shift-resolved block.}
 \label{fig:silicon-density-errors}
 \end{figure}
+
 
 \section{Ablations}
 \label{sec:ablations}
@@ -1324,10 +1052,8 @@ for four running ablations.}
 \section{Public Interface and Usage Examples}
 \label{sec:usage-examples}
 
-The public interface keeps user-facing code deliberately lightweight:
-simple scripts allow users to run extensive analyses.
-A calculation can be loaded and its sparse
-operator-derived quantities examined directly:
+The public interface keeps user-facing code deliberately lightweight: simple scripts allow users to run extensive analyses.
+A calculation can be loaded and its sparse operator-derived quantities examined directly:
 
 \begin{lstlisting}
 from data.snapshot import Snapshot
@@ -1339,8 +1065,7 @@ print(snapshot.get_band_energy())
 print(snapshot.get_number_of_electrons())
 \end{lstlisting}
 
-A trained model is restored with its saved configuration and orbital metadata,
-then applied directly to the same snapshot:
+A trained model is restored with its saved configuration and orbital metadata, then applied directly to the same snapshot:
 
 \begin{lstlisting}
 import torch
@@ -1352,8 +1077,7 @@ predictions = predict_snapshot(model, snapshot)
 predicted_hamiltonian = predictions["hamiltonian"]
 \end{lstlisting}
 
-One can evaluate a Hamiltonian-only model on band
-energy using the reference density:
+One can evaluate a Hamiltonian-only model on band energy using the reference density:
 
 \begin{lstlisting}
 from core.sparse_math import trace_matmul_sparse_block_matrix
@@ -1363,8 +1087,7 @@ band_energy = trace_matmul_sparse_block_matrix(
 )
 \end{lstlisting}
 
-Likewise, the predicted Hamiltonian can be combined explicitly with a reference
-overlap matrix for generalized-eigenvalue band-structure analysis:
+Likewise, the predicted Hamiltonian can be combined explicitly with a reference overlap matrix for generalized-eigenvalue band-structure analysis:
 
 \begin{lstlisting}
 from net.evaluation import predictions_to_snapshot
@@ -1379,27 +1102,24 @@ bands = predicted.get_band_structure(
 print(bands.eigenvalues.shape)
 \end{lstlisting}
 
-This interface supports a wide range of workflows,
-with minimal user code required to load data, restore models, and evaluate observables.
+This interface supports a wide range of workflows, with minimal user code required to load data, restore models, and evaluate observables.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
 \texttt{Mandala} is a scientific software framework for learning sparse electronic-structure operators with E(3)-equivariant graph neural networks. Its defining features are the explicit sparse block representation of Hamiltonian, overlap, and density matrices; the modular software layers that connect parsing, basis harmonization, irrep mapping, graph construction, model definition, and training; and the ability to supervise not only matrices themselves but also observables derived from them.
 
-The framework combines capabilities that are often developed separately. From the electronic-structure side, it retains access to operator-level information and basis-aware quantities. From the atomistic machine-learning side, it inherits the flexibility of modern equivariant message passing, multitask learning, and automated hyperparameter search. By combining these perspectives, \texttt{Mandala} supports workflows in which one can train on matrix fidelity, band-energy-observable fidelity, and electron-count fidelity within one coherent implementation.
+The framework combines capabilities that are often developed separately. From the electronic-structure side, it retains access to operator-level information and basis-aware quantities. From the atomistic machine-learning side, it inherits the flexibility of modern equivariant message passing, multitask learning, and automated hyperparameter search. By combining these perspectives, \texttt{Mandala} supports workflows in which one can train on matrix, band-energy, and electron-count fidelity within one coherent implementation.
 
 In this sense, \texttt{Mandala} is aimed at simulation settings that go beyond conventional machine-learning interatomic potentials by retaining access to the predicted electronic structure, including Hamiltonian-derived quantities such as band structure and related observables. This makes the framework particularly relevant for problems in which explicitly electronic effects, such as charge transfer or electronically driven changes in bonding, are part of the physics that must be modeled rather than treated only indirectly. In its current form, \texttt{Mandala} is positioned as a modular platform for operator-level machine learning in electronic-structure simulation and for systematic exploration of equivariant architectures built on that operator-centered representation.
 
-The completed ZnCuSnSeS envelope-factorization ablation provides an initial
-example of this workflow: multiplying the prediction by the fitted envelope
-reduced the median validation Hamiltonian MAE by 5.6\% across the
-five paired seeds considered here. The remaining ablation panels are explicitly
-labelled placeholders and are not interpreted as scientific evidence until the
-corresponding runs and analyses are complete.
+The capabilities of \texttt{Mandala} for predicting the Hamiltonian matrix, density matrix, density of states, and band structure are illustrated for a variety of systems including the chalcogenide ZnCu$_2$Sn(SeS)$_2$, amorphous silicon oxide, and bulk silicon.
+
+
 \section*{Acknowledgments}
 
-This work was partially supported by the Center for Advanced Systems Understanding (CASUS), financed by the German Federal Ministry of Education and Research and by the Saxon state government out of the state budget approved by the Saxon State Parliament, and by the University of Wroc\l aw. Computational resources were provided by the \texttt{hemera} and \texttt{rosi} clusters of HZDR.
+This work was supported by the Center for Advanced Systems Understanding (CASUS), which is financed by Germany’s Federal Ministry of Research, Technology and Space (BMFTR) and by the Saxon State government out of the State budget approved by the Saxon State Parliament, and by the University of Wroc\l aw. Computational resources were provided by the \texttt{hemera} and \texttt{rosi} clusters of HZDR.
+
 
 \clearpage
 \bibliographystyle{elsarticle-num}
