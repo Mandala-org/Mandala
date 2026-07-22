@@ -35,6 +35,9 @@ from data.snapshot import Snapshot  # noqa: E402
 
 
 EPS = 1.0e-18
+DISTANCE_UNIT = "Angstrom"
+FIT_TARGET_QUANTITY = "hamiltonian_block_sum_of_squares"
+FIT_TARGET_UNIT = "Hartree^2"
 
 
 @dataclass(frozen=True)
@@ -747,8 +750,8 @@ def _plot_all_pairs_scatter(
             continue
         ax.scatter(x, y, s=18, alpha=0.8, color=colors[pair], label=pair)
     ax.set_title(f"{snapshot_label} Hamiltonian block sum of squares vs edge distance")
-    ax.set_xlabel("Edge distance")
-    ax.set_ylabel("Hamiltonian block sum of squares")
+    ax.set_xlabel(f"Edge distance ({DISTANCE_UNIT})")
+    ax.set_ylabel(f"Hamiltonian block sum of squares ({FIT_TARGET_UNIT})")
     ax.set_yscale("log")
     ax.grid(alpha=0.2)
     ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False)
@@ -784,8 +787,8 @@ def _plot_family_all_pairs(
         f"{snapshot_label} Hamiltonian block sum of squares vs edge distance\n"
         f"fit family: {family.name}"
     )
-    ax.set_xlabel("Edge distance")
-    ax.set_ylabel("Hamiltonian block sum of squares")
+    ax.set_xlabel(f"Edge distance ({DISTANCE_UNIT})")
+    ax.set_ylabel(f"Hamiltonian block sum of squares ({FIT_TARGET_UNIT})")
     ax.set_yscale("log")
     ax.grid(alpha=0.2)
     ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False)
@@ -839,8 +842,8 @@ def _plot_family_per_pair(
             ax.set_title(f"{pair}  logRMSE={fit['metrics']['log_rmse']:.3f}")
         else:
             ax.set_title(f"{pair} (fit skipped)")
-        ax.set_xlabel("Distance")
-        ax.set_ylabel("Sum of squares")
+        ax.set_xlabel(f"Distance ({DISTANCE_UNIT})")
+        ax.set_ylabel(f"Sum of squares ({FIT_TARGET_UNIT})")
         ax.set_yscale("log")
         ax.grid(alpha=0.2)
     for ax in flat_axes[len(order) :]:
@@ -893,7 +896,7 @@ def _plot_family_log_residuals(
         ax.scatter(x, resid, s=18, alpha=0.7, color=colors[pair])
         ax.axhline(0.0, color="black", linewidth=1.0, linestyle="--")
         ax.set_title(pair)
-        ax.set_xlabel("Distance")
+        ax.set_xlabel(f"Distance ({DISTANCE_UNIT})")
         ax.set_ylabel("log10(pred) - log10(gt)")
         ax.grid(alpha=0.2)
     for ax in flat_axes[len(order) :]:
@@ -951,6 +954,9 @@ def _write_markdown_summary(
     lines = [
         f"# Radial fit study: {snapshot_label}",
         "",
+        f"Distance unit: `{DISTANCE_UNIT}`.",
+        f"Fit target: `{FIT_TARGET_QUANTITY}` in `{FIT_TARGET_UNIT}`.",
+        "",
         "Primary metric used for ranking fit agreement here is `log_rmse`.",
         "",
     ]
@@ -983,6 +989,9 @@ def _write_selected_envelope_artifact(
         raise ValueError(f"Requested family {family_name!r} is not available.")
     payload = {
         "family": family_name,
+        "distance_unit": DISTANCE_UNIT,
+        "fit_target_quantity": FIT_TARGET_QUANTITY,
+        "fit_target_unit": FIT_TARGET_UNIT,
         "pairs": {},
     }
     for pair, fit in fits.items():

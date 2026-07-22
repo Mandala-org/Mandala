@@ -1,5 +1,8 @@
 {
+  "distance_unit": "Angstrom",
   "family": "slater_exp_quad_soft_wall",
+  "fit_target_quantity": "hamiltonian_block_sum_of_squares",
+  "fit_target_unit": "Hartree^2",
   "pairs": {
     "C-C": {
       "metrics": {

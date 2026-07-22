@@ -22,8 +22,8 @@ from ase.data import chemical_symbols
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.block_matrix import BlockMatrix
+from utils.units import HARTREE_TO_EV
 
-HARTREE_TO_EV = 27.2113845
 REQUIRED_FILES = (
     "hamiltonians.h5",
     "element.dat",
@@ -60,6 +60,9 @@ class DeepHE3Metadata:
             available_matrices=self.available_matrices,
             source_format="deeph_e3",
             source_energy_unit="eV",
+            internal_energy_unit="Hartree",
+            source_length_unit="Angstrom",
+            internal_length_unit="Angstrom",
         )
 
 

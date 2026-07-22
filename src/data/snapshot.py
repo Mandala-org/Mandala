@@ -28,14 +28,11 @@ Key features
 from __future__ import annotations
 
 import os
-import json
 import re
 from pathlib import Path
 from typing import Dict, Any, Mapping
 import torch
-import h5py
 from ase.io import read as ase_read
-from ase import Atoms
 from e3nn.o3 import Irreps
 
 from core.sparse_math import (
@@ -1279,75 +1276,20 @@ class Snapshot:
         return grid, dos
 
     def export_to_deephe3(self, path: str | os.PathLike):
-        """
-        Export the snapshot to the DeepH-E3 format.
+        """Export this snapshot using DeepH-E3's eV/Angstrom convention."""
+        from data.deeph_e3_exporter import _write_hdf5_matrix, _write_text_metadata
+        from utils.units import HARTREE_TO_EV
 
-        Parameters
-        ----------
-        path : str | os.PathLike
-            The directory where the files will be saved.
-        """
         path = Path(path)
-        os.makedirs(path, exist_ok=True)
-
-        # save_element
-        atoms = Atoms(self.hamiltonian.atoms)
-        with open(path / "element.dat", "w") as f:
-            for number in atoms.numbers:
-                f.write(f"{number}\n")
-
-        # save_info
-        with open(path / "info.json", "w") as f:
-            json.dump(
-                {"fermi_level": self.info.fermi_level.item(), "isspinful": False}, f
-            )
-
-        # save_lat
-        with open(path / "lat.dat", "w") as f:
-            for row in self.box:
-                for el in row:
-                    f.write(f"{el} ")
-                f.write("\n")
-
-        # save_rlat
-        rlat = 2 * torch.pi * torch.linalg.inv(self.box).T
-        with open(path / "rlat.dat", "w") as f:
-            for row in rlat:
-                for el in row:
-                    f.write(f"{el} ")
-                f.write("\n")
-
-        # save_site_positions
-        with open(path / "site_positions.dat", "w") as f:
-            for row in self.positions.T:
-                for el in row:
-                    f.write(f"{el}\t")
-                f.write("\n")
-
-        # save_hamiltonians
-        with h5py.File(path / "hamiltonians.h5", "w") as f:
-            for key in self.hamiltonian.keys():
-                edges = self.hamiltonian.pair_edges[key]
-                blocks = self.hamiltonian.pair_blocks[key]
-
-                # edges rows: 0:sx, 1:sy, 2:sz, 3:src, 4:dst
-                for i in range(edges.shape[1]):
-                    sx = edges[0, i].item()
-                    sy = edges[1, i].item()
-                    sz = edges[2, i].item()
-                    src = edges[3, i].item()
-                    dst = edges[4, i].item()
-
-                    # Key format: [sx, sy, sz, src, dst]
-                    name = str([sx, sy, sz, src, dst])
-                    f.create_dataset(
-                        name, data=blocks[i].to(torch.float64).cpu().numpy()
-                    )
-
-        # save_orbital_types
-        with open(path / "orbital_types.dat", "w") as f:
-            for atom in self.hamiltonian.atoms:
-                orbital_list = self.hamiltonian.orbital_cfg.element_to_irreps[atom].ls
-                for l in orbital_list:
-                    f.write(f"{l}\t")
-                f.write("\n")
+        path.mkdir(parents=True, exist_ok=True)
+        snapshot_openmx = self._change_basis("openmx")
+        _write_text_metadata(path, snapshot_openmx)
+        _write_hdf5_matrix(
+            path / "hamiltonians.h5",
+            snapshot_openmx.hamiltonian,
+            scale=HARTREE_TO_EV,
+        )
+        _write_hdf5_matrix(path / "overlaps.h5", snapshot_openmx.overlap, scale=1.0)
+        _write_hdf5_matrix(
+            path / "density_matrixs.h5", snapshot_openmx.density, scale=1.0
+        )

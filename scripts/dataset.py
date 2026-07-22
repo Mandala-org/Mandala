@@ -396,6 +396,11 @@ def build_deeph_e3_datasets(
             "blocks have identical DFT support ---"
         )
         cfg.graph_source = "target_edges"
+    print(
+        "--- DeepH-E3 units: source Hamiltonian/Fermi=eV -> internal=Hartree; "
+        "positions/lattice/edge lengths=Angstrom; logged hamiltonian MAE=eV, "
+        "MSE=eV^2; matrix optimization losses remain in internal units ---"
+    )
     all_pairs = discover_deeph_e3_snapshot_pairs(Path(data_path))
     random.Random(data_split_seed).shuffle(all_pairs)
     train_pairs, val_pairs, test_pairs = _split_shuffled_pairs(

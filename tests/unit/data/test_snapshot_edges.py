@@ -1,5 +1,6 @@
 import pytest
 import torch
+import json
 from collections import Counter
 from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix
@@ -101,6 +102,7 @@ def test_change_basis_geometry(mock_snapshot):
 
 def test_export_to_deephe3(mock_snapshot, tmp_path):
     snap = mock_snapshot
+    expected_blocks_ha = snap.hamiltonian.pair_blocks["H-H"].clone()
 
     # Mock info object which is needed for export
     class MockInfo:
@@ -112,15 +114,24 @@ def test_export_to_deephe3(mock_snapshot, tmp_path):
     snap.export_to_deephe3(out_dir)
 
     assert (out_dir / "hamiltonians.h5").exists()
+    assert (out_dir / "orbital_types.dat").exists()
+    assert (out_dir / "site_positions.dat").exists()
+    assert json.loads((out_dir / "info.json").read_text())["fermi_level"] == 0.0
 
     import h5py
 
     with h5py.File(out_dir / "hamiltonians.h5", "r") as f:
-        # Keys should be string of list [sx, sy, sz, src, dst]
-        key1 = str([0, 0, 0, 0, 1])
-        key2 = str([1, 0, 0, 0, 1])
+        # DeepH-E3 keys use one-based atom indices and Hamiltonians use eV.
+        key1 = str([0, 0, 0, 1, 2])
+        key2 = str([1, 0, 0, 1, 2])
 
         assert key1 in f
         assert key2 in f
 
         assert f[key1].shape == (1, 1)
+        assert f[key1][0, 0] == pytest.approx(
+            expected_blocks_ha[0, 0, 0].item() * 27.2114
+        )
+        assert f[key2][0, 0] == pytest.approx(
+            expected_blocks_ha[1, 0, 0].item() * 27.2114
+        )
