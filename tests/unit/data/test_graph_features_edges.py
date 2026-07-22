@@ -52,6 +52,7 @@ def test_compute_graph_features():
         edge_length_emb,
         edge_sh,
         num_self_edges,
+        edge_lengths,
     ) = compute_graph_features(pos, box, atoms, cfg, sh_irreps, edge_type2idx)
 
     # Check self edges
@@ -64,6 +65,8 @@ def test_compute_graph_features():
     # Check other edges
     # Should have 2 more edges
     assert edge_index.shape[1] == 4
+    assert torch.allclose(edge_lengths[:num_self_edges], torch.zeros(2))
+    assert torch.allclose(edge_lengths[num_self_edges:], torch.full((2,), 2.0))
 
     # Edge 0->1
     # Find edge where src=0, dst=1
@@ -121,6 +124,7 @@ def test_compute_graph_features_is_invariant_under_atom_image_relabeling():
         edge_length_emb_ref,
         edge_sh_ref,
         num_self_edges_ref,
+        edge_lengths_ref,
     ) = out_ref
     (
         edge_index_shifted,
@@ -129,6 +133,7 @@ def test_compute_graph_features_is_invariant_under_atom_image_relabeling():
         edge_length_emb_shifted,
         edge_sh_shifted,
         num_self_edges_shifted,
+        edge_lengths_shifted,
     ) = out_shifted
 
     # Geometry and ordering should be identical.
@@ -137,6 +142,7 @@ def test_compute_graph_features_is_invariant_under_atom_image_relabeling():
     assert num_self_edges_ref == num_self_edges_shifted
     assert torch.allclose(edge_length_emb_ref, edge_length_emb_shifted)
     assert torch.allclose(edge_sh_ref, edge_sh_shifted)
+    assert torch.allclose(edge_lengths_ref, edge_lengths_shifted)
 
     # Edge shifts change exactly by the atom-image relabeling rule:
     # new_shift = old_shift + shift(src) - shift(dst)

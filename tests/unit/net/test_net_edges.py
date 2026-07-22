@@ -28,10 +28,16 @@ def test_wrap_head_output():
     edges = torch.tensor([[0, 0, 0, 0, 1]]).t()
     vectors = torch.randn(1, 1)
 
-    raw = {"H-H": {"vectors": vectors, "edges": edges}}
+    raw = {"H-H": vectors}
     atoms = ("H", "H")
+    x = {
+        "atoms_tuple": atoms,
+        "atom_counts": {"H": 2},
+        "pred_pair_edges_static": {"H-H": edges},
+        "pred_lookup_static": {(0, 0, 0, 0, 1): ("H-H", 0)},
+    }
 
-    ibd = model._wrap_head_output(raw, atoms)
+    ibd = model._wrap_head_output(raw, x)
 
     assert isinstance(ibd, IrrepsBlockData)
     assert (0, 0, 0, 0, 1) in ibd.lookup

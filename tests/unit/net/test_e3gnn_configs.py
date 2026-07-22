@@ -16,8 +16,27 @@ from e3nn.o3 import Irreps
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.edge_alignment import build_prediction_edge_metadata
-from net.common import Config, resolve_hidden_irreps
+from net.common import Config as ProductionConfig, resolve_hidden_irreps
 from net.e3gnn import E3GNN
+
+
+def Config(**overrides):
+    """Construct a compact model while retaining the variant under test."""
+    values = dict(
+        l_max=2,
+        hidden_base_dim=4,
+        hidden_irreps=None,
+        n_radial=8,
+        radial_layers=[8],
+        num_layers_gnn=1,
+        neck_depth=1,
+        internal_e3mlp_layers=1,
+        head_e3mlp_layers=1,
+        matrix_targets=["hamiltonian", "overlap", "density"],
+        verbosity=0,
+    )
+    values.update(overrides)
+    return ProductionConfig(**values)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -85,7 +104,7 @@ HP_VARIANTS = [
     {"node_update_message_agg": "average"},
     {"node_update_message_agg": "attention", "node_update_attention_heads": 2},
     {"edge_update_residual": False, "node_update_residual": False},
-    {"l_max": 3, "hidden_base_dim": 32},
+    {"l_max": 3, "hidden_base_dim": 8},
     {"hidden_irreps": "8x0e+8x0o+4x1e+4x1o", "e3layernorm": True},
 ]
 

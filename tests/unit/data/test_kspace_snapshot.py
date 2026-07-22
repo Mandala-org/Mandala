@@ -53,7 +53,8 @@ def test_kspace_matrix_roundtrip_from_shiftspace():
     shifts_back, ham_shift_back = kmat.to_shiftspace_dense()
 
     assert torch.equal(shifts_back, shifts)
-    assert torch.allclose(ham_shift_back, ham_shift, atol=1e-6)
+    assert torch.allclose(ham_shift_back.imag, torch.zeros_like(ham_shift), atol=1e-6)
+    assert torch.allclose(ham_shift_back.real, ham_shift, atol=1e-6)
 
 
 @pytest.mark.unit
@@ -172,8 +173,10 @@ def test_load_pyscf_kspace_snapshot_from_shift_artifacts(tmp_path: Path):
     snap = ksnap.to_shift_space()
 
     assert ksnap.kmesh == (2, 1, 1)
+    shifted_block = snap.hamiltonian[(1, 0, 0, 0, 1)]
+    assert torch.allclose(shifted_block.imag, torch.zeros_like(shifted_block.imag))
     assert torch.allclose(
-        snap.hamiltonian[(1, 0, 0, 0, 1)],
+        shifted_block.real,
         torch.tensor([[-0.1]], dtype=torch.float32),
         atol=1e-6,
     )

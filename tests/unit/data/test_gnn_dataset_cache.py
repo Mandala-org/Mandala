@@ -167,6 +167,9 @@ def test_preprocessed_cache_file_changes_when_geometry_source_mode_changes(tmp_p
     )
     ds.convention = "e3nn"
     ds.dtype = torch.float32
+    ds.hamiltonian_envelope_mode = "off"
+    ds.pair_distance_normalization = "off"
+    ds.loss_weighting_mode = "off"
     ds.cfg = SimpleNamespace(
         snapshot_cache_dir=str(cache_root),
         l_max=5,

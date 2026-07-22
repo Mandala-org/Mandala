@@ -267,14 +267,13 @@ def test_message_block_equivariance():
 @pytest.mark.parametrize("mlp_layers", [1, 2])
 def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     """Tests the DeepHead for equivariance."""
-    E = 30
     cfg = Config(
         head_use_mlp_log_scale=head_use_mlp_log_scale,
         neck_depth=mlp_layers,
         head_e3mlp_layers=mlp_layers,
         head_log_scale_mlp_n_layers=mlp_layers,
-        l_max=3,
-        hidden_base_dim=16,
+        l_max=2,
+        hidden_base_dim=4,
         safety_checks=True,
     )
 
@@ -298,10 +297,14 @@ def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
     )
 
     # Inputs and Rotation
-    N = 10
+    # Prediction metadata requires reverse-edge closure. A complete directed
+    # graph is deterministic and exercises every H/O pair without duplicate
+    # edge identities, unlike the former random edge fixture.
+    N = 4
+    edge_index = torch.cartesian_prod(torch.arange(N), torch.arange(N)).T
+    E = edge_index.shape[1]
     node_feat = generate_equivariant_input(hidden_irreps, batch_size=N)
     edge_feat = generate_equivariant_input(hidden_irreps, batch_size=E)
-    edge_index = torch.randint(0, N, (2, E))  # Dummy node indices
     edge_shift = torch.zeros(3, E, dtype=torch.long)
     atoms = tuple("H" if i % 2 == 0 else "O" for i in range(N))
     edge_type_idx = torch.tensor(

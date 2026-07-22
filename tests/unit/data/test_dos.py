@@ -1,25 +1,36 @@
 import pytest
 from data.snapshot import Snapshot
-from net.common import Config
-from pathlib import Path
+from data.block_matrix import BlockMatrix
+from core.orbital_irrep_config import OrbitalIrrepConfig
+from collections import Counter
 import torch
 
 
 @pytest.fixture(scope="module")
 def snapshot():
-    base = Path("data/big/silicon/2700K")
-    matrix_path = base / "Si_DM"
-    info_path = base / "info.txt"
-    cfg = Config(
-        cutoff_radius=9.0,
+    orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "2s"})
+    atoms = ("H",)
+    edges = torch.zeros((5, 1), dtype=torch.long)
+    lookup = {(0, 0, 0, 0, 0): ("H-H", 0)}
+
+    def matrix(block):
+        return BlockMatrix(
+            atoms=atoms,
+            atom_counts=Counter(atoms),
+            pair_blocks={"H-H": block.unsqueeze(0)},
+            pair_edges={"H-H": edges.clone()},
+            lookup=dict(lookup),
+            orbital_cfg=orbital_cfg,
+            basis="e3nn",
+        )
+
+    return Snapshot(
+        hamiltonian=matrix(torch.diag(torch.tensor([-0.25, 0.35]))),
+        overlap=matrix(torch.eye(2)),
+        density=matrix(torch.eye(2)),
+        positions=torch.zeros(1, 3),
+        box=torch.eye(3) * 10.0,
     )
-    snap = Snapshot.from_openmx(
-        str(matrix_path),
-        str(info_path),
-        convention="openmx",
-        cfg=cfg,
-    )
-    return snap
 
 
 @pytest.mark.unit

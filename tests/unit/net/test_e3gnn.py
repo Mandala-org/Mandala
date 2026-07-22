@@ -5,13 +5,31 @@ from collections import Counter
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.edge_alignment import build_prediction_edge_metadata
-from net.common import Config
+from net.common import Config as ProductionConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from net.e3gnn import E3GNN
 from e3nn.o3 import Irreps
 from data.factory import DatasetFactory
 from data.block_matrix import IrrepsBlockData
 from data.graph_features import compute_graph_features
+
+
+def Config(**overrides):
+    """Construct a small model while preserving each test's explicit options."""
+    values = dict(
+        l_max=1,
+        hidden_base_dim=2,
+        hidden_irreps="2x0e+2x0o+1x1e+1x1o",
+        n_radial=4,
+        radial_layers=[4],
+        num_layers_gnn=1,
+        neck_depth=1,
+        internal_e3mlp_layers=1,
+        head_e3mlp_layers=1,
+        verbosity=0,
+    )
+    values.update(overrides)
+    return ProductionConfig(**values)
 
 
 def _build_static_graph_x(

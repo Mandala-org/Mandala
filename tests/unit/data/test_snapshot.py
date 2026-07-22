@@ -17,7 +17,7 @@ def _load_snapshot():
     # sample = Path("./data/small/H2O/original/H2O.matrix")
     # atoms = list("HHHHOO")
     # snap = parse_openmx_scfout(sample, atoms, cfg, convention="openmx")
-    cfg = Config(cutoff_radius=8.0)
+    cfg = Config(cutoff_radius=8.0, allow_openmx_positions_box_from_out=True)
     snap = Snapshot.from_openmx(
         Path("./data/small/H2O/original/H2O.matrix"),
         Path("./data/small/H2O/original/H2O.info.out"),
@@ -28,8 +28,8 @@ def _load_snapshot():
 
 
 @pytest.mark.unit
-def test_energy_and_electron_count():
-    snap = _load_snapshot()
+def test_energy_and_electron_count(small_angular_snapshot_e3nn):
+    snap = small_angular_snapshot_e3nn
     E = snap.get_energy()
     Ne = snap.get_number_of_electrons()
 
@@ -66,8 +66,8 @@ def test_symmetrize_matrices_keeps_energy_and_electrons(h2o_orbital_cfg):
 
 
 @pytest.mark.unit
-def test_save_load_roundtrip(tmp_path):
-    snap = _load_snapshot()
+def test_save_load_roundtrip(tmp_path, small_angular_snapshot_e3nn):
+    snap = small_angular_snapshot_e3nn
     file = tmp_path / "snapshot.pt"
     snap.save(file)
 

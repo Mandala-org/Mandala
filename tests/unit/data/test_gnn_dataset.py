@@ -14,28 +14,20 @@ import torch
 
 from data.gnn_dataset import E3GNNDataset
 from core.block_irrep_mapper import BlockIrrepMapper
-from data.snapshot import Snapshot
 from net.common import Config
 
 
-@pytest.fixture(scope="module")
-def dataset():
-    cfg = Config(cutoff_radius=8.0)
-    snap_H20 = Snapshot.from_openmx(
-        matrix_path=Path("data/small/H2O/original/H2O.matrix"),
-        info_path=Path("data/small/H2O/original/H2O.info.out"),
-        cfg=cfg,
+@pytest.fixture
+def dataset(monkeypatch, small_angular_snapshot_e3nn):
+    cfg = Config(cutoff_radius=5.0, n_radial=4)
+    mapper = BlockIrrepMapper(small_angular_snapshot_e3nn.hamiltonian.orbital_cfg)
+    monkeypatch.setattr(
+        "data.gnn_dataset.Snapshot.from_openmx",
+        lambda *args, **kwargs: small_angular_snapshot_e3nn,
     )
 
-    mapper = BlockIrrepMapper(snap_H20.hamiltonian.orbital_cfg)
-
     return E3GNNDataset(
-        [
-            (
-                Path("data/small/H2O/original/H2O.matrix"),
-                Path("data/small/H2O/original/H2O.info.out"),
-            )
-        ],
+        [(Path("synthetic.matrix"), Path("synthetic.out"))],
         mapper,
         cfg=cfg,
     )
@@ -54,3 +46,38 @@ def test_edge_sets(dataset):
     # ----  SH & radial embed sizes
     assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim
     assert x["edge_length_emb"].shape[1] == dataset.cfg.n_radial
+
+
+@pytest.mark.unit
+def test_to_allows_missing_optional_observable_targets():
+    class Movable:
+        def __init__(self):
+            self.devices = []
+
+        def to(self, device):
+            self.devices.append(torch.device(device))
+            return self
+
+    ds = object.__new__(E3GNNDataset)
+    ds.device = torch.device("cpu")
+    required = {key: Movable() for key in ("hamiltonian", "overlap", "density")}
+    present_stress = Movable()
+    y = {
+        **required,
+        "energy": None,
+        "num_electrons": None,
+        "forces": None,
+        "stress": present_stress,
+    }
+    ds.snapshots = [({}, y)]
+
+    returned = ds.to("meta")
+
+    assert returned is ds
+    assert ds.device == torch.device("meta")
+    assert y["energy"] is None
+    assert y["num_electrons"] is None
+    assert y["forces"] is None
+    assert present_stress.devices == [torch.device("meta")]
+    for value in required.values():
+        assert value.devices == [torch.device("meta")]

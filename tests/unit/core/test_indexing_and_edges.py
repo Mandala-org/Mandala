@@ -5,22 +5,15 @@ inside BlockMatrix / IrrepsBlockData.
 
 import pytest
 import random
-from pathlib import Path
 import torch
 
-from data.openmx_parser import parse_openmx_scfout
-from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 
 
 @pytest.fixture(scope="module")
-def data():
-    atoms = list("HHHHOO")  # global indices 0…5
-    cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
-    file = Path("./data/small/H2O/original/H2O.matrix")
-    return parse_openmx_scfout(file, atoms, cfg, convention="openmx"), BlockIrrepMapper(
-        cfg
-    )
+def data(small_angular_snapshot_e3nn):
+    snapshot = small_angular_snapshot_e3nn
+    return snapshot, BlockIrrepMapper(snapshot.hamiltonian.orbital_cfg)
 
 
 # --------------------------------------------------------------------------- #

@@ -57,9 +57,7 @@ def test_compute_irrep_metrics_zero_for_identical_blocks():
         orbital_cfg=mapper.orbital_cfg,
         basis="e3nn",
     )
-    pred = bm.to_vectors(mapper)
-    target = bm.to_vectors(mapper)
-    metrics = compute_irrep_metrics(pred, target, get_all_irreps(mapper), mapper)
+    metrics = compute_irrep_metrics(bm, bm, get_all_irreps(mapper), mapper)
 
     assert metrics
     assert all(value == pytest.approx(0.0, abs=1e-8) for value in metrics.values())

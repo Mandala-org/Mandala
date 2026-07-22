@@ -1,4 +1,5 @@
 import torch
+from pathlib import Path
 from collections import Counter
 from data.gnn_dataset import E3GNNDataset
 from data.snapshot import Snapshot
@@ -25,6 +26,13 @@ def test_process_snapshot_to_sample():
             )
             self.sh_irreps = Irreps("1x0e")
             self.dtype = self.cfg.dtype
+            self.device = torch.device("cpu")
+            self.hamiltonian_envelope_mode = "off"
+            self.pair_distance_normalization = "off"
+            self.loss_weighting_mode = "off"
+            self.envelope_table = None
+            self.edge_type_r0 = None
+            self.spectral_loss_enabled = False
             self.mapper = type(
                 "MockMapper",
                 (),
@@ -33,7 +41,12 @@ def test_process_snapshot_to_sample():
             self.orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})
 
         def _process_snapshot_to_sample(self, snap):
-            return E3GNNDataset._process_snapshot_to_sample(self, snap)
+            return E3GNNDataset._process_snapshot_to_sample(
+                self,
+                snap,
+                matrix_path=Path("synthetic.matrix"),
+                info_path=Path("synthetic.out"),
+            )
 
     ds = MockDataset()
 

@@ -1,85 +1,98 @@
 from pathlib import Path
-import sys
+
+import pytest
 import torch
 from ase.io import read as ase_read
 from e3nn.o3 import Irreps
 
-sys.path.append("src")
 from data.openmx_info_parser import parse_info_out, recover_box
 from data.graph_features import compute_graph_features
 from net.common import Config
 
-base = Path("data/small/ZnCu2Sn_SeS_2_scale_1_010")
-info = parse_info_out(base / "ZnCuSeS.out", dtype=torch.float64)
-cif = ase_read(base / "ZnCuSeS.cif")
 
-atoms = tuple(cif.get_chemical_symbols())
-pos_gt = torch.tensor(cif.get_positions(), dtype=torch.float64)
-box_A = torch.tensor(cif.cell.array, dtype=torch.float64)
-pos_out = info.positions.to(dtype=torch.float64)
-box_B = recover_box(info.frac.to(dtype=torch.float64), pos_out).to(dtype=torch.float64)
+@pytest.mark.integration
+def test_graph_features_are_invariant_for_historical_atom_image_relabeling_case():
+    """Preserve a real regression where one atom is represented in another image."""
+    base = Path("data/small/ZnCu2Sn_SeS_2_scale_1_010")
+    info = parse_info_out(base / "ZnCuSeS.out", dtype=torch.float64)
+    cif = ase_read(base / "ZnCuSeS.cif")
 
-invA = torch.linalg.inv(box_A)
-delta_frac = (pos_out - pos_gt) @ invA
-atom_shifts = torch.round(delta_frac).to(torch.long)
-resid = delta_frac - atom_shifts
-print("max atom-image residual vs CIF box:", float(resid.abs().max().item()))
-print(
-    "unique atom shifts:",
-    {
-        tuple(int(v) for v in row.tolist()): int(
-            (atom_shifts == row).all(dim=1).sum().item()
-        )
-        for row in atom_shifts.unique(dim=0)
-    },
-)
-
-cfg = Config(cutoff_radius=11.0, n_radial=8, safety_checks=True)
-sh_irreps = Irreps("1x0e + 1x1o")
-edge_type2idx = {
-    f"{a}-{b}": i
-    for i, (a, b) in enumerate(
-        [
-            (x, y)
-            for x in ["Zn", "Cu", "Sn", "Se", "S"]
-            for y in ["Zn", "Cu", "Sn", "Se", "S"]
-        ]
+    atoms = tuple(cif.get_chemical_symbols())
+    pos_gt = torch.tensor(cif.get_positions(), dtype=torch.float64)
+    box_ref = torch.tensor(cif.cell.array, dtype=torch.float64)
+    pos_out = info.positions.to(dtype=torch.float64)
+    box_recovered = recover_box(info.frac.to(dtype=torch.float64), pos_out).to(
+        dtype=torch.float64
     )
-}
-# use the actual edge types known by the mapper would be better, but for a one-off geometry check
-# the key comparison we care about is using the same atom set; build only the keys that exist.
-# We'll derive the set from the snapshots below.
 
-# build a minimal edge_type map from observed atom pairs in the CIF geometry
-observed = sorted(
-    {f"{atoms[i]}-{atoms[j]}" for i in range(len(atoms)) for j in range(len(atoms))}
-)
-edge_type2idx = {k: i for i, k in enumerate(observed)}
+    inv_box = torch.linalg.inv(box_ref)
+    delta_frac = (pos_out - pos_gt) @ inv_box
+    atom_shifts = torch.round(delta_frac).to(torch.long)
+    residual = delta_frac - atom_shifts
+    assert residual.abs().max() < 1e-5
+    assert torch.any(atom_shifts != 0), "Regression fixture must include an image shift"
 
-out_ref = compute_graph_features(pos_gt, box_A, atoms, cfg, sh_irreps, edge_type2idx)
-out_shift = compute_graph_features(pos_out, box_B, atoms, cfg, sh_irreps, edge_type2idx)
+    cfg = Config(cutoff_radius=11.0, n_radial=8, safety_checks=True)
+    sh_irreps = Irreps("1x0e + 1x1o")
+    observed = sorted({f"{src}-{dst}" for src in atoms for dst in atoms})
+    edge_type2idx = {key: idx for idx, key in enumerate(observed)}
 
-edge_index_A, edge_shift_A, edge_type_idx_A, edge_length_emb_A, edge_sh_A, n_self_A = (
-    out_ref
-)
-edge_index_B, edge_shift_B, edge_type_idx_B, edge_length_emb_B, edge_sh_B, n_self_B = (
-    out_shift
-)
+    out_ref = compute_graph_features(
+        pos_gt, box_ref, atoms, cfg, sh_irreps, edge_type2idx
+    )
+    out_shifted = compute_graph_features(
+        pos_out, box_recovered, atoms, cfg, sh_irreps, edge_type2idx
+    )
 
-print("edge_index equal:", torch.equal(edge_index_A, edge_index_B))
-print("edge_type_idx equal:", torch.equal(edge_type_idx_A, edge_type_idx_B))
-print("edge_length_emb equal:", torch.allclose(edge_length_emb_A, edge_length_emb_B))
-print("edge_sh equal:", torch.allclose(edge_sh_A, edge_sh_B))
-print("num_self_edges equal:", n_self_A == n_self_B)
+    (
+        edge_index_ref,
+        edge_shift_ref,
+        edge_type_idx_ref,
+        edge_length_emb_ref,
+        edge_sh_ref,
+        n_self_ref,
+        edge_lengths_ref,
+    ) = out_ref
+    (
+        edge_index_shifted,
+        edge_shift_shifted,
+        edge_type_idx_shifted,
+        edge_length_emb_shifted,
+        edge_sh_shifted,
+        n_self_shifted,
+        edge_lengths_shifted,
+    ) = out_shifted
 
-# Compare edge shifts after relabeling one position set to the other convention.
-# Compute the per-atom lattice shift from pos_out to pos_gt.
-atom_shifts = torch.round((pos_out - pos_gt) @ invA).to(torch.long)
-src = edge_index_A[0]
-dst = edge_index_A[1]
-expected_edge_shift_B = edge_shift_A + atom_shifts[src].T - atom_shifts[dst].T
-print("edge_shift relabel match:", torch.equal(edge_shift_B, expected_edge_shift_B))
-print(
-    "max abs edge_shift diff after relabel:",
-    int((edge_shift_B - expected_edge_shift_B).abs().max().item()),
-)
+    assert n_self_ref == n_self_shifted
+
+    # The recovered cell differs at about 1e-4 Angstrom, so near-tied edges may
+    # sort differently. Match the physical edges instead of their column order.
+    shifted_in_ref_convention = (
+        edge_shift_shifted
+        - atom_shifts[edge_index_shifted[0]].T
+        + atom_shifts[edge_index_shifted[1]].T
+    )
+
+    def edge_keys(edge_index, edge_shift):
+        return [
+            (
+                int(edge_index[0, idx]),
+                int(edge_index[1, idx]),
+                *(int(value) for value in edge_shift[:, idx]),
+            )
+            for idx in range(edge_index.shape[1])
+        ]
+
+    ref_keys = edge_keys(edge_index_ref, edge_shift_ref)
+    shifted_keys = edge_keys(edge_index_shifted, shifted_in_ref_convention)
+    assert len(ref_keys) == len(set(ref_keys))
+    assert set(ref_keys) == set(shifted_keys)
+
+    shifted_index = {key: idx for idx, key in enumerate(shifted_keys)}
+    reorder = torch.tensor([shifted_index[key] for key in ref_keys])
+    assert torch.equal(edge_type_idx_ref, edge_type_idx_shifted[reorder])
+    assert torch.allclose(edge_lengths_ref, edge_lengths_shifted[reorder], atol=2e-4)
+    assert torch.allclose(
+        edge_length_emb_ref, edge_length_emb_shifted[reorder], atol=1e-4
+    )
+    assert torch.allclose(edge_sh_ref, edge_sh_shifted[reorder], atol=1e-4)

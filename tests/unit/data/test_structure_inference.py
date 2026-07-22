@@ -16,7 +16,7 @@ from net.common import Config
 def test_load_structure_from_cif_and_build_model_input():
     repo_root = Path(__file__).resolve().parents[3]
     cif_path = repo_root / "data" / "structure" / "Silicon.cif"
-    info_path = repo_root / "data" / "big" / "silicon" / "300K" / "info.dat"
+    info_path = repo_root / "data" / "big" / "silicon" / "300K" / "Si.out"
 
     cfg = Config(
         cutoff_radius=7.5,

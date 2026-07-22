@@ -106,7 +106,21 @@ def test_model_forward_cpu(factory_results):
     sample = train_ds[0]
     x, y = sample
 
-    cfg = Config(dropout=0.0, safety_checks=True)
+    cfg = Config(
+        cutoff_radius=7.0,
+        l_max=1,
+        hidden_base_dim=2,
+        hidden_irreps="2x0e+2x0o+1x1e+1x1o",
+        n_radial=4,
+        radial_layers=[4],
+        num_layers_gnn=1,
+        neck_depth=1,
+        internal_e3mlp_layers=1,
+        head_e3mlp_layers=1,
+        matrix_targets=["hamiltonian", "overlap", "density"],
+        dropout=0.0,
+        safety_checks=True,
+    )
     model = E3GNN(
         mapper=mapper,
         cfg=cfg,

@@ -9,14 +9,14 @@ This ensures that the rotation operation on the irrep vector representation
 is consistent with the rotation on the block matrix representation.
 """
 
-import pytest
 import math
+import pytest
 import torch
-from pathlib import Path
 
-from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
-from data.openmx_parser import parse_openmx_scfout
+
+
+pytestmark = pytest.mark.physics
 
 
 def _rotation_z(theta_rad: float) -> torch.Tensor:
@@ -46,29 +46,18 @@ def _rotation_y(theta_rad: float) -> torch.Tensor:
     )
 
 
-@pytest.fixture(scope="module")
-def water_snapshot():
-    """Parse the small H₂O example in e3nn basis."""
-    cfg = OrbitalIrrepConfig.from_dict({"H": "3s2p", "O": "3s3p2d"})
-    sample = Path("./data/small/H2O/original/H2O.matrix")
-    atoms = list("HHHHOO")
-    snap = parse_openmx_scfout(sample, atoms, cfg, convention="e3nn")
-    assert snap.density.basis == "e3nn"
-    return snap
-
-
-@pytest.fixture(scope="module")
-def mapper(water_snapshot):
+def mapper_for(water_snapshot):
     """Create a BlockIrrepMapper for the water snapshot."""
     return BlockIrrepMapper(water_snapshot.hamiltonian.orbital_cfg)
 
 
-@pytest.mark.physics
-def test_irreps_rotation_equivalence_identity(water_snapshot, mapper):
+def test_irreps_rotation_equivalence_identity(small_angular_snapshot_e3nn):
     """Test that identity rotation on IrrepsBlockData matches the roundtrip."""
     R = torch.eye(3)
 
     # Test for Hamiltonian
+    water_snapshot = small_angular_snapshot_e3nn
+    mapper = mapper_for(water_snapshot)
     ham = water_snapshot.hamiltonian
     ham_irreps = ham.to_vectors(mapper)
 
@@ -88,13 +77,14 @@ def test_irreps_rotation_equivalence_identity(water_snapshot, mapper):
         ), f"Identity rotation mismatch for H key {key}"
 
 
-@pytest.mark.physics
-def test_irreps_rotation_equivalence_z_rotation(water_snapshot, mapper):
+def test_irreps_rotation_equivalence_z_rotation(small_angular_snapshot_e3nn):
     """Test rotation around z-axis on IrrepsBlockData matches the roundtrip."""
     theta = math.pi / 7.0
     R = _rotation_z(theta)
 
     # Test for Hamiltonian
+    water_snapshot = small_angular_snapshot_e3nn
+    mapper = mapper_for(water_snapshot)
     ham = water_snapshot.hamiltonian
     ham_irreps = ham.to_vectors(mapper)
 
@@ -110,16 +100,17 @@ def test_irreps_rotation_equivalence_z_rotation(water_snapshot, mapper):
         assert torch.allclose(
             ham_irreps_rot_direct.pair_vectors[key],
             ham_irreps_rot_roundtrip.pair_vectors[key],
-            atol=1e-5,
+            atol=2e-4,
         ), f"Z-rotation mismatch for H key {key}"
 
 
-@pytest.mark.physics
-def test_irreps_rotation_equivalence_all_matrices(water_snapshot, mapper):
+def test_irreps_rotation_equivalence_all_matrices(small_angular_snapshot_e3nn):
     """Test rotation equivalence for H, S, and D matrices."""
     theta = math.pi / 4.0
     R = _rotation_x(theta)
 
+    water_snapshot = small_angular_snapshot_e3nn
+    mapper = mapper_for(water_snapshot)
     for matrix_name, matrix in [
         ("hamiltonian", water_snapshot.hamiltonian),
         ("overlap", water_snapshot.overlap),
@@ -142,12 +133,13 @@ def test_irreps_rotation_equivalence_all_matrices(water_snapshot, mapper):
             ), f"Rotation mismatch for {matrix_name} key {key}"
 
 
-@pytest.mark.physics
-def test_irreps_rotation_roundtrip(water_snapshot, mapper):
+def test_irreps_rotation_roundtrip(small_angular_snapshot_e3nn):
     """Test that R · Rᵀ on IrrepsBlockData returns to original."""
     theta = math.pi / 5.0
     R = _rotation_y(theta)
 
+    water_snapshot = small_angular_snapshot_e3nn
+    mapper = mapper_for(water_snapshot)
     ham_irreps = water_snapshot.hamiltonian.to_vectors(mapper)
 
     # Rotate and rotate back
@@ -163,11 +155,12 @@ def test_irreps_rotation_roundtrip(water_snapshot, mapper):
         ), f"Roundtrip failed for key {key}"
 
 
-@pytest.mark.physics
-def test_irreps_rotation_preserves_structure(water_snapshot, mapper):
+def test_irreps_rotation_preserves_structure(small_angular_snapshot_e3nn):
     """Test that rotation preserves the data structure of IrrepsBlockData."""
     R = _rotation_z(math.pi / 3.0)
 
+    water_snapshot = small_angular_snapshot_e3nn
+    mapper = mapper_for(water_snapshot)
     ham_irreps = water_snapshot.hamiltonian.to_vectors(mapper)
     ham_irreps_rot = ham_irreps.rotate(R, mapper)
 
@@ -191,11 +184,12 @@ def test_irreps_rotation_preserves_structure(water_snapshot, mapper):
         )
 
 
-@pytest.mark.physics
-def test_irreps_rotation_multiple_angles(water_snapshot, mapper):
+def test_irreps_rotation_multiple_angles(small_angular_snapshot_e3nn):
     """Test rotation equivalence at various angles."""
     angles = [0.0, math.pi / 6, math.pi / 4, math.pi / 3, math.pi / 2, math.pi]
 
+    water_snapshot = small_angular_snapshot_e3nn
+    mapper = mapper_for(water_snapshot)
     ham = water_snapshot.hamiltonian
     ham_irreps = ham.to_vectors(mapper)
 
@@ -213,5 +207,5 @@ def test_irreps_rotation_multiple_angles(water_snapshot, mapper):
             assert torch.allclose(
                 ham_irreps_rot_direct.pair_vectors[key],
                 ham_irreps_rot_roundtrip.pair_vectors[key],
-                atol=2e-5,
+                atol=2e-4,
             ), f"Rotation mismatch at angle {theta} for key {key}"

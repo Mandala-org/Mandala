@@ -30,20 +30,23 @@ def _rotation_matrix() -> torch.Tensor:
 
 def _load_pair():
     base = Path("./data/small/H2O")
-    cfg = Config()
+    cfg = Config(allow_openmx_positions_box_from_out=True)
     snap_orig = Snapshot.from_openmx(
         base / "original" / "H2O.matrix",
         base / "original" / "H2O.info.out",
         cfg=cfg,
-        convention="e3nn",
+        convention="openmx",
     )
     snap_rot_ref = Snapshot.from_openmx(
         base / "rotated" / "H2O.matrix",
         base / "rotated" / "H2O.info.out",
         cfg=cfg,
-        convention="e3nn",
+        convention="openmx",
     )
-    return snap_orig, snap_rot_ref
+    return (
+        snap_orig.reduce_orbitals("1s1p").to_e3nn(),
+        snap_rot_ref.reduce_orbitals("1s1p").to_e3nn(),
+    )
 
 
 def _assert_snapshot_equal(a, b, *, atol=1e-5):
