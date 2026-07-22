@@ -44,6 +44,7 @@ from net.time_budget import (
     WallClockBudgetCallback,
 )  # noqa: E402
 from scripts.dataset import (  # noqa: E402
+    build_deeph_e3_datasets,
     build_datasets_from_yaml,
     build_silicon_datasets,
     build_silicon_scales_datasets,
@@ -64,6 +65,8 @@ def run_training(
     args = _as_namespace(run_args)
     print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
+    if getattr(args, "dataset_kind", None) == "deeph_e3":
+        cfg.graph_source = "target_edges"
     pl.seed_everything(int(cfg.seed), workers=True)
     requested_run_name = getattr(args, "run_name", None)
     cfg.save_dir = str(getattr(args, "checkpoint_dir", cfg.save_dir))
@@ -428,6 +431,16 @@ def _build_dataset_bundle(
             num_val=getattr(args, "num_val", None),
             num_test=int(getattr(args, "num_test", 0)),
             val_fraction=getattr(args, "val_fraction", 0.2),
+            data_split_seed=cfg.data_split_seed,
+            convention=convention,
+        )
+    if dataset_kind == "deeph_e3":
+        return build_deeph_e3_datasets(
+            data_path=getattr(args, "data_path"),
+            cfg=cfg,
+            num_train=int(getattr(args, "num_train", 120)),
+            num_val=int(getattr(args, "num_val", 20)),
+            num_test=int(getattr(args, "num_test", 0)),
             data_split_seed=cfg.data_split_seed,
             convention=convention,
         )

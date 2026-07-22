@@ -43,8 +43,10 @@ from data.envelope import (
 )
 from data.graph_features import (
     compute_graph_features,
+    compute_graph_features_from_target_edges,
 )
 from data.snapshot import Snapshot
+from data.deeph_e3_parser import is_deeph_e3_snapshot
 from data.spectral_fermi_cache import (
     load_spectral_fermi_cache,
     lookup_spectral_fermi_record,
@@ -77,6 +79,19 @@ def _stat_payload(path: Path | None) -> dict[str, str | int | None]:
 
 
 def _geometry_source_payload(info_path: Path, cfg: Config) -> dict[str, object]:
+    if (
+        info_path.name == "info.json"
+        and (info_path.parent / "site_positions.dat").is_file()
+    ):
+        return {
+            "source_format": "deeph_e3",
+            "elements": _stat_payload(info_path.parent / "element.dat"),
+            "orbitals": _stat_payload(info_path.parent / "orbital_types.dat"),
+            "positions": _stat_payload(info_path.parent / "site_positions.dat"),
+            "lattice": _stat_payload(info_path.parent / "lat.dat"),
+            "overlap": _stat_payload(info_path.parent / "overlaps.h5"),
+            "density": _stat_payload(info_path.parent / "density_matrixs.h5"),
+        }
     cif_path = info_path.with_suffix(".cif")
     return {
         "allow_openmx_positions_box_from_out": bool(
@@ -368,6 +383,7 @@ class E3GNNDataset(Dataset):
             "radial_embedding_scale": self.cfg.radial_embedding_scale,
             "cutoff_radius": float(self.cfg.cutoff_radius),
             "apply_cutoff_to_targets": bool(self.cfg.apply_cutoff_to_targets),
+            "graph_source": str(getattr(self.cfg, "graph_source", "geometry_cutoff")),
             "matrix_targets": list(self.cfg.matrix_targets),
             "train_target": self.cfg.train_target,
             "dtype": str(self.dtype),
@@ -487,7 +503,15 @@ class E3GNNDataset(Dataset):
 
         self.snapshot_cache_misses += 1
         snapshot_cutoff = None
-        if matrix_path.suffix == ".npz" or info_path.suffix == ".json":
+        if is_deeph_e3_snapshot(matrix_path, info_path):
+            snapshot = Snapshot.from_deeph_e3(
+                info_path.parent,
+                convention=self.convention,
+                cutoff_radius=snapshot_cutoff,
+                dtype=self.dtype,
+                cfg=self.cfg,
+            )
+        elif matrix_path.suffix == ".npz" or info_path.suffix == ".json":
             snapshot = Snapshot.from_pyscf(
                 npz_path=matrix_path,
                 json_path=info_path,
@@ -544,6 +568,34 @@ class E3GNNDataset(Dataset):
         Build graph inputs and targets from one Snapshot.
         """
         with torch.no_grad():
+            available_matrices = set(
+                getattr(
+                    getattr(snap, "info", None),
+                    "available_matrices",
+                    {"hamiltonian", "overlap", "density"},
+                )
+            )
+            unavailable_targets = set(self.cfg.matrix_targets) - available_matrices
+            if unavailable_targets:
+                raise ValueError(
+                    "Requested matrix targets are absent from this snapshot: "
+                    f"{sorted(unavailable_targets)}. Available: "
+                    f"{sorted(available_matrices)}"
+                )
+            if self.spectral_loss_enabled and "overlap" not in available_matrices:
+                raise ValueError(
+                    "spectral_loss_enabled requires overlaps.h5 for DeepH-E3 data."
+                )
+            if (self.cfg.train_on_energy or self.cfg.train_on_num_electrons) and not {
+                "hamiltonian",
+                "overlap",
+                "density",
+            }.issubset(available_matrices):
+                raise ValueError(
+                    "Observable training requires Hamiltonian, overlap, and density "
+                    "matrices, but this DeepH-E3 snapshot provides only "
+                    f"{sorted(available_matrices)}."
+                )
             target_edges_before_cutoff = sum(
                 edges.shape[1] for edges in snap.hamiltonian.pair_edges.values()
             )
@@ -582,6 +634,34 @@ class E3GNNDataset(Dataset):
                 [elem2idx[el] for el in atoms], dtype=torch.long
             )
 
+            graph_source = str(
+                getattr(self.cfg, "graph_source", "geometry_cutoff")
+            ).lower()
+            graph_kwargs = {
+                "positions": snap.positions,
+                "box": snap.box,
+                "atoms": snap.density.atoms,
+                "cfg": self.cfg,
+                "sh_irreps": self.sh_irreps,
+                "edge_type2idx": self.mapper.edge_type2idx,
+                "edge_type_r0": (
+                    self.edge_type_r0
+                    if self.pair_distance_normalization == "pair_r0"
+                    else None
+                ),
+            }
+            if graph_source == "target_edges":
+                graph_features = compute_graph_features_from_target_edges(
+                    pair_edges=snap.hamiltonian.pair_edges,
+                    **graph_kwargs,
+                )
+            elif graph_source == "geometry_cutoff":
+                graph_features = compute_graph_features(**graph_kwargs)
+            else:
+                raise ValueError(
+                    "graph_source must be 'geometry_cutoff' or 'target_edges', "
+                    f"got {graph_source!r}."
+                )
             (
                 edge_index,
                 edge_shift,
@@ -590,19 +670,7 @@ class E3GNNDataset(Dataset):
                 edge_sh,
                 num_self_edges,
                 edge_lengths,
-            ) = compute_graph_features(
-                positions=snap.positions,
-                box=snap.box,
-                atoms=snap.density.atoms,
-                cfg=self.cfg,
-                sh_irreps=self.sh_irreps,
-                edge_type2idx=self.mapper.edge_type2idx,
-                edge_type_r0=(
-                    self.edge_type_r0
-                    if self.pair_distance_normalization == "pair_r0"
-                    else None
-                ),
-            )
+            ) = graph_features
 
             strict_reverse_edge_check(edge_index, edge_shift, edge_set_name="graph")
             for matrix_name, matrix_target in (
@@ -653,12 +721,19 @@ class E3GNNDataset(Dataset):
                 target_pair_edges=hamiltonian_target_matrix.pair_edges,
             )
 
+            has_observable_inputs = {
+                "hamiltonian",
+                "overlap",
+                "density",
+            }.issubset(available_matrices)
             y = {
                 "hamiltonian": hamiltonian_target,
                 "overlap": overlap_target,
                 "density": density_target,
-                "energy": snap.get_energy(),
-                "num_electrons": snap.get_number_of_electrons(),
+                "energy": snap.get_energy() if has_observable_inputs else None,
+                "num_electrons": (
+                    snap.get_number_of_electrons() if has_observable_inputs else None
+                ),
                 "forces": snap.forces,
                 "stress": snap.stress,
             }

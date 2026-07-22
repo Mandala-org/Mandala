@@ -989,6 +989,73 @@ class Snapshot:
 
     # -------------------------------------------------------------------- constructors
     @staticmethod
+    def from_deeph_e3(
+        snapshot_dir: str | os.PathLike,
+        *,
+        convention: str = "e3nn",
+        symmetrize_density: bool = True,
+        cutoff_radius: float | None = None,
+        dtype: torch.dtype = torch.float32,
+        cfg: Config | None = None,
+    ) -> "Snapshot":
+        """Load one snapshot in DeepH-E3's processed OpenMX HDF5 format."""
+        from data.deeph_e3_parser import (
+            load_deeph_e3_block_matrix,
+            load_deeph_e3_metadata,
+            zero_matrix_on_support,
+        )
+
+        snapshot_dir = Path(snapshot_dir).expanduser().resolve()
+        metadata = load_deeph_e3_metadata(snapshot_dir, dtype=dtype)
+        hamiltonian = load_deeph_e3_block_matrix(
+            snapshot_dir / "hamiltonians.h5",
+            metadata,
+            matrix_name="hamiltonian",
+            dtype=dtype,
+        )
+
+        def load_optional(filename: str, matrix_name: str) -> BlockMatrix:
+            path = snapshot_dir / filename
+            if not path.is_file():
+                return zero_matrix_on_support(hamiltonian)
+            matrix = load_deeph_e3_block_matrix(
+                path,
+                metadata,
+                matrix_name=matrix_name,
+                dtype=dtype,
+            )
+            if matrix.lookup.keys() != hamiltonian.lookup.keys():
+                missing = sorted(set(hamiltonian.lookup) - set(matrix.lookup))[:5]
+                extra = sorted(set(matrix.lookup) - set(hamiltonian.lookup))[:5]
+                raise ValueError(
+                    f"DeepH-E3 {matrix_name} support differs from Hamiltonian support. "
+                    f"missing_examples={missing} extra_examples={extra}"
+                )
+            return matrix
+
+        overlap = load_optional("overlaps.h5", "overlap")
+        density = load_optional("density_matrixs.h5", "density")
+        if "density" in metadata.available_matrices and symmetrize_density:
+            # Match Snapshot.from_openmx: OpenMX spin=0 density is converted to
+            # the spin-summed target used throughout Mandala.
+            density = density + density.transpose()
+        snapshot = Snapshot(
+            hamiltonian,
+            overlap,
+            density,
+            positions=metadata.positions,
+            box=metadata.box,
+            matrix_path=snapshot_dir / "hamiltonians.h5",
+            info_path=snapshot_dir / "info.json",
+            cfg=cfg,
+            info=metadata.as_snapshot_info(),
+        )
+        if cutoff_radius is not None:
+            snapshot = snapshot.filter_by_distance(cutoff_radius)
+        snapshot = snapshot._change_basis(convention)
+        return snapshot.canonicalize_edges()
+
+    @staticmethod
     def from_openmx(
         matrix_path: str | os.PathLike,
         info_path: str | os.PathLike,

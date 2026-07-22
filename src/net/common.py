@@ -234,6 +234,7 @@ class Config:
     radial_embedding_scale: str = "none"
     allow_incomplete_dataset: bool = False  # tolerate short snapshot lists
     apply_cutoff_to_targets: bool = True
+    graph_source: str = "geometry_cutoff"  # geometry_cutoff | target_edges
     require_exact_edge_match: bool = (
         True  # validate cutoff prefix only; never mutate edges
     )

@@ -28,6 +28,7 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
 from data.openmx_info_parser import parse_info_out, InfoOutData
 from data.pyscf_baseline_parser import load_pyscf_metadata
+from data.deeph_e3_parser import is_deeph_e3_snapshot, load_deeph_e3_metadata
 from net.common import Config
 from utils.summary import print_dataset_summary
 
@@ -79,7 +80,10 @@ class DatasetFactory:
         self._pairs[purpose].append(pair)
 
     # ------------------------------------------------------------------ helpers
-    def _load_info(self, path: Path) -> InfoOutData:
+    def _load_info(self, matrix_path: Path, path: Path) -> InfoOutData:
+        if is_deeph_e3_snapshot(matrix_path, path):
+            meta = load_deeph_e3_metadata(path.parent, dtype=self.cfg.dtype)
+            return SimpleNamespace(orbital_set=meta.orbital_set)
         if path.suffix == ".json":
             meta = load_pyscf_metadata(path)
             return SimpleNamespace(orbital_set=meta.orbital_set)
@@ -101,10 +105,10 @@ class DatasetFactory:
         """
         # ①  Merge all orbital configs ---------------------------------
         info_all = []
-        for _mat, info_p in (
+        for matrix_path, info_p in (
             self._pairs["train"] + self._pairs["val"] + self._pairs["test"]
         ):
-            info_all.append(self._load_info(info_p))
+            info_all.append(self._load_info(matrix_path, info_p))
 
         # OrbitalIrrepConfig utility: union of all elements / orbitals
         orb_cfg = OrbitalIrrepConfig.from_info_list(info_all)  # type: ignore[attr-defined]

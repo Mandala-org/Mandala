@@ -80,6 +80,26 @@ def discover_siox_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
     return discover_single_snapshot_pairs(root, label="SiOx")
 
 
+def discover_deeph_e3_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
+    """Discover DeepH-E3 snapshots recursively below ``root``."""
+    root = root.expanduser().resolve()
+    print(f"--- Discovering DeepH-E3 snapshots under {root} ---")
+    if not root.is_dir():
+        raise FileNotFoundError(f"DeepH-E3 dataset root not found: {root}")
+    pairs = []
+    for matrix_path in sorted(root.rglob("hamiltonians.h5")):
+        info_path = matrix_path.parent / "info.json"
+        if not info_path.is_file():
+            raise FileNotFoundError(
+                f"Found {matrix_path} without required sibling info.json"
+            )
+        pairs.append((matrix_path.resolve(), info_path.resolve()))
+    if not pairs:
+        raise ValueError(f"No DeepH-E3 hamiltonians.h5 snapshots found under {root}")
+    print(f"--- Found {len(pairs)} DeepH-E3 snapshot pairs ---")
+    return pairs
+
+
 def _resolve_single_snapshot_info_path(sample_dir: Path) -> Path | None:
     for name in ("Si.out", "SiO2.out", "ZnCuSeS.out", "info.dat", "info.txt"):
         candidate = sample_dir / name
@@ -355,6 +375,45 @@ def build_siox_datasets(
     )
 
 
+def build_deeph_e3_datasets(
+    *,
+    data_path: str | Path,
+    cfg: Config,
+    num_train: int,
+    num_val: int,
+    num_test: int = 0,
+    data_split_seed: int = 42,
+    convention: str = "e3nn",
+):
+    """Build deterministic shuffled splits from a DeepH-E3 dataset tree."""
+    if convention not in {"openmx", "e3nn"}:
+        raise ValueError(
+            "DeepH-E3 datasets support only convention='openmx' or 'e3nn'."
+        )
+    if cfg.graph_source != "target_edges":
+        print(
+            "--- DeepH-E3: forcing graph_source=target_edges so model and HDF5 "
+            "blocks have identical DFT support ---"
+        )
+        cfg.graph_source = "target_edges"
+    all_pairs = discover_deeph_e3_snapshot_pairs(Path(data_path))
+    random.Random(data_split_seed).shuffle(all_pairs)
+    train_pairs, val_pairs, test_pairs = _split_shuffled_pairs(
+        all_pairs,
+        num_train=num_train,
+        num_val=num_val,
+        num_test=num_test,
+    )
+    print(
+        "--- DeepH-E3 split selected: "
+        f"train={len(train_pairs)}, val={len(val_pairs)}, test={len(test_pairs)}, "
+        f"seed={data_split_seed} ---"
+    )
+    return _create_datasets_from_pairs(
+        train_pairs, val_pairs, test_pairs, cfg, convention=convention
+    )
+
+
 def build_zncusnses_small_datasets(
     *,
     data_path: str | Path,
@@ -610,6 +669,29 @@ def build_datasets_from_yaml(
             ),
             val_fraction=float(
                 _get_dataset_value(parameters, overrides, "val_fraction", default=0.2)
+            ),
+            data_split_seed=int(
+                _get_dataset_value(
+                    parameters,
+                    overrides,
+                    "data_split_seed",
+                    default=cfg.data_split_seed,
+                )
+            ),
+            convention=convention,
+        )
+    if dataset_kind == "deeph_e3":
+        return build_deeph_e3_datasets(
+            data_path=_require_dataset_value(parameters, overrides, "data_path"),
+            cfg=cfg,
+            num_train=int(
+                _get_dataset_value(parameters, overrides, "num_train", default=120)
+            ),
+            num_val=int(
+                _get_dataset_value(parameters, overrides, "num_val", default=20)
+            ),
+            num_test=int(
+                _get_dataset_value(parameters, overrides, "num_test", default=0)
             ),
             data_split_seed=int(
                 _get_dataset_value(

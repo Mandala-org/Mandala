@@ -285,3 +285,97 @@ def compute_graph_features(
         len(self_edge_src),
         edge_lengths,
     )
+
+
+def compute_graph_features_from_target_edges(
+    *,
+    positions: torch.Tensor,
+    box: torch.Tensor | None,
+    atoms: Tuple[str, ...],
+    pair_edges: Dict[str, torch.Tensor],
+    cfg: Config,
+    sh_irreps: Irreps,
+    edge_type2idx: Dict[str, int],
+    edge_type_r0: torch.Tensor | None = None,
+) -> Tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    int,
+    torch.Tensor,
+]:
+    """Build graph features on the exact target support supplied by DeepH-E3."""
+    edge_rows = [edges.T for edges in pair_edges.values()]
+    if not edge_rows:
+        raise ValueError("Cannot build a graph from empty target edge support.")
+    edges = torch.cat(edge_rows, dim=0).to(device=positions.device)
+    if torch.unique(edges, dim=0).shape[0] != edges.shape[0]:
+        raise ValueError("Target support contains duplicate edges.")
+
+    shifts = edges[:, :3]
+    src = edges[:, 3]
+    dst = edges[:, 4]
+    if box is None:
+        displacement = positions[dst] - positions[src]
+    else:
+        displacement = (
+            positions[dst] - positions[src] + shifts.to(dtype=positions.dtype) @ box
+        )
+    lengths = torch.linalg.norm(displacement, dim=-1)
+    is_diag = (src == dst) & (shifts == 0).all(dim=1)
+    diag_indices = torch.nonzero(is_diag, as_tuple=False).flatten().tolist()
+    offdiag_indices = torch.nonzero(~is_diag, as_tuple=False).flatten().tolist()
+    diag_indices.sort(key=lambda idx: int(src[idx].item()))
+    offdiag_indices.sort(
+        key=lambda idx: (
+            float(lengths[idx].item()),
+            *(int(value) for value in edges[idx].tolist()),
+        )
+    )
+    order = torch.tensor(
+        diag_indices + offdiag_indices, dtype=torch.long, device=positions.device
+    )
+    edges = edges.index_select(0, order)
+    edge_shift = edges[:, :3].T.contiguous()
+    edge_index = edges[:, 3:5].T.contiguous()
+    edge_pairs = edge_index.T.detach().cpu().tolist()
+    edge_type_idx = torch.tensor(
+        [edge_type2idx[f"{atoms[src]}-{atoms[dst]}"] for src, dst in edge_pairs],
+        dtype=torch.long,
+        device=positions.device,
+    )
+
+    radial_lengths = None
+    radial_basis_end = None
+    if edge_type_r0 is not None:
+        raw_lengths = lengths.index_select(0, order)
+        radial_lengths = raw_lengths / edge_type_r0.index_select(0, edge_type_idx)
+        radial_basis_end = 1.0
+    edge_length_emb, edge_sh, edge_lengths = compute_edge_geometry_from_static_edges(
+        positions=positions,
+        box=box,
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        sh_irreps=sh_irreps,
+        cutoff_radius=cfg.cutoff_radius,
+        n_radial=cfg.n_radial,
+        radial_embedding_scale=cfg.radial_embedding_scale,
+        radial_lengths=radial_lengths,
+        radial_basis_end=radial_basis_end,
+    )
+    if len(diag_indices) != len(atoms):
+        raise ValueError(
+            "Target graph must contain exactly one zero-shift self edge per atom; "
+            f"found {len(diag_indices)} for {len(atoms)} atoms."
+        )
+    return (
+        edge_index,
+        edge_shift,
+        edge_type_idx,
+        edge_length_emb,
+        edge_sh,
+        len(diag_indices),
+        edge_lengths,
+    )

@@ -33,6 +33,7 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
             "silicon",
             "silicon_scales",
             "siox",
+            "deeph_e3",
             "ZnCuSnSeS_small",
             "ZnCuSnSeS",
         ],

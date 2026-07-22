@@ -190,14 +190,14 @@ class OpenMXE3NNConverter:
     # ---------------- block‑level helpers -----------------------------------
     def block_openmx_to_e3nn(self, key: str, block: torch.Tensor) -> torch.Tensor:
         el_i, el_j = key.split("-")
-        U_i = self._U_openmx2wiki[el_i]
-        U_j = self._U_openmx2wiki[el_j]
+        U_i = self._U_openmx2wiki[el_i].to(block)
+        U_j = self._U_openmx2wiki[el_j].to(block)
         return U_i @ block @ U_j.T
 
     def block_e3nn_to_openmx(self, key: str, block: torch.Tensor) -> torch.Tensor:
         el_i, el_j = key.split("-")
-        V_i = self._U_wiki2openmx[el_i]
-        V_j = self._U_wiki2openmx[el_j]
+        V_i = self._U_wiki2openmx[el_i].to(block)
+        V_j = self._U_wiki2openmx[el_j].to(block)
         return V_i @ block @ V_j.T
 
     # ---------------- snapshot‑level helpers --------------------------------
