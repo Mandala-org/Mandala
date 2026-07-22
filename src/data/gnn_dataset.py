@@ -880,16 +880,20 @@ class E3GNNDataset(Dataset):
                 if key in x:
                     x[key] = x[key].to(device)
 
-            # y targets
-            y["hamiltonian"] = y["hamiltonian"].to(device)
-            y["overlap"] = y["overlap"].to(device)
-            y["density"] = y["density"].to(device)
-            y["energy"] = y["energy"].to(device)
-            y["num_electrons"] = y["num_electrons"].to(device)
-            if y["forces"] is not None:
-                y["forces"] = y["forces"].to(device)
-            if y["stress"] is not None:
-                y["stress"] = y["stress"].to(device)
+            # Matrix containers are infrastructure-required, while observables
+            # may legitimately be unavailable (for example Hamiltonian-only
+            # DeepH-E3 archives).
+            for key in ("hamiltonian", "overlap", "density"):
+                value = y.get(key)
+                if value is None:
+                    raise ValueError(
+                        f"Dataset sample {idx} is missing required matrix target {key!r}."
+                    )
+                y[key] = value.to(device)
+            for key in ("energy", "num_electrons", "forces", "stress"):
+                value = y.get(key)
+                if value is not None:
+                    y[key] = value.to(device)
 
             self.snapshots[idx] = (x, y)
         return self
