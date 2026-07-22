@@ -174,10 +174,24 @@ def run_training(
             f"--- Evaluating held-out test split once from {best_checkpoint} ---",
             flush=True,
         )
+        # These are checkpoints produced by this training process and contain the
+        # full Config object. Load the model state explicitly so PyTorch 2.6+
+        # does not apply Lightning's weights_only=True default during testing.
+        checkpoint = torch.load(
+            best_checkpoint,
+            map_location="cpu",
+            weights_only=False,
+        )
+        state_dict = checkpoint.get("state_dict")
+        if not isinstance(state_dict, dict):
+            raise ValueError(
+                f"Held-out test checkpoint has no state_dict mapping: {best_checkpoint}"
+            )
+        model.load_state_dict(state_dict, strict=True)
         trainer.test(
             model=model,
             dataloaders=test_loader,
-            ckpt_path=str(best_checkpoint),
+            ckpt_path=None,
             verbose=False,
         )
         metrics.update(_extract_metrics(trainer))
