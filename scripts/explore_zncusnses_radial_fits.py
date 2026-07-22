@@ -30,6 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from data.deeph_e3_parser import is_deeph_e3_snapshot  # noqa: E402
 from data.snapshot import Snapshot  # noqa: E402
 
 
@@ -55,7 +56,10 @@ def parse_args() -> argparse.Namespace:
         "--snapshot-path",
         type=Path,
         default=Path("data/small/ZnCu2Sn_SeS_2_scale_1_010"),
-        help="Snapshot directory containing HS.out and the OpenMX info file.",
+        help=(
+            "Snapshot directory containing either HS.out plus an OpenMX info file "
+            "or a DeepH-E3 hamiltonians.h5 plus info.json pair."
+        ),
     )
     parser.add_argument(
         "--matrix-path",
@@ -164,6 +168,15 @@ def _discover_snapshot_paths(
         return matrix_candidate, info_candidate
     if not snapshot_path.is_dir():
         raise FileNotFoundError(f"Snapshot path does not exist: {snapshot_path}")
+    deeph_matrix = snapshot_path / "hamiltonians.h5"
+    deeph_info = snapshot_path / "info.json"
+    if deeph_matrix.is_file() or deeph_info.is_file():
+        if not is_deeph_e3_snapshot(deeph_matrix, deeph_info):
+            raise FileNotFoundError(
+                "Incomplete DeepH-E3 snapshot; expected all required files under "
+                f"{snapshot_path}"
+            )
+        return deeph_matrix, deeph_info
     matrix_candidate = snapshot_path / "HS.out"
     if not matrix_candidate.exists():
         raise FileNotFoundError(f"Matrix file not found: {matrix_candidate}")
@@ -184,11 +197,17 @@ def _load_processed_snapshot(
     cutoff_radius: float,
     symmetrize_targets: bool,
 ) -> Snapshot:
-    snap = Snapshot.from_openmx(
-        matrix_path=matrix_path,
-        info_path=info_path,
-        convention=convention,
-    )
+    if is_deeph_e3_snapshot(matrix_path, info_path):
+        snap = Snapshot.from_deeph_e3(
+            matrix_path.parent,
+            convention=convention,
+        )
+    else:
+        snap = Snapshot.from_openmx(
+            matrix_path=matrix_path,
+            info_path=info_path,
+            convention=convention,
+        )
     if apply_cutoff:
         snap = snap.filter_by_distance(cutoff_radius)
     if symmetrize_targets:
@@ -209,6 +228,19 @@ def _cache_signature(
     cutoff_radius: float,
     symmetrize_targets: bool,
 ) -> str:
+    source_files = [matrix_path, info_path]
+    if is_deeph_e3_snapshot(matrix_path, info_path):
+        source_files = [
+            matrix_path.parent / name
+            for name in (
+                "hamiltonians.h5",
+                "element.dat",
+                "orbital_types.dat",
+                "site_positions.dat",
+                "lat.dat",
+                "info.json",
+            )
+        ]
     payload = {
         "matrix_path": str(matrix_path.resolve()),
         "matrix_mtime_ns": matrix_path.stat().st_mtime_ns,
@@ -220,6 +252,14 @@ def _cache_signature(
         "apply_cutoff": bool(apply_cutoff),
         "cutoff_radius": float(cutoff_radius),
         "symmetrize_targets": bool(symmetrize_targets),
+        "source_files": [
+            {
+                "path": str(path.resolve()),
+                "mtime_ns": path.stat().st_mtime_ns,
+                "size": path.stat().st_size,
+            }
+            for path in source_files
+        ],
     }
     blob = json.dumps(payload, sort_keys=True).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()[:16]
