@@ -960,7 +960,7 @@ def save_dos_plot(
     ax.grid(True)
 
     if fermi_level_ev is not None:
-        ax.axvline(fermi_level_ev, color="black", ls=":", lw=1.5, label="Fermi level")
+        ax.axvline(fermi_level_ev, color="black", ls="-", lw=1.5, label="Fermi level")
     if num_electrons is not None:
         ax.text(
             0.02,
@@ -1086,7 +1086,7 @@ def save_band_and_dos_plot(
             label="Ground truth",
         )
     if band_fermi_ev is not None:
-        ax_dos.axhline(0.0, color="black", ls=":", lw=1.5, label="Fermi level")
+        ax_dos.axhline(0.0, color="black", ls="-", lw=1.5, label="Fermi level")
     ax_dos.axvline(0.0, color="black", ls="--", lw=1.1)
     ax_dos.set_xlabel("DOS")
     ax_dos.set_title("DOS")
@@ -2827,7 +2827,7 @@ def save_dos_comparison_and_error_plot(
     ax_top.axvline(
         0.0,
         color="#000000",
-        ls=":",
+        ls="-",
         lw=1.4,
         label="Fermi level",
     )
@@ -2837,7 +2837,7 @@ def save_dos_comparison_and_error_plot(
     ax_top.legend(loc="upper right")
     ax_error.plot(gt_x, error, color=DOS_ERROR_COLOR, lw=1.4)
     ax_error.axhline(0.0, color="black", ls="--", lw=1.0)
-    ax_error.axvline(0.0, color="#000000", ls=":", lw=1.4)
+    ax_error.axvline(0.0, color="#000000", ls="-", lw=1.4)
     ax_error.set_xlabel(r"$E-E_F$ (eV)")
     ax_error.set_ylabel("DOS error")
     ax_error.grid(True)
@@ -2915,7 +2915,7 @@ def save_dos_comparison_plot(
         lw=1.4,
         ls="--",
     )
-    ax.axvline(0.0, color="#000000", ls=":", lw=1.4, label="Fermi level")
+    ax.axvline(0.0, color="#000000", ls="-", lw=1.4, label="Fermi level")
     ax.set_title(title)
     ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
@@ -3193,7 +3193,7 @@ def save_tetrahedron_dos_comparison_plot(
         lw=1.4,
         ls="--",
     )
-    ax.axvline(0.0, color="#000000", ls=":", lw=1.4, label="Fermi level")
+    ax.axvline(0.0, color="#000000", ls="-", lw=1.4, label="Fermi level")
     ax.set_title(title)
     ax.set_xlabel(r"$E-E_F$ (eV)")
     ax.set_ylabel("DOS")
@@ -3513,7 +3513,7 @@ def save_band_structure_and_dos_comparison_plot(
     ax_band.axhline(
         0.0,
         color="#000000",
-        ls=":",
+        ls="-",
         lw=1.4,
         label="Fermi level",
     )
@@ -3527,7 +3527,7 @@ def save_band_structure_and_dos_comparison_plot(
 
     ax_dos.plot(dos_true, grid_true, color=GROUND_TRUTH_COLOR, lw=1.8, ls="-")
     ax_dos.plot(dos_pred, grid_pred, color=PREDICTION_COLOR, lw=1.4, ls="--")
-    ax_dos.axhline(0.0, color="#000000", ls=":", lw=1.4)
+    ax_dos.axhline(0.0, color="#000000", ls="-", lw=1.4)
     ax_dos.set_xlim(left=0.0)
     ax_dos.set_ylim(float(emin_ev), float(emax_ev))
     ax_dos.set_xlabel("DOS")
