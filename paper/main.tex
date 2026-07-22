@@ -59,7 +59,7 @@ At the same time, conventional machine-learning interatomic potentials (MLIPs), 
 \texttt{Mandala} is a modular software framework for learning block-sparse electronic-structure matrices with E(3)-equivariant graph neural networks. The framework is built around a unified representation of atom-resolved Hamiltonian, overlap, and density matrices, together with reusable abstractions for basis conversion, sparse block handling, irreducible representation (irrep) mapping, graph construction, model definition, and training. This design allows \texttt{Mandala} to support heterogeneous chemical compositions, a wide range of neural architecture variants within one workflow, and multiple electronic-structure backends.
 A distinguishing feature of \texttt{Mandala} is that it does not stop at matrix reconstruction. Predicted operators can be contracted and post-processed to obtain quantities like the band-energy, the density of states, the band structure, and electron density. This allows the software to bridge electronic-structure learning and observable-guided modeling while retaining a representation tied to quantum-mechanical operators rather than only scalar or vector targets as in MLIPs.
 In this form, \texttt{Mandala} is intended to complement atomistic interatomic potential workflows by resolving electronic structure and operator-derived observables within one scalable implementation.
-%TODO: Remove what follows: The present paper emphasizes the block sparse matrix data model, the observable-guidance loss design, and the broad hyperparameter and architecture search space exposed by the framework.
+
 \end{abstract}
 
 \begin{keyword}
@@ -946,7 +946,7 @@ The valence-band maximum and conduction-band dispersion around the high-symmetry
 \label{fig:silicon-density}
 \end{figure}
 
-For each atom pair and periodic shift, a Hamiltonian or density contribution is an $n\times n$ block in the local orbital basis, where $n$ is the number of orbitals associated with each atom for the chosen basis. Figure~\ref{fig:silicon-density} compares the complete reference and predicted density matrices of the representative structure and shows their element-wise error without collapsing periodic-image contributions.
+For each atom pair and periodic shift, a Hamiltonian or density contribution is an $n\times n$ block in the local orbital basis, where $n$ is the number of orbitals associated with each atom for the chosen basis. Figure~\ref{fig:silicon-density} compares the central-cell reference and predicted density matrices of the representative structure and shows their element-wise error.
 For a predicted block $M^{\mathrm{pred}}$ and its reference $M^{\mathrm{ref}}$, the relative block error shown in Fig.~\ref{fig:silicon-density-errors} is
 \begin{equation}
 \epsilon_{\mathrm{rel}}(M^{\mathrm{pred}},M^{\mathrm{ref}})
