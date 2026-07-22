@@ -98,3 +98,4 @@ benchmark_data/silicon_scaling/
 test_audit/
 docs/*report*
 paper/*report*
+paper/references
