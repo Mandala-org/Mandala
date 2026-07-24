@@ -26,10 +26,12 @@ cd "${ROOT_DIR}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 DATA_PATH="/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS_big"
 SNAPSHOT_CACHE_DIR="${DATA_PATH}/snapshot_cache"
-SOURCE_CHECKPOINT="/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_big_3x_b200/zncusnses-big-3x-scale1-seed42/best_model.pt"
-CHECKPOINT_DIR="/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_big_3x_b200_restarts"
-WANDB_PROJECT="mandala-ZnCuSnSeS-big-3x-b200-restarts"
-RUN_NAME="zncusnses-big-3x-scale1-seed42-restart-lr${LR_TAG}-clip0p5-pat12"
+SOURCE_CHECKPOINT="${ZNCUSNSES_BIG_SOURCE_CHECKPOINT:-/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_big_3x_b200/zncusnses-big-3x-scale1-seed42/best_model.pt}"
+CHECKPOINT_DIR="${ZNCUSNSES_BIG_CHECKPOINT_DIR:-/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_big_3x_b200_restarts}"
+WANDB_PROJECT="${ZNCUSNSES_BIG_WANDB_PROJECT:-mandala-ZnCuSnSeS-big-3x-b200-restarts}"
+WANDB_GROUP="${ZNCUSNSES_BIG_WANDB_GROUP:-ZnCuSnSeS_big_3x_scale1_seed42_restarts}"
+RUN_NAME="${ZNCUSNSES_BIG_RUN_NAME:-zncusnses-big-3x-scale1-seed42-restart-lr${LR_TAG}-clip0p5-pat12}"
+SCALES="${ZNCUSNSES_BIG_SCALES:-[1]}"
 ENVELOPE_PATH="eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json"
 
 HIDDEN_IRREPS="384x0e+48x0o+24x1e+192x1o+72x2e+24x2o+24x3e+72x3o+48x4e+12x4o+12x5e+36x5o+24x6e"
@@ -46,7 +48,7 @@ fi
 CMD=(
   "${PYTHON_BIN}" -u scripts/wandb_run.py
   --wandb-project "${WANDB_PROJECT}"
-  --wandb-group "ZnCuSnSeS_big_3x_scale1_seed42_restarts"
+  --wandb-group "${WANDB_GROUP}"
   --wandb-tags "[big_dataset, b200, checkpoint_restart, 3x_hidden_irreps, stability_tuning]"
   --checkpoint-dir "${CHECKPOINT_DIR}"
   --run-name "${RUN_NAME}"
@@ -61,7 +63,7 @@ CMD=(
   --snapshot-cache-dir "${SNAPSHOT_CACHE_DIR}"
   --dataset-device cuda
   --num-workers 3
-  --scales "[1]"
+  --scales "${SCALES}"
   --num-train-per-scale 350
   --num-val-per-scale 50
   --num-test-per-scale 0
@@ -179,6 +181,7 @@ CMD=(
 
 printf '\n=== Launching %s ===\n' "${RUN_NAME}"
 printf 'Source checkpoint: %s\n' "${SOURCE_CHECKPOINT}"
+printf 'Dataset scales: %s\n' "${SCALES}"
 printf 'lr=%s, grad_clip=0.5, scheduler_patience=12\n' "${LR}"
 printf 'Restart mode: exact weights via compatibility mode; fresh optimizer/scheduler\n'
 
