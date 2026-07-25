@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import torch
+from tqdm.auto import tqdm
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -35,8 +36,11 @@ from scripts.evaluate_checkpoint_materials import (  # noqa: E402
 )
 
 
-REPEATS = 10
-EXPECTED_ATOM_COUNTS = (8, 64, 512, 4096, 32768, 262144)
+DEFAULT_TIMED_REPEATS = 10
+DEFAULT_LARGE_ATOM_THRESHOLD = 262144
+DEFAULT_LARGE_ATOM_REPEATS = 1
+DEFAULT_LARGE_WARMUP_RUNS = 1
+EXPECTED_ATOM_COUNTS = (8, 64, 512, 4096, 32768, 262144, 2097152)
 DEFAULT_STRUCTURES_DIR = REPO_ROOT / "benchmark_data/silicon_scaling"
 DEFAULT_OUTPUT = REPO_ROOT / "eval_outputs/silicon_cif_scaling_b200.txt"
 CLUSTER_ACCURATE_CHECKPOINT = Path(
@@ -65,16 +69,33 @@ class TeeLogger:
         self._handle.close()
 
 
-class ChunkProgressLogger:
-    """Rate-limit chunk progress output without perturbing normal timings."""
+class ChunkProgressBars:
+    """Render an explicit tqdm bar for each edge-streamed inference stage."""
 
-    def __init__(self, logger: TeeLogger) -> None:
-        self.logger = logger
+    def __init__(self) -> None:
+        self._stage: str | None = None
+        self._bar: tqdm | None = None
 
     def __call__(self, stage: str, current: int, total: int) -> None:
-        interval = max(1, total // 10)
-        if current == 1 or current == total or current % interval == 0:
-            self.logger.log(f"[chunked] {stage}: {current}/{total}")
+        if total <= 0:
+            raise ValueError(f"Chunk progress total must be positive, got {total}")
+        if self._stage != stage or self._bar is None or self._bar.total != total:
+            self.close()
+            self._stage = stage
+            self._bar = tqdm(
+                total=total,
+                desc=f"chunked {stage}",
+                unit="chunk",
+                dynamic_ncols=True,
+                leave=True,
+            )
+        self._bar.update(max(0, current - self._bar.n))
+
+    def close(self) -> None:
+        if self._bar is not None:
+            self._bar.close()
+            self._bar = None
+        self._stage = None
 
 
 @dataclass(frozen=True)
@@ -87,8 +108,8 @@ class TimingSummary:
 
 
 def summarize(values: list[float]) -> TimingSummary:
-    if len(values) != REPEATS:
-        raise ValueError(f"Expected exactly {REPEATS} timings, got {len(values)}")
+    if not values:
+        raise ValueError("Cannot summarize an empty set of timings")
     return TimingSummary(
         values=tuple(values),
         minimum=min(values),
@@ -117,6 +138,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--warmup-runs", type=int, default=2)
     parser.add_argument(
+        "--timed-repeats",
+        type=int,
+        default=DEFAULT_TIMED_REPEATS,
+        help="Timed repetitions for structures below --large-atom-threshold.",
+    )
+    parser.add_argument(
+        "--large-atom-threshold",
+        type=int,
+        default=DEFAULT_LARGE_ATOM_THRESHOLD,
+        help=(
+            "Use the large-structure timing policy at or above this atom count. "
+            "Default: 262144."
+        ),
+    )
+    parser.add_argument(
+        "--large-atom-repeats",
+        type=int,
+        default=DEFAULT_LARGE_ATOM_REPEATS,
+        help="Timed repetitions for structures at or above --large-atom-threshold.",
+    )
+    parser.add_argument(
+        "--large-warmup-runs",
+        type=int,
+        default=DEFAULT_LARGE_WARMUP_RUNS,
+        help="Warmup passes for structures at or above --large-atom-threshold.",
+    )
+    parser.add_argument(
         "--edge-chunk-size",
         type=int,
         default=None,
@@ -136,13 +184,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--edge-chunk-progress",
         action="store_true",
-        help="Log coarse edge-chunk progress during bounded-memory inference.",
+        help="Show live tqdm progress bars for each bounded-memory inference stage.",
     )
     parser.add_argument(
         "--atom-counts",
         type=str,
         default=",".join(str(value) for value in EXPECTED_ATOM_COUNTS),
-        help="Comma-separated subset of 8,64,512,4096,32768,262144.",
+        help="Comma-separated subset of 8,64,512,4096,32768,262144,2097152.",
     )
     parser.add_argument(
         "--reference-info-path",
@@ -176,7 +224,7 @@ def peak_memory_gib(device: torch.device) -> float | None:
 def format_summary(name: str, summary: TimingSummary) -> str:
     raw = ", ".join(f"{value:.6f}" for value in summary.values)
     return (
-        f"{name}: repeats={REPEATS} min={summary.minimum:.6f}s "
+        f"{name}: repeats={len(summary.values)} min={summary.minimum:.6f}s "
         f"max={summary.maximum:.6f}s avg={summary.mean:.6f}s "
         f"stddev={summary.stddev:.6f}s raw_seconds=[{raw}]"
     )
@@ -217,10 +265,13 @@ def time_repeated(
     operation: Callable[[], Any],
     *,
     device: torch.device,
+    repeats: int,
 ) -> tuple[TimingSummary, Any]:
+    if repeats < 1:
+        raise ValueError(f"repeats must be at least 1, got {repeats}")
     values: list[float] = []
     last_result: Any = None
-    for _ in range(REPEATS):
+    for _ in range(repeats):
         if last_result is not None:
             del last_result
             last_result = None
@@ -295,6 +346,7 @@ def benchmark_structure(
     model: E3GNN,
     device: torch.device,
     warmup_runs: int,
+    timed_repeats: int,
     edge_chunk_size: int | None,
     edge_store_device: str,
     edge_chunk_progress: bool,
@@ -308,7 +360,11 @@ def benchmark_structure(
     warmup(prepare, 1, device)
     gc.collect()
     reset_peak_memory(device)
-    preparation_summary, model_input = time_repeated(prepare, device=device)
+    preparation_summary, model_input = time_repeated(
+        prepare,
+        device=device,
+        repeats=timed_repeats,
+    )
     preparation_peak = peak_memory_gib(device)
     actual_atoms = len(model_input["atoms"])
     edge_count = int(model_input["edge_index"].shape[1])
@@ -326,19 +382,28 @@ def benchmark_structure(
         # Bind the prepared input explicitly so static analysis and repeated
         # benchmark invocations both use this exact graph instance.
         def chunked_inference(input_payload=model_input):
-            return model.predict_matrices_chunked(
-                input_payload,
-                edge_chunk_size=edge_chunk_size,
-                edge_store_device=edge_store_device,
-                output_device="cpu",
-                physical=True,
-                progress=ChunkProgressLogger(logger) if edge_chunk_progress else None,
-            )
+            progress = ChunkProgressBars() if edge_chunk_progress else None
+            try:
+                return model.predict_matrices_chunked(
+                    input_payload,
+                    edge_chunk_size=edge_chunk_size,
+                    edge_store_device=edge_store_device,
+                    output_device="cpu",
+                    physical=True,
+                    progress=progress,
+                )
+            finally:
+                if progress is not None:
+                    progress.close()
 
         with torch.inference_mode():
             warmup(chunked_inference, warmup_runs, device)
             reset_peak_memory(device)
-            chunked_summary, matrices = time_repeated(chunked_inference, device=device)
+            chunked_summary, matrices = time_repeated(
+                chunked_inference,
+                device=device,
+                repeats=timed_repeats,
+            )
         chunked_peak = peak_memory_gib(device)
         matrix_names = sorted(matrices)
         total_blocks = sum(
@@ -363,7 +428,11 @@ def benchmark_structure(
     with torch.inference_mode():
         warmup(forward, warmup_runs, device)
         reset_peak_memory(device)
-        forward_summary, predictions = time_repeated(forward, device=device)
+        forward_summary, predictions = time_repeated(
+            forward,
+            device=device,
+            repeats=timed_repeats,
+        )
     forward_peak = peak_memory_gib(device)
     logger.log(format_summary("model_evaluation", forward_summary))
     if forward_peak is not None:
@@ -378,7 +447,11 @@ def benchmark_structure(
     with torch.inference_mode():
         warmup(construct, warmup_runs, device)
         reset_peak_memory(device)
-        matrix_summary, matrices = time_repeated(construct, device=device)
+        matrix_summary, matrices = time_repeated(
+            construct,
+            device=device,
+            repeats=timed_repeats,
+        )
     matrix_peak = peak_memory_gib(device)
     matrix_names = sorted(matrices)
     total_blocks = sum(
@@ -399,8 +472,12 @@ def benchmark_structure(
 
 def main() -> None:
     args = parse_args()
-    if args.warmup_runs < 1:
-        raise ValueError("--warmup-runs must be at least 1")
+    if args.warmup_runs < 1 or args.large_warmup_runs < 1:
+        raise ValueError("--warmup-runs and --large-warmup-runs must be at least 1")
+    if args.timed_repeats < 1 or args.large_atom_repeats < 1:
+        raise ValueError("--timed-repeats and --large-atom-repeats must be at least 1")
+    if args.large_atom_threshold < 1:
+        raise ValueError("--large-atom-threshold must be positive")
     device = torch.device(args.device)
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested, but torch.cuda.is_available() is false")
@@ -419,8 +496,14 @@ def main() -> None:
         logger.log(f"device={device}")
         if device.type == "cuda":
             logger.log(f"gpu={torch.cuda.get_device_name(device)}")
-        logger.log(f"timed_repeats={REPEATS}")
+        logger.log(f"timed_repeats={args.timed_repeats}")
         logger.log(f"warmup_runs={args.warmup_runs}")
+        logger.log(
+            "large_structure_policy="
+            f"threshold={args.large_atom_threshold} atoms "
+            f"timed_repeats={args.large_atom_repeats} "
+            f"warmup_runs={args.large_warmup_runs}"
+        )
         logger.log(f"edge_chunk_size={args.edge_chunk_size}")
         logger.log(f"edge_store_device={args.edge_store_device}")
         logger.log(f"edge_chunk_progress={args.edge_chunk_progress}")
@@ -430,6 +513,11 @@ def main() -> None:
 
         for atom_count, cif_path in structures:
             try:
+                is_large = atom_count >= args.large_atom_threshold
+                timed_repeats = (
+                    args.large_atom_repeats if is_large else args.timed_repeats
+                )
+                warmup_runs = args.large_warmup_runs if is_large else args.warmup_runs
                 benchmark_structure(
                     atom_count=atom_count,
                     cif_path=cif_path,
@@ -437,7 +525,8 @@ def main() -> None:
                     mapper=mapper,
                     model=model,
                     device=device,
-                    warmup_runs=args.warmup_runs,
+                    warmup_runs=warmup_runs,
+                    timed_repeats=timed_repeats,
                     edge_chunk_size=args.edge_chunk_size,
                     edge_store_device=args.edge_store_device,
                     edge_chunk_progress=args.edge_chunk_progress,

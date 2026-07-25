@@ -14,13 +14,14 @@ from ase.io import write
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "benchmark_data/silicon_scaling"
 SILICON_LATTICE_CONSTANT_ANGSTROM = 5.4437
-REPETITIONS = (1, 2, 4, 8, 16, 32)
+REPETITIONS = (1, 2, 4, 8, 16, 32, 64)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate 8, 64, 512, 4096, 32768, and 262144 atom diamond-Si " "CIF files."
+            "Generate 8, 64, 512, 4096, 32768, 262144, and 2097152 atom "
+            "diamond-Si CIF files."
         )
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -33,7 +34,7 @@ def parse_args() -> argparse.Namespace:
         "--repetitions",
         type=str,
         default=",".join(str(value) for value in REPETITIONS),
-        help="Comma-separated cubic repeat factors selected from 1,2,4,8,16,32.",
+        help="Comma-separated cubic repeat factors selected from 1,2,4,8,16,32,64.",
     )
     return parser.parse_args()
 
