@@ -66,29 +66,14 @@ def _boxplot(
         positions=positions,
         widths=0.58,
         patch_artist=True,
+        showfliers=False,
         medianprops={"color": "#111111", "linewidth": 1.9},
         whiskerprops={"color": "#444444"},
         capprops={"color": "#444444"},
-        flierprops={"marker": "o", "markerfacecolor": "#444444", "markersize": 3},
     )
     for box, color in zip(boxes["boxes"], colors):
         box.set_facecolor(color)
         box.set_alpha(0.8)
-
-    # Individual points expose the spread without adding statistical annotations.
-    rng = np.random.default_rng(20260725)
-    for index, (setting, color) in enumerate(zip(order, colors)):
-        samples = values[setting]
-        jitter = rng.uniform(-0.075, 0.075, size=len(samples))
-        ax.scatter(
-            np.full(len(samples), positions[index]) + jitter,
-            samples,
-            s=27,
-            color=color,
-            edgecolor="white",
-            linewidth=0.55,
-            zorder=3,
-        )
 
     ax.set_xticks(positions, labels)
     ax.set_ylabel(ylabel)
@@ -121,23 +106,6 @@ def plot_envelope_ablation() -> None:
     _save(fig, "result_envelope_ablation.png")
 
 
-def plot_pair_radial_ablation() -> None:
-    rows = read_csv(DATA / "zncusnses_pair_radial_mlp_ablation.csv")
-    order = ["Shared radial MLP", "Pair-conditioned radial MLP"]
-    values = _values_by_setting(rows, "hamiltonian_mae", order)
-    fig, ax = plt.subplots(figsize=(7.2, 4.8), constrained_layout=True)
-    _boxplot(
-        ax,
-        values,
-        order,
-        ["Shared\nradial MLP", "Pair-conditioned\nradial MLP"],
-        [CONTROL, TREATMENT],
-        ylabel="Hamiltonian MAE (eV)",
-        title=r"ZnCuSnSeS: pair-conditioned radial processing",
-    )
-    _save(fig, "result_pair_radial_ablation.png")
-
-
 def plot_silicon_aggregation_ablation() -> None:
     rows = read_csv(DATA / "silicon_node_aggregation_ablation.csv")
     order = ["Average", "Attention"]
@@ -166,7 +134,10 @@ def plot_siox_energy_guidance_ablation() -> None:
     labels = ["0", r"$3\times10^{-5}$", r"$10^{-4}$", r"$10^{-3}$"]
     colors = [CONTROL, ACCENT_1, TREATMENT, ACCENT_3]
     hamiltonian = _values_by_setting(rows, "hamiltonian_mae", order)
-    energy = _values_by_setting(rows, "observable_mae", order)
+    energy = {
+        setting: values / 150.0
+        for setting, values in _values_by_setting(rows, "observable_mae", order).items()
+    }
     fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.6), constrained_layout=True)
     _boxplot(
         axes[0],
@@ -184,7 +155,7 @@ def plot_siox_energy_guidance_ablation() -> None:
         order,
         labels,
         colors,
-        ylabel="Band-energy MAE (eV)",
+        ylabel="Band-energy MAE (eV/atom)",
         xlabel="Energy-loss coefficient",
         title=r"SiO$_2$: band-energy accuracy",
     )
@@ -264,7 +235,6 @@ if __name__ == "__main__":
     FIGURES.mkdir(parents=True, exist_ok=True)
     RESULTS.mkdir(parents=True, exist_ok=True)
     plot_envelope_ablation()
-    plot_pair_radial_ablation()
     plot_silicon_aggregation_ablation()
     plot_siox_energy_guidance_ablation()
     plot_zncusnses_spectral_ablation()
