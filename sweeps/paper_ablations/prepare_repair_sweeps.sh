@@ -20,22 +20,10 @@ python -u "${GENERATOR}" \
   --value 'loss-coef-observables=0.001'
 
 python -u "${GENERATOR}" \
-  --source "${ROOT}/paper_silicon_node_aggregation_12h.yaml" \
-  --output "${OUT}/paper_silicon_node_aggregation_12h_repair.yaml" \
-  --name "paper_silicon_node_aggregation_12h_repair" \
-  --value 'evaluate-test-after-fit=false'
-
-python -u "${GENERATOR}" \
-  --source "${ROOT}/paper_siox_mature_energy_guidance_3em5_12h.yaml" \
-  --output "${OUT}/paper_siox_mature_energy_guidance_3em5_12h_repair.yaml" \
-  --name "paper_siox_mature_energy_guidance_3em5_12h_repair" \
-  --values 'seed=[41, 43, 44]'
-
-python -u "${GENERATOR}" \
   --source "${ROOT}/paper_zncusnses_big_mature_spectral_24h.yaml" \
-  --output "${OUT}/paper_zncusnses_big_mature_spectral_24h_control_repair.yaml" \
-  --name "paper_zncusnses_big_mature_spectral_24h_control_repair" \
+  --output "${OUT}/paper_zncusnses_big_mature_spectral_24h_control_seed44_repair.yaml" \
+  --name "paper_zncusnses_big_mature_spectral_24h_control_seed44_repair" \
   --value 'spectral-loss-coef=0.0' \
-  --values 'seed=[43, 44]'
+  --value 'seed=44'
 
 printf '\nRepair sweep YAMLs are ready under %s\n' "${OUT}"

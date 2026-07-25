@@ -4,8 +4,8 @@ metric:
   name: val/hamiltonian_mae
   goal: minimize
 project: paper_zncusnses_big_mature_spectral_24h
-name: paper_zncusnses_big_mature_spectral_24h_control_repair
-run_cap: 2
+name: paper_zncusnses_big_mature_spectral_24h_control_seed44_repair
+run_cap: 1
 command:
 - ${env}
 - python
@@ -114,6 +114,4 @@ parameters:
   checkpoint-monitor:
     value: val/hamiltonian_mae
   seed:
-    values:
-    - 43
-    - 44
+    value: 44
