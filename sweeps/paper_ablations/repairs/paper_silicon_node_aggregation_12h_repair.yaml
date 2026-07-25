@@ -1,0 +1,71 @@
+program: scripts/wandb_run.py
+method: grid
+metric:
+  name: val/hamiltonian_mae
+  goal: minimize
+project: paper_silicon_node_aggregation_12h
+name: paper_silicon_node_aggregation_12h_repair
+run_cap: 10
+command:
+- ${env}
+- python
+- -u
+- ${program}
+- ${args}
+parameters:
+  dataset-kind:
+    value: silicon_scales
+  data-path:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si
+  snapshot-cache-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/snapshot_cache
+  dataset-device:
+    value: cpu
+  scales:
+    value:
+    - 1
+  allow-incomplete-dataset:
+    value: true
+  num-train-per-scale:
+    value: 80
+  num-val-per-scale:
+    value: 20
+  cutoff-radius:
+    value: 8.0
+  l-max:
+    value: 4
+  hidden-irreps:
+    value: 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e
+  hamiltonian-envelope-path:
+    value: eval_outputs/silicon_perturbed_scale1_radial_fit_study/slater_exp_quad_soft_wall_envelope.json
+  hamiltonian-envelope-mode:
+    value: multiply_prediction
+  wandb-project:
+    value: paper_silicon_node_aggregation_12h
+  wandb-group:
+    value: paper_silicon_node_aggregation_12h
+  wandb-tags:
+    value:
+    - paper_ablation
+    - fresh_initialization
+  checkpoint-dir:
+    value: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/paper_silicon_node_aggregation_12h
+  experiment-id:
+    value: paper_round2_20260720
+  ablation-name:
+    value: paper_silicon_node_aggregation_12h
+  ablation-setting-from:
+    value: node_update_message_agg
+  node-update-message-agg:
+    values:
+    - average
+    - attention
+  seed:
+    values:
+    - 41
+    - 42
+    - 43
+    - 44
+    - 45
+  evaluate-test-after-fit:
+    value: false
