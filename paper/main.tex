@@ -841,24 +841,24 @@ Each figure is generated for one representative structure from the corresponding
 
 ZnCu$_2$Sn(SeS)$_2$ combines five elements and chemically distinct cation and anion environments in one periodic material.
 Its electronic structure contains many element-pair channels with different orbital content, so a single model must resolve both the heterogeneous local chemistry and the coupling between those environments.
-The aggregate validation result is summarized in Table~\ref{tab:zncusnses-validation}; the complete configuration of the evaluated model is provided in \mbox{\ref{app:model-config-zncusnses}}. The relative error normalizes the aggregate MAE by the mean absolute reference Hamiltonian element, $0.1022$~eV, in the representative validation structure used for the figures.
+The aggregate validation result is summarized in Table~\ref{tab:zncusnses-validation}; the complete configuration of the evaluated model is provided in \mbox{\ref{app:model-config-zncusnses}}. The relative error normalizes the aggregate MAE by the mean absolute reference Hamiltonian element, $0.1021$~eV, in the representative validation structure used for the figures.
 
 \begin{table}[H]
 \centering
-\caption{Validation metric for the ZnCu$_2$Sn(SeS)$_2$ model.}
+\caption{Validation metrics for the ZnCu$_2$Sn(SeS)$_2$ model.}
 \label{tab:zncusnses-validation}
 \begin{tabular}{lc}
 \toprule
 Metric & Value \\
 \midrule
-Hamiltonian MAE & 0.003013~eV \\
-Relative Hamiltonian MAE & 2.95\% \\
+Hamiltonian MAE & $6.329\times10^{-4}$~eV \\
+Relative Hamiltonian MAE & 0.620\% \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Figure~\ref{fig:zncusnses-hamiltonian} resolves a representative prediction into atom-pair matrix blocks. The $\pm0.01$~eV range is narrow compared with the Hamiltonian elements and exposes residual structure in both on-site and off-site blocks.
-The correlation in Fig.~\ref{fig:zncusnses-correlation} includes all shift-resolved elements of the same structure and gives $R^2=0.999475$.
+The Hamiltonian and its eigenvalue correlations in Fig.~\ref{fig:zncusnses-correlation} include all shift-resolved matrix elements and the Gamma-point eigenvalues, respectively. They give $R^2=0.999978$ for Hamiltonian elements and $R^2=0.999864$ for eigenvalues; the eigenvalue MAE is $0.1608$~eV.
 
 \begin{figure}[H]
 \centering
@@ -869,9 +869,16 @@ The correlation in Fig.~\ref{fig:zncusnses-correlation} includes all shift-resol
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.68\textwidth]{figures/results/paper_zncusnses_hamiltonian_correlation.png}
-\caption{Element-wise Hamiltonian correlation for the representative ZnCu$_2$Sn(SeS)$_2$ structure. Counts use a logarithmic color scale; all matrix elements are overlaid as points.}
+\includegraphics[width=\textwidth]{figures/results/paper_zncusnses_hamiltonian_and_eigenvalue_correlation.png}
+\caption{Hamiltonian-element and Gamma-point eigenvalue correlations for the representative ZnCu$_2$Sn(SeS)$_2$ structure. The Hamiltonian density uses a logarithmic color scale.}
 \label{fig:zncusnses-correlation}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/results/paper_zncusnses_band_structure_and_dos.png}
+\caption{Band structure and density of states for the representative ZnCu$_2$Sn(SeS)$_2$ structure. The generalized eigensolve uses the reference overlap matrix.}
+\label{fig:zncusnses-bands-dos}
 \end{figure}
 
 
@@ -899,7 +906,6 @@ Relative band-energy MAE & 0.20\% \\
 \end{table}
 
 The density of states in Fig.~\ref{fig:sio2-dos} tests the collective spectral consequence of the predicted matrix rather than individual matrix elements.
-The residual is largest where narrow variations in the reference DOS amplify small shifts of the eigenvalue distribution.
 
 \begin{figure}[H]
 \centering
@@ -955,7 +961,7 @@ For a predicted block $M^{\mathrm{pred}}$ and its reference $M^{\mathrm{ref}}$, 
 \end{equation}
 The discrete distance groups correspond to coordination shells of the perturbed crystal.
 Hamiltonian blocks have their smallest relative errors over the strongly coupled intermediate shells and larger relative errors near the cutoff, where normalization by weak target blocks magnifies the ratio.
-The density matrix shows greater shell-to-shell variation because its longer-range blocks encode the occupied electronic subspace rather than the operator alone.
+The density matrix shows greater shell-to-shell variation because its blocks don't fall off with magnitude as quickly as the Hamiltonian blocks do.
 
 \begin{figure}[H]
 \centering
@@ -979,58 +985,61 @@ The density matrix shows greater shell-to-shell variation because its longer-ran
 
 \subsection{ZnCuSnSeS envelope-factorization ablation}
 
-We performed a controlled ablation using perturbed ZnCuSnSeS structures.
-The baseline predicts Hamiltonian blocks directly
-(\texttt{hamiltonian\_envelope\_mode=off}), while the treatment multiplies the
-predicted blocks by a fitted pair-distance envelope
-(\texttt{multiply\_prediction}). Both treatments use the same set of seeds and the same
-fixed data split.
-
-The median validation Hamiltonian MAE decreases from 0.005221~eV without the
-envelope to 0.004930~eV with prediction factorization, a relative reduction of
-5.6\%. The corresponding means are 0.005167 and 0.004941~eV, respectively, a
-4.4\% reduction. The treatment improves four of the five paired seeds. The mean
-paired difference (treatment minus baseline) is $-2.26\times 10^{-4}$~eV, with a
-95\% $t$ interval from $-4.86\times 10^{-4}$ to
-$3.37\times 10^{-5}$~eV. Thus, the completed experiment provides encouraging
-evidence for the envelope factorization, while the interval and small number of
-seeds motivate a restrained interpretation rather than a claim of definitive
-statistical separation.
+Prediction factorization lowers the mean test Hamiltonian MAE from
+$0.005069$~eV to $0.004907$~eV. The median decreases from $0.005093$~eV to
+$0.004902$~eV, and four of five matched seeds improve.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.82\textwidth]{figures/result_envelope_ablation.png}
-\caption{Results for the ZnCuSnSeS envelope-factorization ablation. The two
-boxplots summarize the final W\&B validation Hamiltonian MAE across seeds;
-black horizontal marks denote medians. The fitted envelope reduces the
-median error by 5.6\% and wins four of five paired runs.}
+\caption{Test Hamiltonian MAE for ZnCuSnSeS with direct block prediction and fitted-envelope prediction factorization.}
 \label{fig:result-envelope-real}
 \end{figure}
 
-\subsection{Other ablations}
+\subsection{Additional ablations}
 
-\noindent\fcolorbox{red!80!black}{red!8}{\parbox{0.94\linewidth}{
-\centering\bfseries\large PLACEHOLDER --- SYNTHETIC DATA --- NOT SCIENTIFIC RESULTS}}
-\par\medskip
-
-\begin{enumerate}
-\item SiO$_x$ energy guidance: \texttt{loss\_coef\_observables=0} versus
-      \texttt{0.003}, with Hamiltonian and band-energy validation errors.
-\item Mature ZnCuSnSeS spectral fine-tuning:
-      \texttt{spectral\_loss\_coef=0} versus \texttt{0.001}, with Hamiltonian
-      and spectral validation errors. Duplicate sweep instances will be
-      consolidated before analysis.
-\item ZnCuSnSeS node aggregation: \texttt{sum} versus \texttt{attention}.
-\item ZnCuSnSeS shifted-self handling:
-      \texttt{separate\_shifted\_self=false} versus \texttt{true}.
-\end{enumerate}
+Pair-conditioned radial processing changes the mean test Hamiltonian MAE from
+$0.003365$~eV to $0.003316$~eV on ZnCuSnSeS. Attention aggregation lowers the
+perturbed-silicon validation Hamiltonian MAE from $1.660\times10^{-4}$~eV to
+$1.407\times10^{-4}$~eV.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/result_ablations_placeholder.png}
-\caption{\textbf{PLACEHOLDER --- SYNTHETIC DATA --- NOT RESULTS.} Layout preview
-for four running ablations.}
-\label{fig:result-placeholders}
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/result_pair_radial_ablation.png}
+\small (a) Pair-conditioned radial processing
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/result_silicon_node_aggregation_ablation.png}
+\small (b) Node-message aggregation
+\end{minipage}
+\caption{Hamiltonian MAE for pair-conditioned radial processing on ZnCuSnSeS and node-message aggregation on perturbed silicon.}
+\label{fig:result-additional-matrix}
+\end{figure}
+
+On SiO$_2$, an energy-loss coefficient of $10^{-4}$ reduces the mean band-energy
+MAE from $34.99$~eV to $14.99$~eV while changing the mean Hamiltonian MAE from
+$0.002239$~eV to $0.002364$~eV. A coefficient of $10^{-3}$ raises the mean
+Hamiltonian MAE to $0.002991$~eV.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/result_siox_energy_guidance_ablation.png}
+\caption{Hamiltonian and band-energy MAE for mature SiO$_2$ models with energy guidance.}
+\label{fig:result-siox-energy-guidance}
+\end{figure}
+
+On ZnCuSnSeS, spectral guidance reduces the mean spectral MAE from $0.5913$~eV
+to $0.04086$~eV and changes the mean Hamiltonian MAE from $0.002822$~eV to
+$0.002770$~eV.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/result_zncusnses_spectral_guidance_ablation.png}
+\caption{Hamiltonian and eigenvalue MAE for mature ZnCuSnSeS models with spectral guidance.}
+\label{fig:result-zncusnses-spectral-guidance}
 \end{figure}
 
 \clearpage

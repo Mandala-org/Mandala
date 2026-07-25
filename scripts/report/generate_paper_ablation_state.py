@@ -29,6 +29,11 @@ PAPER_PROJECTS = (
     "paper_zncusnses_mature_full_network_spectral_12h",
     "paper_zncusnses_big_mature_spectral_24h",
     "paper_silicon_mature_energy_guidance_47h",
+    "paper_additional_seeds_siox_mature_energy_guidance_12h",
+    "paper_additional_seeds_zncusnses_mature_full_network_spectral_12h",
+    "paper_additional_seeds_zncusnses_envelope_12h",
+    "paper_additional_seeds_zncusnses_pair_radial_mlp_12h",
+    "paper_additional_seeds_silicon_node_aggregation_12h",
 )
 
 

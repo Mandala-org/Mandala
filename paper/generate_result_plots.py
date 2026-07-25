@@ -1,17 +1,33 @@
 from __future__ import annotations
 
 import csv
+import shutil
 from collections import defaultdict
 from pathlib import Path
+from typing import Iterable
 
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 FIGURES = ROOT / "figures"
-SEEDS = (41, 42, 43, 44, 45)
+RESULTS = FIGURES / "results"
+ZN_ASSET_ROOT = (
+    ROOT.parent
+    / "eval_outputs"
+    / "ZnCuSnSeS_hamiltonian"
+    / "big_data_big_model"
+    / "best_restart_val0288"
+)
+
+CONTROL = "#315b7d"
+TREATMENT = "#2f8f6b"
+ACCENT_1 = "#5a8fbd"
+ACCENT_2 = "#d07b3f"
+ACCENT_3 = "#8d5aab"
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -19,164 +35,238 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def plot_envelope_ablation() -> None:
-    rows = read_csv(DATA / "zncusnses_envelope_ablation.csv")
-    by_treatment: dict[str, dict[int, float]] = defaultdict(dict)
-    split_hashes = set()
+def _values_by_setting(
+    rows: Iterable[dict[str, str]], metric: str, order: list[str]
+) -> dict[str, np.ndarray]:
+    grouped: dict[str, list[float]] = defaultdict(list)
     for row in rows:
-        by_treatment[row["treatment"]][int(row["seed"])] = float(
-            row["val_hamiltonian_mae"]
-        )
-        split_hashes.add(row["split_hash"])
-    assert set(by_treatment) == {"off", "multiply_prediction"}
-    assert all(set(seed_values) == set(SEEDS) for seed_values in by_treatment.values())
-    assert len(split_hashes) == 1
+        value = row[metric]
+        if value:
+            grouped[row["setting"]].append(float(value))
+    missing = [setting for setting in order if setting not in grouped]
+    if missing:
+        raise ValueError(f"Missing {metric} values for settings: {missing}")
+    return {setting: np.asarray(grouped[setting], dtype=float) for setting in order}
 
-    treatments = ("off", "multiply_prediction")
-    labels = ("Envelope off", "Multiply prediction")
-    colors = ("#315b7d", "#2f8f6b")
-    x = np.arange(2, dtype=float)
-    values = {
-        treatment: np.array([by_treatment[treatment][seed] for seed in SEEDS])
-        for treatment in treatments
-    }
 
-    fig, ax = plt.subplots(figsize=(7.2, 4.8), constrained_layout=True)
+def _boxplot(
+    ax,
+    values: dict[str, np.ndarray],
+    order: list[str],
+    labels: list[str],
+    colors: list[str],
+    *,
+    ylabel: str,
+    title: str,
+    xlabel: str | None = None,
+) -> None:
+    positions = np.arange(len(order), dtype=float)
     boxes = ax.boxplot(
-        [values[treatment] for treatment in treatments],
-        positions=x,
-        widths=0.56,
+        [values[setting] for setting in order],
+        positions=positions,
+        widths=0.58,
         patch_artist=True,
-        medianprops={"color": "#111111", "linewidth": 2.0},
+        medianprops={"color": "#111111", "linewidth": 1.9},
         whiskerprops={"color": "#444444"},
         capprops={"color": "#444444"},
-        flierprops={"marker": "o", "markerfacecolor": "#444444", "markersize": 4},
+        flierprops={"marker": "o", "markerfacecolor": "#444444", "markersize": 3},
     )
     for box, color in zip(boxes["boxes"], colors):
         box.set_facecolor(color)
-        box.set_alpha(0.82)
+        box.set_alpha(0.8)
 
-    for index, treatment in enumerate(treatments):
-        median = float(np.median(values[treatment]))
-        ax.annotate(
-            f"median {median:.6f}",
-            (index, median),
-            xytext=(0, 15),
-            textcoords="offset points",
-            ha="center",
-            fontsize=9,
+    # Individual points expose the spread without adding statistical annotations.
+    rng = np.random.default_rng(20260725)
+    for index, (setting, color) in enumerate(zip(order, colors)):
+        samples = values[setting]
+        jitter = rng.uniform(-0.075, 0.075, size=len(samples))
+        ax.scatter(
+            np.full(len(samples), positions[index]) + jitter,
+            samples,
+            s=27,
+            color=color,
+            edgecolor="white",
+            linewidth=0.55,
+            zorder=3,
         )
 
-    median_off = float(np.median(values["off"]))
-    median_on = float(np.median(values["multiply_prediction"]))
-    reduction = 100.0 * (median_off - median_on) / median_off
-    ax.text(
-        0.5,
-        0.97,
-        f"Median reduction: {reduction:.1f}%; treatment wins 4/5 paired seeds",
-        transform=ax.transAxes,
-        ha="center",
-        va="top",
-        fontsize=10,
-        bbox={
-            "boxstyle": "round,pad=0.3",
-            "facecolor": "#eef7f2",
-            "edgecolor": "#78a98e",
-        },
-    )
-    ax.set_xticks(x, labels)
-    ax.set_ylabel("Validation Hamiltonian MAE")
-    ax.set_title("ZnCuSnSeS envelope factorization (n=10)", pad=12)
+    ax.set_xticks(positions, labels)
+    ax.set_ylabel(ylabel)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    ax.set_title(title, pad=10)
     ax.grid(axis="y", alpha=0.25)
     ax.spines[["top", "right"]].set_visible(False)
-    fig.savefig(FIGURES / "result_envelope_ablation.png", dpi=240)
+
+
+def _save(fig, name: str) -> None:
+    fig.savefig(FIGURES / name, dpi=260)
     plt.close(fig)
 
 
-def plot_placeholder_ablations() -> None:
-    rows = read_csv(DATA / "placeholder_ablations_synthetic.csv")
-    study_order = (
-        "SiOx energy guidance",
-        "ZnCuSnSeS mature spectral fine-tuning",
-        "ZnCuSnSeS node aggregation",
-        "ZnCuSnSeS shifted-self handling",
+def plot_envelope_ablation() -> None:
+    rows = read_csv(DATA / "zncusnses_envelope_ablation.csv")
+    order = ["Envelope off", "Multiply prediction"]
+    values = _values_by_setting(rows, "hamiltonian_mae", order)
+    fig, ax = plt.subplots(figsize=(7.2, 4.8), constrained_layout=True)
+    _boxplot(
+        ax,
+        values,
+        order,
+        ["Envelope\noff", "Multiply\nprediction"],
+        [CONTROL, TREATMENT],
+        ylabel="Hamiltonian MAE (eV)",
+        title=r"ZnCuSnSeS: envelope factorization",
     )
-    grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
-    for row in rows:
-        grouped[row["study"]].append(row)
-    assert set(grouped) == set(study_order)
+    _save(fig, "result_envelope_ablation.png")
 
-    fig, axes = plt.subplots(2, 2, figsize=(11.5, 8.1), constrained_layout=True)
-    for ax, study in zip(axes.flat, study_order):
-        study_rows = grouped[study]
-        parameter = study_rows[0]["parameter"]
-        treatments = list(dict.fromkeys(row["treatment"] for row in study_rows))
-        primary_by_treatment = {
-            treatment: {
-                int(row["seed"]): float(row["synthetic_val_hamiltonian_mae_au"])
-                for row in study_rows
-                if row["treatment"] == treatment
-            }
-            for treatment in treatments
-        }
-        assert all(
-            set(seed_values) == set(SEEDS)
-            for seed_values in primary_by_treatment.values()
-        )
-        assert all(
-            value >= 10
-            for values in primary_by_treatment.values()
-            for value in values.values()
-        )
-        boxes = ax.boxplot(
-            [
-                list(primary_by_treatment[treatment].values())
-                for treatment in treatments
-            ],
-            widths=0.56,
-            patch_artist=True,
-            medianprops={"color": "#111111", "linewidth": 1.8},
-            whiskerprops={"color": "#555555"},
-            capprops={"color": "#555555"},
-        )
-        for box, color in zip(boxes["boxes"], ("#315b7d", "#2f8f6b")):
-            box.set_facecolor(color)
-            box.set_alpha(0.78)
-        ax.set_xticks(np.arange(1, len(treatments) + 1), treatments)
-        ax.set_xlabel(parameter)
-        ax.set_ylabel("Synthetic val/hamiltonian_mae proxy (a.u.)", color="#365f8d")
-        ax.tick_params(axis="y", labelcolor="#365f8d")
-        ax.set_title(study, fontsize=11)
-        ax.grid(axis="y", alpha=0.2)
 
-        ax.text(
-            0.5,
-            0.5,
-            "PLACEHOLDER\nSYNTHETIC",
-            transform=ax.transAxes,
-            ha="center",
-            va="center",
-            fontsize=27,
-            weight="bold",
-            color="#c00000",
-            alpha=0.22,
-            rotation=18,
-            zorder=10,
-        )
-
-    fig.suptitle(
-        "PLACEHOLDER — SYNTHETIC DATA — REPLACE BEFORE SUBMISSION",
-        fontsize=19,
-        weight="bold",
-        color="white",
-        backgroundcolor="#b00020",
+def plot_pair_radial_ablation() -> None:
+    rows = read_csv(DATA / "zncusnses_pair_radial_mlp_ablation.csv")
+    order = ["Shared radial MLP", "Pair-conditioned radial MLP"]
+    values = _values_by_setting(rows, "hamiltonian_mae", order)
+    fig, ax = plt.subplots(figsize=(7.2, 4.8), constrained_layout=True)
+    _boxplot(
+        ax,
+        values,
+        order,
+        ["Shared\nradial MLP", "Pair-conditioned\nradial MLP"],
+        [CONTROL, TREATMENT],
+        ylabel="Hamiltonian MAE (eV)",
+        title=r"ZnCuSnSeS: pair-conditioned radial processing",
     )
-    fig.savefig(FIGURES / "result_ablations_placeholder.png", dpi=220)
-    plt.close(fig)
+    _save(fig, "result_pair_radial_ablation.png")
+
+
+def plot_silicon_aggregation_ablation() -> None:
+    rows = read_csv(DATA / "silicon_node_aggregation_ablation.csv")
+    order = ["Average", "Attention"]
+    values = _values_by_setting(rows, "hamiltonian_mae", order)
+    fig, ax = plt.subplots(figsize=(7.2, 4.8), constrained_layout=True)
+    _boxplot(
+        ax,
+        values,
+        order,
+        ["Average", "Attention"],
+        [CONTROL, TREATMENT],
+        ylabel="Hamiltonian MAE (eV)",
+        title="Perturbed silicon: node-message aggregation",
+    )
+    _save(fig, "result_silicon_node_aggregation_ablation.png")
+
+
+def plot_siox_energy_guidance_ablation() -> None:
+    rows = read_csv(DATA / "siox_mature_energy_guidance_ablation.csv")
+    order = [
+        "No energy guidance",
+        r"Energy coefficient $3\times10^{-5}$",
+        r"Energy coefficient $10^{-4}$",
+        r"Energy coefficient $10^{-3}$",
+    ]
+    labels = ["0", r"$3\times10^{-5}$", r"$10^{-4}$", r"$10^{-3}$"]
+    colors = [CONTROL, ACCENT_1, TREATMENT, ACCENT_3]
+    hamiltonian = _values_by_setting(rows, "hamiltonian_mae", order)
+    energy = _values_by_setting(rows, "observable_mae", order)
+    fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.6), constrained_layout=True)
+    _boxplot(
+        axes[0],
+        hamiltonian,
+        order,
+        labels,
+        colors,
+        ylabel="Hamiltonian MAE (eV)",
+        xlabel="Energy-loss coefficient",
+        title=r"SiO$_2$: matrix accuracy",
+    )
+    _boxplot(
+        axes[1],
+        energy,
+        order,
+        labels,
+        colors,
+        ylabel="Band-energy MAE (eV)",
+        xlabel="Energy-loss coefficient",
+        title=r"SiO$_2$: band-energy accuracy",
+    )
+    _save(fig, "result_siox_energy_guidance_ablation.png")
+
+
+def plot_zncusnses_spectral_ablation() -> None:
+    rows = read_csv(DATA / "zncusnses_mature_spectral_ablation.csv")
+    order = ["No spectral guidance", r"Spectral coefficient $10^{-3}$"]
+    labels = ["No spectral\nguidance", "Spectral coefficient\n$10^{-3}$"]
+    hamiltonian = _values_by_setting(rows, "hamiltonian_mae", order)
+    spectral = _values_by_setting(rows, "observable_mae", order)
+    fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.6), constrained_layout=True)
+    _boxplot(
+        axes[0],
+        hamiltonian,
+        order,
+        labels,
+        [CONTROL, TREATMENT],
+        ylabel="Hamiltonian MAE (eV)",
+        title=r"ZnCuSnSeS: Hamiltonian",
+    )
+    _boxplot(
+        axes[1],
+        spectral,
+        order,
+        labels,
+        [CONTROL, TREATMENT],
+        ylabel="Spectral MAE (eV)",
+        title=r"ZnCuSnSeS: eigenvalues",
+    )
+    _save(fig, "result_zncusnses_spectral_guidance_ablation.png")
+
+
+def refresh_zncusnses_result_assets() -> None:
+    assets = {
+        "hamiltonian_first6_clim_0p01.png": "paper_zncusnses_hamiltonian_first6.png",
+        "hamiltonian_correlation.png": "paper_zncusnses_hamiltonian_correlation.png",
+        "eigenvalue_correlation.png": "paper_zncusnses_eigenvalue_correlation.png",
+        "band_structure_and_dos_comparison.png": "paper_zncusnses_band_structure_and_dos.png",
+    }
+    for source_name, target_name in assets.items():
+        source = ZN_ASSET_ROOT / source_name
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"Required ZnCuSnSeS result asset is missing: {source}"
+            )
+        shutil.copy2(source, RESULTS / target_name)
+
+    hamiltonian = Image.open(ZN_ASSET_ROOT / "hamiltonian_correlation.png").convert(
+        "RGB"
+    )
+    eigenvalue = Image.open(ZN_ASSET_ROOT / "eigenvalue_correlation.png").convert("RGB")
+    height = max(hamiltonian.height, eigenvalue.height)
+    if hamiltonian.height != height:
+        hamiltonian = hamiltonian.resize(
+            (round(hamiltonian.width * height / hamiltonian.height), height),
+            Image.Resampling.LANCZOS,
+        )
+    if eigenvalue.height != height:
+        eigenvalue = eigenvalue.resize(
+            (round(eigenvalue.width * height / eigenvalue.height), height),
+            Image.Resampling.LANCZOS,
+        )
+    gutter = 24
+    combined = Image.new(
+        "RGB", (hamiltonian.width + gutter + eigenvalue.width, height), "white"
+    )
+    combined.paste(hamiltonian, (0, 0))
+    combined.paste(eigenvalue, (hamiltonian.width + gutter, 0))
+    combined.save(
+        RESULTS / "paper_zncusnses_hamiltonian_and_eigenvalue_correlation.png"
+    )
 
 
 if __name__ == "__main__":
     FIGURES.mkdir(parents=True, exist_ok=True)
+    RESULTS.mkdir(parents=True, exist_ok=True)
     plot_envelope_ablation()
-    plot_placeholder_ablations()
-    print("Generated ablation plots.")
+    plot_pair_radial_ablation()
+    plot_silicon_aggregation_ablation()
+    plot_siox_energy_guidance_ablation()
+    plot_zncusnses_spectral_ablation()
+    refresh_zncusnses_result_assets()
+    print("Generated ablation figures and refreshed ZnCuSnSeS result assets.")

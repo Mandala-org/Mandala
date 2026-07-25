@@ -1,11 +1,12 @@
-# Paper result data
+# Paper Result Data
 
-- `zncusnses_envelope_ablation.csv` contains W&B summary values for the ten
-  runs in sweep `up109kk9`. Seeds 41--45 share split hash
-  `7d8e79c452810d3f27c251c26c3f726862832a39df7114b3a140ed10945ca51d`.
-- `placeholder_ablations_synthetic.csv` is deliberately fabricated plotting
-  data in arbitrary units. It must never be used for scientific conclusions
-  and must be replaced before submission.
+The CSV files in this directory contain completed W&B run summaries used by
+`paper/generate_result_plots.py`.
 
-The two sources are deliberately kept separate so synthetic values cannot be
-mistaken for downloaded experiment results.
+- `zncusnses_envelope_ablation.csv`: envelope prediction factorization.
+- `zncusnses_pair_radial_mlp_ablation.csv`: shared and pair-conditioned radial MLPs.
+- `silicon_node_aggregation_ablation.csv`: average and attention aggregation.
+- `siox_mature_energy_guidance_ablation.csv`: SiO$_2$ energy-guidance strengths merged from two sweeps.
+- `zncusnses_mature_spectral_ablation.csv`: ZnCuSnSeS spectral guidance.
+
+Run `paper/download_ablation_csvs.py` to refresh the source data from W&B.

@@ -419,9 +419,9 @@ def _material_plot_title(path: Path, explicit_title: str | None) -> str:
         return explicit_title
     value = str(path).lower()
     if "siox" in value or "sio2" in value:
-        return "SiOx"
+        return r"$\mathrm{SiO}_{2}$"
     if "zncu" in value:
-        return "ZnCuSnSeS"
+        return r"$\mathrm{Zn}\mathrm{Cu}_{2}\mathrm{Sn}(\mathrm{SeS})_{2}$"
     if "perturbed" in value:
         return "Silicon"
     if "300k" in value:
