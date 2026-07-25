@@ -16,20 +16,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = REPO_ROOT / "eval_outputs/silicon_cif_scaling_b200.txt"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "eval_outputs/silicon_cif_scaling_plots"
 
-PHASES = ("data_preparation", "model_evaluation", "matrix_construction")
+PHASES = (
+    "data_preparation",
+    "model_evaluation",
+    "matrix_construction",
+    "chunked_inference_and_matrix_construction",
+)
 PHASE_LABELS = {
     "data_preparation": "Data preparation",
     "model_evaluation": "Model evaluation",
     "matrix_construction": "Matrix construction",
+    "chunked_inference_and_matrix_construction": "Chunked inference + matrices",
 }
 PHASE_COLORS = {
     "data_preparation": "#4c78a8",
     "model_evaluation": "#f58518",
     "matrix_construction": "#54a24b",
+    "chunked_inference_and_matrix_construction": "#e45756",
 }
 SECTION_RE = re.compile(r"^=== atoms=(?P<atoms>\d+)\s+cif=.* ===$")
 TIME_RE = re.compile(
-    r"^(?P<phase>data_preparation|model_evaluation|matrix_construction): "
+    r"^(?P<phase>data_preparation|model_evaluation|matrix_construction|"
+    r"chunked_inference_and_matrix_construction): "
     r"repeats=(?P<repeats>\d+) "
     r"min=(?P<minimum>[0-9.eE+-]+)s "
     r"max=(?P<maximum>[0-9.eE+-]+)s "
@@ -37,7 +45,8 @@ TIME_RE = re.compile(
     r"stddev=(?P<stddev>[0-9.eE+-]+)s"
 )
 MEMORY_RE = re.compile(
-    r"^(?P<phase>data_preparation|model_evaluation|matrix_construction)"
+    r"^(?P<phase>data_preparation|model_evaluation|matrix_construction|"
+    r"chunked_inference_and_matrix_construction)"
     r"_peak_gpu_memory=(?P<gib>[0-9.eE+-]+) GiB$"
 )
 

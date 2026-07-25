@@ -62,3 +62,24 @@ def test_parse_benchmark_file_keeps_partial_measurements(tmp_path):
     assert len(results) == 1
     assert results[0].atom_count == 64
     assert set(results[0].timings) == {"data_preparation"}
+
+
+def test_parse_benchmark_file_accepts_chunked_inference_measurements(tmp_path):
+    benchmark_file = tmp_path / "chunked.txt"
+    benchmark_file.write_text(
+        "\n".join(
+            [
+                "=== atoms=32768 cif=/tmp/si32768.cif ===",
+                "chunked_inference_and_matrix_construction: repeats=10 min=1s max=3s avg=2s stddev=0.2s raw_seconds=[...]",
+                "chunked_inference_and_matrix_construction_peak_gpu_memory=42.0 GiB",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = _load_module().parse_benchmark_file(benchmark_file)[0]
+
+    assert (
+        result.timings["chunked_inference_and_matrix_construction"].mean_seconds == 2.0
+    )
+    assert result.peak_memory_gib["chunked_inference_and_matrix_construction"] == 42.0

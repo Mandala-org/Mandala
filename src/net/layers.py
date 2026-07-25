@@ -502,6 +502,33 @@ class EdgeUpdateBlock(nn.Module):
         Returns:
             Updated edge features (E, irreps_out.dim)
         """
+        return self.forward_chunk(
+            node=node,
+            edge=edge,
+            edge_index=edge_index,
+            edge_sh=edge_sh,
+            edge_length_emb=edge_length_emb,
+            edge_one_hot=edge_one_hot,
+            edge_type_idx=edge_type_idx,
+        )
+
+    def forward_chunk(
+        self,
+        *,
+        node: torch.Tensor,
+        edge: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_sh: torch.Tensor,
+        edge_length_emb: torch.Tensor,
+        edge_one_hot: torch.Tensor | None = None,
+        edge_type_idx: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Update one independent edge chunk.
+
+        This is mathematically identical to :meth:`forward`.  It is exposed so
+        inference can bound tensor-product intermediates without changing the
+        training path, where all edges are passed as one chunk.
+        """
         edge_old = edge
 
         # Self-connection
@@ -738,22 +765,19 @@ class NodeUpdateBlock(nn.Module):
         Returns:
             Updated node features (N, irreps_out.dim)
         """
-        node_old = node
-
-        # Self-connection
-        if self.sc is not None and node_one_hot is not None:
-            node_self_connection = self.sc(node, node_one_hot)
-
-        # Pre-linear
-        node = self.lin_pre(node)
+        node_old, node_pre, node_self_connection = self.prepare_node_update(
+            node, node_one_hot
+        )
 
         # Create edge messages
         src, dst = edge_index
-        fea_in = torch.cat([node[src], node[dst], edge], dim=-1)
-
-        # EquiConv to create messages
-        edge_messages = self.conv(
-            fea_in, edge_sh, edge_length_emb, edge_type_idx=edge_type_idx
+        edge_messages = self.compute_edge_messages(
+            node_pre=node_pre,
+            edge=edge,
+            edge_index=edge_index,
+            edge_sh=edge_sh,
+            edge_length_emb=edge_length_emb,
+            edge_type_idx=edge_type_idx,
         )
 
         # Aggregate messages to nodes
@@ -766,8 +790,8 @@ class NodeUpdateBlock(nn.Module):
                 edge_messages, dst, dim=0, dim_size=node_old.size(0), reduce="mean"
             )
         else:
-            query = self.query_proj(node).reshape(
-                node.shape[0], self.attn_num_heads, self.attn_head_dim
+            query = self.query_proj(node_pre).reshape(
+                node_pre.shape[0], self.attn_num_heads, self.attn_head_dim
             )
             key_input = torch.cat([edge_length_emb, edge_messages], dim=-1)
             key = self.key_proj(key_input).reshape(
@@ -796,28 +820,58 @@ class NodeUpdateBlock(nn.Module):
             )
             node = head_outputs.mean(dim=1)
 
-        # Post-linear
-        node = self.lin_post(node)
+        return self.finalize_node_update(
+            aggregated=node,
+            node_old=node_old,
+            node_self_connection=node_self_connection,
+        )
 
-        # Add self-connection
+    def prepare_node_update(
+        self,
+        node: torch.Tensor,
+        node_one_hot: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+        """Compute the node-global terms shared by every edge chunk."""
+        node_old = node
+        node_self_connection = None
         if self.sc is not None and node_one_hot is not None:
-            node = node + node_self_connection
+            node_self_connection = self.sc(node, node_one_hot)
+        return node_old, self.lin_pre(node), node_self_connection
 
-        # Normalization and activation
+    def compute_edge_messages(
+        self,
+        *,
+        node_pre: torch.Tensor,
+        edge: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_sh: torch.Tensor,
+        edge_length_emb: torch.Tensor,
+        edge_type_idx: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute messages for one edge chunk using already prepared nodes."""
+        src, dst = edge_index
+        fea_in = torch.cat([node_pre[src], node_pre[dst], edge], dim=-1)
+        return self.conv(fea_in, edge_sh, edge_length_emb, edge_type_idx=edge_type_idx)
+
+    def finalize_node_update(
+        self,
+        *,
+        aggregated: torch.Tensor,
+        node_old: torch.Tensor,
+        node_self_connection: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Apply the node-global post-processing after edge aggregation."""
+        node = self.lin_post(aggregated)
+        if node_self_connection is not None:
+            node = node + node_self_connection
         node = self.norm_act(node)
         if self.layer_norm is not None:
             node = self.layer_norm(node)
-
-        # Dropout
         if self.dropout:
             node = self.dropout(node)
-
         node = self.refine(node)
-
-        # Residual connection (only if dimensions match)
         if self.cfg.node_update_residual and node.shape == node_old.shape:
             node = node + node_old
-
         return node
 
 

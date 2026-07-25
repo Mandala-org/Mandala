@@ -242,91 +242,128 @@ class DeepHead(nn.Module):
             parts = edge_partitions[key]
             global_idx = parts["global_idx"]
             key_edge_feat = edge_feat.index_select(0, global_idx)
-            pair_vectors = key_edge_feat.new_zeros(
-                (key_edges.shape[1], self.mapper.get_pair_irreps(key).dim)
+            result[key] = self.forward_pair_chunk(
+                key=key,
+                node_feat=node_feat,
+                key_edge_feat=key_edge_feat,
+                key_edges=key_edges,
             )
-            pair_dtype = pair_vectors.dtype
-
-            def _match_pair_dtype(t: torch.Tensor) -> torch.Tensor:
-                return t if t.dtype == pair_dtype else t.to(dtype=pair_dtype)
-
-            diag_local_idx = parts["diag_local_idx"]
-            if diag_local_idx.numel() > 0:
-                if self.use_node_embeddings_for_self_edges:
-                    diag_src = key_edges[3].index_select(0, diag_local_idx)
-                    diag_input = node_feat.index_select(0, diag_src)
-                else:
-                    diag_input = key_edge_feat.index_select(0, diag_local_idx)
-                diag_hidden = self.diag_trunk(diag_input)
-                if self.diag_tensor_square is not None:
-                    diag_hidden = self.diag_tensor_square(diag_hidden)
-                diag_proj = (
-                    self.diag_projs[key]
-                    if self.head_pair_mode == "split"
-                    else self.shared_diag_proj
-                )
-                diag_vectors = self._project_pair(
-                    key=key,
-                    hidden=diag_hidden,
-                    proj=diag_proj,
-                )
-                if self.diag_log_scales is not None:
-                    diag_vectors = (
-                        torch.exp(self.diag_log_scales[key](diag_hidden)) * diag_vectors
-                    )
-                diag_vectors = _match_pair_dtype(diag_vectors)
-                pair_vectors.index_copy_(0, diag_local_idx, diag_vectors)
-
-            shifted_self_local_idx = parts["shifted_self_local_idx"]
-            if shifted_self_local_idx.numel() > 0:
-                shifted_input = key_edge_feat.index_select(0, shifted_self_local_idx)
-                shifted_hidden = self.shifted_self_trunk(shifted_input)
-                if self.shifted_self_tensor_square is not None:
-                    shifted_hidden = self.shifted_self_tensor_square(shifted_hidden)
-                shifted_proj = (
-                    self.shifted_self_projs[key]
-                    if self.head_pair_mode == "split"
-                    else self.shared_shifted_self_proj
-                )
-                shifted_vectors = self._project_pair(
-                    key=key,
-                    hidden=shifted_hidden,
-                    proj=shifted_proj,
-                )
-                if self.shifted_self_log_scales is not None:
-                    shifted_vectors = (
-                        torch.exp(self.shifted_self_log_scales[key](shifted_hidden))
-                        * shifted_vectors
-                    )
-                shifted_vectors = _match_pair_dtype(shifted_vectors)
-                pair_vectors.index_copy_(0, shifted_self_local_idx, shifted_vectors)
-
-            offdiag_local_idx = parts["offdiag_local_idx"]
-            if offdiag_local_idx.numel() > 0:
-                offdiag_input = key_edge_feat.index_select(0, offdiag_local_idx)
-                offdiag_hidden = self.offdiag_trunk(offdiag_input)
-                if self.offdiag_tensor_square is not None:
-                    offdiag_hidden = self.offdiag_tensor_square(offdiag_hidden)
-                offdiag_proj = (
-                    self.offdiag_projs[key]
-                    if self.head_pair_mode == "split"
-                    else self.shared_offdiag_proj
-                )
-                offdiag_vectors = self._project_pair(
-                    key=key,
-                    hidden=offdiag_hidden,
-                    proj=offdiag_proj,
-                )
-                if self.offdiag_log_scales is not None:
-                    offdiag_vectors = (
-                        torch.exp(self.offdiag_log_scales[key](offdiag_hidden))
-                        * offdiag_vectors
-                    )
-                offdiag_vectors = _match_pair_dtype(offdiag_vectors)
-                pair_vectors.index_copy_(0, offdiag_local_idx, offdiag_vectors)
-
-            result[key] = pair_vectors
         return result
+
+    def forward_pair_chunk(
+        self,
+        *,
+        key: str,
+        node_feat: torch.Tensor,
+        key_edge_feat: torch.Tensor,
+        key_edges: torch.Tensor,
+    ) -> torch.Tensor:
+        """Predict one contiguous chunk of a single ordered element pair.
+
+        ``key_edges`` follows the usual ``(shift_x, shift_y, shift_z, src,
+        dst)`` layout.  Deriving the partitions from this chunk preserves the
+        existing head semantics while avoiding a full pair-sized activation.
+        """
+        if key not in self.pair_key_to_index:
+            raise KeyError(f"Unknown pair key {key!r}")
+        if key_edge_feat.shape[0] != key_edges.shape[1]:
+            raise ValueError(
+                "Pair feature/edge length mismatch: "
+                f"features={key_edge_feat.shape[0]} edges={key_edges.shape[1]}"
+            )
+
+        pair_vectors = key_edge_feat.new_zeros(
+            (key_edges.shape[1], self.mapper.get_pair_irreps(key).dim)
+        )
+        pair_dtype = pair_vectors.dtype
+
+        def _match_pair_dtype(t: torch.Tensor) -> torch.Tensor:
+            return t if t.dtype == pair_dtype else t.to(dtype=pair_dtype)
+
+        src = key_edges[3]
+        dst = key_edges[4]
+        is_same_atom = src == dst
+        is_zero_shift = (key_edges[:3] == 0).all(dim=0)
+        diag_local_idx = torch.nonzero(
+            is_same_atom & is_zero_shift, as_tuple=False
+        ).flatten()
+        if self.separate_shifted_self:
+            shifted_self_local_idx = torch.nonzero(
+                is_same_atom & (~is_zero_shift), as_tuple=False
+            ).flatten()
+            offdiag_local_idx = torch.nonzero(~is_same_atom, as_tuple=False).flatten()
+        else:
+            shifted_self_local_idx = key_edges.new_empty((0,), dtype=torch.long)
+            offdiag_local_idx = torch.nonzero(
+                ~(is_same_atom & is_zero_shift), as_tuple=False
+            ).flatten()
+
+        if diag_local_idx.numel() > 0:
+            if self.use_node_embeddings_for_self_edges:
+                diag_input = node_feat.index_select(
+                    0, src.index_select(0, diag_local_idx)
+                )
+            else:
+                diag_input = key_edge_feat.index_select(0, diag_local_idx)
+            diag_hidden = self.diag_trunk(diag_input)
+            if self.diag_tensor_square is not None:
+                diag_hidden = self.diag_tensor_square(diag_hidden)
+            diag_proj = (
+                self.diag_projs[key]
+                if self.head_pair_mode == "split"
+                else self.shared_diag_proj
+            )
+            diag_vectors = self._project_pair(key, diag_hidden, diag_proj)
+            if self.diag_log_scales is not None:
+                diag_vectors = (
+                    torch.exp(self.diag_log_scales[key](diag_hidden)) * diag_vectors
+                )
+            pair_vectors.index_copy_(0, diag_local_idx, _match_pair_dtype(diag_vectors))
+
+        if shifted_self_local_idx.numel() > 0:
+            if self.shifted_self_trunk is None:
+                raise RuntimeError("Missing shifted-self trunk for shifted-self edges.")
+            shifted_hidden = self.shifted_self_trunk(
+                key_edge_feat.index_select(0, shifted_self_local_idx)
+            )
+            if self.shifted_self_tensor_square is not None:
+                shifted_hidden = self.shifted_self_tensor_square(shifted_hidden)
+            shifted_proj = (
+                self.shifted_self_projs[key]
+                if self.head_pair_mode == "split"
+                else self.shared_shifted_self_proj
+            )
+            shifted_vectors = self._project_pair(key, shifted_hidden, shifted_proj)
+            if self.shifted_self_log_scales is not None:
+                shifted_vectors = (
+                    torch.exp(self.shifted_self_log_scales[key](shifted_hidden))
+                    * shifted_vectors
+                )
+            pair_vectors.index_copy_(
+                0, shifted_self_local_idx, _match_pair_dtype(shifted_vectors)
+            )
+
+        if offdiag_local_idx.numel() > 0:
+            offdiag_hidden = self.offdiag_trunk(
+                key_edge_feat.index_select(0, offdiag_local_idx)
+            )
+            if self.offdiag_tensor_square is not None:
+                offdiag_hidden = self.offdiag_tensor_square(offdiag_hidden)
+            offdiag_proj = (
+                self.offdiag_projs[key]
+                if self.head_pair_mode == "split"
+                else self.shared_offdiag_proj
+            )
+            offdiag_vectors = self._project_pair(key, offdiag_hidden, offdiag_proj)
+            if self.offdiag_log_scales is not None:
+                offdiag_vectors = (
+                    torch.exp(self.offdiag_log_scales[key](offdiag_hidden))
+                    * offdiag_vectors
+                )
+            pair_vectors.index_copy_(
+                0, offdiag_local_idx, _match_pair_dtype(offdiag_vectors)
+            )
+        return pair_vectors
 
     def _project_pair(
         self, key: str, hidden: torch.Tensor, proj: nn.Module | None

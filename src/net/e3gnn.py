@@ -385,6 +385,40 @@ class E3GNN(pl.LightningModule):
         finally:
             self.train(was_training)
 
+    def predict_matrices_chunked(
+        self,
+        x: Dict[str, Any],
+        *,
+        edge_chunk_size: int,
+        edge_store_device: str | torch.device | None = None,
+        output_device: str | torch.device = "cpu",
+        physical: bool = True,
+        progress=None,
+    ) -> Dict[str, BlockMatrix]:
+        """Predict physical block matrices with bounded edge-local memory.
+
+        This is an inference-only alternative to :meth:`predict_matrices` for
+        large cells.  It retains the complete global graph and performs the
+        attention normalization over all incoming edges exactly.
+        """
+        from net.chunked_inference import predict_matrices_chunked
+
+        was_training = self.training
+        self.eval()
+        try:
+            with torch.inference_mode():
+                return predict_matrices_chunked(
+                    self,
+                    x,
+                    edge_chunk_size=edge_chunk_size,
+                    edge_store_device=edge_store_device,
+                    output_device=output_device,
+                    physical=physical,
+                    progress=progress,
+                )
+        finally:
+            self.train(was_training)
+
     def _spectral_loss_enabled(self) -> bool:
         return bool(getattr(self.cfg, "spectral_loss_enabled", False))
 

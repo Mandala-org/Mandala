@@ -145,6 +145,67 @@ def test_forward_smoke(edge_encoder_style):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("message_aggregation", ["sum", "average", "attention"])
+@pytest.mark.parametrize("edge_store_device", [None, "cpu"])
+@pytest.mark.parametrize("envelope_mode", ["off", "multiply_prediction"])
+def test_chunked_prediction_matches_monolithic(
+    message_aggregation, edge_store_device, envelope_mode
+):
+    """The bounded-memory inference path must retain global graph semantics."""
+    torch.manual_seed(20260724)
+    orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
+    cfg = Config(
+        matrix_targets=["hamiltonian", "overlap", "density"],
+        node_update_message_agg=message_aggregation,
+        precompute_edge_features=True,
+        hamiltonian_envelope_mode=envelope_mode,
+    )
+    model = E3GNN(BlockIrrepMapper(orbital_cfg), cfg).eval()
+    node_type_idx = torch.zeros(4, dtype=torch.long)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 0, 1, 1, 2, 0, 0], [0, 1, 2, 3, 1, 0, 2, 1, 0, 0]],
+        dtype=torch.long,
+    )
+    edge_count = edge_index.shape[1]
+    edge_shift = torch.zeros(3, edge_count, dtype=torch.long)
+    edge_shift[0, -2:] = torch.tensor([1, -1])
+    atoms = ("H", "H", "H", "H")
+    x = _build_static_graph_x(
+        node_type_idx=node_type_idx,
+        edge_index=edge_index,
+        edge_shift=edge_shift,
+        edge_type_idx=torch.zeros(edge_count, dtype=torch.long),
+        atoms=atoms,
+        mapper=model.mapper,
+        cfg=cfg,
+        edge_length_emb=torch.randn(edge_count, cfg.n_radial),
+        edge_sh=torch.randn(edge_count, Irreps.spherical_harmonics(cfg.l_max).dim),
+        positions=torch.zeros(4, 3, dtype=cfg.dtype),
+        box=torch.eye(3, dtype=cfg.dtype),
+    )
+    if envelope_mode != "off":
+        x["edge_envelope"] = torch.linspace(0.2, 1.0, edge_count)
+
+    with torch.inference_mode():
+        reference = model.predicted_irreps_to_block_matrices(model(x), x)
+        chunked = model.predict_matrices_chunked(
+            x,
+            edge_chunk_size=3,
+            edge_store_device=edge_store_device,
+        )
+
+    assert reference.keys() == chunked.keys()
+    for name in reference:
+        assert reference[name].pair_blocks.keys() == chunked[name].pair_blocks.keys()
+        for key, expected in reference[name].pair_blocks.items():
+            actual = chunked[name].pair_blocks[key]
+            assert torch.allclose(actual, expected.cpu(), rtol=1e-5, atol=1e-6)
+            assert torch.equal(
+                chunked[name].pair_edges[key], reference[name].pair_edges[key].cpu()
+            )
+
+
+@pytest.mark.unit
 def test_forward_smoke_onthefly_deeph_e3():
     orb_cfg = OrbitalIrrepConfig.from_dict({"H": "1x0e"})
     cfg = Config(

@@ -36,7 +36,7 @@ from scripts.evaluate_checkpoint_materials import (  # noqa: E402
 
 
 REPEATS = 10
-EXPECTED_ATOM_COUNTS = (8, 64, 512, 4096, 32768)
+EXPECTED_ATOM_COUNTS = (8, 64, 512, 4096, 32768, 262144)
 DEFAULT_STRUCTURES_DIR = REPO_ROOT / "benchmark_data/silicon_scaling"
 DEFAULT_OUTPUT = REPO_ROOT / "eval_outputs/silicon_cif_scaling_b200.txt"
 CLUSTER_ACCURATE_CHECKPOINT = Path(
@@ -63,6 +63,18 @@ class TeeLogger:
 
     def close(self) -> None:
         self._handle.close()
+
+
+class ChunkProgressLogger:
+    """Rate-limit chunk progress output without perturbing normal timings."""
+
+    def __init__(self, logger: TeeLogger) -> None:
+        self.logger = logger
+
+    def __call__(self, stage: str, current: int, total: int) -> None:
+        interval = max(1, total // 10)
+        if current == 1 or current == total or current % interval == 0:
+            self.logger.log(f"[chunked] {stage}: {current}/{total}")
 
 
 @dataclass(frozen=True)
@@ -105,10 +117,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--warmup-runs", type=int, default=2)
     parser.add_argument(
+        "--edge-chunk-size",
+        type=int,
+        default=None,
+        help=(
+            "Use exact edge-streamed inference with this many edges per chunk. "
+            "This combines model evaluation and matrix construction into one "
+            "bounded-memory operation."
+        ),
+    )
+    parser.add_argument(
+        "--edge-store-device",
+        type=str,
+        default="cuda",
+        choices=["cuda", "cpu"],
+        help="Persistent edge-state placement for --edge-chunk-size inference.",
+    )
+    parser.add_argument(
+        "--edge-chunk-progress",
+        action="store_true",
+        help="Log coarse edge-chunk progress during bounded-memory inference.",
+    )
+    parser.add_argument(
         "--atom-counts",
         type=str,
         default=",".join(str(value) for value in EXPECTED_ATOM_COUNTS),
-        help="Comma-separated subset of 8,64,512,4096,32768.",
+        help="Comma-separated subset of 8,64,512,4096,32768,262144.",
     )
     parser.add_argument(
         "--reference-info-path",
@@ -261,6 +295,9 @@ def benchmark_structure(
     model: E3GNN,
     device: torch.device,
     warmup_runs: int,
+    edge_chunk_size: int | None,
+    edge_store_device: str,
+    edge_chunk_progress: bool,
     logger: TeeLogger,
 ) -> None:
     logger.log()
@@ -283,6 +320,43 @@ def benchmark_structure(
     logger.log(f"graph: atoms={actual_atoms} directed_edges={edge_count}")
     if preparation_peak is not None:
         logger.log(f"data_preparation_peak_gpu_memory={preparation_peak:.6f} GiB")
+
+    if edge_chunk_size is not None:
+
+        # Bind the prepared input explicitly so static analysis and repeated
+        # benchmark invocations both use this exact graph instance.
+        def chunked_inference(input_payload=model_input):
+            return model.predict_matrices_chunked(
+                input_payload,
+                edge_chunk_size=edge_chunk_size,
+                edge_store_device=edge_store_device,
+                output_device="cpu",
+                physical=True,
+                progress=ChunkProgressLogger(logger) if edge_chunk_progress else None,
+            )
+
+        with torch.inference_mode():
+            warmup(chunked_inference, warmup_runs, device)
+            reset_peak_memory(device)
+            chunked_summary, matrices = time_repeated(chunked_inference, device=device)
+        chunked_peak = peak_memory_gib(device)
+        matrix_names = sorted(matrices)
+        total_blocks = sum(
+            int(blocks.shape[0])
+            for matrix in matrices.values()
+            for blocks in matrix.pair_blocks.values()
+        )
+        logger.log(
+            format_summary("chunked_inference_and_matrix_construction", chunked_summary)
+        )
+        logger.log(f"matrices={matrix_names} total_matrix_blocks={total_blocks}")
+        if chunked_peak is not None:
+            logger.log(f"chunked_inference_peak_gpu_memory={chunked_peak:.6f} GiB")
+        del matrices, model_input
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+        return
 
     forward = partial(model, model_input)
 
@@ -347,6 +421,9 @@ def main() -> None:
             logger.log(f"gpu={torch.cuda.get_device_name(device)}")
         logger.log(f"timed_repeats={REPEATS}")
         logger.log(f"warmup_runs={args.warmup_runs}")
+        logger.log(f"edge_chunk_size={args.edge_chunk_size}")
+        logger.log(f"edge_store_device={args.edge_store_device}")
+        logger.log(f"edge_chunk_progress={args.edge_chunk_progress}")
         logger.log(f"matrix_targets={list(cfg.matrix_targets)}")
         logger.log(f"cutoff_radius_angstrom={float(cfg.cutoff_radius):.6f}")
         logger.log(f"dtype={cfg.dtype}")
@@ -361,6 +438,9 @@ def main() -> None:
                     model=model,
                     device=device,
                     warmup_runs=args.warmup_runs,
+                    edge_chunk_size=args.edge_chunk_size,
+                    edge_store_device=args.edge_store_device,
+                    edge_chunk_progress=args.edge_chunk_progress,
                     logger=logger,
                 )
             except Exception as exc:

@@ -14,12 +14,14 @@ from ase.io import write
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "benchmark_data/silicon_scaling"
 SILICON_LATTICE_CONSTANT_ANGSTROM = 5.4437
-REPETITIONS = (1, 2, 4, 8, 16)
+REPETITIONS = (1, 2, 4, 8, 16, 32)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=("Generate 8, 64, 512, 4096, and 32768 atom diamond-Si CIF files.")
+        description=(
+            "Generate 8, 64, 512, 4096, 32768, and 262144 atom diamond-Si " "CIF files."
+        )
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
@@ -27,13 +29,37 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=SILICON_LATTICE_CONSTANT_ANGSTROM,
     )
+    parser.add_argument(
+        "--repetitions",
+        type=str,
+        default=",".join(str(value) for value in REPETITIONS),
+        help="Comma-separated cubic repeat factors selected from 1,2,4,8,16,32.",
+    )
     return parser.parse_args()
+
+
+def parse_repetitions(value: str) -> tuple[int, ...]:
+    try:
+        repetitions = tuple(
+            int(item.strip()) for item in value.split(",") if item.strip()
+        )
+    except ValueError as exc:
+        raise ValueError(f"Invalid --repetitions value: {value!r}") from exc
+    if not repetitions or len(set(repetitions)) != len(repetitions):
+        raise ValueError("--repetitions must contain unique integer values")
+    unsupported = sorted(set(repetitions).difference(REPETITIONS))
+    if unsupported:
+        raise ValueError(
+            f"Unsupported repetitions {unsupported}; available={REPETITIONS}"
+        )
+    return tuple(repeat for repeat in REPETITIONS if repeat in repetitions)
 
 
 def main() -> None:
     args = parse_args()
     if args.lattice_constant <= 0.0:
         raise ValueError("--lattice-constant must be positive")
+    repetitions = parse_repetitions(args.repetitions)
 
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -50,7 +76,7 @@ def main() -> None:
 
     print(f"output_dir={output_dir}", flush=True)
     print(f"lattice_constant_angstrom={args.lattice_constant:.8f}", flush=True)
-    for repeat in REPETITIONS:
+    for repeat in repetitions:
         structure = conventional_cell.repeat((repeat, repeat, repeat))
         structure.pbc = True
         structure.wrap()
