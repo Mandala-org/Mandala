@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/SiOx_hamiltonian_mae_stage2_47h25/dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25/best_model.pt",
+  "dataset_kind": "siox",
+  "validation_structures": 10,
+  "data_split_seed": 42,
+  "definition": "ratio of the mean per-structure validation MAE to the mean absolute reference magnitude over the same validation structures",
+  "metrics": {
+    "hamiltonian": {
+      "mae": 0.0019958807217170917,
+      "mean_absolute_reference": 0.11940096577815729,
+      "relative_mae": 0.01671578373516146,
+      "relative_mae_percent": 1.671578373516146,
+      "unit": "eV"
+    },
+    "val/energy_mae_gt_density": {
+      "mae_ev_per_atom": 0.14632936533292135,
+      "mean_absolute_reference_ev_per_atom": 75.92722557972817,
+      "relative_mae": 0.001927231822520193,
+      "relative_mae_percent": 0.19272318225201931
+    }
+  }
+}

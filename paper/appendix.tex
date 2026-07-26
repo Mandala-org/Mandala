@@ -1,255 +1,64 @@
-\begingroup
-\sloppy
-\setlength{\emergencystretch}{3em}
+\section{Compact configurations of the evaluated models}
+\label{app:model-configurations}
 
-\section{Configuration Inventory}
-\label{app:config-inventory}
+The three selected models share two E(3)-equivariant message-passing layers, separate-weight tensor products, a rich edge encoder with spherical-harmonic tensor-square features, invariant attention for node aggregation, species-pair-split output heads, separate shifted-self handling, MAE matrix training, and no spectral loss. Table~\ref{tab:evaluated-configs} lists the settings that distinguish the models. Complete machine-readable resolved configurations accompany the manuscript in \texttt{paper/data/evaluated\_model\_configs/}; paths and experiment-tracking metadata are omitted from the paper.
 
-This appendix summarizes the current Mandala configuration surface.
+\begin{table}[H]
+\centering
+\scriptsize
+\caption{Distinguishing settings of the three models used in the capability demonstrations. H, D, and S denote Hamiltonian, density, and overlap targets.}
+\label{tab:evaluated-configs}
+\begin{tabular}{p{0.18\textwidth}p{0.22\textwidth}p{0.22\textwidth}p{0.22\textwidth}}
+\toprule
+Setting & ZnCu$_2$Sn(SeS)$_2$ & SiO$_2$ & Perturbed Si \\
+\midrule
+Appendix label &
+\ref{app:model-config-zncusnses} &
+\ref{app:model-config-sio2} &
+\ref{app:model-config-silicon} \\
+Targets & H & H & H, D, S \\
+Cutoff / $\ell_{\max}$ & 11~\r{A} / 6 & 10~\r{A} / 4 & 8~\r{A} / 4 \\
+Neck / head depth & 2 / 1 & 1 / 1 & 2 / 2 \\
+Head nonlinearity & NormAct & NormAct & FiLM \\
+Radial envelope & Multiply prediction & Multiply prediction & Off \\
+Energy guidance & Off & Off & $3\times10^{-3}$ \\
+Learning rate & $5\times10^{-3}$ & $2\times10^{-4}$ & $3\times10^{-4}$ \\
+Training seed & 44 & 42 & 43 \\
+Maximum wall time & 47.0~h & 47.25~h & 47.25~h \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-% \subsection{Top-Level Runtime Settings Outside \texttt{Config}}
-
-% \begin{description}
-% \item[\texttt{convention}] Values: \texttt{e3nn} by default, or backend-specific conventions such as \texttt{openmx}, \texttt{fhi-aims}, and \texttt{pyscf} through parser and basis-conversion paths. This chooses the orbital and real-spherical-harmonics convention used after loading.
-% \item[Snapshot registration] \nolinkurl{DatasetFactory.add_snapshot(matrix_path, info_path, purpose=...)} registers matrix/info pairs for dataset creation. Backend type is inferred from the source file suffixes.
-% \end{description}
-
-\subsection{Geometry, Basis, and Graph Construction}
-
-\begin{description}
-\item[\texttt{cutoff\_radius}] Default: \texttt{11.0}. Global neighbor cutoff used for graph construction and target filtering.
-\item[\texttt{l\_max}] Default: \texttt{6}. Maximum angular momentum used for spherical harmonics and auto-built hidden irreps.
-\item[\texttt{hidden\_base\_dim}] Default: \texttt{64}. Base multiplicity for the auto-built hidden irreps at \texttt{l = 0}.
-\item[\texttt{hidden\_irreps}] Default: an explicit representation through $l=6$: \nolinkurl{128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e+4x4o+4x5e+12x5o+8x6e}. Setting this to \texttt{None} enables automatic construction.
-\item[\texttt{emb\_use\_odd\_features}] Default: \texttt{True}. Whether auto-built hidden irreps include odd-parity channels.
-\item[\texttt{edge\_type\_emb\_dim}] Default: \texttt{32}. Dimension of the learned scalar embedding for edge types.
-\item[\texttt{edge\_encoder\_style}] Default: \texttt{rich}. Values: \texttt{rich} uses edge-type, radial, and spherical-harmonic features, while \texttt{distance} uses a distance-only scalar projection.
-\item[\texttt{edge\_encoder\_use\_sh\_tensor\_square}] Default: \texttt{True}. Whether to apply tensor square to spherical-harmonic features before combination.
-\item[\texttt{e3layernorm}] Default: \texttt{False}. Enables equivariant layer normalization after encoder and update blocks.
-\item[\texttt{n\_radial}] Default: \texttt{128}. Number of radial basis channels in \nolinkurl{soft_one_hot_linspace(...)}.
-\item[\texttt{radial\_layers}] Default: \texttt{(128, 128, 128)}. Hidden layer widths of the radial MLP inside \texttt{EquiConv}.
-\item[\texttt{pair\_conditioned\_radial\_mlp}] Default: \texttt{False}. Enables pair-conditioned radial weights.
-\item[\texttt{pair\_distance\_normalization}] Default: \texttt{off}; \texttt{pair\_r0} normalizes distances with fitted pair scales.
-\item[\texttt{radial\_embedding\_scale}] Default: \texttt{none}. Optional scale applied to the radial basis embedding.
-\item[\texttt{apply\_cutoff\_to\_targets}] Default: \texttt{True}. Whether target sparse matrices are filtered to the same cutoff as the graph inputs.
-\item[\texttt{require\_exact\_edge\_match}] Default: \texttt{True}. Whether graph-target reconciliation must be exact.
-\item[\texttt{precompute\_edge\_features}] Default: \texttt{True}. Whether edge radial embeddings and spherical harmonics are cached in the sample payload.
-\end{description}
-
-\subsection{Message Passing and Tensor Products}
-
-\begin{description}
-\item[\texttt{num\_layers\_gnn}] Default: \texttt{2}. Number of message-passing blocks.
-\item[\texttt{tp\_type}] Default: \texttt{separate\_weight}. Values: \texttt{separate\_weight} uses Mandala's DeepH-E3-style separate-weight tensor-product implementation, and \texttt{fully\_connected} uses e3nn's implementation.
-\item[\texttt{use\_self\_connection}] Default: \texttt{False}. Enables learned scalar-conditioned skip/self-connection tensor products in node and edge updates.
-\item[\texttt{edge\_update\_residual}] Default: \texttt{False}. Adds residual connection to the edge update output when dimensions match.
-\item[\texttt{node\_update\_residual}] Default: \texttt{False}. Adds residual connection to the node update output when dimensions match.
-\item[\texttt{edge\_update\_node\_combine}] Default: \texttt{concat}. Values: \texttt{concat} concatenates source and destination node features as a direct sum, \texttt{sum} requires matching irreps and adds them, and \texttt{tensor\_product} learns an equivariant projection from the node pair to the edge-update input space.
-\item[\texttt{node\_update\_message\_agg}] Default: \texttt{attention}. Values: \texttt{sum} adds incoming messages, \texttt{average} divides the sum by the number of incoming edges, and \texttt{attention} uses scalar multi-head attention weights with per-head equivariant values.
-\item[\texttt{node\_update\_attention\_scalar\_dim}] Default: \texttt{64}. Total scalar query/key width used by attention aggregation.
-\item[\texttt{node\_update\_attention\_heads}] Default: \texttt{4}. Number of attention heads used when \texttt{node\_update\_message\_agg="attention"}.
-\end{description}
-
-\subsection{Readout Heads and Output Structure}
-
-\begin{description}
-\item[\texttt{neck\_depth}] Default: \texttt{2}. Depth of the shared per-class trunk before matrix-specific projections.
-\item[\texttt{internal\_e3mlp\_layers}] Default: \texttt{1}. Additional equivariant refinement depth inside node and edge update blocks after the main convolution/update.
-\item[\texttt{head\_e3mlp\_layers}] Default: \texttt{1}. Depth of the final matrix-specific equivariant projection MLPs in the heads.
-\item[\texttt{head\_use\_node\_embeddings\_for\_self\_edges}] Default: \texttt{True}. For zero-shift diagonal self edges, chooses node features instead of edge features as head input.
-\item[\texttt{separate\_shifted\_self}] Default: \texttt{True}. Splits shifted-self edges into their own readout branch.
-\item[\texttt{head\_use\_tensor\_square}] Default: \texttt{False}. Applies \texttt{TensorSquare} before branch-specific projection heads.
-\item[\texttt{head\_pair\_mode}] Default: \texttt{split}. Values: \texttt{split} and \texttt{shared\_conditioned}.
-\item[\texttt{head\_diag\_output\_scale}] Default: \texttt{1.0}. Post-scale applied to diagonal and shifted-self head outputs.
-\item[\texttt{head\_offdiag\_output\_scale}] Default: \texttt{1.0}. Post-scale applied to off-diagonal head outputs.
-\item[\texttt{head\_use\_mlp\_log\_scale}] Default: \texttt{False}. Enables branch-specific learned log-amplitude scaling MLPs.
-\item[\texttt{head\_log\_scale\_mlp\_n\_layers}] Default: \texttt{1}. Depth of the scalar log-scale MLPs used when \texttt{head\_use\_mlp\_log\_scale=True}.
-\end{description}
-
-\subsection{E(3)-MLP Variants, Activations, and Normalization}
-
-\paragraph{Main variant selectors}
-\begin{description}
-\item[\texttt{e3mlp\_variant}] Default: \texttt{film}. Values: \texttt{basic} is the plain linear-plus-nonlinearity path; \texttt{normact} uses normalization before activation; \texttt{gate} uses gated equivariant features; \texttt{gatemagnitudes} gates by vector magnitudes; \texttt{film} conditions blocks with invariant FiLM parameters; \texttt{resnormact} and \texttt{resgatemagnitudes} add residual-style behavior; \texttt{bilinear} uses bilinear self tensor products.
-\item[\texttt{internal\_e3mlp\_variant}] Default: \texttt{resnormact}. Values mirror \texttt{e3mlp\_variant}; this overrides the refinement MLPs inside message passing.
-\item[\texttt{head\_e3mlp\_variant}] Default: \texttt{normact}. Values mirror \texttt{e3mlp\_variant}; this overrides the projection MLPs inside the readout heads.
-\end{description}
-
-\paragraph{Variant block parameters}
-\begin{description}
-\item[\texttt{e3mlp\_output\_scale}] Default: \texttt{1.0}. Output scale passed into scaled linear layers used by non-basic E3MLP variants.
-\item[\texttt{e3mlp\_weight\_init\_scale}] Default: \texttt{1.0}. Multiplicative scale on initial weights for variant blocks.
-\item[\texttt{e3mlp\_residual\_scale}] Default: \texttt{0.25}. Initial layer-scale or residual strength for residual-style variant blocks.
-\item[\texttt{e3mlp\_pre\_norm}] Default: \texttt{False}. Whether variant blocks use pre-normalization by \texttt{EquivariantRMSNorm}.
-\item[\texttt{e3mlp\_norm\_eps}] Default: \texttt{1e-8}. Numerical epsilon for \texttt{EquivariantRMSNorm}.
-\item[\texttt{e3mlp\_film\_hidden\_dim}] Default: \texttt{64}. Hidden width of the invariant FiLM MLP.
-\end{description}
-
-\paragraph{Activation and equivariant nonlinearity family}
-\begin{description}
-\item[\texttt{nonlin\_kind}] Default: \texttt{normact}. Values: \texttt{normact} applies normalized scalar gating, \texttt{s2act} uses e3nn's spherical activation, \texttt{gate\_scalars\_mlp} gates scalars with a learned invariant MLP, and \texttt{gate\_magnitudes} gates by vector magnitudes.
-\item[\texttt{activation\_scalar}] Default: \texttt{leakyrelu}. Values: standard scalar activations such as \texttt{silu}, \texttt{relu}, \texttt{gelu}, \texttt{tanh}, \texttt{sigmoid}, \texttt{leakyrelu}, \texttt{softplus}, and \texttt{softsign}.
-\item[\texttt{activation\_gate}] Default: \texttt{softplus}. Values: the same scalar activation family is allowed, but this choice is used for gate channels.
-\item[\texttt{activation\_odd\_scalar}] Default: \texttt{tanh}. Values: \texttt{tanh} and \texttt{identity} are the intended stable choices for odd-parity scalar channels.
-\item[\texttt{activation\_odd\_gate}] Default: \texttt{tanh}. Values: \texttt{tanh} and \texttt{identity} are the intended stable choices for odd-parity gate scalars.
-\item[\texttt{s2act\_res}] Default: \texttt{128}. Positive integer controlling the angular resolution used by \texttt{S2Activation}.
-\item[\texttt{norm\_kind}] Default: \texttt{component}. Values: \texttt{component} normalizes by component variance, while \texttt{norm} normalizes by vector norm.
-\end{description}
-
-\subsection{Prediction Targets, Observable Guidance, and Physics-Aware Options}
-
-\begin{description}
-\item[\texttt{matrix\_targets}] Default: \texttt{[hamiltonian]}. Values: \texttt{hamiltonian}, \texttt{overlap}, and \texttt{density}. These choose which sparse operators the model predicts.
-\item[\texttt{train\_target}] Default: \texttt{matrix}. Values: \texttt{matrix} applies supervision in block-matrix space, while \texttt{irreps} applies it in irrep-vector space.
-\item[\texttt{partial\_train}] Default: \texttt{None}. Values: \texttt{diag} restricts loss to diagonal/self edges, \texttt{shifted\_self} keeps shifted self-edges, and \texttt{offdiag} restricts training to off-diagonal edges.
-\item[\texttt{train\_on\_irrep\_parts}] Default: \texttt{False}. When enabled, matrix-space loss is computed after splitting predictions and targets into irrep components.
-\item[\texttt{enable\_energy}] Default: \texttt{True}. Boolean switch for band-energy observable evaluation and logging.
-\item[\texttt{enable\_num\_electrons}] Default: \texttt{True}. Boolean switch for electron-count observable evaluation and logging.
-\item[\texttt{enable\_forces}] Default: \texttt{False}. Experimental switch for derivatives of the band energy; these outputs are not total-energy forces.
-\item[\texttt{enable\_stress}] Default: \texttt{False}. Experimental switch for cell derivatives of the band energy; these outputs are not total-energy stresses.
-\item[\texttt{train\_on\_energy}] Default: \texttt{False}. Boolean switch for adding a band-energy loss term.
-\item[\texttt{train\_on\_num\_electrons}] Default: \texttt{False}. Boolean switch for adding an electron-count loss term.
-\item[\texttt{train\_on\_forces}] Default: \texttt{False}. Internal experimental control; it is not part of the validated paper-facing objective.
-\item[\texttt{train\_on\_stress}] Default: \texttt{False}. Internal experimental control; it is not part of the validated paper-facing objective.
-\item[\texttt{train\_observables\_on\_gt}] Default: \texttt{True}. Boolean switch. When enabled, observable losses may mix predicted and ground-truth operators.
-\item[\texttt{log\_partial\_gt\_observables}] Default: \texttt{True}. Boolean switch for logging hybrid observable diagnostics even when not training on them.
-\item[\texttt{symmetrize\_output}] Default: \texttt{False}. Boolean switch for symmetrizing predicted block matrices before matrix-space loss computation.
-\item[\texttt{symmetrize\_hamiltonian\_targets}] Default: \texttt{True}. Boolean switch for symmetrizing Hamiltonian targets during dataset preprocessing.
-\item[\texttt{rescale\_density\_to\_num\_electrons}] Default: \texttt{False}. Boolean switch for rescaling predicted density matrices before artifact evaluation.
-\item[\texttt{observable\_loss\_kind}] Default: \texttt{mae}. Values: \texttt{mae} and \texttt{mse}.
-\item[\texttt{hamiltonian\_envelope\_mode}] Default: \texttt{off}. Values: \texttt{off}, \texttt{normalize\_target}, and \texttt{multiply\_prediction}.
-\item[\texttt{loss\_weighting\_mode}] Default: \texttt{off}. Selects optional block-loss weighting, including envelope-based modes.
-\item[\texttt{spectral\_loss\_enabled}] Default: \texttt{False}. Enables differentiable eigenvalue guidance from a configured k-point mesh.
-\item[\texttt{spectral\_loss\_coef}] Default: \texttt{0.0}. Weight of the spectral objective.
-\item[\texttt{spectral\_loss\_kmesh}] Default: \texttt{1x1x1}. k-point mesh used by spectral guidance.
-\end{description}
-
-\subsection{Optimization, Regularization, and Training Stability}
-
-\begin{description}
-\item[\texttt{lr}] Default: \texttt{0.01}. Learning rate for \texttt{AdamW}.
-\item[\texttt{max\_epochs}] Default: \texttt{1000}. Intended training horizon.
-\item[\texttt{max\_wall\_clock\_seconds}] Default: \texttt{43200} (12 hours). Wall-clock training budget; \texttt{None} disables it.
-\item[\texttt{batch\_size}] Default: \texttt{1}. Batch size for dataset loaders.
-\item[\texttt{accumulate\_grad\_batches}] Default: \texttt{1}. Gradient accumulation factor.
-\item[\texttt{dropout}] Default: \texttt{0.0}. Equivariant dropout on all irrep coefficients.
-\item[\texttt{l1\_reg\_coef}] Default: \texttt{0.0}. Global L1 regularization coefficient.
-\item[\texttt{l2\_reg\_coef}] Default: \texttt{0.0}. Global L2 regularization coefficient.
-\item[\texttt{init\_weights\_factor}] Default: \texttt{1.0}. Global post-construction multiplicative scale applied to floating-point parameters.
-\item[\texttt{grad\_clip\_val}] Default: \texttt{2.0}. Gradient clipping threshold.
-\item[\texttt{loss\_l1\_fraction}] Default: \texttt{1.0}. Blend between L2 and L1 block losses; the default therefore selects pure L1 loss.
-\item[\texttt{loss\_coef\_observables}] Default: \texttt{0.0}. Shared weight for band-energy and electron-count loss terms.
-\item[\texttt{loss\_coef\_forces}] Default: \texttt{0.0}. Experimental band-energy derivative weight; not part of the validated objective.
-\item[\texttt{loss\_coef\_stress}] Default: \texttt{0.0}. Reserved experimental band-energy cell-derivative weight; not part of the validated objective.
-\item[\texttt{use\_lr\_scheduler}] Default: \texttt{True}. Boolean switch. When enabled, a reduce-on-plateau learning-rate scheduler is used.
-\item[\texttt{lr\_scheduler\_factor}] Default: \texttt{0.5}. Positive float below one; sets the multiplicative decay factor.
-\item[\texttt{lr\_scheduler\_patience}] Default: \texttt{60}. Nonnegative integer; sets plateau patience in epochs.
-\item[\texttt{lr\_scheduler\_min\_lr}] Default: \texttt{1e-8}. Nonnegative float; sets the minimum LR floor.
-\item[\texttt{lr\_scheduler\_target}] Default: \texttt{val/hamiltonian\_mae}. Logged metric name monitored by \texttt{ReduceLROnPlateau}.
-\item[\texttt{revert\_on\_spike}] Default: \texttt{True}. Boolean switch for the revert-to-best checkpoint callback behavior.
-\item[\texttt{revert\_monitor}] Default: \texttt{val/hamiltonian\_mae}. Metric name monitored by the revert-on-spike callback.
-\item[\texttt{revert\_decay\_patience}] Default: \texttt{4}. Number of bad epochs before triggering revert or decay.
-\item[\texttt{revert\_decay\_rate}] Default: \texttt{0.5}. Positive float below one; sets the LR decay applied after revert.
-\item[\texttt{revert\_spike\_factor}] Default: \texttt{2.0}. Positive float that defines the spike threshold relative to the best score.
-\item[\texttt{checkpoint\_monitor}] Default: \texttt{val/hamiltonian\_mae}. Metric used to select the best checkpoint.
-\end{description}
-
-\subsection{Logging, Evaluation Artifacts, and Benchmarking}
-
-\begin{description}
-\item[\texttt{run\_name}] Default: \texttt{mandala-run}. Human-readable run name.
-\item[\texttt{verbosity}] Default: \texttt{1}. Integer verbosity level for summaries.
-\item[\texttt{wandb\_project}] Default: \texttt{None}. Weights \& Biases project name.
-\item[\texttt{log\_on\_step}] Default: \texttt{False}. Boolean switch for logging metrics on each training step.
-\item[\texttt{log\_on\_epoch}] Default: \texttt{True}. Boolean switch for logging metrics on epoch aggregation.
-\item[\texttt{log\_partial\_gt\_observables}] Default: \texttt{True}. Boolean switch for logging hybrid observable diagnostics.
-\item[\texttt{log\_per\_irrep\_metrics}] Default: \texttt{True}. Boolean switch for computing and logging per-irrep metrics during training and evaluation.
-\item[\texttt{print\_per\_irrep\_metrics}] Default: \texttt{False}. Boolean switch for printing per-irrep metrics to the console during evaluation callbacks.
-\item[\texttt{log\_per\_irrep\_images}] Default: \texttt{False}. Boolean switch for saving per-irrep matrix comparison images in artifact callbacks.
-\item[\texttt{log\_activation\_mag}] Default: \texttt{False}. Boolean switch for tracking and logging per-irrep activation magnitudes.
-\item[\texttt{log\_data}] Default: \texttt{False}. Boolean switch for detailed dataset-side logging.
-\item[\texttt{log\_forward}] Default: \texttt{False}. Boolean switch for detailed forward-pass logging.
-\item[\texttt{benchmark}] Default: \texttt{False}. Boolean switch for timing and benchmark reporting paths.
-\item[\texttt{log\_interval}] Default: \texttt{10}. Positive integer epoch interval for detailed artifact logging.
-\item[\texttt{adaptive\_log\_interval}] Default: \texttt{True}. Boolean switch for adaptive epoch logging cadence.
-\item[\texttt{video\_max\_atoms}] Default: \texttt{6}. Positive integer or \texttt{None}; caps the atom count in matrix or video artifacts.
-\item[\texttt{log\_model}] Default: \texttt{False}. Boolean switch for logging the full model artifact to WandB.
-\end{description}
-
-\subsection{Runtime, Device, Caching, and Reproducibility}
-
-\begin{description}
-\item[\texttt{safety\_checks}] Default: \texttt{False}. Boolean switch for expensive validation checks on graph alignment, shape matching, and geometry consistency.
-\item[\texttt{dtype}] Default: \texttt{torch.float32}. Default tensor dtype consulted by the network code.
-\item[\texttt{device}] Default: \texttt{cuda}. Default device target as a torch device string.
-\item[\texttt{gpus}] Default: \texttt{1}. Nonnegative integer GPU count request.
-\item[\texttt{num\_workers}] Default: \texttt{3}. Nonnegative integer or \texttt{None}; controls DataLoader worker count.
-\item[\texttt{save\_dir}] Default: \texttt{checkpoints}. Filesystem path root for checkpoints and artifacts.
-\item[\texttt{snapshot\_cache\_dir}] Default: \texttt{None}. Filesystem path or \texttt{None}; location of raw snapshot cache and preprocessed sample cache.
-\item[\texttt{dataset\_device}] Default: \texttt{None}. Optional torch device string for processed dataset payloads.
-\item[\texttt{shuffle\_snapshot\_load\_order}] Default: \texttt{True}. Randomizes cache warm-up order without changing split membership.
-\item[\texttt{data\_split\_seed}] Default: \texttt{42}. Seed defining train, validation, and test membership.
-\item[\texttt{seed}] Default: \texttt{42}. Global random seed for reproducibility.
-\item[\texttt{tune}] Default: \texttt{None}. Hyperparameter tuning backend selector such as \texttt{ray} or \texttt{wandb}.
-\end{description}
-
-\subsection{Constraints and Appendix Notes}
-
-\begin{enumerate}
-\item \texttt{train\_on\_energy=True} with \texttt{train\_observables\_on\_gt=False} requires \texttt{matrix\_targets} to include both \texttt{hamiltonian} and \texttt{density}.
-\item \texttt{train\_on\_num\_electrons=True} with \texttt{train\_observables\_on\_gt=False} requires \texttt{matrix\_targets} to include both \texttt{density} and \texttt{overlap}.
-\item \texttt{train\_on\_energy=True} or \texttt{train\_on\_num\_electrons=True} requires \texttt{loss\_coef\_observables != 0}.
-\item \texttt{train\_on\_irrep\_parts=True} cannot be combined with \texttt{train\_target="irreps"}.
-\item \texttt{partial\_train="offdiag"} behaves differently depending on \texttt{separate\_shifted\_self}.
-\item \texttt{hidden\_irreps} overrides the automatic \texttt{build\_hidden\_irreps(l\_max, hidden\_base\_dim, emb\_use\_odd\_features)} logic completely.
-\item \texttt{rescale\_density\_to\_num\_electrons=True} affects artifact and metric evaluation.
-\end{enumerate}
-
-\endgroup
-
-\clearpage
-\section{Configurations of the Evaluated Models}
-\label{app:evaluated-model-configurations}
-
-The following listings contain the resolved configuration stored by Weights
-\& Biases for each model used in Section~\ref{sec:results}. Run identifiers,
-service metadata, and launch commands are omitted. Explicit filesystem paths
-are replaced by \texttt{...}. The redundant serialized \texttt{cfg}
-representation is also omitted; its settings are retained as structured
-entries under \texttt{configuration}.
-
-\subsection{ZnCu$_2$Sn(SeS)$_2$ Model}
+\subsection{ZnCu$_2$Sn(SeS)$_2$ Hamiltonian model}
 \label{app:model-config-zncusnses}
 
-\lstinputlisting[
-  language={},
-  basicstyle=\ttfamily\tiny,
-  breaklines=true,
-  breakatwhitespace=false,
-  columns=fullflexible,
-  frame=single
-]{data/evaluated_model_configs/zncu2sn_ses2.yaml}
+The model uses the hidden representation
+\begin{align*}
+&384{\times}0e+48{\times}0o+24{\times}1e+192{\times}1o\\
+&\quad+72{\times}2e+24{\times}2o+24{\times}3e+72{\times}3o\\
+&\quad+48{\times}4e+12{\times}4o+12{\times}5e+36{\times}5o+24{\times}6e.
+\end{align*}
+Its fitted pair-dependent radial envelope multiplies the predicted Hamiltonian blocks. The full resolved configuration is stored as
+\path{paper/data/evaluated_model_configs/zncu2sn_ses2.yaml}.
 
-\subsection{SiO$_x$ Model}
-\label{app:model-config-siox}
+\subsection{SiO$_2$ Hamiltonian model}
+\label{app:model-config-sio2}
 
-\lstinputlisting[
-  language={},
-  basicstyle=\ttfamily\tiny,
-  breaklines=true,
-  breakatwhitespace=false,
-  columns=fullflexible,
-  frame=single
-]{data/evaluated_model_configs/siox.yaml}
+The model uses the hidden representation
+\[
+128{\times}0e+64{\times}0o+32{\times}1e+32{\times}1o+
+24{\times}2e+24{\times}2o+16{\times}3e+16{\times}3o+8{\times}4e.
+\]
+Its fitted pair-dependent radial envelope multiplies the predicted Hamiltonian blocks. The full resolved configuration is stored as
+\path{paper/data/evaluated_model_configs/sio2.yaml}.
 
-\subsection{Perturbed-Silicon Model}
+\subsection{Perturbed-silicon joint operator model}
 \label{app:model-config-silicon}
 
-\lstinputlisting[
-  language={},
-  basicstyle=\ttfamily\tiny,
-  breaklines=true,
-  breakatwhitespace=false,
-  columns=fullflexible,
-  frame=single
-]{data/evaluated_model_configs/silicon_perturbed.yaml}
+The model uses the hidden representation
+\[
+128{\times}0e+128{\times}0o+64{\times}1e+64{\times}1o+
+32{\times}2e+32{\times}2o+16{\times}3e+16{\times}3o+16{\times}4e.
+\]
+It jointly predicts Hamiltonian, density, and overlap matrices without a radial output envelope. Band-energy guidance contracts the predicted Hamiltonian with the reference density during training. The full resolved configuration is stored as
+\path{paper/data/evaluated_model_configs/silicon_perturbed.yaml}.

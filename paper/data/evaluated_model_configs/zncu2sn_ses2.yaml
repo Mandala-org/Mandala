@@ -11,9 +11,9 @@ configuration:
   batch_size: 1
   bench_verbosity: 1
   benchmark: false
-  compatibility: true
+  compatibility: false
   cutoff_radius: 11
-  dataset_device: cuda
+  dataset_device: cpu
   device: cuda:0
   dropout: 0
   dtype: torch.float32
@@ -37,7 +37,7 @@ configuration:
   enable_stress: false
   freeze_backbone_train_heads_only: false
   gpus: 1
-  grad_clip_val: 0.5
+  grad_clip_val: 2
   hamiltonian_envelope_eps: 1.0e-12
   hamiltonian_envelope_mode: multiply_prediction
   hamiltonian_envelope_path: '...'
@@ -51,7 +51,7 @@ configuration:
   head_use_node_embeddings_for_self_edges: true
   head_use_tensor_square: false
   hidden_base_dim: 64
-  hidden_irreps: 384x0e+48x0o+24x1e+192x1o+72x2e+24x2o+24x3e+72x3o+48x4e+12x4o+12x5e+36x5o+24x6e
+  hidden_irreps: 128x0e+16x0o+8x1e+64x1o+24x2e+8x2o+8x3e+24x3o+16x4e+4x4o+4x5e+12x5o+8x6e
   init_weights_factor: 1
   internal_e3mlp_layers: 1
   internal_e3mlp_variant: resnormact
@@ -76,19 +76,19 @@ configuration:
   loss_coef_forces: 0
   loss_coef_observables: 0
   loss_coef_stress: 0
-  loss_l1_fraction: 1
+  loss_l1_fraction: 0
   loss_weight_max: 100
   loss_weight_min: 0
   loss_weighting_mode: 'off'
-  lr: 0.005
+  lr: 0.002
   lr_scheduler_factor: 0.5
   lr_scheduler_min_lr: 1.0e-08
-  lr_scheduler_patience: 12
-  lr_scheduler_target: val/hamiltonian_mae
+  lr_scheduler_patience: 60
+  lr_scheduler_target: val/loss_total
   matrix_targets:
   - hamiltonian
-  max_epochs: 10000
-  max_wall_clock_seconds: 169200
+  max_epochs: 3000
+  max_wall_clock_seconds: 171000
   n_radial: 128
   neck_depth: 2
   node_update_attention_heads: 4
@@ -116,13 +116,13 @@ configuration:
   rescale_density_to_num_electrons: false
   revert_decay_patience: 4
   revert_decay_rate: 0.5
-  revert_monitor: val/hamiltonian_mae
+  revert_monitor: val/loss_total
   revert_on_spike: true
   revert_spike_factor: 2
   s2act_res: 128
   safety_checks: false
   save_dir: '...'
-  seed: 42
+  seed: 44
   separate_shifted_self: true
   shuffle_snapshot_load_order: true
   snapshot_cache_dir: '...'
@@ -130,7 +130,7 @@ configuration:
   spectral_loss_coef: 0
   spectral_loss_enabled: false
   spectral_loss_huber_delta_ev: 0.1
-  spectral_loss_kmesh: 1x1x1
+  spectral_loss_kmesh: 2x2x2
   spectral_loss_overlap_jitter: true
   spectral_loss_overlap_psd_cleanup: false
   spectral_loss_taper_ev: 2
@@ -138,7 +138,7 @@ configuration:
   symmetrize_hamiltonian_targets: true
   symmetrize_output: false
   tp_type: separate_weight
-  train_observables_on_gt: true
+  train_observables_on_gt: false
   train_on_energy: false
   train_on_forces: false
   train_on_irrep_parts: false

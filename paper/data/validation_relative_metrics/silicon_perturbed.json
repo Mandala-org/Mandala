@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hdo_energy_stage2_47h25/leafy-sweep-15-half_gt-coef3em3-lr3em4-47h25/best_model.pt",
+  "dataset_kind": "silicon_scales",
+  "validation_structures": 16,
+  "data_split_seed": 43,
+  "definition": "ratio of the mean per-structure validation MAE to the mean absolute reference magnitude over the same validation structures",
+  "metrics": {
+    "hamiltonian": {
+      "mae": 0.00043516422479659164,
+      "mean_absolute_reference": 0.12273519396198485,
+      "relative_mae": 0.003545553730345482,
+      "relative_mae_percent": 0.3545553730345482,
+      "unit": "eV"
+    },
+    "density": {
+      "mae": 5.757723329224973e-05,
+      "mean_absolute_reference": 0.002949518289224214,
+      "relative_mae": 0.019520893802422824,
+      "relative_mae_percent": 1.9520893802422825,
+      "unit": "dimensionless"
+    },
+    "overlap": {
+      "mae": 1.389779276905756e-05,
+      "mean_absolute_reference": 0.012703048139415304,
+      "relative_mae": 0.0010940518068206933,
+      "relative_mae_percent": 0.10940518068206934,
+      "unit": "dimensionless"
+    },
+    "val/energy_mae": {
+      "mae_ev_per_atom": 0.020713208912638947,
+      "mean_absolute_reference_ev_per_atom": 32.84919715778232,
+      "relative_mae": 0.0006305544946242855,
+      "relative_mae_percent": 0.06305544946242855
+    },
+    "val/energy_mae_gt_hamiltonian": {
+      "mae_ev_per_atom": 0.028757554944604635,
+      "mean_absolute_reference_ev_per_atom": 32.84919715778232,
+      "relative_mae": 0.0008754416373245112,
+      "relative_mae_percent": 0.08754416373245112
+    },
+    "val/energy_mae_gt_density": {
+      "mae_ev_per_atom": 0.007971156977873761,
+      "mean_absolute_reference_ev_per_atom": 32.84919715778232,
+      "relative_mae": 0.00024265911095441522,
+      "relative_mae_percent": 0.02426591109544152
+    }
+  }
+}
