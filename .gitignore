@@ -67,6 +67,9 @@ saved_models/
 *.png
 *.jpg
 *.jpeg
+# Final manuscript figures generated from the committed scaling benchmark log.
+!paper/figures/results/silicon_cif_scaling_time.png
+!paper/figures/results/silicon_cif_scaling_memory.png
 .codex
 
 # slurm.out

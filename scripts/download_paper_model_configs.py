@@ -15,7 +15,7 @@ PAPER_RUNS = {
         "mandala-ZnCuSnSeS-hamiltonian-envelope-stageA-selected-47h5/"
         "lk9fvoxv"
     ),
-    "siox.yaml": ("b-brzoza/mandala-SiOx-hamiltonian-mae-stage2-47h25/ebg4g3h3"),
+    "sio2.yaml": ("b-brzoza/mandala-SiOx-hamiltonian-mae-stage2-47h25/ebg4g3h3"),
     "silicon_perturbed.yaml": (
         "b-brzoza/mandala-silicon-hdo-energy-stage2-47h25/92sqde98"
     ),
