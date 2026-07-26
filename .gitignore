@@ -102,3 +102,10 @@ test_audit/
 docs/*report*
 paper/*report*
 paper/references
+
+# latex
+*.aux
+*.bbl
+*.blg
+paper/main.out
+paper/main.log
