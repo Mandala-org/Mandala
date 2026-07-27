@@ -119,3 +119,7 @@ paper/main.log
 
 # precommit
 .pre-commit-config.yaml
+
+# legacy files
+sweeps/old/
+sweeps/very_old/
