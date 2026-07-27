@@ -116,3 +116,6 @@ paper/
 *.blg
 paper/main.out
 paper/main.log
+
+# precommit
+.pre-commit-config.yaml
