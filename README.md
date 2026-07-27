@@ -83,3 +83,14 @@ For a short end-to-end inference example, see
 [`demos/demo_07_checkpoint_evaluation.py`](demos/demo_07_checkpoint_evaluation.py).
 Checkpoint evaluation uses the existing `Snapshot` and `E3GNN` classes together
 with stateless helpers; no new checkpoint format is required.
+
+## Contributors
+- Bartosz Brzoza — CASUS/HZDR, University of Wrocław
+- Wiktoria Szopa — CASUS/HZDR, Warsaw University of Technology
+- Zakaria Elabid — CASUS/HZDR
+- Vincent Martinetto — CASUS/HZDR
+- Mani Lokamani — HZDR
+
+## Scientific supervision:
+- Attila Cangi — CASUS/HZDR
+- Thomas D. Kühne — CASUS/HZDR, Technische Universität Dresden
