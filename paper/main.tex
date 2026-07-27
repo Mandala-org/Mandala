@@ -906,25 +906,37 @@ The importance of systematic hyperparameter exploration in machine-learned elect
 
 For a fixed real-space cutoff, the number of graph edges $|\mathcal{E}|$ grows linearly with the number of atoms $N$ at approximately constant density. Sparse graph preparation and storage therefore scale as $\mathcal{O}(N+|\mathcal{E}|)$. For a fixed irrep layout and number of layers, message passing scales as $\mathcal{O}(|\mathcal{E}|C_{\mathrm{TP}})$, where $C_{\mathrm{TP}}$ is the cost of the configured tensor-product paths. Readout and sparse block reconstruction scale with the number and dimensions of the retained atom-pair blocks. Dense downstream diagonalization is separate from network inference and scales cubically with the number of basis functions; it is not included in the benchmark below.
 
-Figure~\ref{fig:silicon-scaling} reports target-free inference for periodic diamond-silicon supercells containing 8, 64, 512, and 4096 atoms. The benchmark uses the selected joint Hamiltonian--density--overlap model in single-precision arithmetic on one NVIDIA B200 GPU, an 8~\r{A} cutoff, two warm-up calls, and ten timed repetitions per size. It measures three phases independently: construction of graph features from a CIF structure, the neural-network forward pass, and reconstruction of sparse operator blocks. The corresponding block counts are 2376, 19\,008, 152\,064, and 1\,216\,512.
+Figure~\ref{fig:silicon-scaling} reports target-free inference for periodic diamond-silicon supercells containing 8, 64, 512, and 4096 atoms. The benchmark uses the selected joint Hamiltonian--density--overlap model in single-precision arithmetic on one NVIDIA B200 GPU, an 8~\r{A} cutoff, two warm-up calls, and ten timed repetitions per size. It measures three phases independently: construction of graph features from a CIF structure, the neural-network forward pass, and reconstruction of sparse operator blocks. The corresponding block counts are 2376, 19\,008, 152\,064, and 1\,216\,512. Absolute totals and maxima are separated from phase composition so that logarithmic scaling does not visually distort the relative contributions.
 
 \begin{figure}[H]
 \centering
 \begin{minipage}[t]{0.49\textwidth}
 \centering
-\includegraphics[width=\linewidth]{figures/results/silicon_cif_scaling_time.png}
-\small (a) Wall time
+\includegraphics[width=\linewidth]{figures/results/silicon_cif_scaling_time_total.png}
+\small (a) Total wall time
 \end{minipage}\hfill
 \begin{minipage}[t]{0.49\textwidth}
 \centering
-\includegraphics[width=\linewidth]{figures/results/silicon_cif_scaling_memory.png}
-\small (b) Peak allocated GPU memory
+\includegraphics[width=\linewidth]{figures/results/silicon_cif_scaling_time_contributions.png}
+\small (b) Time contributions
 \end{minipage}
-\caption{Inference scaling for periodic silicon supercells on one NVIDIA B200 GPU. Bars separate graph-data preparation, model evaluation, and sparse matrix construction. Timing bars show the mean of ten calls after two warm-ups; the optional error bars show the combined one-standard-deviation timing variation. The 32\,768-atom run did not produce a complete measurement and is excluded.}
+
+\vspace{0.6em}
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/results/silicon_cif_scaling_memory_max.png}
+\small (c) Maximum peak GPU memory
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/results/silicon_cif_scaling_memory_contributions.png}
+\small (d) Memory contributions
+\end{minipage}
+\caption{Inference scaling for periodic silicon supercells on one NVIDIA B200 GPU. Panels (a) and (c) use logarithmic axes for the total time and the largest independently recorded phase-memory peak, respectively. Panels (b) and (d) use linear percentage axes: timing phases sum to the total, whereas each independently measured memory peak is normalized to the largest phase peak at that system size. Timing values are means of ten calls after two warm-ups; error bars in panel (a) show the combined one-standard-deviation variation.}
 \label{fig:silicon-scaling}
 \end{figure}
 
-The forward pass increases from $0.234$~s for 8 atoms to $3.17$~s for 4096 atoms, whereas graph preparation grows from $0.130$~s to $93.8$~s and dominates at the largest size. Peak memory during model evaluation grows from $0.266$~GiB to $93.9$~GiB over the same range. These measurements demonstrate sparse model execution to 4096 atoms on the stated hardware and identify input preparation and memory as the present large-system bottlenecks; they are not a training-throughput benchmark.
+Total evaluation time increases from $0.364$~s for 8 atoms to $97.0$~s for 4096 atoms. The phase decomposition shows a crossover from model-dominated execution at 8 atoms to data-preparation-dominated execution: graph preparation grows from $0.130$~s to $93.8$~s and accounts for approximately $97\%$ of the largest-system total, while the forward pass grows from $0.234$~s to $3.17$~s. The model-evaluation phase sets the maximum memory requirement at every measured size, increasing from $0.266$~GiB to $93.9$~GiB; the other independently measured phase peaks become progressively smaller fractions of that maximum. These measurements demonstrate sparse model execution to 4096 atoms on the stated hardware and identify input preparation and model-evaluation memory as the present large-system bottlenecks; they are not a training-throughput benchmark.
 
 
 \subsection{Current limitations and development roadmap}
@@ -961,7 +973,7 @@ We demonstrate the framework on three datasets chosen to probe multicomponent ch
 \subsection{Demonstration data and evaluation protocol}
 \label{subsec:demonstration-protocol}
 
-Table~\ref{tab:dataset-protocol} summarizes the populations used for the three demonstrations. The ZnCu$_2$Sn(SeS)$_2$ corpus contains four 100-structure scale subsets of periodically perturbed 32-atom cells; only scale~1 enters the selected model. The silicon corpus contains 100 independently perturbed eight-atom diamond cells at each displacement scale $\sigma=0.02$, 0.05, 0.2, and 0.4~\r{A}; the selected model likewise uses scale~1 ($\sigma=0.02$~\r{A}). The SiO$_2$ corpus contains 165 independently stored 150-atom amorphous glass configurations, of which 100 were selected by the deterministic split procedure. The remaining structures were not used by this demonstration.
+Table~\ref{tab:dataset-protocol} summarizes the populations used for the three demonstrations. The ZnCu$_2$Sn(SeS)$_2$ corpus contains 100 perturbed 32-atom cells. The silicon corpus contains 100 independently perturbed eight-atom diamond cells at each displacement scale $\sigma=0.02$ and 0.05~\r{A}. The SiO$_2$ corpus contains 165 MD-produced 150-atom amorphous glass configurations, of which 100 were selected by the deterministic split procedure.
 
 \begin{table}[H]
 \centering
@@ -972,14 +984,14 @@ Table~\ref{tab:dataset-protocol} summarizes the populations used for the three d
 \toprule
 Dataset & Corpus & Used split & Seed & Example \\
 \midrule
-ZnCu$_2$Sn(SeS)$_2$, scale 1 & $4\times100$ & 80/20/0 & 44 & scale 1, no.~65 (train) \\
-Amorphous SiO$_2$ & 165 & 90/10/0 & 42 & 13\_67164000 \\
-Perturbed Si, scale 1 & $4\times100$ & 80/20/0 & 43 & scale 1, no.~90 \\
+ZnCu$_2$Sn(SeS)$_2$ & $100$ & 80/20 & 44 & no.~94\\
+Amorphous SiO$_2$ & 165 & 90/10 & 42 & 13\_67164000 \\
+Perturbed Si & $100$ & 80/20 & 43 & no.~90 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All reference operators were calculated with OpenMX~3.9 using the PBE exchange--correlation functional, norm-conserving PBE19 pseudopotentials, scalar non-spin-polarized calculations, and a 300~K electronic temperature. Table~\ref{tab:reference-settings} gives the material-specific basis and Brillouin-zone settings. Self-consistent calculations used a $10^{-8}$~Hartree convergence threshold. The sparse targets were converted to the common e3nn real spherical-harmonic convention and filtered with the same real-space cutoff used to build the model graph. The checkpoint with the lowest validation Hamiltonian MAE was retained. Each displayed model is one training run; seed replication is used for the controlled ablations rather than for the showcase models.
+All reference operators were calculated with OpenMX~3.9 using the PBE exchange--correlation functional, norm-conserving PBE19 pseudopotentials, scalar non-spin-polarized calculations. Table~\ref{tab:reference-settings} gives the material-specific basis and Brillouin-zone settings. Self-consistent calculations used a $10^{-8}$~Hartree convergence threshold. The sparse targets were converted to the common e3nn real spherical-harmonic convention and filtered with the same real-space cutoff used to build the model graph. The checkpoint with the lowest validation Hamiltonian MAE was retained. Each displayed model is one training run; seed replication is used for the controlled ablations rather than for the showcase models.
 
 \begin{table}[H]
 \centering
@@ -1000,7 +1012,9 @@ Si7.0-s2p2d1/Si\_PBE19; 400~Ry grid; $8^3$ k mesh; 8~\r{A} model cutoff \\
 \end{tabular}
 \end{table}
 
-Hamiltonian MAEs are element-weighted, shift-resolved sparse-block errors after transpose symmetrization and are reported in electronvolts. Density errors use the same matrix-element definition in the native dimensionless representation. The band-energy diagnostic for the Hamiltonian-only SiO$_2$ model contracts $H^{\mathrm{pred}}$ with $D^{\mathrm{ref}}$. The spectral figures use the reference overlap matrix, which is inexpensive to retain from the underlying localized-basis calculation. Energies are shown relative to the reference Fermi level.
+Hamiltonian MAEs are shift-resolved sparse-block errors after transpose symmetrization and are reported in electronvolts. Density and overlap errors use the same matrix-element definition in their native dimensionless representations. The band-energy diagnostic for the Hamiltonian-only SiO$_2$ model contracts $H^{\mathrm{pred}}$ with $D^{\mathrm{ref}}$. The spectral figures use the reference overlap matrix, which is inexpensive to obtain from the underlying localized-basis calculation. Energies are shown relative to the reference Fermi level.
+
+Each relative value in the following tables uses the same structures as its absolute validation error. Specifically, it is the mean per-structure validation MAE divided by the mean absolute reference value over that complete validation split. For matrix targets the denominator is the corresponding mean absolute matrix-element magnitude; for band energy it is the mean absolute reference band energy per atom.
 
 
 \subsection{Multicomponent ZnCu$_2$Sn(SeS)$_2$}
@@ -1015,35 +1029,28 @@ The aggregate validation result is summarized in Table~\ref{tab:zncusnses-valida
 \label{tab:zncusnses-validation}
 \begin{tabular}{lc}
 \toprule
-Metric & Value \\
+Metric & Value (relative) \\
 \midrule
-Hamiltonian MAE & $6.329\times10^{-4}$~eV \\
+Hamiltonian MAE & 0.003012~eV (2.95\%) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Figure~\ref{fig:zncusnses-hamiltonian} resolves a representative prediction into atom-pair matrix blocks. The $\pm0.01$~eV range is narrow compared with the Hamiltonian elements and exposes residual structure in both on-site and off-site blocks.
-The Hamiltonian and its eigenvalue correlations in Fig.~\ref{fig:zncusnses-correlation} include all shift-resolved matrix elements and the $\Gamma$-point eigenvalues, respectively. They give $R^2=0.999978$ for Hamiltonian elements and $R^2=0.999864$ for eigenvalues; the eigenvalue MAE is $0.1608$~eV.
+The Hamiltonian correlation in Fig.~\ref{fig:zncusnses-correlation} includes all 5\,345\,640 shift-resolved matrix elements of the same validation structure. Its structure-level MAE is 0.003029~eV and $R^2=0.999460$, consistent with the aggregate validation error despite the chemically and orbitally heterogeneous block structure.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_zncusnses_hamiltonian_first6.png}
-\caption{Hamiltonian fragments for the first six atoms of the displayed ZnCu$_2$Sn(SeS)$_2$ training structure. The common color range is $\pm0.01$~eV; aggregate errors are evaluated on the validation split.}
+\caption{Hamiltonian fragments for the first six atoms of a representative ZnCu$_2$Sn(SeS)$_2$ validation structure. The common color range is $\pm0.01$~eV.}
 \label{fig:zncusnses-hamiltonian}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/results/paper_zncusnses_hamiltonian_and_eigenvalue_correlation.png}
-\caption{Hamiltonian-element and $\Gamma$-point eigenvalue correlations for the displayed ZnCu$_2$Sn(SeS)$_2$ training structure. The correlation plot bucket counts use logarithmic color scales.}
+\includegraphics[width=0.82\textwidth]{figures/results/paper_zncusnses_hamiltonian_correlation.png}
+\caption{Hamiltonian-element correlation for the representative ZnCu$_2$Sn(SeS)$_2$ validation structure. The density heatmap uses a logarithmic count scale, with individual matrix elements overlaid as black points.}
 \label{fig:zncusnses-correlation}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.92\textwidth]{figures/results/paper_zncusnses_band_structure_and_dos.png}
-\caption{Band structure and density of states for the representative ZnCu$_2$Sn(SeS)$_2$ structure. The generalized eigensolve uses the reference overlap matrix.}
-\label{fig:zncusnses-bands-dos}
 \end{figure}
 
 
@@ -1060,10 +1067,10 @@ Its compact configuration is provided in \ref{app:model-config-sio2}.
 \label{tab:sio2-validation}
 \begin{tabular}{lc}
 \toprule
-Metric & Value \\
+Metric & Value (relative) \\
 \midrule
-Hamiltonian MAE & 0.002002~eV \\
-Band-energy MAE & 0.15~eV/atom \\
+Hamiltonian MAE & 0.001996~eV (1.67\%) \\
+Band-energy MAE & 0.146~eV/atom (0.193\%) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1088,10 +1095,12 @@ The aggregate validation metrics of the joint Hamiltonian--density--overlap mode
 \label{tab:silicon-validation}
 \begin{tabular}{lc}
 \toprule
-Metric & Value \\
+Metric & Value (relative) \\
 \midrule
-Hamiltonian MAE & $5.228\times10^{-4}$~eV \\
-Density-matrix MAE & $5.736\times10^{-5}$ \\
+Hamiltonian MAE & $4.352\times10^{-4}$~eV (0.355\%) \\
+Density-matrix MAE & $5.758\times10^{-5}$ (1.95\%) \\
+Overlap-matrix MAE & $1.390\times10^{-5}$ (0.109\%) \\
+Band-energy MAE & 0.0207~eV/atom (0.0631\%) \\
 \bottomrule
 \end{tabular}
 \end{table}
