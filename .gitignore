@@ -108,6 +108,7 @@ paper/*report*
 paper/references
 
 # latex
+paper/
 *.aux
 *.bbl
 *.blg
