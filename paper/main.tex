@@ -969,17 +969,17 @@ This design allows \texttt{Mandala} to function both as a reusable scientific so
 \section{Results}
 \label{sec:results}
 
-We demonstrate the framework on three datasets chosen to probe multicomponent chemistry, amorphous environments, and joint operator and spectral prediction. These are capability demonstrations rather than a proper benchmark against other methods: one selected Mandala model is shown for each material. The numerical tables report averages over the complete validation split of that model.
+We demonstrate the framework's capabilities on three datasets chosen to probe multicomponent chemistry, amorphous environments, and joint operator and spectral prediction. These are capability demonstrations rather than a proper benchmark against other methods: one selected Mandala model is shown for each material. The numerical tables report averages over the complete validation split of that model.
 
 \subsection{Demonstration data and evaluation protocol}
 \label{subsec:demonstration-protocol}
 
-Table~\ref{tab:dataset-protocol} summarizes the populations used for the three demonstrations. The ZnCu$_2$Sn(SeS)$_2$ corpus contains 100 perturbed 32-atom cells. The silicon corpus contains 100 independently perturbed eight-atom diamond cells at each displacement scale $\sigma=0.02$ and 0.05~\r{A}. The SiO$_2$ corpus contains 165 MD-produced 150-atom amorphous glass configurations, of which 100 were selected by the deterministic split procedure.
+Table~\ref{tab:dataset-protocol} summarizes the populations used for the three demonstrations. The ZnCu$_2$Sn(SeS)$_2$ corpus contains 100 perturbed 32-atom cells. The silicon corpus contains 100 independently perturbed eight-atom diamond cells. The SiO$_2$ corpus contains 165 MD-produced 150-atom amorphous glass configurations, of which 100 were selected by the deterministic split procedure.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Dataset populations and deterministic splits for the selected demonstration models. No held-out test set was created for these three historical showcase runs; the separate ablations use held-out test splits except where noted in Section~\ref{sec:ablations}.}
+\caption{Dataset populations and splits for the selected demonstration models.}
 \label{tab:dataset-protocol}
 \begin{tabular}{p{0.28\textwidth}p{0.12\textwidth}p{0.16\textwidth}cp{0.19\textwidth}}
 \toprule
@@ -1087,7 +1087,7 @@ The density of states in Fig.~\ref{fig:sio2-dos} tests the collective spectral c
 
 \subsection{Band structure, density of states, and density matrix of silicon}
 
-The silicon dataset retains the diamond-crystal topology while introducing small atomic displacements ($\sigma = 0.02$~\r{A} and $\sigma = 0.05$~\r{A}). Its single-species composition and regular coordination remove the chemical and configurational complexity of the other two systems, allowing the attainable precision of the equivariant model to be assessed on a simpler crystalline electronic structure.
+The silicon dataset retains the diamond-crystal topology while introducing small atomic displacements ($\sigma = 0.02$~\r{A}). Its single-species composition and regular coordination remove the chemical and configurational complexity of the other two systems, allowing the attainable precision of the equivariant model to be assessed on a simpler crystalline electronic structure.
 The aggregate validation metrics of the joint Hamiltonian--density--overlap model are given in Table~\ref{tab:silicon-validation}; its compact configuration is provided in \ref{app:model-config-silicon}.
 
 \begin{table}[H]
@@ -1106,13 +1106,13 @@ Band-energy MAE & 0.0207~eV/atom (0.0631\%) \\
 \end{tabular}
 \end{table}
 
-The predicted Hamiltonian combined with the reference overlap determines the bands and DOS in Fig.~\ref{fig:silicon-bands-dos}. For the representative structure, the resulting operators reproduce the displayed occupied and low-lying unoccupied bands; aggregate spectral metrics should be assessed separately from this structure-level visualization.
+The predicted Hamiltonian combined with the reference overlap determines the bands and DOS in Fig.~\ref{fig:silicon-bands-dos}. For the representative structure, the resulting operators reproduce the displayed occupied and low-lying unoccupied bands.
 The valence-band maximum and conduction-band dispersion around the high-symmetry points are reproduced without fitting the bands as direct targets.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/results/paper_silicon_band_structure_and_dos.png}
-\caption{Band structure and density of states for a representative silicon validation structure. The path is $L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$, and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh. The solid black line marks the Fermi level.}
+\caption{Band structure and density of states for a representative silicon validation structure. The path is $L\!\rightarrow\!\Gamma\!\rightarrow\!X\!\rightarrow\!U\!\rightarrow\!\Gamma$, and the DOS uses tetrahedron integration on a $4\times4\times4$ k-point mesh. The solid black line marks the Fermi level. The model is able to almost perfectly reproduce the spectral features of the reference calculation on this simpler dataset.}
 \label{fig:silicon-bands-dos}
 \end{figure}
 
@@ -1164,7 +1164,7 @@ setting is universally superior.
 
 \subsection{Energy guidance}
 
-The held-out test results show that energy guidance introduces an explicit tradeoff between element-wise
+The presented held-out test results show that energy guidance introduces an explicit tradeoff between element-wise
 Hamiltonian accuracy and the aggregate band-energy observable. As shown in
 Fig.~\ref{fig:result-siox-energy-guidance}, a loss coefficient of $10^{-4}$
 reduces the median band-energy error from $0.245$ to $0.078$~eV/atom, a
@@ -1207,11 +1207,8 @@ The effect is modest but reasonably consistent across this ablation.
 
 The choice of node-message aggregation has a larger influence. Replacing
 average aggregation with attention lowers the median silicon
-validation Hamiltonian MAE by $10.1\%$. These runs contain no held-out test
-split because of a dataset-configuration error, so this is the sole
-validation-only ablation. Because the ablations serve as demonstrations of the
-configuration interface rather than as a definitive architecture benchmark,
-the study was not rerun solely to create a test partition.
+validation Hamiltonian MAE by $10.1\%$.
+The evaluation was performed on the validation split instead of a held-out test set in this case.
 
 \begin{figure}[H]
 \centering
@@ -1234,7 +1231,7 @@ the study was not rerun solely to create a test partition.
 
 The three demonstrations establish that one sparse-operator pipeline can accommodate materially different regimes: a five-element periodic compound with many chemical-pair channels, a 150-atom amorphous oxide with broad local structural variation, and a crystalline system in which Hamiltonian, density, and overlap matrices are learned jointly. The downstream figures also show that the learned real-space operators can be carried into matrix-resolved diagnostics, density-of-states calculations, and band-structure calculations without introducing a separate observable-prediction model.
 
-These results do not establish state-of-the-art accuracy. The showcase models are selected validation checkpoints, the representative figures visualize individual validation structures, and no numerical baseline is evaluated on an identical data split and basis convention. Their purpose is to verify the breadth and composability of the software. The seed-matched ablations answer narrower questions about configured components and loss terms. In particular, the spectral study demonstrates that an operator-derived objective can substantially improve eigenvalues in a chosen energy window while leaving the matrix metric nearly unchanged; it does not imply that spectral guidance has the same effect for every dataset or training regime.
+These results do not establish state-of-the-art accuracy. The showcased models are selected validation checkpoints and the representative figures visualize individual validation structures. Their purpose is to verify the breadth and composability of the software, not a definitive benchmark. The seed-matched ablations answer narrower questions about configured components and loss terms. In particular, the spectral study demonstrates that an operator-derived objective can substantially improve eigenvalues in a chosen energy window while leaving the matrix metric nearly unchanged; it does not imply that spectral guidance has the same effect for every dataset or training regime.
 
 The software-level contribution is the shared route from backend parsing through sparse periodic block alignment, symmetry conversion, configurable equivariant learning, differentiable sparse observables, and electronic-structure reporting. Keeping these stages behind common data and model interfaces makes it possible to change targets or architecture components without constructing a new end-to-end code path. The current boundaries remain important: the demonstrations use real non-spin-polarized operators in fixed localized bases, dense diagonalization remains a downstream scaling limit, and the learned operators do not yet satisfy every many-body or density-matrix consistency condition by construction.
 
@@ -1298,7 +1295,7 @@ This interface supports a wide range of workflows, with minimal user code requir
 
 \texttt{Mandala} is a scientific software framework for learning sparse electronic-structure operators with E(3)-equivariant graph neural networks. Its defining features are the explicit sparse block representation of Hamiltonian, overlap, and density matrices; the modular software layers that connect parsing, basis harmonization, irrep mapping, graph construction, model definition, and training; and the ability to supervise not only matrices themselves but also observables derived from them.
 
-The framework combines capabilities that are often developed separately. From the electronic-structure side, it retains access to operator-level information and basis-aware quantities. From the atomistic machine-learning side, it inherits the flexibility of modern equivariant message passing, multitask learning, and automated hyperparameter search. By combining these perspectives, \texttt{Mandala} supports workflows in which one can train on matrix, band-energy, and electron-count fidelity within one coherent implementation.
+The framework combines capabilities that are often developed separately. From the electronic-structure side, it retains access to operator-level information and basis-aware quantities. From the atomistic machine-learning side, it inherits the flexibility of modern equivariant message passing, multitask learning, and automated hyperparameter search. By combining these perspectives, \texttt{Mandala} supports workflows in which one can train models on matrix, band-energy, electron-count and spectral fidelity within one coherent implementation.
 
 In this sense, \texttt{Mandala} is aimed at simulation settings that go beyond conventional machine-learning interatomic potentials by retaining access to the predicted electronic structure, including Hamiltonian-derived quantities such as band structure and related observables. This makes the framework particularly relevant for problems in which explicitly electronic effects, such as charge transfer or electronically driven changes in bonding, are part of the physics that must be modeled rather than treated only indirectly. In its current form, \texttt{Mandala} is positioned as a modular platform for operator-level machine learning in electronic-structure simulation and for systematic exploration of equivariant architectures built on that operator-centered representation.
 

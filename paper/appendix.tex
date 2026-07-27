@@ -38,8 +38,7 @@ The model uses the hidden representation
 &\quad+72{\times}2e+24{\times}2o+24{\times}3e+72{\times}3o\\
 &\quad+48{\times}4e+12{\times}4o+12{\times}5e+36{\times}5o+24{\times}6e.
 \end{align*}
-Its fitted pair-dependent radial envelope multiplies the predicted Hamiltonian blocks. The full resolved configuration is stored as
-\path{paper/data/evaluated_model_configs/zncu2sn_ses2.yaml}.
+Its fitted pair-dependent radial envelope multiplies the predicted Hamiltonian blocks. The full resolved configuration is available in supplementary materials.
 
 \subsection{SiO$_2$ Hamiltonian model}
 \label{app:model-config-sio2}
@@ -49,10 +48,9 @@ The model uses the hidden representation
 128{\times}0e+64{\times}0o+32{\times}1e+32{\times}1o+
 24{\times}2e+24{\times}2o+16{\times}3e+16{\times}3o+8{\times}4e.
 \]
-Its fitted pair-dependent radial envelope multiplies the predicted Hamiltonian blocks. The full resolved configuration is stored as
-\path{paper/data/evaluated_model_configs/sio2.yaml}.
+Its fitted pair-dependent radial envelope multiplies the predicted Hamiltonian blocks. The full resolved configuration is available in supplementary materials.
 
-\subsection{Perturbed-silicon joint operator model}
+\subsection{Silicon joint operator model}
 \label{app:model-config-silicon}
 
 The model uses the hidden representation
@@ -60,5 +58,4 @@ The model uses the hidden representation
 128{\times}0e+128{\times}0o+64{\times}1e+64{\times}1o+
 32{\times}2e+32{\times}2o+16{\times}3e+16{\times}3o+16{\times}4e.
 \]
-It jointly predicts Hamiltonian, density, and overlap matrices without a radial output envelope. Band-energy guidance contracts the predicted Hamiltonian with the reference density during training. The full resolved configuration is stored as
-\path{paper/data/evaluated_model_configs/silicon_perturbed.yaml}.
+It jointly predicts Hamiltonian, density, and overlap matrices without a radial output envelope. Band-energy guidance contracts the predicted Hamiltonian with the reference density during training. The full resolved configuration is available in supplementary materials.
