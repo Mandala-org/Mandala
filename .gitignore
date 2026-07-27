@@ -97,6 +97,8 @@ data/small/Si_perturbed_scale1_078/
 data/paper
 analysis_outputs/
 *.zip
+configs/
+tmp/
 
 # Generated structures for inference-scaling benchmarks
 benchmark_data/silicon_scaling/
