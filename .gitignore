@@ -68,8 +68,12 @@ saved_models/
 *.jpg
 *.jpeg
 # Final manuscript figures generated from the committed scaling benchmark log.
-!paper/figures/results/silicon_cif_scaling_time.png
-!paper/figures/results/silicon_cif_scaling_memory.png
+!paper/figures/results/silicon_cif_scaling_time_total.png
+!paper/figures/results/silicon_cif_scaling_time_contributions.png
+!paper/figures/results/silicon_cif_scaling_memory_max.png
+!paper/figures/results/silicon_cif_scaling_memory_contributions.png
+!paper/figures/results/paper_zncusnses_hamiltonian_first6.png
+!paper/figures/results/paper_zncusnses_hamiltonian_correlation.png
 .codex
 
 # slurm.out

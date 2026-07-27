@@ -8,20 +8,13 @@ from typing import Iterable
 
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 FIGURES = ROOT / "figures"
 RESULTS = FIGURES / "results"
-ZN_ASSET_ROOT = (
-    ROOT.parent
-    / "eval_outputs"
-    / "ZnCuSnSeS_hamiltonian"
-    / "big_data_big_model"
-    / "best_restart_val0288"
-)
+ZN_ASSET_ROOT = ROOT.parent / "eval_outputs" / "paper_ZnCuSnSeS_best_val094"
 
 CONTROL = "#315b7d"
 TREATMENT = "#2f8f6b"
@@ -194,8 +187,6 @@ def refresh_zncusnses_result_assets() -> None:
     assets = {
         "hamiltonian_first6_clim_0p01.png": "paper_zncusnses_hamiltonian_first6.png",
         "hamiltonian_correlation.png": "paper_zncusnses_hamiltonian_correlation.png",
-        "eigenvalue_correlation.png": "paper_zncusnses_eigenvalue_correlation.png",
-        "band_structure_and_dos_comparison.png": "paper_zncusnses_band_structure_and_dos.png",
     }
     for source_name, target_name in assets.items():
         source = ZN_ASSET_ROOT / source_name
@@ -204,31 +195,6 @@ def refresh_zncusnses_result_assets() -> None:
                 f"Required ZnCuSnSeS result asset is missing: {source}"
             )
         shutil.copy2(source, RESULTS / target_name)
-
-    hamiltonian = Image.open(ZN_ASSET_ROOT / "hamiltonian_correlation.png").convert(
-        "RGB"
-    )
-    eigenvalue = Image.open(ZN_ASSET_ROOT / "eigenvalue_correlation.png").convert("RGB")
-    height = max(hamiltonian.height, eigenvalue.height)
-    if hamiltonian.height != height:
-        hamiltonian = hamiltonian.resize(
-            (round(hamiltonian.width * height / hamiltonian.height), height),
-            Image.Resampling.LANCZOS,
-        )
-    if eigenvalue.height != height:
-        eigenvalue = eigenvalue.resize(
-            (round(eigenvalue.width * height / eigenvalue.height), height),
-            Image.Resampling.LANCZOS,
-        )
-    gutter = 24
-    combined = Image.new(
-        "RGB", (hamiltonian.width + gutter + eigenvalue.width, height), "white"
-    )
-    combined.paste(hamiltonian, (0, 0))
-    combined.paste(eigenvalue, (hamiltonian.width + gutter, 0))
-    combined.save(
-        RESULTS / "paper_zncusnses_hamiltonian_and_eigenvalue_correlation.png"
-    )
 
 
 if __name__ == "__main__":

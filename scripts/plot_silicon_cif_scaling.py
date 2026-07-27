@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Plot stacked timing and GPU-memory breakdowns from CIF scaling benchmarks."""
+"""Plot total scaling and phase contributions from CIF scaling benchmarks."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = REPO_ROOT / "eval_outputs/silicon_cif_scaling_b200.txt"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "eval_outputs/silicon_cif_scaling_plots"
+FIGURE_SIZE = (6.2, 4.2)
 
 PHASES = ("data_preparation", "model_evaluation", "matrix_construction")
 PHASE_LABELS = {
@@ -157,25 +158,26 @@ def _stacked_bars(
     return totals
 
 
-def _annotate_totals(
+def _annotate_values(
     ax: plt.Axes,
     positions: np.ndarray,
-    totals: np.ndarray,
+    values: np.ndarray,
     *,
     logarithmic: bool,
+    suffix: str = "",
 ) -> None:
-    if len(totals) == 0:
+    if len(values) == 0:
         return
-    for position, total in zip(positions, totals, strict=True):
+    for position, value in zip(positions, values, strict=True):
         label_y = (
-            total * 1.08
+            value * 1.08
             if logarithmic
-            else total + max(float(np.max(totals)) * 0.012, 0.01)
+            else value + max(float(np.max(values)) * 0.012, 0.01)
         )
         ax.text(
             position,
             label_y,
-            f"{total:.3g}",
+            f"{value:.3g}{suffix}",
             ha="center",
             va="bottom",
             fontsize=9,
@@ -199,7 +201,48 @@ def _configure_log_axis(
     ax.set_ylim(min(positive_values) * 0.5, float(np.max(totals)) * 1.35)
 
 
-def plot_times(
+def _phase_values(
+    results: list[BenchmarkResult],
+    phases: list[str],
+    attribute: str,
+) -> dict[str, np.ndarray]:
+    if attribute == "timings":
+        return {
+            phase: np.array(
+                [
+                    (
+                        result.timings[phase].mean_seconds
+                        if phase in result.timings
+                        else 0.0
+                    )
+                    for result in results
+                ],
+                dtype=float,
+            )
+            for phase in phases
+        }
+    if attribute == "peak_memory_gib":
+        return {
+            phase: np.array(
+                [result.peak_memory_gib.get(phase, 0.0) for result in results],
+                dtype=float,
+            )
+            for phase in phases
+        }
+    raise ValueError(f"Unsupported benchmark attribute: {attribute}")
+
+
+def _configure_common_x_axis(
+    axis: plt.Axes,
+    positions: np.ndarray,
+    results: list[BenchmarkResult],
+) -> None:
+    axis.set_xticks(positions, [str(result.atom_count) for result in results])
+    axis.set_xlabel("Atoms in periodic Silicon supercell")
+    axis.grid(axis="y", color="#d9d9d9", linewidth=0.8)
+
+
+def plot_time_total(
     results: list[BenchmarkResult],
     output_path: Path,
     dpi: int,
@@ -210,16 +253,7 @@ def plot_times(
     if not phases:
         return
     positions = np.arange(len(results), dtype=float)
-    values_by_phase = {
-        phase: np.array(
-            [
-                result.timings[phase].mean_seconds if phase in result.timings else 0.0
-                for result in results
-            ],
-            dtype=float,
-        )
-        for phase in phases
-    }
+    values_by_phase = _phase_values(results, phases, "timings")
     error_by_phase = {
         phase: np.array(
             [
@@ -230,14 +264,16 @@ def plot_times(
         )
         for phase in phases
     }
-    figure, axis = plt.subplots(figsize=(9.0, 5.8))
-    figure.subplots_adjust(left=0.11, right=0.98, bottom=0.15, top=0.88)
-    totals = _stacked_bars(
-        axis,
-        positions=positions,
-        results=results,
-        phases=phases,
-        values_by_phase=values_by_phase,
+    figure, axis = plt.subplots(figsize=FIGURE_SIZE)
+    figure.subplots_adjust(left=0.14, right=0.98, bottom=0.17, top=0.86)
+    totals = sum(values_by_phase.values(), np.zeros(len(results), dtype=float))
+    axis.bar(
+        positions,
+        totals,
+        width=0.68,
+        color="#4c78a8",
+        edgecolor="white",
+        linewidth=0.75,
     )
     if show_uncertainty:
         total_stddev = np.sqrt(
@@ -251,58 +287,128 @@ def plot_times(
             ecolor="black",
             capsize=4,
             linewidth=1.1,
-            label="Combined 1 sigma timing uncertainty",
         )
-    _configure_log_axis(axis, values_by_phase, totals)
-    _annotate_totals(axis, positions, totals, logarithmic=True)
-    axis.set_xticks(positions, [str(result.atom_count) for result in results])
-    axis.set_xlabel("Atoms in periodic Silicon supercell")
+    _configure_log_axis(axis, {"total": totals}, totals)
+    _annotate_values(axis, positions, totals, logarithmic=True)
+    _configure_common_x_axis(axis, positions, results)
     axis.set_ylabel("Total time per evaluation (s)")
-    axis.set_title("Mandala Silicon inference scaling: time breakdown", pad=14)
-    axis.grid(axis="y", alpha=0.28)
+    axis.set_title("Mandala Silicon inference scaling: total time", pad=14)
+    figure.savefig(output_path, dpi=dpi)
+    plt.close(figure)
+
+
+def plot_time_contributions(
+    results: list[BenchmarkResult],
+    output_path: Path,
+    dpi: int,
+) -> None:
+    phases = _available_phases(results, "timings")
+    if not phases:
+        return
+    positions = np.arange(len(results), dtype=float)
+    values_by_phase = _phase_values(results, phases, "timings")
+    totals = sum(values_by_phase.values(), np.zeros(len(results), dtype=float))
+    percentages = {
+        phase: np.divide(
+            values,
+            totals,
+            out=np.zeros_like(values),
+            where=totals > 0.0,
+        )
+        * 100.0
+        for phase, values in values_by_phase.items()
+    }
+
+    figure, axis = plt.subplots(figsize=FIGURE_SIZE)
+    figure.subplots_adjust(left=0.14, right=0.98, bottom=0.17, top=0.86)
+    _stacked_bars(
+        axis,
+        positions=positions,
+        results=results,
+        phases=phases,
+        values_by_phase=percentages,
+    )
+    _configure_common_x_axis(axis, positions, results)
+    axis.set_ylim(0.0, 100.0)
+    axis.set_ylabel("Contribution to total time (%)")
+    axis.set_title("Mandala Silicon inference scaling: time contributions", pad=14)
     axis.legend(loc="upper left")
     figure.savefig(output_path, dpi=dpi)
     plt.close(figure)
 
 
-def plot_memory(results: list[BenchmarkResult], output_path: Path, dpi: int) -> None:
+def plot_memory_max(
+    results: list[BenchmarkResult],
+    output_path: Path,
+    dpi: int,
+) -> None:
     phases = _available_phases(results, "peak_memory_gib")
     if not phases:
         return
     positions = np.arange(len(results), dtype=float)
-    values_by_phase = {
-        phase: np.array(
-            [result.peak_memory_gib.get(phase, 0.0) for result in results],
-            dtype=float,
+    values_by_phase = _phase_values(results, phases, "peak_memory_gib")
+    maxima = np.maximum.reduce(list(values_by_phase.values()))
+
+    figure, axis = plt.subplots(figsize=FIGURE_SIZE)
+    figure.subplots_adjust(left=0.14, right=0.98, bottom=0.17, top=0.86)
+    axis.bar(
+        positions,
+        maxima,
+        width=0.68,
+        color="#f58518",
+        edgecolor="white",
+        linewidth=0.75,
+    )
+    _configure_log_axis(axis, {"maximum": maxima}, maxima)
+    _annotate_values(axis, positions, maxima, logarithmic=True)
+    _configure_common_x_axis(axis, positions, results)
+    axis.set_ylabel("Maximum phase peak allocation (GiB)")
+    axis.set_title("Mandala Silicon inference scaling: peak GPU memory", pad=14)
+    figure.savefig(output_path, dpi=dpi)
+    plt.close(figure)
+
+
+def plot_memory_contributions(
+    results: list[BenchmarkResult],
+    output_path: Path,
+    dpi: int,
+) -> None:
+    phases = _available_phases(results, "peak_memory_gib")
+    if not phases:
+        return
+    positions = np.arange(len(results), dtype=float)
+    values_by_phase = _phase_values(results, phases, "peak_memory_gib")
+    maxima = np.maximum.reduce(list(values_by_phase.values()))
+    percentages = {
+        phase: np.divide(
+            values,
+            maxima,
+            out=np.zeros_like(values),
+            where=maxima > 0.0,
         )
-        for phase in phases
+        * 100.0
+        for phase, values in values_by_phase.items()
     }
 
-    figure, axis = plt.subplots(figsize=(9.0, 5.8))
-    figure.subplots_adjust(left=0.11, right=0.98, bottom=0.20, top=0.88)
-    totals = _stacked_bars(
-        axis,
-        positions=positions,
-        results=results,
-        phases=phases,
-        values_by_phase=values_by_phase,
-    )
-    _configure_log_axis(axis, values_by_phase, totals)
-    _annotate_totals(axis, positions, totals, logarithmic=True)
-    axis.set_xticks(positions, [str(result.atom_count) for result in results])
-    axis.set_xlabel("Atoms in periodic Silicon supercell")
-    axis.set_ylabel("Sum of logged per-phase peak allocations (GiB)")
-    axis.set_title("Mandala Silicon inference scaling: GPU-memory breakdown", pad=14)
-    axis.grid(axis="y", alpha=0.28)
+    figure, axis = plt.subplots(figsize=FIGURE_SIZE)
+    figure.subplots_adjust(left=0.14, right=0.98, bottom=0.17, top=0.86)
+    width = 0.22
+    offsets = (np.arange(len(phases), dtype=float) - (len(phases) - 1) / 2) * width
+    for offset, phase in zip(offsets, phases, strict=True):
+        axis.bar(
+            positions + offset,
+            percentages[phase],
+            width=width,
+            color=PHASE_COLORS[phase],
+            edgecolor="white",
+            linewidth=0.75,
+            label=PHASE_LABELS[phase],
+        )
+    _configure_common_x_axis(axis, positions, results)
+    axis.set_ylim(0.0, 110.0)
+    axis.set_ylabel("Phase peak relative to maximum (%)")
+    axis.set_title("Mandala Silicon inference scaling: memory contributions", pad=14)
     axis.legend(loc="upper left")
-    figure.text(
-        0.5,
-        0.055,
-        "Phase peaks are recorded separately; stacked totals compare phase costs and are not simultaneous live memory.",
-        ha="center",
-        va="bottom",
-        fontsize=8,
-    )
     figure.savefig(output_path, dpi=dpi)
     plt.close(figure)
 
@@ -321,20 +427,28 @@ def main() -> None:
 
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    time_path = output_dir / "silicon_cif_scaling_time.png"
-    memory_path = output_dir / "silicon_cif_scaling_memory.png"
-    plot_times(
+    time_total_path = output_dir / "silicon_cif_scaling_time_total.png"
+    time_contributions_path = output_dir / "silicon_cif_scaling_time_contributions.png"
+    memory_max_path = output_dir / "silicon_cif_scaling_memory_max.png"
+    memory_contributions_path = (
+        output_dir / "silicon_cif_scaling_memory_contributions.png"
+    )
+    plot_time_total(
         results,
-        time_path,
+        time_total_path,
         args.dpi,
         show_uncertainty=args.show_uncertainty,
     )
-    plot_memory(results, memory_path, args.dpi)
+    plot_time_contributions(results, time_contributions_path, args.dpi)
+    plot_memory_max(results, memory_max_path, args.dpi)
+    plot_memory_contributions(results, memory_contributions_path, args.dpi)
 
     available_counts = ", ".join(str(result.atom_count) for result in results)
     print(f"parsed_atom_counts=[{available_counts}]", flush=True)
-    print(f"wrote={time_path}", flush=True)
-    print(f"wrote={memory_path}", flush=True)
+    print(f"wrote={time_total_path}", flush=True)
+    print(f"wrote={time_contributions_path}", flush=True)
+    print(f"wrote={memory_max_path}", flush=True)
+    print(f"wrote={memory_contributions_path}", flush=True)
 
 
 if __name__ == "__main__":
