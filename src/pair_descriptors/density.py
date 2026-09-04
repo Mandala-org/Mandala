@@ -80,6 +80,28 @@ def _jacobi(n: int, alpha: float, beta: float, x: torch.Tensor) -> torch.Tensor:
     return p1
 
 
+def spherical_bessel_j(l_value: int, z: torch.Tensor) -> torch.Tensor:
+    """Differentiable ``j_l(z)`` with a stable small-argument series."""
+    tiny = torch.finfo(z.dtype).eps ** 0.5
+    safe = torch.where(z.abs() < tiny, torch.full_like(z, tiny), z)
+    j0 = torch.sin(safe) / safe
+    if l_value == 0:
+        return torch.where(z.abs() < tiny, torch.ones_like(z), j0)
+    current = torch.sin(safe) / safe.square() - torch.cos(safe) / safe
+    previous = j0
+    for ell in range(1, l_value):
+        following = (2 * ell + 1) / safe * current - previous
+        previous, current = current, following
+    double_factorial = math.prod(range(1, 2 * l_value + 2, 2))
+    series = z.pow(l_value) / double_factorial
+    series *= (
+        1.0
+        - z.square() / (2.0 * (2 * l_value + 3))
+        + z.pow(4) / (8.0 * (2 * l_value + 3) * (2 * l_value + 5))
+    )
+    return torch.where(z.abs() < 0.2, series, current)
+
+
 class OrthogonalBallRadialBasis(nn.Module):
     """Fixed radial functions indexed by ``(n,l)`` on ``[0, cutoff]``."""
 
@@ -117,32 +139,7 @@ class OrthogonalBallRadialBasis(nn.Module):
             # torch.special.spherical_bessel_j0 only covers l=0; use the stable
             # upward recurrence, with analytic small-x limits supplied below.
             z = x[:, None] * roots[None, :]
-            tiny = torch.finfo(distance.dtype).eps ** 0.5
-            safe = z.clamp_min(tiny)
-            j0 = torch.sin(safe) / safe
-            if l_value == 0:
-                values = torch.where(z.abs() < tiny, torch.ones_like(z), j0)
-            else:
-                j1 = torch.sin(safe) / safe.square() - torch.cos(safe) / safe
-                current = torch.where(z.abs() < tiny, torch.zeros_like(z), j1)
-                previous = j0
-                for ell in range(1, l_value):
-                    following = (2 * ell + 1) / safe * current - previous
-                    following = torch.where(
-                        z.abs() < tiny, torch.zeros_like(z), following
-                    )
-                    previous, current = current, following
-                values = current
-                # Upward recurrence loses digits for small arguments. Replace
-                # that region with the first terms of the analytic series.
-                double_factorial = math.prod(range(1, 2 * l_value + 2, 2))
-                series = z.pow(l_value) / double_factorial
-                series = series * (
-                    1.0
-                    - z.square() / (2.0 * (2 * l_value + 3))
-                    + z.pow(4) / (8.0 * (2 * l_value + 3) * (2 * l_value + 5))
-                )
-                values = torch.where(z.abs() < 0.2, series, values)
+            values = spherical_bessel_j(l_value, z)
             values = values * norms[None, :] / self.cutoff**1.5
         else:
             values = []

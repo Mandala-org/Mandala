@@ -12,6 +12,8 @@ from pair_descriptors.density import (
     OrthogonalBallRadialBasis,
     RawNeighborDensityDescriptor,
 )
+from pair_descriptors.fourier_bessel import FourierBesselDescriptor
+from pair_descriptors.moments import IrreducibleMomentDescriptor
 
 __all__ = [
     "ACECovariantBasis",
@@ -22,4 +24,6 @@ __all__ = [
     "DensityChannel",
     "OrthogonalBallRadialBasis",
     "RawNeighborDensityDescriptor",
+    "FourierBesselDescriptor",
+    "IrreducibleMomentDescriptor",
 ]
