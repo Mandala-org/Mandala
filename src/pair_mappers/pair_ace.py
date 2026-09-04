@@ -14,7 +14,11 @@ from pair_descriptors.ace_covariants import (
     TaggedBondACEBasis,
 )
 from pair_hamiltonian.output_schema import FullBlockIrrepTransform
-from pair_mappers.linear import EquivariantRidgeRegressor, RidgeFitDiagnostics
+from pair_mappers.linear import (
+    EquivariantRidgeAccumulator,
+    EquivariantRidgeRegressor,
+    RidgeFitDiagnostics,
+)
 
 
 def _module_key(pair: tuple[str, str]) -> str:
@@ -128,6 +132,27 @@ class NativeACEPairMapper(nn.Module):
             target = self.target_transform.reverse(pair, target)
         features = self.offsite_features(descriptor_i, displacement_ij, descriptor_j)
         return self.offsite_regressors[_module_key(canonical)].fit(features, target)
+
+    @torch.no_grad()
+    def fit_onsite_from_accumulator(
+        self, species: str, accumulator: EquivariantRidgeAccumulator
+    ) -> RidgeFitDiagnostics:
+        """Finalize one bounded-memory onsite sufficient-statistics fit."""
+        return self.onsite_regressors[species].fit_from_accumulator(accumulator)
+
+    @torch.no_grad()
+    def fit_offsite_from_accumulator(
+        self,
+        pair: tuple[str, str],
+        accumulator: EquivariantRidgeAccumulator,
+    ) -> RidgeFitDiagnostics:
+        """Finalize one canonical bounded-memory offsite fit."""
+        canonical, was_reversed = self._canonical_pair(pair)
+        if was_reversed:
+            raise ValueError("Streaming offsite accumulators must use canonical pairs")
+        return self.offsite_regressors[_module_key(canonical)].fit_from_accumulator(
+            accumulator
+        )
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
         return self.onsite_regressors[species](self.onsite_features(descriptor))

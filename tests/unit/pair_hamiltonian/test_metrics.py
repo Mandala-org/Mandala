@@ -28,6 +28,12 @@ def test_headline_metric_is_reconstructed_matrix_element_weighted():
     result = metrics.compute()
     assert result["matrix_elements"]["mae"] == pytest.approx(2.0 * HARTREE_TO_MEV)
     assert result["matrix_elements"]["scalar_count"] == 32
+    assert result["block_frobenius"]["mae"] == pytest.approx(8.0 * HARTREE_TO_MEV)
+    assert result["block_frobenius"]["rmse"] == pytest.approx(
+        80.0**0.5 * HARTREE_TO_MEV
+    )
+    assert result["block_frobenius"]["block_count"] == 2
+    assert len(result["by_target_irrep_copy"]) == len(transform.schema("X-X").copies)
     assert set(result["by_distance"]) == {
         "0.000-1.000_angstrom",
         "1.000-2.000_angstrom",

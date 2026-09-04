@@ -8,7 +8,7 @@ from pair_hamiltonian.output_schema import (
     FullBlockIrrepTransform,
     o3_representation_matrix,
 )
-from pair_mappers import NativeACEPairMapper
+from pair_mappers import EquivariantRidgeAccumulator, NativeACEPairMapper
 
 
 @pytest.fixture(scope="module")
@@ -99,3 +99,24 @@ def test_pair_mapper_is_full_o3_equivariant(components, determinant):
         @ transform.output_action("A-B", rotation).T
     )
     assert torch.allclose(actual, expected, atol=1e-9, rtol=1e-9)
+
+
+@pytest.mark.unit
+def test_pair_mapper_finalizes_streaming_offsite_statistics(components):
+    transform, density, model = components
+    descriptor_i = torch.randn(20, density.irreps_out.dim, dtype=torch.float64)
+    descriptor_j = torch.randn_like(descriptor_i)
+    displacement = torch.randn(20, 3, dtype=torch.float64)
+    features = model.offsite_features(descriptor_i, displacement, descriptor_j)
+    targets = torch.randn(20, transform.irreps("A-B").dim, dtype=torch.float64)
+    accumulator = EquivariantRidgeAccumulator(
+        model.offsite_basis.irreps_out,
+        transform.irreps("A-B"),
+        dtype=torch.float64,
+    )
+    accumulator.update(features[:7], targets[:7])
+    accumulator.update(features[7:], targets[7:])
+    diagnostics = model.fit_offsite_from_accumulator(("A", "B"), accumulator)
+    assert diagnostics.sample_count == 20
+    with pytest.raises(ValueError, match="canonical"):
+        model.fit_offsite_from_accumulator(("B", "A"), accumulator)
