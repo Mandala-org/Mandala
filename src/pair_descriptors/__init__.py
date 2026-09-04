@@ -7,6 +7,11 @@ from pair_descriptors.ace_covariants import (
     EquivariantFeatureLayout,
     TaggedBondACEBasis,
 )
+from pair_descriptors.density import (
+    DensityChannel,
+    OrthogonalBallRadialBasis,
+    RawNeighborDensityDescriptor,
+)
 
 __all__ = [
     "ACECovariantBasis",
@@ -14,4 +19,7 @@ __all__ = [
     "CovariantChannel",
     "EquivariantFeatureLayout",
     "TaggedBondACEBasis",
+    "DensityChannel",
+    "OrthogonalBallRadialBasis",
+    "RawNeighborDensityDescriptor",
 ]
