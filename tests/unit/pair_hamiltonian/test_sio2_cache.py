@@ -74,7 +74,7 @@ def test_structure_shard_is_atomic_and_metadata_validated(tmp_path, two_atom_gra
         hamiltonian_cutoff_angstrom=3.0,
     )
     path = tmp_path / "structure_0000.h5"
-    metadata = {"version": "test", "cutoff": 3.0}
+    metadata = {"version": "test", "cutoff": 3.0, "pair_names": ("O-O", "O-Si")}
     summary = write_structure_shard(
         path,
         arrays,

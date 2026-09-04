@@ -263,9 +263,10 @@ def validate_structure_shard(path: Path, metadata: Mapping[str, object]) -> bool
         return False
     try:
         with h5py.File(path, "r") as handle:
+            normalized_metadata = json.loads(json.dumps(metadata, sort_keys=True))
             return (
                 bool(handle.attrs.get("complete", False))
-                and json.loads(handle.attrs["metadata_json"]) == metadata
+                and json.loads(handle.attrs["metadata_json"]) == normalized_metadata
             )
     except (OSError, KeyError, json.JSONDecodeError):
         return False

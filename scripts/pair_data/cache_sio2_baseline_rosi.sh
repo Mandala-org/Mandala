@@ -16,6 +16,7 @@ python -u scripts/pair_data/cache_sio2_baseline.py \
   --density-radial-count 2 \
   --density-l-max 2 \
   --envelope-bin-width-angstrom 0.05 \
+  --plot-max-points-per-pair 50000 \
   --nao-max 14 \
   --num-workers 8 \
   --resume \

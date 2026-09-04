@@ -27,6 +27,7 @@ if str(SOURCE_ROOT) not in sys.path:
 from pair_hamiltonian.range_factorization import (
     RangeEnvelopeAccumulator,
     envelope_manifest,
+    plot_range_envelope_fits,
 )
 from pair_hamiltonian.sio2_cache import (
     CANONICAL_PAIR_NAMES,
@@ -67,6 +68,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--density-radial-count", type=int, required=True)
     result.add_argument("--density-l-max", type=int, required=True)
     result.add_argument("--envelope-bin-width-angstrom", type=float, required=True)
+    result.add_argument("--plot-max-points-per-pair", type=int, required=True)
     result.add_argument("--nao-max", type=int, required=True)
     result.add_argument("--num-workers", type=int, required=True)
     result.add_argument("--max-structures", type=int, default=0)
@@ -141,6 +143,7 @@ def main() -> None:
         args.descriptor_cutoff_angstrom,
         args.density_radial_count,
         args.envelope_bin_width_angstrom,
+        args.plot_max_points_per_pair,
         args.num_workers,
     )
     if any(value <= 0 for value in positive) or args.density_l_max < 0:
@@ -298,6 +301,12 @@ def main() -> None:
         )
         for pair in CANONICAL_PAIR_NAMES
     }
+    sample_distances: dict[str, list[np.ndarray]] = {
+        pair: [] for pair in CANONICAL_PAIR_NAMES
+    }
+    sample_magnitudes: dict[str, list[np.ndarray]] = {
+        pair: [] for pair in CANONICAL_PAIR_NAMES
+    }
     for index in tqdm(range(limit), desc="envelope", unit="structure"):
         if split_names[index] != "train":
             continue
@@ -311,6 +320,12 @@ def main() -> None:
         for pair_index, pair in enumerate(CANONICAL_PAIR_NAMES):
             selected = pair_types == pair_index
             accumulators[pair].update(distances[selected], targets[selected])
+            sample_distances[pair].append(distances[selected])
+            sample_magnitudes[pair].append(
+                np.sqrt(
+                    np.mean(np.square(targets[selected].astype(np.float64)), axis=1)
+                )
+            )
     fits = [accumulators[pair].fit(pair) for pair in CANONICAL_PAIR_NAMES]
     envelope = envelope_manifest(
         fits,
@@ -318,6 +333,23 @@ def main() -> None:
         split_hash=frozen_split_hash,
     )
     atomic_json(output_dir / "range_envelope.json", envelope)
+    plot_samples = {
+        pair: (
+            np.concatenate(sample_distances[pair]),
+            np.concatenate(sample_magnitudes[pair]),
+        )
+        for pair in CANONICAL_PAIR_NAMES
+    }
+    plot_rows = plot_range_envelope_fits(
+        fits,
+        plot_samples,
+        output_dir / "range_envelope_fit.png",
+        max_scatter_points=args.plot_max_points_per_pair,
+    )
+    with (output_dir / "range_envelope_bins.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(plot_rows[0]))
+        writer.writeheader()
+        writer.writerows(plot_rows)
 
     print("[5/7] Writing cache registry and storage manifest", flush=True)
     registry_path = output_dir / "shards.csv"
@@ -353,6 +385,7 @@ def main() -> None:
         "cache_size_bytes": actual_bytes,
         "cache_metadata": cache_metadata,
         "range_envelope_hash": envelope["content_hash"],
+        "range_envelope_plot": str(output_dir / "range_envelope_fit.png"),
         "range_envelope_fits": {fit.pair: asdict(fit) for fit in fits},
         "elapsed_seconds": time.perf_counter() - started,
     }

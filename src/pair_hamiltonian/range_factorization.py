@@ -5,13 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+from os import PathLike
 from typing import Iterable
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import least_squares
 import torch
 
 from data.envelope import evaluate_slater_soft_cutoff
+
+HARTREE_TO_MEV = 27_211.386245988
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,3 +157,109 @@ def envelope_manifest(
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     payload["content_hash"] = hashlib.sha256(canonical.encode()).hexdigest()
     return payload
+
+
+def plot_range_envelope_fits(
+    fits: Iterable[SlaterEnvelopeFit],
+    samples: dict[str, tuple[np.ndarray, np.ndarray]],
+    output_path: str | PathLike[str],
+    *,
+    max_scatter_points: int = 50_000,
+) -> list[dict[str, float | int | str]]:
+    """Plot training block RMS magnitudes and frozen fitted range curves.
+
+    ``samples[pair]`` contains distances in angstrom and per-block physical
+    matrix-element RMS magnitudes in hartree.  Scatter downsampling is
+    deterministic and affects only rendering, never fitting or bin summaries.
+    """
+    ordered = sorted(fits, key=lambda fit: fit.pair)
+    if max_scatter_points <= 0:
+        raise ValueError("max_scatter_points must be positive")
+    figure, axes = plt.subplots(
+        1, len(ordered), figsize=(5.2 * len(ordered), 4.6), sharey=True
+    )
+    axes = np.atleast_1d(axes)
+    rows: list[dict[str, float | int | str]] = []
+    for axis, fit in zip(axes, ordered):
+        distance, magnitude = samples[fit.pair]
+        distance = np.asarray(distance, dtype=np.float64)
+        magnitude = np.asarray(magnitude, dtype=np.float64)
+        valid = (
+            np.isfinite(distance)
+            & np.isfinite(magnitude)
+            & (magnitude > np.finfo(np.float64).tiny)
+        )
+        distance = distance[valid]
+        magnitude = magnitude[valid]
+        if distance.size == 0:
+            raise ValueError(f"No finite positive samples for {fit.pair}")
+        if distance.size > max_scatter_points:
+            shown = np.linspace(
+                0, distance.size - 1, max_scatter_points, dtype=np.int64
+            )
+        else:
+            shown = np.arange(distance.size)
+        axis.scatter(
+            distance[shown],
+            magnitude[shown] * HARTREE_TO_MEV,
+            s=3,
+            alpha=0.08,
+            color="#4472c4",
+            linewidths=0,
+            rasterized=True,
+            label="training blocks",
+        )
+        bin_index = np.floor(distance / fit.bin_width_angstrom).astype(np.int64)
+        bin_centers: list[float] = []
+        geometric_means: list[float] = []
+        for index in np.unique(bin_index):
+            selected = magnitude[bin_index == index]
+            center = (index + 0.5) * fit.bin_width_angstrom
+            geometric_mean = float(np.exp(np.mean(np.log(selected))))
+            bin_centers.append(center)
+            geometric_means.append(geometric_mean)
+            rows.append(
+                {
+                    "species_pair": fit.pair,
+                    "distance_center_angstrom": center,
+                    "block_count": int(selected.size),
+                    "geometric_mean_rms_mev": geometric_mean * HARTREE_TO_MEV,
+                    "q10_rms_mev": float(np.quantile(selected, 0.1)) * HARTREE_TO_MEV,
+                    "q90_rms_mev": float(np.quantile(selected, 0.9)) * HARTREE_TO_MEV,
+                }
+            )
+        axis.plot(
+            bin_centers,
+            np.asarray(geometric_means) * HARTREE_TO_MEV,
+            color="#111111",
+            linewidth=1.4,
+            marker="o",
+            markersize=2.5,
+            label="binned geometric mean",
+        )
+        fit_distance = torch.linspace(
+            max(1.0e-4, float(distance.min())),
+            fit.cutoff_angstrom,
+            500,
+            dtype=torch.float64,
+        )
+        fit_magnitude = fit.evaluate(fit_distance).numpy() * HARTREE_TO_MEV
+        axis.plot(
+            fit_distance.numpy(),
+            fit_magnitude,
+            color="#c43b35",
+            linewidth=2.2,
+            label="frozen Slater fit",
+        )
+        axis.set_yscale("log")
+        axis.set_xlim(left=0.0, right=fit.cutoff_angstrom)
+        axis.set_xlabel("Pair distance (angstrom)")
+        axis.set_title(fit.pair)
+        axis.grid(True, which="both", alpha=0.18, linewidth=0.6)
+    axes[0].set_ylabel("Per-block matrix-element RMS magnitude (meV)")
+    axes[0].legend(loc="lower left", frameon=False)
+    figure.suptitle("Training-only SiO2 range-envelope fits")
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+    return rows
