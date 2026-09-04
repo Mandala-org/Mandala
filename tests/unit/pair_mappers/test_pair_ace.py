@@ -4,7 +4,10 @@ from e3nn import o3
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from pair_descriptors import AtomicNeighborDensity
-from pair_hamiltonian.output_schema import FullBlockIrrepTransform
+from pair_hamiltonian.output_schema import (
+    FullBlockIrrepTransform,
+    o3_representation_matrix,
+)
 from pair_mappers import NativeACEPairMapper
 
 
@@ -84,7 +87,7 @@ def test_pair_mapper_is_full_o3_equivariant(components, determinant):
     rotation = o3.rand_matrix(dtype=torch.float64)
     if determinant == -1:
         rotation = -rotation
-    descriptor_action = transform._float64_representation(density.irreps_out, rotation)
+    descriptor_action = o3_representation_matrix(density.irreps_out, rotation)
     actual = model.predict_offsite(
         ("A", "B"),
         descriptor_i @ descriptor_action.T,
