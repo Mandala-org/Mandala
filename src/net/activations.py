@@ -7,10 +7,9 @@ layers for arbitrary Irreps.
 
 Supported kinds
 ---------------
-• "gate"      ->  e3nn.nn.Gate
-• "normact"   ->  e3nn.nn.NormActivation
-• "s2act"     ->  e3nn.nn.S2Activation
-• "id"        ->  identity (no non-linearity)
+• "normact"          -> e3nn.nn.NormActivation
+• "gate_scalars_mlp" -> invariant scalar-conditioned gates
+• "gate_magnitudes"  -> norm-conditioned radial gates
 
 The choice is controlled by ``cfg.nonlin_kind`` (see Config).
 Batch-Norm (equivariant) can be toggled independently through
@@ -25,7 +24,7 @@ from typing import Dict, Callable
 import torch
 from torch import nn
 from e3nn.o3 import Irreps
-from e3nn.nn import NormActivation, S2Activation
+from e3nn.nn import NormActivation
 
 from net.common import Config
 
@@ -86,6 +85,16 @@ class GateScalarsMLP(nn.Module):
         """
         super().__init__()
         self.irreps = irreps
+        saw_non_even_scalar = False
+        for _, ir in self.irreps:
+            is_even_scalar = ir.l == 0 and ir.p == 1
+            if is_even_scalar and saw_non_even_scalar:
+                raise ValueError(
+                    "GateScalarsMLP requires all 0e scalar irreps to form a "
+                    "contiguous prefix of the Irreps layout."
+                )
+            if not is_even_scalar:
+                saw_non_even_scalar = True
         self.nonlin_scalars = nonlin_scalars
         self.n_scalars = sum(mul for mul, ir in irreps if ir.l == 0 and ir.p == 1)
         self.n_non_scalars = sum(mul for mul, ir in irreps if ir.l > 0 or ir.p == -1)
@@ -170,12 +179,17 @@ class GateMagnitudes(nn.Module):
     """
 
     def __init__(
-        self, irreps: Irreps, nonlin_scalars: nn.Module, nonlin_gate: nn.Module
+        self,
+        irreps: Irreps,
+        nonlin_scalars: nn.Module,
+        nonlin_gate: nn.Module,
+        eps: float = 1e-8,
     ):
         super().__init__()
         self.irreps = irreps
         self.nonlin_scalars = nonlin_scalars
         self.nonlin_gate = nonlin_gate
+        self.eps = float(eps)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -211,8 +225,9 @@ class GateMagnitudes(nn.Module):
                 # Apply non-linearity to magnitudes
                 activations = self.nonlin_gate(magnitudes)
                 # Multiply non-scalars by magnitudes
+                safe_magnitudes = magnitudes.clamp_min(self.eps)
                 non_scalars = non_scalars * (
-                    activations.unsqueeze(-1) / magnitudes.unsqueeze(-1)
+                    activations.unsqueeze(-1) / safe_magnitudes.unsqueeze(-1)
                 )
                 # Reshape back to original shape
                 output.append(non_scalars.reshape(*x.shape[:-1], -1))
@@ -234,7 +249,7 @@ def make_nonlinearity(
         Input/output representation (unchanged by the non-linearity).
     cfg
         Any object that exposes the attributes used below
-        (`nonlin_kind`, `activation_scalar`, `norm_kind`).
+        (`nonlin_kind`, `activation_scalar`).
 
     Returns
     -------
@@ -244,18 +259,10 @@ def make_nonlinearity(
     kind = cfg.nonlin_kind.lower()
 
     if kind == "normact":
-        # Norm kind: "component" (default) or "norm"
-        normalise_over = "component" if cfg.norm_kind == "component" else "norm"
         return NormActivation(
             irreps,
             scalar_activation(cfg.activation_scalar),
-            normalize=normalise_over,
-        )
-    elif kind == "s2act":
-        return S2Activation(
-            irreps,
-            scalar_activation(cfg.activation_scalar),
-            res=cfg.s2act_res,
+            normalize=True,
         )
     elif kind == "gate_scalars_mlp":
         return GateScalarsMLP(
@@ -272,5 +279,5 @@ def make_nonlinearity(
     else:
         raise ValueError(
             f"Unknown nonlin_kind '{cfg.nonlin_kind}'. "
-            f"Expected one of: 'normact', 's2act', 'gate_scalars_mlp', 'gate_magnitudes'."
+            "Expected one of: 'normact', 'gate_scalars_mlp', 'gate_magnitudes'."
         )

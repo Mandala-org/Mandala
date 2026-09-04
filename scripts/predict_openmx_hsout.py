@@ -37,17 +37,6 @@ def _device(name: str) -> torch.device:
     return torch.device(name)
 
 
-def symmetrize_predictions(
-    predictions: dict[str, Any],
-) -> dict[str, Any]:
-    """Return Hermitian real-space H/S/D predictions."""
-
-    return {
-        name: 0.5 * (matrix + matrix.transpose())
-        for name, matrix in predictions.items()
-    }
-
-
 def load_hsd_prediction(
     *,
     checkpoint_path: Path,
@@ -80,8 +69,7 @@ def load_hsd_prediction(
     model.load_state_dict(checkpoint["state_dict"], strict=True)
     model.to(device).eval()
 
-    predictions = predict_snapshot(model, reference, physical=True)
-    predictions = symmetrize_predictions(predictions)
+    predictions = predict_snapshot(model, reference)
     return predictions, reference, cfg
 
 

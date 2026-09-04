@@ -299,7 +299,7 @@ def benchmark_structure(
         model.predicted_irreps_to_block_matrices,
         predictions,
         model_input,
-        physical=True,
+        training=False,
     )
     with torch.inference_mode():
         warmup(construct, warmup_runs, device)

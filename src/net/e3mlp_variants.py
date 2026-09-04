@@ -150,11 +150,13 @@ class InvariantFiLMActivation(nn.Module):
         self.scalar_activation = scalar_activation_fn(scalar_activation)
         self.odd_scalar_activation = odd_safe_activation(odd_scalar_activation)
         self.copy_specs = _copy_slices(Irreps(irreps))
-        self.scalar_copy_indices = [
-            idx for idx, (_, _, _, ir) in enumerate(self.copy_specs) if ir.l == 0
+        self.even_scalar_copy_indices = [
+            idx
+            for idx, (_, _, _, ir) in enumerate(self.copy_specs)
+            if ir.l == 0 and ir.p == 1
         ]
         inv_dim = len(self.copy_specs)
-        out_dim = len(self.copy_specs) + len(self.scalar_copy_indices)
+        out_dim = len(self.copy_specs) + len(self.even_scalar_copy_indices)
         self.mlp = nn.Sequential(
             nn.Linear(inv_dim, hidden_dim),
             scalar_activation_module(scalar_activation),
@@ -167,8 +169,12 @@ class InvariantFiLMActivation(nn.Module):
         for start, dim, _, ir in self.copy_specs:
             block = x[..., start : start + dim]
             blocks.append(block)
-            if ir.l == 0:
+            if ir.l == 0 and ir.p == 1:
                 invariants.append(block.reshape(*block.shape[:-1], -1))
+            elif ir.l == 0:
+                # A 0o pseudoscalar changes sign under inversion.  Its square is
+                # a smooth 0e descriptor, including at exactly zero.
+                invariants.append(block.square().reshape(*block.shape[:-1], -1))
             else:
                 invariants.append(torch.linalg.norm(block, dim=-1, keepdim=True))
 
@@ -182,15 +188,15 @@ class InvariantFiLMActivation(nn.Module):
         for idx, ((_, _, _, ir), block) in enumerate(zip(self.copy_specs, blocks)):
             gain = gains[..., idx : idx + 1]
             y = gain * block
-            if ir.l == 0:
+            if ir.l == 0 and ir.p == 1:
                 bias = scalar_biases[..., bias_cursor : bias_cursor + 1]
                 y = y + bias
-                y = (
-                    self.scalar_activation(y)
-                    if ir.p == 1
-                    else self.odd_scalar_activation(y)
-                )
+                y = self.scalar_activation(y)
                 bias_cursor += 1
+            elif ir.l == 0:
+                # Odd scalars may be invariantly rescaled, but cannot receive an
+                # even additive bias.  The activation must preserve odd parity.
+                y = self.odd_scalar_activation(y)
             out.append(y)
         return torch.cat(out, dim=-1)
 
@@ -321,14 +327,40 @@ class GateBlock(nn.Module):
         return self.post(self.gate(self.linear(x)))
 
 
-class ResidualBlock(nn.Module):
-    def __init__(self, block: nn.Module, width: int, residual_scale: float) -> None:
+class IrrepCopyScale(nn.Module):
+    """Learn one scalar per irrep copy and broadcast it over all m components."""
+
+    def __init__(self, irreps: Irreps, initial_value: float) -> None:
         super().__init__()
-        self.block = block
-        self.layerscale = nn.Parameter(torch.full((width,), residual_scale))
+        self.irreps = Irreps(irreps)
+        self.scale = nn.Parameter(
+            torch.full((self.irreps.num_irreps,), float(initial_value))
+        )
+        component_index: list[int] = []
+        copy_index = 0
+        for mul, ir in self.irreps:
+            for _ in range(mul):
+                component_index.extend([copy_index] * ir.dim)
+                copy_index += 1
+        self.register_buffer(
+            "_component_index",
+            torch.tensor(component_index, dtype=torch.long),
+            persistent=False,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.layerscale * self.block(x)
+        factors = self.scale.index_select(0, self._component_index).to(x)
+        return x * factors
+
+
+class ResidualBlock(nn.Module):
+    def __init__(self, block: nn.Module, irreps: Irreps, residual_scale: float) -> None:
+        super().__init__()
+        self.block = block
+        self.layerscale = IrrepCopyScale(irreps, residual_scale)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.layerscale(self.block(x))
 
 
 class BilinearSelfTPBlock(nn.Module):
@@ -382,12 +414,12 @@ class BilinearSelfTPBlock(nn.Module):
             output_scale=1.0,
             weight_init_scale=1.0,
         )
-        self.skip = nn.Parameter(torch.full((irreps_hidden.dim,), residual_scale))
+        self.skip = IrrepCopyScale(irreps_hidden, residual_scale)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         q = self.tp(self.lin_a(x), self.lin_b(x))
         q = self.norm(q)
-        return x + self.skip * self.proj(q)
+        return x + self.skip(self.proj(q))
 
 
 class InvariantFiLME3MLPBlock(nn.Module):
@@ -492,9 +524,9 @@ def make_variant_block(
                 ScaledLinear(
                     irreps_in, irreps_hidden, output_scale=1.0, weight_init_scale=1.0
                 ),
-                ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale),
+                ResidualBlock(inner, irreps_hidden, cfg.residual_scale),
             )
-        return ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale)
+        return ResidualBlock(inner, irreps_hidden, cfg.residual_scale)
     if variant == "resgatemagnitudes":
         inner = LinearThenAct(
             irreps_hidden,
@@ -513,9 +545,9 @@ def make_variant_block(
                 ScaledLinear(
                     irreps_in, irreps_hidden, output_scale=1.0, weight_init_scale=1.0
                 ),
-                ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale),
+                ResidualBlock(inner, irreps_hidden, cfg.residual_scale),
             )
-        return ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale)
+        return ResidualBlock(inner, irreps_hidden, cfg.residual_scale)
     if variant == "bilinear":
         if Irreps(irreps_in) != Irreps(irreps_hidden):
             return nn.Sequential(

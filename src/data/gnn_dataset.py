@@ -54,9 +54,8 @@ from data.spectral_fermi_cache import (
 from net.spectral_loss import build_spectral_reference
 from tqdm.auto import tqdm
 
-
 SNAPSHOT_CACHE_VERSION = "v3"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v6"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v7"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
@@ -789,6 +788,16 @@ class E3GNNDataset(Dataset):
             }
             if edge_envelope is not None:
                 x["edge_envelope"] = edge_envelope
+                x["edge_envelope_family"] = self.envelope_table.family
+                x["edge_envelope_pair_params"] = (
+                    self.envelope_table.parameters.index_select(0, edge_type_idx)
+                )
+                if self.envelope_table.reference_x_max is not None:
+                    x["edge_envelope_reference_x_max"] = (
+                        self.envelope_table.reference_x_max.index_select(
+                            0, edge_type_idx
+                        )
+                    )
             if edge_r0 is not None:
                 x["edge_r0"] = edge_r0
             if self.cfg.precompute_edge_features:
@@ -882,6 +891,14 @@ class E3GNNDataset(Dataset):
                 x["edge_length"] = x["edge_length"].to(device)
             if "edge_envelope" in x:
                 x["edge_envelope"] = x["edge_envelope"].to(device)
+            if "edge_envelope_pair_params" in x:
+                x["edge_envelope_pair_params"] = x["edge_envelope_pair_params"].to(
+                    device
+                )
+            if "edge_envelope_reference_x_max" in x:
+                x["edge_envelope_reference_x_max"] = x[
+                    "edge_envelope_reference_x_max"
+                ].to(device)
             if "edge_r0" in x:
                 x["edge_r0"] = x["edge_r0"].to(device)
             if "pred_pair_edges_static" in x:

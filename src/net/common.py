@@ -15,7 +15,7 @@ to :pymod:`net.activations` so we avoid a circular import between files.
 from __future__ import annotations
 from functools import lru_cache
 from dataclasses import dataclass, field
-from typing import List, Sequence, Tuple
+from typing import List, Literal, Sequence, Tuple
 
 import torch
 from torch import nn
@@ -99,13 +99,9 @@ class Config:
     e3mlp_film_hidden_dim: int = 64
     activation_odd_scalar: str = "tanh"
     activation_odd_gate: str = "tanh"
-    nonlin_kind: str = (
-        "normact"  # "normact" | "s2act" | "gate_scalars_mlp" | "gate_magnitudes"
-    )
+    nonlin_kind: Literal["normact", "gate_scalars_mlp", "gate_magnitudes"] = "normact"
     activation_scalar: str = "leakyrelu"
     activation_gate: str = "softplus"
-    s2act_res: int = 128
-    norm_kind: str = "component"  # for NormActivation: "component" | "norm"
 
     # ---------------------- training ------------------------------------
     lr: float = 0.010803383053097332
@@ -253,6 +249,20 @@ class Config:
     use_sc: bool = True
     use_sbf: bool = False
 
+    def __post_init__(self) -> None:
+        supported_nonlinearities = {
+            "normact",
+            "gate_scalars_mlp",
+            "gate_magnitudes",
+        }
+        if self.nonlin_kind not in supported_nonlinearities:
+            choices = ", ".join(sorted(supported_nonlinearities))
+            raise ValueError(
+                f"Unsupported nonlin_kind {self.nonlin_kind!r}; expected one of: {choices}."
+            )
+        if self.cutoff_radius <= 0.0:
+            raise ValueError("cutoff_radius must be positive")
+
 
 def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
     if not isinstance(dtype, torch.dtype):
@@ -260,6 +270,16 @@ def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:
         assert isinstance(dtype, torch.dtype)
 
     return dtype
+
+
+def smooth_cutoff(r: torch.Tensor, cutoff_radius: float) -> torch.Tensor:
+    """C2 quintic cutoff: one at zero and zero with two zero derivatives at rc."""
+    if cutoff_radius <= 0.0:
+        raise ValueError("cutoff_radius must be positive")
+    x = (r / float(cutoff_radius)).clamp(min=0.0, max=1.0)
+    # Factored form avoids cancellation in 1 - 10 x^3 + 15 x^4 - 6 x^5
+    # when x is close to one.
+    return (1.0 - x).pow(3) * (1.0 + 3.0 * x + 6.0 * x.square())
 
 
 # ════════════════════════════════════════════════════════════════════════

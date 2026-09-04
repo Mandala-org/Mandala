@@ -6,7 +6,7 @@ correctly adheres to rotational equivariance. The core methodology for each test
 
 1.  Initialize the layer, often with various configurations using pytest.mark.parametrize.
 2.  Generate a random input tensor `x` that conforms to the layer's input Irreps.
-3.  Generate a random SO(3) rotation matrix `R`.
+3.  Generate proper and improper O(3) transformation matrices `R`.
 4.  Calculate the Wigner-D matrices `D_in` and `D_out` for the input and output Irreps.
 5.  Transform the input tensor with the rotation: `x_rotated = x @ D_in.T`.
 6.  Pass both the original and the transformed inputs through the layer to get `y` and `y_transformed_input`.
@@ -21,8 +21,7 @@ import sys
 from pathlib import Path
 import pytest
 import torch
-from scipy.spatial.transform import Rotation as R
-from e3nn.o3 import Irreps
+from e3nn.o3 import Irreps, rand_matrix
 
 # Add project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
@@ -42,7 +41,20 @@ from data.edge_alignment import build_prediction_edge_metadata  # noqa: E402
 
 def random_rotation_matrix() -> torch.Tensor:
     """Generates a random 3x3 SO(3) rotation matrix."""
-    return torch.tensor(R.random().as_matrix(), dtype=torch.float32)
+    return rand_matrix()
+
+
+def o3_transforms() -> list[torch.Tensor]:
+    improper = rand_matrix()
+    improper[:, 0] *= -1.0
+    transforms = [
+        rand_matrix(),
+        -torch.eye(3),
+        torch.diag(torch.tensor([-1.0, 1.0, 1.0])),
+        improper,
+    ]
+    assert [round(torch.det(r).item()) for r in transforms] == [1, -1, -1, -1]
+    return transforms
 
 
 def generate_equivariant_input(irreps: Irreps, batch_size: int = 1) -> torch.Tensor:
@@ -88,6 +100,7 @@ def test_edge_encoder_equivariance(l_max):
     # Inputs
     edge_type_idx = torch.randint(0, N_edge_types, (E,))
     length_emb = torch.randn(E, n_radial)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
     sh = generate_equivariant_input(layer.sh_irreps, batch_size=E)
 
     # Rotation
@@ -99,8 +112,8 @@ def test_edge_encoder_equivariance(l_max):
     sh_rotated = sh @ D_in.T
 
     # Apply layer
-    y = layer(edge_type_idx, length_emb, sh)
-    y_rotated_input = layer(edge_type_idx, length_emb, sh_rotated)
+    y = layer(edge_type_idx, length_emb, sh, edge_length)
+    y_rotated_input = layer(edge_type_idx, length_emb, sh_rotated, edge_length)
 
     # Check equivariance
     y_rotated_output = y @ D_out.T
@@ -118,22 +131,12 @@ def test_activations_equivariance(nonlin_kind, irreps_str):
     irreps = Irreps(irreps_str)
     layer = make_nonlinearity(irreps, cfg)
 
-    # Input and Rotation
+    # Inputs and proper/improper transformations
     x = generate_equivariant_input(irreps, batch_size=B)
-    rot = random_rotation_matrix()
-    D_in = irreps.D_from_matrix(rot)
-    D_out = irreps.D_from_matrix(rot)  # Activations don't change irreps
-
-    # Transform input
-    x_rotated = x @ D_in.T
-
-    # Apply layer
     y = layer(x)
-    y_rotated_input = layer(x_rotated)
-
-    # Check equivariance
-    y_rotated_output = y @ D_out.T
-    assert torch.allclose(y_rotated_input, y_rotated_output, atol=2e-4)
+    for transform in o3_transforms():
+        d = irreps.D_from_matrix(transform)
+        assert torch.allclose(layer(x @ d.T), y @ d.T, atol=2e-4, rtol=2e-4)
 
 
 @pytest.mark.parametrize(
@@ -163,6 +166,7 @@ def test_edge_update_block_equivariance(
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = generate_equivariant_input(sh_irreps, batch_size=E)
     edge_length_emb = torch.randn(E, cfg.n_radial)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
     rot = random_rotation_matrix()
     D_hidden = hidden_irreps.D_from_matrix(rot)
     D_sh = sh_irreps.D_from_matrix(rot)
@@ -173,9 +177,14 @@ def test_edge_update_block_equivariance(
     edge_sh_rotated = edge_sh @ D_sh.T
 
     # Apply layer
-    y = layer(node, edge, edge_index, edge_sh, edge_length_emb)
+    y = layer(node, edge, edge_index, edge_sh, edge_length_emb, edge_length)
     y_rotated_input = layer(
-        node_rotated, edge_rotated, edge_index, edge_sh_rotated, edge_length_emb
+        node_rotated,
+        edge_rotated,
+        edge_index,
+        edge_sh_rotated,
+        edge_length_emb,
+        edge_length,
     )
 
     # Check equivariance
@@ -208,6 +217,7 @@ def test_node_update_block_equivariance(
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = generate_equivariant_input(sh_irreps, batch_size=E)
     edge_length_emb = torch.randn(E, cfg.n_radial)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
     rot = random_rotation_matrix()
     D_hidden = hidden_irreps.D_from_matrix(rot)
     D_sh = sh_irreps.D_from_matrix(rot)
@@ -218,9 +228,14 @@ def test_node_update_block_equivariance(
     edge_sh_rotated = edge_sh @ D_sh.T
 
     # Apply layer
-    y = layer(node, edge, edge_index, edge_sh, edge_length_emb)
+    y = layer(node, edge, edge_index, edge_sh, edge_length_emb, edge_length)
     y_rotated_input = layer(
-        node_rotated, edge_rotated, edge_index, edge_sh_rotated, edge_length_emb
+        node_rotated,
+        edge_rotated,
+        edge_index,
+        edge_sh_rotated,
+        edge_length_emb,
+        edge_length,
     )
 
     # Check equivariance
@@ -243,24 +258,27 @@ def test_message_block_equivariance():
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = generate_equivariant_input(sh_irreps, batch_size=E)
     edge_length_emb = torch.randn(E, cfg.n_radial)
-    rot = random_rotation_matrix()
-    D_hidden = hidden_irreps.D_from_matrix(rot)
-    D_sh = sh_irreps.D_from_matrix(rot)
-
-    # Transform inputs
-    node_rotated = node @ D_hidden.T
-    edge_rotated = edge @ D_hidden.T
-    edge_sh_rotated = edge_sh @ D_sh.T
-
-    # Apply layer
-    node_out, edge_out = layer(node, edge, edge_index, edge_sh, edge_length_emb)
-    node_out_rot, edge_out_rot = layer(
-        node_rotated, edge_rotated, edge_index, edge_sh_rotated, edge_length_emb
+    edge_length = torch.rand(E) * cfg.cutoff_radius
+    node_out, edge_out = layer(
+        node, edge, edge_index, edge_sh, edge_length_emb, edge_length
     )
-
-    # Check equivariance for both outputs
-    assert torch.allclose(node_out_rot, node_out @ D_hidden.T, atol=2e-4)
-    assert torch.allclose(edge_out_rot, edge_out @ D_hidden.T, atol=2e-4)
+    for transform in o3_transforms():
+        d_hidden = hidden_irreps.D_from_matrix(transform)
+        d_sh = sh_irreps.D_from_matrix(transform)
+        node_out_transformed, edge_out_transformed = layer(
+            node @ d_hidden.T,
+            edge @ d_hidden.T,
+            edge_index,
+            edge_sh @ d_sh.T,
+            edge_length_emb,
+            edge_length,
+        )
+        assert torch.allclose(
+            node_out_transformed, node_out @ d_hidden.T, atol=3e-4, rtol=3e-4
+        )
+        assert torch.allclose(
+            edge_out_transformed, edge_out @ d_hidden.T, atol=3e-4, rtol=3e-4
+        )
 
 
 @pytest.mark.parametrize("head_use_mlp_log_scale", [True, False])

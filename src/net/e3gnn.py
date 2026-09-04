@@ -23,7 +23,7 @@ import time
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix, IrrepsBlockData
-from data.envelope import scale_block_matrix_by_edge_values
+from data.envelope import evaluate_pair_envelope, scale_block_matrix_by_edge_values
 from data.graph_features import compute_edge_geometry_from_static_edges
 
 from net.common import Config, resolve_hidden_irreps
@@ -310,63 +310,67 @@ class E3GNN(pl.LightningModule):
     def _matrix_envelope_mode(self) -> str:
         return str(getattr(self.cfg, "hamiltonian_envelope_mode", "off")).lower()
 
-    def _physicalize_predicted_matrix(
-        self,
-        *,
-        name: str,
-        pred_matrix: BlockMatrix,
-        x: Dict[str, Any],
+    @staticmethod
+    def _symmetrize_matrix(
+        matrix: BlockMatrix,
+        alignment: dict[str, tuple[str, torch.Tensor]] | None,
     ) -> BlockMatrix:
+        if alignment is None:
+            raise ValueError("Symmetrization requires precomputed reverse alignment.")
+        return matrix.symmetrize_aligned(alignment)
+
+    def physicalize_matrices(
+        self,
+        matrices: Dict[str, BlockMatrix],
+        x: Dict[str, Any],
+        *,
+        training: bool,
+    ) -> Dict[str, BlockMatrix]:
+        """Apply the canonical prediction cleanup used by training and evaluation.
+
+        The envelope is always part of the physical operator. Symmetrization is
+        optional only for training; validation, testing, and inference always
+        return Hermitized sparse matrices.
+        """
         mode = self._matrix_envelope_mode()
-        if name not in {"hamiltonian", "overlap"} or mode == "off":
-            return pred_matrix
-        if "edge_envelope" not in x:
-            raise ValueError(
-                "hamiltonian_envelope_mode requires edge_envelope in the batch."
-            )
-        if "edge_partitions" not in x:
-            raise ValueError(
-                "hamiltonian_envelope_mode requires edge_partitions in the batch."
-            )
-        if mode in {"multiply_prediction", "normalize_target"}:
-            return scale_block_matrix_by_edge_values(
-                pred_matrix,
-                x["edge_envelope"],
-                x["edge_partitions"],
-            )
-        raise ValueError(
-            "hamiltonian_envelope_mode must be one of 'off', "
-            "'normalize_target', or 'multiply_prediction'."
-        )
+        if mode != "off":
+            if "edge_envelope" not in x or "edge_partitions" not in x:
+                raise ValueError(
+                    "hamiltonian_envelope_mode requires edge_envelope and "
+                    "edge_partitions in the batch."
+                )
+        should_symmetrize = (not training) or bool(self.cfg.symmetrize_output)
+        alignment = x.get("pred_reverse_alignment", x.get("pred_trace_alignment"))
+        physical: Dict[str, BlockMatrix] = {}
+        for name, matrix in matrices.items():
+            if name in {"hamiltonian", "overlap"} and mode != "off":
+                matrix = scale_block_matrix_by_edge_values(
+                    matrix,
+                    x["edge_envelope"],
+                    x["edge_partitions"],
+                )
+            if should_symmetrize:
+                matrix = self._symmetrize_matrix(matrix, alignment)
+            physical[name] = matrix
+        return physical
 
     def predicted_irreps_to_block_matrices(
         self,
         predictions: Dict[str, IrrepsBlockData],
         x: Dict[str, Any],
         *,
-        physical: bool = True,
+        training: bool = False,
     ) -> Dict[str, BlockMatrix]:
         matrices = {
             name: pred.to_blocks(self.mapper) for name, pred in predictions.items()
         }
-        if not physical:
-            return matrices
-        return {
-            name: self._physicalize_predicted_matrix(
-                name=name,
-                pred_matrix=matrix,
-                x=x,
-            )
-            for name, matrix in matrices.items()
-        }
+        return self.physicalize_matrices(matrices, x, training=training)
 
     def predict_matrices(
         self,
         x: Dict[str, Any],
-        *,
-        physical: bool = True,
     ) -> Dict[str, BlockMatrix]:
-        """Run inference and return predicted sparse block matrices.
+        """Run inference and return canonical physicalized sparse matrices.
 
         This is a convenience wrapper around ``forward`` and
         ``predicted_irreps_to_block_matrices``. It does not move ``x`` between
@@ -380,7 +384,7 @@ class E3GNN(pl.LightningModule):
             return self.predicted_irreps_to_block_matrices(
                 predictions,
                 x,
-                physical=physical,
+                training=False,
             )
         finally:
             self.train(was_training)
@@ -440,17 +444,19 @@ class E3GNN(pl.LightningModule):
             self._spectral_loss_debug_printed = True
         return loss, stats
 
-    def _apply_matrix_envelope_mode(
+    def _prepare_loss_matrices(
         self,
         *,
         name: str,
         pred_matrix: BlockMatrix,
         target_matrix: BlockMatrix,
         x: Dict[str, Any],
-    ) -> tuple[BlockMatrix, BlockMatrix, BlockMatrix]:
+        training: bool,
+        physical_pred_matrix: BlockMatrix,
+    ) -> tuple[BlockMatrix, BlockMatrix]:
         mode = self._matrix_envelope_mode()
-        if name not in {"hamiltonian", "overlap"} or mode == "off":
-            return pred_matrix, target_matrix, pred_matrix
+        if name not in {"hamiltonian", "overlap"} or mode != "normalize_target":
+            return physical_pred_matrix, target_matrix
         if "edge_envelope" not in x:
             raise ValueError(
                 "hamiltonian_envelope_mode requires edge_envelope in the batch."
@@ -462,32 +468,27 @@ class E3GNN(pl.LightningModule):
         edge_envelope = x["edge_envelope"]
         edge_partitions = x["edge_partitions"]
         eps = float(getattr(self.cfg, "hamiltonian_envelope_eps", 1.0e-12))
-        if mode == "multiply_prediction":
-            scaled_pred = scale_block_matrix_by_edge_values(
-                pred_matrix,
-                edge_envelope,
-                edge_partitions,
-            )
-            return scaled_pred, target_matrix, scaled_pred
-        if mode == "normalize_target":
-            physical_pred = scale_block_matrix_by_edge_values(
-                pred_matrix,
-                edge_envelope,
-                edge_partitions,
-            )
-            normalized_target = scale_block_matrix_by_edge_values(
-                target_matrix,
-                edge_envelope,
-                edge_partitions,
-                inverse=True,
-                eps=eps,
-                allow_prefix_trim=True,
-            )
-            return pred_matrix, normalized_target, physical_pred
-        raise ValueError(
-            "hamiltonian_envelope_mode must be one of 'off', "
-            "'normalize_target', or 'multiply_prediction'."
+        normalized_target = scale_block_matrix_by_edge_values(
+            target_matrix,
+            edge_envelope,
+            edge_partitions,
+            inverse=True,
+            eps=eps,
+            allow_prefix_trim=True,
         )
+        loss_pred = pred_matrix
+        if (not training) or bool(self.cfg.symmetrize_output):
+            pred_alignment = x.get(
+                "pred_reverse_alignment", x.get("pred_trace_alignment")
+            )
+            target_alignment = x.get(
+                "target_reverse_alignment", x.get("pred_trace_alignment")
+            )
+            loss_pred = self._symmetrize_matrix(loss_pred, pred_alignment)
+            normalized_target = self._symmetrize_matrix(
+                normalized_target, target_alignment
+            )
+        return loss_pred, normalized_target
 
     def _edge_loss_weights(self, x: Dict[str, Any]) -> torch.Tensor | None:
         mode = str(getattr(self.cfg, "loss_weighting_mode", "off")).lower()
@@ -574,20 +575,30 @@ class E3GNN(pl.LightningModule):
         return False
 
     def _populate_edge_features(self, x: Dict[str, Any]) -> None:
+        edge_index = x["edge_index"]
+        edge_shift = x["edge_shift"]
+        if x["box"] is None:
+            displacement = x["positions"][edge_index[1]] - x["positions"][edge_index[0]]
+        else:
+            displacement = (
+                x["positions"][edge_index[1]]
+                - x["positions"][edge_index[0]]
+                + edge_shift.T.to(dtype=x["positions"].dtype) @ x["box"]
+            )
+        current_edge_length = torch.linalg.norm(displacement, dim=-1)
         radial_lengths = None
         radial_basis_end = None
         if (
             str(getattr(self.cfg, "pair_distance_normalization", "off")).lower()
             == "pair_r0"
         ):
-            if "edge_length" not in x or "edge_r0" not in x:
+            if "edge_r0" not in x:
                 raise ValueError(
-                    "pair_distance_normalization='pair_r0' requires edge_length "
-                    "and edge_r0 in the batch."
+                    "pair_distance_normalization='pair_r0' requires edge_r0 in the batch."
                 )
-            radial_lengths = x["edge_length"] / x["edge_r0"].clamp_min(1e-12)
+            radial_lengths = current_edge_length / x["edge_r0"].clamp_min(1e-12)
             radial_basis_end = 1.0
-        edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
+        edge_length_emb, edge_sh, edge_length = compute_edge_geometry_from_static_edges(
             positions=x["positions"],
             box=x["box"],
             edge_index=x["edge_index"],
@@ -601,6 +612,23 @@ class E3GNN(pl.LightningModule):
         )
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh
+        x["edge_length"] = edge_length
+        if self._matrix_envelope_mode() != "off":
+            missing = {
+                "edge_envelope_family",
+                "edge_envelope_pair_params",
+            }.difference(x)
+            if missing:
+                raise ValueError(
+                    "Differentiable envelope evaluation requires per-edge envelope "
+                    f"metadata; missing: {', '.join(sorted(missing))}."
+                )
+            x["edge_envelope"] = evaluate_pair_envelope(
+                edge_length,
+                family=x["edge_envelope_family"],
+                pair_params=x["edge_envelope_pair_params"],
+                reference_x_max=x.get("edge_envelope_reference_x_max"),
+            )
 
     def _partial_train_mask(self, edges_5d: torch.Tensor) -> torch.Tensor | None:
         if self.cfg.partial_train is None:
@@ -724,6 +752,7 @@ class E3GNN(pl.LightningModule):
             x["edge_type_idx"],
             x["edge_length_emb"],
             x["edge_sh"],
+            x["edge_length"],
             activation_mags=activation_mags,
         )
         if self.cfg.safety_checks and torch.is_grad_enabled():
@@ -738,6 +767,7 @@ class E3GNN(pl.LightningModule):
                 edge_index=x["edge_index"],
                 edge_sh=x["edge_sh"],
                 edge_length_emb=x["edge_length_emb"],
+                edge_length=x["edge_length"],
                 node_one_hot=x["node_one_hot"],
                 edge_one_hot=x["edge_one_hot"],
                 edge_type_idx=x["edge_type_idx"],
@@ -785,12 +815,16 @@ class E3GNN(pl.LightningModule):
             name: preds_irreps[name].to_blocks(self.mapper)
             for name in self.cfg.matrix_targets
         }
+        physical_pred_matrices = self.physicalize_matrices(
+            preds_matrix,
+            x,
+            training=stage == "train",
+        )
         t_map_end = time.perf_counter() if record_timings else 0.0
 
         # --- Matrix Loss Calculation ------------------------------------
         combined_matrix_losses = {}
         combined_pair_losses: dict[str, dict[str, torch.Tensor]] = {}
-        physical_pred_matrices: dict[str, BlockMatrix] = {}
         target_matrices: dict[str, BlockMatrix] = {
             name: (
                 y[name].to_blocks(self.mapper)
@@ -847,17 +881,6 @@ class E3GNN(pl.LightningModule):
                 mae_val += torch.mean(torch.abs(diff))
             return mse_val, mae_val
 
-        def _symmetrize_aligned(
-            matrix: BlockMatrix,
-            alignment: dict[str, tuple[str, torch.Tensor]] | None,
-        ) -> BlockMatrix:
-            if alignment is None:
-                raise ValueError(
-                    "Symmetrization requires precomputed reverse alignment."
-                )
-            transposed = matrix.transpose_aligned(alignment)
-            return matrix.add_aligned(transposed) * 0.5
-
         for name in self.cfg.matrix_targets:
             per_irrep_metrics: dict[str, dict[str, torch.Tensor]] = {}
             pred_irrep_blocks = None
@@ -866,15 +889,15 @@ class E3GNN(pl.LightningModule):
             raw_pred_matrix = preds_matrix[name]
             raw_target = y[name]
             raw_target_matrix = target_matrices[name]
-            loss_pred_matrix, loss_target_matrix, metric_pred_matrix = (
-                self._apply_matrix_envelope_mode(
-                    name=name,
-                    pred_matrix=raw_pred_matrix,
-                    target_matrix=raw_target_matrix,
-                    x=x,
-                )
+            metric_pred_matrix = physical_pred_matrices[name]
+            loss_pred_matrix, loss_target_matrix = self._prepare_loss_matrices(
+                name=name,
+                pred_matrix=raw_pred_matrix,
+                target_matrix=raw_target_matrix,
+                x=x,
+                training=stage == "train",
+                physical_pred_matrix=metric_pred_matrix,
             )
-            physical_pred_matrices[name] = metric_pred_matrix
             matrix_edge_weights = (
                 edge_loss_weights if name in {"hamiltonian", "overlap"} else None
             )
@@ -902,27 +925,38 @@ class E3GNN(pl.LightningModule):
                         "hamiltonian_envelope_mode is not supported with train_on_irrep_parts."
                     )
                 target_irreps = raw_target_matrix.to_vectors(self.mapper)
-                loss_mse_val, loss_mae_val, per_irrep_metrics = (
-                    self._compute_irrep_part_losses(preds_irreps[name], target_irreps)
+                pred_for_loss = (
+                    metric_pred_matrix.to_vectors(self.mapper)
+                    if stage != "train" or self.cfg.symmetrize_output
+                    else preds_irreps[name]
                 )
-                metric_mse_val = loss_mse_val
-                metric_mae_val = loss_mae_val
+                loss_mse_val, loss_mae_val, per_irrep_metrics = (
+                    self._compute_irrep_part_losses(pred_for_loss, target_irreps)
+                )
+                metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
+                    metric_pred_matrix, raw_target_matrix, name
+                )
             elif self.cfg.train_target == "irreps":
                 loss_mse_val = torch.tensor(0.0, device=self.device)
                 loss_mae_val = torch.tensor(0.0, device=self.device)
+                pred_irreps_for_loss = (
+                    metric_pred_matrix.to_vectors(self.mapper)
+                    if stage != "train" or self.cfg.symmetrize_output
+                    else preds_irreps[name]
+                )
                 for key, targets in raw_target.pair_vectors.items():
-                    if key not in preds_irreps[name].pair_vectors:
+                    if key not in pred_irreps_for_loss.pair_vectors:
                         raise ValueError(
                             f"Key {key} not found in predicted irreps for {name}."
                         )
-                    preds = preds_irreps[name].pair_vectors[key]
+                    preds = pred_irreps_for_loss.pair_vectors[key]
                     target_n = targets.shape[0]
                     if preds.shape[0] < target_n:
                         raise ValueError(
                             f"Predicted vectors for matrix {name}, key {key} are too "
                             f"short: pred_len={preds.shape[0]} target_len={target_n}"
                         )
-                    pred_edges = preds_irreps[name].pair_edges[key][:, :target_n]
+                    pred_edges = pred_irreps_for_loss.pair_edges[key][:, :target_n]
                     target_edges = raw_target.pair_edges[key][:, :target_n]
                     if self.cfg.safety_checks:
                         assert torch.equal(
@@ -943,48 +977,12 @@ class E3GNN(pl.LightningModule):
                         1 - self.cfg.loss_l1_fraction
                     ) * pair_mse + self.cfg.loss_l1_fraction * pair_mae
 
-                if stage != "train" or self.cfg.symmetrize_output:
-                    metric_pred_matrix = _symmetrize_aligned(
-                        metric_pred_matrix,
-                        x.get(
-                            "pred_reverse_alignment",
-                            x.get("pred_trace_alignment"),
-                        ),
-                    )
                 metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
                     metric_pred_matrix, raw_target_matrix, name
                 )
             else:
                 p = loss_pred_matrix
                 t = loss_target_matrix
-                loss_and_metric_share_prediction = metric_pred_matrix is p
-
-                should_symmetrize = self.cfg.symmetrize_output or stage != "train"
-                if should_symmetrize:
-                    p = _symmetrize_aligned(
-                        p,
-                        x.get("pred_reverse_alignment", x.get("pred_trace_alignment")),
-                    )
-                    if self._matrix_envelope_mode() == "normalize_target":
-                        t = _symmetrize_aligned(
-                            t,
-                            x.get(
-                                "target_reverse_alignment",
-                                x.get("pred_trace_alignment"),
-                            ),
-                        )
-
-                if should_symmetrize:
-                    if loss_and_metric_share_prediction:
-                        metric_pred_matrix = p
-                    else:
-                        metric_pred_matrix = _symmetrize_aligned(
-                            metric_pred_matrix,
-                            x.get(
-                                "pred_reverse_alignment",
-                                x.get("pred_trace_alignment"),
-                            ),
-                        )
 
                 p_items, t_items = p.pair_blocks, t.pair_blocks
 
@@ -1254,7 +1252,7 @@ class E3GNN(pl.LightningModule):
             and y.get("forces") is not None
         )
         if self.cfg.enable_forces and y.get("forces") is not None:
-            forces_pred = self.get_forces(preds_irreps, x["positions"], x["box"])
+            forces_pred = self.get_forces(preds_irreps, x)
             forces_true = y["forces"]
             metrics[f"{stage}/forces_mae"] = torch.mean(
                 torch.abs(forces_pred - forces_true)
@@ -1505,9 +1503,7 @@ class E3GNN(pl.LightningModule):
     def predictions_to_snapshot(
         self,
         predictions: Dict[str, IrrepsBlockData],
-        positions: torch.Tensor,
-        box: torch.Tensor,
-        x: Dict[str, Any] | None = None,
+        x: Dict[str, Any],
     ) -> "Snapshot":
         required = {"hamiltonian", "overlap", "density"}
         missing = sorted(required.difference(predictions))
@@ -1516,15 +1512,10 @@ class E3GNN(pl.LightningModule):
                 "Energy-derived force/stress evaluation requires predictions for "
                 f"hamiltonian, overlap, and density; missing: {', '.join(missing)}."
             )
-        if x is None and self._matrix_envelope_mode() != "off":
-            raise ValueError(
-                "predictions_to_snapshot requires the input batch `x` when "
-                "hamiltonian_envelope_mode is enabled."
-            )
         block_matrices = self.predicted_irreps_to_block_matrices(
             predictions,
-            x if x is not None else {},
-            physical=True,
+            x,
+            training=False,
         )
         return Snapshot(
             hamiltonian=(
@@ -1538,34 +1529,33 @@ class E3GNN(pl.LightningModule):
             density=(
                 block_matrices["density"] if "density" in block_matrices else None
             ),
-            positions=positions,
-            box=box,
+            positions=x["positions"],
+            box=x["box"],
         )
 
     def get_forces(
         self,
         predictions: Dict[str, IrrepsBlockData],
-        positions: torch.Tensor,
-        box: torch.Tensor,
+        x: Dict[str, Any],
     ) -> torch.Tensor:
         """
         Compute forces from predictions and positions.
         Args:
             predictions: Output from the forward pass, containing hamiltonian,
                          overlap, and density matrices.
-            positions: Atomic positions (N, 3).
-            box: Lattice box matrix (3, 3).
+            x: Original model input containing the differentiable positions,
+               box, edge metadata, and any envelope parameters.
         Returns:
             Forces as a tensor of shape (N, 3).
         Comments:
             - Forces are computed as -∂E/∂r, where E is the energy from the hamiltonian.
             - No Pulay correction needed
         """
-        snapshot = self.predictions_to_snapshot(predictions, positions, box)
+        snapshot = self.predictions_to_snapshot(predictions, x)
         energy = snapshot.get_energy()
         grad_pos = torch.autograd.grad(
             energy,
-            positions,
+            x["positions"],
             create_graph=self.cfg.train_on_forces,  # needed for second derivatives
             retain_graph=True,
         )[0]
@@ -1574,25 +1564,24 @@ class E3GNN(pl.LightningModule):
     def get_box_grad(
         self,
         predictions: Dict[str, IrrepsBlockData],
-        positions: torch.Tensor,
-        box: torch.Tensor,
+        x: Dict[str, Any],
     ) -> torch.Tensor:
         """
         Compute gradient of energy with respect to box.
         Args:
             predictions: Output from the forward pass, containing hamiltonian,
                          overlap, and density matrices.
-            positions: Atomic positions (N, 3).
-            box: Lattice box matrix (3, 3).
+            x: Original model input containing the differentiable box and edge
+               metadata.
         Returns:
             Gradient of energy with respect to box as a tensor of shape (3, 3).
         """
-        snapshot = self.predictions_to_snapshot(predictions, positions, box)
+        snapshot = self.predictions_to_snapshot(predictions, x)
         energy = snapshot.get_energy()
         # 1. get dE/dh
         grad_box = torch.autograd.grad(
             energy,
-            box,
+            x["box"],
             create_graph=self.cfg.train_on_stress,  # needed for second derivatives
             retain_graph=True,
         )[0]
@@ -1601,15 +1590,15 @@ class E3GNN(pl.LightningModule):
     def get_stress(
         self,
         predictions: Dict[str, IrrepsBlockData],
-        positions: torch.Tensor,
-        box: torch.Tensor,
+        x: Dict[str, Any],
         symmetrize: bool = True,
     ) -> torch.Tensor:
         """
         Compute stress tensor from energy and box.
         Args:
-            energy: Scalar energy value.
-            box: Lattice box matrix (3, 3).
+            predictions: Output from the forward pass.
+            x: Original model input containing the differentiable box and edge
+               metadata.
         Returns:
             Stress tensor as a (3, 3) tensor.
         Comments:
@@ -1617,12 +1606,12 @@ class E3GNN(pl.LightningModule):
             - No Pulay correction needed
         """
         # 1. get dE/dh
-        grad_box = self.get_box_grad(predictions, positions, box)
+        grad_box = self.get_box_grad(predictions, x)
         # 2. compute volume
-        volume = torch.det(box)
+        volume = torch.det(x["box"])
         # 3. compute stress tensor σ_{αβ} = (1/Ω) ∑_γ h_{γα} (dE/dh_{γβ})
         # stress = (1/Ω) * box^T @ grad_box
-        stress = torch.matmul(box.t(), grad_box) / volume
+        stress = torch.matmul(x["box"].t(), grad_box) / volume
         # 4. optionally symmetrize: σ -> (σ+σ^T)/2
         if symmetrize:
             stress = 0.5 * (stress + stress.transpose(-1, -2))
@@ -1633,11 +1622,11 @@ class E3GNN(pl.LightningModule):
         if not x["positions"].requires_grad:
             x["positions"] = x["positions"].clone().detach().requires_grad_(True)
         predictions = self(x)
-        return self.get_forces(predictions, x["positions"], x["box"])
+        return self.get_forces(predictions, x)
 
     def predict_stress(self, x: Dict[str, Any]) -> torch.Tensor:
         x = dict(x)
         if x.get("box") is not None and not x["box"].requires_grad:
             x["box"] = x["box"].clone().detach().requires_grad_(True)
         predictions = self(x)
-        return self.get_stress(predictions, x["positions"], x["box"])
+        return self.get_stress(predictions, x)

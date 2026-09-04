@@ -35,6 +35,7 @@ def test_edge_encoder_with_offdiag():
     E = 7
     edge_type_idx = torch.randint(0, 3, (E,))
     length_emb = torch.randn(E, cfg.n_radial)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
     sh = torch.randn(E, sh_irreps.dim)
-    out = enc(edge_type_idx, length_emb, sh)
+    out = enc(edge_type_idx, length_emb, sh, edge_length)
     assert out.shape == (E, hid.dim)

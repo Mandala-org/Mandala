@@ -21,7 +21,13 @@ from e3nn.o3 import FullyConnectedTensorProduct
 from e3nn.nn import Dropout
 from e3nn.nn import Gate
 
-from net.common import Config, E3MLP, RadialMLP, SeparateWeightTensorProduct
+from net.common import (
+    Config,
+    E3MLP,
+    RadialMLP,
+    SeparateWeightTensorProduct,
+    smooth_cutoff,
+)
 from net.activations import make_nonlinearity
 from net.layer_norm import E3LayerNorm
 
@@ -265,6 +271,7 @@ class EquiConv(nn.Module):
         fea_in1: torch.Tensor,
         fea_in2: torch.Tensor,
         edge_length_emb: torch.Tensor,
+        edge_length: torch.Tensor,
         edge_type_idx: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
@@ -272,6 +279,7 @@ class EquiConv(nn.Module):
             fea_in1: Geometric features (batch, irreps_in1.dim)
             fea_in2: Spherical harmonics (batch, irreps_in2.dim)
             edge_length_emb: Radial embeddings (batch, n_radial)
+            edge_length: Physical edge distances (batch,) used by the cutoff.
 
         Returns:
             Tensor of shape (batch, irreps_out.dim)
@@ -331,7 +339,8 @@ class EquiConv(nn.Module):
         if self._radial_weight_index.numel() == 0:
             return torch.zeros(z.shape[0], 0, dtype=z.dtype, device=z.device)
         component_weights = weights.index_select(1, self._radial_weight_index)
-        return z * component_weights
+        cutoff = smooth_cutoff(edge_length, self.cfg.cutoff_radius).unsqueeze(-1)
+        return z * component_weights * cutoff
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -487,6 +496,7 @@ class EdgeUpdateBlock(nn.Module):
         edge_index: torch.Tensor,
         edge_sh: torch.Tensor,
         edge_length_emb: torch.Tensor,
+        edge_length: torch.Tensor,
         edge_one_hot: torch.Tensor = None,
         edge_type_idx: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -522,7 +532,13 @@ class EdgeUpdateBlock(nn.Module):
         fea_in = torch.cat([node_context, edge], dim=-1)
 
         # EquiConv
-        edge = self.conv(fea_in, edge_sh, edge_length_emb, edge_type_idx=edge_type_idx)
+        edge = self.conv(
+            fea_in,
+            edge_sh,
+            edge_length_emb,
+            edge_length,
+            edge_type_idx=edge_type_idx,
+        )
 
         # Post-linear
         edge = self.lin_post(edge)
@@ -723,6 +739,7 @@ class NodeUpdateBlock(nn.Module):
         edge_index: torch.Tensor,
         edge_sh: torch.Tensor,
         edge_length_emb: torch.Tensor,
+        edge_length: torch.Tensor,
         node_one_hot: torch.Tensor = None,
         edge_type_idx: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -753,7 +770,11 @@ class NodeUpdateBlock(nn.Module):
 
         # EquiConv to create messages
         edge_messages = self.conv(
-            fea_in, edge_sh, edge_length_emb, edge_type_idx=edge_type_idx
+            fea_in,
+            edge_sh,
+            edge_length_emb,
+            edge_length,
+            edge_type_idx=edge_type_idx,
         )
 
         # Aggregate messages to nodes
@@ -888,6 +909,7 @@ class MessageBlock(nn.Module):
         edge_index: torch.Tensor,
         edge_sh: torch.Tensor,
         edge_length_emb: torch.Tensor,
+        edge_length: torch.Tensor,
         node_one_hot: torch.Tensor = None,
         edge_one_hot: torch.Tensor = None,
         edge_type_idx: torch.Tensor | None = None,
@@ -915,6 +937,7 @@ class MessageBlock(nn.Module):
             edge_index,
             edge_sh,
             edge_length_emb,
+            edge_length,
             node_one_hot,
             edge_type_idx=edge_type_idx,
         )
@@ -932,6 +955,7 @@ class MessageBlock(nn.Module):
             edge_index,
             edge_sh,
             edge_length_emb,
+            edge_length,
             edge_one_hot,
             edge_type_idx=edge_type_idx,
         )

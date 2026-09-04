@@ -77,6 +77,7 @@ def make_dummy_graph(cfg, mapper):
         "edge_type_idx": edge_type_idx,
         "edge_one_hot": edge_one_hot,
         "edge_length_emb": edge_len,
+        "edge_length": torch.zeros(E, dtype=cfg.dtype),
         "edge_sh": edge_sh,
         "edge_index": edge_index,
         "edge_shift": edge_shift,

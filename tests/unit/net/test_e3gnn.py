@@ -8,9 +8,10 @@ from data.edge_alignment import build_prediction_edge_metadata
 from net.common import Config as ProductionConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from net.e3gnn import E3GNN
-from e3nn.o3 import Irreps
+from e3nn.o3 import Irreps, rand_matrix
 from data.block_matrix import IrrepsBlockData
 from data.graph_features import compute_graph_features
+from net.e3mlp_variants import IrrepCopyScale
 
 
 def Config(**overrides):
@@ -83,7 +84,44 @@ def _build_static_graph_x(
         x["edge_length_emb"] = edge_length_emb
     if edge_sh is not None:
         x["edge_sh"] = edge_sh
+    if positions is not None:
+        displacement = positions[edge_index[1]] - positions[edge_index[0]]
+        if box is not None:
+            displacement = displacement + edge_shift.T.to(positions.dtype) @ box
+        x["edge_length"] = torch.linalg.norm(displacement, dim=-1)
     return x
+
+
+def _asymmetric_scalar_prediction(mapper: BlockIrrepMapper):
+    edges = torch.tensor(
+        [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 1, 0, 1],
+            [0, 1, 1, 0],
+        ],
+        dtype=torch.long,
+    )
+    values = torch.tensor([[1.0], [2.0], [3.0], [7.0]])
+    prediction = IrrepsBlockData(
+        atoms=("H", "H"),
+        atom_counts=Counter(("H", "H")),
+        pair_vectors={"H-H": values},
+        pair_edges={"H-H": edges},
+        lookup={tuple(edge.tolist()): ("H-H", i) for i, edge in enumerate(edges.T)},
+        orbital_cfg=mapper.orbital_cfg,
+    )
+    metadata = build_prediction_edge_metadata(
+        edge_index=edges[3:],
+        edge_shift=edges[:3],
+        edge_type_idx=torch.zeros(4, dtype=torch.long),
+        atoms=("H", "H"),
+        edge_types=mapper.edge_types,
+        edge_type2idx=mapper.edge_type2idx,
+        separate_shifted_self=False,
+    )
+    return prediction, {**metadata}
 
 
 class MockHead(nn.Module):
@@ -93,6 +131,132 @@ class MockHead(nn.Module):
 
     def forward(self, *args, **kwargs):
         return self.mock_impl(*args, **kwargs)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "training,symmetrize_output,expected_offdiag",
+    [
+        (True, False, (3.0, 7.0)),
+        (True, True, (5.0, 5.0)),
+        (False, False, (5.0, 5.0)),
+    ],
+)
+def test_physicalize_symmetrization_is_optional_only_during_training(
+    training, symmetrize_output, expected_offdiag
+):
+    mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": "1x0e"}))
+    model = E3GNN(
+        mapper,
+        Config(
+            matrix_targets=["hamiltonian"],
+            symmetrize_output=symmetrize_output,
+        ),
+    )
+    prediction, x = _asymmetric_scalar_prediction(mapper)
+    raw = prediction.to_blocks(mapper)
+    physical = model.physicalize_matrices({"hamiltonian": raw}, x, training=training)[
+        "hamiltonian"
+    ]
+    values = physical.pair_blocks["H-H"].flatten()
+    assert tuple(values[2:].tolist()) == pytest.approx(expected_offdiag)
+
+
+@pytest.mark.unit
+def test_public_inference_uses_the_same_nontraining_physicalization():
+    mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": "1x0e"}))
+    model = E3GNN(
+        mapper,
+        Config(
+            matrix_targets=["hamiltonian"],
+            symmetrize_output=False,
+        ),
+    )
+    prediction, x = _asymmetric_scalar_prediction(mapper)
+    model.forward = lambda batch_x: {"hamiltonian": prediction}
+    inferred = model.predict_matrices(x)["hamiltonian"]
+    evaluated = model.physicalize_matrices(
+        {"hamiltonian": prediction.to_blocks(mapper)}, x, training=False
+    )["hamiltonian"]
+    assert torch.equal(inferred.pair_blocks["H-H"], evaluated.pair_blocks["H-H"])
+
+
+@pytest.mark.unit
+def test_complete_network_is_translation_invariant(small_angular_dataset_e3nn):
+    dataset, mapper, _ = small_angular_dataset_e3nn
+    cfg = Config(
+        matrix_targets=["hamiltonian"],
+        precompute_edge_features=False,
+        safety_checks=True,
+    )
+    model = E3GNN(mapper, cfg).eval()
+    sample_x, _ = dataset[0]
+    original_x = dict(sample_x)
+    translated_x = dict(sample_x)
+    original_x["positions"] = sample_x["positions"].detach().clone()
+    translated_x["positions"] = original_x["positions"] + torch.tensor([1.7, -0.8, 2.3])
+    if sample_x["box"] is not None:
+        original_x["box"] = sample_x["box"].detach().clone()
+        translated_x["box"] = original_x["box"].clone()
+
+    with torch.no_grad():
+        original = model(original_x)["hamiltonian"]
+        translated = model(translated_x)["hamiltonian"]
+    for key in original.pair_vectors:
+        assert torch.allclose(
+            translated.pair_vectors[key],
+            original.pair_vectors[key],
+            atol=3e-5,
+            rtol=3e-5,
+        )
+
+
+@pytest.mark.unit
+def test_complete_network_o3_equivariance_after_scale_perturbation(
+    small_angular_dataset_e3nn,
+):
+    dataset, mapper, _ = small_angular_dataset_e3nn
+    cfg = Config(
+        matrix_targets=["hamiltonian"],
+        precompute_edge_features=False,
+        safety_checks=True,
+    )
+    model = E3GNN(mapper, cfg).eval()
+    with torch.no_grad():
+        for scale in (m for m in model.modules() if isinstance(m, IrrepCopyScale)):
+            scale.scale.copy_(torch.linspace(-0.7, 1.1, scale.scale.numel()))
+
+    sample_x, _ = dataset[0]
+    base_x = dict(sample_x)
+    base_x["positions"] = sample_x["positions"].detach().clone()
+    if sample_x["box"] is not None:
+        base_x["box"] = sample_x["box"].detach().clone()
+    with torch.no_grad():
+        base = model(base_x)["hamiltonian"]
+
+    improper = rand_matrix()
+    improper[:, 0] *= -1.0
+    transforms = [
+        rand_matrix(),
+        -torch.eye(3),
+        torch.diag(torch.tensor([-1.0, 1.0, 1.0])),
+        improper,
+    ]
+    for transform in transforms:
+        transformed_x = dict(sample_x)
+        transformed_x["positions"] = base_x["positions"] @ transform.T
+        if base_x["box"] is not None:
+            transformed_x["box"] = base_x["box"] @ transform.T
+        with torch.no_grad():
+            actual = model(transformed_x)["hamiltonian"]
+            expected = base.rotate(transform, mapper)
+        for key in actual.pair_vectors:
+            assert torch.allclose(
+                actual.pair_vectors[key],
+                expected.pair_vectors[key],
+                atol=4e-4,
+                rtol=4e-4,
+            ), f"failed for det={torch.det(transform).item():.0f}, pair={key}"
 
 
 @pytest.mark.parametrize("edge_encoder_style", ["rich", "distance"])

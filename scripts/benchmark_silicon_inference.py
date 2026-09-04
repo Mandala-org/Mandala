@@ -261,9 +261,7 @@ def main() -> None:
                     predictions = model(x)
                     snapshot = model.predictions_to_snapshot(
                         predictions,
-                        x["positions"],
-                        x["box"],
-                        x=x,
+                        x,
                     )
                     energy_values.append(snapshot.get_energy())
         synchronize(device)

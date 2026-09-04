@@ -110,6 +110,15 @@ def setup_argparse(argv: list[str] | None = None) -> argparse.Namespace:
             continue
 
         origin = typing.get_origin(field_type)
+        if origin is typing.Literal:
+            choices = list(typing.get_args(field_type))
+            parser.add_argument(
+                *_arg_names(name),
+                type=type(choices[0]),
+                choices=choices,
+                default=default_value,
+            )
+            continue
         if origin in {Union, typing.Union, UnionType}:
             union_args = typing.get_args(field_type)
             non_none_args = [

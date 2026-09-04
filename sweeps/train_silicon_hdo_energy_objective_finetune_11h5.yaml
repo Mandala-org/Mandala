@@ -164,10 +164,6 @@ parameters:
     value: leakyrelu
   activation-gate:
     value: softplus
-  s2act-res:
-    value: 128
-  norm-kind:
-    value: component
   dropout:
     value: 0
   l1-reg-coef:

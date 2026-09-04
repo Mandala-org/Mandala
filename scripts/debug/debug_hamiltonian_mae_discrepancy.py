@@ -146,9 +146,9 @@ def main() -> None:
     with torch.no_grad():
         pred_irreps = model(x)
         raw = pred_irreps["hamiltonian"].to_blocks(model.mapper)
-        physical = model._physicalize_predicted_matrix(
-            name="hamiltonian", pred_matrix=raw, x=x
-        )
+        physical = model.physicalize_matrices({"hamiltonian": raw}, x, training=False)[
+            "hamiltonian"
+        ]
         raw_sym = analysis_eval.symmetrize_block_matrix(raw)
         physical_sym = analysis_eval.symmetrize_block_matrix(physical)
 

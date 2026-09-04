@@ -115,14 +115,12 @@ def snapshot_model_input(
 def predict_snapshot(
     model: E3GNN,
     snapshot: Snapshot,
-    *,
-    physical: bool = True,
 ) -> dict[str, Any]:
     """Run structure-only inference and return predicted block matrices."""
     device = next(model.parameters()).device
     x = snapshot_model_input(snapshot, model.cfg, mapper=model.mapper)
     x = _move_to_device(x, device)
-    return model.predict_matrices(x, physical=physical)
+    return model.predict_matrices(x)
 
 
 def predictions_to_snapshot(

@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _load_module():
     path = Path("scripts/wandb_run.py").resolve()
@@ -42,6 +44,12 @@ def test_setup_argparse_accepts_dataset_kind_and_aliases(monkeypatch):
     assert args.num_train == 4
     assert args.num_val == 1
     assert args.matrix_targets == ["density"]
+
+
+def test_setup_argparse_rejects_removed_s2_activation():
+    mod = _load_module()
+    with pytest.raises(SystemExit):
+        mod.setup_argparse(["--nonlin-kind", "s2act"])
 
 
 def test_setup_argparse_accepts_resume_from_wandb(monkeypatch):

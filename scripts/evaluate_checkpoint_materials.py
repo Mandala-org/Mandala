@@ -385,12 +385,9 @@ def _physical_predicted_block_matrices(
     pred_mats = model.predicted_irreps_to_block_matrices(
         predictions_irreps,
         x,
-        physical=True,
+        training=False,
     )
-    return {
-        name: analysis_eval.symmetrize_block_matrix(matrix)
-        for name, matrix in pred_mats.items()
-    }
+    return pred_mats
 
 
 def _remove_if_exists(path: Path) -> None:

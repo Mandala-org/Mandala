@@ -1060,15 +1060,18 @@ class ArtifactCheckpointCallback(pl.Callback):
     def _truncate_pred_matrices(
         self,
         preds: dict[str, Any],
+        x: dict[str, Any],
         y: dict[str, Any],
-        mapper,
+        pl_module,
     ) -> dict[str, BlockMatrix]:
+        physical = pl_module.predicted_irreps_to_block_matrices(
+            preds, x, training=False
+        )
         truncated: dict[str, BlockMatrix] = {}
-        for name, pred_obj in preds.items():
+        for name, pred_mat in physical.items():
             if name not in y:
                 continue
-            pred_mat = self._as_block_matrix(pred_obj, mapper)
-            target_mat = self._as_block_matrix(y[name], mapper)
+            target_mat = self._as_block_matrix(y[name], pl_module.mapper)
             truncated[name] = truncate_pred_block_matrix_to_target_prefix(
                 pred_mat,
                 target_mat,
@@ -1165,8 +1168,9 @@ class ArtifactCheckpointCallback(pl.Callback):
         for x, y, preds in payloads:
             aligned_preds = self._truncate_pred_matrices(
                 preds,
+                x,
                 y,
-                pl_module.mapper,
+                pl_module,
             )
             pred_trace_alignment = x.get("pred_trace_alignment")
             if pred_trace_alignment is None:
@@ -1263,7 +1267,7 @@ class ArtifactCheckpointCallback(pl.Callback):
                 and "hamiltonian" in preds
                 and "density" in preds
             ):
-                forces_pred = pl_module.get_forces(preds, x["positions"], x["box"])
+                forces_pred = pl_module.get_forces(preds, x)
                 forces_true = y["forces"]
                 force_diff = forces_pred - forces_true
                 forces_mae_sum += float(

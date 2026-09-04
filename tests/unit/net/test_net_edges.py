@@ -64,9 +64,10 @@ def test_edge_update_block():
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(1, sh_irreps.dim)
     edge_length_emb = torch.randn(1, cfg.n_radial)
+    edge_length = torch.rand(1) * cfg.cutoff_radius
 
     # Forward
-    out = block(node, edge, edge_index, edge_sh, edge_length_emb)
+    out = block(node, edge, edge_index, edge_sh, edge_length_emb, edge_length)
 
     assert out.shape == (1, 1)
 
@@ -91,8 +92,9 @@ def test_node_update_block():
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(1, sh_irreps.dim)
     edge_length_emb = torch.randn(1, cfg.n_radial)
+    edge_length = torch.rand(1) * cfg.cutoff_radius
 
     # Forward
-    out = block(node, edge, edge_index, edge_sh, edge_length_emb)
+    out = block(node, edge, edge_index, edge_sh, edge_length_emb, edge_length)
 
     assert out.shape == (2, 1)

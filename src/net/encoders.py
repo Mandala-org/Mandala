@@ -16,7 +16,7 @@ from torch import nn
 from e3nn.o3 import Irreps, FullyConnectedTensorProduct, TensorSquare
 from collections import OrderedDict
 
-from net.common import Config
+from net.common import Config, smooth_cutoff
 from net.layer_norm import E3LayerNorm
 
 
@@ -101,6 +101,7 @@ class EdgeEncoder(nn.Module):
       - edge_type_idx: LongTensor[E] of edge-type indices (n_edge_types).
       - length_emb: Tensor[E, n_radial] radial distance embeddings.
       - sh: Tensor[E, sh_irreps.dim] spherical harmonics coefficients.
+      - edge_length: Tensor[E] physical distances used by the smooth cutoff.
 
     Combines:
       1. Learned edge-type embedding.
@@ -167,6 +168,7 @@ class EdgeEncoder(nn.Module):
         edge_type_idx: torch.Tensor,
         length_emb: torch.Tensor,
         sh: torch.Tensor,
+        edge_length: torch.Tensor,
         activation_mags: dict = None,
     ) -> torch.Tensor:
         """
@@ -183,6 +185,8 @@ class EdgeEncoder(nn.Module):
 
         if self.norm is not None:
             emb = self.norm(emb)
+
+        emb = emb * smooth_cutoff(edge_length, self.cfg.cutoff_radius).unsqueeze(-1)
 
         if activation_mags is not None and self.cfg.log_activation_mag and self.info:
             prefix = f"mag_{self.info['name']}"

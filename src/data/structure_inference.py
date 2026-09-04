@@ -170,6 +170,14 @@ def build_model_input_from_structure(
             edge_type_idx=edge_type_idx,
             envelope_table=envelope_table,
         ).to(dtype=dtype)
+        x["edge_envelope_family"] = envelope_table.family
+        x["edge_envelope_pair_params"] = envelope_table.parameters.index_select(
+            0, edge_type_idx
+        )
+        if envelope_table.reference_x_max is not None:
+            x["edge_envelope_reference_x_max"] = (
+                envelope_table.reference_x_max.index_select(0, edge_type_idx)
+            )
     if cfg.precompute_edge_features:
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh

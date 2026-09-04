@@ -43,7 +43,8 @@ def test_edge_update_block_variants(node_combine, residual):
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(edge.shape[0], sh_irreps.dim)
     edge_length_emb = torch.randn(edge.shape[0], cfg.n_radial)
-    edge_out = edge_blk(node, edge, ei, edge_sh, edge_length_emb)
+    edge_length = torch.rand(edge.shape[0]) * cfg.cutoff_radius
+    edge_out = edge_blk(node, edge, ei, edge_sh, edge_length_emb, edge_length)
 
     assert edge_out.shape == edge.shape
 
@@ -77,7 +78,8 @@ def test_node_update_block_variants(message_agg, residual):
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(edge.shape[0], sh_irreps.dim)
     edge_length_emb = torch.randn(edge.shape[0], cfg.n_radial)
-    node_out = node_blk(node, edge, ei, edge_sh, edge_length_emb)
+    edge_length = torch.rand(edge.shape[0]) * cfg.cutoff_radius
+    node_out = node_blk(node, edge, ei, edge_sh, edge_length_emb, edge_length)
 
     assert node_out.shape == node.shape
 
@@ -94,7 +96,8 @@ def test_message_block_roundtrip():
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(edge.shape[0], sh_irreps.dim)
     edge_length_emb = torch.randn(edge.shape[0], cfg.n_radial)
-    n2, e2 = blk(node, edge, ei, edge_sh, edge_length_emb)
+    edge_length = torch.rand(edge.shape[0]) * cfg.cutoff_radius
+    n2, e2 = blk(node, edge, ei, edge_sh, edge_length_emb, edge_length)
 
     assert n2.shape == node.shape
     assert e2.shape == edge.shape

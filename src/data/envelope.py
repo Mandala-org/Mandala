@@ -6,7 +6,6 @@ from pathlib import Path
 
 import torch
 
-
 EPS = 1.0e-12
 
 
@@ -215,23 +214,39 @@ def build_edge_envelope(
             f"{tuple(edge_lengths.shape)} and {tuple(edge_type_idx.shape)}"
         )
     pair_params = envelope_table.parameters.index_select(0, edge_type_idx)
-    if envelope_table.family == "slater_soft_cutoff":
+    pair_reference_x_max = (
+        None
+        if envelope_table.reference_x_max is None
+        else envelope_table.reference_x_max.index_select(0, edge_type_idx)
+    )
+    return evaluate_pair_envelope(
+        edge_lengths,
+        family=envelope_table.family,
+        pair_params=pair_params,
+        reference_x_max=pair_reference_x_max,
+    )
+
+
+def evaluate_pair_envelope(
+    edge_lengths: torch.Tensor,
+    *,
+    family: str,
+    pair_params: torch.Tensor,
+    reference_x_max: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Evaluate already edge-indexed parameters without leaving autograd."""
+    if family == "slater_soft_cutoff":
         return evaluate_slater_soft_cutoff(edge_lengths, pair_params)
-    if envelope_table.family == "slater_exp_quad_soft_wall":
-        if envelope_table.reference_x_max is None:
+    if family == "slater_exp_quad_soft_wall":
+        if reference_x_max is None:
             raise ValueError(
                 "slater_exp_quad_soft_wall envelope requires reference_x_max data."
             )
-        pair_reference_x_max = envelope_table.reference_x_max.index_select(
-            0, edge_type_idx
-        )
         return evaluate_slater_exp_quad_soft_wall(
-            edge_lengths,
-            pair_params,
-            pair_reference_x_max,
+            edge_lengths, pair_params, reference_x_max
         )
     raise ValueError(
-        f"Unsupported envelope family {envelope_table.family!r}. "
+        f"Unsupported envelope family {family!r}. "
         "Supported families: 'slater_soft_cutoff', 'slater_exp_quad_soft_wall'."
     )
 

@@ -28,7 +28,8 @@ def make_dummy_graph(E=10, N=5, node_dim=32, edge_dim=32, n_radial=64, sh_dim=9)
     edge = torch.randn(E, edge_dim)
     edge_sh = torch.randn(E, sh_dim)
     edge_length_emb = torch.randn(E, n_radial)
-    return node, edge, ei, edge_sh, edge_length_emb
+    edge_length = torch.rand(E) * 5.0
+    return node, edge, ei, edge_sh, edge_length_emb, edge_length
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -186,8 +187,9 @@ def test_equiconv_forward():
     fea_in1 = irreps_in1.randn(batch_size, -1)
     fea_in2 = irreps_in2.randn(batch_size, -1)
     edge_length_emb = torch.randn(batch_size, cfg.n_radial)
+    edge_length = torch.rand(batch_size) * cfg.cutoff_radius
 
-    out = conv(fea_in1, fea_in2, edge_length_emb)
+    out = conv(fea_in1, fea_in2, edge_length_emb, edge_length)
 
     assert out.shape == (batch_size, conv.irreps_out.dim)
 
@@ -207,9 +209,10 @@ def test_equiconv_vectorized_radial_scaling_matches_pathwise_output_and_gradient
     x1 = conv.tp.tp.irreps_in1.randn(5, -1, dtype=torch.float64).requires_grad_(True)
     x2 = conv.tp.tp.irreps_in2.randn(5, -1, dtype=torch.float64).requires_grad_(True)
     radial = torch.randn(5, cfg.n_radial, dtype=torch.float64, requires_grad=True)
+    edge_length = torch.rand(5, dtype=torch.float64) * cfg.cutoff_radius
     parameters = list(conv.parameters())
 
-    actual = conv(x1, x2, radial)
+    actual = conv(x1, x2, radial, edge_length)
     actual_grads = torch.autograd.grad(
         actual.square().sum(), [x1, x2, radial, *parameters]
     )
@@ -226,6 +229,9 @@ def test_equiconv_vectorized_radial_scaling_matches_pathwise_output_and_gradient
         chunks.append(z[:, start : start + width] * weights[:, idx : idx + 1])
         start += width
     expected = torch.cat(chunks, dim=-1)
+    from net.common import smooth_cutoff
+
+    expected = expected * smooth_cutoff(edge_length, cfg.cutoff_radius).unsqueeze(-1)
     expected_grads = torch.autograd.grad(
         expected.square().sum(),
         [ref_x1, ref_x2, ref_radial, *parameters],
@@ -258,6 +264,7 @@ def test_equiconv_equivariance():
     fea_in1 = irreps_in1.randn(batch_size, -1)
     fea_in2 = irreps_in2.randn(batch_size, -1)
     edge_length_emb = torch.randn(batch_size, cfg.n_radial)
+    edge_length = torch.rand(batch_size) * cfg.cutoff_radius
 
     # Random rotation
     R = rand_matrix()
@@ -266,17 +273,42 @@ def test_equiconv_equivariance():
     D_out = conv.irreps_out.D_from_matrix(R)
 
     # Forward on original
-    out = conv(fea_in1, fea_in2, edge_length_emb)
+    out = conv(fea_in1, fea_in2, edge_length_emb, edge_length)
 
     # Rotate inputs, then forward
     fea_in1_rot = fea_in1 @ D_in1.T
     fea_in2_rot = fea_in2 @ D_in2.T
-    out_rot = conv(fea_in1_rot, fea_in2_rot, edge_length_emb)
+    out_rot = conv(fea_in1_rot, fea_in2_rot, edge_length_emb, edge_length)
 
     # Forward, then rotate
     out_expected = out @ D_out.T
 
     assert torch.allclose(out_rot, out_expected, atol=1e-4)
+
+
+@pytest.mark.unit
+def test_equiconv_message_and_radial_force_vanish_smoothly_at_cutoff():
+    cfg = Config(tp_type="separate_weight", n_radial=8, radial_layers=(12,))
+    conv = EquiConv(
+        n_radial=cfg.n_radial,
+        irreps_in1=Irreps("2x0e+1x1o"),
+        irreps_in2=Irreps("1x0e+1x1o"),
+        irreps_out=Irreps("2x0e+1x1o"),
+        cfg=cfg,
+        nonlin=False,
+    )
+    x1 = conv.tp.tp.irreps_in1.randn(1, -1)
+    x2 = conv.tp.tp.irreps_in2.randn(1, -1)
+    radial = torch.randn(1, cfg.n_radial)
+    at_cutoff = torch.tensor([cfg.cutoff_radius], requires_grad=True)
+    output = conv(x1, x2, radial, at_cutoff)
+    radial_force = torch.autograd.grad(output.sum(), at_cutoff)[0]
+    assert torch.allclose(output, torch.zeros_like(output), atol=1e-7)
+    assert torch.allclose(radial_force, torch.zeros_like(radial_force), atol=1e-7)
+
+    just_below = torch.tensor([cfg.cutoff_radius - 1e-2])
+    nearby_output = conv(x1, x2, radial, just_below)
+    assert torch.isfinite(nearby_output).all()
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -306,7 +338,7 @@ def test_edge_update_block_new(use_self_connection):
         cfg=cfg,
     )
 
-    node, edge, ei, edge_sh, edge_length_emb = make_dummy_graph(
+    node, edge, ei, edge_sh, edge_length_emb, edge_length = make_dummy_graph(
         N=5,
         E=10,
         node_dim=node_irreps.dim,
@@ -324,7 +356,9 @@ def test_edge_update_block_new(use_self_connection):
             src_type * num_species + dst_type, num_classes=num_species * num_species
         ).float()
 
-    edge_out = edge_blk(node, edge, ei, edge_sh, edge_length_emb, edge_one_hot)
+    edge_out = edge_blk(
+        node, edge, ei, edge_sh, edge_length_emb, edge_length, edge_one_hot
+    )
 
     assert edge_out.shape[0] == edge.shape[0]
     assert edge_out.shape[1] == edge_blk.irreps_out.dim
@@ -357,7 +391,7 @@ def test_node_update_block_new(use_self_connection):
         cfg=cfg,
     )
 
-    node, edge, ei, edge_sh, edge_length_emb = make_dummy_graph(
+    node, edge, ei, edge_sh, edge_length_emb, edge_length = make_dummy_graph(
         N=5,
         E=10,
         node_dim=node_irreps.dim,
@@ -372,7 +406,9 @@ def test_node_update_block_new(use_self_connection):
         node_type = torch.randint(0, num_species, (node.shape[0],))
         node_one_hot = F.one_hot(node_type, num_classes=num_species).float()
 
-    node_out = node_blk(node, edge, ei, edge_sh, edge_length_emb, node_one_hot)
+    node_out = node_blk(
+        node, edge, ei, edge_sh, edge_length_emb, edge_length, node_one_hot
+    )
 
     assert node_out.shape[0] == node.shape[0]
     assert node_out.shape[1] == node_blk.irreps_out.dim
@@ -406,7 +442,7 @@ def test_message_block_new_signature():
         info={"layer": 0},
     )
 
-    node, edge, ei, edge_sh, edge_length_emb = make_dummy_graph(
+    node, edge, ei, edge_sh, edge_length_emb, edge_length = make_dummy_graph(
         N=5,
         E=10,
         node_dim=node_irreps.dim,
@@ -426,7 +462,14 @@ def test_message_block_new_signature():
     ).float()
 
     node_out, edge_out = msg_blk(
-        node, edge, ei, edge_sh, edge_length_emb, node_one_hot, edge_one_hot
+        node,
+        edge,
+        ei,
+        edge_sh,
+        edge_length_emb,
+        edge_length,
+        node_one_hot,
+        edge_one_hot,
     )
 
     assert node_out.shape[0] == node.shape[0]
@@ -457,7 +500,7 @@ def test_message_block_activation_magnitudes():
         info={"layer": 0, "graph": "test"},
     )
 
-    node, edge, ei, edge_sh, edge_length_emb = make_dummy_graph(
+    node, edge, ei, edge_sh, edge_length_emb, edge_length = make_dummy_graph(
         N=5,
         E=10,
         node_dim=node_irreps.dim,
@@ -482,6 +525,7 @@ def test_message_block_activation_magnitudes():
         ei,
         edge_sh,
         edge_length_emb,
+        edge_length,
         node_one_hot,
         edge_one_hot,
         activation_mags=activation_mags,

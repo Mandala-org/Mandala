@@ -67,8 +67,6 @@ python -u -Xfrozen_modules=off -m debugpy --listen 5678 --wait-for-client script
   --nonlin-kind normact \
   --activation-scalar leakyrelu \
   --activation-gate softplus \
-  --s2act-res 128 \
-  --norm-kind component \
   --lr-scheduler-factor 0.2 \
   --lr-scheduler-patience 100 \
   --lr-scheduler-min-lr 1e-8 \

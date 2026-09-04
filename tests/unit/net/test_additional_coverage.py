@@ -4,7 +4,7 @@ from e3nn.o3 import Irreps
 
 from net.common import Config, build_hidden_irreps
 from net.common import RadialMLP
-from net.activations import scalar_activation, make_nonlinearity
+from net.activations import scalar_activation
 from net.encoders import NodeEncoder, EdgeEncoder
 from net.layers import EdgeUpdateBlock, NodeUpdateBlock, MessageBlock
 from core.sparse_math import trace_matmul_sparse
@@ -33,8 +33,9 @@ def test_edge_encoder_forward():
     E = 4
     edge_type_idx = torch.randint(0, n_types, (E,), dtype=torch.long)
     length_emb = torch.rand(E, cfg.n_radial)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
     sh = torch.rand(E, sh_ir.dim)
-    h = enc(edge_type_idx, length_emb, sh)
+    h = enc(edge_type_idx, length_emb, sh, edge_length)
     assert h.shape == (E, out_ir.dim)
 
 
@@ -53,7 +54,8 @@ def test_edge_update_block_shape(residual):
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh_irreps.dim)
     edge_length_emb = torch.randn(E, cfg.n_radial)
-    out = blk(node, edge, idx, edge_sh, edge_length_emb)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
+    out = blk(node, edge, idx, edge_sh, edge_length_emb, edge_length)
     assert out.shape == (E, hid_ir.dim)
 
 
@@ -70,7 +72,8 @@ def test_node_update_block_shape():
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh_irreps.dim)
     edge_length_emb = torch.randn(E, cfg.n_radial)
-    out = blk(node, edge, idx, edge_sh, edge_length_emb)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
+    out = blk(node, edge, idx, edge_sh, edge_length_emb, edge_length)
     assert out.shape == (N, hid_ir.dim)
 
 
@@ -87,7 +90,8 @@ def test_message_block_edge_and_node_update():
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     edge_sh = torch.randn(E, sh_irreps.dim)
     edge_length_emb = torch.randn(E, cfg.n_radial)
-    node2, edge2 = blk(node, edge, idx, edge_sh, edge_length_emb)
+    edge_length = torch.rand(E) * cfg.cutoff_radius
+    node2, edge2 = blk(node, edge, idx, edge_sh, edge_length_emb, edge_length)
     assert node2.shape == (N, hid_ir.dim)
     assert edge2.shape == (E, hid_ir.dim)
     assert blk.node_upd.value_projs is not None
@@ -104,10 +108,8 @@ def test_scalar_activation_and_invalid():
 
 @pytest.mark.unit
 def test_bad_nonlinearity():
-    ir = Irreps("2x0e+1x1o")
-    cfg = Config(nonlin_kind="bogus", safety_checks=True)
-    with pytest.raises(ValueError):
-        make_nonlinearity(ir, cfg)
+    with pytest.raises(ValueError, match="Unsupported nonlin_kind"):
+        Config(nonlin_kind="bogus", safety_checks=True)
 
 
 @pytest.mark.parametrize(

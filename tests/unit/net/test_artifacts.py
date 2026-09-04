@@ -81,6 +81,12 @@ def _make_batch_and_module():
                 "density": pred.to_vectors(mapper),
             }
 
+        def predicted_irreps_to_block_matrices(self, predictions, batch_x, *, training):
+            assert training is False
+            return {
+                name: value.to_blocks(mapper) for name, value in predictions.items()
+            }
+
         def transfer_batch_to_device(self, batch, device, dataloader_idx):
             return batch
 
@@ -335,8 +341,14 @@ def test_checkpoint_callback_logs_force_and_rescale_metrics(tmp_path):
                 "density": pred_d.to_vectors(mapper),
             }
 
-        def get_forces(self, predictions, positions, box):
-            return torch.zeros_like(positions)
+        def predicted_irreps_to_block_matrices(self, predictions, batch_x, *, training):
+            assert training is False
+            return {
+                name: value.to_blocks(mapper) for name, value in predictions.items()
+            }
+
+        def get_forces(self, predictions, x):
+            return torch.zeros_like(x["positions"])
 
         def transfer_batch_to_device(self, batch, device, dataloader_idx):
             return batch

@@ -3,6 +3,7 @@ import torch
 from e3nn.o3 import Irreps, rand_matrix
 
 from net.common import Config, E3MLP
+from net.e3mlp_variants import InvariantFiLMActivation, IrrepCopyScale
 
 VARIANTS = [
     "basic",
@@ -30,6 +31,25 @@ def random_rotation_matrix() -> torch.Tensor:
 
 def generate_equivariant_input(irreps: Irreps, batch_size: int = 1) -> torch.Tensor:
     return irreps.randn(batch_size, -1)
+
+
+def o3_transforms() -> list[torch.Tensor]:
+    reflection = torch.diag(torch.tensor([-1.0, 1.0, 1.0]))
+    improper = rand_matrix()
+    improper[:, 0] *= -1.0
+    transforms = [rand_matrix(), -torch.eye(3), reflection, improper]
+    assert [round(torch.det(r).item()) for r in transforms] == [1, -1, -1, -1]
+    return transforms
+
+
+def assert_o3_equivariant(module, irreps: Irreps, *, atol: float = 3e-5) -> None:
+    x = irreps.randn(5, -1)
+    y = module(x)
+    for transform in o3_transforms():
+        d = irreps.D_from_matrix(transform)
+        assert torch.allclose(
+            module(x @ d.T), y @ d.T, atol=atol, rtol=atol
+        ), f"failed for det={torch.det(transform).item():.0f}"
 
 
 @pytest.mark.unit
@@ -122,3 +142,49 @@ def test_e3mlp_invalid_variant():
             num_layers=2,
             cfg=cfg,
         )
+
+
+@pytest.mark.unit
+def test_invariant_film_is_o3_equivariant_with_even_and_odd_scalars():
+    torch.manual_seed(2026)
+    irreps = Irreps("2x0e+3x0o+2x1e+2x1o+2x2e+2x2o")
+    film = InvariantFiLMActivation(irreps, hidden_dim=19)
+    # Avoid relying on any special initialization of the final FiLM map.
+    with torch.no_grad():
+        for parameter in film.parameters():
+            parameter.normal_(mean=0.17, std=0.63)
+    assert_o3_equivariant(film, irreps, atol=3e-4)
+
+
+@pytest.mark.unit
+def test_irrep_copy_scale_broadcasts_over_m_and_is_o3_equivariant():
+    torch.manual_seed(2027)
+    irreps = Irreps("2x0e+3x0o+2x1e+3x1o+2x2e+3x2o")
+    scale = IrrepCopyScale(irreps, initial_value=1.0)
+    with torch.no_grad():
+        scale.scale.copy_(torch.linspace(-1.3, 2.1, irreps.num_irreps))
+    assert scale.scale.numel() == irreps.num_irreps
+    assert_o3_equivariant(scale, irreps)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("variant", ["resnormact", "resgatemagnitudes", "bilinear"])
+def test_residual_and_bilinear_scales_remain_o3_equivariant_when_perturbed(variant):
+    torch.manual_seed(2028)
+    irreps = Irreps("2x0e+2x0o+2x1e+2x1o+2x2e+2x2o")
+    mlp = E3MLP(
+        input_irreps=irreps,
+        hidden_irreps=irreps,
+        output_irreps=irreps,
+        num_layers=2,
+        cfg=Config(e3mlp_variant=variant, safety_checks=True),
+        activate_last=True,
+    )
+    cursor = 0
+    with torch.no_grad():
+        for scale in (m for m in mlp.modules() if isinstance(m, IrrepCopyScale)):
+            values = torch.linspace(-0.9 + cursor, 1.4 + cursor, scale.scale.numel())
+            scale.scale.copy_(values)
+            cursor += 1
+    assert cursor > 0
+    assert_o3_equivariant(mlp, irreps, atol=8e-5)

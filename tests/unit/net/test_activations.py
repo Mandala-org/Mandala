@@ -12,7 +12,6 @@ class DummyCFG:
         # defaults
         self.nonlin_kind = "gate"
         self.activation_scalar = "silu"
-        self.norm_kind = "component"
         # overrides
         for k, v in kw.items():
             setattr(self, k, v)
@@ -21,10 +20,10 @@ class DummyCFG:
 IR = Irreps("4x0e + 4x0o + 2x1e + 2x1o")  # simple test irreps
 
 
-@pytest.mark.parametrize("kind", ["normact"])  # "gate", "s2act" doesn't pass
+@pytest.mark.parametrize("kind", ["normact"])
 @pytest.mark.unit
 def test_factory_builds_and_runs(kind):
-    cfg = DummyCFG(nonlin_kind=kind, s2act_res=128)
+    cfg = DummyCFG(nonlin_kind=kind)
     mod = make_nonlinearity(IR, cfg)
 
     x = torch.randn(8, IR.dim, requires_grad=True)
