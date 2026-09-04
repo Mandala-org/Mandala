@@ -23,7 +23,10 @@ if str(SOURCE_ROOT) not in sys.path:
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from pair_descriptors import AtomicNeighborDensity
-from pair_hamiltonian.output_schema import FullBlockIrrepTransform
+from pair_hamiltonian.output_schema import (
+    FullBlockIrrepTransform,
+    o3_representation_matrix,
+)
 from pair_mappers import NativeACEPairMapper
 
 
@@ -80,12 +83,7 @@ def synchronize(device: torch.device) -> None:
 
 
 def action(irreps: o3.Irreps, rotation: torch.Tensor) -> torch.Tensor:
-    previous = torch.get_default_dtype()
-    try:
-        torch.set_default_dtype(torch.float64)
-        return irreps.D_from_matrix(rotation)
-    finally:
-        torch.set_default_dtype(previous)
+    return o3_representation_matrix(irreps, rotation)
 
 
 def relative_error(actual: torch.Tensor, expected: torch.Tensor) -> float:

@@ -30,6 +30,24 @@ from core.orbital_irrep_config import OrbitalIrrepConfig
 Pair = tuple[str, str]
 
 
+def o3_representation_matrix(irreps: Irreps, matrix: torch.Tensor) -> torch.Tensor:
+    """Evaluate an e3nn O(3) action with the input matrix's dtype and device.
+
+    e3nn 0.6 constructs the Wigner generators on CPU.  Passing a CUDA rotation
+    directly therefore mixes CPU generators with CUDA Euler angles.  The
+    representation matrices are small and are not part of the model hot path,
+    so evaluate them on CPU and return them to the caller's device.
+    """
+    evaluation_matrix = matrix.cpu() if matrix.device.type != "cpu" else matrix
+    previous_dtype = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(evaluation_matrix.dtype)
+        representation = irreps.D_from_matrix(evaluation_matrix)
+    finally:
+        torch.set_default_dtype(previous_dtype)
+    return representation.to(device=matrix.device, dtype=matrix.dtype)
+
+
 @dataclass(frozen=True, slots=True)
 class OrbitalShell:
     """One radial AO shell occupying a contiguous magnetic-component range."""
@@ -440,29 +458,17 @@ class FullBlockIrrepTransform(nn.Module):
     def irreps(self, pair: Pair | str) -> Irreps:
         return Irreps(self.schema(pair).irreps)
 
-    @staticmethod
-    def _float64_representation(irreps: Irreps, matrix: torch.Tensor) -> torch.Tensor:
-        """Evaluate an e3nn O(3) action without its legacy dtype leakage."""
-        if matrix.dtype != torch.float64:
-            return irreps.D_from_matrix(matrix)
-        previous_dtype = torch.get_default_dtype()
-        try:
-            torch.set_default_dtype(torch.float64)
-            return irreps.D_from_matrix(matrix)
-        finally:
-            torch.set_default_dtype(previous_dtype)
-
     def orbital_action(self, species: str, matrix: torch.Tensor) -> torch.Tensor:
         """Return the AO representation matrix for a proper/improper rotation."""
         try:
             irreps = self.orbital_config.element_to_irreps[species]
         except KeyError as exc:
             raise KeyError(f"Unknown species {species!r}") from exc
-        return self._float64_representation(irreps, matrix)
+        return o3_representation_matrix(irreps, matrix)
 
     def output_action(self, pair: Pair | str, matrix: torch.Tensor) -> torch.Tensor:
         """Return the full target-vector representation matrix."""
-        return self._float64_representation(self.irreps(pair), matrix)
+        return o3_representation_matrix(self.irreps(pair), matrix)
 
     def blocks_to_irreps(self, pair: Pair | str, blocks: torch.Tensor) -> torch.Tensor:
         schema = self.schema(pair)

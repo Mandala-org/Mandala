@@ -3,7 +3,10 @@ import torch
 from e3nn import o3
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
-from pair_hamiltonian.output_schema import FullBlockIrrepTransform
+from pair_hamiltonian.output_schema import (
+    FullBlockIrrepTransform,
+    o3_representation_matrix,
+)
 
 
 @pytest.fixture(scope="module")
@@ -91,3 +94,21 @@ def test_full_o3_action_commutes_with_target_transform(transform, determinant):
         expected
     )
     assert error < 1.0e-10
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_o3_representation_preserves_matrix_dtype_and_device(dtype):
+    rotation = o3.rand_matrix(dtype=dtype)
+    representation = o3_representation_matrix(o3.Irreps("2x0e + 1x1o"), rotation)
+    assert representation.dtype == dtype
+    assert representation.device == rotation.device
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
+def test_o3_representation_accepts_cuda_rotation():
+    rotation = o3.rand_matrix(dtype=torch.float64, device=torch.device("cuda"))
+    representation = o3_representation_matrix(o3.Irreps("1x0e + 1x1o"), rotation)
+    assert representation.dtype == rotation.dtype
+    assert representation.device == rotation.device

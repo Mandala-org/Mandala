@@ -5,6 +5,7 @@ from pair_hamiltonian.output_schema import (
     FullBlockSchema,
     IrrepCopyMetadata,
     OrbitalShell,
+    o3_representation_matrix,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "FullBlockSchema",
     "IrrepCopyMetadata",
     "OrbitalShell",
+    "o3_representation_matrix",
 ]
