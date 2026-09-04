@@ -14,6 +14,6 @@ python -u scripts/pair_descriptors/precompute_d1_sio2.py \
   --radial-bases spherical_bessel zernike \
   --resolution compact 4 3 \
   --resolution high 8 6 \
-  --num-workers 32 \
+  --num-workers 64 \
   --resume \
   2>&1 | tee artifacts/pair_stage2/d1_sio2_precompute_v1/launcher.log

@@ -110,9 +110,12 @@ def configurations(args: argparse.Namespace) -> list[dict[str, object]]:
     return result
 
 
-def _write_one(payload: tuple) -> dict[str, object]:
+def _initialize_worker() -> None:
+    """Limit each process to one intra-op thread exactly once at process start."""
     torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
+
+
+def _write_one(payload: tuple) -> dict[str, object]:
     index, source, destination, split, configs, maximum_cutoff, manifest_hash = payload
     destination = Path(destination)
     temporary = destination.with_suffix(".h5.partial")
@@ -318,7 +321,9 @@ def main() -> None:
         f"[1/4] Computing {len(configs)} D1 configurations for {len(tasks)} shards",
         flush=True,
     )
-    with ProcessPoolExecutor(max_workers=args.num_workers) as pool:
+    with ProcessPoolExecutor(
+        max_workers=args.num_workers, initializer=_initialize_worker
+    ) as pool:
         completed = list(
             tqdm(pool.map(_write_one, tasks), total=len(tasks), unit="structure")
         )
