@@ -1,0 +1,34 @@
+import pytest
+import torch
+
+from core.orbital_irrep_config import OrbitalIrrepConfig
+from pair_hamiltonian.hamgnn_sio2 import HARTREE_TO_MEV
+from pair_hamiltonian.metrics import FullBlockMetricAccumulator
+from pair_hamiltonian.output_schema import FullBlockIrrepTransform
+
+
+@pytest.mark.unit
+def test_headline_metric_is_reconstructed_matrix_element_weighted():
+    config = OrbitalIrrepConfig.from_dict({"X": "1s1p"})
+    transform = FullBlockIrrepTransform(config, dtype=torch.float64)
+    target_blocks = torch.zeros(2, 4, 4, dtype=torch.float64)
+    predicted_blocks = target_blocks.clone()
+    predicted_blocks[0] = 1.0
+    predicted_blocks[1] = 3.0
+    target = transform.blocks_to_irreps("X-X", target_blocks)
+    prediction = transform.blocks_to_irreps("X-X", predicted_blocks)
+    metrics = FullBlockMetricAccumulator(transform, distance_bin_width_angstrom=1.0)
+    metrics.update(
+        "X-X",
+        prediction,
+        target,
+        onsite=False,
+        distances_angstrom=torch.tensor([0.5, 1.5]),
+    )
+    result = metrics.compute()
+    assert result["matrix_elements"]["mae"] == pytest.approx(2.0 * HARTREE_TO_MEV)
+    assert result["matrix_elements"]["scalar_count"] == 32
+    assert set(result["by_distance"]) == {
+        "0.000-1.000_angstrom",
+        "1.000-2.000_angstrom",
+    }
