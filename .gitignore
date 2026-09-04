@@ -95,6 +95,7 @@ data/small/Si_perturbed_scale1/
 data/small/Si_perturbed_scale1_030/
 data/small/Si_perturbed_scale1_078/
 data/paper
+data/pair_descriptor_hamiltonian/
 analysis_outputs/
 *.zip
 configs/
