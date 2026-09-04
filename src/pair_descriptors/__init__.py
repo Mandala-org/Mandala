@@ -12,6 +12,10 @@ from pair_descriptors.density import (
     OrthogonalBallRadialBasis,
     RawNeighborDensityDescriptor,
 )
+from pair_descriptors.d4_covariants import (
+    D4LiftPath,
+    DeterministicCovariantLiftDescriptor,
+)
 from pair_descriptors.fourier_bessel import FourierBesselDescriptor
 from pair_descriptors.moments import IrreducibleMomentDescriptor
 
@@ -24,6 +28,8 @@ __all__ = [
     "DensityChannel",
     "OrthogonalBallRadialBasis",
     "RawNeighborDensityDescriptor",
+    "D4LiftPath",
+    "DeterministicCovariantLiftDescriptor",
     "FourierBesselDescriptor",
     "IrreducibleMomentDescriptor",
 ]
