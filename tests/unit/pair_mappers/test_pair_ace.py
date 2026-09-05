@@ -73,6 +73,27 @@ def test_heterogeneous_pair_reversal_is_exact(components):
 
 
 @pytest.mark.unit
+def test_homonuclear_pair_reversal_is_exact(components):
+    transform, density, model = components
+    descriptor_i = density(
+        torch.tensor([[1.0, 0.2, 0.3]], dtype=torch.float64), torch.tensor([8])
+    )
+    descriptor_j = density(
+        torch.tensor([[-0.4, 0.8, 0.1]], dtype=torch.float64), torch.tensor([14])
+    )
+    displacement = torch.tensor([[1.3, 0.2, -0.1]], dtype=torch.float64)
+    forward = model.predict_offsite(
+        ("A", "A"), descriptor_i, displacement, descriptor_j
+    )
+    reverse = model.predict_offsite(
+        ("A", "A"), descriptor_j, -displacement, descriptor_i
+    )
+    assert torch.allclose(
+        reverse, transform.reverse(("A", "A"), forward), atol=1e-12, rtol=1e-12
+    )
+
+
+@pytest.mark.unit
 @pytest.mark.equivariance
 @pytest.mark.parametrize("determinant", [1, -1])
 def test_pair_mapper_is_full_o3_equivariant(components, determinant):

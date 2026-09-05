@@ -168,9 +168,22 @@ class NativeACEPairMapper(nn.Module):
         if was_reversed:
             descriptor_i, descriptor_j = descriptor_j, descriptor_i
             displacement_ij = -displacement_ij
-        prediction = self.offsite_regressors[_module_key(canonical)](
+        regressor = self.offsite_regressors[_module_key(canonical)]
+        prediction = regressor(
             self.offsite_features(descriptor_i, displacement_ij, descriptor_j)
         )
+        # A homonuclear directed block and its reversed edge share one module,
+        # so canonical species ordering alone cannot enforce H_ji = H_ij^T.
+        # Project the two orientations onto the exact AO-transpose-derived
+        # subspace.  This remains one full-block prediction and is linear in
+        # the deterministic ACE features.
+        if canonical[0] == canonical[1]:
+            opposite = regressor(
+                self.offsite_features(descriptor_j, -displacement_ij, descriptor_i)
+            )
+            prediction = 0.5 * (
+                prediction + self.target_transform.reverse(canonical, opposite)
+            )
         return (
             self.target_transform.reverse(canonical, prediction)
             if was_reversed
