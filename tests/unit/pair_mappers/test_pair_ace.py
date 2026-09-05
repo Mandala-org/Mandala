@@ -94,6 +94,21 @@ def test_homonuclear_pair_reversal_is_exact(components):
 
 
 @pytest.mark.unit
+def test_onsite_hermiticity_is_exact(components):
+    transform, density, model = components
+    descriptor = density(
+        torch.tensor([[1.0, 0.2, 0.3]], dtype=torch.float64), torch.tensor([8])
+    )
+    onsite = model.predict_onsite("A", descriptor)
+    assert torch.allclose(
+        onsite,
+        transform.reverse(("A", "A"), onsite),
+        atol=1e-12,
+        rtol=1e-12,
+    )
+
+
+@pytest.mark.unit
 @pytest.mark.equivariance
 @pytest.mark.parametrize("determinant", [1, -1])
 def test_pair_mapper_is_full_o3_equivariant(components, determinant):

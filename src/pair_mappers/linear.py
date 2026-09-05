@@ -44,6 +44,7 @@ class EquivariantRidgeAccumulator:
         *,
         dtype: torch.dtype = torch.float64,
         device: torch.device | str = "cpu",
+        allow_missing_target_irreps: bool = False,
     ) -> None:
         self.feature_irreps = Irreps(feature_irreps)
         self.target_irreps = Irreps(target_irreps)
@@ -60,6 +61,8 @@ class EquivariantRidgeAccumulator:
         self.equation_count: dict[Irrep, int] = defaultdict(int)
         for irrep, target_slices in self.target_groups.items():
             feature_count = len(self.feature_groups[irrep])
+            if feature_count == 0 and not allow_missing_target_irreps:
+                raise ValueError(f"Feature basis lacks required target irrep: {irrep}")
             self.xtx[irrep] = torch.zeros(
                 feature_count, feature_count, dtype=dtype, device=device
             )
@@ -80,6 +83,8 @@ class EquivariantRidgeAccumulator:
             return
         self.sample_count += features.shape[0]
         for irrep, target_slices in self.target_groups.items():
+            if not self.feature_groups[irrep]:
+                continue
             x = EquivariantRidgeRegressor._gather(
                 features, self.feature_groups[irrep]
             ).to(self.xtx[irrep])
@@ -109,6 +114,7 @@ class EquivariantRidgeRegressor(nn.Module):
         *,
         ridge: float = 1.0e-8,
         dtype: torch.dtype = torch.float64,
+        allow_missing_target_irreps: bool = False,
     ) -> None:
         super().__init__()
         if ridge < 0:
@@ -129,7 +135,7 @@ class EquivariantRidgeRegressor(nn.Module):
                 if irrep not in self.feature_groups
             }
         )
-        if missing:
+        if missing and not allow_missing_target_irreps:
             raise ValueError(f"Feature basis lacks required target irreps: {missing}")
         for irrep, feature_slices in self.feature_groups.items():
             self.register_buffer(
@@ -162,6 +168,9 @@ class EquivariantRidgeRegressor(nn.Module):
         equations = 0
         for irrep, target_slices in self.target_groups.items():
             feature_slices = self.feature_groups[irrep]
+            if not feature_slices:
+                conditions[str(irrep)] = float("inf")
+                continue
             x = self._gather(features, feature_slices)  # sample, copy, m
             y = self._gather(targets, target_slices)
             scale = torch.sqrt(torch.mean(x.square(), dim=(0, 2))).clamp_min(1.0e-12)
@@ -204,6 +213,9 @@ class EquivariantRidgeRegressor(nn.Module):
         conditions: dict[str, float] = {}
         equations = 0
         for irrep, target_slices in self.target_groups.items():
+            if not self.feature_groups[irrep]:
+                conditions[str(irrep)] = float("inf")
+                continue
             count = accumulator.equation_count[irrep]
             scale = torch.sqrt(accumulator.sum_square[irrep] / count).clamp_min(1e-12)
             inverse_scale = scale.reciprocal()
@@ -239,6 +251,8 @@ class EquivariantRidgeRegressor(nn.Module):
         result = features.new_zeros(*features.shape[:-1], self.target_irreps.dim)
         for irrep, target_slices in self.target_groups.items():
             feature_slices = self.feature_groups[irrep]
+            if not feature_slices:
+                continue
             x = self._gather(features, feature_slices)
             scale = getattr(self, f"scale_{_key(irrep)}").to(features)
             weight = getattr(self, f"weight_{_key(irrep)}").to(features)

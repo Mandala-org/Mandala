@@ -83,6 +83,20 @@ def test_pair_reversal_is_exact(setup, architecture, pair):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("architecture", ARCHITECTURES)
+def test_onsite_hermiticity_is_exact(setup, architecture):
+    transform, irreps, descriptor_i, _descriptor_j, _displacement = setup
+    model = make_model(architecture, transform, irreps)
+    onsite = model.predict_onsite("A", descriptor_i)
+    assert torch.allclose(
+        onsite,
+        transform.reverse(("A", "A"), onsite),
+        atol=1e-12,
+        rtol=1e-12,
+    )
+
+
+@pytest.mark.unit
 @pytest.mark.equivariance
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
 @pytest.mark.parametrize("determinant", [1, -1])

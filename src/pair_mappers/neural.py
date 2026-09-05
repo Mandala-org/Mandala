@@ -105,22 +105,26 @@ class InvariantSummary(nn.Module):
 
 
 class LinearPairKernel(nn.Module):
-    """M0 block-diagonal equal-irrep readout of the two endpoints."""
+    """M0 block-diagonal equal-irrep readout of endpoints and bond."""
 
-    def __init__(self, descriptor_irreps: Irreps, target_irreps: Irreps) -> None:
+    def __init__(
+        self,
+        descriptor_irreps: Irreps,
+        bond_irreps: Irreps,
+        target_irreps: Irreps,
+    ) -> None:
         super().__init__()
-        self.input_irreps = descriptor_irreps + descriptor_irreps
+        self.input_irreps = descriptor_irreps + descriptor_irreps + bond_irreps
         self.target_irreps = target_irreps
         self.linear = o3.Linear(self.input_irreps, target_irreps)
 
     def forward(
         self,
         descriptor_i: torch.Tensor,
-        displacement_ij: torch.Tensor,
+        bond: torch.Tensor,
         descriptor_j: torch.Tensor,
     ) -> torch.Tensor:
-        del displacement_ij
-        return self.linear(torch.cat((descriptor_i, descriptor_j), dim=-1))
+        return self.linear(torch.cat((descriptor_i, descriptor_j, bond), dim=-1))
 
 
 def _reachable_hidden(input_irreps: Irreps, *, multiplicity: int, l_max: int) -> Irreps:
@@ -409,7 +413,11 @@ class FullBlockNeuralPairMapper(nn.Module):
         for pair in combinations_with_replacement(elements, 2):
             target = target_transform.irreps(pair)
             if architecture == "m0":
-                kernel: nn.Module = LinearPairKernel(self.descriptor_irreps, target)
+                kernel: nn.Module = LinearPairKernel(
+                    self.descriptor_irreps,
+                    self.bond_expansion.irreps_out,
+                    target,
+                )
             elif architecture == "m2":
                 kernel = DenseCGPairKernel(
                     self.descriptor_irreps,
@@ -468,7 +476,10 @@ class FullBlockNeuralPairMapper(nn.Module):
         return kernel(descriptor_i, bond, descriptor_j)
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
-        return self.onsite_kernels[species](descriptor)
+        prediction = self.onsite_kernels[species](descriptor)
+        return 0.5 * (
+            prediction + self.target_transform.reverse((species, species), prediction)
+        )
 
     def predict_offsite(
         self,

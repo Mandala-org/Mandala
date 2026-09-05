@@ -198,6 +198,9 @@ def _symmetry_metrics(
         errors["onsite_improper_o3_relative_error"] = _relative_error(
             rotated_onsite, onsite @ target_action.T
         )
+        errors["onsite_hermiticity_relative_error"] = _relative_error(
+            onsite, transform.reverse(("A", "A"), onsite)
+        )
 
         first = model(
             descriptor_i,
@@ -576,6 +579,7 @@ def main() -> None:
         reversal_values = [
             float(row["heterogeneous_reversal_relative_error"]),
             float(row["homogeneous_reversal_relative_error"]),
+            float(row["onsite_hermiticity_relative_error"]),
         ]
         row["passed"] = bool(
             max(equivariance_values) <= args.equivariance_tolerance
