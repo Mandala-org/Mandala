@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from scipy.optimize import linear_sum_assignment
+from e3nn import o3
+import numpy as np
+from scipy.optimize import least_squares, linear_sum_assignment
 import torch
 
 
@@ -125,6 +127,121 @@ def _project_inside(coordinates: torch.Tensor, radius: float) -> None:
         coordinates.mul_(torch.clamp(radius / norm.clamp_min(1e-12), max=1.0))
 
 
+def constructive_l0_l1_initializer(
+    descriptor,
+    target_descriptor: torch.Tensor,
+    species: torch.Tensor,
+    scales: torch.Tensor,
+    channels: list[dict[str, object]],
+    *,
+    starts: int,
+    seed: int,
+) -> tuple[torch.Tensor, float]:
+    """Recover radii from l=0 channels, then directions from l=1 channels.
+
+    This is a finite numerical realization of the radial-moment/Vandermonde
+    route.  It requires at least as many independent l=1 radial channels as
+    same-species points; otherwise the caller should use generic multistart.
+    """
+    if target_descriptor.device.type != "cpu":
+        raise ValueError("Constructive initializer currently runs on CPU")
+    generator = np.random.default_rng(seed)
+    recovered = torch.empty((len(species), 3), dtype=torch.float64)
+    basis = o3.spherical_harmonics(
+        1,
+        torch.eye(3, dtype=torch.float64),
+        normalize=True,
+        normalization="component",
+    )
+    inverse_basis = torch.linalg.inv(basis)
+    total_residual = 0.0
+    for atomic_number_tensor in torch.unique(species, sorted=True):
+        atomic_number = int(atomic_number_tensor)
+        locations = torch.nonzero(
+            species == atomic_number_tensor, as_tuple=False
+        ).flatten()
+        count = len(locations)
+        scalar_channels = sorted(
+            [
+                channel
+                for channel in channels
+                if int(channel["species"]) == atomic_number and int(channel["l"]) == 0
+            ],
+            key=lambda channel: int(
+                channel.get("radial_index", channel.get("frequency_index", 0))
+            ),
+        )
+        vector_channels = sorted(
+            [
+                channel
+                for channel in channels
+                if int(channel["species"]) == atomic_number and int(channel["l"]) == 1
+            ],
+            key=lambda channel: int(
+                channel.get("radial_index", channel.get("frequency_index", 0))
+            ),
+        )
+        if len(scalar_channels) < count or len(vector_channels) < count:
+            raise ValueError(
+                f"Insufficient l=0/l=1 channels for {count} atoms of Z={atomic_number}"
+            )
+        scalar_indices = torch.tensor(
+            [int(channel["start"]) for channel in scalar_channels], dtype=torch.long
+        )
+        scalar_target = target_descriptor[scalar_indices]
+        scalar_scale = scales[scalar_indices]
+        local_species = torch.full((count,), atomic_number, dtype=torch.long)
+
+        def residual(radii_array: np.ndarray) -> np.ndarray:
+            radii = torch.from_numpy(np.sort(radii_array)).to(torch.float64)
+            trial = torch.zeros((count, 3), dtype=torch.float64)
+            trial[:, 0] = radii
+            with torch.no_grad():
+                values = descriptor(trial, local_species)[0][scalar_indices]
+            return ((values - scalar_target) / scalar_scale).numpy()
+
+        best = None
+        for _attempt in range(starts):
+            initial = np.sort(
+                generator.uniform(
+                    0.08 * descriptor.cutoff, 0.82 * descriptor.cutoff, count
+                )
+            )
+            candidate = least_squares(
+                residual,
+                initial,
+                bounds=(0.03 * descriptor.cutoff, 0.85 * descriptor.cutoff),
+                max_nfev=500,
+                ftol=1e-13,
+                xtol=1e-13,
+                gtol=1e-13,
+            )
+            score = float(np.sqrt(np.mean(residual(candidate.x) ** 2)))
+            if best is None or score < best[0]:
+                best = (score, np.sort(candidate.x))
+        if best is None:  # pragma: no cover - starts is validated by callers
+            raise RuntimeError("No radial reconstruction attempt was made")
+        total_residual = max(total_residual, best[0])
+        radii = torch.from_numpy(best[1]).to(torch.float64)
+        trial = torch.zeros((count, 3), dtype=torch.float64)
+        trial[:, 0] = radii
+        contributions = descriptor.contribution(local_species, trial)
+        known_y = basis[0]
+        radial_matrix = torch.empty((len(vector_channels), count), dtype=torch.float64)
+        target_y = torch.empty((len(vector_channels), 3), dtype=torch.float64)
+        for row, channel in enumerate(vector_channels):
+            start, stop = int(channel["start"]), int(channel["stop"])
+            target_y[row] = target_descriptor[start:stop]
+            radial_matrix[row] = (contributions[:, start:stop] @ known_y) / torch.dot(
+                known_y, known_y
+            )
+        recovered_y = torch.linalg.lstsq(radial_matrix, target_y).solution
+        unit = recovered_y @ inverse_basis
+        unit /= torch.linalg.vector_norm(unit, dim=-1, keepdim=True).clamp_min(1e-12)
+        recovered[locations] = radii[:, None] * unit
+    return recovered, total_residual
+
+
 def reconstruct_multistart(
     descriptor,
     target_coordinates: torch.Tensor,
@@ -136,9 +253,12 @@ def reconstruct_multistart(
     polish_steps: int,
     learning_rate: float,
     seed: int,
+    stage_masks: tuple[torch.Tensor, ...] | None = None,
+    polish_candidates: int = 4,
+    initial_coordinates: torch.Tensor | None = None,
     radial_fraction: float = 0.85,
 ) -> InverseResult:
-    """Recover a fixed-count/species neighborhood using random-start optimization."""
+    """Recover a fixed-count/species neighborhood using continuation in ℓ."""
     generator = torch.Generator(device=target_coordinates.device).manual_seed(seed)
     coordinates = torch.randn(
         starts,
@@ -150,37 +270,24 @@ def reconstruct_multistart(
     )
     coordinates *= descriptor.cutoff * 0.45
     _project_inside(coordinates, descriptor.cutoff * radial_fraction)
+    if initial_coordinates is not None:
+        if initial_coordinates.shape != coordinates.shape[1:]:
+            raise ValueError("initial_coordinates shape does not match environment")
+        coordinates[0] = initial_coordinates
     coordinates.requires_grad_(True)
     target = descriptor(target_coordinates, species)[0].detach()
-    optimizer = torch.optim.Adam([coordinates], lr=learning_rate)
-    for _step in range(steps):
-        optimizer.zero_grad(set_to_none=True)
-        values = _batched_descriptor(descriptor, coordinates, species)
-        per_start = ((values - target) / scales).square().mean(dim=-1)
-        radii = torch.linalg.vector_norm(coordinates, dim=-1)
-        boundary = (
-            torch.relu(radii - descriptor.cutoff * radial_fraction)
-            .square()
-            .mean(dim=-1)
-        )
-        loss = (per_start + 100.0 * boundary).sum()
-        loss.backward()
-        optimizer.step()
-        _project_inside(coordinates, descriptor.cutoff * radial_fraction)
-    if polish_steps:
-        optimizer_lbfgs = torch.optim.LBFGS(
-            [coordinates],
-            lr=0.8,
-            max_iter=polish_steps,
-            tolerance_grad=1e-12,
-            tolerance_change=1e-14,
-            line_search_fn="strong_wolfe",
-        )
-
-        def closure():
-            optimizer_lbfgs.zero_grad(set_to_none=True)
+    if stage_masks is None:
+        stage_masks = (torch.ones_like(scales, dtype=torch.bool),)
+    stage_masks = tuple(mask.to(device=scales.device) for mask in stage_masks)
+    stage_steps = max(1, steps // len(stage_masks))
+    for mask in stage_masks:
+        optimizer = torch.optim.Adam([coordinates], lr=learning_rate)
+        for _step in range(stage_steps):
+            optimizer.zero_grad(set_to_none=True)
             values = _batched_descriptor(descriptor, coordinates, species)
-            per_start = ((values - target) / scales).square().mean(dim=-1)
+            per_start = (
+                ((values[:, mask] - target[mask]) / scales[mask]).square().mean(dim=-1)
+            )
             radii = torch.linalg.vector_norm(coordinates, dim=-1)
             boundary = (
                 torch.relu(radii - descriptor.cutoff * radial_fraction)
@@ -189,10 +296,44 @@ def reconstruct_multistart(
             )
             loss = (per_start + 100.0 * boundary).sum()
             loss.backward()
-            return loss
+            optimizer.step()
+            _project_inside(coordinates, descriptor.cutoff * radial_fraction)
+    if polish_steps:
+        with torch.no_grad():
+            values = _batched_descriptor(descriptor, coordinates, species)
+            residuals = ((values - target) / scales).square().mean(dim=-1)
+            candidates = torch.argsort(residuals)[: min(polish_candidates, starts)]
+        for candidate in candidates.tolist():
+            point = coordinates[candidate : candidate + 1].detach().clone()
+            point.requires_grad_(True)
+            optimizer_lbfgs = torch.optim.LBFGS(
+                [point],
+                lr=0.8,
+                max_iter=polish_steps,
+                tolerance_grad=1e-12,
+                tolerance_change=1e-14,
+                line_search_fn="strong_wolfe",
+            )
 
-        optimizer_lbfgs.step(closure)
-        _project_inside(coordinates, descriptor.cutoff * radial_fraction)
+            def closure():
+                optimizer_lbfgs.zero_grad(set_to_none=True)
+                values = _batched_descriptor(descriptor, point, species)[0]
+                loss = (((values - target) / scales).square()).mean()
+                radii = torch.linalg.vector_norm(point, dim=-1)
+                loss = (
+                    loss
+                    + 100.0
+                    * torch.relu(radii - descriptor.cutoff * radial_fraction)
+                    .square()
+                    .mean()
+                )
+                loss.backward()
+                return loss
+
+            optimizer_lbfgs.step(closure)
+            _project_inside(point, descriptor.cutoff * radial_fraction)
+            with torch.no_grad():
+                coordinates[candidate].copy_(point[0])
     with torch.no_grad():
         values = _batched_descriptor(descriptor, coordinates, species)
         residuals = torch.sqrt(((values - target) / scales).square().mean(dim=-1))

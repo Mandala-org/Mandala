@@ -11,6 +11,7 @@ import torch
 from pair_descriptors import RawNeighborDensityDescriptor
 from pair_descriptors.information_certification import (
     adversarial_collision_search,
+    constructive_l0_l1_initializer,
     descriptor_jacobian,
     expanded_irrep_scales,
     geometry_signature,
@@ -96,6 +97,38 @@ def test_jacobian_inverse_collision_and_continuation_smoke():
         learning_rate=0.01,
     )
     assert all(torch.isfinite(torch.tensor(value)) for value in continuation.values())
+
+
+def test_constructive_l0_l1_initializer_recovers_small_environment():
+    descriptor, coordinates, species, scales = _fixture()
+    target = descriptor(coordinates, species)[0]
+    channels = [
+        {
+            "species": channel.species,
+            "radial_index": channel.radial_index,
+            "l": channel.l,
+            "start": channel.start,
+            "stop": channel.stop,
+        }
+        for channel in descriptor.channels
+    ]
+    previous_threads = torch.get_num_threads()
+    try:
+        torch.set_num_threads(1)
+        recovered, radial_residual = constructive_l0_l1_initializer(
+            descriptor,
+            target,
+            species,
+            scales,
+            channels,
+            starts=4,
+            seed=22,
+        )
+    finally:
+        torch.set_num_threads(previous_threads)
+    assert radial_residual < 1e-10
+    assert species_assigned_rmsd(recovered, coordinates, species) < 1e-8
+    assert pair_distance_rmsd(recovered, coordinates) < 1e-8
 
 
 def test_stage3_cli_tiny_end_to_end(tmp_path):
