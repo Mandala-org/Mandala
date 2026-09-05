@@ -479,9 +479,9 @@ def main() -> None:
                 "learned_coefficient_count": _learned_coefficient_count(models[key]),
                 "descriptor_cache_size_bytes": descriptor_summary["cache_size_bytes"],
                 "descriptor_precompute_seconds": descriptor_summary["elapsed_seconds"],
-                "descriptor_neighbor_contributions_per_second": descriptor_summary[
+                "descriptor_neighbor_contributions_per_second": descriptor_summary.get(
                     "neighbor_contributions_per_second"
-                ],
+                ),
                 "validation_matrix_mae_mev": headline["mae"],
                 "validation_matrix_rmse_mev": headline["rmse"],
                 "validation_matrix_element_count": headline["scalar_count"],
