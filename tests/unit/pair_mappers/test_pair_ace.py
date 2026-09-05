@@ -52,7 +52,7 @@ def test_pair_mapper_returns_one_complete_full_block(components):
 
 
 @pytest.mark.unit
-def test_heterogeneous_pair_reversal_is_exact(components):
+def test_heterogeneous_directions_are_independent_raw_predictions(components):
     transform, density, model = components
     descriptor_i = density(
         torch.tensor([[1.0, 0.2, 0.3]], dtype=torch.float64), torch.tensor([8])
@@ -67,13 +67,13 @@ def test_heterogeneous_pair_reversal_is_exact(components):
     reverse = model.predict_offsite(
         ("B", "A"), descriptor_j, -displacement, descriptor_i
     )
-    assert torch.allclose(
+    assert not torch.allclose(
         reverse, transform.reverse(("A", "B"), forward), atol=1e-12, rtol=1e-12
     )
 
 
 @pytest.mark.unit
-def test_homonuclear_pair_reversal_is_exact(components):
+def test_homonuclear_directions_are_independent_raw_predictions(components):
     transform, density, model = components
     descriptor_i = density(
         torch.tensor([[1.0, 0.2, 0.3]], dtype=torch.float64), torch.tensor([8])
@@ -88,19 +88,19 @@ def test_homonuclear_pair_reversal_is_exact(components):
     reverse = model.predict_offsite(
         ("A", "A"), descriptor_j, -displacement, descriptor_i
     )
-    assert torch.allclose(
+    assert not torch.allclose(
         reverse, transform.reverse(("A", "A"), forward), atol=1e-12, rtol=1e-12
     )
 
 
 @pytest.mark.unit
-def test_onsite_hermiticity_is_exact(components):
+def test_onsite_prediction_is_raw(components):
     transform, density, model = components
     descriptor = density(
         torch.tensor([[1.0, 0.2, 0.3]], dtype=torch.float64), torch.tensor([8])
     )
     onsite = model.predict_onsite("A", descriptor)
-    assert torch.allclose(
+    assert not torch.allclose(
         onsite,
         transform.reverse(("A", "A"), onsite),
         atol=1e-12,
@@ -154,5 +154,13 @@ def test_pair_mapper_finalizes_streaming_offsite_statistics(components):
     accumulator.update(features[7:], targets[7:])
     diagnostics = model.fit_offsite_from_accumulator(("A", "B"), accumulator)
     assert diagnostics.sample_count == 20
-    with pytest.raises(ValueError, match="canonical"):
-        model.fit_offsite_from_accumulator(("B", "A"), accumulator)
+    reverse_accumulator = EquivariantRidgeAccumulator(
+        model.offsite_basis.irreps_out,
+        transform.irreps("B-A"),
+        dtype=torch.float64,
+    )
+    reverse_accumulator.update(features, targets)
+    reverse_diagnostics = model.fit_offsite_from_accumulator(
+        ("B", "A"), reverse_accumulator
+    )
+    assert reverse_diagnostics.sample_count == 20

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import combinations_with_replacement
+from itertools import product
 from typing import Mapping
 
 from e3nn.o3 import Irreps
@@ -27,8 +27,8 @@ class ClosedFormM0PairMapper(nn.Module):
 
     M0 creates no tensor-product channels. Missing target irrep types are
     returned as exact zeros and recorded through infinite-condition entries in
-    the fit diagnostics. Canonical species ordering and an exact homonuclear
-    reversal projection enforce the full-block Hermiticity convention.
+    the fit diagnostics. Every ordered species pair is fitted separately and
+    predictions remain raw until post-training Hermitian projection.
     """
 
     def __init__(
@@ -56,7 +56,6 @@ class ClosedFormM0PairMapper(nn.Module):
             + self.bond_expansion.irreps_out
         )
         elements = target_transform.orbital_config.elements()
-        self._element_rank = {element: index for index, element in enumerate(elements)}
         self.onsite_regressors = nn.ModuleDict(
             {
                 element: EquivariantRidgeRegressor(
@@ -78,16 +77,9 @@ class ClosedFormM0PairMapper(nn.Module):
                     dtype=dtype,
                     allow_missing_target_irreps=True,
                 )
-                for pair in combinations_with_replacement(elements, 2)
+                for pair in product(elements, repeat=2)
             }
         )
-
-    def _canonical_pair(self, pair: tuple[str, str]) -> tuple[tuple[str, str], bool]:
-        try:
-            reverse = self._element_rank[pair[0]] > self._element_rank[pair[1]]
-        except KeyError as exc:
-            raise KeyError(f"unknown species pair {pair}") from exc
-        return ((pair[1], pair[0]) if reverse else pair), reverse
 
     def onsite_accumulator(
         self, species: str, *, device: torch.device | str
@@ -103,10 +95,9 @@ class ClosedFormM0PairMapper(nn.Module):
     def offsite_accumulator(
         self, pair: tuple[str, str], *, device: torch.device | str
     ) -> EquivariantRidgeAccumulator:
-        canonical, _ = self._canonical_pair(pair)
         return EquivariantRidgeAccumulator(
             self.offsite_irreps,
-            self.target_transform.irreps(canonical),
+            self.target_transform.irreps(pair),
             dtype=torch.float64,
             device=device,
             allow_missing_target_irreps=True,
@@ -134,18 +125,12 @@ class ClosedFormM0PairMapper(nn.Module):
         pair: tuple[str, str],
         accumulator: EquivariantRidgeAccumulator,
     ) -> RidgeFitDiagnostics:
-        canonical, was_reversed = self._canonical_pair(pair)
-        if was_reversed:
-            raise ValueError("streaming accumulators must use canonical pairs")
-        return self.offsite_regressors[_module_key(canonical)].fit_from_accumulator(
+        return self.offsite_regressors[_module_key(pair)].fit_from_accumulator(
             accumulator
         )
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
-        prediction = self.onsite_regressors[species](descriptor)
-        return 0.5 * (
-            prediction + self.target_transform.reverse((species, species), prediction)
-        )
+        return self.onsite_regressors[species](descriptor)
 
     def predict_offsite(
         self,
@@ -154,25 +139,9 @@ class ClosedFormM0PairMapper(nn.Module):
         displacement_ij: torch.Tensor,
         descriptor_j: torch.Tensor,
     ) -> torch.Tensor:
-        canonical, was_reversed = self._canonical_pair(pair)
-        if was_reversed:
-            descriptor_i, descriptor_j = descriptor_j, descriptor_i
-            displacement_ij = -displacement_ij
-        regressor = self.offsite_regressors[_module_key(canonical)]
-        prediction = regressor(
+        regressor = self.offsite_regressors[_module_key(pair)]
+        return regressor(
             self.offsite_features(descriptor_i, displacement_ij, descriptor_j)
-        )
-        if canonical[0] == canonical[1]:
-            opposite = regressor(
-                self.offsite_features(descriptor_j, -displacement_ij, descriptor_i)
-            )
-            prediction = 0.5 * (
-                prediction + self.target_transform.reverse(canonical, opposite)
-            )
-        return (
-            self.target_transform.reverse(canonical, prediction)
-            if was_reversed
-            else prediction
         )
 
     def forward(

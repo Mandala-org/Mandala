@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import combinations_with_replacement
+from itertools import product
 from typing import Mapping
 
 import torch
@@ -28,10 +28,9 @@ def _module_key(pair: tuple[str, str]) -> str:
 class NativeACEPairMapper(nn.Module):
     """Pair-local ACE basis plus equivariant linear full-block regression.
 
-    There is one fit per species/pair type, but every fit predicts the complete
-    block-irrep vector in one call.  Shell-pair provenance remains solely in the
-    fixed target schema.  Reversed heterogeneous pairs are generated from the
-    canonical prediction through the exact AO-transpose-derived map.
+    There is one fit per directed species-pair type, and every fit predicts the
+    complete raw block-irrep vector in one call. Hermitian projection is an
+    evaluation/export operation and is deliberately absent from this mapper.
     """
 
     def __init__(
@@ -66,7 +65,6 @@ class NativeACEPairMapper(nn.Module):
             dtype=dtype,
         )
         elements = target_transform.orbital_config.elements()
-        self._element_rank = {element: index for index, element in enumerate(elements)}
         self.onsite_regressors = nn.ModuleDict(
             {
                 element: EquivariantRidgeRegressor(
@@ -86,16 +84,9 @@ class NativeACEPairMapper(nn.Module):
                     ridge=ridge,
                     dtype=dtype,
                 )
-                for pair in combinations_with_replacement(elements, 2)
+                for pair in product(elements, repeat=2)
             }
         )
-
-    def _canonical_pair(self, pair: tuple[str, str]) -> tuple[tuple[str, str], bool]:
-        try:
-            reversed_order = self._element_rank[pair[0]] > self._element_rank[pair[1]]
-        except KeyError as exc:
-            raise KeyError(f"Unknown species pair {pair}") from exc
-        return ((pair[1], pair[0]) if reversed_order else pair), reversed_order
 
     def onsite_features(self, descriptor: torch.Tensor) -> torch.Tensor:
         return self.onsite_basis(descriptor)
@@ -125,13 +116,8 @@ class NativeACEPairMapper(nn.Module):
         descriptor_j: torch.Tensor,
         target: torch.Tensor,
     ) -> RidgeFitDiagnostics:
-        canonical, was_reversed = self._canonical_pair(pair)
-        if was_reversed:
-            descriptor_i, descriptor_j = descriptor_j, descriptor_i
-            displacement_ij = -displacement_ij
-            target = self.target_transform.reverse(pair, target)
         features = self.offsite_features(descriptor_i, displacement_ij, descriptor_j)
-        return self.offsite_regressors[_module_key(canonical)].fit(features, target)
+        return self.offsite_regressors[_module_key(pair)].fit(features, target)
 
     @torch.no_grad()
     def fit_onsite_from_accumulator(
@@ -146,19 +132,13 @@ class NativeACEPairMapper(nn.Module):
         pair: tuple[str, str],
         accumulator: EquivariantRidgeAccumulator,
     ) -> RidgeFitDiagnostics:
-        """Finalize one canonical bounded-memory offsite fit."""
-        canonical, was_reversed = self._canonical_pair(pair)
-        if was_reversed:
-            raise ValueError("Streaming offsite accumulators must use canonical pairs")
-        return self.offsite_regressors[_module_key(canonical)].fit_from_accumulator(
+        """Finalize one directed bounded-memory offsite fit."""
+        return self.offsite_regressors[_module_key(pair)].fit_from_accumulator(
             accumulator
         )
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
-        prediction = self.onsite_regressors[species](self.onsite_features(descriptor))
-        return 0.5 * (
-            prediction + self.target_transform.reverse((species, species), prediction)
-        )
+        return self.onsite_regressors[species](self.onsite_features(descriptor))
 
     def predict_offsite(
         self,
@@ -167,30 +147,9 @@ class NativeACEPairMapper(nn.Module):
         displacement_ij: torch.Tensor,
         descriptor_j: torch.Tensor,
     ) -> torch.Tensor:
-        canonical, was_reversed = self._canonical_pair(pair)
-        if was_reversed:
-            descriptor_i, descriptor_j = descriptor_j, descriptor_i
-            displacement_ij = -displacement_ij
-        regressor = self.offsite_regressors[_module_key(canonical)]
-        prediction = regressor(
+        regressor = self.offsite_regressors[_module_key(pair)]
+        return regressor(
             self.offsite_features(descriptor_i, displacement_ij, descriptor_j)
-        )
-        # A homonuclear directed block and its reversed edge share one module,
-        # so canonical species ordering alone cannot enforce H_ji = H_ij^T.
-        # Project the two orientations onto the exact AO-transpose-derived
-        # subspace.  This remains one full-block prediction and is linear in
-        # the deterministic ACE features.
-        if canonical[0] == canonical[1]:
-            opposite = regressor(
-                self.offsite_features(descriptor_j, -displacement_ij, descriptor_i)
-            )
-            prediction = 0.5 * (
-                prediction + self.target_transform.reverse(canonical, opposite)
-            )
-        return (
-            self.target_transform.reverse(canonical, prediction)
-            if was_reversed
-            else prediction
         )
 
     def forward(

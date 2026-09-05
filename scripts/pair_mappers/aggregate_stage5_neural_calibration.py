@@ -56,11 +56,18 @@ def main() -> None:
                 "architecture": task["architecture"],
                 "resource_band": task["resource_band"],
                 "learning_rate": task["learning_rate"],
+                "range_loss_mode": task["range_loss_mode"],
                 "parameter_count": summary["parameter_count"],
                 "best_step": summary["best_step"],
                 "validation_matrix_mae_mev": summary["best_validation_matrix_mae_mev"],
                 "validation_matrix_rmse_mev": summary[
                     "best_validation_matrix_rmse_mev"
+                ],
+                "validation_raw_matrix_mae_mev": summary[
+                    "best_validation_raw_matrix_mae_mev"
+                ],
+                "raw_relative_projection_change": summary[
+                    "raw_relative_projection_change"
                 ],
                 "training_seconds": summary["training_seconds"],
                 "sampled_training_blocks_per_second": summary[
@@ -70,10 +77,10 @@ def main() -> None:
                 "stopped_early": summary["stopped_early"],
             }
         )
-    if len(rows) != 12 or any(
+    if len(rows) != 24 or any(
         not math.isfinite(float(row["validation_matrix_mae_mev"])) for row in rows
     ):
-        raise ValueError("calibration grid must have 12 finite results")
+        raise ValueError("calibration grid must have 24 finite results")
     rows.sort(
         key=lambda row: (
             float(row["validation_matrix_mae_mev"]),
@@ -91,6 +98,10 @@ def main() -> None:
         )
         for architecture in ("m3", "m5")
     }
+    best_by_range_loss = {
+        mode: next(row["task_id"] for row in rows if row["range_loss_mode"] == mode)
+        for mode in ("physical_mse", "weighted_normalized_mse")
+    }
     summary = {
         "completed": True,
         "passed": True,
@@ -99,28 +110,38 @@ def main() -> None:
         "best_overall_task_id": rows[0]["task_id"],
         "best_overall_validation_matrix_mae_mev": rows[0]["validation_matrix_mae_mev"],
         "best_by_architecture": best_by_architecture,
+        "best_by_range_loss": best_by_range_loss,
         "test_shards_read": False,
     }
     _atomic_json(output / "summary.json", summary)
 
     colors = {"m3": "#0072B2", "m5": "#D55E00"}
-    markers = {3.0e-4: "o", 1.0e-3: "s"}
+    markers = {
+        (3.0e-4, "physical_mse"): "o",
+        (1.0e-3, "physical_mse"): "s",
+        (3.0e-4, "weighted_normalized_mse"): "^",
+        (1.0e-3, "weighted_normalized_mse"): "D",
+    }
     figure, axis = plt.subplots(figsize=(7.5, 5.0), constrained_layout=True)
     for architecture in ("m3", "m5"):
-        for learning_rate in (3.0e-4, 1.0e-3):
+        for learning_rate, range_loss_mode in markers:
             subset = [
                 row
                 for row in rows
                 if row["architecture"] == architecture
                 and float(row["learning_rate"]) == learning_rate
+                and row["range_loss_mode"] == range_loss_mode
             ]
             axis.scatter(
                 [row["parameter_count"] for row in subset],
                 [row["validation_matrix_mae_mev"] for row in subset],
                 color=colors[architecture],
-                marker=markers[learning_rate],
+                marker=markers[(learning_rate, range_loss_mode)],
                 s=55,
-                label=f"{architecture.upper()}, lr={learning_rate:g}",
+                label=(
+                    f"{architecture.upper()}, lr={learning_rate:g}, "
+                    f"{range_loss_mode.replace('_mse', '')}"
+                ),
             )
             for row in subset:
                 axis.annotate(
@@ -130,13 +151,14 @@ def main() -> None:
                     textcoords="offset points",
                     fontsize=8,
                 )
-    axis.axhline(
-        float(manifest["m0_gate"]["best_validation_matrix_mae_mev"]),
-        color="black",
-        linestyle="--",
-        linewidth=1.0,
-        label="best M0 validation",
-    )
+    if manifest["m0_gate"] is not None:
+        axis.axhline(
+            float(manifest["m0_gate"]["best_validation_matrix_mae_mev"]),
+            color="black",
+            linestyle="--",
+            linewidth=1.0,
+            label="best M0 validation",
+        )
     axis.set_xscale("log")
     axis.set_yscale("log")
     axis.set_xlabel("Learnable parameters")
@@ -149,14 +171,14 @@ def main() -> None:
     lines = [
         "# Stage 5 M3/M5 neural calibration",
         "",
-        "One seed, 25% of training structures, full validation partition, and no test-target access.",
+        "One seed, 25% of training structures, both physical-equivalent range-loss forms, full validation partition, and no test-target access.",
         "",
-        "| Rank | Task | Parameters | Best step | Validation MAE (meV) | RMSE (meV) | blocks/s | Peak GPU (GiB) |",
-        "|---:|---|---:|---:|---:|---:|---:|---:|",
+        "| Rank | Task | Loss form | Parameters | Best step | Validation MAE (meV) | RMSE (meV) | blocks/s | Peak GPU (GiB) |",
+        "|---:|---|---|---:|---:|---:|---:|---:|---:|",
     ]
     for rank, row in enumerate(rows, start=1):
         lines.append(
-            f"| {rank} | {row['task_id']} | {int(row['parameter_count']):,} | "
+            f"| {rank} | {row['task_id']} | {row['range_loss_mode']} | {int(row['parameter_count']):,} | "
             f"{row['best_step']} | {float(row['validation_matrix_mae_mev']):.6f} | "
             f"{float(row['validation_matrix_rmse_mev']):.6f} | "
             f"{float(row['sampled_training_blocks_per_second']):.1f} | "

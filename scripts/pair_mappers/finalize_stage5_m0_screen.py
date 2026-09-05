@@ -73,7 +73,10 @@ def main() -> None:
         model_path = output / "models" / f"{key}.pt"
         if not model_path.is_file():
             raise FileNotFoundError(model_path)
-        headline = detailed[key]["matrix_elements"]
+        raw_metrics = detailed[key].get("raw", detailed[key])
+        projected_metrics = detailed[key].get("projected", detailed[key])
+        raw_headline = raw_metrics["matrix_elements"]
+        headline = projected_metrics["matrix_elements"]
         missing = sorted(
             {
                 irrep
@@ -100,8 +103,13 @@ def main() -> None:
                 ),
                 "validation_matrix_mae_mev": headline["mae"],
                 "validation_matrix_rmse_mev": headline["rmse"],
+                "validation_raw_matrix_mae_mev": raw_headline["mae"],
+                "validation_raw_matrix_rmse_mev": raw_headline["rmse"],
+                "raw_relative_projection_change": detailed[key].get(
+                    "raw_relative_projection_change"
+                ),
                 "validation_matrix_element_count": headline["scalar_count"],
-                "validation_block_count": detailed[key]["block_frobenius"][
+                "validation_block_count": projected_metrics["block_frobenius"][
                     "block_count"
                 ],
                 "missing_target_irreps": ";".join(missing),

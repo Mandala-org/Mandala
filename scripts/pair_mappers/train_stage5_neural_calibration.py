@@ -21,16 +21,21 @@ from e3nn import o3
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.envelope import build_edge_envelope, load_pair_envelope_table
 from pair_hamiltonian.metrics import FullBlockMetricAccumulator
+from pair_hamiltonian.hermiticity import (
+    project_directed_irreps,
+    project_onsite_irreps,
+)
 from pair_hamiltonian.output_schema import (
     FullBlockIrrepTransform,
     o3_representation_matrix,
 )
-from pair_hamiltonian.sio2_cache import CANONICAL_PAIR_NAMES
+from pair_hamiltonian.range_objective import range_factored_mse
+from pair_hamiltonian.sio2_cache import DIRECTED_PAIR_NAMES
 from pair_mappers.neural import FullBlockNeuralPairMapper
 
 SPECIES = ("O", "Si")
 SPECIES_Z = {"O": 8, "Si": 14}
-PAIRS = tuple(tuple(name.split("-")) for name in CANONICAL_PAIR_NAMES)
+PAIRS = tuple(tuple(name.split("-")) for name in DIRECTED_PAIR_NAMES)
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,6 +70,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bond-cutoff-angstrom", type=float, required=True)
     parser.add_argument("--learning-rate", type=float, required=True)
     parser.add_argument("--weight-decay", type=float, required=True)
+    parser.add_argument(
+        "--range-loss-mode",
+        choices=("physical_mse", "weighted_normalized_mse"),
+        required=True,
+    )
     parser.add_argument("--steps", type=int, required=True)
     parser.add_argument("--eval-interval", type=int, required=True)
     parser.add_argument("--early-stopping-evaluations", type=int, required=True)
@@ -153,6 +163,7 @@ def _load_shard(
         "onsite_target_irreps_hartree",
         "offsite_source",
         "offsite_target",
+        "offsite_inverse",
         "offsite_displacement_angstrom",
         "offsite_pair_type",
         "offsite_target_irreps_hartree",
@@ -191,7 +202,20 @@ def _concatenate_partition(
         }
         for pair in PAIRS
     }
+    offsite_flat = {
+        key: []
+        for key in (
+            "source",
+            "target_index",
+            "displacement",
+            "target",
+            "envelope",
+            "pair_type",
+            "inverse",
+        )
+    }
     atom_offset = 0
+    edge_offset = 0
     for row in rows:
         shard = _load_shard(
             baseline_cache,
@@ -211,14 +235,27 @@ def _concatenate_partition(
             )
         pair_types = shard["offsite_pair_type"].to(torch.long)
         displacement = shard["offsite_displacement_angstrom"]
+        distance = torch.linalg.vector_norm(displacement, dim=-1)
+        all_envelope = build_edge_envelope(
+            distance, pair_types, envelope_table
+        ).clamp_min(envelope_floor)
+        offsite_flat["source"].append(
+            shard["offsite_source"].to(torch.long) + atom_offset
+        )
+        offsite_flat["target_index"].append(
+            shard["offsite_target"].to(torch.long) + atom_offset
+        )
+        offsite_flat["displacement"].append(displacement)
+        offsite_flat["target"].append(shard["offsite_target_irreps_hartree"])
+        offsite_flat["envelope"].append(all_envelope)
+        offsite_flat["pair_type"].append(pair_types)
+        offsite_flat["inverse"].append(
+            shard["offsite_inverse"].to(torch.long) + edge_offset
+        )
         for pair_index, pair in enumerate(PAIRS):
             mask = pair_types == pair_index
             pair_displacement = displacement[mask]
-            pair_type_values = pair_types[mask]
-            distance = torch.linalg.vector_norm(pair_displacement, dim=-1)
-            envelope = build_edge_envelope(
-                distance, pair_type_values, envelope_table
-            ).clamp_min(envelope_floor)
+            envelope = all_envelope[mask]
             offsite[pair]["source"].append(
                 shard["offsite_source"][mask].to(torch.long) + atom_offset
             )
@@ -229,10 +266,14 @@ def _concatenate_partition(
             offsite[pair]["target"].append(shard["offsite_target_irreps_hartree"][mask])
             offsite[pair]["envelope"].append(envelope)
         atom_offset += descriptor.shape[0]
+        edge_offset += pair_types.shape[0]
     packed: dict[str, object] = {
         "descriptor": torch.cat(descriptors).to(device),
         "onsite": {},
         "offsite": {},
+        "offsite_flat": {
+            key: torch.cat(chunks).to(device) for key, chunks in offsite_flat.items()
+        },
     }
     for species, values in onsite.items():
         packed["onsite"][species] = {
@@ -295,8 +336,13 @@ def _training_loss(
         )
         target = values["target"].index_select(0, indices)
         envelope = values["envelope"].index_select(0, indices)
-        weighted_loss = weighted_loss + (group_count / total_count) * torch.mean(
-            (prediction - target / envelope[:, None]).square()
+        weighted_loss = weighted_loss + (
+            group_count / total_count
+        ) * range_factored_mse(
+            prediction,
+            target,
+            envelope,
+            mode=args.range_loss_mode,
         )
         sampled += indices.numel()
     return weighted_loss, sampled
@@ -349,12 +395,65 @@ def _symmetry_errors(
     same_reverse = model.predict_offsite(
         ("O", "O"), descriptor_j, -displacement, descriptor_i
     )
-    errors["homogeneous_reversal"] = relative(
+    errors["raw_homogeneous_reversal"] = relative(
         same_reverse, model.target_transform.reverse(("O", "O"), same)
     )
+    same_raw = torch.cat((same, same_reverse), dim=0)
+    same_inverse = torch.cat(
+        (
+            torch.arange(3, 6, device=device),
+            torch.arange(0, 3, device=device),
+        )
+    )
+    same_projected = project_directed_irreps(
+        model.target_transform,
+        DIRECTED_PAIR_NAMES,
+        same_raw,
+        torch.zeros(6, device=device, dtype=torch.long),
+        same_inverse,
+    )
+    errors["projected_homogeneous_reversal"] = relative(
+        same_projected[3:],
+        model.target_transform.reverse(("O", "O"), same_projected[:3]),
+    )
     onsite = model.predict_onsite("O", descriptor_i)
-    errors["onsite_hermiticity"] = relative(
+    errors["raw_onsite_hermiticity"] = relative(
         onsite, model.target_transform.reverse(("O", "O"), onsite)
+    )
+    heterogeneous_reverse = model.predict_offsite(
+        ("Si", "O"), descriptor_j, -displacement, descriptor_i
+    )
+    raw = torch.cat((reference, heterogeneous_reverse), dim=0)
+    inverse = torch.cat(
+        (
+            torch.arange(3, 6, device=device),
+            torch.arange(0, 3, device=device),
+        )
+    )
+    pair_types = torch.cat(
+        (
+            torch.full((3,), 1, device=device, dtype=torch.long),
+            torch.full((3,), 2, device=device, dtype=torch.long),
+        )
+    )
+    projected = project_directed_irreps(
+        model.target_transform,
+        DIRECTED_PAIR_NAMES,
+        raw,
+        pair_types,
+        inverse,
+    )
+    errors["raw_heterogeneous_reversal"] = relative(
+        heterogeneous_reverse, model.target_transform.reverse(("O", "Si"), reference)
+    )
+    errors["projected_heterogeneous_reversal"] = relative(
+        projected[3:],
+        model.target_transform.reverse(("O", "Si"), projected[:3]),
+    )
+    projected_onsite = project_onsite_irreps(model.target_transform, "O", onsite)
+    errors["projected_onsite_hermiticity"] = relative(
+        projected_onsite,
+        model.target_transform.reverse(("O", "O"), projected_onsite),
     )
     return errors
 
@@ -368,59 +467,95 @@ def _evaluate(
     distance_bin_width: float,
 ) -> tuple[dict[str, object], int]:
     model.eval()
-    metrics = FullBlockMetricAccumulator(
-        transform_cpu, distance_bin_width_angstrom=distance_bin_width
-    )
+    metrics = {
+        mode: FullBlockMetricAccumulator(
+            transform_cpu, distance_bin_width_angstrom=distance_bin_width
+        )
+        for mode in ("raw", "projected")
+    }
     directed_blocks = 0
+    projection_change_square = [0.0, 0.0]
     for species in SPECIES:
         values = data["onsite"][species]
         for start in range(0, values["target"].shape[0], batch_size):
             stop = min(start + batch_size, values["target"].shape[0])
             prediction = model.predict_onsite(species, values["descriptor"][start:stop])
-            metrics.update(
+            target = values["target"][start:stop]
+            projected = project_onsite_irreps(
+                model.target_transform, species, prediction
+            )
+            metrics["raw"].update(
                 (species, species),
                 prediction.cpu(),
-                values["target"][start:stop].cpu(),
+                target.cpu(),
                 onsite=True,
             )
+            metrics["projected"].update(
+                (species, species),
+                projected.cpu(),
+                target.cpu(),
+                onsite=True,
+            )
+            projection_change_square[0] += float(
+                (prediction - projected).square().sum().item()
+            )
+            projection_change_square[1] += float(prediction.square().sum().item())
             directed_blocks += stop - start
     descriptors = data["descriptor"]
-    for pair in PAIRS:
-        values = data["offsite"][pair]
-        for start in range(0, values["target"].shape[0], batch_size):
-            stop = min(start + batch_size, values["target"].shape[0])
-            source = values["source"][start:stop]
-            target_index = values["target_index"][start:stop]
-            displacement = values["displacement"][start:stop]
-            target = values["target"][start:stop]
-            prediction = (
-                model.predict_offsite(
-                    pair,
-                    descriptors.index_select(0, source),
-                    displacement,
-                    descriptors.index_select(0, target_index),
-                )
-                * values["envelope"][start:stop, None]
-            )
-            distance = torch.linalg.vector_norm(displacement, dim=-1)
-            metrics.update(
+    flat = data["offsite_flat"]
+    raw = torch.empty_like(flat["target"])
+    for pair_index, pair in enumerate(PAIRS):
+        selected = torch.nonzero(flat["pair_type"] == pair_index).flatten()
+        for start in range(0, selected.numel(), batch_size):
+            batch = selected[start : start + batch_size]
+            source = flat["source"].index_select(0, batch)
+            target_index = flat["target_index"].index_select(0, batch)
+            prediction = model.predict_offsite(
                 pair,
-                prediction.cpu(),
+                descriptors.index_select(0, source),
+                flat["displacement"].index_select(0, batch),
+                descriptors.index_select(0, target_index),
+            )
+            prediction = prediction * flat["envelope"].index_select(0, batch)[:, None]
+            raw.index_copy_(0, batch, prediction)
+    projected = project_directed_irreps(
+        model.target_transform,
+        DIRECTED_PAIR_NAMES,
+        raw,
+        flat["pair_type"],
+        flat["inverse"],
+    )
+    projection_change_square[0] += float((raw - projected).square().sum().item())
+    projection_change_square[1] += float(raw.square().sum().item())
+    for pair_index, pair in enumerate(PAIRS):
+        selected = torch.nonzero(flat["pair_type"] == pair_index).flatten()
+        for start in range(0, selected.numel(), batch_size):
+            batch = selected[start : start + batch_size]
+            distance = torch.linalg.vector_norm(
+                flat["displacement"].index_select(0, batch), dim=-1
+            )
+            target = flat["target"].index_select(0, batch)
+            metrics["raw"].update(
+                pair,
+                raw.index_select(0, batch).cpu(),
                 target.cpu(),
                 onsite=False,
                 distances_angstrom=distance.cpu(),
             )
-            reverse_pair = (pair[1], pair[0])
-            metrics.update(
-                reverse_pair,
-                transform_cpu.reverse(pair, prediction.cpu()),
-                transform_cpu.reverse(pair, target.cpu()),
+            metrics["projected"].update(
+                pair,
+                projected.index_select(0, batch).cpu(),
+                target.cpu(),
                 onsite=False,
                 distances_angstrom=distance.cpu(),
             )
-            directed_blocks += 2 * (stop - start)
+            directed_blocks += batch.numel()
     model.train()
-    return metrics.compute(), directed_blocks
+    result = {mode: accumulator.compute() for mode, accumulator in metrics.items()}
+    result["raw_relative_projection_change"] = (
+        projection_change_square[0] / max(projection_change_square[1], 1.0e-300)
+    ) ** 0.5
+    return result, directed_blocks
 
 
 def main() -> None:
@@ -502,6 +637,7 @@ def main() -> None:
         "hidden_multiplicity": args.hidden_multiplicity,
         "invariant_hidden": args.invariant_hidden,
         "factorization_rank": args.factorization_rank,
+        "range_loss_mode": args.range_loss_mode,
     }
     if any(task[key] != value for key, value in frozen_values.items()):
         raise ValueError("CLI settings differ from the frozen calibration task")
@@ -552,7 +688,7 @@ def main() -> None:
             for key, value in vars(args).items()
             if key != "resume"
         },
-        "convention": "mandala-stage5-neural-calibration-v1",
+        "convention": "mandala-stage5-directed-neural-calibration-v2",
         "descriptor_content_hash": schema["content_hash"],
         "promotion_manifest_hash": promotions["manifest_hash"],
         "calibration_manifest_hash": calibration["manifest_hash"],
@@ -564,12 +700,17 @@ def main() -> None:
         },
         "selection_uses_test_hamiltonian": False,
         "test_shards_read": False,
+        "training_time_hermiticity_enforcement": "none",
+        "directed_training": "both reverse-pair records, one raw call each",
+        "evaluation_hermiticity": "global reverse-pair projection",
         "gradient_clipping": False,
         "mixed_precision": False,
         "loss": {
             "space": "complete full-block irreps",
             "reduction": "block-count-weighted mean squared error",
-            "offsite_target": "target divided by frozen range envelope",
+            "offsite_objective": args.range_loss_mode,
+            "physical_prediction": "model output multiplied by frozen range envelope",
+            "normalized_target_weight": "G(r)^2 when normalized-target form is selected",
             "onsite_target": "unscaled target",
         },
         "software": {
@@ -606,7 +747,7 @@ def main() -> None:
     scale = _normalization_scale(args.normalization, args.family, args.descriptor_key)
     envelope_table = load_pair_envelope_table(
         args.range_envelope,
-        pair_order=CANONICAL_PAIR_NAMES,
+        pair_order=DIRECTED_PAIR_NAMES,
         dtype=torch.float32,
         device="cpu",
     )
@@ -654,7 +795,12 @@ def main() -> None:
         dtype=torch.float32,
     ).to(device)
     initial_symmetry = _symmetry_errors(model, device, args.seed + 2)
-    if max(initial_symmetry.values()) > args.float32_symmetry_tolerance:
+    initial_gate = {
+        key: value
+        for key, value in initial_symmetry.items()
+        if key.startswith(("proper_", "improper_", "projected_"))
+    }
+    if max(initial_gate.values()) > args.float32_symmetry_tolerance:
         raise ValueError(f"initial float32 symmetry gate failed: {initial_symmetry}")
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
@@ -705,7 +851,7 @@ def main() -> None:
             args.evaluation_batch_size,
             args.distance_bin_width_angstrom,
         )
-        mae = float(metrics["matrix_elements"]["mae"])
+        mae = float(metrics["projected"]["matrix_elements"]["mae"])
         history.append(
             {
                 "step": step,
@@ -758,16 +904,37 @@ def main() -> None:
     _atomic_json(output / "validation_metrics.json", final_metrics)
     summary = {
         "completed": True,
-        "passed": math.isfinite(float(final_metrics["matrix_elements"]["mae"]))
-        and max(final_symmetry.values()) <= args.float32_symmetry_tolerance,
+        "passed": math.isfinite(
+            float(final_metrics["projected"]["matrix_elements"]["mae"])
+        )
+        and max(
+            value
+            for key, value in final_symmetry.items()
+            if key.startswith(("proper_", "improper_", "projected_"))
+        )
+        <= args.float32_symmetry_tolerance,
         "manifest_hash": config["manifest_hash"],
         "architecture": args.architecture,
         "resource_band": args.resource_band,
         "descriptor_key": args.descriptor_key,
         "parameter_count": parameter_count,
         "best_step": best_step,
-        "best_validation_matrix_mae_mev": final_metrics["matrix_elements"]["mae"],
-        "best_validation_matrix_rmse_mev": final_metrics["matrix_elements"]["rmse"],
+        "range_loss_mode": args.range_loss_mode,
+        "best_validation_matrix_mae_mev": final_metrics["projected"]["matrix_elements"][
+            "mae"
+        ],
+        "best_validation_matrix_rmse_mev": final_metrics["projected"][
+            "matrix_elements"
+        ]["rmse"],
+        "best_validation_raw_matrix_mae_mev": final_metrics["raw"]["matrix_elements"][
+            "mae"
+        ],
+        "best_validation_raw_matrix_rmse_mev": final_metrics["raw"]["matrix_elements"][
+            "rmse"
+        ],
+        "raw_relative_projection_change": final_metrics[
+            "raw_relative_projection_change"
+        ],
         "stopped_early": stopped_early,
         "training_seconds": elapsed,
         "sampled_training_blocks": sampled_blocks,

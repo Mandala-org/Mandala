@@ -15,7 +15,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-
 FAMILIES = ("d1", "d2", "d3", "d4")
 
 
@@ -92,6 +91,11 @@ def main() -> None:
             raise ValueError(f"{family} screen did not pass")
         if summary["test_shards_read"] or config["test_shards_read"]:
             raise ValueError(f"{family} screen accessed test shards")
+        if (
+            config.get("training_time_hermiticity_enforcement") != "none"
+            or config.get("range_fit_mode") != "physical_design"
+        ):
+            raise ValueError(f"{family} did not use the frozen directed physical fit")
         if config["promotion_manifest_hash"] != promotions["manifest_hash"]:
             raise ValueError(f"{family} used a different promotion manifest")
         if summary["manifest_hash"] != config["manifest_hash"]:
@@ -141,7 +145,7 @@ def main() -> None:
             )["key"]
     pareto = _pareto(rows)
     config = {
-        "convention": "mandala-stage5-m0-validation-aggregate-v1",
+        "convention": "mandala-stage5-directed-m0-validation-aggregate-v2",
         "promotion_manifest_hash": promotions["manifest_hash"],
         "source_manifests": source_manifests,
         "selection_partition": "validation",

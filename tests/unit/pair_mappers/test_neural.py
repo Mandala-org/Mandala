@@ -103,7 +103,7 @@ def test_complete_full_block_and_irrelevant_metadata_independence(setup, archite
 @pytest.mark.unit
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
 @pytest.mark.parametrize("pair", [("A", "B"), ("A", "A")])
-def test_pair_reversal_is_exact(setup, architecture, pair):
+def test_directed_predictions_are_not_projected_in_model(setup, architecture, pair):
     transform, irreps, descriptor_i, descriptor_j, displacement = setup
     model = make_model(architecture, transform, irreps)
     forward = model.predict_offsite(pair, descriptor_i, displacement, descriptor_j)
@@ -111,18 +111,18 @@ def test_pair_reversal_is_exact(setup, architecture, pair):
     reverse = model.predict_offsite(
         reverse_pair, descriptor_j, -displacement, descriptor_i
     )
-    assert torch.allclose(
+    assert not torch.allclose(
         reverse, transform.reverse(pair, forward), atol=1e-12, rtol=1e-12
     )
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
-def test_onsite_hermiticity_is_exact(setup, architecture):
+def test_onsite_prediction_is_not_projected_in_model(setup, architecture):
     transform, irreps, descriptor_i, _descriptor_j, _displacement = setup
     model = make_model(architecture, transform, irreps)
     onsite = model.predict_onsite("A", descriptor_i)
-    assert torch.allclose(
+    assert not torch.allclose(
         onsite,
         transform.reverse(("A", "A"), onsite),
         atol=1e-12,

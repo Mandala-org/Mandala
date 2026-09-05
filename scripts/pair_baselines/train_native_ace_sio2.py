@@ -29,11 +29,17 @@ from data.envelope import build_edge_envelope, load_pair_envelope_table
 from pair_descriptors import AtomicNeighborDensity
 from pair_hamiltonian.metrics import FullBlockMetricAccumulator
 from pair_hamiltonian.output_schema import FullBlockIrrepTransform
-from pair_hamiltonian.sio2_cache import CANONICAL_PAIR_NAMES
+from pair_hamiltonian.hermiticity import (
+    project_directed_irreps,
+    project_onsite_irreps,
+)
+from pair_hamiltonian.range_objective import closed_form_range_batch
+from pair_hamiltonian.sio2_cache import DIRECTED_PAIR_NAMES
 from pair_mappers import EquivariantRidgeAccumulator, NativeACEPairMapper
 
 SPECIES = ("O", "Si")
 ATOMIC_NUMBER_TO_SPECIES = {8: "O", 14: "Si"}
+DIRECTED_PAIRS = tuple(tuple(value.split("-")) for value in DIRECTED_PAIR_NAMES)
 
 
 class Tee:
@@ -71,6 +77,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--bond-cutoff-angstrom", type=float, required=True)
     result.add_argument("--offsite-max-degree", type=int, required=True)
     result.add_argument("--ridge", type=float, required=True)
+    result.add_argument(
+        "--range-fit-mode",
+        choices=("physical_design", "weighted_normalized_target"),
+        required=True,
+    )
     result.add_argument("--batch-size", type=int, required=True)
     result.add_argument("--envelope-floor-hartree", type=float, required=True)
     result.add_argument("--distance-bin-width-angstrom", type=float, required=True)
@@ -105,16 +116,16 @@ def git_state() -> dict[str, object]:
 
 
 def selected_registry(path: Path, maximum: int) -> dict[str, list[dict[str, str]]]:
-    selected = {"train": [], "validation": [], "test": []}
+    selected = {"train": [], "validation": []}
     with path.open(newline="") as stream:
         for row in csv.DictReader(stream):
             split = row["split"]
             if split not in selected:
-                raise ValueError(f"Unknown split {split!r} in shard registry")
+                continue
             if maximum == 0 or len(selected[split]) < maximum:
                 selected[split].append(row)
     if any(not rows for rows in selected.values()):
-        raise ValueError("Every split must contain at least one selected shard")
+        raise ValueError("Train and validation must contain selected shards")
     return selected
 
 
@@ -157,6 +168,7 @@ def load_shard(path: Path) -> dict[str, np.ndarray]:
         "onsite_target_irreps_hartree",
         "offsite_source",
         "offsite_target",
+        "offsite_inverse",
         "offsite_displacement_angstrom",
         "offsite_pair_type",
         "offsite_target_irreps_hartree",
@@ -204,10 +216,10 @@ def accumulate_training(
             dtype=torch.float64,
             device=device,
         )
-        for pair in (("O", "O"), ("O", "Si"), ("Si", "Si"))
+        for pair in DIRECTED_PAIRS
     }
     normalized_rms: dict[str, list[np.ndarray]] = {
-        pair: [] for pair in CANONICAL_PAIR_NAMES
+        pair: [] for pair in DIRECTED_PAIR_NAMES
     }
     pair_count = 0
     for row in tqdm(rows, desc="fit sufficient statistics", unit="structure"):
@@ -241,7 +253,7 @@ def accumulate_training(
             device=device, dtype=torch.long
         )
         targets = torch.from_numpy(shard["offsite_target_irreps_hartree"]).to(device)
-        for pair_index, pair_name in enumerate(CANONICAL_PAIR_NAMES):
+        for pair_index, pair_name in enumerate(DIRECTED_PAIR_NAMES):
             pair = tuple(pair_name.split("-"))
             selected = torch.nonzero(pair_types == pair_index, as_tuple=False).flatten()
             for batch in batches(selected, args.batch_size):
@@ -251,13 +263,22 @@ def accumulate_training(
                     envelope_table,
                     args.envelope_floor_hartree,
                 )
-                normalized_target = targets.index_select(0, batch) / values[:, None]
                 features = model.offsite_features(
                     descriptor.index_select(0, source.index_select(0, batch)),
                     displacement.index_select(0, batch),
                     descriptor.index_select(0, target.index_select(0, batch)),
                 )
-                offsite[pair].update(features, normalized_target)
+                batch_target = targets.index_select(0, batch)
+                fit_features, fit_target, sample_weight = closed_form_range_batch(
+                    features,
+                    batch_target,
+                    values,
+                    mode=args.range_fit_mode,
+                )
+                offsite[pair].update(
+                    fit_features, fit_target, sample_weight=sample_weight
+                )
+                normalized_target = batch_target / values[:, None]
                 normalized_rms[pair_name].append(
                     torch.sqrt(torch.mean(normalized_target.square(), dim=1))
                     .cpu()
@@ -300,11 +321,15 @@ def evaluate(
     metric_transform = FullBlockIrrepTransform(
         model.target_transform.orbital_config, dtype=torch.float32, device="cpu"
     )
-    metrics = FullBlockMetricAccumulator(
-        metric_transform,
-        distance_bin_width_angstrom=args.distance_bin_width_angstrom,
-    )
+    metrics = {
+        mode: FullBlockMetricAccumulator(
+            metric_transform,
+            distance_bin_width_angstrom=args.distance_bin_width_angstrom,
+        )
+        for mode in ("raw", "projected")
+    }
     evaluated_blocks = 0
+    projection_change_square = [0.0, 0.0]
     started = time.perf_counter()
     for row in tqdm(rows, desc="evaluate", unit="structure"):
         shard = load_shard(
@@ -322,12 +347,26 @@ def evaluate(
             prediction = model.predict_onsite(
                 species, descriptor.index_select(0, selected)
             )
-            metrics.update(
+            target_values = onsite_target.index_select(0, selected)
+            projected_prediction = project_onsite_irreps(
+                model.target_transform, species, prediction
+            )
+            metrics["raw"].update(
                 (species, species),
                 prediction.cpu(),
-                onsite_target.index_select(0, selected).cpu(),
+                target_values.cpu(),
                 onsite=True,
             )
+            metrics["projected"].update(
+                (species, species),
+                projected_prediction.cpu(),
+                target_values.cpu(),
+                onsite=True,
+            )
+            projection_change_square[0] += float(
+                (prediction - projected_prediction).square().sum().item()
+            )
+            projection_change_square[1] += float(prediction.square().sum().item())
             evaluated_blocks += selected.numel()
         source = torch.from_numpy(shard["offsite_source"]).to(
             device=device, dtype=torch.long
@@ -341,8 +380,12 @@ def evaluate(
         pair_types = torch.from_numpy(shard["offsite_pair_type"]).to(
             device=device, dtype=torch.long
         )
+        inverse = torch.from_numpy(shard["offsite_inverse"]).to(
+            device=device, dtype=torch.long
+        )
         targets = torch.from_numpy(shard["offsite_target_irreps_hartree"]).to(device)
-        for pair_index, pair_name in enumerate(CANONICAL_PAIR_NAMES):
+        raw_offsite = torch.empty_like(targets)
+        for pair_index, pair_name in enumerate(DIRECTED_PAIR_NAMES):
             pair = tuple(pair_name.split("-"))
             selected = torch.nonzero(pair_types == pair_index, as_tuple=False).flatten()
             for batch in batches(selected, args.batch_size):
@@ -360,30 +403,49 @@ def evaluate(
                     args.envelope_floor_hartree,
                 )
                 prediction = normalized_prediction * values[:, None]
+                raw_offsite.index_copy_(0, batch, prediction)
+        projected_offsite = project_directed_irreps(
+            model.target_transform,
+            DIRECTED_PAIR_NAMES,
+            raw_offsite,
+            pair_types,
+            inverse,
+        )
+        projection_change_square[0] += float(
+            (raw_offsite - projected_offsite).square().sum().item()
+        )
+        projection_change_square[1] += float(raw_offsite.square().sum().item())
+        for pair_index, pair_name in enumerate(DIRECTED_PAIR_NAMES):
+            pair = tuple(pair_name.split("-"))
+            selected = torch.nonzero(pair_types == pair_index, as_tuple=False).flatten()
+            for batch in batches(selected, args.batch_size):
+                batch_displacement = displacement.index_select(0, batch)
                 batch_target = targets.index_select(0, batch)
                 distances = torch.linalg.vector_norm(batch_displacement, dim=1)
-                prediction_cpu = prediction.cpu()
                 target_cpu = batch_target.cpu()
                 distances_cpu = distances.cpu()
-                metrics.update(
+                metrics["raw"].update(
                     pair,
-                    prediction_cpu,
+                    raw_offsite.index_select(0, batch).cpu(),
                     target_cpu,
                     onsite=False,
                     distances_angstrom=distances_cpu,
                 )
-                reverse_pair = (pair[1], pair[0])
-                metrics.update(
-                    reverse_pair,
-                    metric_transform.reverse(pair, prediction_cpu),
-                    metric_transform.reverse(pair, target_cpu),
+                metrics["projected"].update(
+                    pair,
+                    projected_offsite.index_select(0, batch).cpu(),
+                    target_cpu,
                     onsite=False,
                     distances_angstrom=distances_cpu,
                 )
-                evaluated_blocks += 2 * batch.numel()
+                evaluated_blocks += batch.numel()
     if device.type == "cuda":
         torch.cuda.synchronize(device)
-    return metrics.compute(), evaluated_blocks, time.perf_counter() - started
+    values = {mode: accumulator.compute() for mode, accumulator in metrics.items()}
+    values["raw_relative_projection_change"] = (
+        projection_change_square[0] / max(projection_change_square[1], 1.0e-300)
+    ) ** 0.5
+    return values, evaluated_blocks, time.perf_counter() - started
 
 
 def flatten_metrics(prefix: str, value: object):
@@ -451,7 +513,7 @@ def main() -> None:
     cache_metadata = cache_summary["cache_metadata"]
     envelope_table = load_pair_envelope_table(
         args.range_envelope.resolve(),
-        pair_order=CANONICAL_PAIR_NAMES,
+        pair_order=DIRECTED_PAIR_NAMES,
         dtype=torch.float32,
         device=device,
     )
@@ -487,6 +549,11 @@ def main() -> None:
         "selected_structure_counts": {
             split: len(rows) for split, rows in registry.items()
         },
+        "convention": "mandala-native-ace-directed-validation-v2",
+        "test_shards_read": False,
+        "training_time_hermiticity_enforcement": "none",
+        "directed_training": "both reverse-pair records, one raw call each",
+        "evaluation_hermiticity": "global reverse-pair projection",
     }
     atomic_json(output_dir / "config.json", configuration)
     print(json.dumps(configuration, indent=2, sort_keys=True), flush=True)
@@ -514,11 +581,11 @@ def main() -> None:
         "fit_diagnostics": diagnostics,
     }
     torch.save(checkpoint, output_dir / "model.pt")
-    print("[3/6] Evaluating train/validation/test physical metrics", flush=True)
+    print("[3/6] Evaluating train/validation physical metrics", flush=True)
     evaluations = {}
     evaluated_counts = {}
     evaluation_seconds = {}
-    for split in ("train", "validation", "test"):
+    for split in ("train", "validation"):
         values, count, elapsed = evaluate(
             model, registry[split], cache_dir, envelope_table, args, device
         )
@@ -542,11 +609,16 @@ def main() -> None:
     summary = {
         "passed": passed,
         "full_run": full_run,
-        "headline_test_matrix_mae_mev": evaluations["test"]["matrix_elements"]["mae"],
+        "headline_validation_matrix_mae_mev": evaluations["validation"]["projected"][
+            "matrix_elements"
+        ]["mae"],
+        "headline_validation_raw_matrix_mae_mev": evaluations["validation"]["raw"][
+            "matrix_elements"
+        ]["mae"],
         "evaluations": evaluations,
         "fit_diagnostics": diagnostics,
         "normalized_target_rms": normalized_tails,
-        "fitted_canonical_offsite_pairs": fitted_pairs,
+        "fitted_directed_offsite_pairs": fitted_pairs,
         "evaluated_directed_block_counts": evaluated_counts,
         "fit_seconds": fit_seconds,
         "evaluation_seconds": evaluation_seconds,
@@ -569,9 +641,9 @@ def main() -> None:
     (output_dir / "report.md").write_text(
         "# Native ACE SiO2 baseline\n\n"
         f"Acceptance: **{'PASS' if passed else 'SMOKE-ONLY/FAIL'}**\n\n"
-        f"Headline test matrix-element MAE: {summary['headline_test_matrix_mae_mev']:.6g} meV.\n\n"
+        f"Headline projected validation matrix-element MAE: {summary['headline_validation_matrix_mae_mev']:.6g} meV.\n\n"
         f"Fitted coefficients: {fitted_coefficients}; peak CUDA memory: {peak_memory / 2**30:.3f} GiB.\n\n"
-        "The model is pair-local, predicts one complete block-irrep vector, uses exact canonical reversal, and applies the frozen training-only range envelope.\n"
+        "Both directed blocks are fitted independently. The range factor enters the physical prediction; Hermiticity is projected only for evaluation. Raw and projected metrics are retained. Test shards were not read.\n"
     )
     print("[6/6] Complete", flush=True)
     print(
@@ -579,7 +651,9 @@ def main() -> None:
             {
                 "passed": passed,
                 "full_run": full_run,
-                "headline_test_matrix_mae_mev": summary["headline_test_matrix_mae_mev"],
+                "headline_validation_matrix_mae_mev": summary[
+                    "headline_validation_matrix_mae_mev"
+                ],
                 "fit_seconds": fit_seconds,
                 "evaluation_blocks_per_second": summary["evaluation_blocks_per_second"],
                 "fitted_coefficient_count": fitted_coefficients,

@@ -23,12 +23,17 @@ from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.envelope import build_edge_envelope, load_pair_envelope_table
 from pair_hamiltonian.metrics import FullBlockMetricAccumulator
 from pair_hamiltonian.output_schema import FullBlockIrrepTransform
-from pair_hamiltonian.sio2_cache import CANONICAL_PAIR_NAMES
+from pair_hamiltonian.hermiticity import (
+    project_directed_irreps,
+    project_onsite_irreps,
+)
+from pair_hamiltonian.range_objective import closed_form_range_batch
+from pair_hamiltonian.sio2_cache import DIRECTED_PAIR_NAMES
 from pair_mappers import ClosedFormM0PairMapper
 
 SPECIES = ("O", "Si")
 ATOMIC_NUMBER_TO_SPECIES = {8: "O", 14: "Si"}
-CANONICAL_PAIRS = tuple(tuple(value.split("-")) for value in CANONICAL_PAIR_NAMES)
+DIRECTED_PAIRS = tuple(tuple(value.split("-")) for value in DIRECTED_PAIR_NAMES)
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,6 +54,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bond-l-max", type=int, required=True)
     parser.add_argument("--bond-cutoff-angstrom", type=float, required=True)
     parser.add_argument("--ridge", type=float, required=True)
+    parser.add_argument(
+        "--range-fit-mode",
+        choices=("physical_design", "weighted_normalized_target"),
+        required=True,
+    )
     parser.add_argument("--batch-size", type=int, required=True)
     parser.add_argument("--envelope-floor-hartree", type=float, required=True)
     parser.add_argument("--distance-bin-width-angstrom", type=float, required=True)
@@ -90,6 +100,7 @@ def _baseline_shard(cache_dir: Path, index: int) -> dict[str, np.ndarray]:
         "onsite_target_irreps_hartree",
         "offsite_source",
         "offsite_target",
+        "offsite_inverse",
         "offsite_displacement_angstrom",
         "offsite_pair_type",
         "offsite_target_irreps_hartree",
@@ -211,7 +222,7 @@ def main() -> None:
         raise ValueError("range envelope differs from frozen baseline")
     envelope_table = load_pair_envelope_table(
         args.range_envelope,
-        pair_order=CANONICAL_PAIR_NAMES,
+        pair_order=DIRECTED_PAIR_NAMES,
         dtype=torch.float32,
         device=device,
     )
@@ -233,7 +244,7 @@ def main() -> None:
             },
             "offsite": {
                 pair: model.offsite_accumulator(pair, device=device)
-                for pair in CANONICAL_PAIRS
+                for pair in DIRECTED_PAIRS
             },
         }
         for key, model in models.items()
@@ -243,11 +254,12 @@ def main() -> None:
             key: str(value.resolve()) if isinstance(value, Path) else value
             for key, value in vars(args).items()
         },
-        "convention": "mandala-stage5-m0-validation-screen-v1",
+        "convention": "mandala-stage5-directed-m0-validation-screen-v2",
         "test_shards_read": False,
         "selection_uses_test_hamiltonian": False,
-        "onsite_hermiticity_enforcement": "exact AO-transpose projection",
-        "same_species_training_augmentation": "exact reversed orientation",
+        "training_time_hermiticity_enforcement": "none",
+        "directed_training": "both reverse-pair records, one raw call each",
+        "evaluation_hermiticity": "global reverse-pair projection",
         "promotion_manifest_hash": promotion_manifest["manifest_hash"],
         "source_hashes": {
             "baseline_summary": _sha256(args.baseline_summary),
@@ -305,11 +317,7 @@ def main() -> None:
                 selected_target = onsite_target.index_select(0, selected)
                 onsite_accumulator = accumulators[key]["onsite"][species]
                 onsite_accumulator.update(selected_descriptor, selected_target)
-                onsite_accumulator.update(
-                    selected_descriptor,
-                    transform.reverse((species, species), selected_target),
-                )
-            for pair_index, pair in enumerate(CANONICAL_PAIRS):
+            for pair_index, pair in enumerate(DIRECTED_PAIRS):
                 selected = torch.nonzero(pair_types == pair_index).flatten()
                 for batch in _batches(selected, args.batch_size):
                     batch_displacement = displacement.index_select(0, batch)
@@ -324,23 +332,15 @@ def main() -> None:
                         batch_displacement,
                         descriptor.index_select(0, target.index_select(0, batch)),
                     )
-                    accumulators[key]["offsite"][pair].update(
+                    fit_features, fit_target, sample_weight = closed_form_range_batch(
                         features,
-                        offsite_target.index_select(0, batch) / values[:, None],
+                        offsite_target.index_select(0, batch),
+                        values,
+                        mode=args.range_fit_mode,
                     )
-                    if pair[0] == pair[1]:
-                        reverse_features = model.offsite_features(
-                            descriptor.index_select(0, target.index_select(0, batch)),
-                            -batch_displacement,
-                            descriptor.index_select(0, source.index_select(0, batch)),
-                        )
-                        normalized_target = (
-                            offsite_target.index_select(0, batch) / values[:, None]
-                        )
-                        accumulators[key]["offsite"][pair].update(
-                            reverse_features,
-                            transform.reverse(pair, normalized_target),
-                        )
+                    accumulators[key]["offsite"][pair].update(
+                        fit_features, fit_target, sample_weight=sample_weight
+                    )
     fit_stream_seconds = time.perf_counter() - started
 
     diagnostics: dict[str, object] = {}
@@ -352,7 +352,7 @@ def main() -> None:
                     species, accumulators[key]["onsite"][species]
                 )
             )
-        for pair in CANONICAL_PAIRS:
+        for pair in DIRECTED_PAIRS:
             diagnostics[key]["offsite"]["-".join(pair)] = asdict(
                 model.fit_offsite_from_accumulator(
                     pair, accumulators[key]["offsite"][pair]
@@ -365,13 +365,17 @@ def main() -> None:
         transform.orbital_config, dtype=torch.float32, device="cpu"
     )
     metrics = {
-        key: FullBlockMetricAccumulator(
-            metric_transform,
-            distance_bin_width_angstrom=args.distance_bin_width_angstrom,
-        )
+        key: {
+            mode: FullBlockMetricAccumulator(
+                metric_transform,
+                distance_bin_width_angstrom=args.distance_bin_width_angstrom,
+            )
+            for mode in ("raw", "projected")
+        }
         for key in keys
     }
     block_counts = {key: 0 for key in keys}
+    projection_change_square = {key: [0.0, 0.0] for key in keys}
     started = time.perf_counter()
     for row in tqdm(
         registry["validation"], desc=f"validate {args.family}", unit="structure"
@@ -395,6 +399,9 @@ def main() -> None:
         pair_types = torch.from_numpy(base["offsite_pair_type"]).to(
             device=device, dtype=torch.long
         )
+        inverse = torch.from_numpy(base["offsite_inverse"]).to(
+            device=device, dtype=torch.long
+        )
         offsite_target = torch.from_numpy(base["offsite_target_irreps_hartree"]).to(
             device
         )
@@ -405,14 +412,31 @@ def main() -> None:
                 prediction = model.predict_onsite(
                     species, descriptor.index_select(0, selected)
                 )
-                metrics[key].update(
+                target_values = onsite_target.index_select(0, selected)
+                projected_prediction = project_onsite_irreps(
+                    transform, species, prediction
+                )
+                metrics[key]["raw"].update(
                     (species, species),
                     prediction.cpu(),
-                    onsite_target.index_select(0, selected).cpu(),
+                    target_values.cpu(),
                     onsite=True,
                 )
+                metrics[key]["projected"].update(
+                    (species, species),
+                    projected_prediction.cpu(),
+                    target_values.cpu(),
+                    onsite=True,
+                )
+                projection_change_square[key][0] += float(
+                    (prediction - projected_prediction).square().sum().item()
+                )
+                projection_change_square[key][1] += float(
+                    prediction.square().sum().item()
+                )
                 block_counts[key] += selected.numel()
-            for pair_index, pair in enumerate(CANONICAL_PAIRS):
+            raw_offsite = torch.empty_like(offsite_target)
+            for pair_index, pair in enumerate(DIRECTED_PAIRS):
                 selected = torch.nonzero(pair_types == pair_index).flatten()
                 for batch in _batches(selected, args.batch_size):
                     batch_displacement = displacement.index_select(0, batch)
@@ -429,34 +453,54 @@ def main() -> None:
                         args.envelope_floor_hartree,
                     )
                     prediction = prediction * values[:, None]
+                    raw_offsite.index_copy_(0, batch, prediction)
+            projected_offsite = project_directed_irreps(
+                transform,
+                DIRECTED_PAIR_NAMES,
+                raw_offsite,
+                pair_types,
+                inverse,
+            )
+            projection_change_square[key][0] += float(
+                (raw_offsite - projected_offsite).square().sum().item()
+            )
+            projection_change_square[key][1] += float(raw_offsite.square().sum().item())
+            for pair_index, pair in enumerate(DIRECTED_PAIRS):
+                selected = torch.nonzero(pair_types == pair_index).flatten()
+                for batch in _batches(selected, args.batch_size):
+                    distance = torch.linalg.vector_norm(
+                        displacement.index_select(0, batch), dim=-1
+                    )
                     batch_target = offsite_target.index_select(0, batch)
-                    distance = torch.linalg.vector_norm(batch_displacement, dim=-1)
-                    metrics[key].update(
+                    metrics[key]["raw"].update(
                         pair,
-                        prediction.cpu(),
+                        raw_offsite.index_select(0, batch).cpu(),
                         batch_target.cpu(),
                         onsite=False,
                         distances_angstrom=distance.cpu(),
                     )
-                    reverse_pair = (pair[1], pair[0])
-                    metrics[key].update(
-                        reverse_pair,
-                        metric_transform.reverse(pair, prediction.cpu()),
-                        metric_transform.reverse(pair, batch_target.cpu()),
+                    metrics[key]["projected"].update(
+                        pair,
+                        projected_offsite.index_select(0, batch).cpu(),
+                        batch_target.cpu(),
                         onsite=False,
                         distances_angstrom=distance.cpu(),
                     )
-                    block_counts[key] += 2 * batch.numel()
+                    block_counts[key] += batch.numel()
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     validation_seconds = time.perf_counter() - started
-    detailed = {key: value.compute() for key, value in metrics.items()}
+    detailed = {
+        key: {mode: accumulator.compute() for mode, accumulator in value.items()}
+        for key, value in metrics.items()
+    }
     _atomic_json(output / "validation_metrics.json", detailed)
 
     rows = []
     promotion_by_key = {item["key"]: item for item in promotions}
     for key in keys:
-        headline = detailed[key]["matrix_elements"]
+        raw_headline = detailed[key]["raw"]["matrix_elements"]
+        headline = detailed[key]["projected"]["matrix_elements"]
         item = promotion_by_key[key]
         missing = sorted(
             {
@@ -484,6 +528,12 @@ def main() -> None:
                 ),
                 "validation_matrix_mae_mev": headline["mae"],
                 "validation_matrix_rmse_mev": headline["rmse"],
+                "validation_raw_matrix_mae_mev": raw_headline["mae"],
+                "validation_raw_matrix_rmse_mev": raw_headline["rmse"],
+                "raw_relative_projection_change": math.sqrt(
+                    projection_change_square[key][0]
+                    / max(projection_change_square[key][1], 1.0e-300)
+                ),
                 "validation_matrix_element_count": headline["scalar_count"],
                 "validation_block_count": block_counts[key],
                 "missing_target_irreps": ";".join(missing),

@@ -13,8 +13,8 @@ from pathlib import Path
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--m0-aggregate", type=Path, required=True)
-    parser.add_argument("--m0-results", type=Path, required=True)
+    parser.add_argument("--m0-aggregate", type=Path)
+    parser.add_argument("--m0-results", type=Path)
     parser.add_argument("--promotions", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser.parse_args()
@@ -40,33 +40,39 @@ def main() -> None:
     if output.exists() and list(output.iterdir()):
         raise FileExistsError(f"refusing to overwrite nonempty {output}")
     output.mkdir(parents=True, exist_ok=True)
-    aggregate = json.loads(args.m0_aggregate.read_text())
     promotions = json.loads(args.promotions.read_text())
-    if not aggregate["passed"] or aggregate["test_shards_read"]:
-        raise ValueError("M0 validation gate must pass without test access")
-    with args.m0_results.open(newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    if len(rows) != 32:
-        raise ValueError("M0 gate must contain 32 configurations")
-    best_cutoffs = {}
-    for family in ("d1", "d2", "d3", "d4"):
-        for resolution in ("compact", "high"):
-            subset = [
-                row
-                for row in rows
-                if row["family"] == family and row["resolution"] == resolution
-            ]
-            best = min(subset, key=lambda row: float(row["validation_matrix_mae_mev"]))
-            best_cutoffs[f"{family}_{resolution}"] = float(best["cutoff_angstrom"])
-    if set(best_cutoffs.values()) != {6.5}:
-        raise ValueError("the M0 cutoff gate does not unanimously select 6.5 angstrom")
+    if (args.m0_aggregate is None) != (args.m0_results is None):
+        raise ValueError("provide both M0 inputs or neither")
+    aggregate = None
+    best_cutoffs = None
+    if args.m0_aggregate is not None:
+        aggregate = json.loads(args.m0_aggregate.read_text())
+        if not aggregate["passed"] or aggregate["test_shards_read"]:
+            raise ValueError("M0 validation gate must pass without test access")
+        with args.m0_results.open(newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        if len(rows) != 32:
+            raise ValueError("M0 gate must contain 32 configurations")
+        best_cutoffs = {}
+        for family in ("d1", "d2", "d3", "d4"):
+            for resolution in ("compact", "high"):
+                subset = [
+                    row
+                    for row in rows
+                    if row["family"] == family and row["resolution"] == resolution
+                ]
+                best = min(
+                    subset,
+                    key=lambda row: float(row["validation_matrix_mae_mev"]),
+                )
+                best_cutoffs[f"{family}_{resolution}"] = float(best["cutoff_angstrom"])
     descriptor_key = "r6p5_spherical_bessel_high_n8_l6"
     promoted = next(
         (item for item in promotions["promotions"] if item["key"] == descriptor_key),
         None,
     )
-    if promoted is None or descriptor_key not in aggregate["pareto_keys"]:
-        raise ValueError("D1-high calibration descriptor is not on the M0 Pareto set")
+    if promoted is None:
+        raise ValueError("D1-high calibration descriptor is not geometry-promoted")
 
     bands = {
         "small": {
@@ -95,17 +101,24 @@ def main() -> None:
     for architecture in ("m3", "m5"):
         for band, settings in bands.items():
             for learning_rate, label in ((3.0e-4, "3em4"), (1.0e-3, "1em3")):
-                tasks.append(
-                    {
-                        "task_id": f"{architecture}_{band}_lr{label}",
-                        "architecture": architecture,
-                        "resource_band": band,
-                        "learning_rate": learning_rate,
-                        **settings,
-                    }
-                )
+                for range_loss_mode, loss_label in (
+                    ("physical_mse", "physical"),
+                    ("weighted_normalized_mse", "weighted_h_over_g"),
+                ):
+                    tasks.append(
+                        {
+                            "task_id": (
+                                f"{architecture}_{band}_lr{label}_{loss_label}"
+                            ),
+                            "architecture": architecture,
+                            "resource_band": band,
+                            "learning_rate": learning_rate,
+                            "range_loss_mode": range_loss_mode,
+                            **settings,
+                        }
+                    )
     manifest = {
-        "convention": "mandala-stage5-neural-calibration-grid-v1",
+        "convention": "mandala-stage5-directed-neural-calibration-grid-v2",
         "selection_partition": "validation",
         "test_shards_read": False,
         "selection_uses_test_hamiltonian": False,
@@ -135,19 +148,35 @@ def main() -> None:
             "device": "cuda",
         },
         "bands": bands,
+        "range_loss_modes": ["physical_mse", "weighted_normalized_mse"],
         "tasks": tasks,
-        "m0_gate": {
-            "manifest_hash": aggregate["manifest_hash"],
-            "best_validation_matrix_mae_mev": aggregate[
-                "best_overall_validation_matrix_mae_mev"
-            ],
-            "best_cutoffs": best_cutoffs,
-            "pareto_keys": aggregate["pareto_keys"],
-        },
+        "selection_basis": (
+            "pre_registered_geometry_promoted_d1_high_6p5"
+            if aggregate is None
+            else "optional_m0_validation_context"
+        ),
+        "m0_gate": (
+            None
+            if aggregate is None
+            else {
+                "manifest_hash": aggregate["manifest_hash"],
+                "best_validation_matrix_mae_mev": aggregate[
+                    "best_overall_validation_matrix_mae_mev"
+                ],
+                "best_cutoffs": best_cutoffs,
+                "pareto_keys": aggregate["pareto_keys"],
+            }
+        ),
         "source_hashes": {
-            "m0_aggregate": _sha256(args.m0_aggregate),
-            "m0_results": _sha256(args.m0_results),
             "promotions": _sha256(args.promotions),
+            **(
+                {}
+                if args.m0_aggregate is None
+                else {
+                    "m0_aggregate": _sha256(args.m0_aggregate),
+                    "m0_results": _sha256(args.m0_results),
+                }
+            ),
         },
     }
     manifest["manifest_hash"] = hashlib.sha256(
@@ -156,7 +185,7 @@ def main() -> None:
     _atomic_json(output / "calibration_manifest.json", manifest)
     summary = {
         "completed": True,
-        "passed": len(tasks) == 12,
+        "passed": len(tasks) == 24,
         "manifest_hash": manifest["manifest_hash"],
         "task_count": len(tasks),
         "descriptor_key": descriptor_key,
@@ -165,11 +194,11 @@ def main() -> None:
     _atomic_json(output / "summary.json", summary)
     (output / "report.md").write_text(
         "# Stage 5 neural calibration freeze\n\n"
-        "The M0 validation gate selected 6.5 Å in every descriptor family and resolution. "
-        "D1-high at 6.5 Å is a storage/accuracy Pareto point and is used as the representative "
-        "raw-density descriptor for optimizer and resource calibration.\n\n"
-        "The frozen grid contains M3 and M5 at three resource bands and two learning rates "
-        "(12 one-seed runs). It uses 25% of training structures and the full validation split. "
+        "D1-high at 6.5 Å is pre-registered from the geometry-only promotion manifest as the "
+        "representative raw-density descriptor; this freeze does not depend on corrected M0 outcomes.\n\n"
+        "The frozen grid contains M3 and M5 at three resource bands, two learning rates, "
+        "and two algebraically equivalent physical-space loss formulations (24 one-seed runs). "
+        "It uses 25% of training structures and the full validation split. "
         "No test target is read.\n"
     )
     print(json.dumps(summary, indent=2, sort_keys=True))

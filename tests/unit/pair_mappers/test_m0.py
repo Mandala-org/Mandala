@@ -26,7 +26,7 @@ def test_ridge_can_return_missing_target_irrep_as_zero():
 
 
 @pytest.mark.unit
-def test_m0_uses_uncoupled_bond_channels_and_enforces_reversal():
+def test_m0_uses_uncoupled_bond_channels_without_training_time_projection():
     config = OrbitalIrrepConfig.from_dict({"A": "1s1p", "B": "1s1p"})
     transform = FullBlockIrrepTransform(config, dtype=torch.float64)
     descriptor_irreps = o3.Irreps("2x0e + 1x1o")
@@ -39,6 +39,7 @@ def test_m0_uses_uncoupled_bond_channels_and_enforces_reversal():
         ridge=1e-10,
     )
     assert model.offsite_irreps.dim > 2 * descriptor_irreps.dim
+    assert set(model.offsite_regressors) == {"A__A", "A__B", "B__A", "B__B"}
     descriptor_i = torch.randn(5, descriptor_irreps.dim, dtype=torch.float64)
     descriptor_j = torch.randn_like(descriptor_i)
     displacement = torch.randn(5, 3, dtype=torch.float64)
@@ -51,11 +52,11 @@ def test_m0_uses_uncoupled_bond_channels_and_enforces_reversal():
     reverse = model.predict_offsite(
         ("A", "A"), descriptor_j, -displacement, descriptor_i
     )
-    assert torch.allclose(
+    assert not torch.allclose(
         reverse, transform.reverse(("A", "A"), forward), atol=1e-12, rtol=1e-12
     )
     onsite = model.predict_onsite("A", descriptor_i)
-    assert torch.allclose(
+    assert not torch.allclose(
         onsite,
         transform.reverse(("A", "A"), onsite),
         atol=1e-12,

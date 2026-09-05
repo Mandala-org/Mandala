@@ -24,9 +24,12 @@ from pair_hamiltonian.output_schema import (
     FullBlockIrrepTransform,
     o3_representation_matrix,
 )
+from pair_hamiltonian.hermiticity import (
+    project_directed_irreps,
+    project_onsite_irreps,
+)
 from pair_mappers import FullBlockNeuralPairMapper, NativeACEPairMapper
 from pair_mappers.neural import BondFramePairKernel
-
 
 ARCHITECTURES = ("m0", "m1", "m2", "m3", "m5", "m7")
 DESCRIPTOR_IRREPS = o3.Irreps("0e + 1o + 2e + 0e + 1o + 2e")
@@ -177,8 +180,33 @@ def _symmetry_metrics(
         reverse = model.predict_offsite(
             ("B", "A"), descriptor_j, -displacement, descriptor_i
         )
-        errors["heterogeneous_reversal_relative_error"] = _relative_error(
+        errors["raw_heterogeneous_reversal_relative_error"] = _relative_error(
             reverse, transform.reverse(("A", "B"), reference)
+        )
+        projected = project_directed_irreps(
+            transform,
+            ("A-A", "A-B", "B-A", "B-B"),
+            torch.cat((reference, reverse)),
+            torch.cat(
+                (
+                    torch.full((reference.shape[0],), 1, device=reference.device),
+                    torch.full((reverse.shape[0],), 2, device=reverse.device),
+                )
+            ),
+            torch.cat(
+                (
+                    torch.arange(
+                        reference.shape[0],
+                        2 * reference.shape[0],
+                        device=reference.device,
+                    ),
+                    torch.arange(reference.shape[0], device=reference.device),
+                )
+            ),
+        )
+        errors["projected_heterogeneous_reversal_relative_error"] = _relative_error(
+            projected[reference.shape[0] :],
+            transform.reverse(("A", "B"), projected[: reference.shape[0]]),
         )
         same = model.predict_offsite(
             ("A", "A"), descriptor_i, displacement, descriptor_j
@@ -186,8 +214,24 @@ def _symmetry_metrics(
         same_reverse = model.predict_offsite(
             ("A", "A"), descriptor_j, -displacement, descriptor_i
         )
-        errors["homogeneous_reversal_relative_error"] = _relative_error(
+        errors["raw_homogeneous_reversal_relative_error"] = _relative_error(
             same_reverse, transform.reverse(("A", "A"), same)
+        )
+        same_projected = project_directed_irreps(
+            transform,
+            ("A-A", "A-B", "B-A", "B-B"),
+            torch.cat((same, same_reverse)),
+            torch.zeros(2 * same.shape[0], dtype=torch.long, device=same.device),
+            torch.cat(
+                (
+                    torch.arange(same.shape[0], 2 * same.shape[0], device=same.device),
+                    torch.arange(same.shape[0], device=same.device),
+                )
+            ),
+        )
+        errors["projected_homogeneous_reversal_relative_error"] = _relative_error(
+            same_projected[same.shape[0] :],
+            transform.reverse(("A", "A"), same_projected[: same.shape[0]]),
         )
 
         onsite = model.predict_onsite("A", descriptor_i)
@@ -198,8 +242,13 @@ def _symmetry_metrics(
         errors["onsite_improper_o3_relative_error"] = _relative_error(
             rotated_onsite, onsite @ target_action.T
         )
-        errors["onsite_hermiticity_relative_error"] = _relative_error(
+        errors["raw_onsite_hermiticity_relative_error"] = _relative_error(
             onsite, transform.reverse(("A", "A"), onsite)
+        )
+        projected_onsite = project_onsite_irreps(transform, "A", onsite)
+        errors["projected_onsite_hermiticity_relative_error"] = _relative_error(
+            projected_onsite,
+            transform.reverse(("A", "A"), projected_onsite),
         )
 
         first = model(
@@ -456,7 +505,8 @@ def main() -> None:
     generator = torch.Generator(device=device).manual_seed(args.seed)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     config = {
-        "convention": "mandala-stage4-mapper-correctness-v1",
+        "convention": "mandala-stage4-directed-mapper-correctness-v3",
+        "training_time_hermitian_projection": False,
         "architectures": args.architectures,
         "descriptor_irreps": str(DESCRIPTOR_IRREPS),
         "target_orbitals": {"A": "1s1p", "B": "1s1p"},
@@ -577,9 +627,9 @@ def main() -> None:
             )
         ]
         reversal_values = [
-            float(row["heterogeneous_reversal_relative_error"]),
-            float(row["homogeneous_reversal_relative_error"]),
-            float(row["onsite_hermiticity_relative_error"]),
+            float(row["projected_heterogeneous_reversal_relative_error"]),
+            float(row["projected_homogeneous_reversal_relative_error"]),
+            float(row["projected_onsite_hermiticity_relative_error"]),
         ]
         row["passed"] = bool(
             max(equivariance_values) <= args.equivariance_tolerance

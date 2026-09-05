@@ -1,4 +1,4 @@
-"""Canonical sharded cache construction for the released HamGNN SiO2 graphs."""
+"""Directed sharded cache construction for the released HamGNN SiO2 graphs."""
 
 from __future__ import annotations
 
@@ -21,8 +21,24 @@ from pair_descriptors import AtomicNeighborDensity
 from pair_hamiltonian.hamgnn_sio2 import ACTIVE_AO_14, BOHR_TO_ANGSTROM, SPECIES_BY_Z
 from pair_hamiltonian.output_schema import FullBlockIrrepTransform
 
-CANONICAL_PAIR_NAMES = ("O-O", "O-Si", "Si-Si")
-PAIR_TO_INDEX = {name: index for index, name in enumerate(CANONICAL_PAIR_NAMES)}
+DIRECTED_PAIR_NAMES = ("O-O", "O-Si", "Si-O", "Si-Si")
+UNORDERED_PAIR_NAMES = ("O-O", "O-Si", "Si-Si")
+# Kept as a compatibility alias for non-supervised, unordered pair artifacts such
+# as the range envelope.  Supervised code must use DIRECTED_PAIR_NAMES.
+CANONICAL_PAIR_NAMES = UNORDERED_PAIR_NAMES
+PAIR_TO_INDEX = {name: index for index, name in enumerate(DIRECTED_PAIR_NAMES)}
+
+
+def openmx_to_e3nn_cartesian(values: np.ndarray | torch.Tensor):
+    """Apply the Cartesian frame change paired with OpenMXE3NNConverter.
+
+    ``OpenMXE3NNConverter`` maps native OpenMX real harmonics into the project's
+    e3nn convention using the cyclic frame ``(x, y, z) -> (y, z, x)``.  Matrix
+    and geometry conversion are one indivisible operation.
+    """
+    if values.shape[-1] != 3:
+        raise ValueError("Cartesian values must end in three coordinates")
+    return values[..., [1, 2, 0]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +96,7 @@ def _target_irreps(
     converter: OpenMXE3NNConverter,
 ) -> np.ndarray:
     result = torch.empty(blocks_openmx.shape[0], 169, dtype=torch.float64, device="cpu")
-    for pair_index, pair_name in enumerate(CANONICAL_PAIR_NAMES):
+    for pair_index, pair_name in enumerate(DIRECTED_PAIR_NAMES):
         selected = np.flatnonzero(pair_indices == pair_index)
         if selected.size == 0:
             continue
@@ -99,16 +115,17 @@ def build_structure_arrays(
     density_l_max: int,
     hamiltonian_cutoff_angstrom: float,
     nao_max: int = 14,
+    validate_physical_targets: bool = True,
 ) -> dict[str, np.ndarray]:
-    """Convert one released graph into one canonical full-block cache shard."""
+    """Convert one released graph into one directed full-block cache shard."""
     atomic_numbers = graph.z.detach().cpu().numpy().astype(np.int16, copy=False)
     positions_bohr = graph.pos.detach().cpu().numpy().astype(np.float64, copy=False)
     raw_cell = graph.cell.detach().cpu().numpy().astype(np.float64, copy=False)
     cell_bohr = raw_cell[0] if raw_cell.shape == (1, 3, 3) else raw_cell
     if cell_bohr.shape != (3, 3):
         raise ValueError(f"Expected cell shape (3, 3), got {raw_cell.shape}")
-    positions_angstrom = positions_bohr * BOHR_TO_ANGSTROM
-    cell_angstrom = cell_bohr * BOHR_TO_ANGSTROM
+    positions_angstrom = openmx_to_e3nn_cartesian(positions_bohr) * BOHR_TO_ANGSTROM
+    cell_angstrom = openmx_to_e3nn_cartesian(cell_bohr) * BOHR_TO_ANGSTROM
     center, neighbor, neighbor_image, neighbor_displacement = _geometry_neighbors(
         atomic_numbers,
         positions_angstrom,
@@ -135,24 +152,20 @@ def build_structure_arrays(
         inverse[inverse], torch.arange(edge_count)
     ):
         raise ValueError("Invalid inverse-edge mapping")
-    representatives = torch.arange(edge_count)[torch.arange(edge_count) < inverse]
     source_all, target_all = edge_index
-    rank = {8: 0, 14: 1}
-    canonical_edges: list[int] = []
-    for edge in representatives.tolist():
-        source_z = int(graph.z[source_all[edge]])
-        target_z = int(graph.z[target_all[edge]])
-        canonical_edges.append(
-            edge if rank[source_z] <= rank[target_z] else int(inverse[edge])
-        )
-    selected = torch.tensor(canonical_edges, dtype=torch.long)
+    # Both members of every periodic reverse pair are distinct supervised
+    # records.  Hermiticity is applied only after raw model evaluation.
+    selected = torch.arange(edge_count, dtype=torch.long)
     source = source_all.index_select(0, selected)
     target = target_all.index_select(0, selected)
     displacement = (
-        graph.pos[target]
-        - graph.pos[source]
-        + graph.nbr_shift.index_select(0, selected)
-    ).to(torch.float64) * BOHR_TO_ANGSTROM
+        openmx_to_e3nn_cartesian(
+            graph.pos[target]
+            - graph.pos[source]
+            + graph.nbr_shift.index_select(0, selected)
+        ).to(torch.float64)
+        * BOHR_TO_ANGSTROM
+    )
     keep = torch.linalg.vector_norm(displacement, dim=1) <= (
         hamiltonian_cutoff_angstrom + 1.0e-7
     )
@@ -160,6 +173,14 @@ def build_structure_arrays(
     source = source[keep]
     target = target[keep]
     displacement = displacement[keep]
+    original_to_selected = torch.full((edge_count,), -1, dtype=torch.long)
+    original_to_selected[selected] = torch.arange(selected.numel(), dtype=torch.long)
+    selected_inverse = original_to_selected[inverse.index_select(0, selected)]
+    if torch.any(selected_inverse < 0) or not torch.equal(
+        selected_inverse.index_select(0, selected_inverse),
+        torch.arange(selected.numel()),
+    ):
+        raise ValueError("Hamiltonian cutoff did not preserve complete reverse pairs")
     image = graph.cell_shift.detach().cpu().index_select(0, selected).to(torch.int16)
     source_z = graph.z.detach().cpu().index_select(0, source)
     target_z = graph.z.detach().cpu().index_select(0, target)
@@ -198,6 +219,42 @@ def build_structure_arrays(
         onsite_blocks, onsite_pair_indices, transform, converter
     )
     offsite_targets = _target_irreps(offsite_blocks, pair_indices, transform, converter)
+    if validate_physical_targets:
+        onsite_tensor = torch.from_numpy(onsite_targets)
+        for pair_name in ("O-O", "Si-Si"):
+            chosen = torch.from_numpy(
+                np.flatnonzero(onsite_pair_indices == PAIR_TO_INDEX[pair_name])
+            )
+            if chosen.numel() and not torch.allclose(
+                onsite_tensor.index_select(0, chosen),
+                transform.reverse(
+                    pair_name,
+                    onsite_tensor.index_select(0, chosen).to(torch.float64),
+                ).to(torch.float32),
+                atol=2.0e-6,
+                rtol=2.0e-6,
+            ):
+                raise ValueError(f"Onsite targets violate Hermiticity for {pair_name}")
+        offsite_tensor = torch.from_numpy(offsite_targets)
+        for pair_index, pair_name in enumerate(DIRECTED_PAIR_NAMES):
+            chosen = torch.from_numpy(np.flatnonzero(pair_indices == pair_index))
+            if chosen.numel() == 0:
+                continue
+            reverse_indices = selected_inverse.index_select(0, chosen)
+            reverse_pair = "-".join(reversed(pair_name.split("-")))
+            expected = transform.reverse(
+                reverse_pair,
+                offsite_tensor.index_select(0, reverse_indices).to(torch.float64),
+            ).to(torch.float32)
+            if not torch.allclose(
+                offsite_tensor.index_select(0, chosen),
+                expected,
+                atol=2.0e-6,
+                rtol=2.0e-6,
+            ):
+                raise ValueError(
+                    f"Directed targets violate Hermiticity for {pair_name}"
+                )
     return {
         "atomic_numbers": atomic_numbers,
         "positions_angstrom": positions_angstrom.astype(np.float32),
@@ -206,6 +263,7 @@ def build_structure_arrays(
         "onsite_target_irreps_hartree": onsite_targets,
         "offsite_source": source.numpy().astype(np.int32),
         "offsite_target": target.numpy().astype(np.int32),
+        "offsite_inverse": selected_inverse.numpy().astype(np.int32),
         "offsite_image": image.numpy(),
         "offsite_displacement_angstrom": displacement.numpy().astype(np.float32),
         "offsite_pair_type": pair_indices,
@@ -264,9 +322,32 @@ def validate_structure_shard(path: Path, metadata: Mapping[str, object]) -> bool
     try:
         with h5py.File(path, "r") as handle:
             normalized_metadata = json.loads(json.dumps(metadata, sort_keys=True))
-            return (
+            if not (
                 bool(handle.attrs.get("complete", False))
                 and json.loads(handle.attrs["metadata_json"]) == normalized_metadata
+            ):
+                return False
+            required = (
+                "atomic_numbers",
+                "descriptor",
+                "onsite_target_irreps_hartree",
+                "offsite_source",
+                "offsite_target",
+                "offsite_inverse",
+                "offsite_displacement_angstrom",
+                "offsite_pair_type",
+                "offsite_target_irreps_hartree",
+            )
+            if any(name not in handle for name in required):
+                return False
+            edge_count = int(handle["offsite_source"].shape[0])
+            if any(int(handle[name].shape[0]) != edge_count for name in required[3:]):
+                return False
+            inverse = handle["offsite_inverse"][:]
+            return bool(
+                inverse.shape == (edge_count,)
+                and np.all((0 <= inverse) & (inverse < edge_count))
+                and np.array_equal(inverse[inverse], np.arange(edge_count))
             )
     except (OSError, KeyError, json.JSONDecodeError):
         return False

@@ -27,6 +27,8 @@ from pair_hamiltonian.output_schema import (
     FullBlockIrrepTransform,
     o3_representation_matrix,
 )
+from pair_hamiltonian.hermiticity import project_directed_irreps
+from pair_hamiltonian.sio2_cache import DIRECTED_PAIR_NAMES
 from pair_mappers import NativeACEPairMapper
 
 
@@ -216,7 +218,33 @@ def main() -> None:
     )
     reversal_error = relative_error(reverse, transform.reverse("O-Si", base))
     metrics.append(
-        {"metric": "pair_reversal", "value": reversal_error, "unit": "relative"}
+        {"metric": "raw_pair_reversal", "value": reversal_error, "unit": "relative"}
+    )
+    raw = torch.cat((base, reverse), dim=0)
+    inverse = torch.cat(
+        (
+            torch.arange(batch, 2 * batch, device=device),
+            torch.arange(batch, device=device),
+        )
+    )
+    pair_types = torch.cat(
+        (
+            torch.full((batch,), 1, dtype=torch.long, device=device),
+            torch.full((batch,), 2, dtype=torch.long, device=device),
+        )
+    )
+    projected = project_directed_irreps(
+        transform, DIRECTED_PAIR_NAMES, raw, pair_types, inverse
+    )
+    projected_reversal_error = relative_error(
+        projected[batch:], transform.reverse("O-Si", projected[:batch])
+    )
+    metrics.append(
+        {
+            "metric": "projected_pair_reversal",
+            "value": projected_reversal_error,
+            "unit": "relative",
+        }
     )
 
     print("[3/5] Float32 agreement and stability", flush=True)
@@ -283,7 +311,7 @@ def main() -> None:
     passed = (
         metric_values["equivariance_det_1"] <= tolerances["equivariance"]
         and metric_values["equivariance_det_-1"] <= tolerances["equivariance"]
-        and metric_values["pair_reversal"] <= tolerances["reversal"]
+        and metric_values["projected_pair_reversal"] <= tolerances["reversal"]
         and metric_values["float32_vs_float64"] <= tolerances["float32_vs_float64"]
     )
     summary = {
@@ -309,7 +337,7 @@ def main() -> None:
         "# Native ACE core validation\n\n"
         f"Acceptance: **{'PASS' if passed else 'FAIL'}**\n\n"
         f"Offsite feature throughput: {pairs_per_second:.3f} pairs/s on {config['hardware']['name']}.\n\n"
-        "This validates the native fixed ACE algebra and full-block interface. It is not an upstream Julia basis-value comparison or a fitted SiO2 accuracy result.\n"
+        "This validates the native fixed ACE algebra, independent directed raw calls, and evaluation-only Hermitian projection. Raw reversal error is diagnostic and is not constrained. It is not an upstream Julia basis-value comparison or a fitted SiO2 accuracy result.\n"
     )
     print(json.dumps(summary, indent=2, sort_keys=True), flush=True)
     if not passed:

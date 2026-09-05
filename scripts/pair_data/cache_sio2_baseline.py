@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build canonical SiO2 pair/target/neighbor shards and fit the frozen envelope."""
+"""Build directed SiO2 pair/target/neighbor shards and fit the frozen envelope."""
 
 from __future__ import annotations
 
@@ -30,7 +30,8 @@ from pair_hamiltonian.range_factorization import (
     plot_range_envelope_fits,
 )
 from pair_hamiltonian.sio2_cache import (
-    CANONICAL_PAIR_NAMES,
+    DIRECTED_PAIR_NAMES,
+    UNORDERED_PAIR_NAMES,
     build_structure_arrays,
     split_hash,
     validate_structure_shard,
@@ -195,7 +196,7 @@ def main() -> None:
     if source_hash != audit["source"]["sha256"]:
         raise ValueError("Input SHA256 differs from the fingerprinted audit source")
     projected_bytes = int(
-        (audit["directed_offsite_block_count"] / 2 + audit["atom_count"]["total"])
+        (audit["directed_offsite_block_count"] + audit["atom_count"]["total"])
         * 169
         * 4
         * 1.25
@@ -233,14 +234,16 @@ def main() -> None:
         "nao_max": args.nao_max,
     }
     cache_metadata = {
-        "version": "mandala-sio2-baseline-cache-v1",
+        "version": "mandala-sio2-directed-baseline-cache-v2",
+        "cartesian_convention": "openmx_xyz_to_e3nn_yzx",
+        "offsite_supervision": "all directed reverse-pair members",
         "dataset_sha256": audit["source"]["sha256"],
         "split_hash": frozen_split_hash,
         **settings,
-        "pair_names": CANONICAL_PAIR_NAMES,
+        "pair_names": DIRECTED_PAIR_NAMES,
         "target_schema_hashes": {
             name: audit["output_irrep_schemas"][name]["content_hash"]
-            for name in CANONICAL_PAIR_NAMES
+            for name in DIRECTED_PAIR_NAMES
         },
     }
     atomic_json(output_dir / "cache_metadata.json", cache_metadata)
@@ -299,13 +302,13 @@ def main() -> None:
         pair: RangeEnvelopeAccumulator(
             args.hamiltonian_cutoff_angstrom, args.envelope_bin_width_angstrom
         )
-        for pair in CANONICAL_PAIR_NAMES
+        for pair in UNORDERED_PAIR_NAMES
     }
     sample_distances: dict[str, list[np.ndarray]] = {
-        pair: [] for pair in CANONICAL_PAIR_NAMES
+        pair: [] for pair in UNORDERED_PAIR_NAMES
     }
     sample_magnitudes: dict[str, list[np.ndarray]] = {
-        pair: [] for pair in CANONICAL_PAIR_NAMES
+        pair: [] for pair in UNORDERED_PAIR_NAMES
     }
     for index in tqdm(range(limit), desc="envelope", unit="structure"):
         if split_names[index] != "train":
@@ -317,7 +320,12 @@ def main() -> None:
                 handle["offsite_displacement_angstrom"][:], axis=1
             )
             targets = handle["offsite_target_irreps_hartree"][:]
-        for pair_index, pair in enumerate(CANONICAL_PAIR_NAMES):
+        for pair_index, directed_pair in enumerate(DIRECTED_PAIR_NAMES):
+            pair = (
+                directed_pair
+                if directed_pair in accumulators
+                else "-".join(reversed(directed_pair.split("-")))
+            )
             selected = pair_types == pair_index
             accumulators[pair].update(distances[selected], targets[selected])
             sample_distances[pair].append(distances[selected])
@@ -326,7 +334,7 @@ def main() -> None:
                     np.mean(np.square(targets[selected].astype(np.float64)), axis=1)
                 )
             )
-    fits = [accumulators[pair].fit(pair) for pair in CANONICAL_PAIR_NAMES]
+    fits = [accumulators[pair].fit(pair) for pair in UNORDERED_PAIR_NAMES]
     envelope = envelope_manifest(
         fits,
         dataset_fingerprint=audit["source"]["sha256"],
@@ -338,7 +346,7 @@ def main() -> None:
             np.concatenate(sample_distances[pair]),
             np.concatenate(sample_magnitudes[pair]),
         )
-        for pair in CANONICAL_PAIR_NAMES
+        for pair in UNORDERED_PAIR_NAMES
     }
     plot_rows = plot_range_envelope_fits(
         fits,
@@ -361,7 +369,7 @@ def main() -> None:
     actual_bytes = sum(int(row["size_bytes"]) for row in summaries.values())
     storage = {
         "path": str(cache_dir),
-        "description": "Canonical full-block targets, D1 descriptors, and exact neighbors",
+        "description": "Directed full-block targets, D1 descriptors, and exact neighbors",
         "size_bytes": actual_bytes,
         "regenerable": True,
         "creation_script": str(Path(__file__).relative_to(REPOSITORY_ROOT)),
@@ -380,7 +388,7 @@ def main() -> None:
         "full_run": full_run,
         "structure_count": len(summaries),
         "atom_count": total_atoms,
-        "canonical_offsite_pair_count": total_pairs,
+        "directed_offsite_pair_count": total_pairs,
         "exact_neighbor_count": total_neighbors,
         "cache_size_bytes": actual_bytes,
         "cache_metadata": cache_metadata,
@@ -391,9 +399,9 @@ def main() -> None:
     }
     atomic_json(output_dir / "summary.json", summary)
     (output_dir / "report.md").write_text(
-        "# SiO2 canonical baseline cache\n\n"
+        "# SiO2 directed baseline cache\n\n"
         f"Acceptance: **{'PASS' if passed else 'SMOKE-ONLY'}**\n\n"
-        f"Structures: {len(summaries)}; atoms: {total_atoms}; canonical offsite pairs: {total_pairs}.\n\n"
+        f"Structures: {len(summaries)}; atoms: {total_atoms}; directed offsite pairs: {total_pairs}.\n\n"
         f"Cache size: {actual_bytes / 2**30:.3f} GiB. The range envelope was fitted only on training shards.\n"
     )
     print("[7/7] Complete", flush=True)

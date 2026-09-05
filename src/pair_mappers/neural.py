@@ -1,15 +1,15 @@
 """Pair-local O(3)-equivariant mapper references for Stage 4.
 
 The implementations in this module prioritize an auditable float64 reference
-over production throughput.  Every public mapper consumes exactly the two
-endpoint descriptors and their bond, returns one complete full-block irrep
-vector, and enforces canonical pair reversal.  No graph aggregation or mutable
-node state is present.
+over production throughput. Every public mapper consumes exactly the two
+endpoint descriptors and their bond and returns one complete raw full-block
+irrep vector. Hermiticity is projected only after independent directed forward
+calls. No graph aggregation or mutable node state is present.
 """
 
 from __future__ import annotations
 
-from itertools import combinations_with_replacement
+from itertools import product
 import math
 from typing import Literal
 
@@ -438,7 +438,6 @@ class FullBlockNeuralPairMapper(nn.Module):
             n_radial=bond_n_radial, l_max=bond_l_max, cutoff=bond_cutoff
         )
         elements = target_transform.orbital_config.elements()
-        self._element_rank = {element: index for index, element in enumerate(elements)}
         self.onsite_kernels = nn.ModuleDict()
         self.offsite_kernels = nn.ModuleDict()
         for element in elements:
@@ -453,7 +452,7 @@ class FullBlockNeuralPairMapper(nn.Module):
                     hidden_l_max=hidden_l_max,
                 )
             )
-        for pair in combinations_with_replacement(elements, 2):
+        for pair in product(elements, repeat=2):
             target = target_transform.irreps(pair)
             if architecture == "m0":
                 kernel: nn.Module = LinearPairKernel(
@@ -491,13 +490,6 @@ class FullBlockNeuralPairMapper(nn.Module):
             self.offsite_kernels[_module_key(pair)] = kernel
         self.to(dtype=dtype)
 
-    def _canonical_pair(self, pair: tuple[str, str]) -> tuple[tuple[str, str], bool]:
-        try:
-            reversed_order = self._element_rank[pair[0]] > self._element_rank[pair[1]]
-        except KeyError as exc:
-            raise KeyError(f"unknown species pair {pair}") from exc
-        return ((pair[1], pair[0]) if reversed_order else pair), reversed_order
-
     def _raw_offsite(
         self,
         pair: tuple[str, str],
@@ -522,10 +514,7 @@ class FullBlockNeuralPairMapper(nn.Module):
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
         descriptor = self.descriptor_projection(descriptor)
-        prediction = self.onsite_kernels[species](descriptor)
-        return 0.5 * (
-            prediction + self.target_transform.reverse((species, species), prediction)
-        )
+        return self.onsite_kernels[species](descriptor)
 
     def predict_offsite(
         self,
@@ -538,31 +527,13 @@ class FullBlockNeuralPairMapper(nn.Module):
     ) -> torch.Tensor:
         descriptor_i = self.descriptor_projection(descriptor_i)
         descriptor_j = self.descriptor_projection(descriptor_j)
-        canonical, was_reversed = self._canonical_pair(pair)
-        if was_reversed:
-            descriptor_i, descriptor_j = descriptor_j, descriptor_i
-            displacement_ij = -displacement_ij
-        prediction = self._raw_offsite(
-            canonical,
+        return self._raw_offsite(
+            pair,
             descriptor_i,
             displacement_ij,
             descriptor_j,
             roll=roll,
         )
-        if canonical[0] == canonical[1]:
-            opposite = self._raw_offsite(
-                canonical,
-                descriptor_j,
-                -displacement_ij,
-                descriptor_i,
-                roll=roll,
-            )
-            prediction = 0.5 * (
-                prediction + self.target_transform.reverse(canonical, opposite)
-            )
-        if was_reversed:
-            prediction = self.target_transform.reverse(canonical, prediction)
-        return prediction
 
     def forward(
         self,

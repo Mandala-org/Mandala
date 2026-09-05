@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 RADII = (6.5, 7.5, 8.5, 10.5)
 FAMILIES = ("d1", "d2", "d3", "d4")
 
@@ -62,6 +61,16 @@ def _selected_keys(radius: float) -> dict[str, dict[str, str]]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts-root", type=Path, default=Path("artifacts"))
+    parser.add_argument("--certification-dir", type=Path)
+    parser.add_argument("--information-dir", type=Path)
+    parser.add_argument("--confirmation-dir", type=Path)
+    parser.add_argument("--cases-dir", type=Path)
+    parser.add_argument(
+        "--family-artifact",
+        nargs=2,
+        action="append",
+        metavar=("FAMILY", "DIRECTORY"),
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -75,9 +84,21 @@ def main() -> None:
     args = parse_args()
     stage2 = args.artifacts_root / "pair_stage2"
     stage3 = args.artifacts_root / "pair_stage3"
-    confirmation = stage3 / "sio2_reconstruction_confirmation_v1"
-    cases = stage3 / "sio2_confirmation_cases_v1"
-    information = stage3 / "sio2_information_suite_v1"
+    confirmation = args.confirmation_dir or (
+        stage3 / "sio2_reconstruction_confirmation_v1"
+    )
+    cases = args.cases_dir or (stage3 / "sio2_confirmation_cases_v1")
+    information = args.information_dir or (stage3 / "sio2_information_suite_v1")
+    certification_dir = args.certification_dir or (
+        stage2 / "sio2_descriptor_certification_v1"
+    )
+    supplied_families = (
+        {}
+        if args.family_artifact is None
+        else {family: Path(directory) for family, directory in args.family_artifact}
+    )
+    if supplied_families and set(supplied_families) != set(FAMILIES):
+        raise ValueError("family artifacts must provide d1, d2, d3, and d4")
 
     confirmation_summary = _read_json(confirmation / "summary.json")
     confirmation_config = _read_json(confirmation / "config.json")
@@ -107,9 +128,7 @@ def main() -> None:
         }
     with (information / "configuration_metrics.csv").open(newline="") as stream:
         info = {(row["family"], row["key"]): row for row in csv.DictReader(stream)}
-    with (stage2 / "sio2_descriptor_certification_v1" / "descriptor_metrics.csv").open(
-        newline=""
-    ) as stream:
+    with (certification_dir / "descriptor_metrics.csv").open(newline="") as stream:
         certification = {
             (row["family"], row["key"]): row for row in csv.DictReader(stream)
         }
@@ -123,10 +142,12 @@ def main() -> None:
         cases / "cases.json",
         cases / "summary.json",
         information / "configuration_metrics.csv",
-        stage2 / "sio2_descriptor_certification_v1" / "descriptor_metrics.csv",
+        certification_dir / "descriptor_metrics.csv",
     ]
     for family in FAMILIES:
-        family_dir = stage2 / f"{family}_sio2_precompute_v1"
+        family_dir = supplied_families.get(
+            family, stage2 / f"{family}_sio2_precompute_v1"
+        )
         family_summary = _read_json(family_dir / "summary.json")
         if not family_summary["passed"] or not family_summary["full_run"]:
             raise RuntimeError(f"Stage-2 cache did not pass for {family}")

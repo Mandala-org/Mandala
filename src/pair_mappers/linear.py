@@ -74,11 +74,22 @@ class EquivariantRidgeAccumulator:
             )
 
     @torch.no_grad()
-    def update(self, features: torch.Tensor, targets: torch.Tensor) -> None:
+    def update(
+        self,
+        features: torch.Tensor,
+        targets: torch.Tensor,
+        *,
+        sample_weight: torch.Tensor | None = None,
+    ) -> None:
         if features.ndim != 2 or features.shape[1] != self.feature_irreps.dim:
             raise ValueError("features do not match accumulator feature irreps")
         if targets.shape != (features.shape[0], self.target_irreps.dim):
             raise ValueError("targets do not match accumulator target irreps")
+        if sample_weight is not None:
+            if sample_weight.shape != (features.shape[0],):
+                raise ValueError("sample_weight must have one value per sample")
+            if not torch.isfinite(sample_weight).all() or torch.any(sample_weight < 0):
+                raise ValueError("sample_weight must be finite and non-negative")
         if features.shape[0] == 0:
             return
         self.sample_count += features.shape[0]
@@ -91,6 +102,10 @@ class EquivariantRidgeAccumulator:
             y = EquivariantRidgeRegressor._gather(targets, target_slices).to(
                 self.xty[irrep]
             )
+            if sample_weight is not None:
+                root_weight = torch.sqrt(sample_weight.to(x))[:, None, None]
+                x = x * root_weight
+                y = y * root_weight
             x = x.permute(0, 2, 1).reshape(-1, x.shape[-2])
             y = y.permute(0, 2, 1).reshape(-1, y.shape[-2])
             self.xtx[irrep].add_(x.T @ x)

@@ -24,11 +24,15 @@ from data.envelope import build_edge_envelope, load_pair_envelope_table
 from pair_descriptors import AtomicNeighborDensity
 from pair_hamiltonian.hamgnn_sio2 import HARTREE_TO_MEV
 from pair_hamiltonian.output_schema import FullBlockIrrepTransform
-from pair_hamiltonian.sio2_cache import CANONICAL_PAIR_NAMES
+from pair_hamiltonian.hermiticity import (
+    project_directed_irreps,
+    project_onsite_irreps,
+)
+from pair_hamiltonian.sio2_cache import DIRECTED_PAIR_NAMES
 from pair_mappers import ClosedFormM0PairMapper, NativeACEPairMapper
 
 SPECIES_BY_Z = {8: "O", 14: "Si"}
-CANONICAL_PAIRS = tuple(tuple(value.split("-")) for value in CANONICAL_PAIR_NAMES)
+DIRECTED_PAIRS = tuple(tuple(value.split("-")) for value in DIRECTED_PAIR_NAMES)
 IRREP_LABELS = ("0e", "1o", "1e", "2o", "2e", "3o", "3e", "4e")
 AO_PER_ATOM = 13
 
@@ -81,6 +85,7 @@ def load_baseline(path: Path) -> dict[str, np.ndarray]:
         "onsite_target_irreps_hartree",
         "offsite_source",
         "offsite_target",
+        "offsite_inverse",
         "offsite_image",
         "offsite_displacement_angstrom",
         "offsite_pair_type",
@@ -157,22 +162,34 @@ def predict(
     envelope_table,
     envelope_floor: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    features = torch.from_numpy(descriptor)
+    model_dtype = next(model.buffers()).dtype
+    features = torch.from_numpy(descriptor).to(dtype=model_dtype)
     atomic_numbers = torch.from_numpy(data["atomic_numbers"].astype(np.int64))
     source = torch.from_numpy(data["offsite_source"].astype(np.int64))
     target = torch.from_numpy(data["offsite_target"].astype(np.int64))
-    displacement = torch.from_numpy(data["offsite_displacement_angstrom"])
+    displacement = torch.from_numpy(data["offsite_displacement_angstrom"]).to(
+        dtype=model_dtype
+    )
     pair_types = torch.from_numpy(data["offsite_pair_type"].astype(np.int64))
-    onsite = torch.empty_like(torch.from_numpy(data["onsite_target_irreps_hartree"]))
-    offsite = torch.empty_like(torch.from_numpy(data["offsite_target_irreps_hartree"]))
+    onsite = torch.empty(
+        torch.from_numpy(data["onsite_target_irreps_hartree"]).shape,
+        dtype=model_dtype,
+    )
+    offsite = torch.empty(
+        torch.from_numpy(data["offsite_target_irreps_hartree"]).shape,
+        dtype=model_dtype,
+    )
     for atomic_number, species in SPECIES_BY_Z.items():
         index = torch.nonzero(atomic_numbers == atomic_number).flatten()
-        onsite[index] = model.predict_onsite(species, features[index]).to(onsite.dtype)
+        prediction = model.predict_onsite(species, features[index])
+        onsite[index] = project_onsite_irreps(
+            model.target_transform, species, prediction
+        )
     distance = torch.linalg.vector_norm(displacement, dim=-1)
     envelope = build_edge_envelope(distance, pair_types, envelope_table).clamp_min(
         envelope_floor
     )
-    for pair_index, pair in enumerate(CANONICAL_PAIRS):
+    for pair_index, pair in enumerate(DIRECTED_PAIRS):
         index = torch.nonzero(pair_types == pair_index).flatten()
         offsite[index] = (
             model.predict_offsite(
@@ -180,9 +197,16 @@ def predict(
                 features[source[index]],
                 displacement[index],
                 features[target[index]],
-            ).to(offsite.dtype)
+            )
             * envelope[index, None]
         )
+    offsite = project_directed_irreps(
+        model.target_transform,
+        DIRECTED_PAIR_NAMES,
+        offsite,
+        pair_types,
+        torch.from_numpy(data["offsite_inverse"].astype(np.int64)),
+    )
     return onsite.numpy(), offsite.numpy()
 
 
@@ -217,16 +241,10 @@ def assemble(
         block = transform.irreps_to_blocks(pair, torch.from_numpy(vector)).numpy()
         start = atom * AO_PER_ATOM
         matrix[start : start + AO_PER_ATOM, start : start + AO_PER_ATOM] = block
-    occupied: set[tuple[int, int]] = set()
     for edge in edge_index:
         source = int(data["offsite_source"][edge])
         target = int(data["offsite_target"][edge])
-        if (source, target) in occupied or (target, source) in occupied:
-            raise ValueError(
-                f"duplicate L=0 atom-pair block for atoms {source}, {target}"
-            )
-        occupied.add((source, target))
-        pair = CANONICAL_PAIRS[int(data["offsite_pair_type"][edge])]
+        pair = DIRECTED_PAIRS[int(data["offsite_pair_type"][edge])]
         vector = offsite[edge].copy()
         if label is not None:
             vector[~label_mask(transform, pair, label)] = 0.0
@@ -234,11 +252,10 @@ def assemble(
         row = slice(source * AO_PER_ATOM, (source + 1) * AO_PER_ATOM)
         column = slice(target * AO_PER_ATOM, (target + 1) * AO_PER_ATOM)
         matrix[row, column] = block
-        matrix[column, row] = block.T
     return matrix
 
 
-def coefficient_mae(
+def invariant_irrep_error(
     transform: FullBlockIrrepTransform,
     data: dict[str, np.ndarray],
     predicted_onsite: np.ndarray,
@@ -247,28 +264,34 @@ def coefficient_mae(
     edge_index: np.ndarray,
     label: str,
 ) -> tuple[float, int]:
-    errors: list[np.ndarray] = []
+    errors: list[float] = []
+
+    def append_copy_norms(pair, prediction, target) -> None:
+        difference = prediction - target
+        for copy in transform.schema(pair).copies:
+            if copy.irrep_label == label:
+                errors.append(
+                    float(
+                        np.linalg.norm(difference[copy.vector_start : copy.vector_stop])
+                    )
+                )
+
     numbers = data["atomic_numbers"]
     for atom in range(atom_count):
         species = SPECIES_BY_Z[int(numbers[atom])]
-        mask = label_mask(transform, (species, species), label)
-        errors.append(
-            np.abs(
-                predicted_onsite[atom, mask]
-                - data["onsite_target_irreps_hartree"][atom, mask]
-            )
+        append_copy_norms(
+            (species, species),
+            predicted_onsite[atom],
+            data["onsite_target_irreps_hartree"][atom],
         )
     for edge in edge_index:
-        pair = CANONICAL_PAIRS[int(data["offsite_pair_type"][edge])]
-        mask = label_mask(transform, pair, label)
-        errors.append(
-            np.abs(
-                predicted_offsite[edge, mask]
-                - data["offsite_target_irreps_hartree"][edge, mask]
-            )
+        pair = DIRECTED_PAIRS[int(data["offsite_pair_type"][edge])]
+        append_copy_norms(
+            pair,
+            predicted_offsite[edge],
+            data["offsite_target_irreps_hartree"][edge],
         )
-    joined = np.concatenate(errors)
-    return float(joined.mean() * HARTREE_TO_MEV), int(joined.size)
+    return float(np.mean(errors) * HARTREE_TO_MEV), len(errors)
 
 
 def plot_triptych(
@@ -353,7 +376,7 @@ def main() -> None:
 
     envelope_table = load_pair_envelope_table(
         args.range_envelope,
-        pair_order=CANONICAL_PAIR_NAMES,
+        pair_order=DIRECTED_PAIR_NAMES,
         dtype=torch.float32,
         device="cpu",
     )
@@ -427,7 +450,7 @@ def main() -> None:
         "atom_indices": list(range(args.atom_count)),
         "atom_labels": atom_labels,
         "periodic_block": "L=(0,0,0)",
-        "selected_canonical_offsite_blocks": int(edge_index.size),
+        "selected_directed_offsite_blocks": int(edge_index.size),
         "color_limit_hartree": args.color_limit_hartree,
         "residual_convention": "prediction_minus_ground_truth",
         "methods": {},
@@ -479,7 +502,7 @@ def main() -> None:
                 label,
             )
             predicted_channels[label] = channel_prediction
-            coeff_mae, count = coefficient_mae(
+            invariant_mae, count = invariant_irrep_error(
                 transform,
                 data,
                 predicted_onsite,
@@ -493,17 +516,17 @@ def main() -> None:
                 * HARTREE_TO_MEV
             )
             method_metrics["per_irrep"][label] = {
-                "canonical_block_coefficient_mae_mev": coeff_mae,
-                "coefficient_count": count,
+                "invariant_irrep_copy_norm_mae_mev": invariant_mae,
+                "irrep_copy_count": count,
                 "six_atom_channel_submatrix_mae_mev": matrix_mae,
             }
-            report_rows.append((display, label, coeff_mae, matrix_mae))
+            report_rows.append((display, label, invariant_mae, matrix_mae))
             plot_triptych(
                 channel_truth[label],
                 channel_prediction,
                 method_dir / "irreps" / label,
                 f"{display} — {label} channel, first validation structure, atoms 0–{args.atom_count - 1}, L=0\n"
-                f"channel coefficient MAE = {coeff_mae:.3f} meV; submatrix MAE = {matrix_mae:.3f} meV",
+                f"invariant irrep-copy norm MAE = {invariant_mae:.3f} meV; submatrix MAE = {matrix_mae:.3f} meV",
                 atom_labels,
                 args.color_limit_hartree,
             )
@@ -525,11 +548,11 @@ def main() -> None:
     )
     atomic_json(output / "summary.json", summary)
     config = {
-        "convention": "mandala-stage5-six-atom-validation-comparison-v1",
+        "convention": "mandala-stage5-directed-six-atom-validation-comparison-v2",
         "test_shards_read": False,
         "method_selection_basis": "lowest validation matrix MAE among completed methods",
         "missing_or_out_of_cutoff_blocks": "represented by exact zeros",
-        "irrep_mae_definition": "MAE of selected canonical L=0 block coefficients, including onsite blocks",
+        "irrep_mae_definition": "mean O(3)-invariant norm of each selected directed L=0 irrep-copy residual, including onsite blocks",
         "inputs": {
             key: str(value.resolve())
             for key, value in vars(args).items()
@@ -556,7 +579,7 @@ def main() -> None:
         "No test shard was read. The three methods were selected by their already-recorded validation matrix MAE.",
         "All panels use `bwr` with a shared fixed range of [-0.05, 0.05] Hartree. Residual means prediction minus ground truth.",
         "",
-        "| Method | Irrep | coefficient MAE (meV) | six-atom channel matrix MAE (meV) |",
+        "| Method | Irrep | invariant copy-norm MAE (meV) | six-atom channel matrix MAE (meV) |",
         "|---|---:|---:|---:|",
     ]
     lines.extend(

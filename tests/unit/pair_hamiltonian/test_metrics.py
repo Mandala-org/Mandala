@@ -1,5 +1,6 @@
 import pytest
 import torch
+from e3nn import o3
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from pair_hamiltonian.hamgnn_sio2 import HARTREE_TO_MEV
@@ -34,7 +35,29 @@ def test_headline_metric_is_reconstructed_matrix_element_weighted():
     )
     assert result["block_frobenius"]["block_count"] == 2
     assert len(result["by_target_irrep_copy"]) == len(transform.schema("X-X").copies)
+    assert len(result["by_target_irrep_copy_invariant_norm"]) == len(
+        transform.schema("X-X").copies
+    )
     assert set(result["by_distance"]) == {
         "0.000-1.000_angstrom",
         "1.000-2.000_angstrom",
     }
+
+
+@pytest.mark.unit
+def test_irrep_norm_metrics_are_rotation_invariant():
+    config = OrbitalIrrepConfig.from_dict({"X": "1s1p"})
+    transform = FullBlockIrrepTransform(config, dtype=torch.float64)
+    target = torch.randn(6, transform.irreps("X-X").dim, dtype=torch.float64)
+    prediction = torch.randn_like(target)
+    first = FullBlockMetricAccumulator(transform)
+    first.update("X-X", prediction, target, onsite=False)
+    rotation = o3.rand_matrix(dtype=torch.float64)
+    action = transform.output_action("X-X", rotation)
+    second = FullBlockMetricAccumulator(transform)
+    second.update("X-X", prediction @ action.T, target @ action.T, onsite=False)
+    a = first.compute()["by_target_irrep_invariant_norm"]
+    b = second.compute()["by_target_irrep_invariant_norm"]
+    for label in a:
+        assert a[label]["mae"] == pytest.approx(b[label]["mae"], rel=1e-12)
+        assert a[label]["rmse"] == pytest.approx(b[label]["rmse"], rel=1e-12)

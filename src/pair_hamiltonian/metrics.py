@@ -54,6 +54,28 @@ class _BlockNormSums:
         }
 
 
+@dataclass
+class _VectorNormSums:
+    norm_sum: float = 0.0
+    norm_square_sum: float = 0.0
+    count: int = 0
+
+    def update(self, difference: torch.Tensor) -> None:
+        norms = torch.linalg.vector_norm(difference, dim=-1)
+        self.norm_sum += float(norms.sum().item())
+        self.norm_square_sum += float(norms.square().sum().item())
+        self.count += norms.numel()
+
+    def metrics(self, scale: float) -> dict[str, float | int]:
+        if self.count == 0:
+            return {"mae": 0.0, "rmse": 0.0, "vector_count": 0}
+        return {
+            "mae": self.norm_sum / self.count * scale,
+            "rmse": (self.norm_square_sum / self.count) ** 0.5 * scale,
+            "vector_count": self.count,
+        }
+
+
 class FullBlockMetricAccumulator:
     """Accumulate headline reconstructed-element and diagnostic irrep metrics."""
 
@@ -74,6 +96,10 @@ class FullBlockMetricAccumulator:
         self.by_distance: dict[int, _Sums] = defaultdict(_Sums)
         self.by_irrep: dict[str, _Sums] = defaultdict(_Sums)
         self.by_irrep_copy: dict[str, _Sums] = defaultdict(_Sums)
+        self.by_irrep_norm: dict[str, _VectorNormSums] = defaultdict(_VectorNormSums)
+        self.by_irrep_copy_norm: dict[str, _VectorNormSums] = defaultdict(
+            _VectorNormSums
+        )
 
     def update(
         self,
@@ -114,9 +140,10 @@ class FullBlockMetricAccumulator:
         for copy in schema.copies:
             difference = vector_difference[..., copy.vector_start : copy.vector_stop]
             self.by_irrep[copy.irrep_label].update(difference)
-            self.by_irrep_copy[
-                f"{pair_name}:q{copy.copy_index:03d}:{copy.irrep_label}"
-            ].update(difference)
+            copy_key = f"{pair_name}:q{copy.copy_index:03d}:{copy.irrep_label}"
+            self.by_irrep_copy[copy_key].update(difference)
+            self.by_irrep_norm[copy.irrep_label].update(difference)
+            self.by_irrep_copy_norm[copy_key].update(difference)
 
     def compute(self) -> dict[str, object]:
         matrix_scale = HARTREE_TO_MEV
@@ -146,5 +173,13 @@ class FullBlockMetricAccumulator:
             "by_target_irrep_copy": {
                 key: value.metrics(matrix_scale)
                 for key, value in sorted(self.by_irrep_copy.items())
+            },
+            "by_target_irrep_invariant_norm": {
+                key: value.metrics(matrix_scale)
+                for key, value in sorted(self.by_irrep_norm.items())
+            },
+            "by_target_irrep_copy_invariant_norm": {
+                key: value.metrics(matrix_scale)
+                for key, value in sorted(self.by_irrep_copy_norm.items())
             },
         }
