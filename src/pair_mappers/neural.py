@@ -40,6 +40,20 @@ def _copy_slices(irreps: Irreps) -> list[tuple[Irrep, slice]]:
     return result
 
 
+def _multiplicity_capped_irreps(irreps: Irreps, cap: int) -> Irreps:
+    if cap < 1:
+        raise ValueError("descriptor multiplicity cap must be positive")
+    counts: dict[Irrep, int] = {}
+    for multiplicity, irrep in irreps:
+        counts[irrep] = counts.get(irrep, 0) + multiplicity
+    return Irreps(
+        (min(multiplicity, cap), irrep)
+        for irrep, multiplicity in sorted(
+            counts.items(), key=lambda item: (item[0].l, item[0].p)
+        )
+    )
+
+
 class BondExpansion(nn.Module):
     """Fixed radial-spherical bond basis with full natural O(3) parity."""
 
@@ -204,15 +218,30 @@ class ReducedCoefficientPairKernel(nn.Module):
         *,
         invariant_hidden: int,
         factorization_rank: int | None = None,
+        generator_multiplicity: int | None = None,
     ) -> None:
         super().__init__()
         self.endpoint_irreps = descriptor_irreps + descriptor_irreps
         self.bond_irreps = bond_irreps
         self.target_irreps = target_irreps
+        if generator_multiplicity is None:
+            self.generator_irreps = target_irreps
+            self.output: nn.Module = nn.Identity()
+        else:
+            if generator_multiplicity < 1:
+                raise ValueError("generator multiplicity must be positive")
+            target_types = sorted(
+                {irrep for _, irrep in target_irreps},
+                key=lambda irrep: (irrep.l, irrep.p),
+            )
+            self.generator_irreps = Irreps(
+                (generator_multiplicity, irrep) for irrep in target_types
+            )
+            self.output = o3.Linear(self.generator_irreps, target_irreps)
         self.tensor_product = o3.FullyConnectedTensorProduct(
             self.endpoint_irreps,
             bond_irreps,
-            target_irreps,
+            self.generator_irreps,
             internal_weights=False,
             shared_weights=False,
         )
@@ -251,7 +280,7 @@ class ReducedCoefficientPairKernel(nn.Module):
         weights = self.coefficients(invariants)
         if self.weight_basis is not None:
             weights = weights @ self.weight_basis
-        return self.tensor_product(endpoints, bond, weights)
+        return self.output(self.tensor_product(endpoints, bond, weights))
 
 
 def _bond_frame(displacement: torch.Tensor, roll: torch.Tensor | None) -> torch.Tensor:
@@ -292,6 +321,7 @@ class BondFramePairKernel(nn.Module):
         target_irreps: Irreps,
         *,
         invariant_hidden: int,
+        generator_multiplicity: int | None = None,
     ) -> None:
         super().__init__()
         self.descriptor_irreps = descriptor_irreps
@@ -301,6 +331,7 @@ class BondFramePairKernel(nn.Module):
             bond_irreps,
             target_irreps,
             invariant_hidden=invariant_hidden,
+            generator_multiplicity=generator_multiplicity,
         )
 
     def local_coordinates(
@@ -383,6 +414,8 @@ class FullBlockNeuralPairMapper(nn.Module):
         hidden_l_max: int = 3,
         invariant_hidden: int = 32,
         factorization_rank: int = 4,
+        descriptor_multiplicity_cap: int | None = None,
+        generator_multiplicity: int | None = None,
         dtype: torch.dtype = torch.float64,
     ) -> None:
         super().__init__()
@@ -390,7 +423,17 @@ class FullBlockNeuralPairMapper(nn.Module):
             raise ValueError(f"unsupported architecture {architecture!r}")
         self.architecture = architecture
         self.target_transform = target_transform
-        self.descriptor_irreps = Irreps(descriptor_irreps)
+        self.input_descriptor_irreps = Irreps(descriptor_irreps)
+        if descriptor_multiplicity_cap is None:
+            self.descriptor_irreps = self.input_descriptor_irreps
+            self.descriptor_projection: nn.Module = nn.Identity()
+        else:
+            self.descriptor_irreps = _multiplicity_capped_irreps(
+                self.input_descriptor_irreps, descriptor_multiplicity_cap
+            )
+            self.descriptor_projection = o3.Linear(
+                self.input_descriptor_irreps, self.descriptor_irreps
+            )
         self.bond_expansion = BondExpansion(
             n_radial=bond_n_radial, l_max=bond_l_max, cutoff=bond_cutoff
         )
@@ -435,6 +478,7 @@ class FullBlockNeuralPairMapper(nn.Module):
                     factorization_rank=(
                         factorization_rank if architecture == "m5" else None
                     ),
+                    generator_multiplicity=generator_multiplicity,
                 )
             else:
                 kernel = BondFramePairKernel(
@@ -442,6 +486,7 @@ class FullBlockNeuralPairMapper(nn.Module):
                     self.bond_expansion.irreps_out,
                     target,
                     invariant_hidden=invariant_hidden,
+                    generator_multiplicity=generator_multiplicity,
                 )
             self.offsite_kernels[_module_key(pair)] = kernel
         self.to(dtype=dtype)
@@ -476,6 +521,7 @@ class FullBlockNeuralPairMapper(nn.Module):
         return kernel(descriptor_i, bond, descriptor_j)
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
+        descriptor = self.descriptor_projection(descriptor)
         prediction = self.onsite_kernels[species](descriptor)
         return 0.5 * (
             prediction + self.target_transform.reverse((species, species), prediction)
@@ -490,6 +536,8 @@ class FullBlockNeuralPairMapper(nn.Module):
         *,
         roll: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        descriptor_i = self.descriptor_projection(descriptor_i)
+        descriptor_j = self.descriptor_projection(descriptor_j)
         canonical, was_reversed = self._canonical_pair(pair)
         if was_reversed:
             descriptor_i, descriptor_j = descriptor_j, descriptor_i

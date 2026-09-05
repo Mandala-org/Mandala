@@ -9,7 +9,6 @@ from pair_hamiltonian.output_schema import (
 )
 from pair_mappers.neural import FullBlockNeuralPairMapper
 
-
 ARCHITECTURES = ("m0", "m2", "m3", "m5", "m7")
 
 
@@ -39,6 +38,41 @@ def make_model(architecture, transform, descriptor_irreps, dtype=torch.float64):
         factorization_rank=2,
         dtype=dtype,
     )
+
+
+@pytest.mark.unit
+@pytest.mark.equivariance
+@pytest.mark.parametrize("architecture", ("m3", "m5"))
+def test_multiplicity_capped_production_path_is_equivariant(setup, architecture):
+    transform, irreps, descriptor_i, descriptor_j, displacement = setup
+    model = FullBlockNeuralPairMapper(
+        architecture,
+        transform,
+        irreps,
+        bond_n_radial=1,
+        bond_l_max=2,
+        bond_cutoff=6.0,
+        hidden_multiplicity=1,
+        hidden_l_max=2,
+        invariant_hidden=8,
+        factorization_rank=2,
+        descriptor_multiplicity_cap=1,
+        generator_multiplicity=1,
+        dtype=torch.float64,
+    )
+    rotation = -o3.rand_matrix(dtype=torch.float64)
+    descriptor_action = o3_representation_matrix(irreps, rotation)
+    target_action = transform.output_action(("A", "B"), rotation)
+    reference = model.predict_offsite(
+        ("A", "B"), descriptor_i, displacement, descriptor_j
+    )
+    actual = model.predict_offsite(
+        ("A", "B"),
+        descriptor_i @ descriptor_action.T,
+        displacement @ rotation.T,
+        descriptor_j @ descriptor_action.T,
+    )
+    assert torch.allclose(actual, reference @ target_action.T, atol=1e-8, rtol=1e-8)
 
 
 @pytest.mark.unit
