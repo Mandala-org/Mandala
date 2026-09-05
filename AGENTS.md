@@ -33,3 +33,24 @@ baselines, and pre-registered model grids may be batched when their definitions
 are frozen in advance. Validation-selected promotions, architecture changes,
 cutoff choices, and confirmatory test evaluations remain behind result-dependent
 gates to prevent leakage and opportunistic tuning.
+
+## Directed Hamiltonian and Hermiticity protocol
+
+- Preserve both members of every periodic offsite reverse pair as distinct
+  supervised records: `(i, j, L)` and `(j, i, -L)`. Do not reduce the training
+  cache to one canonical representative.
+- Every mapper must make two independent raw forward evaluations for those two
+  directed inputs. A mapper's normal `predict_offsite` path must not average a
+  prediction with its reversed-input prediction and must not generate one
+  direction analytically from the other. Shared model parameters are allowed;
+  the directed examples, forward calls, and losses remain distinct.
+- Fit/train against both raw directed targets. Do not impose Hermiticity inside
+  the training forward pass or closed-form fit.
+- Apply global Hermitian projection only after training, when evaluating or
+  exporting physical predictions:
+  `H_proj(i,j,L) = 0.5 * (H_raw(i,j,L) + H_raw(j,i,-L).T)`, with the reverse
+  projected block set to its transpose. Treat onsite `(i,i,0)` analogously by
+  projecting its raw block with its transpose at evaluation time.
+- Report raw-direction metrics and raw Hermiticity residuals as diagnostics,
+  plus the post-projection physical metrics used for model comparison. Never
+  replace global pair projection with self-symmetrization of an offsite block.
