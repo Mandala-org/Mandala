@@ -208,3 +208,46 @@ def test_m5_reduces_m3_parameter_count(setup):
     assert sum(p.numel() for p in m5.parameters()) < sum(
         p.numel() for p in m3.parameters()
     )
+
+
+@pytest.mark.unit
+def test_independent_scopes_have_disjoint_parameters_and_paths(setup):
+    transform, irreps, descriptor_i, descriptor_j, displacement = setup
+    onsite = FullBlockNeuralPairMapper(
+        "m3",
+        transform,
+        irreps,
+        descriptor_multiplicity_cap=1,
+        hidden_multiplicity=1,
+        hidden_l_max=2,
+        generator_multiplicity=1,
+        invariant_hidden=8,
+        factorization_rank=2,
+        separate_descriptor_projections=True,
+        enabled_scope="onsite",
+    )
+    offsite = FullBlockNeuralPairMapper(
+        "m3",
+        transform,
+        irreps,
+        descriptor_multiplicity_cap=1,
+        hidden_multiplicity=1,
+        hidden_l_max=2,
+        generator_multiplicity=1,
+        invariant_hidden=8,
+        factorization_rank=2,
+        separate_descriptor_projections=True,
+        enabled_scope="offsite",
+    )
+    assert onsite.onsite_kernels and not onsite.offsite_kernels
+    assert offsite.offsite_kernels and not offsite.onsite_kernels
+    onsite_parameters = {id(value) for value in onsite.parameters_for_scope("onsite")}
+    offsite_parameters = {
+        id(value) for value in offsite.parameters_for_scope("offsite")
+    }
+    assert onsite_parameters and offsite_parameters
+    assert onsite_parameters.isdisjoint(offsite_parameters)
+    with pytest.raises(RuntimeError, match="offsite path"):
+        onsite.predict_offsite(("A", "B"), descriptor_i, displacement, descriptor_j)
+    with pytest.raises(RuntimeError, match="onsite path"):
+        offsite.predict_onsite("A", descriptor_i)

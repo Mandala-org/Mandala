@@ -62,3 +62,25 @@ def test_m0_uses_uncoupled_bond_channels_without_training_time_projection():
         atol=1e-12,
         rtol=1e-12,
     )
+
+
+@pytest.mark.unit
+def test_onsite_affine_ridge_adds_only_an_invariant_scalar_feature():
+    config = OrbitalIrrepConfig.from_dict({"A": "1s1p"})
+    transform = FullBlockIrrepTransform(config, dtype=torch.float64)
+    model = ClosedFormM0PairMapper(
+        transform,
+        "1x0e + 1x1o",
+        bond_n_radial=1,
+        bond_l_max=0,
+        bond_cutoff=6.0,
+        ridge=1e-10,
+        onsite_affine=True,
+        enabled_scope="onsite",
+    )
+    descriptor = torch.randn(7, 4, dtype=torch.float64)
+    features = model.onsite_features(descriptor)
+    assert model.onsite_irreps == o3.Irreps("1x0e + 1x1o + 1x0e")
+    assert torch.equal(features[:, :-1], descriptor)
+    assert torch.equal(features[:, -1], torch.ones(7, dtype=torch.float64))
+    assert not model.offsite_regressors

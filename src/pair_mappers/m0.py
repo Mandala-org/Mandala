@@ -40,11 +40,22 @@ class ClosedFormM0PairMapper(nn.Module):
         bond_l_max: int,
         bond_cutoff: float,
         ridge: float,
+        onsite_affine: bool = False,
+        enabled_scope: str = "joint",
         dtype: torch.dtype = torch.float64,
     ) -> None:
         super().__init__()
         self.target_transform = target_transform
+        if enabled_scope not in ("onsite", "offsite", "joint"):
+            raise ValueError(f"unsupported enabled scope {enabled_scope!r}")
+        self.enabled_scope = enabled_scope
         self.descriptor_irreps = Irreps(descriptor_irreps)
+        self.onsite_affine = bool(onsite_affine)
+        self.onsite_irreps = (
+            self.descriptor_irreps + Irreps("1x0e")
+            if self.onsite_affine
+            else self.descriptor_irreps
+        )
         self.bond_expansion = BondExpansion(
             n_radial=bond_n_radial,
             l_max=bond_l_max,
@@ -59,13 +70,14 @@ class ClosedFormM0PairMapper(nn.Module):
         self.onsite_regressors = nn.ModuleDict(
             {
                 element: EquivariantRidgeRegressor(
-                    self.descriptor_irreps,
+                    self.onsite_irreps,
                     target_transform.irreps((element, element)),
                     ridge=ridge,
                     dtype=dtype,
                     allow_missing_target_irreps=True,
                 )
                 for element in elements
+                if enabled_scope in ("joint", "onsite")
             }
         )
         self.offsite_regressors = nn.ModuleDict(
@@ -78,14 +90,17 @@ class ClosedFormM0PairMapper(nn.Module):
                     allow_missing_target_irreps=True,
                 )
                 for pair in product(elements, repeat=2)
+                if enabled_scope in ("joint", "offsite")
             }
         )
 
     def onsite_accumulator(
         self, species: str, *, device: torch.device | str
     ) -> EquivariantRidgeAccumulator:
+        if self.enabled_scope not in ("joint", "onsite"):
+            raise RuntimeError("onsite path is not present in this scoped model")
         return EquivariantRidgeAccumulator(
-            self.descriptor_irreps,
+            self.onsite_irreps,
             self.target_transform.irreps((species, species)),
             dtype=torch.float64,
             device=device,
@@ -95,6 +110,8 @@ class ClosedFormM0PairMapper(nn.Module):
     def offsite_accumulator(
         self, pair: tuple[str, str], *, device: torch.device | str
     ) -> EquivariantRidgeAccumulator:
+        if self.enabled_scope not in ("joint", "offsite"):
+            raise RuntimeError("offsite path is not present in this scoped model")
         return EquivariantRidgeAccumulator(
             self.offsite_irreps,
             self.target_transform.irreps(pair),
@@ -104,7 +121,11 @@ class ClosedFormM0PairMapper(nn.Module):
         )
 
     def onsite_features(self, descriptor: torch.Tensor) -> torch.Tensor:
-        return descriptor
+        if not self.onsite_affine:
+            return descriptor
+        return torch.cat(
+            (descriptor, descriptor.new_ones(*descriptor.shape[:-1], 1)), dim=-1
+        )
 
     def offsite_features(
         self,
@@ -130,7 +151,9 @@ class ClosedFormM0PairMapper(nn.Module):
         )
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
-        return self.onsite_regressors[species](descriptor)
+        if self.enabled_scope not in ("joint", "onsite"):
+            raise RuntimeError("onsite path is not present in this scoped model")
+        return self.onsite_regressors[species](self.onsite_features(descriptor))
 
     def predict_offsite(
         self,
@@ -139,6 +162,8 @@ class ClosedFormM0PairMapper(nn.Module):
         displacement_ij: torch.Tensor,
         descriptor_j: torch.Tensor,
     ) -> torch.Tensor:
+        if self.enabled_scope not in ("joint", "offsite"):
+            raise RuntimeError("offsite path is not present in this scoped model")
         regressor = self.offsite_regressors[_module_key(pair)]
         return regressor(
             self.offsite_features(descriptor_i, displacement_ij, descriptor_j)

@@ -24,6 +24,7 @@ from pair_hamiltonian.output_schema import (
 )
 
 Architecture = Literal["m0", "m2", "m3", "m5", "m7"]
+TrainingScope = Literal["onsite", "offsite", "joint"]
 
 
 def _module_key(pair: tuple[str, str]) -> str:
@@ -416,78 +417,102 @@ class FullBlockNeuralPairMapper(nn.Module):
         factorization_rank: int = 4,
         descriptor_multiplicity_cap: int | None = None,
         generator_multiplicity: int | None = None,
+        separate_descriptor_projections: bool = False,
+        enabled_scope: TrainingScope = "joint",
         dtype: torch.dtype = torch.float64,
     ) -> None:
         super().__init__()
         if architecture not in ("m0", "m2", "m3", "m5", "m7"):
             raise ValueError(f"unsupported architecture {architecture!r}")
         self.architecture = architecture
+        if enabled_scope not in ("onsite", "offsite", "joint"):
+            raise ValueError(f"unsupported enabled scope {enabled_scope!r}")
+        self.enabled_scope = enabled_scope
         self.target_transform = target_transform
         self.input_descriptor_irreps = Irreps(descriptor_irreps)
+        self.separate_descriptor_projections = bool(separate_descriptor_projections)
         if descriptor_multiplicity_cap is None:
             self.descriptor_irreps = self.input_descriptor_irreps
-            self.descriptor_projection: nn.Module = nn.Identity()
+            if self.separate_descriptor_projections:
+                if enabled_scope in ("joint", "onsite"):
+                    self.onsite_descriptor_projection: nn.Module = nn.Identity()
+                if enabled_scope in ("joint", "offsite"):
+                    self.offsite_descriptor_projection: nn.Module = nn.Identity()
+            else:
+                self.descriptor_projection: nn.Module = nn.Identity()
         else:
             self.descriptor_irreps = _multiplicity_capped_irreps(
                 self.input_descriptor_irreps, descriptor_multiplicity_cap
             )
-            self.descriptor_projection = o3.Linear(
-                self.input_descriptor_irreps, self.descriptor_irreps
-            )
+            if self.separate_descriptor_projections:
+                if enabled_scope in ("joint", "onsite"):
+                    self.onsite_descriptor_projection = o3.Linear(
+                        self.input_descriptor_irreps, self.descriptor_irreps
+                    )
+                if enabled_scope in ("joint", "offsite"):
+                    self.offsite_descriptor_projection = o3.Linear(
+                        self.input_descriptor_irreps, self.descriptor_irreps
+                    )
+            else:
+                self.descriptor_projection = o3.Linear(
+                    self.input_descriptor_irreps, self.descriptor_irreps
+                )
         self.bond_expansion = BondExpansion(
             n_radial=bond_n_radial, l_max=bond_l_max, cutoff=bond_cutoff
         )
         elements = target_transform.orbital_config.elements()
         self.onsite_kernels = nn.ModuleDict()
         self.offsite_kernels = nn.ModuleDict()
-        for element in elements:
-            target = target_transform.irreps((element, element))
-            self.onsite_kernels[element] = (
-                o3.Linear(self.descriptor_irreps, target)
-                if architecture == "m0"
-                else OnsiteCGKernel(
-                    self.descriptor_irreps,
-                    target,
-                    hidden_multiplicity=hidden_multiplicity,
-                    hidden_l_max=hidden_l_max,
+        if enabled_scope in ("joint", "onsite"):
+            for element in elements:
+                target = target_transform.irreps((element, element))
+                self.onsite_kernels[element] = (
+                    o3.Linear(self.descriptor_irreps, target)
+                    if architecture == "m0"
+                    else OnsiteCGKernel(
+                        self.descriptor_irreps,
+                        target,
+                        hidden_multiplicity=hidden_multiplicity,
+                        hidden_l_max=hidden_l_max,
+                    )
                 )
-            )
-        for pair in product(elements, repeat=2):
-            target = target_transform.irreps(pair)
-            if architecture == "m0":
-                kernel: nn.Module = LinearPairKernel(
-                    self.descriptor_irreps,
-                    self.bond_expansion.irreps_out,
-                    target,
-                )
-            elif architecture == "m2":
-                kernel = DenseCGPairKernel(
-                    self.descriptor_irreps,
-                    self.bond_expansion.irreps_out,
-                    target,
-                    hidden_multiplicity=hidden_multiplicity,
-                    hidden_l_max=hidden_l_max,
-                )
-            elif architecture in ("m3", "m5"):
-                kernel = ReducedCoefficientPairKernel(
-                    self.descriptor_irreps,
-                    self.bond_expansion.irreps_out,
-                    target,
-                    invariant_hidden=invariant_hidden,
-                    factorization_rank=(
-                        factorization_rank if architecture == "m5" else None
-                    ),
-                    generator_multiplicity=generator_multiplicity,
-                )
-            else:
-                kernel = BondFramePairKernel(
-                    self.descriptor_irreps,
-                    self.bond_expansion.irreps_out,
-                    target,
-                    invariant_hidden=invariant_hidden,
-                    generator_multiplicity=generator_multiplicity,
-                )
-            self.offsite_kernels[_module_key(pair)] = kernel
+        if enabled_scope in ("joint", "offsite"):
+            for pair in product(elements, repeat=2):
+                target = target_transform.irreps(pair)
+                if architecture == "m0":
+                    kernel: nn.Module = LinearPairKernel(
+                        self.descriptor_irreps,
+                        self.bond_expansion.irreps_out,
+                        target,
+                    )
+                elif architecture == "m2":
+                    kernel = DenseCGPairKernel(
+                        self.descriptor_irreps,
+                        self.bond_expansion.irreps_out,
+                        target,
+                        hidden_multiplicity=hidden_multiplicity,
+                        hidden_l_max=hidden_l_max,
+                    )
+                elif architecture in ("m3", "m5"):
+                    kernel = ReducedCoefficientPairKernel(
+                        self.descriptor_irreps,
+                        self.bond_expansion.irreps_out,
+                        target,
+                        invariant_hidden=invariant_hidden,
+                        factorization_rank=(
+                            factorization_rank if architecture == "m5" else None
+                        ),
+                        generator_multiplicity=generator_multiplicity,
+                    )
+                else:
+                    kernel = BondFramePairKernel(
+                        self.descriptor_irreps,
+                        self.bond_expansion.irreps_out,
+                        target,
+                        invariant_hidden=invariant_hidden,
+                        generator_multiplicity=generator_multiplicity,
+                    )
+                self.offsite_kernels[_module_key(pair)] = kernel
         self.to(dtype=dtype)
 
     def _raw_offsite(
@@ -513,7 +538,14 @@ class FullBlockNeuralPairMapper(nn.Module):
         return kernel(descriptor_i, bond, descriptor_j)
 
     def predict_onsite(self, species: str, descriptor: torch.Tensor) -> torch.Tensor:
-        descriptor = self.descriptor_projection(descriptor)
+        if self.enabled_scope not in ("joint", "onsite"):
+            raise RuntimeError("onsite path is not present in this scoped model")
+        projection = (
+            self.onsite_descriptor_projection
+            if self.separate_descriptor_projections
+            else self.descriptor_projection
+        )
+        descriptor = projection(descriptor)
         return self.onsite_kernels[species](descriptor)
 
     def predict_offsite(
@@ -525,8 +557,15 @@ class FullBlockNeuralPairMapper(nn.Module):
         *,
         roll: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        descriptor_i = self.descriptor_projection(descriptor_i)
-        descriptor_j = self.descriptor_projection(descriptor_j)
+        if self.enabled_scope not in ("joint", "offsite"):
+            raise RuntimeError("offsite path is not present in this scoped model")
+        projection = (
+            self.offsite_descriptor_projection
+            if self.separate_descriptor_projections
+            else self.descriptor_projection
+        )
+        descriptor_i = projection(descriptor_i)
+        descriptor_j = projection(descriptor_j)
         return self._raw_offsite(
             pair,
             descriptor_i,
@@ -534,6 +573,26 @@ class FullBlockNeuralPairMapper(nn.Module):
             descriptor_j,
             roll=roll,
         )
+
+    def parameters_for_scope(self, scope: TrainingScope):
+        """Yield exactly the parameters owned by an independent fit scope."""
+        if scope not in ("onsite", "offsite", "joint"):
+            raise ValueError(f"unsupported training scope {scope!r}")
+        if scope == "joint":
+            yield from self.parameters()
+            return
+        if not self.separate_descriptor_projections:
+            raise ValueError(
+                "independent optimization requires separate descriptor projections"
+            )
+        projection = (
+            self.onsite_descriptor_projection
+            if scope == "onsite"
+            else self.offsite_descriptor_projection
+        )
+        yield from projection.parameters()
+        kernels = self.onsite_kernels if scope == "onsite" else self.offsite_kernels
+        yield from kernels.parameters()
 
     def forward(
         self,

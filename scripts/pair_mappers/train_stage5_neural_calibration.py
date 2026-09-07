@@ -83,6 +83,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evaluation-batch-size", type=int, required=True)
     parser.add_argument("--train-fraction", type=float, required=True)
     parser.add_argument(
+        "--target-scope",
+        choices=("joint", "onsite", "offsite"),
+        default="joint",
+        help="Optimize and evaluate only this independently owned target scope.",
+    )
+    parser.add_argument(
+        "--onsite-baseline",
+        choices=("none", "invariant_mean"),
+        default="none",
+        help="Fixed train-only equivariant baseline added to onsite residual output.",
+    )
+    parser.add_argument("--separate-descriptor-projections", action="store_true")
+    parser.add_argument(
         "--onsite-loss-weight",
         type=float,
         default=None,
@@ -164,19 +177,24 @@ def _load_shard(
     index: int,
     descriptor_key: str,
     scale: torch.Tensor,
+    target_scope: str = "joint",
 ):
     baseline_path = baseline_cache / "shards" / f"structure_{index:04d}.h5"
     descriptor_path = descriptor_cache / "shards" / f"structure_{index:04d}.h5"
-    names = (
-        "atomic_numbers",
-        "onsite_target_irreps_hartree",
-        "offsite_source",
-        "offsite_target",
-        "offsite_inverse",
-        "offsite_displacement_angstrom",
-        "offsite_pair_type",
-        "offsite_target_irreps_hartree",
-    )
+    names = ["atomic_numbers"]
+    if target_scope in ("joint", "onsite"):
+        names.append("onsite_target_irreps_hartree")
+    if target_scope in ("joint", "offsite"):
+        names.extend(
+            (
+                "offsite_source",
+                "offsite_target",
+                "offsite_inverse",
+                "offsite_displacement_angstrom",
+                "offsite_pair_type",
+                "offsite_target_irreps_hartree",
+            )
+        )
     with h5py.File(baseline_path, "r") as handle:
         if not handle.attrs.get("complete", False):
             raise ValueError(f"incomplete baseline shard {baseline_path}")
@@ -198,7 +216,10 @@ def _concatenate_partition(
     envelope_table,
     envelope_floor: float,
     device: torch.device,
+    target_scope: str = "joint",
 ) -> dict[str, object]:
+    include_onsite = target_scope in ("joint", "onsite")
+    include_offsite = target_scope in ("joint", "offsite")
     descriptors = []
     onsite = {species: {"descriptor": [], "target": []} for species in SPECIES}
     offsite = {
@@ -232,16 +253,21 @@ def _concatenate_partition(
             int(row["structure_index"]),
             descriptor_key,
             scale,
+            target_scope,
         )
         descriptor = shard["descriptor"]
         descriptors.append(descriptor)
         atomic_numbers = shard["atomic_numbers"]
-        for species in SPECIES:
-            mask = atomic_numbers == SPECIES_Z[species]
-            onsite[species]["descriptor"].append(descriptor[mask])
-            onsite[species]["target"].append(
-                shard["onsite_target_irreps_hartree"][mask]
-            )
+        if include_onsite:
+            for species in SPECIES:
+                mask = atomic_numbers == SPECIES_Z[species]
+                onsite[species]["descriptor"].append(descriptor[mask])
+                onsite[species]["target"].append(
+                    shard["onsite_target_irreps_hartree"][mask]
+                )
+        if not include_offsite:
+            atom_offset += descriptor.shape[0]
+            continue
         pair_types = shard["offsite_pair_type"].to(torch.long)
         displacement = shard["offsite_displacement_angstrom"]
         distance = torch.linalg.vector_norm(displacement, dim=-1)
@@ -280,18 +306,20 @@ def _concatenate_partition(
         "descriptor": torch.cat(descriptors).to(device),
         "onsite": {},
         "offsite": {},
-        "offsite_flat": {
-            key: torch.cat(chunks).to(device) for key, chunks in offsite_flat.items()
-        },
     }
-    for species, values in onsite.items():
-        packed["onsite"][species] = {
-            key: torch.cat(chunks).to(device) for key, chunks in values.items()
+    if include_onsite:
+        for species, values in onsite.items():
+            packed["onsite"][species] = {
+                key: torch.cat(chunks).to(device) for key, chunks in values.items()
+            }
+    if include_offsite:
+        packed["offsite_flat"] = {
+            key: torch.cat(chunks).to(device) for key, chunks in offsite_flat.items()
         }
-    for pair, values in offsite.items():
-        packed["offsite"][pair] = {
-            key: torch.cat(chunks).to(device) for key, chunks in values.items()
-        }
+        for pair, values in offsite.items():
+            packed["offsite"][pair] = {
+                key: torch.cat(chunks).to(device) for key, chunks in values.items()
+            }
     return packed
 
 
@@ -309,16 +337,30 @@ def _training_loss(
     args: argparse.Namespace,
     generator: torch.Generator,
     device: torch.device,
+    onsite_baselines: dict[str, torch.Tensor] | None = None,
 ) -> tuple[torch.Tensor, int]:
-    group_counts = [
-        data["onsite"][species]["target"].shape[0] for species in SPECIES
-    ] + [data["offsite"][pair]["target"].shape[0] for pair in PAIRS]
+    scope = getattr(args, "target_scope", "joint")
+    include_onsite = scope in ("joint", "onsite")
+    include_offsite = scope in ("joint", "offsite")
+    onsite_counts = (
+        [data["onsite"][species]["target"].shape[0] for species in SPECIES]
+        if include_onsite
+        else []
+    )
+    offsite_counts = (
+        [data["offsite"][pair]["target"].shape[0] for pair in PAIRS]
+        if include_offsite
+        else []
+    )
+    group_counts = (onsite_counts if include_onsite else []) + (
+        offsite_counts if include_offsite else []
+    )
     total_count = sum(group_counts)
-    onsite_count = sum(group_counts[: len(SPECIES)])
-    offsite_count = sum(group_counts[len(SPECIES) :])
+    onsite_count = sum(onsite_counts)
+    offsite_count = sum(offsite_counts)
 
     def group_weight(group_count: int, *, onsite: bool) -> float:
-        if args.onsite_loss_weight is None:
+        if scope != "joint" or args.onsite_loss_weight is None:
             return group_count / total_count
         if onsite:
             return args.onsite_loss_weight * group_count / onsite_count
@@ -326,21 +368,26 @@ def _training_loss(
 
     weighted_loss = torch.zeros((), dtype=torch.float32, device=device)
     sampled = 0
-    for species, group_count in zip(SPECIES, group_counts[: len(SPECIES)]):
-        values = data["onsite"][species]
-        indices = _sample(
-            values["target"].shape[0], args.onsite_batch_size, generator, device
-        )
-        prediction = model.predict_onsite(
-            species, values["descriptor"].index_select(0, indices)
-        )
-        target = values["target"].index_select(0, indices)
-        weighted_loss = weighted_loss + group_weight(
-            group_count, onsite=True
-        ) * torch.mean((prediction - target).square())
-        sampled += indices.numel()
+    if include_onsite:
+        for species, group_count in zip(SPECIES, onsite_counts):
+            values = data["onsite"][species]
+            indices = _sample(
+                values["target"].shape[0], args.onsite_batch_size, generator, device
+            )
+            prediction = model.predict_onsite(
+                species, values["descriptor"].index_select(0, indices)
+            )
+            if onsite_baselines is not None:
+                prediction = prediction + onsite_baselines[species]
+            target = values["target"].index_select(0, indices)
+            weighted_loss = weighted_loss + group_weight(
+                group_count, onsite=True
+            ) * torch.mean((prediction - target).square())
+            sampled += indices.numel()
     descriptors = data["descriptor"]
-    for pair, group_count in zip(PAIRS, group_counts[len(SPECIES) :]):
+    if not include_offsite:
+        return weighted_loss, sampled
+    for pair, group_count in zip(PAIRS, offsite_counts):
         values = data["offsite"][pair]
         indices = _sample(
             values["target"].shape[0], args.offsite_batch_size, generator, device
@@ -368,6 +415,33 @@ def _training_loss(
 
 
 @torch.no_grad()
+def _invariant_onsite_means(
+    data: dict[str, object], transform: FullBlockIrrepTransform
+) -> dict[str, torch.Tensor]:
+    """Train-only species means restricted to the valid invariant subspace."""
+    result: dict[str, torch.Tensor] = {}
+    for species in SPECIES:
+        mean = data["onsite"][species]["target"].mean(dim=0)
+        invariant = torch.zeros_like(mean)
+        offset = 0
+        for multiplicity, irrep in transform.irreps((species, species)):
+            width = multiplicity * irrep.dim
+            if irrep.l == 0 and irrep.p == 1:
+                invariant[offset : offset + width] = mean[offset : offset + width]
+            offset += width
+        projected = project_onsite_irreps(transform, species, invariant)
+        cleaned = torch.zeros_like(projected)
+        offset = 0
+        for multiplicity, irrep in transform.irreps((species, species)):
+            width = multiplicity * irrep.dim
+            if irrep.l == 0 and irrep.p == 1:
+                cleaned[offset : offset + width] = projected[offset : offset + width]
+            offset += width
+        result[species] = cleaned
+    return result
+
+
+@torch.no_grad()
 def _symmetry_errors(
     model: FullBlockNeuralPairMapper, device: torch.device, seed: int
 ) -> dict[str, float]:
@@ -391,89 +465,102 @@ def _symmetry_errors(
         denominator = torch.linalg.vector_norm(expected).clamp_min(1.0e-12)
         return float((torch.linalg.vector_norm(actual - expected) / denominator).item())
 
-    reference = model.predict_offsite(
-        ("O", "Si"), descriptor_i, displacement, descriptor_j
-    )
     errors = {}
-    for label, determinant in (("proper_o3", 1), ("improper_o3", -1)):
-        rotation = o3.rand_matrix(dtype=torch.float32).to(device)
-        if determinant == -1:
-            rotation = -rotation
-        descriptor_action = o3_representation_matrix(
-            model.input_descriptor_irreps, rotation
+    if model.enabled_scope in ("joint", "offsite"):
+        reference = model.predict_offsite(
+            ("O", "Si"), descriptor_i, displacement, descriptor_j
         )
-        target_action = model.target_transform.output_action(("O", "Si"), rotation)
-        actual = model.predict_offsite(
-            ("O", "Si"),
-            descriptor_i @ descriptor_action.T,
-            displacement @ rotation.T,
-            descriptor_j @ descriptor_action.T,
+        for label, determinant in (("proper_o3", 1), ("improper_o3", -1)):
+            rotation = o3.rand_matrix(dtype=torch.float32).to(device)
+            if determinant == -1:
+                rotation = -rotation
+            descriptor_action = o3_representation_matrix(
+                model.input_descriptor_irreps, rotation
+            )
+            target_action = model.target_transform.output_action(("O", "Si"), rotation)
+            actual = model.predict_offsite(
+                ("O", "Si"),
+                descriptor_i @ descriptor_action.T,
+                displacement @ rotation.T,
+                descriptor_j @ descriptor_action.T,
+            )
+            errors[label] = relative(actual, reference @ target_action.T)
+        same = model.predict_offsite(
+            ("O", "O"), descriptor_i, displacement, descriptor_j
         )
-        errors[label] = relative(actual, reference @ target_action.T)
-    same = model.predict_offsite(("O", "O"), descriptor_i, displacement, descriptor_j)
-    same_reverse = model.predict_offsite(
-        ("O", "O"), descriptor_j, -displacement, descriptor_i
-    )
-    errors["raw_homogeneous_reversal"] = relative(
-        same_reverse, model.target_transform.reverse(("O", "O"), same)
-    )
-    same_raw = torch.cat((same, same_reverse), dim=0)
-    same_inverse = torch.cat(
-        (
-            torch.arange(3, 6, device=device),
-            torch.arange(0, 3, device=device),
+        same_reverse = model.predict_offsite(
+            ("O", "O"), descriptor_j, -displacement, descriptor_i
         )
-    )
-    same_projected = project_directed_irreps(
-        model.target_transform,
-        DIRECTED_PAIR_NAMES,
-        same_raw,
-        torch.zeros(6, device=device, dtype=torch.long),
-        same_inverse,
-    )
-    errors["projected_homogeneous_reversal"] = relative(
-        same_projected[3:],
-        model.target_transform.reverse(("O", "O"), same_projected[:3]),
-    )
-    onsite = model.predict_onsite("O", descriptor_i)
-    errors["raw_onsite_hermiticity"] = relative(
-        onsite, model.target_transform.reverse(("O", "O"), onsite)
-    )
-    heterogeneous_reverse = model.predict_offsite(
-        ("Si", "O"), descriptor_j, -displacement, descriptor_i
-    )
-    raw = torch.cat((reference, heterogeneous_reverse), dim=0)
-    inverse = torch.cat(
-        (
-            torch.arange(3, 6, device=device),
-            torch.arange(0, 3, device=device),
+        errors["raw_homogeneous_reversal"] = relative(
+            same_reverse, model.target_transform.reverse(("O", "O"), same)
         )
-    )
-    pair_types = torch.cat(
-        (
-            torch.full((3,), 1, device=device, dtype=torch.long),
-            torch.full((3,), 2, device=device, dtype=torch.long),
+        same_raw = torch.cat((same, same_reverse), dim=0)
+        same_inverse = torch.cat(
+            (
+                torch.arange(3, 6, device=device),
+                torch.arange(0, 3, device=device),
+            )
         )
-    )
-    projected = project_directed_irreps(
-        model.target_transform,
-        DIRECTED_PAIR_NAMES,
-        raw,
-        pair_types,
-        inverse,
-    )
-    errors["raw_heterogeneous_reversal"] = relative(
-        heterogeneous_reverse, model.target_transform.reverse(("O", "Si"), reference)
-    )
-    errors["projected_heterogeneous_reversal"] = relative(
-        projected[3:],
-        model.target_transform.reverse(("O", "Si"), projected[:3]),
-    )
-    projected_onsite = project_onsite_irreps(model.target_transform, "O", onsite)
-    errors["projected_onsite_hermiticity"] = relative(
-        projected_onsite,
-        model.target_transform.reverse(("O", "O"), projected_onsite),
-    )
+        same_projected = project_directed_irreps(
+            model.target_transform,
+            DIRECTED_PAIR_NAMES,
+            same_raw,
+            torch.zeros(6, device=device, dtype=torch.long),
+            same_inverse,
+        )
+        errors["projected_homogeneous_reversal"] = relative(
+            same_projected[3:],
+            model.target_transform.reverse(("O", "O"), same_projected[:3]),
+        )
+        heterogeneous_reverse = model.predict_offsite(
+            ("Si", "O"), descriptor_j, -displacement, descriptor_i
+        )
+        raw = torch.cat((reference, heterogeneous_reverse), dim=0)
+        inverse = same_inverse
+        pair_types = torch.cat(
+            (
+                torch.full((3,), 1, device=device, dtype=torch.long),
+                torch.full((3,), 2, device=device, dtype=torch.long),
+            )
+        )
+        projected = project_directed_irreps(
+            model.target_transform,
+            DIRECTED_PAIR_NAMES,
+            raw,
+            pair_types,
+            inverse,
+        )
+        errors["raw_heterogeneous_reversal"] = relative(
+            heterogeneous_reverse,
+            model.target_transform.reverse(("O", "Si"), reference),
+        )
+        errors["projected_heterogeneous_reversal"] = relative(
+            projected[3:],
+            model.target_transform.reverse(("O", "Si"), projected[:3]),
+        )
+    if model.enabled_scope in ("joint", "onsite"):
+        onsite = model.predict_onsite("O", descriptor_i)
+        for label, determinant in (
+            ("proper_o3_onsite", 1),
+            ("improper_o3_onsite", -1),
+        ):
+            rotation = o3.rand_matrix(dtype=torch.float32).to(device)
+            if determinant == -1:
+                rotation = -rotation
+            descriptor_action = o3_representation_matrix(
+                model.input_descriptor_irreps, rotation
+            )
+            target_action = model.target_transform.output_action(("O", "O"), rotation)
+            actual = model.predict_onsite("O", descriptor_i @ descriptor_action.T)
+            errors[label] = relative(actual, onsite @ target_action.T)
+        errors["raw_onsite_hermiticity"] = relative(
+            onsite, model.target_transform.reverse(("O", "O"), onsite)
+        )
+        projected_onsite = project_onsite_irreps(model.target_transform, "O", onsite)
+        errors["projected_onsite_hermiticity"] = relative(
+            projected_onsite,
+            model.target_transform.reverse(("O", "O"), projected_onsite),
+        )
     return errors
 
 
@@ -484,6 +571,9 @@ def _evaluate(
     transform_cpu: FullBlockIrrepTransform,
     batch_size: int,
     distance_bin_width: float,
+    *,
+    target_scope: str = "joint",
+    onsite_baselines: dict[str, torch.Tensor] | None = None,
 ) -> tuple[dict[str, object], int]:
     model.eval()
     metrics = {
@@ -494,11 +584,15 @@ def _evaluate(
     }
     directed_blocks = 0
     projection_change_square = [0.0, 0.0]
-    for species in SPECIES:
+    include_onsite = target_scope in ("joint", "onsite")
+    include_offsite = target_scope in ("joint", "offsite")
+    for species in SPECIES if include_onsite else ():
         values = data["onsite"][species]
         for start in range(0, values["target"].shape[0], batch_size):
             stop = min(start + batch_size, values["target"].shape[0])
             prediction = model.predict_onsite(species, values["descriptor"][start:stop])
+            if onsite_baselines is not None:
+                prediction = prediction + onsite_baselines[species]
             target = values["target"][start:stop]
             projected = project_onsite_irreps(
                 model.target_transform, species, prediction
@@ -520,55 +614,58 @@ def _evaluate(
             )
             projection_change_square[1] += float(prediction.square().sum().item())
             directed_blocks += stop - start
-    descriptors = data["descriptor"]
-    flat = data["offsite_flat"]
-    raw = torch.empty_like(flat["target"])
-    for pair_index, pair in enumerate(PAIRS):
-        selected = torch.nonzero(flat["pair_type"] == pair_index).flatten()
-        for start in range(0, selected.numel(), batch_size):
-            batch = selected[start : start + batch_size]
-            source = flat["source"].index_select(0, batch)
-            target_index = flat["target_index"].index_select(0, batch)
-            prediction = model.predict_offsite(
-                pair,
-                descriptors.index_select(0, source),
-                flat["displacement"].index_select(0, batch),
-                descriptors.index_select(0, target_index),
-            )
-            prediction = prediction * flat["envelope"].index_select(0, batch)[:, None]
-            raw.index_copy_(0, batch, prediction)
-    projected = project_directed_irreps(
-        model.target_transform,
-        DIRECTED_PAIR_NAMES,
-        raw,
-        flat["pair_type"],
-        flat["inverse"],
-    )
-    projection_change_square[0] += float((raw - projected).square().sum().item())
-    projection_change_square[1] += float(raw.square().sum().item())
-    for pair_index, pair in enumerate(PAIRS):
-        selected = torch.nonzero(flat["pair_type"] == pair_index).flatten()
-        for start in range(0, selected.numel(), batch_size):
-            batch = selected[start : start + batch_size]
-            distance = torch.linalg.vector_norm(
-                flat["displacement"].index_select(0, batch), dim=-1
-            )
-            target = flat["target"].index_select(0, batch)
-            metrics["raw"].update(
-                pair,
-                raw.index_select(0, batch).cpu(),
-                target.cpu(),
-                onsite=False,
-                distances_angstrom=distance.cpu(),
-            )
-            metrics["projected"].update(
-                pair,
-                projected.index_select(0, batch).cpu(),
-                target.cpu(),
-                onsite=False,
-                distances_angstrom=distance.cpu(),
-            )
-            directed_blocks += batch.numel()
+    if include_offsite:
+        descriptors = data["descriptor"]
+        flat = data["offsite_flat"]
+        raw = torch.empty_like(flat["target"])
+        for pair_index, pair in enumerate(PAIRS):
+            selected = torch.nonzero(flat["pair_type"] == pair_index).flatten()
+            for start in range(0, selected.numel(), batch_size):
+                batch = selected[start : start + batch_size]
+                source = flat["source"].index_select(0, batch)
+                target_index = flat["target_index"].index_select(0, batch)
+                prediction = model.predict_offsite(
+                    pair,
+                    descriptors.index_select(0, source),
+                    flat["displacement"].index_select(0, batch),
+                    descriptors.index_select(0, target_index),
+                )
+                prediction = (
+                    prediction * flat["envelope"].index_select(0, batch)[:, None]
+                )
+                raw.index_copy_(0, batch, prediction)
+        projected = project_directed_irreps(
+            model.target_transform,
+            DIRECTED_PAIR_NAMES,
+            raw,
+            flat["pair_type"],
+            flat["inverse"],
+        )
+        projection_change_square[0] += float((raw - projected).square().sum().item())
+        projection_change_square[1] += float(raw.square().sum().item())
+        for pair_index, pair in enumerate(PAIRS):
+            selected = torch.nonzero(flat["pair_type"] == pair_index).flatten()
+            for start in range(0, selected.numel(), batch_size):
+                batch = selected[start : start + batch_size]
+                distance = torch.linalg.vector_norm(
+                    flat["displacement"].index_select(0, batch), dim=-1
+                )
+                target = flat["target"].index_select(0, batch)
+                metrics["raw"].update(
+                    pair,
+                    raw.index_select(0, batch).cpu(),
+                    target.cpu(),
+                    onsite=False,
+                    distances_angstrom=distance.cpu(),
+                )
+                metrics["projected"].update(
+                    pair,
+                    projected.index_select(0, batch).cpu(),
+                    target.cpu(),
+                    onsite=False,
+                    distances_angstrom=distance.cpu(),
+                )
+                directed_blocks += batch.numel()
     model.train()
     result = {mode: accumulator.compute() for mode, accumulator in metrics.items()}
     result["raw_relative_projection_change"] = (
@@ -585,6 +682,12 @@ def main() -> None:
         raise ValueError("train fraction must lie in (0, 1]")
     if args.onsite_loss_weight is not None and not 0 < args.onsite_loss_weight < 1:
         raise ValueError("onsite loss weight must lie in (0, 1)")
+    if args.target_scope != "joint" and args.onsite_loss_weight is not None:
+        raise ValueError("onsite loss weight is only defined for joint optimization")
+    if args.target_scope != "onsite" and args.onsite_baseline != "none":
+        raise ValueError("onsite baselines are only defined for onsite optimization")
+    if args.target_scope != "joint" and not args.separate_descriptor_projections:
+        raise ValueError("independent fits require separate descriptor projections")
     positive = (
         args.descriptor_multiplicity_cap,
         args.generator_multiplicity,
@@ -650,6 +753,8 @@ def main() -> None:
     if task is None:
         raise ValueError(f"unknown frozen calibration task {args.task_id!r}")
     frozen_values = {
+        "family": args.family,
+        "descriptor_key": args.descriptor_key,
         "architecture": args.architecture,
         "resource_band": args.resource_band,
         "learning_rate": args.learning_rate,
@@ -659,13 +764,25 @@ def main() -> None:
         "invariant_hidden": args.invariant_hidden,
         "factorization_rank": args.factorization_rank,
         "range_loss_mode": args.range_loss_mode,
+        "target_scope": args.target_scope,
+        "onsite_baseline": args.onsite_baseline,
+        "separate_descriptor_projections": args.separate_descriptor_projections,
     }
-    if any(task[key] != value for key, value in frozen_values.items()):
+    task_defaults = {
+        "family": calibration.get("descriptor_family", args.family),
+        "descriptor_key": calibration.get("descriptor_key", args.descriptor_key),
+        "target_scope": "joint",
+        "onsite_baseline": "none",
+        "separate_descriptor_projections": False,
+    }
+    if any(
+        task.get(key, task_defaults.get(key)) != value
+        for key, value in frozen_values.items()
+    ):
         raise ValueError("CLI settings differ from the frozen calibration task")
     if task.get("onsite_loss_weight") != args.onsite_loss_weight:
         raise ValueError("onsite loss weight differs from the frozen task")
     frozen_run = {
-        "descriptor_key": args.descriptor_key,
         "train_fraction": args.train_fraction,
         "seed": args.seed,
         "steps": args.steps,
@@ -736,6 +853,8 @@ def main() -> None:
             "normalized_target_weight": "G(r)^2 when normalized-target form is selected",
             "onsite_target": "unscaled target",
             "onsite_loss_weight": args.onsite_loss_weight,
+            "target_scope": args.target_scope,
+            "onsite_baseline": args.onsite_baseline,
         },
         "software": {
             "python": platform.python_version(),
@@ -784,6 +903,7 @@ def main() -> None:
         envelope_table,
         args.envelope_floor_hartree,
         device,
+        args.target_scope,
     )
     validation_data = _concatenate_partition(
         rows["validation"],
@@ -794,6 +914,7 @@ def main() -> None:
         envelope_table,
         args.envelope_floor_hartree,
         device,
+        args.target_scope,
     )
     transform = FullBlockIrrepTransform(
         OrbitalIrrepConfig.from_dict({"O": "2s2p1d", "Si": "2s2p1d"}),
@@ -816,8 +937,20 @@ def main() -> None:
         factorization_rank=args.factorization_rank,
         descriptor_multiplicity_cap=args.descriptor_multiplicity_cap,
         generator_multiplicity=args.generator_multiplicity,
+        separate_descriptor_projections=args.separate_descriptor_projections,
+        enabled_scope=args.target_scope,
         dtype=torch.float32,
     ).to(device)
+    onsite_baselines = (
+        _invariant_onsite_means(train_data, transform)
+        if args.onsite_baseline == "invariant_mean"
+        else None
+    )
+    if onsite_baselines is not None:
+        torch.save(
+            {key: value.detach().cpu() for key, value in onsite_baselines.items()},
+            output / "onsite_baseline.pt",
+        )
     initial_symmetry = _symmetry_errors(model, device, args.seed + 2)
     initial_gate = {
         key: value
@@ -826,8 +959,9 @@ def main() -> None:
     }
     if max(initial_gate.values()) > args.float32_symmetry_tolerance:
         raise ValueError(f"initial float32 symmetry gate failed: {initial_symmetry}")
+    optimized_parameters = list(model.parameters_for_scope(args.target_scope))
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
+        optimized_parameters, lr=args.learning_rate, weight_decay=args.weight_decay
     )
     generator = torch.Generator(device=device).manual_seed(args.seed + 1)
     checkpoint_path = output / "last.pt"
@@ -858,7 +992,9 @@ def main() -> None:
     stopped_early = False
     for step in range(start_step + 1, args.steps + 1):
         optimizer.zero_grad(set_to_none=True)
-        loss, sampled = _training_loss(model, train_data, args, generator, device)
+        loss, sampled = _training_loss(
+            model, train_data, args, generator, device, onsite_baselines
+        )
         if not torch.isfinite(loss):
             raise FloatingPointError(f"non-finite loss at step {step}")
         loss.backward()
@@ -874,6 +1010,8 @@ def main() -> None:
             transform_cpu,
             args.evaluation_batch_size,
             args.distance_bin_width_angstrom,
+            target_scope=args.target_scope,
+            onsite_baselines=onsite_baselines,
         )
         mae = float(metrics["projected"]["matrix_elements"]["mae"])
         history.append(
@@ -923,6 +1061,8 @@ def main() -> None:
         transform_cpu,
         args.evaluation_batch_size,
         args.distance_bin_width_angstrom,
+        target_scope=args.target_scope,
+        onsite_baselines=onsite_baselines,
     )
     final_symmetry = _symmetry_errors(model, device, args.seed + 3)
     _atomic_json(output / "validation_metrics.json", final_metrics)
@@ -939,9 +1079,14 @@ def main() -> None:
         <= args.float32_symmetry_tolerance,
         "manifest_hash": config["manifest_hash"],
         "architecture": args.architecture,
+        "target_scope": args.target_scope,
+        "onsite_baseline": args.onsite_baseline,
         "resource_band": args.resource_band,
         "descriptor_key": args.descriptor_key,
         "parameter_count": parameter_count,
+        "optimized_parameter_count": sum(
+            parameter.numel() for parameter in optimized_parameters
+        ),
         "best_step": best_step,
         "range_loss_mode": args.range_loss_mode,
         "best_validation_matrix_mae_mev": final_metrics["projected"]["matrix_elements"][

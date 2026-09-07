@@ -54,11 +54,20 @@ def main() -> None:
                 "task_id": task["task_id"],
                 "run_manifest_hash": summary["manifest_hash"],
                 "architecture": task["architecture"],
+                "target_scope": task.get("target_scope", "joint"),
+                "onsite_baseline": task.get("onsite_baseline", "none"),
+                "descriptor_key": task.get(
+                    "descriptor_key", manifest.get("descriptor_key")
+                ),
+                "family": task.get("family", manifest.get("descriptor_family")),
                 "resource_band": task["resource_band"],
                 "learning_rate": task["learning_rate"],
                 "range_loss_mode": task["range_loss_mode"],
                 "onsite_loss_weight": task.get("onsite_loss_weight"),
                 "parameter_count": summary["parameter_count"],
+                "optimized_parameter_count": summary.get(
+                    "optimized_parameter_count", summary["parameter_count"]
+                ),
                 "best_step": summary["best_step"],
                 "validation_matrix_mae_mev": summary["best_validation_matrix_mae_mev"],
                 "validation_matrix_rmse_mev": summary[

@@ -54,3 +54,19 @@ gates to prevent leakage and opportunistic tuning.
 - Report raw-direction metrics and raw Hermiticity residuals as diagnostics,
   plus the post-projection physical metrics used for model comparison. Never
   replace global pair projection with self-symmetrization of an offsite block.
+
+## Independent onsite/offsite optimization protocol
+
+- Treat onsite and offsite Hamiltonian blocks as separate supervised problems.
+  They must have separate learned descriptor projections, model parameters,
+  optimizers, batches, losses, checkpoints, and validation rankings; do not tune
+  their relative weight in a joint objective.
+- Continue the directed M3/M5 and other pair-local approaches for offsite blocks.
+  Onsite models may use different model classes, including invariant species
+  means, affine equivariant ridge maps, and onsite-only nonlinear equivariant
+  residual models.
+- Select onsite and offsite candidates independently using validation data.
+  Compose them only after both choices are frozen. The composed predictor takes
+  onsite blocks exclusively from the selected onsite model and offsite blocks
+  exclusively from the selected directed offsite model, followed by the
+  evaluation-only projections defined above.
