@@ -15,6 +15,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from pair_hamiltonian.stage6_validation import assess_stage6_scoped_run
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -36,13 +38,26 @@ def main() -> None:
         raise FileExistsError(f"refusing to overwrite nonempty {output}")
     output.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((args.grid_dir / "calibration_manifest.json").read_text())
+    stage6_scoped = str(manifest.get("convention", "")).startswith("mandala-stage6")
     rows = []
     for task in manifest["tasks"]:
         run = args.grid_dir / "runs" / task["task_id"]
         config = json.loads((run / "config.json").read_text())
         summary = json.loads((run / "summary.json").read_text())
-        if not summary["completed"] or not summary["passed"]:
-            raise ValueError(f"incomplete calibration task {task['task_id']}")
+        assessment = (
+            assess_stage6_scoped_run(
+                summary, float(config["float32_symmetry_tolerance"])
+            )
+            if stage6_scoped
+            else {
+                "accepted": bool(summary["completed"] and summary["passed"]),
+                "original_passed": bool(summary["passed"]),
+                "numerical_tolerance_amendment_used": False,
+                "worst_gated_float32_relative_error": None,
+            }
+        )
+        if not assessment["accepted"]:
+            raise ValueError(f"failed calibration task {task['task_id']}")
         if summary["test_shards_read"] or config["test_shards_read"]:
             raise ValueError(f"test access recorded for {task['task_id']}")
         if config["calibration_manifest_hash"] != manifest["manifest_hash"]:
@@ -85,6 +100,13 @@ def main() -> None:
                 ],
                 "peak_cuda_memory_bytes": summary["peak_cuda_memory_bytes"],
                 "stopped_early": summary["stopped_early"],
+                "original_passed": assessment["original_passed"],
+                "numerical_tolerance_amendment_used": assessment[
+                    "numerical_tolerance_amendment_used"
+                ],
+                "worst_gated_float32_relative_error": assessment[
+                    "worst_gated_float32_relative_error"
+                ],
             }
         )
     if len(rows) != len(manifest["tasks"]) or any(
@@ -123,6 +145,9 @@ def main() -> None:
         "best_overall_validation_matrix_mae_mev": rows[0]["validation_matrix_mae_mev"],
         "best_by_architecture": best_by_architecture,
         "best_by_range_loss": best_by_range_loss,
+        "numerical_tolerance_amendment_count": sum(
+            bool(row["numerical_tolerance_amendment_used"]) for row in rows
+        ),
         "test_shards_read": False,
     }
     _atomic_json(output / "summary.json", summary)
@@ -195,6 +220,12 @@ def main() -> None:
         "| Rank | Task | Loss form | Onsite weight | Parameters | Best step | Validation MAE (meV) | RMSE (meV) | blocks/s | Peak GPU (GiB) |",
         "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
+    if summary["numerical_tolerance_amendment_count"]:
+        lines[2] += (
+            f" {summary['numerical_tolerance_amendment_count']} Stage-6 run(s) used "
+            "the documented 5e-5 float32 equivariance ceiling; original pass flags "
+            "and measured errors remain in results.csv."
+        )
     for rank, row in enumerate(rows, start=1):
         lines.append(
             f"| {rank} | {row['task_id']} | {row['range_loss_mode']} | "

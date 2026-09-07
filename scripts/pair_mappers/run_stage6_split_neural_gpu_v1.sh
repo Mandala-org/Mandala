@@ -45,7 +45,7 @@ run_neural() {
       --float32-symmetry-tolerance 2e-5 --resume \
       2>&1 | tee -a "${output}/launcher.log"
   fi
-  python -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["completed"] and p["passed"] and not p["test_shards_read"]' "${output}/summary.json"
+  python scripts/pair_mappers/validate_stage6_scoped_run.py --run-dir "${output}"
 }
 
 offsite_grid="${root}/offsite"
