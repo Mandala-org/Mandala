@@ -19,6 +19,9 @@ eval_cache/
 csvs/
 wandb_sweep_analysis/
 slurm-*.out
+artifacts/
+data/pair_descriptor_hamiltonian
+local_cache/
 
 # PyTest + coverage
 .pytest_cache/
