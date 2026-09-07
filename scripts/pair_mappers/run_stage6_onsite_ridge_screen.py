@@ -55,6 +55,13 @@ def _atomic_json(path: Path, value: object) -> None:
     os.replace(temporary, path)
 
 
+def _non_log_output_entries(path: Path) -> list[Path]:
+    """Return material outputs, ignoring the log pre-created by ``tee``."""
+    if not path.exists():
+        return []
+    return [entry for entry in path.iterdir() if entry.name != "launcher.log"]
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -147,7 +154,8 @@ def main() -> None:
     if args.distance_bin_width_angstrom <= 0:
         raise ValueError("distance bin width must be positive")
     output = args.output_dir.resolve()
-    if output.exists() and list(output.iterdir()):
+    existing = _non_log_output_entries(output)
+    if existing:
         raise FileExistsError(f"refusing to overwrite nonempty {output}")
     output.mkdir(parents=True, exist_ok=True)
     (output / "models").mkdir()

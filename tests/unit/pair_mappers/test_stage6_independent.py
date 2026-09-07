@@ -3,6 +3,9 @@ import math
 import pytest
 
 from scripts.pair_mappers.aggregate_stage6_independent import combine_disjoint_metrics
+from scripts.pair_mappers.run_stage6_onsite_ridge_screen import (
+    _non_log_output_entries,
+)
 
 
 @pytest.mark.unit
@@ -14,3 +17,13 @@ def test_disjoint_metric_composition_is_exact():
     assert combined["mae"] == pytest.approx(4.25)
     assert combined["rmse"] == pytest.approx(math.sqrt((9 * 10 + 49 * 30) / 40))
     assert combined["scalar_count"] == 40
+
+
+@pytest.mark.unit
+def test_onsite_screen_allows_launcher_log_precreated_by_tee(tmp_path):
+    output = tmp_path / "run"
+    output.mkdir()
+    (output / "launcher.log").write_text("")
+    assert _non_log_output_entries(output) == []
+    (output / "partial.json").write_text("{}")
+    assert _non_log_output_entries(output) == [output / "partial.json"]
