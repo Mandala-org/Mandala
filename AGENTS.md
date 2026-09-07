@@ -1,8 +1,20 @@
-# Pair-descriptor Hamiltonian workflow
+# MANDALA repository guidance
 
-These instructions apply to the repository-wide MANDALA pair-descriptor project.
+MANDALA—an E(3)-equivariant graph neural network framework for learning
+electronic-structure operators with observable guidance—is the primary project
+in this repository. Its core code, data interfaces, training workflows, tests,
+and documentation are repository-wide concerns.
 
-## Cluster collaboration protocol
+The pair-descriptor Hamiltonian work is an experimental side project. Its
+specialized rules below apply only when a task explicitly concerns pair
+descriptors, pair mappers, pair Hamiltonians, or their `pair_stage*` artifacts.
+They must not be treated as default requirements for unrelated MANDALA work.
+
+## Pair-descriptor Hamiltonian experimental sub-project
+
+When working on the pair-descriptor sub-project, apply all instructions below.
+
+### Cluster collaboration protocol
 
 - Work locally; the user executes cluster workloads and returns small artifacts.
 - Prepare cluster work in scientifically valid batches. Prefer one ordered batch
@@ -26,7 +38,7 @@ These instructions apply to the repository-wide MANDALA pair-descriptor project.
 - After a batch completes, copy/evaluate its compact artifacts together and use
   the combined evidence to choose the next result-dependent batch.
 
-## Scientific batching rule
+### Scientific batching rule
 
 Precomputation, training-independent descriptor certification, deterministic
 baselines, and pre-registered model grids may be batched when their definitions
@@ -34,7 +46,7 @@ are frozen in advance. Validation-selected promotions, architecture changes,
 cutoff choices, and confirmatory test evaluations remain behind result-dependent
 gates to prevent leakage and opportunistic tuning.
 
-## Directed Hamiltonian and Hermiticity protocol
+### Directed Hamiltonian and Hermiticity protocol
 
 - Preserve both members of every periodic offsite reverse pair as distinct
   supervised records: `(i, j, L)` and `(j, i, -L)`. Do not reduce the training
@@ -55,7 +67,7 @@ gates to prevent leakage and opportunistic tuning.
   plus the post-projection physical metrics used for model comparison. Never
   replace global pair projection with self-symmetrization of an offsite block.
 
-## Independent onsite/offsite optimization protocol
+### Independent onsite/offsite optimization protocol
 
 - Treat onsite and offsite Hamiltonian blocks as separate supervised problems.
   They must have separate learned descriptor projections, model parameters,
