@@ -82,6 +82,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--offsite-batch-size", type=int, required=True)
     parser.add_argument("--evaluation-batch-size", type=int, required=True)
     parser.add_argument("--train-fraction", type=float, required=True)
+    parser.add_argument(
+        "--onsite-loss-weight",
+        type=float,
+        default=None,
+        help=(
+            "If set, balance onsite and offsite objectives with this onsite "
+            "weight; otherwise weight every block globally."
+        ),
+    )
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--device", choices=("cuda", "cpu"), required=True)
     parser.add_argument("--envelope-floor-hartree", type=float, required=True)
@@ -305,6 +314,16 @@ def _training_loss(
         data["onsite"][species]["target"].shape[0] for species in SPECIES
     ] + [data["offsite"][pair]["target"].shape[0] for pair in PAIRS]
     total_count = sum(group_counts)
+    onsite_count = sum(group_counts[: len(SPECIES)])
+    offsite_count = sum(group_counts[len(SPECIES) :])
+
+    def group_weight(group_count: int, *, onsite: bool) -> float:
+        if args.onsite_loss_weight is None:
+            return group_count / total_count
+        if onsite:
+            return args.onsite_loss_weight * group_count / onsite_count
+        return (1.0 - args.onsite_loss_weight) * group_count / offsite_count
+
     weighted_loss = torch.zeros((), dtype=torch.float32, device=device)
     sampled = 0
     for species, group_count in zip(SPECIES, group_counts[: len(SPECIES)]):
@@ -316,9 +335,9 @@ def _training_loss(
             species, values["descriptor"].index_select(0, indices)
         )
         target = values["target"].index_select(0, indices)
-        weighted_loss = weighted_loss + (group_count / total_count) * torch.mean(
-            (prediction - target).square()
-        )
+        weighted_loss = weighted_loss + group_weight(
+            group_count, onsite=True
+        ) * torch.mean((prediction - target).square())
         sampled += indices.numel()
     descriptors = data["descriptor"]
     for pair, group_count in zip(PAIRS, group_counts[len(SPECIES) :]):
@@ -336,8 +355,8 @@ def _training_loss(
         )
         target = values["target"].index_select(0, indices)
         envelope = values["envelope"].index_select(0, indices)
-        weighted_loss = weighted_loss + (
-            group_count / total_count
+        weighted_loss = weighted_loss + group_weight(
+            group_count, onsite=False
         ) * range_factored_mse(
             prediction,
             target,
@@ -564,6 +583,8 @@ def main() -> None:
         raise RuntimeError("CUDA requested but unavailable")
     if not 0 < args.train_fraction <= 1:
         raise ValueError("train fraction must lie in (0, 1]")
+    if args.onsite_loss_weight is not None and not 0 < args.onsite_loss_weight < 1:
+        raise ValueError("onsite loss weight must lie in (0, 1)")
     positive = (
         args.descriptor_multiplicity_cap,
         args.generator_multiplicity,
@@ -641,6 +662,8 @@ def main() -> None:
     }
     if any(task[key] != value for key, value in frozen_values.items()):
         raise ValueError("CLI settings differ from the frozen calibration task")
+    if task.get("onsite_loss_weight") != args.onsite_loss_weight:
+        raise ValueError("onsite loss weight differs from the frozen task")
     frozen_run = {
         "descriptor_key": args.descriptor_key,
         "train_fraction": args.train_fraction,
@@ -712,6 +735,7 @@ def main() -> None:
             "physical_prediction": "model output multiplied by frozen range envelope",
             "normalized_target_weight": "G(r)^2 when normalized-target form is selected",
             "onsite_target": "unscaled target",
+            "onsite_loss_weight": args.onsite_loss_weight,
         },
         "software": {
             "python": platform.python_version(),

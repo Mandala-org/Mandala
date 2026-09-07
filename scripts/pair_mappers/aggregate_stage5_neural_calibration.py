@@ -57,6 +57,7 @@ def main() -> None:
                 "resource_band": task["resource_band"],
                 "learning_rate": task["learning_rate"],
                 "range_loss_mode": task["range_loss_mode"],
+                "onsite_loss_weight": task.get("onsite_loss_weight"),
                 "parameter_count": summary["parameter_count"],
                 "best_step": summary["best_step"],
                 "validation_matrix_mae_mev": summary["best_validation_matrix_mae_mev"],
@@ -77,10 +78,10 @@ def main() -> None:
                 "stopped_early": summary["stopped_early"],
             }
         )
-    if len(rows) != 24 or any(
+    if len(rows) != len(manifest["tasks"]) or any(
         not math.isfinite(float(row["validation_matrix_mae_mev"])) for row in rows
     ):
-        raise ValueError("calibration grid must have 24 finite results")
+        raise ValueError("calibration grid must contain one finite result per task")
     rows.sort(
         key=lambda row: (
             float(row["validation_matrix_mae_mev"]),
@@ -92,15 +93,17 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
+    architectures = sorted({str(row["architecture"]) for row in rows})
+    loss_modes = sorted({str(row["range_loss_mode"]) for row in rows})
     best_by_architecture = {
         architecture: next(
             row["task_id"] for row in rows if row["architecture"] == architecture
         )
-        for architecture in ("m3", "m5")
+        for architecture in architectures
     }
     best_by_range_loss = {
         mode: next(row["task_id"] for row in rows if row["range_loss_mode"] == mode)
-        for mode in ("physical_mse", "weighted_normalized_mse")
+        for mode in loss_modes
     }
     summary = {
         "completed": True,
@@ -123,7 +126,7 @@ def main() -> None:
         (1.0e-3, "weighted_normalized_mse"): "D",
     }
     figure, axis = plt.subplots(figsize=(7.5, 5.0), constrained_layout=True)
-    for architecture in ("m3", "m5"):
+    for architecture in architectures:
         for learning_rate, range_loss_mode in markers:
             subset = [
                 row
@@ -132,6 +135,8 @@ def main() -> None:
                 and float(row["learning_rate"]) == learning_rate
                 and row["range_loss_mode"] == range_loss_mode
             ]
+            if not subset:
+                continue
             axis.scatter(
                 [row["parameter_count"] for row in subset],
                 [row["validation_matrix_mae_mev"] for row in subset],
@@ -145,13 +150,17 @@ def main() -> None:
             )
             for row in subset:
                 axis.annotate(
-                    str(row["resource_band"])[0].upper(),
+                    (
+                        f"w={float(row['onsite_loss_weight']):g}"
+                        if row["onsite_loss_weight"] is not None
+                        else str(row["resource_band"])[0].upper()
+                    ),
                     (row["parameter_count"], row["validation_matrix_mae_mev"]),
                     xytext=(4, 3),
                     textcoords="offset points",
                     fontsize=8,
                 )
-    if manifest["m0_gate"] is not None:
+    if manifest.get("m0_gate") is not None:
         axis.axhline(
             float(manifest["m0_gate"]["best_validation_matrix_mae_mev"]),
             color="black",
@@ -171,14 +180,17 @@ def main() -> None:
     lines = [
         "# Stage 5 M3/M5 neural calibration",
         "",
-        "One seed, 25% of training structures, both physical-equivalent range-loss forms, full validation partition, and no test-target access.",
+        f"One seed, {100 * float(manifest['train_fraction']):g}% of training structures, "
+        f"range-loss modes {', '.join(loss_modes)}, full validation partition, and no test-target access.",
         "",
-        "| Rank | Task | Loss form | Parameters | Best step | Validation MAE (meV) | RMSE (meV) | blocks/s | Peak GPU (GiB) |",
-        "|---:|---|---|---:|---:|---:|---:|---:|---:|",
+        "| Rank | Task | Loss form | Onsite weight | Parameters | Best step | Validation MAE (meV) | RMSE (meV) | blocks/s | Peak GPU (GiB) |",
+        "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for rank, row in enumerate(rows, start=1):
         lines.append(
-            f"| {rank} | {row['task_id']} | {row['range_loss_mode']} | {int(row['parameter_count']):,} | "
+            f"| {rank} | {row['task_id']} | {row['range_loss_mode']} | "
+            f"{row['onsite_loss_weight'] if row['onsite_loss_weight'] is not None else 'global'} | "
+            f"{int(row['parameter_count']):,} | "
             f"{row['best_step']} | {float(row['validation_matrix_mae_mev']):.6f} | "
             f"{float(row['validation_matrix_rmse_mev']):.6f} | "
             f"{float(row['sampled_training_blocks_per_second']):.1f} | "

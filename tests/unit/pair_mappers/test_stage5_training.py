@@ -46,6 +46,7 @@ def test_calibration_loss_matches_block_count_weighted_global_mse():
         onsite_batch_size=10,
         offsite_batch_size=10,
         range_loss_mode="physical_mse",
+        onsite_loss_weight=None,
     )
     losses = []
     for mode in ("physical_mse", "weighted_normalized_mse"):
@@ -64,3 +65,20 @@ def test_calibration_loss_matches_block_count_weighted_global_mse():
     assert float(losses[0]) == pytest.approx(expected)
     assert torch.allclose(losses[0], losses[1], rtol=1e-6, atol=1e-6)
     assert sampled == sum(counts)
+
+    args.range_loss_mode = "physical_mse"
+    args.onsite_loss_weight = 0.5
+    balanced, _ = _training_loss(
+        _ZeroMapper(),
+        data,
+        args,
+        torch.Generator().manual_seed(1),
+        torch.device("cpu"),
+    )
+    onsite_expected = sum(
+        count * target**2 for count, target in zip(counts[:2], targets[:2])
+    ) / sum(counts[:2])
+    offsite_expected = sum(
+        count * target**2 for count, target in zip(counts[2:], targets[2:])
+    ) / sum(counts[2:])
+    assert float(balanced) == pytest.approx(0.5 * (onsite_expected + offsite_expected))

@@ -101,6 +101,7 @@ analysis_outputs/
 *.zip
 configs/
 tmp/
+local_cache/
 
 # Generated structures for inference-scaling benchmarks
 benchmark_data/silicon_scaling/

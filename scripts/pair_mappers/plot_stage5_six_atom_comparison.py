@@ -29,7 +29,7 @@ from pair_hamiltonian.hermiticity import (
     project_onsite_irreps,
 )
 from pair_hamiltonian.sio2_cache import DIRECTED_PAIR_NAMES
-from pair_mappers import ClosedFormM0PairMapper, NativeACEPairMapper
+from pair_mappers import FullBlockNeuralPairMapper, NativeACEPairMapper
 
 SPECIES_BY_Z = {8: "O", 14: "Si"}
 DIRECTED_PAIRS = tuple(tuple(value.split("-")) for value in DIRECTED_PAIR_NAMES)
@@ -45,10 +45,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--range-envelope", type=Path, required=True)
     parser.add_argument("--native-config", type=Path, required=True)
     parser.add_argument("--native-checkpoint", type=Path, required=True)
-    parser.add_argument("--d4-cache-dir", type=Path, required=True)
-    parser.add_argument("--d4-schemas", type=Path, required=True)
-    parser.add_argument("--m0-high-checkpoint", type=Path, required=True)
-    parser.add_argument("--m0-compact-checkpoint", type=Path, required=True)
+    parser.add_argument("--native-summary", type=Path, required=True)
+    parser.add_argument("--d1-cache-dir", type=Path, required=True)
+    parser.add_argument("--d1-schemas", type=Path, required=True)
+    parser.add_argument("--normalization", type=Path, required=True)
+    parser.add_argument("--m5-config", type=Path, required=True)
+    parser.add_argument("--m5-summary", type=Path, required=True)
+    parser.add_argument("--m5-checkpoint", type=Path, required=True)
+    parser.add_argument("--m3-config", type=Path, required=True)
+    parser.add_argument("--m3-summary", type=Path, required=True)
+    parser.add_argument("--m3-checkpoint", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--atom-count", type=int, default=6)
     parser.add_argument("--color-limit-hartree", type=float, default=0.05)
@@ -97,7 +103,7 @@ def load_baseline(path: Path) -> dict[str, np.ndarray]:
         return {name: handle[name][:] for name in names}
 
 
-def load_d4(path: Path, keys: tuple[str, ...]) -> dict[str, np.ndarray]:
+def load_descriptors(path: Path, keys: tuple[str, ...]) -> dict[str, np.ndarray]:
     with h5py.File(path, "r") as handle:
         if not handle.attrs.get("complete", False):
             raise ValueError(f"incomplete descriptor shard: {path}")
@@ -129,20 +135,46 @@ def make_native_model(
     )
 
 
-def make_m0_model(schema: dict[str, object]) -> ClosedFormM0PairMapper:
+def make_neural_model(
+    schema: dict[str, object], config: dict[str, object]
+) -> FullBlockNeuralPairMapper:
     transform = FullBlockIrrepTransform(
         OrbitalIrrepConfig.from_dict({"O": "2s2p1d", "Si": "2s2p1d"}),
-        dtype=torch.float64,
+        dtype=torch.float32,
     )
-    return ClosedFormM0PairMapper(
+    return FullBlockNeuralPairMapper(
+        str(config["architecture"]),
         transform,
         str(schema["irreps_out"]),
-        bond_n_radial=2,
-        bond_l_max=4,
-        bond_cutoff=6.5,
-        ridge=1.0e-8,
-        dtype=torch.float64,
+        bond_n_radial=int(config["bond_radial_count"]),
+        bond_l_max=int(config["bond_l_max"]),
+        bond_cutoff=float(config["bond_cutoff_angstrom"]),
+        hidden_multiplicity=int(config["hidden_multiplicity"]),
+        hidden_l_max=int(config["hidden_l_max"]),
+        invariant_hidden=int(config["invariant_hidden"]),
+        factorization_rank=int(config["factorization_rank"]),
+        descriptor_multiplicity_cap=int(config["descriptor_multiplicity_cap"]),
+        generator_multiplicity=int(config["generator_multiplicity"]),
+        dtype=torch.float32,
     )
+
+
+def normalization_scale(path: Path, family: str, key: str) -> np.ndarray:
+    payload = json.loads(path.read_text())
+    record = next(
+        item
+        for item in payload["families"][family]["descriptors"]
+        if item["key"] == key
+    )
+    scale = np.empty(int(record["dimension"]), dtype=np.float32)
+    covered = np.zeros(scale.shape, dtype=bool)
+    for channel in record["channels"]:
+        start, stop = int(channel["start"]), int(channel["stop"])
+        scale[start:stop] = float(channel["rms"])
+        covered[start:stop] = True
+    if not np.all(covered) or not np.all(np.isfinite(scale)) or np.any(scale <= 0):
+        raise ValueError("invalid D1 normalization")
+    return scale
 
 
 def selected_edges(data: dict[str, np.ndarray], atom_count: int) -> np.ndarray:
@@ -156,7 +188,7 @@ def selected_edges(data: dict[str, np.ndarray], atom_count: int) -> np.ndarray:
 
 @torch.no_grad()
 def predict(
-    model: NativeACEPairMapper | ClosedFormM0PairMapper,
+    model: NativeACEPairMapper | FullBlockNeuralPairMapper,
     descriptor: np.ndarray,
     data: dict[str, np.ndarray],
     envelope_table,
@@ -357,17 +389,21 @@ def main() -> None:
 
     baseline_summary = json.loads(args.baseline_summary.read_text())
     native_config = json.loads(args.native_config.read_text())
-    schemas = {item["key"]: item for item in json.loads(args.d4_schemas.read_text())}
-    high_key = "r6p5_d4_spherical_bessel_high_n8_l6_b3"
-    compact_key = "r6p5_d4_spherical_bessel_compact_n4_l3_b2"
+    native_summary = json.loads(args.native_summary.read_text())
+    m5_config = json.loads(args.m5_config.read_text())
+    m5_summary = json.loads(args.m5_summary.read_text())
+    m3_config = json.loads(args.m3_config.read_text())
+    m3_summary = json.loads(args.m3_summary.read_text())
+    schemas = {item["key"]: item for item in json.loads(args.d1_schemas.read_text())}
+    descriptor_key = "r6p5_spherical_bessel_high_n8_l6"
     row = first_validation_row(args.shard_registry)
     structure_index = int(row["structure_index"])
     baseline_path = (
         args.baseline_cache_dir / "shards" / f"structure_{structure_index:04d}.h5"
     )
-    d4_path = args.d4_cache_dir / "shards" / f"structure_{structure_index:04d}.h5"
+    d1_path = args.d1_cache_dir / "shards" / f"structure_{structure_index:04d}.h5"
     data = load_baseline(baseline_path)
-    descriptors = load_d4(d4_path, (high_key, compact_key))
+    descriptors = load_descriptors(d1_path, (descriptor_key,))
     if args.atom_count > len(data["atomic_numbers"]):
         raise ValueError("requested atom count exceeds structure size")
     edge_index = selected_edges(data, args.atom_count)
@@ -389,26 +425,40 @@ def main() -> None:
             args.native_checkpoint, map_location="cpu", weights_only=True
         )
     native.load_state_dict(native_payload["model_state_dict"])
-    high = make_m0_model(schemas[high_key])
-    high.load_state_dict(
-        torch.load(args.m0_high_checkpoint, map_location="cpu", weights_only=True)
+    m5 = make_neural_model(schemas[descriptor_key], m5_config)
+    m5.load_state_dict(
+        torch.load(args.m5_checkpoint, map_location="cpu", weights_only=True)
     )
-    compact = make_m0_model(schemas[compact_key])
-    compact.load_state_dict(
-        torch.load(args.m0_compact_checkpoint, map_location="cpu", weights_only=True)
+    m3 = make_neural_model(schemas[descriptor_key], m3_config)
+    m3.load_state_dict(
+        torch.load(args.m3_checkpoint, map_location="cpu", weights_only=True)
     )
-    for model in (native, high, compact):
+    scale = normalization_scale(args.normalization, "d1", descriptor_key)
+    neural_descriptor = descriptors[descriptor_key] / scale
+    for model in (native, m5, m3):
         model.eval()
 
     methods = (
-        ("native_ace", "Native ACE", 157.62090261675303, native, data["descriptor"]),
-        ("m0_d4_high", "M0 · D4 high", 157.8083701491333, high, descriptors[high_key]),
         (
-            "m0_d4_compact",
-            "M0 · D4 compact",
-            157.8215031600897,
-            compact,
-            descriptors[compact_key],
+            "m5_large",
+            "M5 large",
+            float(m5_summary["best_validation_matrix_mae_mev"]),
+            m5,
+            neural_descriptor,
+        ),
+        (
+            "m3_large",
+            "M3 large",
+            float(m3_summary["best_validation_matrix_mae_mev"]),
+            m3,
+            neural_descriptor,
+        ),
+        (
+            "native_ace",
+            "Native ACE",
+            float(native_summary["headline_validation_matrix_mae_mev"]),
+            native,
+            data["descriptor"],
         ),
     )
     transform = FullBlockIrrepTransform(
@@ -564,11 +614,17 @@ def main() -> None:
             "range_envelope": sha256(args.range_envelope),
             "native_config": sha256(args.native_config),
             "native_checkpoint": sha256(args.native_checkpoint),
-            "d4_schemas": sha256(args.d4_schemas),
-            "m0_high_checkpoint": sha256(args.m0_high_checkpoint),
-            "m0_compact_checkpoint": sha256(args.m0_compact_checkpoint),
+            "native_summary": sha256(args.native_summary),
+            "d1_schemas": sha256(args.d1_schemas),
+            "normalization": sha256(args.normalization),
+            "m5_config": sha256(args.m5_config),
+            "m5_summary": sha256(args.m5_summary),
+            "m5_checkpoint": sha256(args.m5_checkpoint),
+            "m3_config": sha256(args.m3_config),
+            "m3_summary": sha256(args.m3_summary),
+            "m3_checkpoint": sha256(args.m3_checkpoint),
             "baseline_shard": sha256(baseline_path),
-            "d4_shard": sha256(d4_path),
+            "d1_shard": sha256(d1_path),
         },
     }
     atomic_json(output / "config.json", config)
