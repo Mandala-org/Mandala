@@ -174,6 +174,18 @@ def _scheduled_learning_rate(
     ) * (1.0 + math.cos(math.pi * progress))
 
 
+def _restore_generator_state(generator: torch.Generator, state: torch.Tensor) -> None:
+    """Restore a checkpoint RNG state without inheriting ``map_location``.
+
+    PyTorch requires generator states to be CPU byte tensors, including for a
+    CUDA generator. Loading a whole checkpoint with ``map_location='cuda'``
+    otherwise moves this tensor to CUDA together with model/optimizer tensors.
+    """
+    if not isinstance(state, torch.Tensor):
+        raise TypeError("checkpoint generator state must be a tensor")
+    generator.set_state(state.detach().to(device="cpu", dtype=torch.uint8))
+
+
 def _rows(
     path: Path, train_fraction: float, seed: int
 ) -> dict[str, list[dict[str, str]]]:
@@ -1097,7 +1109,7 @@ def main() -> None:
         )
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
-        generator.set_state(checkpoint["generator_state"])
+        _restore_generator_state(generator, checkpoint["generator_state"])
         start_step = int(checkpoint["step"])
         best_mae = float(checkpoint["best_mae"])
         best_step = int(checkpoint["best_step"])
@@ -1111,7 +1123,7 @@ def main() -> None:
         )
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
-        generator.set_state(checkpoint["generator_state"])
+        _restore_generator_state(generator, checkpoint["generator_state"])
         start_step = int(checkpoint["step"])
         if start_step != args.decay_start_step:
             raise ValueError(

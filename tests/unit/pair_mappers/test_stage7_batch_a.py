@@ -9,6 +9,7 @@ from scripts.pair_mappers.audit_stage7_onsite_identity_gauge import (
 )
 from scripts.pair_mappers.freeze_stage7_batch_a import DESCRIPTORS, main as freeze_main
 from scripts.pair_mappers.train_stage5_neural_calibration import (
+    _restore_generator_state,
     _scheduled_learning_rate,
 )
 
@@ -25,6 +26,15 @@ def test_constant_then_cosine_schedule_preserves_first_10k_and_hits_floor():
     assert _scheduled_learning_rate(10_000, **settings) == pytest.approx(1.0e-3)
     assert _scheduled_learning_rate(20_000, **settings) == pytest.approx(5.5e-4)
     assert _scheduled_learning_rate(30_000, **settings) == pytest.approx(1.0e-4)
+
+
+def test_generator_state_restore_uses_portable_cpu_byte_state():
+    source = torch.Generator(device="cpu").manual_seed(17)
+    state = source.get_state()
+    expected = torch.rand(5, generator=source)
+    restored = torch.Generator(device="cpu")
+    _restore_generator_state(restored, state)
+    assert torch.equal(torch.rand(5, generator=restored), expected)
 
 
 def test_identity_gauge_solver_recovers_common_and_atom_shifts():
