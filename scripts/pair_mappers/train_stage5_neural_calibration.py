@@ -69,6 +69,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bond-l-max", type=int, required=True)
     parser.add_argument("--bond-cutoff-angstrom", type=float, required=True)
     parser.add_argument("--learning-rate", type=float, required=True)
+    parser.add_argument(
+        "--learning-rate-schedule",
+        choices=("constant", "constant_then_cosine"),
+        default="constant",
+    )
+    parser.add_argument("--minimum-learning-rate", type=float, default=0.0)
+    parser.add_argument("--decay-start-step", type=int, default=0)
     parser.add_argument("--weight-decay", type=float, required=True)
     parser.add_argument(
         "--range-loss-mode",
@@ -110,6 +117,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--distance-bin-width-angstrom", type=float, required=True)
     parser.add_argument("--float32-symmetry-tolerance", type=float, required=True)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--warm-start-run-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Completed compatible run whose last checkpoint initializes a new "
+            "output. Unlike --resume, this preserves the source artifact."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -131,6 +147,31 @@ def _hash(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def _scheduled_learning_rate(
+    step: int,
+    *,
+    total_steps: int,
+    base_learning_rate: float,
+    minimum_learning_rate: float,
+    decay_start_step: int,
+    schedule: str,
+) -> float:
+    """Return the preregistered learning rate for one one-indexed update."""
+    if schedule == "constant":
+        return base_learning_rate
+    if schedule != "constant_then_cosine":
+        raise ValueError(f"unknown learning-rate schedule {schedule!r}")
+    if step <= decay_start_step:
+        return base_learning_rate
+    span = total_steps - decay_start_step
+    if span <= 0:
+        raise ValueError("cosine decay requires decay_start_step < total_steps")
+    progress = min(1.0, max(0.0, (step - decay_start_step) / span))
+    return minimum_learning_rate + 0.5 * (
+        base_learning_rate - minimum_learning_rate
+    ) * (1.0 + math.cos(math.pi * progress))
 
 
 def _rows(
@@ -688,6 +729,17 @@ def main() -> None:
         raise ValueError("onsite baselines are only defined for onsite optimization")
     if args.target_scope != "joint" and not args.separate_descriptor_projections:
         raise ValueError("independent fits require separate descriptor projections")
+    if args.resume and args.warm_start_run_dir is not None:
+        raise ValueError("--resume and --warm-start-run-dir are mutually exclusive")
+    if not 0 <= args.minimum_learning_rate <= args.learning_rate:
+        raise ValueError("minimum learning rate must lie in [0, learning rate]")
+    if args.decay_start_step < 0 or args.decay_start_step > args.steps:
+        raise ValueError("decay start step must lie in [0, steps]")
+    if (
+        args.learning_rate_schedule == "constant_then_cosine"
+        and args.decay_start_step >= args.steps
+    ):
+        raise ValueError("cosine schedule needs at least one decay update")
     positive = (
         args.descriptor_multiplicity_cap,
         args.generator_multiplicity,
@@ -788,9 +840,66 @@ def main() -> None:
         "steps": args.steps,
         "eval_interval": args.eval_interval,
         "early_stopping_evaluations": args.early_stopping_evaluations,
+        "learning_rate_schedule": args.learning_rate_schedule,
+        "minimum_learning_rate": args.minimum_learning_rate,
+        "decay_start_step": args.decay_start_step,
     }
-    if any(calibration[key] != value for key, value in frozen_run.items()):
+    backward_compatible_run_defaults = {
+        "learning_rate_schedule": "constant",
+        "minimum_learning_rate": 0.0,
+        "decay_start_step": 0,
+    }
+    if any(
+        calibration.get(key, backward_compatible_run_defaults.get(key)) != value
+        for key, value in frozen_run.items()
+    ):
         raise ValueError("CLI run settings differ from the frozen calibration manifest")
+    expected_warm_start = task.get("warm_start_task_id")
+    warm_start_payload = None
+    if args.resume:
+        saved_config_path = args.output_dir.resolve() / "config.json"
+        if not saved_config_path.is_file():
+            raise FileNotFoundError("resume requested but saved config.json is absent")
+        warm_start_payload = json.loads(saved_config_path.read_text()).get("warm_start")
+        saved_task = (
+            None if warm_start_payload is None else warm_start_payload.get("task_id")
+        )
+        if saved_task != expected_warm_start:
+            raise ValueError("saved warm-start provenance differs from the frozen task")
+    elif (args.warm_start_run_dir is None) != (expected_warm_start is None):
+        raise ValueError("warm-start CLI setting differs from the frozen task")
+    elif args.warm_start_run_dir is not None:
+        warm_dir = args.warm_start_run_dir.resolve()
+        warm_config_path = warm_dir / "config.json"
+        warm_summary_path = warm_dir / "summary.json"
+        warm_checkpoint_path = warm_dir / "last.pt"
+        if not all(
+            path.is_file()
+            for path in (warm_config_path, warm_summary_path, warm_checkpoint_path)
+        ):
+            raise FileNotFoundError(
+                "warm-start run is missing config, summary, or last.pt"
+            )
+        warm_config = json.loads(warm_config_path.read_text())
+        warm_summary = json.loads(warm_summary_path.read_text())
+        if (
+            not warm_summary.get("completed")
+            or warm_summary.get("test_shards_read")
+            or warm_config.get("task_id") != expected_warm_start
+            or warm_config.get("family") != args.family
+            or warm_config.get("descriptor_key") != args.descriptor_key
+            or warm_config.get("architecture") != args.architecture
+            or warm_config.get("target_scope") != args.target_scope
+        ):
+            raise ValueError("warm-start source is incomplete or incompatible")
+        warm_start_payload = {
+            "run_dir": str(warm_dir),
+            "task_id": expected_warm_start,
+            "config_manifest_hash": warm_config["manifest_hash"],
+            "summary_sha256": _hash_file(warm_summary_path),
+            "checkpoint_sha256": _hash_file(warm_checkpoint_path),
+            "checkpoint": str(warm_checkpoint_path),
+        }
     fixed_run = {
         "hidden_l_max": args.hidden_l_max,
         "bond_radial_count": args.bond_radial_count,
@@ -822,12 +931,20 @@ def main() -> None:
     rows = _rows(args.shard_registry, args.train_fraction, args.seed)
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    config_args = {
+        key: str(value.resolve()) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+        if key not in ("resume", "warm_start_run_dir")
+    }
+    if "learning_rate_schedule" not in calibration:
+        for key in (
+            "learning_rate_schedule",
+            "minimum_learning_rate",
+            "decay_start_step",
+        ):
+            config_args.pop(key)
     config = {
-        **{
-            key: str(value.resolve()) if isinstance(value, Path) else value
-            for key, value in vars(args).items()
-            if key != "resume"
-        },
+        **config_args,
         "convention": "mandala-stage5-directed-neural-calibration-v2",
         "descriptor_content_hash": schema["content_hash"],
         "promotion_manifest_hash": promotions["manifest_hash"],
@@ -873,6 +990,8 @@ def main() -> None:
             "range_envelope": _hash_file(args.range_envelope),
         },
     }
+    if "warm_start_task_id" in task:
+        config["warm_start"] = warm_start_payload
     config["manifest_hash"] = _hash(config)
     config_path = output / "config.json"
     existing = [path for path in output.iterdir() if path.name != "launcher.log"]
@@ -986,11 +1105,52 @@ def main() -> None:
         history = checkpoint["history"]
         sampled_blocks = int(checkpoint["sampled_blocks"])
         elapsed_before = float(checkpoint["elapsed_seconds"])
+    elif warm_start_payload is not None:
+        checkpoint = torch.load(
+            warm_start_payload["checkpoint"], map_location=device, weights_only=False
+        )
+        model.load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        generator.set_state(checkpoint["generator_state"])
+        start_step = int(checkpoint["step"])
+        if start_step != args.decay_start_step:
+            raise ValueError(
+                "warm-start checkpoint step must equal the frozen decay start step"
+            )
+        best_mae = float(checkpoint["best_mae"])
+        best_step = int(checkpoint["best_step"])
+        stale = 0
+        history = list(checkpoint["history"])
+        sampled_blocks = int(checkpoint["sampled_blocks"])
+        elapsed_before = float(checkpoint["elapsed_seconds"])
+        source_run_dir = Path(warm_start_payload["run_dir"])
+        source_best = source_run_dir / "best_model.pt"
+        source_best_metrics = source_run_dir / "best_validation_metrics.json"
+        if not source_best.is_file() or not source_best_metrics.is_file():
+            raise FileNotFoundError("warm-start run is missing its best checkpoint")
+        torch.save(
+            torch.load(source_best, map_location="cpu", weights_only=True),
+            output / "best_model.pt",
+        )
+        _atomic_json(
+            output / "best_validation_metrics.json",
+            json.loads(source_best_metrics.read_text()),
+        )
 
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
     started = time.perf_counter()
     stopped_early = False
     for step in range(start_step + 1, args.steps + 1):
+        learning_rate = _scheduled_learning_rate(
+            step,
+            total_steps=args.steps,
+            base_learning_rate=args.learning_rate,
+            minimum_learning_rate=args.minimum_learning_rate,
+            decay_start_step=args.decay_start_step,
+            schedule=args.learning_rate_schedule,
+        )
+        for group in optimizer.param_groups:
+            group["lr"] = learning_rate
         optimizer.zero_grad(set_to_none=True)
         loss, sampled = _training_loss(
             model, train_data, args, generator, device, onsite_baselines
@@ -1018,6 +1178,7 @@ def main() -> None:
             {
                 "step": step,
                 "training_loss": float(loss.item()),
+                "learning_rate": learning_rate,
                 "validation_matrix_mae_mev": mae,
             }
         )
@@ -1088,6 +1249,13 @@ def main() -> None:
             parameter.numel() for parameter in optimized_parameters
         ),
         "best_step": best_step,
+        "final_step": int(history[-1]["step"]),
+        "learning_rate_schedule": args.learning_rate_schedule,
+        "minimum_learning_rate": args.minimum_learning_rate,
+        "decay_start_step": args.decay_start_step,
+        "warm_start_task_id": (
+            None if warm_start_payload is None else warm_start_payload["task_id"]
+        ),
         "range_loss_mode": args.range_loss_mode,
         "best_validation_matrix_mae_mev": final_metrics["projected"]["matrix_elements"][
             "mae"

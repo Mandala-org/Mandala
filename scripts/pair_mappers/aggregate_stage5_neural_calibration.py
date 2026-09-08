@@ -38,7 +38,9 @@ def main() -> None:
         raise FileExistsError(f"refusing to overwrite nonempty {output}")
     output.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((args.grid_dir / "calibration_manifest.json").read_text())
-    stage6_scoped = str(manifest.get("convention", "")).startswith("mandala-stage6")
+    independently_scoped = str(manifest.get("convention", "")).startswith(
+        ("mandala-stage6", "mandala-stage7")
+    )
     rows = []
     for task in manifest["tasks"]:
         run = args.grid_dir / "runs" / task["task_id"]
@@ -48,7 +50,7 @@ def main() -> None:
             assess_stage6_scoped_run(
                 summary, float(config["float32_symmetry_tolerance"])
             )
-            if stage6_scoped
+            if independently_scoped
             else {
                 "accepted": bool(summary["completed"] and summary["passed"]),
                 "original_passed": bool(summary["passed"]),
