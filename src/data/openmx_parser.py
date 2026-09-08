@@ -50,7 +50,7 @@ def parse_openmx_scfout(
     orbital_cfg: OrbitalIrrepConfig,
     *,
     convention: str = "e3nn",  # "openmx" | "e3nn"
-    symmetrize_density: bool = True,  # D ← D + Dᵀ
+    symmetrize_density: bool = True,  # D ← (D + Dᵀ) / 2
 ) -> Snapshot:
     """
     Parameters
@@ -65,7 +65,9 @@ def parse_openmx_scfout(
         "openmx"  - keep native basis;
         "e3nn"    - convert real-SH ordering to the Wikipedia / e3nn convention.
     symmetrize_density
-        If *True* (default) replaces ``D`` with ``D + Dᵀ`` **after** parsing.
+        If *True* (default) replaces ``D`` with ``0.5 * (D + Dᵀ)`` after
+        parsing. This preserves the native spin=0 occupation normalization;
+        symmetrization does not perform a spin sum.
     """
     atoms = list(atoms)
     mapper = BlockIrrepMapper(
@@ -240,7 +242,7 @@ def parse_openmx_scfout(
     den = _to_block_matrix(accum["density"], rn_shift_map)
 
     if symmetrize_density:
-        den = den + den.transpose()
+        den = 0.5 * (den + den.transpose())
 
     # ─────────────────────────────────────── optional basis conversion
     if convention == "e3nn":

@@ -8,11 +8,184 @@ Sparse-matrix utilities.
 from __future__ import annotations
 
 from typing import Dict, Tuple
+from collections import defaultdict
+from dataclasses import dataclass
 
 import torch
 from data.block_matrix import BlockMatrix
 
 TraceAlignment = Dict[str, Tuple[str, torch.Tensor]]
+
+
+@dataclass(frozen=True)
+class BlockProductGroup:
+    """One batch of compatible (d_i,d_k) @ (d_k,d_j) contractions."""
+
+    output_key: str
+    left_key: str
+    right_key: str
+    left_indices: torch.Tensor
+    right_indices: torch.Tensor
+    output_indices: torch.Tensor
+
+
+@dataclass(frozen=True)
+class BlockProductAlignment:
+    """Reusable integer topology for a product on a specified output support."""
+
+    groups: tuple[BlockProductGroup, ...]
+    left_edges: dict[str, torch.Tensor]
+    right_edges: dict[str, torch.Tensor]
+    output_edges: dict[str, torch.Tensor]
+
+    @property
+    def num_paths(self) -> int:
+        return sum(group.left_indices.numel() for group in self.groups)
+
+
+def _validate_product_matrices(*matrices: BlockMatrix) -> None:
+    reference = matrices[0]
+    if not reference.pair_blocks:
+        raise ValueError("Sparse products require at least one block tensor.")
+    sample = next(iter(reference.pair_blocks.values()))
+    for matrix in matrices:
+        if (
+            matrix.atoms != reference.atoms
+            or matrix.basis != reference.basis
+            or matrix.orbital_cfg.to_dict() != reference.orbital_cfg.to_dict()
+        ):
+            raise ValueError(
+                "Sparse products require matching atoms, basis and orbitals."
+            )
+        if matrix.pair_blocks.keys() != matrix.pair_edges.keys():
+            raise ValueError("Block keys and edge keys must match.")
+        for key, block in matrix.pair_blocks.items():
+            edges = matrix.pair_edges[key]
+            if block.ndim != 3 or block.shape[1:] != matrix.orbital_cfg.block_dims(key):
+                raise ValueError(f"Invalid orbital block shape for {key}.")
+            if edges.dtype != torch.long or edges.shape != (5, block.shape[0]):
+                raise ValueError(f"Expected int64 (5,E) edges for {key}.")
+            if block.dtype != sample.dtype or block.device != sample.device:
+                raise ValueError("All product blocks must share dtype and device.")
+
+
+def build_matmul_alignment(
+    A: BlockMatrix, B: BlockMatrix, output: BlockMatrix
+) -> BlockProductAlignment:
+    """Plan P_output(A B), including periodic convolution of lattice shifts.
+
+    (AB)[i,j,L] = sum_(k,L1) A[i,k,L1] B[k,j,L-L1]. Missing
+    input blocks contribute zero. Only the requested output edges are retained.
+    CPU integer indexing is performed once; numerical evaluation uses grouped
+    batched torch products, like the pre-aligned sparse trace implementation.
+    """
+    _validate_product_matrices(A, B, output)
+
+    def entries(matrix):
+        seen = set()
+        for key, edges in matrix.pair_edges.items():
+            for index, row in enumerate(edges.T.cpu().tolist()):
+                edge = tuple(row)
+                if edge in seen:
+                    raise ValueError(f"Duplicate periodic edge {edge}.")
+                seen.add(edge)
+                if not (
+                    0 <= edge[3] < len(matrix.atoms)
+                    and 0 <= edge[4] < len(matrix.atoms)
+                ):
+                    raise ValueError(f"Invalid atom indices in edge {edge}.")
+                if key != f"{matrix.atoms[edge[3]]}-{matrix.atoms[edge[4]]}":
+                    raise ValueError(
+                        f"Element-pair key {key} disagrees with edge {edge}."
+                    )
+                yield edge, key, index
+
+    left_by_source = defaultdict(list)
+    for edge, key, index in entries(A):
+        left_by_source[edge[3]].append((edge, key, index))
+    right_lookup = {edge: (key, index) for edge, key, index in entries(B)}
+    paths = defaultdict(lambda: ([], [], []))
+    for (sx, sy, sz, i, j), out_key, out_index in entries(output):
+        for (tx, ty, tz, _, k), left_key, left_index in left_by_source[i]:
+            match = right_lookup.get((sx - tx, sy - ty, sz - tz, k, j))
+            if match is None:
+                continue
+            right_key, right_index = match
+            indices = paths[(out_key, left_key, right_key)]
+            indices[0].append(left_index)
+            indices[1].append(right_index)
+            indices[2].append(out_index)
+    device = next(iter(A.pair_blocks.values())).device
+    groups = tuple(
+        BlockProductGroup(
+            *keys,
+            *(
+                torch.tensor(index, dtype=torch.long, device=device)
+                for index in indices
+            ),
+        )
+        for keys, indices in sorted(paths.items())
+    )
+    return BlockProductAlignment(
+        groups,
+        *(
+            {key: edges.clone() for key, edges in matrix.pair_edges.items()}
+            for matrix in (A, B, output)
+        ),
+    )
+
+
+def matmul_sparse_block_matrix_aligned(
+    A: BlockMatrix,
+    B: BlockMatrix,
+    output: BlockMatrix,
+    alignment: BlockProductAlignment,
+    *,
+    chunk_size: int = 4096,
+) -> BlockMatrix:
+    """Evaluate a fixed-support block product, with bounded temporary memory.
+
+    Keeps output keys, edge order and zero blocks exactly. Autograd is retained
+    through gathers, bmm and index_add; only topology is precomputed on CPU.
+    """
+    if (
+        isinstance(chunk_size, bool)
+        or not isinstance(chunk_size, int)
+        or chunk_size <= 0
+    ):
+        raise ValueError("chunk_size must be a positive integer.")
+    _validate_product_matrices(A, B, output)
+    for matrix, planned in zip(
+        (A, B, output),
+        (alignment.left_edges, alignment.right_edges, alignment.output_edges),
+    ):
+        if matrix.pair_edges.keys() != planned.keys() or any(
+            not torch.equal(
+                matrix.pair_edges[key], edges.to(matrix.pair_edges[key].device)
+            )
+            for key, edges in planned.items()
+        ):
+            raise ValueError("Sparse product topology changed; rebuild the alignment.")
+    blocks = {key: torch.zeros_like(value) for key, value in output.pair_blocks.items()}
+    # Retain a zero derivative even for supports with no matching product paths.
+    zero = sum(
+        value.reshape(-1)[:1].sum() * 0
+        for matrix in (A, B)
+        for value in matrix.pair_blocks.values()
+    )
+    blocks = {key: value + zero for key, value in blocks.items()}
+    for group in alignment.groups:
+        left = A.pair_blocks[group.left_key]
+        right = B.pair_blocks[group.right_key]
+        indices = [
+            index.to(left.device)
+            for index in (group.left_indices, group.right_indices, group.output_indices)
+        ]
+        for start in range(0, indices[0].numel(), chunk_size):
+            a, b, out = (index[start : start + chunk_size] for index in indices)
+            values = torch.bmm(left.index_select(0, a), right.index_select(0, b))
+            blocks[group.output_key].index_add_(0, out, values)
+    return output._replace_pair_blocks(blocks, basis=output.basis)
 
 
 def trace_matmul_sparse(
@@ -165,6 +338,9 @@ def trace_matmul_sparse_snap_vectorized(A: BlockMatrix, B: BlockMatrix) -> torch
 
 
 __all__: Tuple[str, ...] = (
+    "BlockProductAlignment",
+    "build_matmul_alignment",
+    "matmul_sparse_block_matrix_aligned",
     "trace_matmul_sparse",
     "build_trace_alignment_from_pair_edges",
     "build_trace_alignment",

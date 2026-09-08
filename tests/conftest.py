@@ -255,6 +255,7 @@ def factory_results(small_multispecies_snapshot_e3nn):
     fac.add_snapshot("synthetic-train-2.matrix", "synthetic.info", purpose="train")
     fac.add_snapshot("synthetic-val.matrix", "synthetic.info", purpose="val")
     try:
-        yield fac.create()
+        # Do not leave the real OpenMX loader mocked for the rest of the session.
+        return fac.create()
     finally:
         patcher.undo()

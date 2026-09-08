@@ -95,10 +95,9 @@ def write_openmx_hsout_prediction(
     cutoff), the corresponding block is written as zeros when
     ``zero_fill_missing`` is true.
 
-    OpenMX stores one half of the non-spin-polarized density matrix in its
-    first ``Density matrix spin=0`` section; Mandala's parser reconstructs the
-    full density as ``D + D.T``.  Consequently, this writer stores half of the
-    supplied, symmetrized density prediction in that first section.  The
+    Density predictions use the native OpenMX spin=0 normalization and are
+    written without rescaling. The loader's Hermitian averaging preserves
+    that normalization. The
     second identically named section is OpenMX's zero-valued imaginary-density
     slot and is retained as zeros.
     """
@@ -205,8 +204,6 @@ def write_openmx_hsout_prediction(
                         f"Prediction block {edge} has shape {tuple(block.shape)}, "
                         f"expected {(rows, columns)}"
                     )
-                if current == "density":
-                    block = 0.5 * block
             written[matrix_name] += 1
 
         output_lines.extend(_format_row(block[row], newline) for row in range(rows))

@@ -1,0 +1,1064 @@
+{
+  "formula": "X=P(SD); Y=P(DX); Z=P(YX); D_next=3Y-2Z",
+  "recurrence": "Raw polynomial iterates; global Hermitian projection for evaluation only",
+  "dtype": "float64",
+  "threads": 4,
+  "manifest_sha256": "e6d1b95d97a26e862546a2acaac4685c742b39fbf3fc870f313a4e634758a912",
+  "source_sha256": {
+    "src/core/sparse_math.py": "f1376bc2fc9e88c83bc49ed6c039ffa63193043d270ce1430119cbaff25ca278",
+    "src/core/density_purification.py": "eed8997140bd37c60806d6d015d146b6844692b623196f5120a39a3bff35dd94",
+    "src/analysis/density_purification.py": "4325ea298231d4e0917910a93bd559d18c22458c46674055f4711a8ef62c66c0",
+    "src/data/openmx_parser.py": "7be5ae4a14631985484f5a2bee1934331730d54ae2e2d639f9ca6b1300f2e7bc",
+    "src/data/snapshot.py": "da8b38a1013c947bbaaf38bfc3cc691fb008e31a89a7d1e81f07b20e760940e5",
+    "scripts/evaluate_density_purification.py": "730afd7ef18b0b07fdacdee03c598ab5953b30409ae6ff0c8fe1130cb93fc032"
+  },
+  "results": [
+    {
+      "rows": [
+        {
+          "iteration": 0,
+          "raw_density": {
+            "mae": 2.5886360253182763e-05,
+            "rmse": 6.19792978970761e-05,
+            "relative_frobenius": 0.008247390742355292,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 2.5886360253182763e-05,
+            "rmse": 6.19792978970761e-05,
+            "relative_frobenius": 0.008247390742355292,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0,
+          "band_energy_ref_h_ha": -9.648667079422006,
+          "band_energy_ref_h_abs_error_ev": 0.2298576227210797,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.028732202840134963,
+          "electron_count": 31.982686541592912,
+          "occupation_trace": 15.991343270796456,
+          "electron_count_abs_error": 0.01731360986791941,
+          "reference_control_density": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "relative_frobenius": 0.0,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 4.255998646840453e-06,
+          "band_energy_pred_h_ha": -9.65800408064777,
+          "band_energy_pred_h_abs_error_ev": 0.02421525243364692,
+          "density_mae_improvement_percent": 0.0
+        },
+        {
+          "iteration": 1,
+          "raw_density": {
+            "mae": 0.0002099364263398086,
+            "rmse": 0.0007141692274330456,
+            "relative_frobenius": 0.09503225874851665,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00019758797496899014,
+            "rmse": 0.0006983700147642645,
+            "relative_frobenius": 0.09292990708074865,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.003556999918716594,
+          "band_energy_ref_h_ha": -9.46086130405772,
+          "band_energy_ref_h_abs_error_ev": 5.340315698468803,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.6675394623086004,
+          "electron_count": 31.41457274330961,
+          "occupation_trace": 15.707286371654805,
+          "electron_count_abs_error": 0.5854274081512223,
+          "reference_control_density": {
+            "mae": 0.0001947808775097223,
+            "rmse": 0.000694707169608554,
+            "relative_frobenius": 0.09244250376620881,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.055871746997581795,
+          "band_energy_pred_h_ha": -9.470119464019259,
+          "band_energy_pred_h_abs_error_ev": 5.088388204491402,
+          "density_mae_improvement_percent": -663.289906485391
+        },
+        {
+          "iteration": 2,
+          "raw_density": {
+            "mae": 0.00031103725574491874,
+            "rmse": 0.0010335237170970722,
+            "relative_frobenius": 0.13752775887435698,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.0002921255213303778,
+            "rmse": 0.0010027295680477206,
+            "relative_frobenius": 0.13343007806148166,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.005711670776693798,
+          "band_energy_ref_h_ha": -9.566646470858922,
+          "band_energy_ref_h_abs_error_ev": 2.461753210574593,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.30771915132182415,
+          "electron_count": 31.80091472996556,
+          "occupation_trace": 15.90045736498278,
+          "electron_count_abs_error": 0.19908542149527264,
+          "reference_control_density": {
+            "mae": 0.00028971151875001214,
+            "rmse": 0.0009991266885953573,
+            "relative_frobenius": 0.13295065419497407,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.05019424299825914,
+          "band_energy_pred_h_ha": -9.57606332561622,
+          "band_energy_pred_h_abs_error_ev": 2.205507409031863,
+          "density_mae_improvement_percent": -1028.492064829626
+        },
+        {
+          "iteration": 3,
+          "raw_density": {
+            "mae": 0.0003716527153011552,
+            "rmse": 0.0012224608375978527,
+            "relative_frobenius": 0.1626690288044075,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.0003430974241894289,
+            "rmse": 0.0011786537099031298,
+            "relative_frobenius": 0.1568397517448544,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.007348435362373222,
+          "band_energy_ref_h_ha": -9.573777034807605,
+          "band_energy_ref_h_abs_error_ev": 2.26772058274139,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.28346507284267375,
+          "electron_count": 31.85733972603769,
+          "occupation_trace": 15.928669863018845,
+          "electron_count_abs_error": 0.1426604254231414,
+          "reference_control_density": {
+            "mae": 0.00034082692831745916,
+            "rmse": 0.0011748853664784182,
+            "relative_frobenius": 0.1563383101066062,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.048272003998135915,
+          "band_energy_pred_h_ha": -9.583221982034734,
+          "band_energy_pred_h_abs_error_ev": 2.010710345765093,
+          "density_mae_improvement_percent": -1225.3984756209388
+        }
+      ],
+      "atoms": 8,
+      "edges": 696,
+      "reference_band_energy_ha": -9.657114186984318,
+      "reference_electrons": 32.00000015146083,
+      "reference_occupation_trace": 16.000000075730416,
+      "spin_degeneracy": 2,
+      "plan_seconds": 0.0450786990004417,
+      "sd_paths": 28472,
+      "dd_paths": 28472,
+      "chunk_size": 4096,
+      "case": {
+        "label": "HSD fine-tune / scale1 snapshot 078",
+        "spin_degeneracy": 2,
+        "saved_density_scale": 0.5,
+        "prediction_dir": "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune",
+        "matrix_path": "data/small/Si_perturbed_scale1_078/HS.out",
+        "info_path": "data/small/Si_perturbed_scale1_078/Si.out",
+        "overlap_sources": [
+          "reference",
+          "predicted"
+        ]
+      },
+      "overlap_source": "reference",
+      "input_sha256": {
+        "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune/pred_density.pt": "4a7d33d5209a34e862f9bcbf364fb8bd3fca01e71409c797909f9440808e68e5",
+        "data/small/Si_perturbed_scale1_078/HS.out": "ceabbc8cc0eb710d702af00bbbbffc703b99771c5fd568672cf1d2f61f3fc714",
+        "data/small/Si_perturbed_scale1_078/Si.out": "488253c0695e9718160b4ccae3c46a0179f95020e84fddc04ce9ddda548c0da7",
+        "data/small/Si_perturbed_scale1_078/Si.cif": "43bca0e5601405f0d55353690d254ed38c25abf0cb768d7cd9fb1491d353772c",
+        "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune/pred_hamiltonian.pt": "3e9351cc538d43c6d15884c504664ada5a86925ce90253cbffd25e35ad2fd0ee"
+      }
+    },
+    {
+      "rows": [
+        {
+          "iteration": 0,
+          "raw_density": {
+            "mae": 2.5886360253182763e-05,
+            "rmse": 6.19792978970761e-05,
+            "relative_frobenius": 0.008247390742355292,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 2.5886360253182763e-05,
+            "rmse": 6.19792978970761e-05,
+            "relative_frobenius": 0.008247390742355292,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0,
+          "band_energy_ref_h_ha": -9.648667079422006,
+          "band_energy_ref_h_abs_error_ev": 0.2298576227210797,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.028732202840134963,
+          "electron_count": 31.982686541592912,
+          "occupation_trace": 15.991343270796456,
+          "electron_count_abs_error": 0.01731360986791941,
+          "reference_control_density": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "relative_frobenius": 0.0,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 4.339999577496201e-06,
+          "band_energy_pred_h_ha": -9.65800408064777,
+          "band_energy_pred_h_abs_error_ev": 0.02421525243364692,
+          "density_mae_improvement_percent": 0.0
+        },
+        {
+          "iteration": 1,
+          "raw_density": {
+            "mae": 0.0002103495168534712,
+            "rmse": 0.0007159521825782577,
+            "relative_frobenius": 0.09526951099656691,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00019783543078894062,
+            "rmse": 0.000700097585166772,
+            "relative_frobenius": 0.09315978945482893,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0035637037273288166,
+          "band_energy_ref_h_ha": -9.457696769110859,
+          "band_energy_ref_h_abs_error_ev": 5.426427124721839,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.6783033905902299,
+          "electron_count": 31.39637656726599,
+          "occupation_trace": 15.698188283632994,
+          "electron_count_abs_error": 0.6036235841948425,
+          "reference_control_density": {
+            "mae": 0.0001947808775097223,
+            "rmse": 0.000694707169608554,
+            "relative_frobenius": 0.09244250376620881,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.05185334000270814,
+          "band_energy_pred_h_ha": -9.466952191807943,
+          "band_energy_pred_h_abs_error_ev": 5.174574115542407,
+          "density_mae_improvement_percent": -664.2458377848484
+        },
+        {
+          "iteration": 2,
+          "raw_density": {
+            "mae": 0.00031094544137929745,
+            "rmse": 0.0010338552009838532,
+            "relative_frobenius": 0.1375718683953073,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00029180364757447916,
+            "rmse": 0.001002831756127993,
+            "relative_frobenius": 0.1334436759087599,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.005727799667905882,
+          "band_energy_ref_h_ha": -9.563809682906106,
+          "band_energy_ref_h_abs_error_ev": 2.5389461822738553,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.3173682727842319,
+          "electron_count": 31.783588643397195,
+          "occupation_trace": 15.891794321698598,
+          "electron_count_abs_error": 0.2164115080636364,
+          "reference_control_density": {
+            "mae": 0.00028971151875001214,
+            "rmse": 0.0009991266885953573,
+            "relative_frobenius": 0.13295065419497407,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.061746626997774,
+          "band_energy_pred_h_ha": -9.573223719950427,
+          "band_energy_pred_h_abs_error_ev": 2.282777054646019,
+          "density_mae_improvement_percent": -1027.2486541965725
+        },
+        {
+          "iteration": 3,
+          "raw_density": {
+            "mae": 0.00037135798596254685,
+            "rmse": 0.0012221433299820482,
+            "relative_frobenius": 0.16262677906199252,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.0003425922351047635,
+            "rmse": 0.0011780102560804363,
+            "relative_frobenius": 0.15675412936318064,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.007370273875759788,
+          "band_energy_ref_h_ha": -9.570923600379437,
+          "band_energy_ref_h_abs_error_ev": 2.3453665283400436,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.29317081604250544,
+          "electron_count": 31.839034951696924,
+          "occupation_trace": 15.919517475848462,
+          "electron_count_abs_error": 0.16096519976390766,
+          "reference_control_density": {
+            "mae": 0.00034082692831745916,
+            "rmse": 0.0011748853664784182,
+            "relative_frobenius": 0.1563383101066062,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.056550945999333635,
+          "band_energy_pred_h_ha": -9.580365597869715,
+          "band_energy_pred_h_abs_error_ev": 2.0884365578331,
+          "density_mae_improvement_percent": -1223.4469108597118
+        }
+      ],
+      "atoms": 8,
+      "edges": 696,
+      "reference_band_energy_ha": -9.657114186984318,
+      "reference_electrons": 32.00000015146083,
+      "reference_occupation_trace": 16.000000075730416,
+      "spin_degeneracy": 2,
+      "plan_seconds": 0.048826543999894056,
+      "sd_paths": 28472,
+      "dd_paths": 28472,
+      "chunk_size": 4096,
+      "case": {
+        "label": "HSD fine-tune / scale1 snapshot 078",
+        "spin_degeneracy": 2,
+        "saved_density_scale": 0.5,
+        "prediction_dir": "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune",
+        "matrix_path": "data/small/Si_perturbed_scale1_078/HS.out",
+        "info_path": "data/small/Si_perturbed_scale1_078/Si.out",
+        "overlap_sources": [
+          "reference",
+          "predicted"
+        ]
+      },
+      "overlap_source": "predicted",
+      "input_sha256": {
+        "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune/pred_density.pt": "4a7d33d5209a34e862f9bcbf364fb8bd3fca01e71409c797909f9440808e68e5",
+        "data/small/Si_perturbed_scale1_078/HS.out": "ceabbc8cc0eb710d702af00bbbbffc703b99771c5fd568672cf1d2f61f3fc714",
+        "data/small/Si_perturbed_scale1_078/Si.out": "488253c0695e9718160b4ccae3c46a0179f95020e84fddc04ce9ddda548c0da7",
+        "data/small/Si_perturbed_scale1_078/Si.cif": "43bca0e5601405f0d55353690d254ed38c25abf0cb768d7cd9fb1491d353772c",
+        "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune/pred_hamiltonian.pt": "3e9351cc538d43c6d15884c504664ada5a86925ce90253cbffd25e35ad2fd0ee",
+        "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune/pred_overlap.pt": "be1ad8578918403a41dca31c73872ede878bf1543bc01f833a6386af0b02e449"
+      }
+    },
+    {
+      "rows": [
+        {
+          "iteration": 0,
+          "raw_density": {
+            "mae": 2.6367884234757965e-05,
+            "rmse": 5.6979184860568637e-05,
+            "relative_frobenius": 0.007584124888482939,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 2.6367884234757965e-05,
+            "rmse": 5.6979184860568637e-05,
+            "relative_frobenius": 0.007584124888482939,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0,
+          "band_energy_ref_h_ha": -9.650254180589183,
+          "band_energy_ref_h_abs_error_ev": 0.2312563254265097,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.028907040678313713,
+          "electron_count": 31.984105842639273,
+          "occupation_trace": 15.992052921319637,
+          "electron_count_abs_error": 0.015894106723592927,
+          "reference_control_density": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "relative_frobenius": 0.0,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 4.674999217968434e-06,
+          "band_energy_pred_h_ha": -9.659471601943306,
+          "band_energy_pred_h_abs_error_ev": 0.019562614009065688,
+          "density_mae_improvement_percent": 0.0
+        },
+        {
+          "iteration": 1,
+          "raw_density": {
+            "mae": 0.00020950661496681208,
+            "rmse": 0.0007127650937989858,
+            "relative_frobenius": 0.0948714780801239,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.0001971167653881514,
+            "rmse": 0.0006969122400870966,
+            "relative_frobenius": 0.0927614088911029,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0036520900744850884,
+          "band_energy_ref_h_ha": -9.462737686431593,
+          "band_energy_ref_h_abs_error_ev": 5.333842654546354,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.6667303318182942,
+          "electron_count": 31.415824856835425,
+          "occupation_trace": 15.707912428417712,
+          "electron_count_abs_error": 0.5841750925274418,
+          "reference_control_density": {
+            "mae": 0.00019475870891894713,
+            "rmse": 0.0006939611842033384,
+            "relative_frobenius": 0.09236861323370482,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.06207190399800311,
+          "band_energy_pred_h_ha": -9.471884598610613,
+          "band_energy_pred_h_abs_error_ev": 5.084942368478176,
+          "density_mae_improvement_percent": -647.5638304279015
+        },
+        {
+          "iteration": 2,
+          "raw_density": {
+            "mae": 0.0003108328850372601,
+            "rmse": 0.0010322303076313447,
+            "relative_frobenius": 0.1373933934981736,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00029181548246452006,
+            "rmse": 0.0010013644522598366,
+            "relative_frobenius": 0.1332850423081697,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.005871885446795979,
+          "band_energy_ref_h_ha": -9.568321707747671,
+          "band_energy_ref_h_abs_error_ev": 2.460753616906025,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.3075942021132531,
+          "electron_count": 31.800941222431472,
+          "occupation_trace": 15.900470611215736,
+          "electron_count_abs_error": 0.19905872693139415,
+          "reference_control_density": {
+            "mae": 0.0002897131952509241,
+            "rmse": 0.0009982294907838008,
+            "relative_frobenius": 0.13286776818582097,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.05163230700054555,
+          "band_energy_pred_h_ha": -9.577621216531519,
+          "band_energy_pred_h_abs_error_ev": 2.2077009635852387,
+          "density_mae_improvement_percent": -1006.7079932027724
+        },
+        {
+          "iteration": 3,
+          "raw_density": {
+            "mae": 0.00037160137876985635,
+            "rmse": 0.0012212517084824908,
+            "relative_frobenius": 0.162552790112202,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.0003428387453430325,
+            "rmse": 0.0011773438081930634,
+            "relative_frobenius": 0.15670849802201234,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.007602976349383131,
+          "band_energy_ref_h_ha": -9.575470513676187,
+          "band_energy_ref_h_abs_error_ev": 2.2662245992628085,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.28327807490785106,
+          "electron_count": 31.857289783069024,
+          "occupation_trace": 15.928644891534512,
+          "electron_count_abs_error": 0.14271016629384192,
+          "reference_control_density": {
+            "mae": 0.00034085113117200927,
+            "rmse": 0.001173958587960155,
+            "relative_frobenius": 0.1562579136009782,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.05862503099706373,
+          "band_energy_pred_h_ha": -9.584797484619093,
+          "band_energy_pred_h_abs_error_ev": 2.01242466214701,
+          "density_mae_improvement_percent": -1200.21332880059
+        }
+      ],
+      "atoms": 8,
+      "edges": 696,
+      "reference_band_energy_ha": -9.658752689501863,
+      "reference_electrons": 31.999999949362866,
+      "reference_occupation_trace": 15.999999974681433,
+      "spin_degeneracy": 2,
+      "plan_seconds": 0.04717865499696927,
+      "sd_paths": 28472,
+      "dd_paths": 28472,
+      "chunk_size": 4096,
+      "case": {
+        "label": "HSD fine-tune / validation snapshot 090",
+        "spin_degeneracy": 2,
+        "saved_density_scale": 0.5,
+        "prediction_dir": "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090",
+        "matrix_path": "data/paper/paper_Si_perturbed_val_090/HS.out",
+        "info_path": "data/paper/paper_Si_perturbed_val_090/Si.out",
+        "overlap_sources": [
+          "reference",
+          "predicted"
+        ]
+      },
+      "overlap_source": "reference",
+      "input_sha256": {
+        "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_density.pt": "761fb586c2e58dfaca6775754e63f9bdae95fb35969d4f48d002380901b25c80",
+        "data/paper/paper_Si_perturbed_val_090/HS.out": "d986479c1aaa91824eafec9731920ed3e60fa14fa7a3de1dc954bf156676eebe",
+        "data/paper/paper_Si_perturbed_val_090/Si.out": "42474dd2ab2c52b7fa62f2f69e6ea42849d0952c3bf3a427266dffed355c3db2",
+        "data/paper/paper_Si_perturbed_val_090/Si.cif": "299d5d03803178601d4479c02a24a7c05f0e313aa63035a2d10be1254af7eb88",
+        "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_hamiltonian.pt": "7f6adad3cbfcebf86f8f99d2e5a3d8717b9d14d80f924b14c2f4f0a7f78c445b"
+      }
+    },
+    {
+      "rows": [
+        {
+          "iteration": 0,
+          "raw_density": {
+            "mae": 2.6367884234757965e-05,
+            "rmse": 5.6979184860568637e-05,
+            "relative_frobenius": 0.007584124888482939,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 2.6367884234757965e-05,
+            "rmse": 5.6979184860568637e-05,
+            "relative_frobenius": 0.007584124888482939,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0,
+          "band_energy_ref_h_ha": -9.650254180589183,
+          "band_energy_ref_h_abs_error_ev": 0.2312563254265097,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.028907040678313713,
+          "electron_count": 31.984105842639273,
+          "occupation_trace": 15.992052921319637,
+          "electron_count_abs_error": 0.015894106723592927,
+          "reference_control_density": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "relative_frobenius": 0.0,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 3.90299828723073e-06,
+          "band_energy_pred_h_ha": -9.659471601943306,
+          "band_energy_pred_h_abs_error_ev": 0.019562614009065688,
+          "density_mae_improvement_percent": 0.0
+        },
+        {
+          "iteration": 1,
+          "raw_density": {
+            "mae": 0.00020990330353699648,
+            "rmse": 0.0007144825245119388,
+            "relative_frobenius": 0.09510007399714562,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00019735398663799786,
+            "rmse": 0.0006985745559908223,
+            "relative_frobenius": 0.09298266883802593,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0036595254574286265,
+          "band_energy_ref_h_ha": -9.45969817723367,
+          "band_energy_ref_h_abs_error_ev": 5.416551955134696,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.677068994391837,
+          "electron_count": 31.398124592329683,
+          "occupation_trace": 15.699062296164842,
+          "electron_count_abs_error": 0.6018753570331832,
+          "reference_control_density": {
+            "mae": 0.00019475870891894713,
+            "rmse": 0.0006939611842033384,
+            "relative_frobenius": 0.09236861323370482,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.08280603400271502,
+          "band_energy_pred_h_ha": -9.46884177579819,
+          "band_energy_pred_h_abs_error_ev": 5.167741837156151,
+          "density_mae_improvement_percent": -648.463490209985
+        },
+        {
+          "iteration": 2,
+          "raw_density": {
+            "mae": 0.0003107162598366515,
+            "rmse": 0.0010325366411426727,
+            "relative_frobenius": 0.1374341675389593,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00029148476377286153,
+            "rmse": 0.0010014453380786767,
+            "relative_frobenius": 0.13329580848801753,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.005889394726735362,
+          "band_energy_ref_h_ha": -9.565593130676087,
+          "band_energy_ref_h_abs_error_ev": 2.535002019031742,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.31687525237896774,
+          "electron_count": 31.78405594482151,
+          "occupation_trace": 15.892027972410755,
+          "electron_count_abs_error": 0.2159440045413561,
+          "reference_control_density": {
+            "mae": 0.0002897131952509241,
+            "rmse": 0.0009982294907838008,
+            "relative_frobenius": 0.13286776818582097,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.07174996899993857,
+          "band_energy_pred_h_ha": -9.5748892433375,
+          "band_energy_pred_h_abs_error_ev": 2.2820417789569545,
+          "density_mae_improvement_percent": -1005.4537450851985
+        },
+        {
+          "iteration": 3,
+          "raw_density": {
+            "mae": 0.00037129288976355505,
+            "rmse": 0.0012209236816744544,
+            "relative_frobenius": 0.1625091286192374,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00034232988568674215,
+            "rmse": 0.00117669581491799,
+            "relative_frobenius": 0.15662224789510934,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.007626362680326567,
+          "band_energy_ref_h_ha": -9.57272670909491,
+          "band_energy_ref_h_abs_error_ev": 2.3408873632457663,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.2926109204057208,
+          "electron_count": 31.83944476094895,
+          "occupation_trace": 15.919722380474475,
+          "electron_count_abs_error": 0.16055518841391603,
+          "reference_control_density": {
+            "mae": 0.00034085113117200927,
+            "rmse": 0.001173958587960155,
+            "relative_frobenius": 0.1562579136009782,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.05382539300262579,
+          "band_energy_pred_h_ha": -9.582050103690436,
+          "band_energy_pred_h_abs_error_ev": 2.087184743549064,
+          "density_mae_improvement_percent": -1198.2834824323343
+        }
+      ],
+      "atoms": 8,
+      "edges": 696,
+      "reference_band_energy_ha": -9.658752689501863,
+      "reference_electrons": 31.999999949362866,
+      "reference_occupation_trace": 15.999999974681433,
+      "spin_degeneracy": 2,
+      "plan_seconds": 0.051587563000794034,
+      "sd_paths": 28472,
+      "dd_paths": 28472,
+      "chunk_size": 4096,
+      "case": {
+        "label": "HSD fine-tune / validation snapshot 090",
+        "spin_degeneracy": 2,
+        "saved_density_scale": 0.5,
+        "prediction_dir": "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090",
+        "matrix_path": "data/paper/paper_Si_perturbed_val_090/HS.out",
+        "info_path": "data/paper/paper_Si_perturbed_val_090/Si.out",
+        "overlap_sources": [
+          "reference",
+          "predicted"
+        ]
+      },
+      "overlap_source": "predicted",
+      "input_sha256": {
+        "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_density.pt": "761fb586c2e58dfaca6775754e63f9bdae95fb35969d4f48d002380901b25c80",
+        "data/paper/paper_Si_perturbed_val_090/HS.out": "d986479c1aaa91824eafec9731920ed3e60fa14fa7a3de1dc954bf156676eebe",
+        "data/paper/paper_Si_perturbed_val_090/Si.out": "42474dd2ab2c52b7fa62f2f69e6ea42849d0952c3bf3a427266dffed355c3db2",
+        "data/paper/paper_Si_perturbed_val_090/Si.cif": "299d5d03803178601d4479c02a24a7c05f0e313aa63035a2d10be1254af7eb88",
+        "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_hamiltonian.pt": "7f6adad3cbfcebf86f8f99d2e5a3d8717b9d14d80f924b14c2f4f0a7f78c445b",
+        "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_overlap.pt": "062bcf426c1e29072204658c7153a91472295d272357a137d3f89926115b77b9"
+      }
+    },
+    {
+      "rows": [
+        {
+          "iteration": 0,
+          "raw_density": {
+            "mae": 5.649261155469015e-05,
+            "rmse": 0.00010876388819117689,
+            "relative_frobenius": 0.014472869409719393,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 5.649261155469015e-05,
+            "rmse": 0.00010876388819117689,
+            "relative_frobenius": 0.014472869409719393,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0,
+          "band_energy_ref_h_ha": -9.660863406432279,
+          "band_energy_ref_h_abs_error_ev": 0.10202151008624973,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.012752688760781216,
+          "electron_count": 32.00961951810013,
+          "occupation_trace": 16.004809759050065,
+          "electron_count_abs_error": 0.009619366639299187,
+          "reference_control_density": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "relative_frobenius": 0.0,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 3.739998646778986e-06,
+          "band_energy_pred_h_ha": -9.657684593178706,
+          "band_energy_pred_h_abs_error_ev": 0.015521551117971924,
+          "density_mae_improvement_percent": 0.0
+        },
+        {
+          "iteration": 1,
+          "raw_density": {
+            "mae": 0.00021523625929645556,
+            "rmse": 0.0007155380572921288,
+            "relative_frobenius": 0.09521440464385109,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00020294679879765022,
+            "rmse": 0.0006998192447589264,
+            "relative_frobenius": 0.09312275156990965,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0035308315453735223,
+          "band_energy_ref_h_ha": -9.461057649037791,
+          "band_energy_ref_h_abs_error_ev": 5.334972876678122,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.6668716095847652,
+          "electron_count": 31.412723365758232,
+          "occupation_trace": 15.706361682879116,
+          "electron_count_abs_error": 0.5872767857025991,
+          "reference_control_density": {
+            "mae": 0.0001947808775097223,
+            "rmse": 0.000694707169608554,
+            "relative_frobenius": 0.09244250376620881,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.06573467400085065,
+          "band_energy_pred_h_ha": -9.457862629143976,
+          "band_energy_pred_h_abs_error_ev": 5.421913841016664,
+          "density_mae_improvement_percent": -259.24485204791546
+        },
+        {
+          "iteration": 2,
+          "raw_density": {
+            "mae": 0.0003143052168070222,
+            "rmse": 0.0010336788356732764,
+            "relative_frobenius": 0.1375484000166861,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.0002953875719469015,
+            "rmse": 0.0010030261486665755,
+            "relative_frobenius": 0.13346954311406048,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.005642182944240848,
+          "band_energy_ref_h_ha": -9.567220956015259,
+          "band_energy_ref_h_abs_error_ev": 2.4461206651914518,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.30576508314893147,
+          "electron_count": 31.80240706053616,
+          "occupation_trace": 15.90120353026808,
+          "electron_count_abs_error": 0.19759309092466992,
+          "reference_control_density": {
+            "mae": 0.00028971151875001214,
+            "rmse": 0.0009991266885953573,
+            "relative_frobenius": 0.13295065419497407,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.07919338400097331,
+          "band_energy_pred_h_ha": -9.563966289415202,
+          "band_energy_pred_h_abs_error_ev": 2.5346846999122437,
+          "density_mae_improvement_percent": -422.87823808771634
+        },
+        {
+          "iteration": 3,
+          "raw_density": {
+            "mae": 0.00037408341041231247,
+            "rmse": 0.001222109836618761,
+            "relative_frobenius": 0.16262232220520842,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00034567661557913004,
+            "rmse": 0.0011784980552481106,
+            "relative_frobenius": 0.156819039268199,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.007288089928166819,
+          "band_energy_ref_h_ha": -9.57426733195284,
+          "band_energy_ref_h_abs_error_ev": 2.254378911003574,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.28179736387544674,
+          "electron_count": 31.85867624779763,
+          "occupation_trace": 15.929338123898814,
+          "electron_count_abs_error": 0.1413239036632028,
+          "reference_control_density": {
+            "mae": 0.00034082692831745916,
+            "rmse": 0.0011748853664784182,
+            "relative_frobenius": 0.1563383101066062,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.05354982700009714,
+          "band_energy_pred_h_ha": -9.570997125175593,
+          "band_energy_pred_h_abs_error_ev": 2.34336581570194,
+          "density_mae_improvement_percent": -511.89703585305597
+        }
+      ],
+      "atoms": 8,
+      "edges": 696,
+      "reference_band_energy_ha": -9.657114186984318,
+      "reference_electrons": 32.00000015146083,
+      "reference_occupation_trace": 16.000000075730416,
+      "spin_degeneracy": 2,
+      "plan_seconds": 0.05397371800063411,
+      "sd_paths": 28472,
+      "dd_paths": 28472,
+      "chunk_size": 4096,
+      "case": {
+        "label": "sleek-sweep-8 HSD / scale1 snapshot 078",
+        "spin_degeneracy": 2,
+        "saved_density_scale": 0.5,
+        "prediction_dir": "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3",
+        "matrix_path": "data/small/Si_perturbed_scale1_078/HS.out",
+        "info_path": "data/small/Si_perturbed_scale1_078/Si.out",
+        "overlap_sources": [
+          "reference",
+          "predicted"
+        ]
+      },
+      "overlap_source": "reference",
+      "input_sha256": {
+        "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3/pred_density.pt": "1a05c1b0175dd74367630a95760dc707c9df6d5bacb9d5b3799bbb631cc97928",
+        "data/small/Si_perturbed_scale1_078/HS.out": "ceabbc8cc0eb710d702af00bbbbffc703b99771c5fd568672cf1d2f61f3fc714",
+        "data/small/Si_perturbed_scale1_078/Si.out": "488253c0695e9718160b4ccae3c46a0179f95020e84fddc04ce9ddda548c0da7",
+        "data/small/Si_perturbed_scale1_078/Si.cif": "43bca0e5601405f0d55353690d254ed38c25abf0cb768d7cd9fb1491d353772c",
+        "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3/pred_hamiltonian.pt": "e28577beb8bb1cd7fe89e650f96e10c96352a3764bad00013f6f2a3fd3e5b777"
+      }
+    },
+    {
+      "rows": [
+        {
+          "iteration": 0,
+          "raw_density": {
+            "mae": 5.649261155469015e-05,
+            "rmse": 0.00010876388819117689,
+            "relative_frobenius": 0.014472869409719393,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 5.649261155469015e-05,
+            "rmse": 0.00010876388819117689,
+            "relative_frobenius": 0.014472869409719393,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.0,
+          "band_energy_ref_h_ha": -9.660863406432279,
+          "band_energy_ref_h_abs_error_ev": 0.10202151008624973,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.012752688760781216,
+          "electron_count": 32.00961951810013,
+          "occupation_trace": 16.004809759050065,
+          "electron_count_abs_error": 0.009619366639299187,
+          "reference_control_density": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "relative_frobenius": 0.0,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 3.4030017559416592e-06,
+          "band_energy_pred_h_ha": -9.657684593178706,
+          "band_energy_pred_h_abs_error_ev": 0.015521551117971924,
+          "density_mae_improvement_percent": 0.0
+        },
+        {
+          "iteration": 1,
+          "raw_density": {
+            "mae": 0.00021539255812107473,
+            "rmse": 0.0007163627521362072,
+            "relative_frobenius": 0.0953241441996882,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.000203027301274373,
+            "rmse": 0.0007006369860406692,
+            "relative_frobenius": 0.09323156583702004,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.003527916946302702,
+          "band_energy_ref_h_ha": -9.458901913967015,
+          "band_energy_ref_h_abs_error_ev": 5.393633445983034,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.6742041807478792,
+          "electron_count": 31.404264792140868,
+          "occupation_trace": 15.702132396070434,
+          "electron_count_abs_error": 0.5957353593199635,
+          "reference_control_density": {
+            "mae": 0.0001947808775097223,
+            "rmse": 0.000694707169608554,
+            "relative_frobenius": 0.09244250376620881,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.08235657799741603,
+          "band_energy_pred_h_ha": -9.455707875551326,
+          "band_energy_pred_h_abs_error_ev": 5.480547702927714,
+          "density_mae_improvement_percent": -259.3873529422932
+        },
+        {
+          "iteration": 2,
+          "raw_density": {
+            "mae": 0.0003141838157911084,
+            "rmse": 0.001033761420050977,
+            "relative_frobenius": 0.13755938926075986,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.00029517920630837144,
+            "rmse": 0.001003031253568916,
+            "relative_frobenius": 0.13347022240740086,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.005648323181663414,
+          "band_energy_ref_h_ha": -9.565286019618513,
+          "band_energy_ref_h_abs_error_ev": 2.4987729934578486,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.3123466241822311,
+          "electron_count": 31.79444461828622,
+          "occupation_trace": 15.89722230914311,
+          "electron_count_abs_error": 0.20555553317461062,
+          "reference_control_density": {
+            "mae": 0.00028971151875001214,
+            "rmse": 0.0009991266885953573,
+            "relative_frobenius": 0.13295065419497407,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.058126624000578886,
+          "band_energy_pred_h_ha": -9.56203235354647,
+          "band_energy_pred_h_abs_error_ev": 2.5873098024106342,
+          "density_mae_improvement_percent": -422.50940111453383
+        },
+        {
+          "iteration": 3,
+          "raw_density": {
+            "mae": 0.0003738707593488514,
+            "rmse": 0.0012219093737509254,
+            "relative_frobenius": 0.16259564724023676,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "physical_density": {
+            "mae": 0.0003453778137017077,
+            "rmse": 0.0011781805018439165,
+            "relative_frobenius": 0.15677678343286666,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "raw_hermiticity_max": 0.007296730341984255,
+          "band_energy_ref_h_ha": -9.572278778916807,
+          "band_energy_ref_h_abs_error_ev": 2.3084902230882536,
+          "band_energy_ref_h_abs_error_ev_per_atom": 0.2885612778860317,
+          "electron_count": 31.850198540899527,
+          "occupation_trace": 15.925099270449763,
+          "electron_count_abs_error": 0.1498016105613047,
+          "reference_control_density": {
+            "mae": 0.00034082692831745916,
+            "rmse": 0.0011748853664784182,
+            "relative_frobenius": 0.1563383101066062,
+            "scalar_count": 117624,
+            "missing_prediction_edges": 0
+          },
+          "step_seconds": 0.0761487500021758,
+          "band_energy_pred_h_ha": -9.569009692860973,
+          "band_energy_pred_h_abs_error_ev": 2.3974466313879748,
+          "density_mae_improvement_percent": -511.36811380608515
+        }
+      ],
+      "atoms": 8,
+      "edges": 696,
+      "reference_band_energy_ha": -9.657114186984318,
+      "reference_electrons": 32.00000015146083,
+      "reference_occupation_trace": 16.000000075730416,
+      "spin_degeneracy": 2,
+      "plan_seconds": 0.051219690998550504,
+      "sd_paths": 28472,
+      "dd_paths": 28472,
+      "chunk_size": 4096,
+      "case": {
+        "label": "sleek-sweep-8 HSD / scale1 snapshot 078",
+        "spin_degeneracy": 2,
+        "saved_density_scale": 0.5,
+        "prediction_dir": "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3",
+        "matrix_path": "data/small/Si_perturbed_scale1_078/HS.out",
+        "info_path": "data/small/Si_perturbed_scale1_078/Si.out",
+        "overlap_sources": [
+          "reference",
+          "predicted"
+        ]
+      },
+      "overlap_source": "predicted",
+      "input_sha256": {
+        "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3/pred_density.pt": "1a05c1b0175dd74367630a95760dc707c9df6d5bacb9d5b3799bbb631cc97928",
+        "data/small/Si_perturbed_scale1_078/HS.out": "ceabbc8cc0eb710d702af00bbbbffc703b99771c5fd568672cf1d2f61f3fc714",
+        "data/small/Si_perturbed_scale1_078/Si.out": "488253c0695e9718160b4ccae3c46a0179f95020e84fddc04ce9ddda548c0da7",
+        "data/small/Si_perturbed_scale1_078/Si.cif": "43bca0e5601405f0d55353690d254ed38c25abf0cb768d7cd9fb1491d353772c",
+        "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3/pred_hamiltonian.pt": "e28577beb8bb1cd7fe89e650f96e10c96352a3764bad00013f6f2a3fd3e5b777",
+        "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3/pred_overlap.pt": "58676ec84179e52244cb3880f71b22d664c95c977a5fcd08dec06b83e7532d22"
+      }
+    }
+  ]
+}

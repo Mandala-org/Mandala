@@ -1046,9 +1046,8 @@ class Snapshot:
         overlap = load_optional("overlaps.h5", "overlap")
         density = load_optional("density_matrixs.h5", "density")
         if "density" in metadata.available_matrices and symmetrize_density:
-            # Match Snapshot.from_openmx: OpenMX spin=0 density is converted to
-            # the spin-summed target used throughout Mandala.
-            density = density + density.transpose()
+            # Match the text OpenMX loader without changing occupations.
+            density = 0.5 * (density + density.transpose())
         snapshot = Snapshot(
             hamiltonian,
             overlap,

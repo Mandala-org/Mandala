@@ -6,6 +6,32 @@ from types import SimpleNamespace
 from data.gnn_dataset import E3GNNDataset
 
 
+def test_corrected_density_normalization_invalidates_both_cache_layers(
+    tmp_path, monkeypatch
+):
+    import data.gnn_dataset as module
+    from net.common import Config
+
+    ds = object.__new__(E3GNNDataset)
+    ds.cfg = Config(snapshot_cache_dir=str(tmp_path / "cache"))
+    ds.convention, ds.dtype = "e3nn", torch.float32
+    ds.mapper = SimpleNamespace(
+        orbital_cfg=SimpleNamespace(to_dict=lambda: {"Si": "1s"})
+    )
+    ds.hamiltonian_envelope_mode = "off"
+    ds.pair_distance_normalization = "off"
+    ds.loss_weighting_mode = "off"
+    matrix_path, info_path = tmp_path / "HS.out", tmp_path / "Si.out"
+    matrix_path.write_text("matrix")
+    info_path.write_text("info")
+    new_snapshot = ds._snapshot_cache_file(matrix_path, info_path)
+    new_sample = ds._preprocessed_sample_cache_file(matrix_path, info_path)
+    monkeypatch.setattr(module, "SNAPSHOT_CACHE_VERSION", "v3")
+    monkeypatch.setattr(module, "PREPROCESSED_SAMPLE_CACHE_VERSION", "v7")
+    assert new_snapshot != ds._snapshot_cache_file(matrix_path, info_path)
+    assert new_sample != ds._preprocessed_sample_cache_file(matrix_path, info_path)
+
+
 @pytest.mark.unit
 def test_load_preprocessed_sample_uses_weights_only_false(monkeypatch, tmp_path):
     ds = object.__new__(E3GNNDataset)

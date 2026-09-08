@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "label": "HSD fine-tune / scale1 snapshot 078",
+      "spin_degeneracy": 2,
+      "saved_density_scale": 0.5,
+      "prediction_dir": "model_reports/Si_perturbed/hdo_finetune/run_assets/hdo_finetune",
+      "matrix_path": "data/small/Si_perturbed_scale1_078/HS.out",
+      "info_path": "data/small/Si_perturbed_scale1_078/Si.out",
+      "overlap_sources": ["reference", "predicted"]
+    },
+    {
+      "label": "HSD fine-tune / validation snapshot 090",
+      "spin_degeneracy": 2,
+      "saved_density_scale": 0.5,
+      "prediction_dir": "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090",
+      "matrix_path": "data/paper/paper_Si_perturbed_val_090/HS.out",
+      "info_path": "data/paper/paper_Si_perturbed_val_090/Si.out",
+      "overlap_sources": ["reference", "predicted"]
+    },
+    {
+      "label": "sleek-sweep-8 HSD / scale1 snapshot 078",
+      "spin_degeneracy": 2,
+      "saved_density_scale": 0.5,
+      "prediction_dir": "model_reports/silicon_perturbed_hamiltonian_sleek-sweep-8-restart-lr2em3_html_pred_ovl_078/run_assets/sleek-sweep-8-restart-lr2em3",
+      "matrix_path": "data/small/Si_perturbed_scale1_078/HS.out",
+      "info_path": "data/small/Si_perturbed_scale1_078/Si.out",
+      "overlap_sources": ["reference", "predicted"]
+    }
+  ]
+}

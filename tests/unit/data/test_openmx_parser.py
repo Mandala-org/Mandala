@@ -4,6 +4,48 @@ import torch
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.snapshot import Snapshot
 from core.block_irrep_mapper import BlockIrrepMapper
+from data.openmx_parser import parse_openmx_scfout
+
+
+def test_dataset_factory_fixture_restores_the_real_openmx_loader(factory_results):
+    assert Snapshot.from_openmx.__module__ == "data.snapshot"
+
+
+@pytest.mark.parametrize("convention", ["openmx", "e3nn"])
+def test_density_symmetrization_averages_periodic_reverse_pairs(tmp_path, convention):
+    # Include unequal reverse-image blocks and an asymmetric onsite block.
+    path = tmp_path / "HS.out"
+    blocks = {
+        0: [[1.0, 2.0], [4.0, 3.0]],
+        1: [[5.0, 6.0], [7.0, 8.0]],
+        2: [[9.0, 10.0], [11.0, 12.0]],
+    }
+    lines = []
+    for section in (
+        "Kohn-Sham Hamiltonian spin=0",
+        "Overlap matrix",
+        "Density matrix spin=0",
+    ):
+        lines.append(section)
+        for rn, block in blocks.items():
+            lines.append(f"global index=1 local index=0 (global=1, Rn={rn})")
+            lines.extend(" ".join(map(str, row)) for row in block)
+    lines.append("Overlap matrix with position operator x")
+    for rn, shift in [(0, 0), (1, 1), (2, -1)]:
+        lines.append(f"global index=1 local index=0 (global=1, Rn={rn} {shift} 0 0)")
+    path.write_text("\n".join(lines) + "\n")
+    cfg = OrbitalIrrepConfig.from_dict({"H": "2s"})
+    raw = parse_openmx_scfout(
+        path, ["H"], cfg, convention=convention, symmetrize_density=False
+    )
+    sym = parse_openmx_scfout(path, ["H"], cfg, convention=convention)
+    expected = 0.5 * (raw.density + raw.density.transpose())
+    torch.testing.assert_close(sym.density["H-H"], expected["H-H"])
+    assert sym.density.lookup == raw.density.lookup
+    torch.testing.assert_close(sym.hamiltonian["H-H"], raw.hamiltonian["H-H"])
+    torch.testing.assert_close(sym.overlap["H-H"], raw.overlap["H-H"])
+    twice = 0.5 * (sym.density + sym.density.transpose())
+    torch.testing.assert_close(twice["H-H"], sym.density["H-H"])
 
 
 @pytest.mark.unit

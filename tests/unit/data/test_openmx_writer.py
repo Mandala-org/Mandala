@@ -23,7 +23,7 @@ def _matrix(value: float, orbital_cfg: OrbitalIrrepConfig) -> BlockMatrix:
 
 
 @pytest.mark.unit
-def test_write_openmx_hsout_prediction_preserves_layout_and_density_quirk(tmp_path):
+def test_write_openmx_hsout_prediction_preserves_layout_and_density_scale(tmp_path):
     template = tmp_path / "HS.out"
     output = tmp_path / "HS_pred.out"
     template.write_text(
@@ -80,4 +80,12 @@ def test_write_openmx_hsout_prediction_preserves_layout_and_density_quirk(tmp_pa
     assert loaded.hamiltonian[0, 0].item() == pytest.approx(2.0)
     assert loaded.overlap[0, 0].item() == pytest.approx(3.0)
     assert loaded.density[0, 0].item() == pytest.approx(4.0)
+    raw = parse_openmx_scfout(
+        output,
+        atoms=["Si"],
+        orbital_cfg=orbital_cfg,
+        convention="openmx",
+        symmetrize_density=False,
+    )
+    assert raw.density[0, 0].item() == pytest.approx(4.0)
     assert output.read_text().splitlines()[-1].strip() == "0.0000000000000000"

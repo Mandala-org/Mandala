@@ -54,8 +54,9 @@ from data.spectral_fermi_cache import (
 from net.spectral_loss import build_spectral_reference
 from tqdm.auto import tqdm
 
-SNAPSHOT_CACHE_VERSION = "v3"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v7"
+# Density targets now retain native spin=0 normalization (Hermitian average).
+SNAPSHOT_CACHE_VERSION = "v4"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v8"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:

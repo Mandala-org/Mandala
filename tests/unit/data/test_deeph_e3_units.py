@@ -10,6 +10,7 @@ from data.deeph_e3_parser import (
     load_deeph_e3_metadata,
 )
 from utils.units import HARTREE_TO_EV
+from data.snapshot import Snapshot
 
 
 def test_deeph_e3_units_are_converted_to_mandala_internal_units(tmp_path):
@@ -42,3 +43,14 @@ def test_deeph_e3_units_are_converted_to_mandala_internal_units(tmp_path):
     assert info.internal_energy_unit == "Hartree"
     assert info.source_length_unit == "Angstrom"
     assert info.internal_length_unit == "Angstrom"
+
+    # Processed OpenMX and text OpenMX must use the same density convention.
+    with h5py.File(tmp_path / "density_matrixs.h5", "w") as handle:
+        handle.create_dataset("[0, 0, 0, 1, 1]", data=[[0.75]])
+    for symmetrize in (False, True):
+        snapshot = Snapshot.from_deeph_e3(
+            tmp_path,
+            convention="e3nn",
+            symmetrize_density=symmetrize,
+        )
+        assert snapshot.density["C-C"].item() == pytest.approx(0.75)

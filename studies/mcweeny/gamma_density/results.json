@@ -1,0 +1,128 @@
+{
+  "case": {
+    "label": "HSD fine-tune / validation snapshot 090",
+    "spin_degeneracy": 2,
+    "saved_density_scale": 0.5,
+    "prediction_dir": "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090",
+    "matrix_path": "data/paper/paper_Si_perturbed_val_090/HS.out",
+    "info_path": "data/paper/paper_Si_perturbed_val_090/Si.out",
+    "overlap_sources": [
+      "reference",
+      "predicted"
+    ]
+  },
+  "nocc": 16,
+  "mesh": 8,
+  "mesh_convention": "Uniform Gamma-centered fractional reciprocal grid arange(N)/N",
+  "occupation_convention": "16 lowest occupied states per spin for 8 Si; zero-temperature CC^T; no fitted scaling",
+  "gamma_occupation_summary": {
+    "states": 104,
+    "minimum": -0.002644448107013462,
+    "maximum": 0.9122834347314877,
+    "sum": 13.971633525866109,
+    "below_zero": 29,
+    "above_one": 0,
+    "below_minus_001": 0,
+    "above_101": 0,
+    "ds_eigenproblem_residual": 3.4009542565130847e-15,
+    "overlap_min_eigenvalue": 0.0011988191011151198
+  },
+  "gamma": [
+    {
+      "method": "Direct density prediction",
+      "mae": 0.00011377567497746327,
+      "rmse": 0.0002153282897740767,
+      "relative_frobenius": 0.009905884527585458
+    },
+    {
+      "method": "Reference H + reference S",
+      "mae": 0.0020713927979826275,
+      "rmse": 0.006388960115093601,
+      "relative_frobenius": 0.2939154033957575,
+      "eigenproblem_relative_residual": 3.161511612316552e-14,
+      "s_orthogonality_max": 1.0924826029418919e-13,
+      "gap_ev": 0.6786654469369863
+    },
+    {
+      "method": "Predicted H + reference S",
+      "mae": 0.0022478173123815473,
+      "rmse": 0.006677810189989389,
+      "relative_frobenius": 0.30720355745440064,
+      "eigenproblem_relative_residual": 3.3620138010292275e-14,
+      "s_orthogonality_max": 1.021405182655144e-13,
+      "gap_ev": 0.6934881359085829
+    },
+    {
+      "method": "Predicted H + predicted S",
+      "mae": 0.0022434577703153097,
+      "rmse": 0.0065831695177298085,
+      "relative_frobenius": 0.3028497423008038,
+      "eigenproblem_relative_residual": 5.281836703257392e-14,
+      "s_orthogonality_max": 1.4173330995651783e-13,
+      "gap_ev": 0.6936637257928358
+    }
+  ],
+  "sparse": [
+    {
+      "method": "Direct density prediction",
+      "mae": 2.6367884234757965e-05,
+      "rmse": 5.6979184860568637e-05,
+      "relative_frobenius": 0.007584124888482939,
+      "scalar_count": 117624,
+      "missing_prediction_edges": 0,
+      "band_energy_ref_h_abs_error_ev": 0.2312563254265097,
+      "electrons": 31.984105842639273
+    },
+    {
+      "method": "Reference H + reference S",
+      "mae": 1.3106427417135215e-07,
+      "rmse": 3.6949188748557066e-07,
+      "relative_frobenius": 4.918063722443867e-05,
+      "scalar_count": 117624,
+      "missing_prediction_edges": 0,
+      "band_energy_ref_h_abs_error_ev": 2.6907888943813066e-05,
+      "electrons": 31.999999999999943,
+      "global_gap_ev": 0.6078945844206458,
+      "eigenproblem_relative_residual": 6.266226351751699e-14,
+      "s_orthogonality_max": 3.1586436161987334e-13,
+      "imaginary_max": 7.682656594232284e-16
+    },
+    {
+      "method": "Predicted H + reference S",
+      "mae": 0.00016429336359512404,
+      "rmse": 0.0004986605817667498,
+      "relative_frobenius": 0.06637343335706061,
+      "scalar_count": 117624,
+      "missing_prediction_edges": 0,
+      "band_energy_ref_h_abs_error_ev": 0.010423269394760357,
+      "electrons": 31.999999999999996,
+      "global_gap_ev": 0.6384671778635526,
+      "eigenproblem_relative_residual": 6.583939688489034e-14,
+      "s_orthogonality_max": 3.82646989269247e-13,
+      "imaginary_max": 5.510999642743819e-16
+    },
+    {
+      "method": "Predicted H + predicted S",
+      "mae": 0.00016560979626866745,
+      "rmse": 0.0004919897791500677,
+      "relative_frobenius": 0.06548552665437368,
+      "scalar_count": 117624,
+      "missing_prediction_edges": 0,
+      "band_energy_ref_h_abs_error_ev": 0.08672382020786305,
+      "electrons": 31.98158658933433,
+      "global_gap_ev": 0.6376334938458091,
+      "eigenproblem_relative_residual": 7.162324492672978e-14,
+      "s_orthogonality_max": 2.5836628082233007e-13,
+      "imaginary_max": 9.594105024324229e-16
+    }
+  ],
+  "input_sha256": {
+    "data/paper/paper_Si_perturbed_val_090/HS.out": "d986479c1aaa91824eafec9731920ed3e60fa14fa7a3de1dc954bf156676eebe",
+    "data/paper/paper_Si_perturbed_val_090/Si.out": "42474dd2ab2c52b7fa62f2f69e6ea42849d0952c3bf3a427266dffed355c3db2",
+    "data/paper/paper_Si_perturbed_val_090/Si.cif": "299d5d03803178601d4479c02a24a7c05f0e313aa63035a2d10be1254af7eb88",
+    "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_density.pt": "761fb586c2e58dfaca6775754e63f9bdae95fb35969d4f48d002380901b25c80",
+    "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_overlap.pt": "062bcf426c1e29072204658c7153a91472295d272357a137d3f89926115b77b9",
+    "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_hamiltonian.pt": "7f6adad3cbfcebf86f8f99d2e5a3d8717b9d14d80f924b14c2f4f0a7f78c445b"
+  },
+  "source_sha256": "17a5df0ce237a488e6dc3efc78e26639c38bb01081c29f6f17e493872f6b6925"
+}
