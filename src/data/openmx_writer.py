@@ -1,248 +1,276 @@
-"""Write predicted H/S/D blocks into an OpenMX ``HS.out`` layout.
+"""Template-free real OpenMX text-matrix export (not binary SCFOUT).
 
-OpenMX's text dump contains information that is not part of Mandala's matrix
-objects, notably local neighbour indices, integer ``Rn`` identifiers, and
-position/momentum overlap sections.  The writer therefore uses an existing
-``HS.out`` as a template and changes only the numeric H/S/D block rows.
+Generation_ATV order: origin first, then i/j/k ascending with k innermost.
+The inverse ratv table, not an arithmetic index formula, supplies Rn.
+Source: https://raw.githubusercontent.com/rigarash/openmx/master/source/openmx_common.c
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 from pathlib import Path
-import re
 import tempfile
 from typing import Mapping
 
+import numpy as np
 import torch
+from ase import Atoms
+from ase.neighborlist import neighbor_list
 
-from core.block_irrep_mapper import BlockIrrepMapper
+from core.basis_converter import OpenMXE3NNConverter
+from core.sparse_math import build_trace_alignment_from_pair_edges
 from data.block_matrix import BlockMatrix
-
-_HAMILTONIAN_HEADER = "Kohn-Sham Hamiltonian spin=0"
-_OVERLAP_HEADER = "Overlap matrix"
-_DENSITY_HEADER = "Density matrix spin=0"
-_POSITION_X_HEADER = "Overlap matrix with position operator x"
-
-_BLOCK_HEADER_RE = re.compile(
-    r"^global index=(\d+)\s+local index=(\d+)\s+"
-    r"\(global=(\d+),\s*Rn=(-?\d+)"
-    r"(?:\s+(-?\d+)\s+(-?\d+)\s+(-?\d+))?\)$"
-)
 
 
 @dataclass(frozen=True)
 class OpenMXWriteStats:
-    """Block counts recorded while filling an OpenMX template."""
+    """Counts for the predicted matrix sections written to the output."""
 
     blocks_written: Mapping[str, int]
-    zero_filled_blocks: Mapping[str, int]
     density_sections: int
 
 
-def _read_lines(path: Path) -> list[str]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return handle.readlines()
+@dataclass(frozen=True)
+class OpenMXTranslationTable:
+    cpy_cell: int
+    atv_ijk: np.ndarray
+    ratv: np.ndarray
 
+    @property
+    def tcpy_cell(self):
+        return len(self.atv_ijk) - 1
 
-def _rn_shift_map(lines: list[str]) -> dict[int, tuple[int, int, int]]:
-    shifts: dict[int, tuple[int, int, int]] = {}
-    in_position_x = False
-    for raw in lines:
-        line = raw.rstrip("\r\n")
-        if line == _POSITION_X_HEADER:
-            in_position_x = True
-            continue
-        if line in {_HAMILTONIAN_HEADER, _OVERLAP_HEADER, _DENSITY_HEADER} or (
-            line.startswith("Overlap matrix with ") and line != _POSITION_X_HEADER
+    def rn(self, shift):
+        shift = tuple(shift)
+        if len(shift) != 3 or any(
+            not isinstance(n, (int, np.integer)) or abs(n) > self.cpy_cell
+            for n in shift
         ):
-            in_position_x = False
-        if not in_position_x:
-            continue
-        match = _BLOCK_HEADER_RE.fullmatch(line)
-        if match is None:
-            continue
-        if match.group(5) is None:
-            raise ValueError(
-                f"Missing lattice shift in position-overlap header: {line}"
-            )
-        rn = int(match.group(4))
-        shift = tuple(int(match.group(index)) for index in (5, 6, 7))
-        previous = shifts.setdefault(rn, shift)
-        if previous != shift:
-            raise ValueError(f"Rn={rn} maps to both {previous} and {shift}")
-    if not shifts:
-        raise ValueError("Template has no position-overlap Rn-to-shift mapping")
-    return shifts
+            raise ValueError("Translation must contain three integers within CpyCell.")
+        return int(self.ratv[tuple(n + self.cpy_cell for n in shift)])
 
 
-def _format_row(row: torch.Tensor, newline: str) -> str:
-    return "".join(f"{float(value):20.16f} " for value in row) + newline
+def build_openmx_translation_table(cpy_cell: int) -> OpenMXTranslationTable:
+    """Reproduce OpenMX Generation_ATV, and invert atv_ijk into ratv."""
+    if isinstance(cpy_cell, bool) or not isinstance(cpy_cell, int) or cpy_cell < 0:
+        raise ValueError("CpyCell must be a nonnegative integer.")
+    shifts = [(0, 0, 0)]
+    for i in range(-cpy_cell, cpy_cell + 1):
+        for j in range(-cpy_cell, cpy_cell + 1):
+            for k in range(-cpy_cell, cpy_cell + 1):
+                if (i, j, k) != (0, 0, 0):
+                    shifts.append((i, j, k))
+    atv_ijk = np.zeros((len(shifts), 4), dtype=np.int64)
+    atv_ijk[:, 1:4] = shifts
+    ratv = np.empty((2 * cpy_cell + 1,) * 3, dtype=np.int64)
+    for rn, row in enumerate(atv_ijk):
+        ratv[tuple(row[1:4] + cpy_cell)] = rn
+    atv_ijk.setflags(write=False)
+    ratv.setflags(write=False)
+    return OpenMXTranslationTable(cpy_cell, atv_ijk, ratv)
 
 
-def write_openmx_hsout_prediction(
-    template_path: str | os.PathLike[str],
-    output_path: str | os.PathLike[str],
+def openmx_cutoff_layout(atoms, positions, lattice, cutoff_radius):
+    """Return a complete cutoff graph and its minimal finite translation table.
+
+    Positions/lattice are native Cartesian Angstrom coordinates, NOT wrapped.
+    ASE's general-cell neighbor search handles skewed cells and unwrapped atoms.
+    This is an OpenMX-compatible table, not OpenMX's solver-dependent choice of
+    potentially larger CpyCell. Cutoff equality is excluded, as in model graphs.
+    """
+    if not math.isfinite(cutoff_radius) or cutoff_radius <= 0:
+        raise ValueError("Matrix cutoff must be finite and positive.")
+    positions = torch.as_tensor(positions).detach().cpu().double().numpy()
+    if (
+        not atoms
+        or positions.shape != (len(atoms), 3)
+        or not np.isfinite(positions).all()
+    ):
+        raise ValueError(
+            "Expected finite (N,3) positions and nonempty atom identities."
+        )
+    if lattice is not None:
+        lattice = torch.as_tensor(lattice).detach().cpu().double().numpy()
+        if (
+            lattice.shape != (3, 3)
+            or not np.isfinite(lattice).all()
+            or abs(np.linalg.det(lattice)) < 1e-12
+        ):
+            raise ValueError("Expected a finite nonsingular (3,3) lattice.")
+    structure = Atoms(
+        symbols=atoms, positions=positions, cell=lattice, pbc=lattice is not None
+    )
+    src, dst, shifts = neighbor_list(
+        "ijS", structure, cutoff_radius, self_interaction=False
+    )
+    edges = {(0, 0, 0, i, i) for i in range(len(atoms))}
+    edges.update(
+        (*map(int, shift), int(i), int(j)) for i, j, shift in zip(src, dst, shifts)
+    )
+    cpy_cell = max(abs(n) for edge in edges for n in edge[:3])
+    table = build_openmx_translation_table(cpy_cell)
+    # OpenMX Trn_System loops over atom j, then Rn; onsite is local index 0.
+    ordered = sorted(
+        edges, key=lambda e: (e[3], e != (0, 0, 0, e[3], e[3]), e[4], table.rn(e[:3]))
+    )
+    return table, ordered
+
+
+def write_openmx_from_structure(
+    output_path: str | Path,
     predictions: Mapping[str, BlockMatrix],
     *,
-    zero_fill_missing: bool = True,
+    atoms,
+    positions,
+    lattice,
+    cutoff_radius: float,
 ) -> OpenMXWriteStats:
-    """Fill the H/S/D sections of an OpenMX text dump from block matrices.
+    """Write predicted sections without reading any reference/template file.
 
-    The template's complete block support is retained.  If a model does not
-    predict a template edge (normally because it lies outside the model
-    cutoff), the corresponding block is written as zeros when
-    ``zero_fill_missing`` is true.
-
-    OpenMX stores one half of the non-spin-polarized density matrix in its
-    first ``Density matrix spin=0`` section; Mandala's parser reconstructs the
-    full density as ``D + D.T``.  Consequently, this writer stores half of the
-    supplied, symmetrized density prediction in that first section.  The
-    second identically named section is OpenMX's zero-valued imaginary-density
-    slot and is retained as zeros.
+    Real H/S/D blocks use OpenMX headers and 20-place decimal rows. Only supplied
+    targets are emitted; unpredicted physical quantities are NEVER fabricated.
+    A translation-table preamble carries shifts instead of fake position overlaps.
+    All predicted matrices must have exactly the structure's cutoff support.
     """
-
-    required = {"hamiltonian", "overlap", "density"}
-    if set(predictions) < required:
-        missing = sorted(required - set(predictions))
-        raise ValueError(f"Missing predicted matrices: {missing}")
-
-    matrices = {name: predictions[name] for name in sorted(required)}
-    first = matrices["hamiltonian"]
-    for name, matrix in matrices.items():
-        if matrix.basis != "openmx":
-            raise ValueError(f"{name} must use the OpenMX basis, got {matrix.basis!r}")
-        if matrix.atoms != first.atoms:
-            raise ValueError("Predicted matrices must use the same atom ordering")
-        if matrix.orbital_cfg.to_dict() != first.orbital_cfg.to_dict():
-            raise ValueError("Predicted matrices must use the same orbital basis")
-
-    template = Path(template_path)
-    output = Path(output_path)
-    lines = _read_lines(template)
-    shifts = _rn_shift_map(lines)
-    newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
-    dtype = next(iter(first.pair_blocks.values())).dtype
-    mapper = BlockIrrepMapper(first.orbital_cfg, dtype=dtype)
-
-    written = {name: 0 for name in required}
-    zeroed = {name: 0 for name in required}
-    density_sections = 0
-    current: str | None = None
-    output_lines: list[str] = []
-    index = 0
-
-    while index < len(lines):
-        raw = lines[index]
-        stripped = raw.rstrip("\r\n")
-        if stripped == _HAMILTONIAN_HEADER:
-            current = "hamiltonian"
-        elif stripped == _OVERLAP_HEADER:
-            current = "overlap"
-        elif stripped == _DENSITY_HEADER:
-            density_sections += 1
-            current = "density" if density_sections == 1 else "density_zero"
-        elif stripped.startswith("Overlap matrix with "):
-            current = None
-
-        match = _BLOCK_HEADER_RE.fullmatch(stripped) if current is not None else None
-        if match is None:
-            output_lines.append(raw)
-            index += 1
-            continue
-
-        src = int(match.group(1)) - 1
-        dst = int(match.group(3)) - 1
-        rn = int(match.group(4))
-        if rn not in shifts:
-            raise ValueError(f"No lattice shift found for Rn={rn}: {stripped}")
-        if not (0 <= src < len(first.atoms) and 0 <= dst < len(first.atoms)):
-            raise ValueError(f"Atom index outside prediction: {stripped}")
-
-        key = f"{first.atoms[src]}-{first.atoms[dst]}"
-        rows, columns = mapper.block_dims(key)
-        output_lines.append(raw)  # Preserve the complete block header verbatim.
-
-        for offset in range(1, rows + 1):
-            if index + offset >= len(lines):
-                raise ValueError(f"Unexpected EOF inside block: {stripped}")
-            numeric = lines[index + offset].split()
-            if len(numeric) != columns:
+    if not predictions or set(predictions) - {"hamiltonian", "overlap", "density"}:
+        raise ValueError("Supply a nonempty subset of H/S/D predictions.")
+    atoms = tuple(atoms)
+    table, edges = openmx_cutoff_layout(atoms, positions, lattice, cutoff_radius)
+    expected = set(edges)
+    first = next(iter(predictions.values()))
+    converter = OpenMXE3NNConverter(first.orbital_cfg)
+    matrices = {}
+    for name, matrix in predictions.items():
+        if (
+            matrix.atoms != atoms
+            or matrix.orbital_cfg.to_dict() != first.orbital_cfg.to_dict()
+        ):
+            raise ValueError(
+                "Predictions must match atom order and orbital configuration."
+            )
+        if matrix.basis not in {"openmx", "e3nn"}:
+            raise ValueError("Only OpenMX/e3nn predictions are supported.")
+        matrix = matrix.to("cpu")
+        lookup = {}
+        for key, block in matrix.pair_blocks.items():
+            edge_tensor = matrix.pair_edges[key]
+            if (
+                block.ndim != 3
+                or block.shape[1:] != matrix.orbital_cfg.block_dims(key)
+                or edge_tensor.shape != (5, len(block))
+                or edge_tensor.dtype != torch.long
+            ):
+                raise ValueError("Invalid matrix block/edge shape or dtype.")
+            if not torch.is_floating_point(block) or not torch.isfinite(block).all():
                 raise ValueError(
-                    f"Template row has {len(numeric)} values; expected {columns}: "
-                    f"{stripped}"
+                    "Predictions must be finite real floating-point blocks."
                 )
-            try:
-                [float(value) for value in numeric]
-            except ValueError as exc:
-                raise ValueError(f"Non-numeric template row below: {stripped}") from exc
-
-        matrix_name = "density" if current == "density_zero" else current
-        assert matrix_name is not None
-        if current == "density_zero":
-            block = torch.zeros((rows, columns), dtype=dtype)
-        else:
-            matrix = matrices[matrix_name]
-            edge = (*shifts[rn], src, dst)
-            location = matrix.lookup.get(edge)
-            if location is None:
-                if not zero_fill_missing:
-                    raise KeyError(
-                        f"Prediction has no {matrix_name} block for edge {edge}"
-                    )
-                block = torch.zeros((rows, columns), dtype=dtype)
-                zeroed[matrix_name] += 1
-            else:
-                location_key, block_index = location
-                if location_key != key:
+            for index, edge in enumerate(edge_tensor.T.tolist()):
+                edge = tuple(edge)
+                if (
+                    edge not in expected
+                    or edge in lookup
+                    or key != f"{atoms[edge[3]]}-{atoms[edge[4]]}"
+                ):
                     raise ValueError(
-                        f"Prediction lookup for {edge} has key {location_key}, expected {key}"
+                        "Invalid, duplicate, or outside-cutoff prediction edge."
                     )
-                block = matrix.pair_blocks[key][block_index].detach().cpu()
-                if block.shape != (rows, columns):
-                    raise ValueError(
-                        f"Prediction block {edge} has shape {tuple(block.shape)}, "
-                        f"expected {(rows, columns)}"
-                    )
-                if current == "density":
-                    block = 0.5 * block
-            written[matrix_name] += 1
-
-        output_lines.extend(_format_row(block[row], newline) for row in range(rows))
-        index += rows + 1
-
-    if density_sections != 2:
-        raise ValueError(
-            f"Expected exactly two '{_DENSITY_HEADER}' sections, found {density_sections}"
+                lookup[edge] = (key, index)
+        if lookup != matrix.lookup or set(lookup) != expected:
+            raise ValueError(
+                "Prediction support must exactly match the structure cutoff graph."
+            )
+        matrix = matrix.symmetrize_aligned(
+            build_trace_alignment_from_pair_edges(matrix.pair_edges)
         )
-    if any(count == 0 for count in written.values()):
-        raise ValueError(f"One or more H/S/D sections were not written: {written}")
-
+        matrices[name] = converter.matrix_to_openmx(matrix)
+    output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=output.parent,
-        prefix=f"{output.name}.",
-        suffix=".tmp",
-        delete=False,
-    ) as handle:
-        temporary = Path(handle.name)
-        handle.writelines(output_lines)
+    temporary = None
     try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=output.parent,
+            prefix=output.name + ".",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(f"atomnum={len(atoms)}\nCatomnum=0\nLatomnum=0\nRatomnum=0\n")
+            handle.write(f"CpyCell={table.cpy_cell}\nTCpyCell={table.tcpy_cell}\n")
+            for rn, row in enumerate(table.atv_ijk):
+                handle.write(f"atv_ijk Rn={rn} {row[1]} {row[2]} {row[3]}\n")
+            titles = {
+                "hamiltonian": "Kohn-Sham Hamiltonian spin=0",
+                "overlap": "Overlap matrix",
+                "density": "Density matrix spin=0",
+            }
+            for name, title in titles.items():
+                if name not in matrices:
+                    continue
+                matrix = matrices[name]
+                handle.write(f"\n\n{title}\n")
+                previous, local = None, 0
+                for edge in edges:
+                    sx, sy, sz, i, j = edge
+                    if previous != i:
+                        previous, local = i, 0
+                    handle.write(
+                        f"global index={i + 1}  local index={local} (global={j + 1}, Rn={table.rn((sx, sy, sz))})\n"
+                    )
+                    key, index = matrix.lookup[edge]
+                    for row in matrix.pair_blocks[key][index].detach().tolist():
+                        handle.write(
+                            " ".join(f"{value:23.20f}" for value in row) + "\n"
+                        )
+                    local += 1
         os.replace(temporary, output)
-        os.chmod(output, template.stat().st_mode & 0o777)
     finally:
-        if temporary.exists():
+        if temporary is not None and temporary.exists():
             temporary.unlink()
-
     return OpenMXWriteStats(
-        blocks_written=written,
-        zero_filled_blocks=zeroed,
-        density_sections=density_sections,
+        {name: len(edges) for name in matrices},
+        int("density" in matrices),
     )
 
 
-__all__ = ["OpenMXWriteStats", "write_openmx_hsout_prediction"]
+def export_model_openmx(model, *, atoms, positions, lattice, output_path):
+    """Infer/export using ONLY a loaded model and native Cartesian geometry."""
+    from data.structure_inference import build_model_input_from_structure
+    from net.common import get_torch_dtype
+
+    device = next(model.parameters()).device
+    dtype = get_torch_dtype(model.cfg.dtype)
+    positions = torch.as_tensor(positions, dtype=dtype, device=device)
+    lattice = (
+        None
+        if lattice is None
+        else torch.as_tensor(lattice, dtype=dtype, device=device)
+    )
+    # Match Snapshot.to_e3nn's Cartesian convention, without any reference data.
+    cob = torch.eye(3, dtype=dtype, device=device)[[2, 0, 1]]
+    x = build_model_input_from_structure(
+        atoms=tuple(atoms),
+        positions=positions @ cob,
+        box=None if lattice is None else lattice @ cob,
+        cfg=model.cfg,
+        mapper=model.mapper,
+    )
+    was_training = model.training
+    try:
+        model.eval()
+        with torch.no_grad():
+            predictions = model.predict_matrices(x, physical=True)
+    finally:
+        model.train(was_training)
+    return write_openmx_from_structure(
+        output_path,
+        predictions,
+        atoms=atoms,
+        positions=positions,
+        lattice=lattice,
+        cutoff_radius=model.cfg.cutoff_radius,
+    )

@@ -5,6 +5,58 @@ An E(3)-equivariant Graph Neural Network implementation framework to predict
 in linear time using E3NN + PyTorch. Designed for arbitrary chemistry,
 wide hyperparameter optimization and distributed training on HPC clusters.
 
+## Template-free OpenMX-compatible prediction export
+
+Standalone inference requires only a loaded model, atom identities, Cartesian
+positions (Å), and the lattice (Å, vectors as rows; `None` for a molecule):
+
+```python
+from data.openmx_writer import export_model_openmx
+
+export_model_openmx(model, atoms=atoms, positions=positions,
+                    lattice=lattice, output_path="predicted.matrix")
+```
+
+Or use an XYZ/extxyz file (periodic inputs must contain lattice and PBC metadata):
+
+```bash
+python scripts/export_prediction.py --checkpoint MODEL_CHECKPOINT.pt \
+  --structure input.xyz --output predicted.matrix --device cpu
+```
+
+New checkpoints embed the orbital configuration. Older checkpoints without it
+must be explicitly re-saved with `hyper_parameters['orbital_cfg']` set to the
+loaded model's `model.mapper.orbital_cfg.to_dict()`; it cannot be inferred from
+atom identities alone. No reference/template/info files are read by this path.
+
+The model's cutoff and supplied (unwrapped) geometry determine the complete
+periodic neighbor graph. `CpyCell` is the largest absolute integer shift component
+in that graph (zero if only the origin is needed). This supports skewed lattices,
+unwrapped atoms, and excludes cutoff equality, like the model graph. The exporter
+builds the full `(2*CpyCell+1)^3` translation table exactly in OpenMX's
+`Generation_ATV` order: origin at `Rn=0`, then ascending nested i/j/k loops with
+k innermost, skipping the origin. `Rn` is looked up in the inverse `ratv` table,
+not calculated using an arithmetic formula. Local neighbors are onsite first,
+then ordered by neighbor atom and Rn, as in `Trn_System`.
+
+Output uses OpenMX real H/S/D text-section headers and 20-decimal numeric rows.
+Only predicted sections are emitted. A small `atv_ijk Rn=...` preamble provides
+the translation mapping for readers (including MANDALA); position/momentum
+overlaps and unpredicted matrices are **not fabricated**. This is a text dump,
+not binary `.scfout`. It is not a byte-identical reconstruction of a particular
+DFT calculation: OpenMX may choose a larger solver/orbital-dependent translation
+table, and auxiliary quantities require additional predictors or integrals.
+All supplied predictions must exactly match the cutoff graph, and exported
+blocks are globally Hermitian-averaged with no density rescaling.
+
+Density ingestion now uses **`0.5 * (D + D.T)`**, retaining native spin=0
+normalization. Export writes density directly, without halving. Text and
+processed-HDF5 OpenMX ingestion use the same convention; dataset caches are
+invalidated to rebuild targets. Existing checkpoints and manually saved
+snapshots trained/stored with doubled densities are not automatically converted.
+Density-grid reconstruction and `Tr(DH)`/`Tr(DS)` use the supplied normalization;
+physical spin sums, where needed, must be explicit.
+
 ## Quickstart
 
 To install run

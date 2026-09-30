@@ -50,7 +50,7 @@ def parse_openmx_scfout(
     orbital_cfg: OrbitalIrrepConfig,
     *,
     convention: str = "e3nn",  # "openmx" | "e3nn"
-    symmetrize_density: bool = True,  # D ← D + Dᵀ
+    symmetrize_density: bool = True,  # D ← (D + Dᵀ) / 2
 ) -> Snapshot:
     """
     Parameters
@@ -65,7 +65,8 @@ def parse_openmx_scfout(
         "openmx"  - keep native basis;
         "e3nn"    - convert real-SH ordering to the Wikipedia / e3nn convention.
     symmetrize_density
-        If *True* (default) replaces ``D`` with ``D + Dᵀ`` **after** parsing.
+        If *True* (default), Hermitian-average the native spin=0 density as
+        ``0.5 * (D + Dᵀ)`` after parsing. This does not perform a spin sum.
     """
     atoms = list(atoms)
     mapper = BlockIrrepMapper(
@@ -97,6 +98,19 @@ def parse_openmx_scfout(
         line_iter = iter(fh)
         for raw in line_iter:
             line = raw.strip()
+
+            # Standalone exports carry the genuine finite translation table;
+            # no auxiliary position-overlap values need to be invented.
+            if line.startswith("atv_ijk Rn="):
+                fields = line.removeprefix("atv_ijk Rn=").split()
+                if len(fields) != 4:
+                    raise OpenMXParseError("Invalid atv_ijk translation row")
+                rn, sx, sy, sz = map(int, fields)
+                shift = (sx, sy, sz)
+                if rn in rn_shift_map and rn_shift_map[rn] != shift:
+                    raise OpenMXParseError("Conflicting atv_ijk translation rows")
+                rn_shift_map[rn] = shift
+                continue
 
             # ---------- section headers ------------------------------------
             if _SECTION_RE.match(line):
@@ -240,7 +254,7 @@ def parse_openmx_scfout(
     den = _to_block_matrix(accum["density"], rn_shift_map)
 
     if symmetrize_density:
-        den = den + den.transpose()
+        den = 0.5 * (den + den.transpose())
 
     # ─────────────────────────────────────── optional basis conversion
     if convention == "e3nn":

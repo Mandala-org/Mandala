@@ -55,8 +55,9 @@ from net.spectral_loss import build_spectral_reference
 from tqdm.auto import tqdm
 
 
-SNAPSHOT_CACHE_VERSION = "v3"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v6"
+# Native spin=0 density normalization; invalidate old doubled-density targets.
+SNAPSHOT_CACHE_VERSION = "v4"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v7"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:

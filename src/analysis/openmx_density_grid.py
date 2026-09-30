@@ -226,7 +226,7 @@ def load_openmx_snapshot(
         OrbitalIrrepConfig.from_dict(info.orbital_set),
         convention="openmx",
         # OpenMX's first non-spin-polarized section is one spin channel.
-        # Mandala's density convention, and this evaluator, are spin summed.
+        # Preserve this spin channel's normalization; averaging is not a spin sum.
         symmetrize_density=True,
     )
     snapshot.positions = info.positions
@@ -526,7 +526,11 @@ def evaluate_density_grids(
     edge_batch_size: int = 32,
     expected_electrons: float | None = None,
 ) -> DensityGridResult:
-    """Evaluate one or more spin-summed density matrices on one OpenMX grid."""
+    """Evaluate densities in their supplied normalization on one OpenMX grid.
+
+    No spin sum is implicit. For native spin=0 inputs, expected_electrons must
+    also refer to that spin channel.
+    """
 
     if not snapshots:
         raise ValueError("At least one snapshot is required")
@@ -806,7 +810,7 @@ def write_density_outputs(
             grid,
             snapshot.density.atoms,
             snapshot.positions,
-            comment=f"Spin-summed electron density: {names[0]} (e/bohr^3)",
+            comment=f"Electron density, input normalization: {names[0]} (e/bohr^3)",
         )
     elif len(names) == 2:
         ground_truth = result.densities[names[0]]
@@ -818,7 +822,7 @@ def write_density_outputs(
             grid,
             snapshot.density.atoms,
             snapshot.positions,
-            comment="Ground-truth spin-summed electron density (e/bohr^3)",
+            comment="Ground-truth electron density, input normalization (e/bohr^3)",
         )
         write_cube(
             output_dir / "predicted_density.cube",
@@ -826,7 +830,7 @@ def write_density_outputs(
             grid,
             snapshot.density.atoms,
             snapshot.positions,
-            comment="Predicted spin-summed electron density (e/bohr^3)",
+            comment="Predicted electron density, input normalization (e/bohr^3)",
         )
         write_cube(
             output_dir / "signed_density_error.cube",

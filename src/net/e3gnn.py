@@ -68,6 +68,8 @@ class E3GNN(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["mapper"])
+        # Structure-only restoration must not depend on reference .out files.
+        self.save_hyperparameters({"orbital_cfg": mapper.orbital_cfg.to_dict()})
         self.cfg = cfg
         # The mapper is now an nn.Module and will be moved to the correct device
         # automatically by PyTorch Lightning.
