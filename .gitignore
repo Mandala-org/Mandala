@@ -16,6 +16,7 @@ lightning_logs/
 outputs/
 eval_outputs/
 eval_cache/
+artifacts/pair_stage*/
 csvs/
 wandb_sweep_analysis/
 slurm-*.out
@@ -32,6 +33,7 @@ ray_results/
 
 # Notes
 notes/
+AGENTS.md
 
 # egg-info
 *.egg-info/
@@ -95,8 +97,12 @@ data/small/Si_perturbed_scale1/
 data/small/Si_perturbed_scale1_030/
 data/small/Si_perturbed_scale1_078/
 data/paper
+data/pair_descriptor_hamiltonian/
 analysis_outputs/
 *.zip
+configs/
+tmp/
+local_cache/
 
 # Generated structures for inference-scaling benchmarks
 benchmark_data/silicon_scaling/
@@ -108,8 +114,16 @@ paper/*report*
 paper/references
 
 # latex
+paper/
 *.aux
 *.bbl
 *.blg
 paper/main.out
 paper/main.log
+
+# precommit
+.pre-commit-config.yaml
+
+# legacy files
+sweeps/old/
+sweeps/very_old/
