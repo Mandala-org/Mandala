@@ -1,0 +1,131 @@
+{
+  "snapshot": "Si validation 090 / scale_1",
+  "temperature_k": 300.0,
+  "temperature_source": "Si.out scf.ElectronicTemperature",
+  "reference_electronic_temperature_k": 300.0,
+  "perturbation_sigma_angstrom": 0.02,
+  "scale_to_temperature_calibration": null,
+  "mesh": 8,
+  "mesh_convention": "Uniform Gamma-centered arange(N)/N; equal weights",
+  "density_convention": "Native per-spin density; explicit 0.5 conversion of legacy prediction; no default loader spin factor",
+  "rows": [
+    {
+      "method": "Direct density prediction",
+      "mae": 2.6367884234757965e-05,
+      "rmse": 5.6979184860568637e-05,
+      "band_energy_ref_h_abs_error_ev": 0.23125632542786315,
+      "electrons_reference_s": 31.98410584263933
+    },
+    {
+      "method": "Reference H + reference S",
+      "mae": 1.3106427417148818e-07,
+      "rmse": 3.694918874860895e-07,
+      "band_energy_ref_h_abs_error_ev": 2.690788875046444e-05,
+      "electrons_reference_s": 32.00000000000006,
+      "temperature_k": 0.0,
+      "chemical_potential_ha": -0.10304777944746535,
+      "global_gap_ev": 0.607894584420642,
+      "thermal_electrons_per_cell": 0.0,
+      "occupation_electrons": 32.0,
+      "max_eigenproblem_residual": 6.243573493595415e-14,
+      "change_from_zero_temperature": {
+        "mae": 0.0,
+        "rmse": 0.0
+      }
+    },
+    {
+      "method": "Reference H + reference S",
+      "mae": 1.3101868961569666e-07,
+      "rmse": 3.693648673127058e-07,
+      "band_energy_ref_h_abs_error_ev": 2.6966937469181574e-05,
+      "electrons_reference_s": 31.999999999999993,
+      "temperature_k": 300.0,
+      "chemical_potential_ha": -0.10380982366809816,
+      "global_gap_ev": 0.607894584420642,
+      "thermal_electrons_per_cell": 9.234304243774865e-08,
+      "occupation_electrons": 32.0,
+      "max_eigenproblem_residual": 6.243573493595415e-14,
+      "change_from_zero_temperature": {
+        "mae": 2.3218003595855628e-10,
+        "rmse": 5.018733408210879e-10
+      }
+    },
+    {
+      "method": "Predicted H + reference S",
+      "mae": 0.00016429336359512404,
+      "rmse": 0.0004986605817667496,
+      "band_energy_ref_h_abs_error_ev": 0.0104232693957271,
+      "electrons_reference_s": 32.0,
+      "temperature_k": 0.0,
+      "chemical_potential_ha": -0.1032549600826035,
+      "global_gap_ev": 0.6384671778635669,
+      "thermal_electrons_per_cell": 0.0,
+      "occupation_electrons": 32.0,
+      "max_eigenproblem_residual": 6.683416272576045e-14,
+      "change_from_zero_temperature": {
+        "mae": 0.0,
+        "rmse": 0.0
+      }
+    },
+    {
+      "method": "Predicted H + reference S",
+      "mae": 0.00016429336243825615,
+      "rmse": 0.0004986605753773282,
+      "band_energy_ref_h_abs_error_ev": 0.01042330350339147,
+      "electrons_reference_s": 32.00000000000002,
+      "temperature_k": 300.0,
+      "chemical_potential_ha": -0.10398788169625661,
+      "global_gap_ev": 0.6384671778635669,
+      "thermal_electrons_per_cell": 5.283460235626838e-08,
+      "occupation_electrons": 32.0,
+      "max_eigenproblem_residual": 6.683416272576045e-14,
+      "change_from_zero_temperature": {
+        "mae": 1.304808335791308e-10,
+        "rmse": 2.863366051956716e-10
+      }
+    },
+    {
+      "method": "Predicted H + predicted S",
+      "mae": 0.00016560979626866748,
+      "rmse": 0.0004919897791500677,
+      "band_energy_ref_h_abs_error_ev": 0.08672382020998988,
+      "electrons_reference_s": 31.9815865893343,
+      "temperature_k": 0.0,
+      "chemical_potential_ha": -0.10311740069953887,
+      "global_gap_ev": 0.6376334938458091,
+      "thermal_electrons_per_cell": 0.0,
+      "occupation_electrons": 32.0,
+      "max_eigenproblem_residual": 7.162324492672978e-14,
+      "change_from_zero_temperature": {
+        "mae": 0.0,
+        "rmse": 0.0
+      }
+    },
+    {
+      "method": "Predicted H + predicted S",
+      "mae": 0.0001656097922989392,
+      "rmse": 0.000491989775451108,
+      "band_energy_ref_h_abs_error_ev": 0.08672385480556952,
+      "electrons_reference_s": 31.98158658933211,
+      "temperature_k": 300.0,
+      "chemical_potential_ha": -0.10384944223443837,
+      "global_gap_ev": 0.6376334938458091,
+      "thermal_electrons_per_cell": 5.3643677945764e-08,
+      "occupation_electrons": 32.0,
+      "max_eigenproblem_residual": 7.162324492672978e-14,
+      "change_from_zero_temperature": {
+        "mae": 1.3200502935872436e-10,
+        "rmse": 2.891687844901578e-10
+      }
+    }
+  ],
+  "input_sha256": {
+    "data/paper/paper_Si_perturbed_val_090/HS.out": "d986479c1aaa91824eafec9731920ed3e60fa14fa7a3de1dc954bf156676eebe",
+    "data/paper/paper_Si_perturbed_val_090/Si.out": "42474dd2ab2c52b7fa62f2f69e6ea42849d0952c3bf3a427266dffed355c3db2",
+    "data/paper/paper_Si_perturbed_val_090/Si.cif": "299d5d03803178601d4479c02a24a7c05f0e313aa63035a2d10be1254af7eb88",
+    "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_density.pt": "761fb586c2e58dfaca6775754e63f9bdae95fb35969d4f48d002380901b25c80",
+    "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_overlap.pt": "062bcf426c1e29072204658c7153a91472295d272357a137d3f89926115b77b9",
+    "model_reports/paper_Si_perturbed_best_val090/run_assets/paper_Si_perturbed_best_val090/pred_hamiltonian.pt": "7f6adad3cbfcebf86f8f99d2e5a3d8717b9d14d80f924b14c2f4f0a7f78c445b"
+  },
+  "source_sha256": "ceab9856607eb998b64c6ea5f8f98f49a0a8bdcf29693328a40f177b4f26c3bb"
+}
