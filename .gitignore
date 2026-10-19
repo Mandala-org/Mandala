@@ -112,6 +112,7 @@ test_audit/
 docs/*report*
 paper/*report*
 paper/references
+agent_docs/
 
 # latex
 paper/
