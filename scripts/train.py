@@ -9,6 +9,8 @@ import os
 import math
 import subprocess
 import sys
+import inspect
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -43,6 +45,7 @@ from net.time_budget import (
     RunBookkeepingCallback,
     WallClockBudgetCallback,
 )  # noqa: E402
+from net.restart import EpochBoundaryCheckpoint, EpochShuffleSampler  # noqa: E402
 from scripts.dataset import (  # noqa: E402
     build_deeph_e3_datasets,
     build_datasets_from_yaml,
@@ -63,6 +66,7 @@ def run_training(
     objective_metric: str | None = None,
 ) -> dict[str, float]:
     args = _as_namespace(run_args)
+    args._training_session_start = time.perf_counter()
     print("=== Mandala training run starting ===")
     cfg = _populate_config_from_args(args)
     if getattr(args, "dataset_kind", None) == "deeph_e3":
@@ -95,6 +99,7 @@ def run_training(
         val_ds=val_ds,
         test_ds=test_ds,
         data_split_seed=int(cfg.data_split_seed),
+        enforce_immutable=cfg.epoch_boundary_resume,
     )
     _write_run_manifest(
         run_dir,
@@ -141,6 +146,15 @@ def run_training(
         gradient_clip_algorithm="value",
         accumulate_grad_batches=cfg.accumulate_grad_batches,
         precision=getattr(args, "precision", "32-true"),
+        **(
+            {
+                "num_sanity_val_steps": 0,
+                "enable_checkpointing": False,
+                "deterministic": "warn",
+            }
+            if cfg.epoch_boundary_resume
+            else {}
+        ),
     )
 
     print("--- Starting training ---")
@@ -155,6 +169,12 @@ def run_training(
                 str(resume_checkpoint)
                 if resume_checkpoint is not None and not compatibility_mode
                 else None
+            ),
+            **(
+                {"weights_only": False}
+                if cfg.epoch_boundary_resume
+                and "weights_only" in inspect.signature(trainer.fit).parameters
+                else {}
             ),
         )
     except KeyboardInterrupt:
@@ -510,7 +530,17 @@ def _build_dataloaders(
         return DataLoader(
             ds or [],
             batch_size=1,
-            shuffle=shuffle,
+            shuffle=shuffle and not cfg.epoch_boundary_resume,
+            sampler=(
+                EpochShuffleSampler(ds, cfg.seed)
+                if shuffle and cfg.epoch_boundary_resume
+                else None
+            ),
+            generator=(
+                torch.Generator().manual_seed(cfg.seed)
+                if cfg.epoch_boundary_resume
+                else None
+            ),
             num_workers=num_workers,
             pin_memory=use_pin_memory,
             persistent_workers=use_persistent_workers,
@@ -588,12 +618,26 @@ def _write_split_manifest(
     val_ds: Any,
     test_ds: Any,
     data_split_seed: int,
+    enforce_immutable: bool = False,
 ) -> dict[str, Any]:
     splits = {
         "train": _dataset_pair_payload(train_ds),
         "val": _dataset_pair_payload(val_ds),
         "test": _dataset_pair_payload(test_ds),
     }
+    # Segmented publication runs fail on changed input identities or metadata.
+    # Large matrix files remain in bigdata; no copies enter the control plane.
+    input_stats = {}
+    for rows in splits.values() if enforce_immutable else []:
+        for row in rows:
+            for value in row.values():
+                source = Path(value)
+                if source.is_file():
+                    stat = source.stat()
+                    input_stats[value] = {
+                        "size": stat.st_size,
+                        "mtime_ns": stat.st_mtime_ns,
+                    }
     identities = {
         name: {(row["matrix"], row["info"]) for row in rows}
         for name, rows in splits.items()
@@ -611,9 +655,17 @@ def _write_split_manifest(
         "split_hash_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         "counts": {name: len(rows) for name, rows in splits.items()},
         "splits": splits,
+        "input_stats": input_stats,
     }
     run_dir.mkdir(parents=True, exist_ok=True)
     path = run_dir / "split_manifest.json"
+    if enforce_immutable and path.exists():
+        previous = json.loads(path.read_text())
+        # Previously recorded identities must never silently change on resume.
+        if previous["split_hash_sha256"] != manifest["split_hash_sha256"]:
+            raise ValueError("Dataset split changed since the original run.")
+        if previous.get("input_stats", input_stats) != input_stats:
+            raise ValueError("Dataset files changed since the original run.")
     path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -715,6 +767,9 @@ def _write_run_manifest(
         "git": _git_provenance(),
     }
     path = run_dir / "run_manifest.json"
+    if cfg.epoch_boundary_resume and path.exists():
+        # Keep the initial specification and record each continuation separately.
+        path = run_dir / f"run_manifest.resume_{time.time_ns()}.json"
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n",
         encoding="utf-8",
@@ -808,7 +863,9 @@ def _build_callbacks(
     callbacks.append(_build_progress_bar())
     callbacks.append(RunBookkeepingCallback())
     artifact_callback = None
-    if getattr(args, "log_artifacts", True):
+    if cfg.epoch_boundary_resume:
+        artifact_callback = EpochBoundaryCheckpoint(run_dir, cfg.checkpoint_monitor)
+    elif getattr(args, "log_artifacts", True):
         artifact_callback = ArtifactCheckpointCallback(
             output_dir=run_dir,
             monitor=cfg.checkpoint_monitor,
@@ -833,9 +890,16 @@ def _build_callbacks(
     if artifact_callback is not None:
         callbacks.append(artifact_callback)
     if cfg.max_wall_clock_seconds is not None:
-        callbacks.append(
-            WallClockBudgetCallback(budget_seconds=cfg.max_wall_clock_seconds)
-        )
+        budget_seconds = cfg.max_wall_clock_seconds
+        if cfg.epoch_boundary_resume:
+            budget_seconds -= time.perf_counter() - getattr(
+                args, "_training_session_start", time.perf_counter()
+            )
+            if budget_seconds <= 0:
+                raise RuntimeError(
+                    "Session budget exhausted during dataset/model preparation."
+                )
+        callbacks.append(WallClockBudgetCallback(budget_seconds=budget_seconds))
     if extra_callbacks:
         callbacks.extend(extra_callbacks)
     print(f"--- Built callbacks: {[type(cb).__name__ for cb in callbacks]} ---")

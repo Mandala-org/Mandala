@@ -231,6 +231,7 @@ class Config:
     shuffle_snapshot_load_order: bool = True  # randomize cache warmup order
     data_split_seed: int = 42  # fixed seed defining train/validation/test membership
     seed: int = 42  # run seed: initialization, dropout, and training order
+    epoch_boundary_resume: bool = False  # opt-in reproducible segmented runs
     precompute_edge_features: bool = True  # precompute edge features
     radial_embedding_scale: str = "none"
     allow_incomplete_dataset: bool = False  # tolerate short snapshot lists
