@@ -47,6 +47,7 @@ from net.time_budget import (
 )  # noqa: E402
 from net.restart import EpochBoundaryCheckpoint, EpochShuffleSampler  # noqa: E402
 from scripts.dataset import (  # noqa: E402
+    build_datasets_from_manifest,
     build_deeph_e3_datasets,
     build_datasets_from_yaml,
     build_silicon_datasets,
@@ -421,6 +422,12 @@ def _build_dataset_bundle(
     print(
         f"--- Preparing datasets: dataset_kind={dataset_kind}, convention={convention} ---"
     )
+    if getattr(args, "dataset_manifest", None) is not None:
+        if parsed_yaml is not None:
+            raise ValueError("Choose either an explicit dataset manifest or YAML")
+        return build_datasets_from_manifest(
+            args.dataset_manifest, cfg, convention=convention
+        )
     if parsed_yaml is not None:
         print("--- Dataset configuration sourced from parsed YAML ---")
         return build_datasets_from_yaml(

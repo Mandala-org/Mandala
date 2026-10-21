@@ -26,6 +26,8 @@ the checkpoint. Native real and complex SOC blocks are supported.
 
 See [configuration, training and inference](docs/modular_operator_models.md)
 and the [reference coverage and verification matrix](docs/reference_architecture_coverage.md).
+The [SiOx ROSI launchers](scripts/train_siox_models/README.md) prepare a shared
+paper split and resumable DeepH, DeepH-E3, MACE-H and paper-configured MANDALA runs.
 Existing flat `Config` models and checkpoints retain their original assembly.
 
 ## Template-free OpenMX-compatible prediction export

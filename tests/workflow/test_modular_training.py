@@ -13,7 +13,6 @@ import torch
 
 from scripts.train_modular import main
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -111,11 +110,14 @@ def test_three_reference_presets_through_actual_training_cli(tmp_path, name):
                     "cpu",
                     "--max-wall-clock-seconds",
                     "0.000001",
+                    "--log-dir",
+                    str(tmp_path / "metrics"),
                 ]
             )
             checkpoint = tmp_path / "run/latest_checkpoint.pt"
             first = torch.load(checkpoint, map_location="cpu", weights_only=False)
             assert first["epoch_boundary_resume"]["safe_to_resume"]
+            assert list((tmp_path / "metrics").rglob("metrics.csv"))
             specification = json.loads(
                 (tmp_path / "run/specification.json").read_text()
             )

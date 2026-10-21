@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 from pathlib import Path
 import platform
@@ -16,6 +17,7 @@ import platform
 import numpy as np
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import CSVLogger
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
@@ -267,6 +269,7 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--accelerator", default="auto")
     parser.add_argument("--max-wall-clock-seconds", type=float)
+    parser.add_argument("--log-dir", type=Path)
     args = parser.parse_args(argv)
     document = OmegaConf.to_container(
         OmegaConf.merge(OmegaConf.load(args.config), OmegaConf.from_dotlist(args.set)),
@@ -364,7 +367,7 @@ def main(argv=None):
         accumulate_grad_batches=training.get("accumulate_grad_batches", 1),
         deterministic=True,
         callbacks=callbacks,
-        logger=False,
+        logger=CSVLogger(str(args.log_dir), name="") if args.log_dir else False,
         enable_checkpointing=False,
         num_sanity_val_steps=0,
         default_root_dir=args.output,
@@ -374,6 +377,11 @@ def main(argv=None):
         train_loader,
         val_loader,
         ckpt_path=str(args.resume) if args.resume else None,
+        **(
+            {"weights_only": False}
+            if "weights_only" in inspect.signature(trainer.fit).parameters
+            else {}
+        ),
     )
 
 

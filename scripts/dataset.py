@@ -166,6 +166,31 @@ def _split_shuffled_pairs(
     return train_pairs, val_pairs, test_pairs
 
 
+def build_datasets_from_manifest(manifest_path, cfg, *, convention="e3nn"):
+    """Load explicit OpenMX split pairs without discovering or reshuffling data."""
+    import json
+
+    document = json.loads(Path(manifest_path).read_text())
+    if document.get("schema_version") != 1:
+        raise ValueError("Unsupported dataset manifest version")
+    pairs = {}
+    for split in ("train", "val", "test"):
+        pairs[split] = [
+            (Path(row["matrix_path"]), Path(row["info_path"]))
+            for row in document["splits"][split]
+        ]
+        for matrix, info in pairs[split]:
+            if not matrix.is_absolute() or not info.is_absolute():
+                raise ValueError("Manifest paths must be absolute")
+            if not matrix.is_file() or not info.is_file():
+                raise FileNotFoundError(f"Missing manifest input: {matrix}, {info}")
+    if not pairs["train"] or not pairs["val"]:
+        raise ValueError("Manifest needs nonempty training and validation splits")
+    return _create_datasets_from_pairs(
+        pairs["train"], pairs["val"], pairs["test"], cfg, convention=convention
+    )
+
+
 def build_silicon_datasets(
     *,
     data_path: str | Path,
