@@ -67,6 +67,12 @@ class E3GNN(pl.LightningModule):
         cfg: Config,
     ):
         super().__init__()
+        # Older slotted Config pickles predate these optional fields. Unpickling
+        # does not run the dataclass constructor, so initialize missing slots
+        # before Lightning inspects or serializes the restored configuration.
+        for field in ("pipeline", "objective", "optimization"):
+            if not hasattr(cfg, field):
+                setattr(cfg, field, None)
         self.save_hyperparameters(ignore=["mapper"])
         # Structure-only restoration must not depend on reference .out files.
         self.save_hyperparameters({"orbital_cfg": mapper.orbital_cfg.to_dict()})
@@ -74,6 +80,30 @@ class E3GNN(pl.LightningModule):
         # The mapper is now an nn.Module and will be moved to the correct device
         # automatically by PyTorch Lightning.
         self.mapper: BlockIrrepMapper = mapper
+
+        if cfg.pipeline is not None:
+            self._validate_pipeline_legacy_options(cfg)
+            from net.pipeline import FeaturePipeline
+
+            self.pipeline = FeaturePipeline(
+                cfg.pipeline,
+                num_species=len(mapper.orbital_cfg.elements()),
+                mapper=mapper,
+            )
+            for operator, slot in self.pipeline.outputs.items():
+                spec = self.pipeline.feature_specs[slot]
+                if (
+                    spec.domain != "edge"
+                    or spec.representation != "matrix"
+                    or spec.support != "output"
+                ):
+                    raise ValueError(
+                        f"Operator {operator!r} must select matrix features on the output-edge support"
+                    )
+            self._nan_loss_detected = False
+            self._spectral_loss_debug_printed = False
+            self._apply_init_weights_factor()
+            return
 
         allow_zero_observable_control = bool(
             getattr(cfg, "allow_zero_observable_loss_control", False)
@@ -247,6 +277,38 @@ class E3GNN(pl.LightningModule):
             strict=strict,
             **kwargs,
         )
+
+    @staticmethod
+    def _validate_pipeline_legacy_options(cfg):
+        """A modular recipe must not silently discard requested legacy losses."""
+        defaults = Config()
+        explicit = {
+            "train_target",
+            "partial_train",
+            "symmetrize_output",
+            "symmetrize_hamiltonian_targets",
+            "rescale_density_to_num_electrons",
+            "spectral_loss_enabled",
+            "freeze_backbone_train_heads_only",
+            "hamiltonian_envelope_mode",
+            "hamiltonian_envelope_path",
+        }
+        names = explicit | {
+            name
+            for name in Config.__dataclass_fields__
+            if name.startswith(("train_on_", "loss_coef_", "loss_weighting_"))
+        }
+        requested = sorted(
+            name
+            for name in names
+            if getattr(cfg, name, None) != getattr(defaults, name, None)
+        )
+        if requested:
+            raise ValueError(
+                "Modular recipes configure scientific behavior in pipeline/objective/data; "
+                "these legacy Config overrides would be ignored: "
+                + ", ".join(requested)
+            )
 
     def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True):
         return super().load_state_dict(strip_mapper_keys(state_dict), strict=strict)
@@ -752,7 +814,9 @@ class E3GNN(pl.LightningModule):
         }
 
     # ------------------------------------------------------------------ forward
-    def forward(self, x: Dict[str, Any]):
+    def forward(self, x: Dict[str, Any], *, physical_derivatives: bool = False):
+        if self.cfg.pipeline is not None:
+            return self.pipeline(x, physical_derivatives=physical_derivatives)
         self._activation_mags: dict[str, torch.Tensor] | None = (
             OrderedDict() if self.cfg.log_activation_mag else None
         )
@@ -767,12 +831,108 @@ class E3GNN(pl.LightningModule):
         self._last_activation_mags = self._activation_mags or {}
         return preds_wrapped
 
+    def predict_operator_blocks(self, sample, codec, *, return_masks=False):
+        """Decode a modular prediction to native directed periodic blocks.
+
+        Values retain the dataset's declared units and orbital/spin convention.
+        Partial shell selection is accompanied by explicit coverage masks; no
+        Hermitian projection or missing-shell completion is performed here.
+        """
+        if self.cfg.pipeline is None:
+            raise ValueError("Use predict_matrices for a legacy configuration")
+        from data.operator_dataset import reconstruct_operator_blocks
+
+        if self.pipeline.operator_layout is None:
+            raise ValueError(
+                "Native export requires a frozen operator layout from resolve_configuration"
+            )
+        if codec.layout_signature() != self.pipeline.operator_layout:
+            raise ValueError(
+                "Inference codec orbital layout or shell-channel assignment differs from the checkpoint"
+            )
+        expected_shells = {
+            atom: tuple(ir.l for mul, ir in irreps for _ in range(mul))
+            for atom, irreps in self.mapper.orbital_cfg.element_to_irreps.items()
+        }
+        if codec.species_shells != expected_shells:
+            raise ValueError(
+                "Inference codec orbital layout differs from the checkpoint"
+            )
+        for name, slot in self.pipeline.outputs.items():
+            spec = self.pipeline.feature_specs[slot]
+            if (
+                spec.representation != "matrix"
+                or spec.dim != codec.packed_dim
+                or spec.frame != sample["target_frame"]
+            ):
+                raise ValueError(
+                    f"Prediction/codec/frame contract mismatch for operator {name}"
+                )
+        for module in self.pipeline.transforms.values():
+            decoder = getattr(module, "codec", None)
+            if decoder is not None and (
+                decoder.shell_pairs != codec.shell_pairs
+                or decoder.spinful != codec.spinful
+                or (
+                    decoder.channel_assignments is not None
+                    and decoder.layout_signature() != codec.layout_signature()
+                )
+            ):
+                raise ValueError(
+                    "Inference codec shell channels differ from the checkpoint"
+                )
+            if (
+                hasattr(module, "packed_dim")
+                and hasattr(module, "spinful")
+                and (
+                    module.packed_dim != codec.packed_dim
+                    or module.spinful != codec.spinful
+                )
+            ):
+                raise ValueError(
+                    "Inference codec spin layout differs from the checkpoint"
+                )
+
+        def move(value):
+            if not isinstance(value, torch.Tensor):
+                return value
+            if value.is_complex():
+                dtype = (
+                    torch.complex128 if self.dtype == torch.float64 else torch.complex64
+                )
+            else:
+                dtype = self.dtype if value.is_floating_point() else value.dtype
+            return value.to(device=self.device, dtype=dtype)
+
+        sample = dict(
+            sample, inputs={key: move(value) for key, value in sample["inputs"].items()}
+        )
+        was_training = self.training
+        self.eval()
+        try:
+            with torch.inference_mode():
+                predictions = self(sample["inputs"], physical_derivatives=True)
+                return {
+                    name: reconstruct_operator_blocks(
+                        sample,
+                        codec,
+                        packed,
+                        output_frame="global",
+                        return_masks=return_masks,
+                    )
+                    for name, packed in predictions.items()
+                }
+        finally:
+            self.train(was_training)
+
     # ==================== Lightning steps ====================================
     def _shared_step(self, batch, batch_idx, stage: str):
         """
         Shared logic for training and validation steps.
         Logs metrics prefixed with stage ('train' or 'val').
         """
+        if self.cfg.pipeline is not None:
+            return self._pipeline_step(batch, stage)
         x, y = batch
         metrics = {}
 
@@ -1481,11 +1641,78 @@ class E3GNN(pl.LightningModule):
                 batch_size=1,
             )
 
+    def _pipeline_step(self, batch, stage):
+        from net.training_policies import masked_error
+
+        x, targets = batch
+        predictions = self(x)
+        options = self.cfg.objective or {"kind": "mse", "epoch_weight": "edges"}
+        total = None
+        for name, prediction in predictions.items():
+            record = targets[name]
+            target = record["values"] if isinstance(record, dict) else record
+            mask = record.get("mask") if isinstance(record, dict) else None
+            complex_reduction = options.get("complex_reduction", "magnitude")
+            value = masked_error(
+                prediction,
+                target,
+                mask,
+                kind=options.get("kind", "mse"),
+                complex_reduction=complex_reduction,
+            )
+            coefficient = options.get("weights", {}).get(name, 1.0)
+            total = (
+                coefficient * value if total is None else total + coefficient * value
+            )
+            weight = (
+                prediction.shape[0]
+                if options.get("epoch_weight", "edges") == "edges"
+                else int(mask.sum()) if mask is not None else target.numel()
+            )
+            for metric in ("mse", "mae"):
+                self.log(
+                    f"{stage}/{name}_{metric}",
+                    masked_error(
+                        prediction,
+                        target,
+                        mask,
+                        kind=metric,
+                        complex_reduction=complex_reduction,
+                    ),
+                    on_step=False,
+                    on_epoch=True,
+                    batch_size=max(1, weight),
+                )
+        if total is None:
+            raise ValueError("No configured operator outputs")
+        if not torch.isfinite(total):
+            raise FloatingPointError("Nonfinite modular training objective")
+        self.log(
+            f"{stage}/loss",
+            total,
+            on_step=False,
+            on_epoch=True,
+            batch_size=max(1, weight),
+        )
+        return total
+
     # ------------------------------------------------------------------ optimiser
     def configure_optimizers(self):
         trainable_params = [p for p in self.parameters() if p.requires_grad]
         if not trainable_params:
             raise ValueError("No trainable parameters remain after freeze settings.")
+        if self.cfg.optimization is not None:
+            from net.training_policies import make_optimizer, make_scheduler
+
+            options = self.cfg.optimization
+            optimizer = make_optimizer(
+                trainable_params,
+                options.get("optimizer", {"kind": "adam", "lr": self.cfg.lr}),
+            )
+            scheduler = make_scheduler(optimizer, options.get("scheduler"))
+            if scheduler is None:
+                return optimizer
+            return {"optimizer": optimizer, "lr_scheduler": scheduler}
         optimizer = torch.optim.AdamW(trainable_params, lr=self.cfg.lr)
         if not self.cfg.use_lr_scheduler:
             return optimizer
@@ -1502,6 +1729,21 @@ class E3GNN(pl.LightningModule):
             "frequency": 1,
         }
         return [optimizer], [scheduler]
+
+    def lr_scheduler_step(self, scheduler, metric):
+        """Advance the declared scheduler before checking the run's LR stop rule."""
+        if metric is None:
+            scheduler.step()
+        else:
+            scheduler.step(metric)
+        if self.cfg.pipeline is not None and self.cfg.optimization is not None:
+            minimum = self.cfg.optimization.get("stop_lr")
+            if (
+                minimum is not None
+                and max(group["lr"] for group in scheduler.optimizer.param_groups)
+                <= minimum
+            ):
+                self.trainer.should_stop = True
 
     # ------------------------------------------------------------------ force prediction
     def predictions_to_snapshot(

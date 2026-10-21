@@ -1,0 +1,173 @@
+# Official MACE-H defaults as neighbor-density, correlation, angular and edge
+# streams. Statistics must be fitted exclusively on explicit training records.
+schema_version: 1
+reference:
+  source: https://github.com/maurergroup/MACE-H
+  commit: 3d6248b715eef302a4fd674d52bcd69254596a51
+  configuration: maceh/default_configs/train_default.ini
+parameters:
+  cutoff_radius: 7.2
+  embedding_width: 64
+  radial_width: 128
+  angular_irreps: 1x0e+1x1o+1x2e+1x3o+1x4e
+  node_irreps: 64x0e+32x1o+16x2e+8x3o+8x4e
+  edge_irreps: 64x0e+32x1o+16x2e+8x3o+8x4e
+  hidden_irreps: 64x0e+64x1o+64x2e
+  density_lmax: 4
+  density_radial_width: 128
+  correlation: 3
+  radial_layers: [64, 64, 64]
+  avg_num_neighbors: 50.0
+codec:
+  spinful: false
+  ignore_parity: false
+  sort_irreps: false
+  block_kind: all
+layout_rules:
+  initial_hidden_irreps:
+    kind: channel_harmonics
+    hidden_irreps: ${parameters.hidden_irreps}
+    lmax: 0
+  density_angular_irreps:
+    kind: channel_harmonics
+    hidden_irreps: 1x0e
+    lmax: ${parameters.density_lmax}
+  density_irreps:
+    kind: channel_harmonics
+    hidden_irreps: ${parameters.hidden_irreps}
+    lmax: ${parameters.density_lmax}
+  post_node_irreps:
+    kind: tensor_product_completion
+    candidate: ${parameters.node_irreps}
+    node_input: ${parameters.node_irreps}
+    edge_input: ${parameters.edge_irreps}
+    angular: ${parameters.angular_irreps}
+    output: ${layout.post_irreps}
+data:
+  support_file: hamiltonians.h5
+  target_frame: global
+  local_coordinates: false
+training:
+  seed: 42
+  dtype: float32
+  batch_size: 1
+  max_epochs: 3000
+  min_lr: 0.00003
+  grad_clip_val: null
+  split: {train_ratio: 0.67, val_ratio: 0.33, test_ratio: 0.0}
+objective: {kind: mse, epoch_weight: edges}
+optimization:
+  optimizer: {kind: adam, lr: 0.002, betas: [0.9, 0.999], eps: 0.00000001, weight_decay: 0.0}
+  scheduler: {kind: plateau, ema_alpha: 0.1, factor: 0.5, cooldown: 40, patience: 120, threshold: 0.05, monitor: val/loss}
+pipeline:
+  inputs:
+    message_vectors: {domain: edge, representation: geometry, frame: global, width: 3, support: message}
+    message_lengths: {domain: edge, representation: scalar, frame: global, width: 1, support: message}
+    message_edge_index: {domain: relation, representation: index, frame: none, support: message}
+  stages:
+    - id: node_embedding
+      transform: irrep_linear
+      inputs: [node_one_hot]
+      outputs: [hidden_0]
+      options: {irreps_out: '${layout.initial_hidden_irreps}'}
+    - id: density_radial_basis
+      transform: gaussian_basis
+      inputs: [message_lengths]
+      outputs: [density_radial]
+      options: {start: 0.0, stop: '${parameters.cutoff_radius}', n_gaussians: '${parameters.density_radial_width}', trainable: true}
+    - id: density_angular_basis
+      transform: spherical_harmonics
+      inputs: [message_vectors]
+      outputs: [density_angular]
+      options: {irreps: '${layout.density_angular_irreps}', permutation: [1, 2, 0]}
+    - id: density_0
+      transform: neighbor_density
+      inputs: [node_one_hot, hidden_0, density_angular, density_radial, message_edge_index, node_batch]
+      outputs: [density_0_channels, skip_0, first_expansion]
+      options: {target_irreps: '${layout.density_irreps}', hidden_irreps: '${parameters.hidden_irreps}', avg_num_neighbors: '${parameters.avg_num_neighbors}', radial_layers: '${parameters.radial_layers}', emit_expansion: true, normalization: graph_component}
+    - id: product_0
+      transform: symmetric_product
+      inputs: [density_0_channels, node_one_hot, skip_0]
+      outputs: [hidden_1]
+      options: {irreps_out: '${parameters.hidden_irreps}', correlation: '${parameters.correlation}'}
+    - id: density_1
+      transform: neighbor_density
+      inputs: [node_one_hot, hidden_1, density_angular, density_radial, message_edge_index, node_batch]
+      outputs: [density_1_channels, skip_1]
+      options: {target_irreps: '${layout.density_irreps}', hidden_irreps: '${parameters.hidden_irreps}', avg_num_neighbors: '${parameters.avg_num_neighbors}', radial_layers: '${parameters.radial_layers}', normalization: graph_component}
+    - id: product_1
+      transform: symmetric_product
+      inputs: [density_1_channels, node_one_hot, skip_1]
+      outputs: [hidden_2]
+      options: {irreps_out: '${parameters.hidden_irreps}', correlation: '${parameters.correlation}'}
+    - id: density_2
+      transform: neighbor_density
+      inputs: [node_one_hot, hidden_2, density_angular, density_radial, message_edge_index, node_batch]
+      outputs: [density_2_channels, skip_2]
+      options: {target_irreps: '${layout.density_irreps}', hidden_irreps: '${parameters.hidden_irreps}', avg_num_neighbors: '${parameters.avg_num_neighbors}', radial_layers: '${parameters.radial_layers}', normalization: graph_component}
+    - id: product_2
+      transform: symmetric_product
+      inputs: [density_2_channels, node_one_hot, skip_2]
+      outputs: [hidden_3]
+      options: {irreps_out: '${parameters.hidden_irreps}', correlation: '${parameters.correlation}'}
+    - id: angular_expansion_0
+      transform: angular_degree_expansion
+      inputs: [hidden_1, first_expansion, node_one_hot, node_batch]
+      outputs: [expanded_1]
+      options: {irreps_out: '${layout.post_node_irreps}', normalization: graph_component}
+    - id: angular_expansion_1
+      transform: angular_degree_expansion
+      inputs: [hidden_2, expanded_1, node_one_hot, node_batch]
+      outputs: [expanded_2]
+      options: {irreps_out: '${layout.post_node_irreps}', normalization: graph_component}
+    - id: angular_expansion_2
+      transform: angular_degree_expansion
+      inputs: [hidden_3, expanded_2, node_one_hot, node_batch]
+      outputs: [expanded_3]
+      options: {irreps_out: '${layout.post_node_irreps}', normalization: graph_component}
+    - id: radial_basis
+      transform: gaussian_basis
+      inputs: [edge_lengths]
+      outputs: [radial]
+      options: {start: 0.0, stop: '${parameters.cutoff_radius}', n_gaussians: '${parameters.radial_width}', trainable: false}
+    - id: edge_embedding
+      transform: gaussian_basis
+      inputs: [edge_lengths]
+      outputs: [edge_0]
+      options: {start: 0.0, stop: 6.0, n_gaussians: '${parameters.embedding_width}', trainable: false}
+    - id: angular_basis
+      transform: spherical_harmonics
+      inputs: [edge_vectors]
+      outputs: [angular]
+      options: {irreps: '${parameters.angular_irreps}', permutation: [1, 2, 0]}
+    - id: edge_update_0
+      transform: endpoint_tensor_product_edge
+      inputs: [expanded_1, edge_one_hot, angular, edge_0, radial, edge_index, node_batch]
+      outputs: [edge_1]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${parameters.edge_irreps}'}
+    - id: edge_update_1
+      transform: endpoint_tensor_product_edge
+      inputs: [expanded_2, edge_one_hot, angular, edge_1, radial, edge_index, node_batch]
+      outputs: [edge_2]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${parameters.edge_irreps}'}
+    - id: edge_update_2
+      transform: endpoint_tensor_product_edge
+      inputs: [expanded_3, edge_one_hot, angular, edge_2, radial, edge_index, node_batch]
+      outputs: [edge_3]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${layout.post_irreps}'}
+    - id: edge_readout
+      transform: irrep_linear
+      inputs: [edge_3]
+      outputs: [coupled_raw]
+      options: {irreps_out: '${layout.coupled_irreps}', biases: true}
+    - id: output_affine
+      transform: species_irrep_affine
+      inputs: [coupled_raw, edge_type_idx]
+      outputs: [coupled]
+      options: {num_species: '${species.count}', gradient_mode: identity}
+    - id: native_decode
+      transform: shell_tensor_decode
+      inputs: [coupled]
+      outputs: [hamiltonian_native]
+      options: {shell_pairs: '${layout.shell_pairs}', spinful: '${layout.spinful}', ignore_parity: '${layout.ignore_parity}', sort_irreps: '${layout.sort_irreps}'}
+  outputs: {hamiltonian: hamiltonian_native}

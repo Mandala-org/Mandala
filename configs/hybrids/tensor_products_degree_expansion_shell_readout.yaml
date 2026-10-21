@@ -1,0 +1,131 @@
+# Tensor-product node updates, angular expansion, shared shell-channel readout.
+schema_version: 1
+codec:
+  spinful: false
+parameters:
+  width: 4
+  radial_width: 8
+data:
+  target_frame: global
+  local_coordinates: false
+objective:
+  kind: mse
+  epoch_weight: edges
+optimization:
+  optimizer:
+    kind: adam
+    lr: 0.002
+  scheduler: null
+training:
+  dtype: float32
+  seed: 42
+  batch_size: 1
+  max_epochs: 3000
+pipeline:
+  stages:
+  - id: embedding
+    transform: irrep_linear
+    inputs:
+    - node_one_hot
+    outputs:
+    - node_0
+    options:
+      irreps_out: 4x0e
+  - id: radial
+    transform: gaussian_basis
+    inputs:
+    - edge_lengths
+    outputs:
+    - radial
+    options:
+      start: 0.0
+      stop: 7.2
+      n_gaussians: 8
+  - id: edge_embedding
+    transform: irrep_linear
+    inputs:
+    - radial
+    outputs:
+    - edge_0
+    options:
+      irreps_out: 4x0e
+  - id: angular
+    transform: spherical_harmonics
+    inputs:
+    - edge_vectors
+    outputs:
+    - angular
+    options:
+      irreps: 0e+1o
+  - id: node_update
+    transform: endpoint_tensor_product_node
+    inputs:
+    - node_0
+    - node_one_hot
+    - angular
+    - edge_0
+    - radial
+    - edge_index
+    - node_batch
+    - edge_batch
+    - selfloop_edge
+    outputs:
+    - node_tp
+    options:
+      num_species: ${species.count}
+      fc_len_in: 8
+      irreps_out_node: 4x0e+4x1o
+  - id: degree_expansion
+    transform: angular_degree_expansion
+    inputs:
+    - node_tp
+    - node_tp
+    - node_one_hot
+    - node_batch
+    outputs:
+    - node_expanded
+    options:
+      irreps_out: 4x0e+4x1o
+      normalization: none
+  - id: edge_update
+    transform: endpoint_tensor_product_edge
+    inputs:
+    - node_expanded
+    - edge_one_hot
+    - angular
+    - edge_0
+    - radial
+    - edge_index
+    - node_batch
+    outputs:
+    - edge_final
+    options:
+      num_species: ${species.count}
+      fc_len_in: 8
+      irreps_out_edge: ${layout.post_irreps}
+  - id: shell_projection
+    transform: irrep_linear
+    inputs:
+    - edge_final
+    outputs:
+    - shell_xyz
+    options:
+      irreps_out: ${layout.coupled_irreps}
+  - id: shell_basis
+    transform: irrep_cartesian_basis
+    inputs:
+    - shell_xyz
+    outputs:
+    - shell_yzx
+    options:
+      target: yzx
+  - id: shell_readout
+    transform: shell_tensor_decode
+    inputs:
+    - shell_yzx
+    outputs:
+    - hamiltonian
+    options:
+      shell_pairs: ${layout.shell_pairs}
+  outputs:
+    hamiltonian: hamiltonian

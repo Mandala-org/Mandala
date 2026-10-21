@@ -5,6 +5,29 @@ An E(3)-equivariant Graph Neural Network implementation framework to predict
 in linear time using E3NN + PyTorch. Designed for arbitrary chemistry,
 wide hyperparameter optimization and distributed training on HPC clusters.
 
+## Modular operator architectures
+
+The single `E3GNN` entry point can also assemble typed transformation pipelines.
+The reference presets in [`configs/reference`](configs/reference) represent
+DeepH, DeepH-E3, and MACE-H; [`configs/hybrids`](configs/hybrids) demonstrates
+mixing their transformations with existing MANDALA attention and readouts.
+Paper names select configuration files, not separate model classes.
+
+```bash
+PYTHONPATH=src:. python -m scripts.train_modular \
+  --config configs/reference/deeph_e3.yaml \
+  --set data.root=/path/to/native_operator_snapshots \
+  --output /path/to/new_run --dry-run
+```
+
+Remove `--dry-run` to train. Continue with `--resume /path/to/new_run/latest_checkpoint.pt`.
+Fitted output statistics use only the explicit training split and are saved in
+the checkpoint. Native real and complex SOC blocks are supported.
+
+See [configuration, training and inference](docs/modular_operator_models.md)
+and the [reference coverage and verification matrix](docs/reference_architecture_coverage.md).
+Existing flat `Config` models and checkpoints retain their original assembly.
+
 ## Template-free OpenMX-compatible prediction export
 
 Standalone inference requires only a loaded model, atom identities, Cartesian
@@ -119,10 +142,13 @@ git lfs install
 git lfs pull
 ```
 
-The test suite is under active cleanup; run it as a development check
+Run focused checks relevant to your changes. For modular models, start with
 
 ```bash
-python -m pytest
+PYTHONPATH=src:. python -m pytest -q \
+  tests/unit/net/test_pipeline_contracts.py \
+  tests/unit/net/test_reference_fixtures.py \
+  tests/workflow/test_modular_training.py
 ```
 
 To launch training, pick a config and run:

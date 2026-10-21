@@ -1,0 +1,176 @@
+# Symmetric product densities, existing MANDALA attention and pair-partitioned head.
+schema_version: 1
+codec:
+  spinful: false
+parameters:
+  width: 4
+  radial_width: 8
+data:
+  target_frame: global
+  local_coordinates: false
+objective:
+  kind: mse
+  epoch_weight: edges
+optimization:
+  optimizer:
+    kind: adam
+    lr: 0.002
+  scheduler: null
+training:
+  dtype: float32
+  seed: 42
+  batch_size: 1
+  max_epochs: 3000
+pipeline:
+  stages:
+  - id: embedding
+    transform: irrep_linear
+    inputs:
+    - node_one_hot
+    outputs:
+    - node_0
+    options:
+      irreps_out: 4x0e
+  - id: radial
+    transform: gaussian_basis
+    inputs:
+    - edge_lengths
+    outputs:
+    - radial
+    options:
+      start: 0.0
+      stop: 7.2
+      n_gaussians: 8
+  - id: edge_embedding
+    transform: irrep_linear
+    inputs:
+    - radial
+    outputs:
+    - edge_0
+    options:
+      irreps_out: 4x0e
+  - id: angular
+    transform: spherical_harmonics
+    inputs:
+    - edge_vectors
+    outputs:
+    - angular
+    options:
+      irreps: 0e+1o
+  - id: density_radial
+    transform: gaussian_basis
+    inputs:
+    - message_lengths
+    outputs:
+    - density_radial
+    options:
+      start: 0.0
+      stop: 7.2
+      n_gaussians: 8
+  - id: density_angular
+    transform: spherical_harmonics
+    inputs:
+    - message_vectors
+    outputs:
+    - density_angular
+    options:
+      irreps: 0e+1o
+  - id: density
+    transform: neighbor_density
+    inputs:
+    - node_one_hot
+    - node_0
+    - density_angular
+    - density_radial
+    - message_edge_index
+    - node_batch
+    outputs:
+    - density
+    - skip
+    options:
+      target_irreps: 4x0e+4x1o
+      hidden_irreps: 4x0e+4x1o
+      avg_num_neighbors: 2.0
+      radial_layers:
+      - 8
+      normalization: none
+  - id: products
+    transform: symmetric_product
+    inputs:
+    - density
+    - node_one_hot
+    - skip
+    outputs:
+    - node_product
+    options:
+      irreps_out: 4x0e+4x1o
+      correlation: 2
+  - id: attention
+    transform: endpoint_message_aggregation
+    inputs:
+    - node_product
+    - edge_0
+    - edge_index
+    - angular
+    - radial
+    - node_one_hot
+    - edge_type_idx
+    outputs:
+    - node_attention
+    options:
+      irreps_out: 4x0e+4x1o
+      config:
+        neck_depth: 1
+        internal_e3mlp_layers: 0
+        head_e3mlp_layers: 1
+        e3mlp_variant: basic
+        internal_e3mlp_variant: basic
+        head_e3mlp_variant: basic
+        nonlin_kind: normact
+        dropout: 0.0
+        e3layernorm: false
+        node_update_message_agg: attention
+        node_update_attention_scalar_dim: 4
+        node_update_attention_heads: 2
+  - id: edge_update
+    transform: endpoint_tensor_product_edge
+    inputs:
+    - node_attention
+    - edge_one_hot
+    - angular
+    - edge_0
+    - radial
+    - edge_index
+    - node_batch
+    outputs:
+    - edge_final
+    options:
+      num_species: ${species.count}
+      fc_len_in: 8
+      irreps_out_edge: 4x0e+4x1o
+  - id: partitioned_readout
+    transform: partitioned_operator_readout
+    inputs:
+    - node_attention
+    - edge_final
+    - edge_index
+    - edge_type_idx
+    - selfloop_edge
+    outputs:
+    - hamiltonian
+    options:
+      species_shells: ${species.shells}
+      species_order: ${species.order}
+      irreps_neck: 4x0e+4x1o
+      config:
+        neck_depth: 1
+        internal_e3mlp_layers: 0
+        head_e3mlp_layers: 1
+        e3mlp_variant: basic
+        internal_e3mlp_variant: basic
+        head_e3mlp_variant: basic
+        nonlin_kind: normact
+        dropout: 0.0
+        e3layernorm: false
+  outputs:
+    hamiltonian: hamiltonian

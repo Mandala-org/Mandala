@@ -38,6 +38,11 @@ class Config:
     nonlinearity, regularization, radial basis, output heads, and loss weighting.
     """
 
+    # None preserves legacy registration order and checkpoints.
+    pipeline: dict | None = None
+    objective: dict | None = None
+    optimization: dict | None = None
+
     # radii (unified cutoff - no small/large graph split)
     cutoff_radius: float = 11.0
 

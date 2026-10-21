@@ -100,7 +100,9 @@ data/paper
 data/pair_descriptor_hamiltonian/
 analysis_outputs/
 *.zip
-configs/
+configs/*
+!configs/reference/
+!configs/hybrids/
 tmp/
 local_cache/
 

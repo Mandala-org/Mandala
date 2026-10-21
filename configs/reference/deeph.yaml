@@ -1,0 +1,251 @@
+schema_version: 1
+reference:
+  repository: https://github.com/mzjb/DeepH-pack
+  commit: 141faaaba1d5e17248283ef939bcd2ead2d8e677
+  method: DeepH original local-coordinate architecture
+  scope: default gated crystal convolution with five message layers and local-coordinate readout
+  utility_policy: MANDALA epoch-boundary restart
+parameters:
+  node_width: 64
+  edge_width: 128
+  post_edge_width: 103
+  gauss_stop: 6
+  num_l: 5
+  angular_dim: 25
+codec:
+  spinful: false
+  ignore_parity: false
+  sort_irreps: false
+  block_kind: all
+data:
+  support_file: overlaps.h5
+  target_frame: bond
+  local_coordinates: true
+  frame_source: derive
+  num_l: ${parameters.num_l}
+training:
+  seed: 42
+  dtype: float32
+  batch_size: 3
+  max_epochs: 4000
+  grad_clip_val: 4.2
+  split:
+    train_ratio: 0.6
+    val_ratio: 0.2
+    test_ratio: 0.2
+optimization:
+  optimizer:
+    kind: adam
+    lr: 0.001
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    weight_decay: 0
+objective:
+  kind: mse
+  epoch_weight: elements
+  complex_reduction: components
+pipeline:
+  stages:
+  - id: species_embedding
+    transform: embedding
+    inputs:
+    - node_type_idx
+    outputs:
+    - node0
+    options:
+      num_embeddings: ${species.count}
+      extra_embeddings: 5
+      width: ${parameters.node_width}
+  - id: distance_expansion
+    transform: gaussian_basis
+    inputs:
+    - edge_lengths
+    outputs:
+    - edge0
+    options:
+      start: 0
+      stop: ${parameters.gauss_stop}
+      n_gaussians: ${parameters.edge_width}
+      trainable: false
+  - id: node_update_1
+    transform: scalar_gated_node
+    inputs:
+    - node0
+    - edge_index
+    - edge0
+    - node_batch
+    - edge_lengths
+    outputs:
+    - node1
+    options:
+      normalization: layer
+      distance_envelope: true
+  - id: edge_update_1
+    transform: endpoint_scalar_edge
+    inputs:
+    - node1
+    - edge_index
+    - edge0
+    outputs:
+    - edge1
+    options:
+      out_dim: ${parameters.edge_width}
+      final_activation: true
+  - id: node_update_2
+    transform: scalar_gated_node
+    inputs:
+    - node1
+    - edge_index
+    - edge1
+    - node_batch
+    - edge_lengths
+    outputs:
+    - node2
+    options:
+      normalization: layer
+      distance_envelope: true
+  - id: edge_update_2
+    transform: endpoint_scalar_edge
+    inputs:
+    - node2
+    - edge_index
+    - edge1
+    outputs:
+    - edge2
+    options:
+      out_dim: ${parameters.edge_width}
+      final_activation: true
+  - id: node_residual_2
+    transform: add
+    inputs:
+    - node0
+    - node2
+    outputs:
+    - node_residual_2
+    options: {}
+  - id: edge_residual_2
+    transform: add
+    inputs:
+    - edge0
+    - edge2
+    outputs:
+    - edge_residual_2
+    options: {}
+  - id: node_update_3
+    transform: scalar_gated_node
+    inputs:
+    - node_residual_2
+    - edge_index
+    - edge_residual_2
+    - node_batch
+    - edge_lengths
+    outputs:
+    - node3
+    options:
+      normalization: layer
+      distance_envelope: true
+  - id: edge_update_3
+    transform: endpoint_scalar_edge
+    inputs:
+    - node3
+    - edge_index
+    - edge_residual_2
+    outputs:
+    - edge3
+    options:
+      out_dim: ${parameters.edge_width}
+      final_activation: true
+  - id: node_update_4
+    transform: scalar_gated_node
+    inputs:
+    - node3
+    - edge_index
+    - edge3
+    - node_batch
+    - edge_lengths
+    outputs:
+    - node4
+    options:
+      normalization: layer
+      distance_envelope: true
+  - id: edge_update_4
+    transform: endpoint_scalar_edge
+    inputs:
+    - node4
+    - edge_index
+    - edge3
+    outputs:
+    - edge4
+    options:
+      out_dim: ${parameters.edge_width}
+      final_activation: true
+  - id: node_residual_4
+    transform: add
+    inputs:
+    - node_residual_2
+    - node4
+    outputs:
+    - node_residual_4
+    options: {}
+  - id: edge_residual_4
+    transform: add
+    inputs:
+    - edge_residual_2
+    - edge4
+    outputs:
+    - edge_residual_4
+    options: {}
+  - id: node_update_5
+    transform: scalar_gated_node
+    inputs:
+    - node_residual_4
+    - edge_index
+    - edge_residual_4
+    - node_batch
+    - edge_lengths
+    outputs:
+    - node5
+    options:
+      normalization: layer
+      distance_envelope: true
+  - id: edge_update_5
+    transform: endpoint_scalar_edge
+    inputs:
+    - node5
+    - edge_index
+    - edge_residual_4
+    outputs:
+    - edge5
+    options:
+      out_dim: ${parameters.post_edge_width}
+      final_activation: true
+  - id: local_coordinate_readout
+    transform: local_coordinate_message
+    inputs:
+    - node5
+    - edge5
+    - sub_atom_idx
+    - sub_edge_idx
+    - sub_edge_ang
+    - sub_index
+    - edge_lengths
+    outputs:
+    - local_entries
+    options:
+      angular_dim: ${parameters.angular_dim}
+      out_dim: ${layout.real_packed_dim}
+      normalization: none
+      distance_envelope: true
+  - id: native_local_operator
+    transform: local_orbital_output
+    inputs:
+    - local_entries
+    outputs:
+    - hamiltonian
+    options:
+      packed_dim: ${layout.packed_dim}
+      spinful: ${codec.spinful}
+  outputs:
+    hamiltonian: hamiltonian

@@ -1,0 +1,104 @@
+# Global equivariant node features explicitly rotated before a local readout.
+schema_version: 1
+codec:
+  spinful: false
+parameters:
+  width: 4
+  radial_width: 8
+data:
+  target_frame: bond
+  local_coordinates: true
+objective:
+  kind: mse
+  epoch_weight: edges
+optimization:
+  optimizer:
+    kind: adam
+    lr: 0.002
+  scheduler: null
+training:
+  dtype: float32
+  seed: 42
+  batch_size: 1
+  max_epochs: 3000
+pipeline:
+  stages:
+  - id: embedding
+    transform: irrep_linear
+    inputs:
+    - node_one_hot
+    outputs:
+    - node_0
+    options:
+      irreps_out: 4x0e
+  - id: radial
+    transform: gaussian_basis
+    inputs:
+    - edge_lengths
+    outputs:
+    - radial
+    options:
+      start: 0.0
+      stop: 7.2
+      n_gaussians: 8
+  - id: edge_embedding
+    transform: irrep_linear
+    inputs:
+    - radial
+    outputs:
+    - edge_0
+    options:
+      irreps_out: 4x0e
+  - id: angular
+    transform: spherical_harmonics
+    inputs:
+    - edge_vectors
+    outputs:
+    - angular
+    options:
+      irreps: 0e+1o
+  - id: node_update
+    transform: endpoint_tensor_product_node
+    inputs:
+    - node_0
+    - node_one_hot
+    - angular
+    - edge_0
+    - radial
+    - edge_index
+    - node_batch
+    - edge_batch
+    - selfloop_edge
+    outputs:
+    - node_tp
+    options:
+      num_species: ${species.count}
+      fc_len_in: 8
+      irreps_out_node: 4x0e+4x1o
+  - id: bond_rotation
+    transform: irrep_to_bond
+    inputs:
+    - node_tp
+    - edge_index
+    - bond_frames
+    outputs:
+    - bond_components
+    options: {}
+  - id: local_projection
+    transform: bond_local_linear
+    inputs:
+    - bond_components
+    outputs:
+    - local_entries
+    options:
+      out_features: ${layout.packed_dim}
+  - id: local_readout
+    transform: local_orbital_output
+    inputs:
+    - local_entries
+    outputs:
+    - hamiltonian
+    options:
+      packed_dim: ${layout.packed_dim}
+  outputs:
+    hamiltonian: hamiltonian

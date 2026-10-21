@@ -12,6 +12,7 @@ dependencies = [
     "torch-scatter>=2.1",
     "torch-geometric>=2.7",
     "e3nn>=0.5.6",
+    "opt-einsum-fx>=0.1.4",
     "metatensor>=0.1.0",
     "ase>=3.22",
     "hydra-core>=1.3",

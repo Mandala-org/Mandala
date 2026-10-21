@@ -1,0 +1,112 @@
+# Official DeepH-E3 default training architecture assembled from common stages.
+# No architecture class or architecture-name dispatch is used.
+schema_version: 1
+reference:
+  source: https://github.com/Xiaoxun-Gong/DeepH-E3
+  commit: 036bf95b996052ef778c5c38e3c54c2ac0e2b591
+  configuration: deephe3/default_configs/train_default.ini
+parameters:
+  cutoff_radius: 7.2
+  embedding_width: 64
+  radial_width: 128
+  angular_irreps: 1x0e+1x1o+1x2e+1x3o+1x4e
+  node_irreps: 64x0e+32x1o+16x2e+8x3o+8x4e
+  edge_irreps: 64x0e+32x1o+16x2e+8x3o+8x4e
+  terminal_self_product: false
+codec:
+  spinful: false
+  ignore_parity: false
+  sort_irreps: false
+  block_kind: all
+layout_rules:
+  post_node_irreps:
+    kind: tensor_product_completion
+    candidate: ${parameters.node_irreps}
+    node_input: ${parameters.node_irreps}
+    edge_input: ${parameters.edge_irreps}
+    angular: ${parameters.angular_irreps}
+    output: ${layout.post_irreps}
+data:
+  support_file: hamiltonians.h5
+  target_frame: global
+  local_coordinates: false
+training:
+  seed: 42
+  dtype: float32
+  batch_size: 1
+  max_epochs: 3000
+  min_lr: 0.00003
+  grad_clip_val: null
+  split: {train_ratio: 0.67, val_ratio: 0.33, test_ratio: 0.0}
+objective: {kind: mse, epoch_weight: edges}
+optimization:
+  optimizer: {kind: adam, lr: 0.002, betas: [0.9, 0.999], eps: 0.00000001, weight_decay: 0.0}
+  scheduler: {kind: plateau, ema_alpha: 0.1, factor: 0.5, cooldown: 40, patience: 120, threshold: 0.05, monitor: val/loss}
+pipeline:
+  stages:
+    - id: embedding
+      transform: irrep_linear
+      inputs: [node_one_hot]
+      outputs: [node_0]
+      options: {irreps_out: '${parameters.embedding_width}x0e'}
+    - id: radial_basis
+      transform: gaussian_basis
+      inputs: [edge_lengths]
+      outputs: [radial]
+      options: {start: 0.0, stop: '${parameters.cutoff_radius}', n_gaussians: '${parameters.radial_width}', trainable: false}
+    - id: edge_embedding
+      transform: gaussian_basis
+      inputs: [edge_lengths]
+      outputs: [edge_0]
+      options: {start: 0.0, stop: 6.0, n_gaussians: '${parameters.embedding_width}', trainable: false}
+    - id: angular_basis
+      transform: spherical_harmonics
+      inputs: [edge_vectors]
+      outputs: [angular]
+      options: {irreps: '${parameters.angular_irreps}', permutation: [1, 2, 0]}
+    - id: node_update_0
+      transform: endpoint_tensor_product_node
+      inputs: [node_0, node_one_hot, angular, edge_0, radial, edge_index, node_batch]
+      outputs: [node_1]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_node: '${parameters.node_irreps}'}
+    - id: edge_update_0
+      transform: endpoint_tensor_product_edge
+      inputs: [node_1, edge_one_hot, angular, edge_0, radial, edge_index, node_batch]
+      outputs: [edge_1]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${parameters.edge_irreps}'}
+    - id: node_update_1
+      transform: endpoint_tensor_product_node
+      inputs: [node_1, node_one_hot, angular, edge_1, radial, edge_index, node_batch]
+      outputs: [node_2]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_node: '${parameters.node_irreps}'}
+    - id: edge_update_1
+      transform: endpoint_tensor_product_edge
+      inputs: [node_2, edge_one_hot, angular, edge_1, radial, edge_index, node_batch]
+      outputs: [edge_2]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${parameters.edge_irreps}'}
+    - id: node_update_2
+      transform: endpoint_tensor_product_node
+      inputs: [node_2, node_one_hot, angular, edge_2, radial, edge_index, node_batch]
+      outputs: [node_3]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_node: '${layout.post_node_irreps}', use_selftp: '${parameters.terminal_self_product}'}
+    - id: edge_update_2
+      transform: endpoint_tensor_product_edge
+      inputs: [node_3, edge_one_hot, angular, edge_2, radial, edge_index, node_batch]
+      outputs: [edge_3]
+      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${layout.post_irreps}', use_selftp: '${parameters.terminal_self_product}'}
+    - id: node_readout
+      transform: irrep_linear
+      inputs: [node_3]
+      outputs: [node_auxiliary]
+      options: {irreps_out: 1x0e, biases: true}
+    - id: edge_readout
+      transform: irrep_linear
+      inputs: [edge_3]
+      outputs: [coupled]
+      options: {irreps_out: '${layout.coupled_irreps}', biases: true}
+    - id: native_decode
+      transform: shell_tensor_decode
+      inputs: [coupled]
+      outputs: [hamiltonian_native]
+      options: {shell_pairs: '${layout.shell_pairs}', spinful: '${layout.spinful}', ignore_parity: '${layout.ignore_parity}', sort_irreps: '${layout.sort_irreps}'}
+  outputs: {hamiltonian: hamiltonian_native}
