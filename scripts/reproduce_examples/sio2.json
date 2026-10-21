@@ -190,5 +190,6 @@
     "num_val": 10
   },
   "envelope_file": "sio2_envelope.json",
-  "envelope_sha256": "ddd2d169662c9dd34e74b7525b0ec351ba1708117b0b0342e01fdc4cf5e2aa74"
+  "envelope_sha256": "587844b92ed7443d20cc8b9e888c925f0ce6a89373526d4dfe09d4937453143c",
+  "envelope_sha256_kind": "canonical-json-v1"
 }

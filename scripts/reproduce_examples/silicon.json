@@ -191,6 +191,6 @@
       1
     ],
     "num_train_per_scale": 80,
-    "num_val_per_scale": 20
+    "num_val_per_scale": 16
   }
 }

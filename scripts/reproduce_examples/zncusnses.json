@@ -193,5 +193,6 @@
     "num_val_per_scale": 20
   },
   "envelope_file": "zncusnses_envelope.json",
-  "envelope_sha256": "75df31535a1acee5efc2d5a00ac817e440108c5f71a7415a3df361b994e74bb5"
+  "envelope_sha256": "9679be29814058b3c784a8956e97c34670c7ac75ee86517d87c319a9db88323f",
+  "envelope_sha256_kind": "canonical-json-v1"
 }

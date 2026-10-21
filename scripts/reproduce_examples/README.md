@@ -41,7 +41,7 @@ or modify environments. B200 is the proposed initial target for all three.
 | --- | --- | ---: | --- | --- | ---: |
 | `zncusnses.json` | H / MSE | 0.010803383053097332 | 44 / 44 | 80 / 20, scale 1 | 3000 |
 | `sio2.json` | H / MAE | 0.0027 | 42 / 42 | 90 / 10 | 4000 |
-| `silicon.json` | H, D, S / MAE + reference-partner energy guidance, coefficient 0.003 | 0.001 | 43 / 43 | 80 / 20, scale 1 | 5000 |
+| `silicon.json` | H, D, S / MAE + reference-partner energy guidance, coefficient 0.003 | 0.001 | 43 / 43 | 80 / 16, scale 1 | 5000 |
 
 These are cumulative epoch caps, not epochs per allocation. All three retain
 the actual selected checkpoint's architecture, tensor products, activations,
@@ -149,7 +149,8 @@ The wrapper locks each model against concurrent writers and rejects changes to
 the recipe, code, installed package versions, GPU type, or recorded runtime
 settings. Manifests reject changed split identities, input sizes, or mtimes.
 Large input files are not content-hashed; preserve the immutable dataset itself.
-The supplied envelopes are copied into this directory and SHA256-verified.
+The supplied envelopes are copied into this directory and SHA256-verified using
+canonical JSON values, so whitespace/newline changes do not alter their identity.
 They are fixed historical fitted preprocessing artifacts, not re-fitted here.
 
 Zero DataLoader workers and disabled cache-warmup shuffling avoid process/RNG
@@ -178,13 +179,16 @@ density targets. The silicon energy/density results cannot be compared blindly
 to the old numerical values. No normalization or physical-constraint method is
 changed by this work.
 
-The historical silicon metric JSON records 16 validation structures although
-the old launcher requested 20 and tolerated incomplete data. The new recipe
-explicitly requests the intended 80/20 and **fails** if fewer than 100 scale-1
-structures are available. It never silently substitutes a smaller validation
-population. Verify that inventory before long execution; if only 96 exist,
-review and freeze an explicit 80/16 recipe before launching. Historical exact
-split membership is not asserted. SiO2 selects 100 of its larger corpus.
+ROSI dataset discovery confirmed 96 scale-1 silicon snapshot pairs. Silicon is
+therefore frozen at 80 training / 16 validation structures, split seed 43, with
+incomplete-dataset fallback still disabled. This matches the historical reported
+validation count; exact historical membership is not asserted. SiO2 selects 100
+of its larger corpus.
+
+A dataset-discovery failure can leave only a contract file, before any run
+directory/checkpoint exists. A corrected fresh attempt archives that failed
+setup contract and creates a new one. Existing run directories or recovery
+checkpoints retain the strict contract checks; training is never reset silently.
 
 These recipes preserve the numerical-example train/validation design and do not
 introduce a test split or evaluate test data after every segment. Histograms and

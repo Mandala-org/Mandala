@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import platform
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -26,6 +27,17 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def json_digest(path):
+    """Hash JSON values rather than transport/editor whitespace."""
+    payload = json.dumps(
+        json.loads(Path(path).read_text()),
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def load_recipe(path):
     recipe = json.loads(path.read_text())
     config = recipe["config"]
@@ -33,8 +45,17 @@ def load_recipe(path):
         raise ValueError("Publication recipes must initialize from scratch.")
     if config["hamiltonian_envelope_mode"] != "off":
         envelope = path.parent / recipe["envelope_file"]
-        if digest(envelope) != recipe["envelope_sha256"]:
-            raise ValueError("Frozen radial envelope checksum mismatch.")
+        kind = recipe.get("envelope_sha256_kind", "file-bytes")
+        if kind not in {"file-bytes", "canonical-json-v1"}:
+            raise ValueError(f"Unknown envelope checksum format: {kind}")
+        actual = (
+            json_digest(envelope) if kind == "canonical-json-v1" else digest(envelope)
+        )
+        if actual != recipe["envelope_sha256"]:
+            raise ValueError(
+                f"Frozen radial envelope checksum mismatch: {envelope}; "
+                f"expected {recipe['envelope_sha256']}, got {actual} ({kind})."
+            )
         config["hamiltonian_envelope_path"] = str(envelope.resolve())
     return recipe
 
@@ -111,8 +132,20 @@ def main(argv=None):
         contract_path = checkpoint_root / f"{values['run_name']}.contract.json"
         if contract_path.exists():
             if json.loads(contract_path.read_text()) != contract:
-                raise RuntimeError(
-                    "Recipe, source, or runtime changed; refusing an untracked continuation."
+                if continuing or run_dir.exists():
+                    raise RuntimeError(
+                        "Recipe, source, or runtime changed; refusing an untracked continuation."
+                    )
+                # A failure in dataset discovery creates the contract but no
+                # run directory/checkpoint. Preserve that failed setup record
+                # and permit the corrected recipe to initialize from scratch.
+                archived = contract_path.with_name(
+                    f"{contract_path.stem}.failed_setup_{time.time_ns()}.json"
+                )
+                contract_path.rename(archived)
+                print(f"Archived pre-training contract: {archived}")
+                contract_path.write_text(
+                    json.dumps(contract, indent=2, sort_keys=True) + "\n"
                 )
         elif continuing:
             raise FileNotFoundError(
