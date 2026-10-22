@@ -100,11 +100,13 @@ def test_offdiag(mock_block_matrix):
 def test_transpose_symmetric():
     atoms = ("A",)
     atom_counts = Counter(atoms)
-    orbital_cfg = OrbitalIrrepConfig.from_dict({"A": "1s"})
+    # Mixed s+p orbitals make block transposition observable; 1x1 scalar
+    # blocks cannot detect an omitted transpose.
+    orbital_cfg = OrbitalIrrepConfig.from_dict({"A": ["1x0e", "1x1o"]})
 
     # Symmetric edges: (0,0,0,0,0) and pair (1,0,0,0,0) & (-1,0,0,0,0)
     edges = torch.tensor([[0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [-1, 0, 0, 0, 0]]).t()
-    blocks = torch.randn(3, 1, 1)
+    blocks = torch.arange(1, 49, dtype=torch.float32).reshape(3, 4, 4)
 
     pair_blocks = {"A-A": blocks}
     pair_edges = {"A-A": edges}

@@ -53,19 +53,23 @@ def test_shared_mapper_identity(factory_results):
 # ════════════════════════════════════════════════════════════════════════
 # 5.  Mapping availability & vector dimensions
 # ════════════════════════════════════════════════════════════════════════
-@pytest.mark.parametrize(
-    "pair",
-    ["H-H", "H-O", "O-H", "O-O", "Si-Si"],  # common ordered pairs
-)
 @pytest.mark.unit
-def test_mapper_vector_dim_positive(factory_results, pair):
+def test_mapper_vector_dims_and_roundtrips_cover_union(factory_results):
     _, _, mapper = factory_results
-    # Not all pairs may exist; skip gracefully
-    try:
-        dim = mapper.vector_dim(pair)
-    except KeyError:
-        pytest.skip(f"Pair {pair} not present in merged config")
-    assert dim > 0, f"vector_dim for {pair} should be > 0 (got {dim})"
+    elements = mapper.orbital_cfg.elements()
+    assert {"H", "O", "Si"} <= set(elements)
+    for first in elements:
+        for second in elements:
+            pair = f"{first}-{second}"
+            dim_i, dim_j = mapper.block_dims(pair)
+            assert mapper.vector_dim(pair) == dim_i * dim_j
+            blocks = torch.arange(2 * dim_i * dim_j, dtype=torch.float32).reshape(
+                2, dim_i, dim_j
+            )
+            torch.testing.assert_close(
+                mapper.vectors_to_blocks(pair, mapper.blocks_to_vectors(pair, blocks)),
+                blocks,
+            )
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -76,15 +80,27 @@ def test_mapper_vector_dim_positive(factory_results, pair):
 @pytest.mark.unit
 def test_sample_coherence(factory_results):
     train_ds, _, mapper = factory_results
-    known = set(mapper.orbital_cfg.elements())
+    elements = train_ds.species_order
+    element_to_idx = {element: index for index, element in enumerate(elements)}
 
     for x, y in train_ds:
-        # node_type_idx sanity: indices map to known elements
-        elem_list = mapper.orbital_cfg.elements()
-        for idx in x["node_type_idx"].tolist():
-            assert elem_list[idx] in known
+        expected_node_types = torch.tensor(
+            [element_to_idx[element] for element in x["atoms_tuple"]],
+            dtype=x["node_type_idx"].dtype,
+        )
+        torch.testing.assert_close(x["node_type_idx"], expected_node_types)
 
-        # edge_type_idx sanity: indices must be within range
+        expected_edge_types = torch.tensor(
+            [
+                train_ds.edge_type2idx[
+                    f"{x['atoms_tuple'][src]}-{x['atoms_tuple'][dst]}"
+                ]
+                for src, dst in x["edge_index"].T.tolist()
+            ],
+            dtype=x["edge_type_idx"].dtype,
+        )
+        torch.testing.assert_close(x["edge_type_idx"], expected_edge_types)
+        assert torch.all(x["edge_type_idx"] >= 0)
         assert torch.all(x["edge_type_idx"] < len(mapper.edge_types))
 
         # target block shapes agree with mapper dims

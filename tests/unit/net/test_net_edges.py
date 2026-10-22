@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 from net.e3gnn import E3GNN
 from net.layers import EdgeUpdateBlock, NodeUpdateBlock
 from net.common import Config
@@ -45,7 +46,9 @@ def test_wrap_head_output():
 
 
 def test_edge_update_block():
-    # Test EdgeUpdateBlock edge unpacking
+    # Replace only the equivariant convolution with a fixed linear probe. This
+    # isolates the block's endpoint ordering and gradient flow from random TP
+    # weights while exercising the real forward method.
     cfg = Config(
         edge_update_node_combine="concat",
         dropout=0.0,
@@ -58,21 +61,39 @@ def test_edge_update_block():
     block = EdgeUpdateBlock(hidden_irreps, hidden_irreps, num_species, cfg)
 
     # Mock input
-    node = torch.randn(2, 1)
-    edge = torch.randn(1, 1)
-    edge_index = torch.tensor([[0], [1]])  # src=0, dst=1
+    node = torch.tensor([[1.0], [2.0], [-1.0]], requires_grad=True)
+    edge = torch.tensor([[0.5], [-0.5]], requires_grad=True)
+    edge_index = torch.tensor([[0, 2], [1, 0]])  # src, dst
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
-    edge_sh = torch.randn(1, sh_irreps.dim)
-    edge_length_emb = torch.randn(1, cfg.n_radial)
+    edge_sh = torch.zeros(2, sh_irreps.dim)
+    edge_length_emb = torch.zeros(2, cfg.n_radial)
+
+    class EndpointProbe(nn.Module):
+        def forward(self, features, spherical_harmonics, radial, **kwargs):
+            # concat mode is [source, destination, edge].
+            return features[:, :1] + 2 * features[:, 1:2] + 3 * features[:, 2:3]
+
+    block.lin_pre = nn.Identity()
+    block.conv = EndpointProbe()
+    block.lin_post = nn.Identity()
+    block.norm_act = nn.Identity()
+    block.refine = nn.Identity()
 
     # Forward
     out = block(node, edge, edge_index, edge_sh, edge_length_emb)
 
-    assert out.shape == (1, 1)
+    expected = node[edge_index[0]] + 2 * node[edge_index[1]] + 3 * edge
+    torch.testing.assert_close(out, expected)
+    node_grad, edge_grad = torch.autograd.grad(out.sum(), (node, edge))
+    expected_node_grad = torch.tensor([[3.0], [2.0], [1.0]])
+    expected_edge_grad = torch.full_like(edge, 3.0)
+    torch.testing.assert_close(node_grad, expected_node_grad)
+    torch.testing.assert_close(edge_grad, expected_edge_grad)
 
 
 def test_node_update_block():
-    # Test NodeUpdateBlock edge unpacking
+    # Isolate the real receiver scatter from equivariant message construction
+    # with a deterministic scalar message probe.
     cfg = Config(
         node_update_message_agg="sum",
         dropout=0.0,
@@ -85,14 +106,32 @@ def test_node_update_block():
     block = NodeUpdateBlock(hidden_irreps, hidden_irreps, num_species, cfg)
 
     # Mock input
-    node = torch.randn(2, 1)
-    edge = torch.randn(1, 1)
-    edge_index = torch.tensor([[0], [1]])  # src=0, dst=1
+    node = torch.tensor([[1.0], [2.0], [-1.0]], requires_grad=True)
+    edge = torch.tensor([[0.5], [-0.5], [1.5]], requires_grad=True)
+    edge_index = torch.tensor([[0, 2, 1], [1, 1, 0]])  # src, receiver
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
-    edge_sh = torch.randn(1, sh_irreps.dim)
-    edge_length_emb = torch.randn(1, cfg.n_radial)
+    edge_sh = torch.zeros(3, sh_irreps.dim)
+    edge_length_emb = torch.zeros(3, cfg.n_radial)
+
+    class MessageProbe(nn.Module):
+        def forward(self, features, spherical_harmonics, radial, **kwargs):
+            # node-update inputs are [source, receiver, edge].
+            return features[:, :1] + 2 * features[:, 1:2] + 3 * features[:, 2:3]
+
+    block.lin_pre = nn.Identity()
+    block.conv = MessageProbe()
+    block.lin_post = nn.Identity()
+    block.norm_act = nn.Identity()
+    block.refine = nn.Identity()
 
     # Forward
     out = block(node, edge, edge_index, edge_sh, edge_length_emb)
 
-    assert out.shape == (2, 1)
+    messages = node[edge_index[0]] + 2 * node[edge_index[1]] + 3 * edge
+    expected = torch.zeros_like(node).index_add(0, edge_index[1], messages)
+    torch.testing.assert_close(out, expected)
+    node_grad, edge_grad = torch.autograd.grad(out.sum(), (node, edge))
+    # Node 2 is a source only; node 0 is the receiver of one message; node 1
+    # receives two messages and also participates as a source once.
+    torch.testing.assert_close(node_grad, torch.tensor([[3.0], [5.0], [1.0]]))
+    torch.testing.assert_close(edge_grad, torch.full_like(edge, 3.0))

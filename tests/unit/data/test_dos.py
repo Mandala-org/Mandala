@@ -1,3 +1,4 @@
+import math
 import pytest
 from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix
@@ -34,7 +35,7 @@ def snapshot():
 
 
 @pytest.mark.unit
-def test_dos_return_shape(snapshot):
+def test_dos_grid_and_gaussian_values(snapshot):
     sigma = 0.005
     bin_width = 0.001
     E_min = -1.0
@@ -45,6 +46,20 @@ def test_dos_return_shape(snapshot):
 
     assert grid.shape == (expected_length,)
     assert dos.shape == (expected_length,)
+    assert grid[0].item() == pytest.approx(E_min)
+    assert grid[-1].item() == pytest.approx(E_max, abs=2e-6)
+    torch.testing.assert_close(
+        grid[1:] - grid[:-1], torch.full_like(grid[1:], bin_width), atol=2e-6, rtol=0
+    )
+
+    # S is identity and H has the known eigenvalues -0.25 and +0.35.  Check
+    # two bins centred on those levels against the normalized Gaussian sum.
+    for index, levels in ((750, (-0.25, 0.35)), (1350, (-0.25, 0.35))):
+        energy = grid[index].item()
+        expected = sum(
+            math.exp(-((energy - level) ** 2) / (2 * sigma**2)) for level in levels
+        ) / (math.sqrt(2 * math.pi) * sigma)
+        assert dos[index].item() == pytest.approx(expected, rel=2e-5)
 
 
 @pytest.mark.unit

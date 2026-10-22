@@ -584,8 +584,9 @@ class E3GNN(pl.LightningModule):
             )
 
         diff = preds - targets
-        mse_diff = diff if self.cfg.loss_l1_fraction < 1.0 else diff.detach()
-        mae_diff = diff if self.cfg.loss_l1_fraction > 0.0 else diff.detach()
+        mixture = self._objective_l1_fraction()
+        mse_diff = diff if mixture < 1.0 else diff.detach()
+        mae_diff = diff if mixture > 0.0 else diff.detach()
         per_edge_mse = torch.mean(mse_diff.abs().square(), dim=(1, 2))
         per_edge_mae = torch.mean(torch.abs(mae_diff), dim=(1, 2))
         if edge_weights is None:
@@ -602,6 +603,15 @@ class E3GNN(pl.LightningModule):
         weighted_mse = torch.sum(edge_weights * per_edge_mse) / weight_sum
         weighted_mae = torch.sum(edge_weights * per_edge_mae) / weight_sum
         return weighted_mse, weighted_mae
+
+    def _objective_l1_fraction(self) -> float:
+        """Return the actual objective mixture used by loss aggregation."""
+        kind = (self.cfg.objective or {}).get("kind")
+        if kind == "mae":
+            return 1.0
+        if kind == "mse":
+            return 0.0
+        return float(self.cfg.loss_l1_fraction)
 
     def _should_recompute_edge_features(self, x: Dict[str, Any]) -> bool:
         if "positions" in x:
@@ -1293,8 +1303,8 @@ class E3GNN(pl.LightningModule):
                     loss_mse_val += pair_mse
                     loss_mae_val += pair_mae
                     pair_losses[key] = (
-                        1 - self.cfg.loss_l1_fraction
-                    ) * pair_mse + self.cfg.loss_l1_fraction * pair_mae
+                        1 - self._objective_l1_fraction()
+                    ) * pair_mse + self._objective_l1_fraction() * pair_mae
 
                 if (
                     stage != "train" and self.cfg.symmetrize_validation_output
@@ -1400,9 +1410,8 @@ class E3GNN(pl.LightningModule):
                     loss_mse_val += weighted_pair_mse
                     loss_mae_val += weighted_pair_mae
                     pair_losses[key] = (
-                        (1 - self.cfg.loss_l1_fraction) * weighted_pair_mse
-                        + self.cfg.loss_l1_fraction * weighted_pair_mae
-                    )
+                        1 - self._objective_l1_fraction()
+                    ) * weighted_pair_mse + self._objective_l1_fraction() * weighted_pair_mae
 
                 if (
                     metric_pred_matrix is p
@@ -1475,8 +1484,8 @@ class E3GNN(pl.LightningModule):
                     irrep_mse = irrep_vals["mse"]
                     irrep_mae = irrep_vals["mae"]
                     irrep_loss = (
-                        1 - self.cfg.loss_l1_fraction
-                    ) * irrep_mse + self.cfg.loss_l1_fraction * irrep_mae
+                        1 - self._objective_l1_fraction()
+                    ) * irrep_mse + self._objective_l1_fraction() * irrep_mae
                     if name == "hamiltonian":
                         metrics[f"{stage}/{name}_irrep_{irrep_key}_mae"] = (
                             irrep_mae * HARTREE_TO_EV
@@ -1491,12 +1500,7 @@ class E3GNN(pl.LightningModule):
                         metrics[f"{stage}/{name}_irrep_{irrep_key}_loss"] = irrep_loss
 
             options = self.cfg.objective or {}
-            kind = options.get("kind")
-            mixture = (
-                1.0
-                if kind == "mae"
-                else 0.0 if kind == "mse" else self.cfg.loss_l1_fraction
-            )
+            mixture = self._objective_l1_fraction()
             combined_matrix_losses[name] = options.get("weights", {}).get(name, 1.0) * (
                 (1 - mixture) * mse_for_loss + mixture * mae_for_loss
             )

@@ -1,5 +1,6 @@
 import pytest
 import torch
+import torch.nn.functional as F
 from e3nn.o3 import Irreps
 from net.common import RadialMLP, build_hidden_irreps, Config
 
@@ -13,10 +14,25 @@ def test_build_hidden_irreps_basic():
 
 @pytest.mark.unit
 def test_radial_mlp_arbitrary_layers():
+    torch.manual_seed(731)
     mlp = RadialMLP(16, out_dim=4, layers=(32, 16, 8))
-    x = torch.randn(3, 16)
+    x = torch.randn(3, 16, requires_grad=True)
     y = mlp(x)
     assert y.shape == (3, 4)
+
+    # Spell out the three hidden affine/SiLU steps and the final affine map.
+    # This catches a missing hidden layer, an activation after the output layer,
+    # and wrong layer ordering while retaining an input-gradient check.
+    layers = [module for module in mlp.net if isinstance(module, torch.nn.Linear)]
+    assert [layer.out_features for layer in layers] == [32, 16, 8, 4]
+    expected = x
+    for layer in layers[:-1]:
+        expected = F.silu(F.linear(expected, layer.weight, layer.bias))
+    expected = F.linear(expected, layers[-1].weight, layers[-1].bias)
+    torch.testing.assert_close(y, expected)
+    actual_grad = torch.autograd.grad(y.square().sum(), x, retain_graph=True)[0]
+    expected_grad = torch.autograd.grad(expected.square().sum(), x)[0]
+    torch.testing.assert_close(actual_grad, expected_grad)
 
 
 @pytest.mark.unit

@@ -14,6 +14,10 @@ def test_parse_returns_snapshot(h2o_snapshot):
     ham = snap.hamiltonian
     den = snap.density
     assert ham["H-O"].shape[-2:] == (9, 22)
+    # Literal first entry of the H2O.matrix onsite Hamiltonian block (Rn=0).
+    assert ham[(0, 0, 0, 0, 0)][0, 0].item() == pytest.approx(
+        -0.5108059744191915, abs=2e-7
+    )
     den_OH = den["O-H"]
     den_T = den.transpose()
     den_OH_T = den_T["O-H"]
@@ -83,6 +87,11 @@ def test_parse_pbc_shapes(h2o_snapshot):
     assert hamiltonian["O-O"].shape == (194, 22, 22)
     assert hamiltonian["H-O"].shape == (384, 9, 22)
     assert hamiltonian["O-H"].shape == (384, 22, 9)
+    # Rn=203 maps to shift (-2,0,0) in the fixture's position-operator table;
+    # this is the first raw entry in the matching Kohn-Sham block.
+    assert hamiltonian[(-2, 0, 0, 0, 0)][0, 0].item() == pytest.approx(
+        -0.00001369518229967737, abs=2e-9
+    )
     # assert O-H is the same as H-O.T
     hamiltonian = hamiltonian
     hamiltonian_T = hamiltonian.transpose()

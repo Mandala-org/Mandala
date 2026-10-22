@@ -8,7 +8,6 @@ from net.e3gnn import E3GNN
 from data.factory import DatasetFactory
 from data.snapshot import Snapshot
 
-
 pytestmark = [pytest.mark.integration, pytest.mark.workflow]
 
 
@@ -58,30 +57,9 @@ def tiny_dataset(monkeypatch, small_angular_snapshot_e3nn):
 
 
 @pytest.mark.integration
-def test_force_prediction(tiny_dataset):
-    """
-    Test that force prediction runs without errors and returns a tensor of the correct shape.
-    """
-    train_ds, mapper = tiny_dataset
-
-    # initialize model with default hyperparameters
-    cfg = _tiny_config(
-        enable_forces=True,
-        matrix_targets=["hamiltonian", "overlap", "density"],
-    )
-    model = E3GNN(mapper, cfg)
-    # take first sample from training dataset
-    x, y = train_ds[0]
-    # predict forces
-    forces = model.predict_forces(x)
-    assert isinstance(forces, torch.Tensor)
-    assert forces.shape == x["positions"].shape
-    assert torch.isfinite(forces).all()
-
-
-@pytest.mark.integration
 def test_training_step_with_force_loss(tiny_dataset):
     train_ds, mapper = tiny_dataset
+    torch.manual_seed(433)
 
     cfg = _tiny_config(
         enable_forces=True,
@@ -91,12 +69,40 @@ def test_training_step_with_force_loss(tiny_dataset):
     )
     model = E3GNN(mapper, cfg)
     model.log_dict = lambda *args, **kwargs: None
-    batch = train_ds[0]
+    x, y = train_ds[0]
+    y = dict(y, forces=torch.full_like(x["positions"], 0.25))
+    batch = (x, y)
+    parameters = tuple(model.parameters())
+    model.cfg.loss_coef_forces = 0.0
+    baseline = model.training_step(batch, 0)
+    baseline_grad = torch.autograd.grad(baseline, parameters, allow_unused=True)
 
-    loss = model.training_step(batch, 0)
+    coefficient = 2.3
+    forces = model.predict_forces(x)
+    assert torch.isfinite(forces).all()
+    expected_force_loss = coefficient * (forces - y["forces"]).square().mean()
+    expected_grad = torch.autograd.grad(
+        expected_force_loss, parameters, allow_unused=True
+    )
+    assert any(grad is not None and grad.abs().max() > 1e-10 for grad in expected_grad)
 
-    assert isinstance(loss, torch.Tensor)
-    assert torch.isfinite(loss)
+    model.cfg.loss_coef_forces = coefficient
+    total = model.training_step(batch, 0)
+    torch.testing.assert_close(
+        total - baseline, expected_force_loss, rtol=1e-4, atol=1e-6
+    )
+    total_grad = torch.autograd.grad(total, parameters, allow_unused=True)
+    for parameter, initial, actual, force in zip(
+        parameters, baseline_grad, total_grad, expected_grad
+    ):
+        zero = torch.zeros_like(parameter)
+        torch.testing.assert_close(
+            (zero if actual is None else actual)
+            - (zero if initial is None else initial),
+            zero if force is None else force,
+            rtol=2e-3,
+            atol=2e-6,
+        )
 
 
 @pytest.mark.integration

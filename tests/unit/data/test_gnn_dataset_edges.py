@@ -105,3 +105,21 @@ def test_process_snapshot_to_sample():
         x["pred_pair_edges_static"]["H-H"],
         torch.cat([x["edge_shift"], x["edge_index"]], dim=0),
     )
+    expected_edges = torch.tensor(
+        [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 1, 0, 1],
+            [0, 1, 1, 0],
+        ],
+        dtype=torch.long,
+    )
+    assert torch.equal(x["pred_pair_edges_static"]["H-H"], expected_edges)
+    # The records are directed and both H0->H1 and H1->H0 must survive.
+    assert {tuple(edge) for edge in expected_edges.T.tolist()} == {
+        (0, 0, 0, 0, 0),
+        (0, 0, 0, 1, 1),
+        (0, 0, 0, 0, 1),
+        (0, 0, 0, 1, 0),
+    }

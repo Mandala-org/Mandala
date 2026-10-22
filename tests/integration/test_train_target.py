@@ -130,6 +130,7 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
     """
     x, y_irreps, y_matrix, mapper, cfg = prepared_data
 
+    cfg = copy.deepcopy(cfg)
     cfg.matrix_targets = matrix_targets
     cfg.train_target = train_target
     model = E3GNN(mapper, cfg)
@@ -140,80 +141,31 @@ def test_model_training_configurations(prepared_data, train_target, matrix_targe
     # Select the correct target format based on the test parameter
     y = y_matrix if train_target == "matrix" else y_irreps
 
-    # 2. Manually calculate the expected matrix loss for the subset
+    # Build labels with known offsets from the real network output. Closed-form
+    # per-operator MSEs (1, 4, 9) make omitted/misrouted targets detectable without
+    # reproducing the production loss loop or its edge-slicing assumptions.
+    offsets = {"hamiltonian": 1.0, "density": 2.0, "overlap": 3.0}
     with torch.no_grad():
-        preds_irreps = model(x)
-        expected_loss_matrix = torch.tensor(0.0)
-
+        predictions = model(x)
+    y = dict(y)
+    for name in matrix_targets:
+        prediction = predictions[name]
         if train_target == "matrix":
-            # Loss is on BlockMatrix blocks
-            preds_matrix = {
-                name: preds_irreps[name].to_blocks(mapper) for name in matrix_targets
+            target = prediction.to_blocks(mapper)
+            target.pair_blocks = {
+                key: values.detach() + offsets[name]
+                for key, values in target.pair_blocks.items()
             }
-            if cfg.symmetrize_output:
-                for name, matrix in preds_matrix.items():
-                    preds_matrix[name] = (matrix + matrix.transpose()) * 0.5
-            for name in matrix_targets:
-                p_blocks = preds_matrix[name].pair_blocks
-                t_blocks = y[name].pair_blocks
-
-                p_edges = preds_matrix[name].pair_edges
-                t_edges = y[name].pair_edges
-
-                # Iterate over target keys only (matching model behavior)
-                for key in t_blocks.keys():
-                    if key not in p_blocks.keys():
-                        raise ValueError(
-                            f"Edge key {key} missing in predicted {name} matrix."
-                        )
-
-                    preds = p_blocks[key]
-                    targets = t_blocks[key]
-
-                    target_n = targets.shape[0]
-                    if preds.shape[0] < target_n:
-                        raise ValueError(
-                            f"Predicted blocks for {name}, key {key} are too short: "
-                            f"pred_len={preds.shape[0]} target_len={target_n}"
-                        )
-                    preds = preds[:target_n]
-                    targets = targets[:target_n]
-
-                    if cfg.safety_checks:
-                        if not torch.equal(
-                            p_edges[key][:, :target_n], t_edges[key][:, :target_n]
-                        ):
-                            raise ValueError(
-                                f"Edge indices for predicted and target {name} matrices do not match."
-                            )
-
-                    expected_loss_matrix += torch.mean((preds - targets) ** 2)
-        else:  # train_target == "irreps"
-            # Loss is on IrrepsBlockData vectors
-            for name in matrix_targets:
-                p_vecs = preds_irreps[name].pair_vectors
-                t_vecs = y[name].pair_vectors
-
-                # Iterate over target keys only (matching model behavior)
-                for key in t_vecs.keys():
-                    if key not in p_vecs.keys():
-                        raise ValueError(
-                            f"Edge key {key} missing in predicted {name} vectors."
-                        )
-
-                    preds = p_vecs[key]
-                    targets = t_vecs[key]
-
-                    target_n = targets.shape[0]
-                    if preds.shape[0] < target_n:
-                        raise ValueError(
-                            f"Predicted vectors for {name}, key {key} are too short: "
-                            f"pred_len={preds.shape[0]} target_len={target_n}"
-                        )
-                    preds = preds[:target_n]
-                    targets = targets[:target_n]
-
-                    expected_loss_matrix += torch.mean((preds - targets) ** 2)
+        else:
+            target = copy.deepcopy(prediction)
+            target.pair_vectors = {
+                key: values.detach() + offsets[name]
+                for key, values in target.pair_vectors.items()
+            }
+        y[name] = target
+    expected_loss_matrix = torch.tensor(
+        sum(offsets[name] ** 2 for name in matrix_targets)
+    )
 
     # 3. Run a training step and capture the logged metrics
     logged_metrics = {}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+import pytest
 
 
 def _load_module():
@@ -132,14 +133,18 @@ def test_main_passes_parsed_yaml_to_run_training(monkeypatch, tmp_path):
     sweep_yaml.write_text(
         """
 dataset-kind: silicon
-data-path: /tmp/data
+data-path: /yaml/data
+lr: 0.007
+radial-layers: [8, 4]
 """
     )
     captured = {}
+    calls = []
 
     def fake_run_training(
         args, *, parsed_yaml=None, extra_callbacks=None, objective_metric=None
     ):
+        calls.append((args, parsed_yaml))
         captured["args"] = args
         captured["parsed_yaml"] = parsed_yaml
         return {}
@@ -152,6 +157,8 @@ data-path: /tmp/data
             "wandb_run.py",
             "--data-path",
             "/tmp/data",
+            "--lr",
+            "0.002",
             "--sweep-yaml",
             str(sweep_yaml),
         ],
@@ -159,8 +166,16 @@ data-path: /tmp/data
 
     mod.main()
 
+    assert len(calls) == 1
     assert captured["args"].data_path == "/tmp/data"
-    assert captured["parsed_yaml"]["dataset-kind"] == "silicon"
+    assert captured["args"].lr == 0.002
+    assert {"data_path", "lr"} <= captured["args"]._explicit_args
+    assert captured["parsed_yaml"] == {
+        "dataset-kind": "silicon",
+        "data-path": "/yaml/data",
+        "lr": 0.007,
+        "radial-layers": [8, 4],
+    }
 
 
 def test_ablation_metadata_derives_setting_and_paper_run_name():
@@ -227,7 +242,8 @@ def test_normalize_wall_clock_args_rejects_both_units():
         raise AssertionError("Expected ValueError when both time-budget units are set")
 
 
-def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch):
+@pytest.mark.parametrize("mode", ["latest", "best", "final"])
+def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch, mode):
     mod = _load_module()
 
     class DummyRun:
@@ -240,6 +256,7 @@ def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch):
         summary = {
             "checkpoint/latest_path": "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt",
             "checkpoint/best_path": "checkpoints/siox/blooming-oath-3/best_model.pt",
+            "checkpoint/final_path": "checkpoints/siox/blooming-oath-3/final_model.pt",
         }
 
     class DummyApi:
@@ -257,13 +274,10 @@ def test_resolve_wandb_resume_uses_summary_checkpoint_paths(monkeypatch):
 
     resolved = mod._resolve_wandb_resume(
         "https://wandb.ai/b-brzoza/mandala-minimal-siox-hamiltonian-energy-halfgt-rosi/runs/9onx8a88",
-        "latest",
+        mode,
     )
 
-    assert (
-        resolved["checkpoint_path"]
-        == "checkpoints/siox/blooming-oath-3/latest_checkpoint.pt"
-    )
+    assert resolved["checkpoint_path"] == DummyRun.summary[f"checkpoint/{mode}_path"]
     assert resolved["run_name"] == "blooming-oath-3"
     assert resolved["checkpoint_dir"] == "checkpoints/siox"
     assert resolved["config"]["data_path"] == "/tmp/siox"
@@ -414,3 +428,21 @@ def test_validate_required_args_accepts_wandb_filled_data_path():
     args = mod.argparse.Namespace(data_path="/tmp/data")
 
     mod._validate_required_args(args)
+
+
+@pytest.mark.parametrize("path", [None, ""])
+def test_validate_required_args_rejects_missing_data_path(path):
+    mod = _load_module()
+    with pytest.raises(ValueError, match="data_path must be provided"):
+        mod._validate_required_args(mod.argparse.Namespace(data_path=path))
+
+
+def test_wandb_resume_rejects_missing_checkpoint_instead_of_falling_back(monkeypatch):
+    mod = _load_module()
+    run = mod.argparse.Namespace(
+        config={}, summary={"checkpoint/best_path": "/other/best_model.pt"}
+    )
+    api = mod.argparse.Namespace(run=lambda path: run)
+    monkeypatch.setitem(sys.modules, "wandb", mod.argparse.Namespace(Api=lambda: api))
+    with pytest.raises(ValueError, match="checkpoint/latest_path"):
+        mod._resolve_wandb_resume("https://wandb.ai/acme/project/runs/abc123", "latest")

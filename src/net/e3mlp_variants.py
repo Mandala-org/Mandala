@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch import nn
 from e3nn.nn import Gate, NormActivation
 from e3nn.o3 import FullyConnectedTensorProduct, Irrep, Irreps, Linear
+from core.norms import zero_safe_norm
 
 
 def scalar_activation_module(name: str) -> nn.Module:
@@ -129,9 +130,7 @@ class GateMagnitudesActivation(nn.Module):
                 continue
 
             block = block.reshape(*block.shape[:-1], mul, ir.dim)
-            mags = torch.linalg.norm(block, dim=-1, keepdim=True).clamp_min(
-                self.epsilon
-            )
+            mags = zero_safe_norm(block, dim=-1, keepdim=True).clamp_min(self.epsilon)
             gains = self.gate_act(mags)
             out.append((block * (gains / mags)).reshape(*block.shape[:-2], size))
         return torch.cat(out, dim=-1)
@@ -170,7 +169,7 @@ class InvariantFiLMActivation(nn.Module):
             if ir.l == 0:
                 invariants.append(block.reshape(*block.shape[:-1], -1))
             else:
-                invariants.append(torch.linalg.norm(block, dim=-1, keepdim=True))
+                invariants.append(zero_safe_norm(block, dim=-1, keepdim=True))
 
         inv = torch.cat(invariants, dim=-1)
         params = self.mlp(inv)
@@ -206,7 +205,7 @@ class EquivariantRMSNorm(nn.Module):
         out: list[torch.Tensor] = []
         for idx, (start, dim, _, _) in enumerate(self.copy_specs):
             block = x[..., start : start + dim]
-            norm = torch.linalg.norm(block, dim=-1, keepdim=True).clamp_min(self.eps)
+            norm = zero_safe_norm(block, dim=-1, keepdim=True).clamp_min(self.eps)
             out.append(block * (self.weight[idx] / norm))
         return torch.cat(out, dim=-1)
 

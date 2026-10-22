@@ -21,15 +21,27 @@ def _load_module():
     return module
 
 
-def test_resolve_resume_checkpoint_prefers_requested_named_file(tmp_path):
+@pytest.mark.parametrize(
+    "mode,filename",
+    [
+        ("latest", "latest_checkpoint.pt"),
+        ("best", "best_model.pt"),
+        ("final", "final_model.pt"),
+    ],
+)
+def test_resolve_resume_checkpoint_prefers_requested_named_file(
+    tmp_path, mode, filename
+):
     mod = _load_module()
     run_dir = tmp_path / "run"
     run_dir.mkdir()
-    latest = run_dir / "latest_checkpoint.pt"
-    latest.write_text("checkpoint")
+    for name in ("latest_checkpoint.pt", "best_model.pt", "final_model.pt"):
+        (run_dir / name).write_text(name)
+    selected = run_dir / filename
 
-    assert mod._resolve_resume_checkpoint(str(run_dir), "latest") == latest.resolve()
-    assert mod._resolve_resume_checkpoint(str(latest), "best") == latest.resolve()
+    assert mod._resolve_resume_checkpoint(str(run_dir), mode) == selected.resolve()
+    # An explicit file wins over mode; it must never silently switch checkpoints.
+    assert mod._resolve_resume_checkpoint(str(selected), "best") == selected.resolve()
 
 
 def test_populate_config_from_args_normalizes_string_list_fields():
@@ -325,22 +337,67 @@ def test_split_manifest_is_disjoint_and_stable(tmp_path):
     assert first["counts"] == {"train": 1, "val": 1, "test": 1}
     on_disk = json.loads((tmp_path / "run-a" / "split_manifest.json").read_text())
     assert on_disk["split_hash_sha256"] == first["split_hash_sha256"]
+    # A constant hash would pass the two-identical-input assertions above.
+    changed = mod._write_split_manifest(
+        tmp_path / "run-c",
+        train_ds=val,
+        val_ds=train,
+        test_ds=test,
+        data_split_seed=42,
+    )
+    assert changed["split_hash_sha256"] != first["split_hash_sha256"]
 
 
-def test_split_manifest_rejects_leakage(tmp_path):
+@pytest.mark.parametrize(
+    "overlap", [("train", "val"), ("train", "test"), ("val", "test")]
+)
+def test_split_manifest_rejects_leakage(tmp_path, overlap):
     mod = _load_module()
 
-    class Dataset:
-        snapshot_paths = [(tmp_path / "h", tmp_path / "i")]
+    def dataset(name):
+        return SimpleNamespace(
+            snapshot_paths=[(tmp_path / name / "h", tmp_path / name / "i")]
+        )
+
+    splits = {key: dataset(key) for key in ("train", "val", "test")}
+    splits[overlap[1]] = splits[overlap[0]]
 
     with pytest.raises(ValueError, match="leakage"):
         mod._write_split_manifest(
             tmp_path / "run",
-            train_ds=Dataset(),
-            val_ds=Dataset(),
-            test_ds=None,
+            train_ds=splits["train"],
+            val_ds=splits["val"],
+            test_ds=splits["test"],
             data_split_seed=42,
         )
+
+
+@pytest.mark.parametrize("mutation", ["split", "input_file"])
+def test_frozen_split_manifest_rejects_changed_continuation_inputs(tmp_path, mutation):
+    mod = _load_module()
+    matrix = tmp_path / "matrix"
+    matrix.write_text("original")
+    train = SimpleNamespace(snapshot_paths=[(matrix, tmp_path / "info")])
+    kwargs = dict(
+        train_ds=train,
+        val_ds=None,
+        test_ds=None,
+        data_split_seed=42,
+        enforce_immutable=True,
+    )
+    directory = tmp_path / "run"
+    first = mod._write_split_manifest(directory, **kwargs)
+    before = (directory / "split_manifest.json").read_bytes()
+    assert mod._write_split_manifest(directory, **kwargs) == first
+    if mutation == "split":
+        train.snapshot_paths = [(tmp_path / "different", tmp_path / "info")]
+        message = "Dataset split changed"
+    else:
+        matrix.write_text("longer replacement contents")
+        message = "Dataset files changed"
+    with pytest.raises(ValueError, match=message):
+        mod._write_split_manifest(directory, **kwargs)
+    assert (directory / "split_manifest.json").read_bytes() == before
 
 
 def test_explicit_cpu_device_is_honored_when_cuda_is_available(monkeypatch):

@@ -35,39 +35,6 @@ def make_dummy_graph(E=10, N=5, node_dim=32, edge_dim=32, n_radial=64, sh_dim=9)
 # SeparateWeightTensorProduct Tests
 # ════════════════════════════════════════════════════════════════════════
 @pytest.mark.unit
-def test_separate_weight_tp_initialization():
-    """Test that SeparateWeightTensorProduct initializes correctly."""
-    irreps_in1 = Irreps("8x0e + 4x1o")
-    irreps_in2 = Irreps("1x0e + 1x1o")
-    irreps_out = Irreps("8x0e + 4x1o")
-
-    tp = SeparateWeightTensorProduct(irreps_in1, irreps_in2, irreps_out)
-
-    assert tp is not None
-    assert len(tp.weights1) > 0
-    assert len(tp.weights2) > 0
-    assert len(tp.weights1) == len(tp.weights2)
-
-
-@pytest.mark.unit
-def test_separate_weight_tp_forward():
-    """Test forward pass of SeparateWeightTensorProduct."""
-    irreps_in1 = Irreps("8x0e + 4x1o")
-    irreps_in2 = Irreps("1x0e + 1x1o")
-    irreps_out = Irreps("8x0e + 4x1o")
-
-    tp = SeparateWeightTensorProduct(irreps_in1, irreps_in2, irreps_out)
-
-    batch_size = 10
-    x1 = irreps_in1.randn(batch_size, -1)
-    x2 = irreps_in2.randn(batch_size, -1)
-
-    out = tp(x1, x2)
-
-    assert out.shape == (batch_size, irreps_out.dim)
-
-
-@pytest.mark.unit
 def test_separate_weight_tp_grouped_weights_match_pathwise_output_and_gradients():
     torch.manual_seed(7)
     tp = SeparateWeightTensorProduct(
@@ -139,8 +106,8 @@ def test_separate_weight_tp_equivariance():
 # ════════════════════════════════════════════════════════════════════════
 @pytest.mark.unit
 @pytest.mark.parametrize("tp_type", ["separate_weight", "fully_connected"])
-def test_equiconv_initialization(tp_type):
-    """Test EquiConv initialization with different TP types."""
+def test_equiconv_types_forward(tp_type):
+    """Exercise the forward path for both supported tensor-product types."""
     cfg = Config(tp_type=tp_type, n_radial=64)
 
     # Use irreps that are compatible with the TP
@@ -160,28 +127,6 @@ def test_equiconv_initialization(tp_type):
         nonlin=True,
     )
 
-    assert conv is not None
-    assert conv.irreps_out.dim > 0
-
-
-@pytest.mark.unit
-def test_equiconv_forward():
-    """Test EquiConv forward pass."""
-    cfg = Config(tp_type="separate_weight", n_radial=64)
-
-    irreps_in1 = Irreps("16x0e + 8x1e")
-    irreps_in2 = Irreps("1x0e + 1x1o")
-    irreps_out = Irreps("16x0e + 8x1o")
-
-    conv = EquiConv(
-        n_radial=cfg.n_radial,
-        irreps_in1=irreps_in1,
-        irreps_in2=irreps_in2,
-        irreps_out=irreps_out,
-        cfg=cfg,
-        nonlin=True,
-    )
-
     batch_size = 10
     fea_in1 = irreps_in1.randn(batch_size, -1)
     fea_in2 = irreps_in2.randn(batch_size, -1)
@@ -190,6 +135,8 @@ def test_equiconv_forward():
     out = conv(fea_in1, fea_in2, edge_length_emb)
 
     assert out.shape == (batch_size, conv.irreps_out.dim)
+    assert torch.isfinite(out).all()
+    assert torch.count_nonzero(out) > 0
 
 
 @pytest.mark.unit

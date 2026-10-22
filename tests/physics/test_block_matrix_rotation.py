@@ -3,63 +3,64 @@ Unit tests that target *BlockMatrix.rotate* in isolation.
 """
 
 import pytest
-import math
 import torch
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.block_matrix import BlockMatrix
 
 
-def _make_small_matrix() -> BlockMatrix:
-    """
-    Construct a **tiny** 2-atom block matrix (one block per orientation)
-    directly in *e3nn* basis for fast tests.
-    """
+def _make_periodic_angular_matrix() -> BlockMatrix:
+    """One s+p site with distinct onsite and reverse-image blocks."""
     from collections import Counter
 
-    cfg = OrbitalIrrepConfig.from_dict({"H": ["1x0e"], "O": ["1x0e"]})
-    atoms = ("H", "O")
-    atom_counts = Counter(atoms)
-
-    # single 1×1 scalar blocks -> easy numerics
-    pair_blocks = {
-        "H-H": torch.randn(1, 1, 1),
-        "H-O": torch.randn(1, 1, 1),
-        "O-H": torch.randn(1, 1, 1),
-        "O-O": torch.randn(1, 1, 1),
-    }
-    pair_edges = {
-        "H-H": torch.tensor([[0], [0]]),
-        "H-O": torch.tensor([[0], [1]]),
-        "O-H": torch.tensor([[1], [0]]),
-        "O-O": torch.tensor([[1], [1]]),
-    }
-    lookup = {
-        (0, 0): ("H-H", 0),
-        (0, 1): ("H-O", 0),
-        (1, 0): ("O-H", 0),
-        (1, 1): ("O-O", 0),
-    }
-
+    cfg = OrbitalIrrepConfig.from_dict({"H": ["1x0e", "1x1o"]})
+    atoms = ("H",)
+    edges = torch.tensor(
+        [
+            [0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [-1, 0, 0, 0, 0],
+        ],
+        dtype=torch.long,
+    ).T
+    blocks = torch.arange(1, 49, dtype=torch.float32).reshape(3, 4, 4)
+    lookup = {tuple(edge.tolist()): ("H-H", i) for i, edge in enumerate(edges.T)}
     return BlockMatrix(
-        atoms, atom_counts, pair_blocks, pair_edges, lookup, cfg, basis="e3nn"
-    )
-
-
-def _rot_y(theta):
-    c, s = math.cos(theta), math.sin(theta)
-    return torch.tensor(
-        [[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], dtype=torch.float32
+        atoms,
+        Counter(atoms),
+        {"H-H": blocks},
+        {"H-H": edges},
+        lookup,
+        cfg,
+        basis="e3nn",
     )
 
 
 @pytest.mark.physics
-def test_blockmatrix_rotation_invariance():
-    mat = _make_small_matrix()
-    R = _rot_y(math.pi / 3.0)
-    mat_rot = mat.rotate(R)
+def test_blockmatrix_rotation_uses_angular_action_and_preserves_periodic_edges():
+    mat = _make_periodic_angular_matrix()
+    # A +90 degree active z rotation has this known real-vector action in the
+    # x,y,z basis used by 1o: x -> y, y -> -x, z -> z.  This literal matrix is
+    # independent of BlockMatrix.rotate and checks the p-orbital convention.
+    orbital_rotation = torch.tensor(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, -1.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=torch.float32,
+    )
+    R = torch.tensor(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=torch.float32,
+    )
+    rotated = mat.rotate(R)
 
-    # All blocks are scalars -> rotation acts as identity;
-    # check exact equality as a sanity test.
-    for key in mat.keys():
-        assert torch.allclose(mat[key], mat_rot[key], atol=1e-7)
+    expected = orbital_rotation @ mat.pair_blocks["H-H"] @ orbital_rotation.T
+    torch.testing.assert_close(rotated.pair_blocks["H-H"], expected, atol=3e-4, rtol=0)
+    assert torch.equal(rotated.pair_edges["H-H"], mat.pair_edges["H-H"])
+    assert rotated.lookup == mat.lookup
+    # The +x and -x image records remain distinct and retain their own values.
+    assert (1, 0, 0, 0, 0) in rotated.lookup
+    assert (-1, 0, 0, 0, 0) in rotated.lookup

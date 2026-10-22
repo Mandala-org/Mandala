@@ -30,6 +30,20 @@ def test_roundtrip_si_si(mapper):
 
 
 @pytest.mark.unit
+def test_s_p_block_uses_cartesian_vector_coefficients():
+    """The scalar-vector product has a fixed Cartesian coefficient order."""
+    cfg = OrbitalIrrepConfig.from_dict({"H": "1s", "P": "1p"})
+    mapper = BlockIrrepMapper(cfg, dtype=torch.float64)
+    block = torch.tensor([[1.25, -2.5, 4.0]], dtype=torch.float64)
+
+    # For 0e x 1o, the reduced tensor product is one 1o copy.  In the
+    # repository's documented Cartesian p ordering its coefficients are x,y,z.
+    expected = torch.tensor([1.25, -2.5, 4.0], dtype=torch.float64)
+    torch.testing.assert_close(mapper.blocks_to_vectors("H-P", block), expected)
+    torch.testing.assert_close(mapper.blocks_to_vectors("P-H", block.T), expected)
+
+
+@pytest.mark.unit
 def test_unknown_pair(mapper):
     with pytest.raises(MappingKeyError):
         mapper.vector_dim(("C", "H"))

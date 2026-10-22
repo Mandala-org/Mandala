@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from ase import Atoms
+from ase.data import covalent_radii
 from ase.io import write
+import numpy as np
 
 from scripts.visualize_crystal import build_crystal_figure
 
@@ -25,3 +27,33 @@ def test_crystal_visualization_uses_shaded_spheres_and_cell_edges(tmp_path) -> N
     assert figure.data[-1].type == "scatter3d"
     assert figure.data[-1].name == "Simulation cell"
     assert figure.layout.scene.aspectmode == "data"
+    vertices = np.column_stack([figure.data[0][axis] for axis in ("x", "y", "z")])
+    # The two same-species spheres share one mesh. Check each sphere against
+    # its atom position and radius, including separation of their vertices.
+    spheres = vertices.reshape(2, -1, 3)
+    for sphere, position in zip(spheres, structure.positions):
+        np.testing.assert_allclose(
+            np.linalg.norm(sphere - position, axis=1),
+            covalent_radii[14] * 0.55,
+            atol=1e-7,
+        )
+    cell = np.column_stack([figure.data[-1][axis] for axis in ("x", "y", "z")])
+    assert cell.shape == (36, 3)
+    assert np.isnan(cell.reshape(12, 3, 3)[:, 2]).all()
+    actual_edges = {
+        frozenset((tuple(segment[0]), tuple(segment[1])))
+        for segment in cell.reshape(12, 3, 3)
+    }
+    # Enumerate the cube edges independently by binary corner coordinates.
+    expected_edges = set()
+    for bits in np.ndindex(2, 2, 2):
+        for axis in range(3):
+            if bits[axis] == 0:
+                neighbor = list(bits)
+                neighbor[axis] = 1
+                expected_edges.add(
+                    frozenset(
+                        (tuple(np.array(bits) * 5.43), tuple(np.array(neighbor) * 5.43))
+                    )
+                )
+    assert actual_edges == expected_edges

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 import pytorch_lightning as pl
+import torch
 from torch.utils.data import DataLoader
 
 # Add project root to the Python path
@@ -14,7 +15,6 @@ from data.factory import DatasetFactory  # noqa: E402
 from data.snapshot import Snapshot  # noqa: E402
 from net.common import Config  # noqa: E402
 from net.e3gnn import E3GNN  # noqa: E402
-
 
 # This one-batch workflow intentionally avoids worker processes and external loggers.
 pytestmark = [
@@ -127,11 +127,17 @@ def test_full_training_workflow(
     )
 
     # 5. Run the training
-    try:
-        trainer.fit(
-            model=model, train_dataloaders=train_loader, val_dataloaders=val_loader
-        )
-    except Exception as e:
-        pytest.fail(
-            f"Training failed for train_target='{train_target}' with error: {e}"
-        )
+    initial_parameters = {
+        name: parameter.detach().clone() for name, parameter in model.named_parameters()
+    }
+    trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+    assert trainer.global_step == 1
+    assert any(
+        not torch.equal(parameter.detach(), initial_parameters[name])
+        for name, parameter in model.named_parameters()
+    ), "The optimizer completed a step without updating any model parameter."
+    for metric_name in ("train/loss_total", "val/loss_total"):
+        assert metric_name in trainer.callback_metrics
+        metric = trainer.callback_metrics[metric_name]
+        assert torch.isfinite(torch.as_tensor(metric)), metric_name

@@ -62,16 +62,18 @@ def test_node_encoder_equivariance():
         safety_checks=True,
     )
     layer = NodeEncoder(node_one_hot_dim=10, cfg=cfg)
-    node_type_idx = torch.randint(0, 10, (5,))
-
-    # The input is not geometric, so there's no rotation to apply to it.
-    # We just check that the output is scalar and therefore invariant.
+    node_type_idx = torch.tensor([0, 1, 2, 3, 4])
     output = layer(node_type_idx)
 
-    assert layer.irreps_out.lmax == 0, "NodeEncoder should only output scalars"
-    # No assertion needed beyond this, as scalar output is inherently invariant.
-    # The test serves to document this property.
-    assert output.shape == (5, cfg.hidden_base_dim)
+    assert layer.irreps_out == Irreps(f"{cfg.hidden_base_dim}x0e")
+    # The encoder consumes categorical species labels, which are unchanged by
+    # spatial rotations. Its scalar representation therefore carries D=I.
+    rotation = random_rotation_matrix()
+    D_scalar = layer.irreps_out.D_from_matrix(rotation)
+    torch.testing.assert_close(D_scalar, torch.eye(cfg.hidden_base_dim))
+    rotated_output = layer(node_type_idx)
+    torch.testing.assert_close(rotated_output, output @ D_scalar.T)
+    assert output.shape == (node_type_idx.numel(), layer.irreps_out.dim)
 
 
 @pytest.mark.parametrize("l_max", [1, 2, 3])

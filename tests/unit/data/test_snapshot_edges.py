@@ -34,21 +34,34 @@ def mock_snapshot():
     return Snapshot(bm, bm, bm, positions=positions, box=box)
 
 
-def test_matrix_from_payload(mock_snapshot):
-    snap = mock_snapshot
-    # Use BlockMatrix._to_payload to generate payload
-    payload = snap.density._to_payload()
-
-    # Reconstruct
+def test_matrix_from_payload():
+    # Literal persisted payload, deliberately independent of BlockMatrix's
+    # serializer so paired encoding/decoding mistakes cannot cancel.
+    payload = {
+        "atoms": ["H", "H"],
+        "atom_counts": Counter({"H": 2}),
+        "orbital_cfg": {"H": "1s"},
+        "pair_blocks": {"H-H": torch.tensor([[[2.5]], [[-4.0]]])},
+        "pair_edges": {
+            "H-H": torch.tensor(
+                [[0, 1], [0, 0], [0, 0], [0, 0], [1, 1]], dtype=torch.long
+            )
+        },
+        "coverage_masks": {"H-H": torch.tensor([[[True]], [[False]]])},
+        "basis": "e3nn",
+    }
     bm_new = Snapshot._matrix_from_payload(payload)
 
-    # Check lookup reconstruction
-    assert (0, 0, 0, 0, 1) in bm_new.lookup
-    assert (1, 0, 0, 0, 1) in bm_new.lookup
-    assert bm_new.lookup[(0, 0, 0, 0, 1)] == ("H-H", 0)
-    assert bm_new.lookup[(1, 0, 0, 0, 1)] == ("H-H", 1)
-
-    assert torch.allclose(bm_new.pair_blocks["H-H"], snap.density.pair_blocks["H-H"])
+    assert bm_new.atoms == ("H", "H")
+    assert bm_new.basis == "e3nn"
+    assert bm_new.orbital_cfg.block_dims("H-H") == (1, 1)
+    assert bm_new.pair_edges["H-H"].tolist() == payload["pair_edges"]["H-H"].tolist()
+    assert bm_new.lookup == {
+        (0, 0, 0, 0, 1): ("H-H", 0),
+        (1, 0, 0, 0, 1): ("H-H", 1),
+    }
+    assert bm_new.pair_blocks["H-H"].flatten().tolist() == [2.5, -4.0]
+    assert torch.equal(bm_new.coverage_masks["H-H"], payload["coverage_masks"]["H-H"])
 
 
 def test_edge_displacements(mock_snapshot):

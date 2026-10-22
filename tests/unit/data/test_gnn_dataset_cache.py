@@ -33,6 +33,47 @@ def test_density_normalization_change_invalidates_both_cache_layers(
     assert new_sample != ds._preprocessed_sample_cache_file(matrix, info)
 
 
+def test_target_normalization_settings_invalidate_the_correct_cache_layers(tmp_path):
+    def make_dataset(*, symmetrize_density=False, pair_distance_normalization="off"):
+        ds = object.__new__(E3GNNDataset)
+        ds.preprocessing, ds.split = None, "train"
+        ds.cfg = Config(
+            snapshot_cache_dir=str(tmp_path / "cache"),
+            symmetrize_density_targets=symmetrize_density,
+        )
+        ds.convention, ds.dtype = "e3nn", torch.float32
+        ds.mapper = SimpleNamespace(
+            orbital_cfg=SimpleNamespace(to_dict=lambda: {"Si": "1s"})
+        )
+        ds.hamiltonian_envelope_mode = "off"
+        ds.pair_distance_normalization = pair_distance_normalization
+        ds.loss_weighting_mode = "off"
+        return ds
+
+    matrix, info = tmp_path / "HS.out", tmp_path / "Si.out"
+    matrix.write_text("matrix")
+    info.write_text("info")
+
+    baseline = make_dataset()
+    density_symmetrized = make_dataset(symmetrize_density=True)
+    assert baseline._snapshot_cache_file(
+        matrix, info
+    ) != density_symmetrized._snapshot_cache_file(matrix, info)
+    assert baseline._preprocessed_sample_cache_file(
+        matrix, info
+    ) != density_symmetrized._preprocessed_sample_cache_file(matrix, info)
+
+    pair_normalized = make_dataset(pair_distance_normalization="pair_r0")
+    # Pair-distance normalization is applied only during sample preprocessing;
+    # the raw parsed snapshot is independent of it.
+    assert baseline._snapshot_cache_file(
+        matrix, info
+    ) == pair_normalized._snapshot_cache_file(matrix, info)
+    assert baseline._preprocessed_sample_cache_file(
+        matrix, info
+    ) != pair_normalized._preprocessed_sample_cache_file(matrix, info)
+
+
 @pytest.mark.unit
 def test_load_preprocessed_sample_uses_weights_only_false(monkeypatch, tmp_path):
     ds = object.__new__(E3GNNDataset)
@@ -183,6 +224,13 @@ def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
     ]
     assert sorted(call_order) == ["mat0", "mat1", "mat2", "mat3", "mat4"]
     assert call_order != ["mat0", "mat1", "mat2", "mat3", "mat4"]
+    assert [sample[1]["info"] for sample in ds.snapshots] == [
+        "info0",
+        "info1",
+        "info2",
+        "info3",
+        "info4",
+    ]
 
 
 @pytest.mark.unit

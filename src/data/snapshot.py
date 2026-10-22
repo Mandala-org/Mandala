@@ -361,6 +361,10 @@ class Snapshot:
 
         atoms = tuple(payload["atoms"])
         atom_counts = payload.get("atom_counts", Counter(atoms))
+        coverage_masks = {
+            key: mask.to(device)
+            for key, mask in payload.get("coverage_masks", {}).items()
+        }
 
         return BlockMatrix(
             atoms=atoms,
@@ -370,6 +374,7 @@ class Snapshot:
             lookup=lookup,
             orbital_cfg=orb_cfg,
             basis=payload.get("basis", "openmx"),
+            _coverage_masks=coverage_masks or None,
         )
 
     # public classmethod ----------------------------------------------------

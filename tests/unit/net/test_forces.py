@@ -7,11 +7,7 @@ from net.e3gnn import E3GNN
 
 @pytest.mark.unit
 def test_non_zero_forces_with_real_data(small_angular_dataset_e3nn):
-    """
-    Tests that a randomly initialized network produces non-zero forces
-    using a real data sample from the E3GNNDataset. This ensures that
-    the entire data processing pipeline correctly propagates gradients.
-    """
+    """Dataset-to-energy forces match a centered coordinate difference."""
 
     # Set up config
     cfg = Config(
@@ -33,11 +29,22 @@ def test_non_zero_forces_with_real_data(small_angular_dataset_e3nn):
 
     train_ds, mapper, _ = small_angular_dataset_e3nn
 
-    # Get a sample. The dataset should have set requires_grad on positions.
+    # Keep the graph and its periodic shifts fixed while perturbing only
+    # coordinates. Double precision makes the central difference useful as an
+    # oracle for the force sign and magnitude.
     x, _ = train_ds[0]
+    x = {
+        key: (
+            value.to(torch.float64)
+            if isinstance(value, torch.Tensor) and value.is_floating_point()
+            else value.clone() if isinstance(value, torch.Tensor) else value
+        )
+        for key, value in x.items()
+    }
 
     # 2. Set up the model
-    model = E3GNN(mapper, cfg)
+    torch.manual_seed(31)
+    model = E3GNN(mapper, cfg).double().eval()
 
     # 3. Predict forces and check that they are not all zero
     forces = model.predict_forces(x)
@@ -47,6 +54,26 @@ def test_non_zero_forces_with_real_data(small_angular_dataset_e3nn):
     assert not torch.allclose(
         forces, torch.zeros_like(forces)
     ), "Forces are all zero, gradients are likely detached."
+
+    def energy_at(positions):
+        perturbed = dict(x, positions=positions)
+        predictions = model(perturbed, physical_derivatives=True)
+        return model.predictions_to_snapshot(
+            predictions, positions, perturbed["box"], x=perturbed
+        ).get_energy()
+
+    # Check the component with the largest predicted magnitude to avoid a
+    # near-zero finite-difference comparison on this randomly initialized net.
+    atom, axis = torch.unravel_index(forces.abs().argmax(), forces.shape)
+    step = 1e-5
+    plus = x["positions"].clone()
+    minus = x["positions"].clone()
+    plus[atom, axis] += step
+    minus[atom, axis] -= step
+    finite_difference_force = -(energy_at(plus) - energy_at(minus)) / (2 * step)
+    torch.testing.assert_close(
+        forces[atom, axis], finite_difference_force.squeeze(), rtol=2e-3, atol=2e-5
+    )
 
 
 @pytest.mark.unit

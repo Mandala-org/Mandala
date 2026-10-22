@@ -2,6 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import numpy as np
+from matplotlib.axes import Axes
 
 from analysis.evaluation import (
     _save_heatmap_triptych,
@@ -63,7 +65,10 @@ def test_shift_resolved_metrics_reject_misaligned_periodic_images() -> None:
         compute_shift_resolved_matrix_metrics(pred, target)
 
 
-def test_heatmap_auto_clim_uses_all_displayed_values(tmp_path) -> None:
+@pytest.mark.parametrize("extreme_panel", ["gt", "pred", "diff"])
+def test_heatmap_auto_clim_uses_all_displayed_values(
+    tmp_path, monkeypatch, extreme_panel
+) -> None:
     output_path = tmp_path / "auto.png"
     cutout = {
         "gt": [[-0.2, 0.1], [0.0, 0.05]],
@@ -71,6 +76,16 @@ def test_heatmap_auto_clim_uses_all_displayed_values(tmp_path) -> None:
         "diff": [[0.1, 0.5], [0.0, 0.0]],
         "axes": {},
     }
+    cutout[extreme_panel][0][0] = -0.9
+    displayed = []
+    imshow = Axes.imshow
+
+    def capture(self, values, *args, **kwargs):
+        image = imshow(self, values, *args, **kwargs)
+        displayed.append(image)
+        return image
+
+    monkeypatch.setattr(Axes, "imshow", capture)
     _save_heatmap_triptych(
         cutout,
         output_path,
@@ -78,6 +93,40 @@ def test_heatmap_auto_clim_uses_all_displayed_values(tmp_path) -> None:
         clim="auto",
     )
     assert output_path.is_file()
+    assert len(displayed) == 3
+    for image, key in zip(displayed, ("gt", "pred", "diff")):
+        assert image.get_clim() == pytest.approx((-0.9, 0.9))
+        np.testing.assert_array_equal(image.get_array(), cutout[key])
+
+
+def test_shift_resolved_metrics_preserve_complex_soc_errors() -> None:
+    edges = {"Si-Si": torch.tensor([[0, 1], [0, 0], [0, 0], [0, 0], [0, 1]])}
+    # Equal real parts isolate the imaginary contribution, which must not be
+    # discarded by casting SOC matrices to a real dtype.
+    target = _matrix({"Si-Si": torch.tensor([[[2.0 + 1.0j]], [[2.0 + 2.0j]]])}, edges)
+    pred = _matrix({"Si-Si": torch.tensor([[[2.0 + 4.0j]], [[2.0 - 2.0j]]])}, edges)
+    metrics = compute_shift_resolved_matrix_metrics(pred, target)
+    assert metrics["scalar_count"] == 2
+    assert metrics["mae"] == pytest.approx(3.5)
+    assert metrics["mse"] == pytest.approx(12.5)
+
+
+@pytest.mark.parametrize("invalid", ["missing_pair", "shape", "empty"])
+def test_shift_resolved_metrics_reject_invalid_supervision(invalid) -> None:
+    edges = {"Si-Si": torch.tensor([[0], [0], [0], [0], [0]])}
+    target = _matrix({"Si-Si": torch.zeros(1, 1, 1)}, edges)
+    pred = _matrix({"Si-Si": torch.ones(1, 1, 1)}, edges)
+    if invalid == "missing_pair":
+        pred.pair_blocks.clear()
+        message = "not found"
+    elif invalid == "shape":
+        pred.pair_blocks["Si-Si"] = torch.ones(1, 2, 2)
+        message = "matching block shapes"
+    else:
+        pred = target = _matrix({}, {})
+        message = "zero scalar"
+    with pytest.raises(ValueError, match=message):
+        compute_shift_resolved_matrix_metrics(pred, target)
 
 
 def test_correlation_uses_all_shift_resolved_elements_and_correct_mae(tmp_path) -> None:

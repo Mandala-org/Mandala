@@ -42,6 +42,10 @@ def test_edge_sets(dataset):
     self_edges = x["edge_index"][:, :num_atoms]
     assert torch.all(self_edges[0] == self_edges[1])
     assert torch.all(self_edges[0] == torch.arange(num_atoms))
+    expected_edges = {(0, 0, 0, i, j) for i in range(2) for j in range(2)}
+    actual_edges = torch.cat((x["edge_shift"], x["edge_index"]), dim=0)
+    assert {tuple(edge) for edge in actual_edges.T.tolist()} == expected_edges
+    assert x["edge_index"].shape[1] == len(expected_edges)
 
     # ----  SH & radial embed sizes
     assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim

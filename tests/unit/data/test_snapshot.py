@@ -68,11 +68,43 @@ def test_symmetrize_matrices_keeps_energy_and_electrons(h2o_orbital_cfg):
 
 @pytest.mark.unit
 def test_save_load_roundtrip(tmp_path, small_angular_snapshot_e3nn):
-    snap = small_angular_snapshot_e3nn
+    snap = copy.deepcopy(small_angular_snapshot_e3nn)
+    # Distinct partial-support masks on every target ensure Snapshot preserves
+    # each matrix's independent label coverage through its serialized payload.
+    for matrix_index, name in enumerate(("hamiltonian", "overlap", "density")):
+        matrix = getattr(snap, name)
+        matrix._coverage_masks = {
+            key: (torch.arange(value.numel()).reshape_as(value) % 3 != matrix_index)
+            for key, value in matrix.pair_blocks.items()
+        }
     file = tmp_path / "snapshot.pt"
     snap.save(file)
 
     snap2 = Snapshot.load(file)
+    for name in ("hamiltonian", "overlap", "density"):
+        original = getattr(snap, name)
+        restored = getattr(snap2, name)
+        assert restored.atoms == original.atoms
+        assert restored.atom_counts == original.atom_counts
+        assert restored.orbital_cfg.to_dict() == original.orbital_cfg.to_dict()
+        assert restored.basis == original.basis
+        assert set(restored.pair_edges) == set(original.pair_edges)
+        assert restored.lookup == original.lookup
+        for key in original.pair_edges:
+            assert torch.equal(restored.pair_edges[key], original.pair_edges[key])
+            assert torch.equal(restored.pair_blocks[key], original.pair_blocks[key])
+            assert torch.equal(
+                restored.coverage_masks[key], original.coverage_masks[key]
+            )
+    for field in ("positions", "box", "forces", "stress"):
+        original, restored = getattr(snap, field), getattr(snap2, field)
+        if original is None:
+            assert restored is None
+        else:
+            assert torch.equal(restored, original)
+    assert snap2.matrix_path == snap.matrix_path
+    assert snap2.info_path == snap.info_path
+    assert snap2.cutoff_radius == snap.cutoff_radius
     assert torch.allclose(snap2.get_energy(), snap.get_energy(), atol=1e-6)
     assert torch.allclose(
         snap2.get_number_of_electrons(), snap.get_number_of_electrons(), atol=1e-6

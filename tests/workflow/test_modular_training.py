@@ -4,6 +4,8 @@ from pathlib import Path
 import json
 import hashlib
 import shutil
+from dataclasses import replace
+from types import SimpleNamespace
 
 import h5py
 import numpy as np
@@ -105,6 +107,157 @@ def native_data(root, *, spinful=False):
                         handle[str([0, 0, 0, i + 1, j + 1])] = block
         paths.append(str(directory))
     return {"train": paths[:2], "val": paths[2:3], "test": paths[3:]}
+
+
+def _install_s_and_p_shell_targets(splits):
+    """Give supervision a nontrivial s/p decomposition for objective checks."""
+    for path in sum(splits.values(), []):
+        (Path(path) / "orbital_types.dat").write_text("0 1\n0 1\n0 1\n")
+        for filename in ("hamiltonians.h5", "overlaps.h5"):
+            with h5py.File(Path(path) / filename, "w") as handle:
+                for i in range(3):
+                    for j in range(3):
+                        base = 0.1 * int(Path(path).name) + 0.01 * (i + j)
+                        block = base + 0.003 * np.arange(16).reshape(4, 4)
+                        block += 0.0001 * i - 0.0002 * j
+                        handle[str([0, 0, 0, i + 1, j + 1])] = block
+
+
+def _assert_supervision_objective(model, graph, objective):
+    """Check objective reduction, label dependence, and final-readout gradients."""
+    from core.basis_converter import OpenMXE3NNConverter
+    from data.block_matrix import IrrepsBlockData
+    from net.irrep_tools import project_irrep_vectors_to_blocks
+
+    x, y = graph
+    model.train()
+    prediction = model(x)["hamiltonian"]
+    raw_target = y["hamiltonian"]
+    assert str(model.cfg.loss_weighting_mode).lower() == "off"
+    converter = OpenMXE3NNConverter(model.mapper.orbital_cfg)
+    if isinstance(raw_target, dict):
+        target_packed = raw_target["values"]
+        target_mask = raw_target["mask"]
+        target_irreps = IrrepsBlockData.from_packed(
+            target_packed,
+            x,
+            model.mapper,
+            model.output_layout,
+            operator="hamiltonian",
+        )
+        target_matrix = target_irreps.to_blocks(model.mapper)
+    elif isinstance(raw_target, IrrepsBlockData):
+        target_packed = target_mask = None
+        target_matrix = raw_target.to_blocks(model.mapper)
+    else:
+        target_packed = target_mask = None
+        target_matrix = raw_target
+    target_matrix = (
+        converter.matrix_to_openmx(target_matrix)
+        if prediction.basis == "openmx"
+        else converter.matrix_to_e3nn(target_matrix)
+    )
+    pred_matrix = prediction.to_blocks(model.mapper)
+    if objective == "matrix":
+        if target_packed is not None:
+            expected = (
+                (prediction.packed_values - target_packed)[target_mask]
+                .abs()
+                .square()
+                .mean()
+            )
+        else:
+            expected = sum(
+                (pred_matrix.pair_blocks[key] - target_matrix.pair_blocks[key])
+                .abs()
+                .square()
+                .mean()
+                for key in target_matrix.pair_blocks
+            )
+    else:
+        target = target_matrix.to_vectors(model.mapper, layout=model.output_layout)
+        predicted_vectors = pred_matrix.to_vectors(
+            model.mapper, layout=model.output_layout
+        )
+        if objective == "irreps":
+            expected = sum(
+                (predicted_vectors.pair_vectors[key] - values).abs().square().mean()
+                for key, values in target.pair_vectors.items()
+            )
+        else:
+            expected = sum(
+                project_irrep_vectors_to_blocks(
+                    predicted_vectors.pair_vectors[pair], projector, model.mapper
+                )
+                .sub(
+                    project_irrep_vectors_to_blocks(
+                        target.pair_vectors[pair], projector, model.mapper
+                    )
+                )
+                .abs()
+                .square()
+                .mean()
+                for projectors in model.irrep_projectors.values()
+                for pair, projector in projectors.items()
+                if pair in predicted_vectors.pair_vectors
+                and pair in target.pair_vectors
+            )
+
+    result = model._graph_step(
+        graph, 0, "train", predictions={"hamiltonian": prediction}
+    )
+    torch.testing.assert_close(result[1]["train/loss_matrix_total"], expected)
+    torch.testing.assert_close(result[0], expected)
+
+    changed_y = dict(y)
+    if isinstance(raw_target, dict):
+        changed_record = dict(raw_target)
+        changed_values = target_packed.clone()
+        changed_values[
+            tuple(torch.nonzero(target_mask, as_tuple=False)[0].tolist())
+        ] += 2.5
+        changed_record["values"] = changed_values
+        changed_y["hamiltonian"] = changed_record
+    elif isinstance(raw_target, IrrepsBlockData):
+        changed_vectors = {
+            key: values.clone() for key, values in raw_target.pair_vectors.items()
+        }
+        changed_vectors[next(iter(changed_vectors))][0, 0] += 2.5
+        changed_y["hamiltonian"] = replace(raw_target, pair_vectors=changed_vectors)
+    else:
+        changed_blocks = {
+            key: values.clone() for key, values in raw_target.pair_blocks.items()
+        }
+        changed_blocks[next(iter(changed_blocks))][0, 0, 0] += 2.5
+        changed_y["hamiltonian"] = raw_target._replace_pair_blocks(
+            changed_blocks, basis=raw_target.basis
+        )
+    changed_graph = (x, changed_y)
+    changed = model._graph_step(
+        changed_graph, 0, "train", predictions={"hamiltonian": prediction}
+    )
+    assert not torch.isclose(changed[0], result[0])
+
+    model.zero_grad(set_to_none=True)
+    full_step_loss = model._shared_step(graph, 0, "train")
+    torch.testing.assert_close(full_step_loss, expected)
+    full_step_loss.backward()
+    trainable_readouts = [
+        module
+        for name, module in model.pipeline.transforms.items()
+        if model.pipeline.roles[name] == "readout"
+        and any(parameter.requires_grad for parameter in module.parameters())
+    ]
+    assert trainable_readouts
+    readout_grads = [
+        parameter.grad
+        for parameter in trainable_readouts[-1].parameters()
+        if parameter.requires_grad
+    ]
+    assert readout_grads and any(
+        grad is not None and torch.isfinite(grad).all() and torch.count_nonzero(grad)
+        for grad in readout_grads
+    )
 
 
 def document(tmp_path, name, splits):
@@ -632,6 +785,7 @@ def test_reference_components_accept_original_block_supervision(
     from scripts.train import build_components
 
     splits = native_data(tmp_path / "data")
+    _install_s_and_p_shell_targets(splits)
     config = OmegaConf.load(document(tmp_path, name, splits))
     config.data.representation = "orbital_blocks"
     config.train_target = "irreps" if objective == "irreps" else "matrix"
@@ -643,15 +797,7 @@ def test_reference_components_accept_original_block_supervision(
         torch.set_default_dtype(torch.float64)
         _, _, model, datasets, _ = build_components(config)
         model.log_dict = lambda values, **kwargs: None
-        loss = model._shared_step(datasets["train"][0], 0, "train")
-        assert torch.isfinite(loss)
-        loss.backward()
-        assert any(parameter.grad is not None for parameter in model.parameters())
-        assert all(
-            torch.isfinite(parameter.grad).all()
-            for parameter in model.parameters()
-            if parameter.grad is not None
-        )
+        _assert_supervision_objective(model, datasets["train"][0], objective)
     finally:
         torch.set_default_dtype(previous)
 
@@ -660,6 +806,7 @@ def test_original_registered_readout_accepts_packed_shell_supervision(tmp_path):
     from scripts.train import build_components
 
     splits = native_data(tmp_path / "data")
+    _install_s_and_p_shell_targets(splits)
     config = OmegaConf.load(document(tmp_path, "deeph_e3", splits))
     config.pipeline = None
     config.hidden_irreps = "2x0e+1x1o"
@@ -675,12 +822,48 @@ def test_original_registered_readout_accepts_packed_shell_supervision(tmp_path):
         torch.set_default_dtype(torch.float64)
         _, _, model, datasets, _ = build_components(config)
         model.log_dict = lambda values, **kwargs: None
-        loss = model._shared_step(datasets["train"][0], 0, "train")
-        assert torch.isfinite(loss)
-        loss.backward()
-        assert any(parameter.grad is not None for parameter in model.parameters())
+        _assert_supervision_objective(model, datasets["train"][0], "matrix")
     finally:
         torch.set_default_dtype(previous)
+
+
+@pytest.mark.parametrize(
+    "kind,configured_fraction,expected_fraction",
+    [("mse", 1.0, 0.0), ("mae", 0.0, 1.0), (None, 0.25, 0.25)],
+)
+def test_weighted_edge_loss_gradient_uses_resolved_objective_mixture(
+    kind, configured_fraction, expected_fraction
+):
+    from net.e3gnn import E3GNN
+
+    model = SimpleNamespace(
+        cfg=SimpleNamespace(
+            objective={} if kind is None else {"kind": kind},
+            loss_l1_fraction=configured_fraction,
+        )
+    )
+    model._objective_l1_fraction = E3GNN._objective_l1_fraction.__get__(model)
+    initial = torch.tensor([[[1.0, 3.0]], [[2.0, 6.0]]], dtype=torch.float64)
+    target = torch.zeros_like(initial)
+    weights = torch.tensor([1.0, 3.0], dtype=torch.float64)
+    prediction = initial.clone().requires_grad_(True)
+    mse, mae = E3GNN._weighted_edge_block_losses(
+        model, preds=prediction, targets=target, edge_weights=weights
+    )
+    loss = (1 - expected_fraction) * mse + expected_fraction * mae
+    assert loss.requires_grad
+    loss.backward()
+
+    mse_gradient = torch.tensor([[[0.25, 0.75]], [[1.5, 4.5]]], dtype=torch.float64)
+    mae_gradient = torch.tensor(
+        [[[0.125, 0.125]], [[0.375, 0.375]]], dtype=torch.float64
+    )
+    expected_value = (1 - expected_fraction) * 16.25 + expected_fraction * 3.5
+    expected_gradient = (
+        1 - expected_fraction
+    ) * mse_gradient + expected_fraction * mae_gradient
+    torch.testing.assert_close(loss, torch.tensor(expected_value, dtype=torch.float64))
+    torch.testing.assert_close(prediction.grad, expected_gradient)
 
 
 def test_public_deeph_trainer_matches_norm_clipped_source_updates_and_lr_events(

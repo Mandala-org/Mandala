@@ -7,7 +7,6 @@ import torch
 
 from net.e3gnn import E3GNN
 
-
 pytestmark = pytest.mark.gpu
 
 
@@ -16,17 +15,10 @@ def _require_cuda() -> None:
         pytest.fail("MANDALA_RUN_GPU_TESTS=1 was set, but CUDA is unavailable.")
 
 
-def test_cuda_tensor_and_e3nn_runtime():
-    _require_cuda()
-    x = torch.randn(1024, 3, device="cuda")
-    loss = x.square().mean()
-    assert torch.isfinite(loss)
-    assert torch.cuda.get_device_capability()[0] >= 7
-
-
 def test_tiny_model_forward_backward_and_strict_reload(small_angular_dataset_e3nn):
     _require_cuda()
     dataset, mapper, base_cfg = small_angular_dataset_e3nn
+    dataset = copy.deepcopy(dataset)
     cfg = copy.deepcopy(base_cfg)
     cfg.device = torch.device("cuda")
     cfg.matrix_targets = ["hamiltonian"]
@@ -38,7 +30,11 @@ def test_tiny_model_forward_backward_and_strict_reload(small_angular_dataset_e3n
     loss = model.training_step((x, y), batch_idx=0)
     assert loss is not None and torch.isfinite(loss)
     loss.backward()
-    assert any(parameter.grad is not None for parameter in model.parameters())
+    gradients = [
+        parameter.grad for parameter in model.parameters() if parameter.grad is not None
+    ]
+    assert gradients and all(torch.isfinite(gradient).all() for gradient in gradients)
+    assert any(torch.count_nonzero(gradient) > 0 for gradient in gradients)
 
     reloaded = E3GNN(mapper, cfg).cuda()
     reloaded.load_state_dict(model.state_dict(), strict=True)

@@ -1,5 +1,4 @@
-"""End-to-end tests for ``src.data.openmx_info_parser``.
-"""
+"""End-to-end tests for ``src.data.openmx_info_parser``."""
 
 from __future__ import annotations
 import pytest
@@ -22,11 +21,17 @@ def parsed_data():
 
 
 # --------------------------------------------------------------------------- basic content checks
-@pytest.mark.parametrize("key", ["Ukin", "UH0", "UH1", "Una"])
 @pytest.mark.unit
-def test_energy_keys_present(parsed_data, key):
-    """Selected energy labels must be present in the header dictionary."""
-    assert key in parsed_data.energies
+def test_energy_values_match_reference_lines(parsed_data):
+    expected = {
+        "Ukin": 26.786957248889,
+        "UH0": -656.647353248566,
+        "UH1": 0.128205567586,
+        "Una": -32.868232779522,
+    }
+    for key, value in expected.items():
+        # The parser's default float32 tensor rounds the larger energy terms.
+        assert parsed_data.energies[key].item() == pytest.approx(value, abs=1e-4)
 
 
 @pytest.mark.unit
@@ -93,18 +98,3 @@ def test_chemical_potential_is_parsed_as_fermi_level(tmp_path):
     parsed = parse_info_out(info_path)
 
     assert parsed.fermi_level.item() == pytest.approx(-0.184928095654)
-
-
-# --------------------------------------------------------------------------- edge-case sanity
-@pytest.mark.parametrize(
-    "element, part",
-    [
-        ("H", "s"),
-        ("H", "p"),
-        ("O", "d"),
-    ],
-)
-@pytest.mark.unit
-def test_orbital_parts_present(parsed_data, element: str, part: str):
-    """Ensure every expected orbital letter appears in the element's compact spec."""
-    assert part in parsed_data.orbital_set[element]

@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
+from types import SimpleNamespace
 
 
 def _load_module():
@@ -128,7 +130,9 @@ parameters:
                 "timeout": timeout,
                 "gc_after_trial": gc_after_trial,
             }
-            objective(FakeTrial())
+            trial = FakeTrial()
+            captured["objective_value"] = objective(trial)
+            captured["user_attrs"] = trial.attrs
 
     class FakeOptuna:
         class samplers:
@@ -165,6 +169,8 @@ parameters:
         captured["parsed_yaml"] = parsed_yaml
         captured["objective_metric"] = objective_metric
         assert extra_callbacks is not None and len(extra_callbacks) == 1
+        assert isinstance(extra_callbacks[0], mod.OptunaPruningCallback)
+        assert extra_callbacks[0].monitor == objective_metric
         return {"val/energy_mae": 0.123, "val/loss": 0.5}
 
     monkeypatch.setitem(sys.modules, "optuna", FakeOptuna)
@@ -192,9 +198,11 @@ parameters:
     assert captured["objective_metric"] == "val/energy_mae"
     assert captured["train_args"].dataset_kind == "silicon"
     assert captured["train_args"].num_train == 2
+    assert captured["objective_value"] == pytest.approx(0.123)
+    assert captured["user_attrs"] == {"val/energy_mae": 0.123, "val/loss": 0.5}
 
 
-def test_get_or_create_study_loads_existing_on_duplicate_key(monkeypatch):
+def test_get_or_create_study_loads_existing_without_creating(monkeypatch):
     mod = _load_module()
     captured = {}
 
@@ -216,6 +224,10 @@ def test_get_or_create_study_loads_existing_on_duplicate_key(monkeypatch):
         def load_study(**kwargs):
             captured["load_study"] = kwargs
             return FakeStudy()
+
+        @staticmethod
+        def create_study(**kwargs):
+            pytest.fail("An existing study must not be recreated")
 
     study_cfg = {
         "study_name": "demo",
@@ -284,6 +296,83 @@ def test_get_or_create_study_creates_when_missing(monkeypatch):
 
     assert isinstance(study, FakeStudy)
     assert captured["create_study"]["study_name"] == "demo"
+    assert captured["create_study"]["load_if_exists"] is True
+    assert captured["create_study"]["direction"] == "minimize"
+
+
+@pytest.mark.parametrize("metric", [0.125, torch.tensor(0.125)])
+@pytest.mark.parametrize("prune", [False, True])
+def test_pruning_callback_reports_the_monitored_epoch_and_honors_decision(
+    metric, prune
+):
+    import optuna
+
+    mod = _load_module()
+    reports = []
+    trial = SimpleNamespace(
+        report=lambda value, step: reports.append((value, step)),
+        should_prune=lambda: prune,
+    )
+    trainer = SimpleNamespace(
+        sanity_checking=False,
+        current_epoch=7,
+        callback_metrics={"val/loss": metric, "train/loss": 99.0},
+    )
+    callback = mod.OptunaPruningCallback(trial, "val/loss")
+    if prune:
+        with pytest.raises(optuna.TrialPruned, match="epoch 7"):
+            callback.on_validation_epoch_end(trainer, None)
+    else:
+        callback.on_validation_epoch_end(trainer, None)
+    assert reports == [(0.125, 7)]
+
+
+@pytest.mark.parametrize("case", ["sanity", "missing", "nan", "inf"])
+def test_pruning_callback_ignores_unusable_validation_metrics(case):
+    mod = _load_module()
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("A sanity/missing/nonfinite metric must not reach the trial")
+
+    trial = SimpleNamespace(report=unexpected, should_prune=unexpected)
+    trainer = SimpleNamespace(
+        sanity_checking=case == "sanity",
+        current_epoch=0,
+        callback_metrics={
+            "val/loss": {
+                "sanity": 1.0,
+                "missing": None,
+                "nan": float("nan"),
+                "inf": float("inf"),
+            }[case]
+        },
+    )
+    mod.OptunaPruningCallback(trial, "val/loss").on_validation_epoch_end(trainer, None)
+
+
+def test_study_connection_failure_is_not_treated_as_a_missing_study(monkeypatch):
+    mod = _load_module()
+    import optuna
+
+    def unavailable(**kwargs):
+        raise ConnectionError("database unreachable")
+
+    monkeypatch.setattr(optuna, "load_study", unavailable)
+    monkeypatch.setattr(
+        optuna,
+        "create_study",
+        lambda **kwargs: pytest.fail("Must not create on connection failure"),
+    )
+    monkeypatch.setattr(mod, "_study_init_lock", lambda *args: _null_ctx())
+    with pytest.raises(ConnectionError, match="database unreachable"):
+        mod._get_or_create_study(
+            optuna,
+            "demo",
+            object(),
+            {"metric": {"goal": "minimize"}},
+            study_yaml_path="study.yaml",
+            storage_url="postgresql://example",
+        )
 
 
 class _null_ctx:

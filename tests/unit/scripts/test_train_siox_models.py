@@ -139,54 +139,6 @@ def test_safe_recovery_and_duplicate_writer_protection(tmp_path):
                 pytest.fail("A second writer acquired the lock")
 
 
-def test_train_resumes_its_own_run_and_stops_at_completion(tmp_path, monkeypatch):
-    from scripts import train as shared_training
-
-    args = SimpleNamespace(
-        records=tmp_path / "records",
-        model="deeph_e3",
-        checkpoint_root=tmp_path / "models",
-        plan=False,
-        action="auto",
-    )
-    args.records.mkdir()
-    run.write_json(args.records / "dataset.json", {})
-    monkeypatch.setattr(run, "validate_manifest", lambda path: {})
-    monkeypatch.setattr(
-        run,
-        "model_settings",
-        lambda *args: {"training": {"max_epochs": 3, "min_lr": 0.00003}},
-    )
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    calls = []
-
-    def fit(cli):
-        calls.append(cli)
-        output = Path(cli[cli.index("--output") + 1])
-        output.mkdir(parents=True, exist_ok=True)
-        torch.save(
-            {
-                "epoch": 1 if len(calls) == 1 else 3,
-                "epoch_boundary_resume": {"safe_to_resume": True},
-                "optimizer_states": [{"param_groups": [{"lr": 0.002}]}],
-            },
-            output / "latest_checkpoint.pt",
-        )
-
-    monkeypatch.setattr(shared_training, "main", fit)
-    run.train(args)
-    assert "--resume" not in calls[0]
-    assert (args.records / "deeph_e3.last_segment.json").is_file()
-    run.train(args)
-    assert "--resume" in calls[1]
-    assert calls[1][calls[1].index("--resume") + 1] == str(
-        args.checkpoint_root / args.model / "latest_checkpoint.pt"
-    )
-    assert (args.records / "deeph_e3.complete.json").is_file()
-    run.train(args)
-    assert len(calls) == 2
-
-
 def test_preparation_does_not_change_a_frozen_selection(tmp_path):
     source = synthetic_source(tmp_path / "raw", count=3)
     first = run.select_inputs(source, num_train=2, num_val=1)
@@ -220,8 +172,9 @@ def test_legacy_trainer_dispatches_explicit_manifest_before_discovery(monkeypatc
 
 
 @pytest.mark.parametrize("model", run.MODELS)
+@pytest.mark.parametrize("completion_policy", ["epochs", "minimum_lr"])
 def test_every_preset_uses_same_training_command_and_full_checkpoint(
-    tmp_path, monkeypatch, model
+    tmp_path, monkeypatch, model, completion_policy
 ):
     from scripts import train
 
@@ -237,6 +190,14 @@ def test_every_preset_uses_same_training_command_and_full_checkpoint(
     run.write_json(args.records / "dataset.json", manifest)
     monkeypatch.setattr(run, "validate_manifest", lambda path: manifest)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    original_settings = run.model_settings
+
+    def settings(*args):
+        document = original_settings(*args)
+        document.setdefault("training", {})["min_lr"] = 3e-5
+        return document
+
+    monkeypatch.setattr(run, "model_settings", settings)
     calls = []
 
     def fit(cli):
@@ -253,9 +214,24 @@ def test_every_preset_uses_same_training_command_and_full_checkpoint(
         output.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
-                "epoch": 1 if len(calls) == 1 else 10000,
+                "epoch": (
+                    10000 if len(calls) == 2 and completion_policy == "epochs" else 1
+                ),
                 "epoch_boundary_resume": {"safe_to_resume": True},
-                "optimizer_states": [{"param_groups": [{"lr": 0.0001}]}],
+                "optimizer_states": [
+                    {
+                        "param_groups": [
+                            {
+                                "lr": (
+                                    3e-5
+                                    if len(calls) == 2
+                                    and completion_policy == "minimum_lr"
+                                    else 0.0001
+                                )
+                            }
+                        ]
+                    }
+                ],
             },
             output / "latest_checkpoint.pt",
         )
@@ -263,7 +239,23 @@ def test_every_preset_uses_same_training_command_and_full_checkpoint(
     monkeypatch.setattr(train, "main", fit)
     run.train(args)
     assert "--resume" not in calls[0]
+    status_path = args.records / f"{model}.last_segment.json"
+    completion_path = args.records / f"{model}.complete.json"
+    assert json.loads(status_path.read_text())["complete"] is False
+    assert not completion_path.exists()
     run.train(args)
     assert "--resume" in calls[1]
+    assert calls[1][calls[1].index("--resume") + 1] == str(
+        args.checkpoint_root / args.model / "latest_checkpoint.pt"
+    )
+    status = json.loads(completion_path.read_text())
+    assert status["complete"] is True
+    assert status == json.loads(status_path.read_text())
+    assert status["checkpoint"] == str(
+        args.checkpoint_root / model / "latest_checkpoint.pt"
+    )
+    if completion_policy == "minimum_lr":
+        assert status["epoch"] == 1
+        assert status["learning_rates"] == [3e-5]
     run.train(args)
     assert len(calls) == 2

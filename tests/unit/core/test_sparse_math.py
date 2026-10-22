@@ -59,15 +59,4 @@ def test_trace_sparse_vs_dense():
     bigA = A.to_dense()
     bigB = B.to_dense()
     dense_trace = torch.trace(bigA @ bigB).item()
-    assert np.isclose(t_sparse.item(), dense_trace, atol=1e-4)
-
-
-@pytest.mark.unit
-def test_trace_matches_dense():
-    A = mock_block_matrix()
-    B = mock_block_matrix()
-    sparse_tr = trace_matmul_sparse_block_matrix(A, B)
-    dense_A = A.to_dense()
-    dense_B = B.to_dense()
-    dense_tr = np.trace(dense_A @ dense_B)
-    assert np.isclose(sparse_tr.cpu().item(), dense_tr, atol=1e-6)
+    assert np.isclose(t_sparse.item(), dense_trace, atol=1e-6)

@@ -3,6 +3,36 @@ import torch
 from e3nn.o3 import Irreps, rand_matrix
 
 from net.common import Config, E3MLP
+from net.e3mlp_variants import (
+    InvariantFiLMActivation,
+    GateMagnitudesActivation,
+    EquivariantRMSNorm,
+)
+
+
+@pytest.mark.parametrize(
+    "activation",
+    [InvariantFiLMActivation, GateMagnitudesActivation, EquivariantRMSNorm],
+)
+def test_zero_irrep_channels_have_finite_higher_order_parameter_gradients(activation):
+    torch.manual_seed(734)
+    module = activation(Irreps("1x0e+1x1o")).double()
+    # Structurally zero angular channels are common for onsite output features.
+    x = torch.tensor(
+        [[0.3, 0.0, 0.0, 0.0], [0.7, 0.2, -0.4, 0.8]],
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+    output = module(x)
+    probe = torch.linspace(0.2, 1.3, output.numel(), dtype=x.dtype).reshape_as(output)
+    gradient = torch.autograd.grad((output * probe).sum(), x, create_graph=True)[0]
+    gradients = torch.autograd.grad(
+        gradient.square().sum(), (x, *module.parameters()), allow_unused=True
+    )
+    assert torch.isfinite(gradient).all()
+    assert any(value is not None and value.abs().max() > 0 for value in gradients)
+    assert all(torch.isfinite(value).all() for value in gradients if value is not None)
+
 
 VARIANTS = [
     "basic",
@@ -30,33 +60,6 @@ def random_rotation_matrix() -> torch.Tensor:
 
 def generate_equivariant_input(irreps: Irreps, batch_size: int = 1) -> torch.Tensor:
     return irreps.randn(batch_size, -1)
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("variant", VARIANTS)
-@pytest.mark.parametrize("num_layers", [1, 2, 3])
-@pytest.mark.parametrize("activate_last", [True, False])
-def test_e3mlp_creation_and_forward(variant, num_layers, activate_last):
-    """Tests that the E3MLP is created and runs a forward pass with correct shapes."""
-    cfg = _cfg_for_variant(variant)
-    input_irreps = Irreps("3x0e + 4x1o")
-    hidden_irreps = Irreps("16x0e + 8x1o + 4x2e")
-    output_irreps = Irreps("5x0e + 2x1o")
-    batch_size = 2
-
-    mlp = E3MLP(
-        input_irreps=input_irreps,
-        hidden_irreps=hidden_irreps,
-        output_irreps=output_irreps,
-        num_layers=num_layers,
-        cfg=cfg,
-        activate_last=activate_last,
-    )
-
-    x = generate_equivariant_input(input_irreps, batch_size=batch_size)
-    y = mlp(x)
-
-    assert y.shape == (batch_size, output_irreps.dim)
 
 
 @pytest.mark.unit
@@ -106,6 +109,8 @@ def test_e3mlp_equivariance(variant, num_layers, activate_last):
     # 3. Pass original input and transform output
     y_original = mlp(x)
     y_rotated_from_original = y_original @ D_out.T
+
+    assert y_original.shape == (batch_size, output_irreps.dim)
 
     # 4. Check for equivariance
     assert torch.allclose(y_from_rotated_input, y_rotated_from_original, atol=1e-5)

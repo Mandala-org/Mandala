@@ -56,25 +56,46 @@ def test_roundtrip_blocks_vectors():
     snap_vec = snap_blk.to_vectors(mapper)
     snap_reco = snap_vec.to_blocks(mapper)
 
-    # test one random global pair
-    assert torch.allclose(snap_blk[(2, 5)], snap_reco[(2, 5)], atol=1e-6)
-
-    # test full tensors key "O-O"
-    assert torch.allclose(snap_blk["O-O"], snap_reco["O-O"], atol=1e-6)
+    for key in snap_blk.pair_blocks:
+        torch.testing.assert_close(snap_blk[key], snap_reco[key], atol=1e-6, rtol=1e-5)
 
 
 @pytest.mark.integration
 def test_denseify_roundtrip():
-    matrix, mapper = make_mock_matrix()
-    dense = matrix.to_dense()
-    re_matrix = BlockMatrix.from_dense(
+    cfg = OrbitalIrrepConfig.from_dict({"H": "1s", "O": "2s"})
+    dense = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
+    matrix = BlockMatrix.from_dense(
         dense,
-        mapper.orbital_cfg,
-        matrix.atoms,
-        basis=matrix.basis,
+        cfg,
+        ("H", "O"),
+        basis="openmx",
     )
-    # check one arbitrary oriented pair
-    assert torch.allclose(matrix[(0, 3)], re_matrix[(0, 3)], atol=1e-6)
+    # Literal unequal forward/reverse blocks catch shared offset/transposition
+    # mistakes that from_dense(to_dense(...)) would cancel.
+    torch.testing.assert_close(matrix[(0, 0)], torch.tensor([[1.0]]))
+    torch.testing.assert_close(matrix[(0, 1)], torch.tensor([[2.0, 3.0]]))
+    torch.testing.assert_close(matrix[(1, 0)], torch.tensor([[4.0], [7.0]]))
+    torch.testing.assert_close(matrix[(1, 1)], torch.tensor([[5.0, 6.0], [8.0, 9.0]]))
+    torch.testing.assert_close(matrix.to_dense(), dense)
+
+
+def test_openmx_p_d_basis_has_fixed_forward_coefficients():
+    converter = OpenMXE3NNConverter(
+        OrbitalIrrepConfig.from_dict({"P": "1p", "D": "1d"})
+    )
+    block = torch.arange(15.0).reshape(3, 5)
+    # Frozen forward convention, independent of the inverse converter.
+    expected = torch.tensor(
+        [
+            [7.0, 9.0, 5.0, 8.0, 6.0],
+            [12.0, 14.0, 10.0, 13.0, 11.0],
+            [2.0, 4.0, 0.0, 3.0, 1.0],
+        ]
+    )
+    torch.testing.assert_close(converter.block_openmx_to_e3nn("P-D", block), expected)
+    torch.testing.assert_close(
+        converter.block_openmx_to_e3nn("D-P", block.T), expected.T
+    )
 
 
 @pytest.mark.integration
@@ -143,18 +164,6 @@ def test_basis_converter_roundtrip():
     # element‑wise equality for all blocks
     for idx in matrix_open.lookup:
         assert torch.allclose(matrix_open[idx], matrix_back[idx], atol=1e-6)
-
-
-@pytest.mark.integration
-def test_block_converter_direct():
-    matrix, mapper = make_mock_matrix()
-    conv = OpenMXE3NNConverter(mapper.orbital_cfg)
-
-    key = "O-H"
-    blk = matrix[key][0]  # (d_O, d_H)
-    blk_e3 = conv.block_openmx_to_e3nn(key, blk)
-    blk_open = conv.block_e3nn_to_openmx(key, blk_e3)
-    assert torch.allclose(blk, blk_open, atol=1e-6)
 
 
 # --------------------------------------------------------------------------- #

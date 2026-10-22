@@ -154,6 +154,13 @@ PYTHONPATH=src:. python -m pytest -q \
   tests/workflow/test_modular_training.py
 ```
 
+The [test-suite audit](docs/test_suite_audit.md) records the scope, numerical
+oracles, infrastructure requirements, and remaining validation limits. Its
+[complete inventory](docs/test_inventory.json) contains an individual review
+and disposition for every test, including parametrized cases. GPU tests require
+`MANDALA_RUN_GPU_TESTS=1`; upstream differential checks require the pinned source
+checkouts described in the audit. Collection alone does not execute tests.
+
 To launch training, pick a config and run:
 
 ```bash

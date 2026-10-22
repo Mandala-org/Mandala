@@ -1273,9 +1273,14 @@ def compute_shift_resolved_matrix_metrics(
             raise ValueError(
                 f"Metric requires exactly aligned shift-resolved edges for key {pair_key!r}."
             )
-        error = pred_blocks.to(torch.float64) - target_blocks.to(torch.float64)
+        dtype = (
+            torch.complex128
+            if pred_blocks.is_complex() or target_blocks.is_complex()
+            else torch.float64
+        )
+        error = pred_blocks.to(dtype) - target_blocks.to(dtype)
         absolute_error_sum += float(error.abs().sum().item())
-        squared_error_sum += float(error.square().sum().item())
+        squared_error_sum += float(error.abs().square().sum().item())
         scalar_count += int(error.numel())
         edge_count += int(error.shape[0])
 
