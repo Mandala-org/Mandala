@@ -16,12 +16,17 @@ class IrrepProjector:
     indices: torch.Tensor
     dim_i: int
     dim_j: int
+    layout: object | None = None
 
 
-def get_all_irreps(mapper: BlockIrrepMapper) -> list[Irrep]:
+def get_all_irreps(mapper: BlockIrrepMapper, layout=None) -> list[Irrep]:
     irreps_set: set[Irrep] = set()
     for edge_type in mapper.edge_types:
-        pair_irreps = mapper.get_pair_irreps(edge_type)
+        pair_irreps = (
+            layout.irreps_out
+            if layout is not None
+            else mapper.get_pair_irreps(edge_type)
+        )
         for mul, irrep in pair_irreps:
             if mul > 0:
                 irreps_set.add(irrep)
@@ -31,6 +36,8 @@ def get_all_irreps(mapper: BlockIrrepMapper) -> list[Irrep]:
 def build_irrep_projector_cache(
     mapper: BlockIrrepMapper,
     irreps: Iterable[Irrep] | None = None,
+    *,
+    layout=None,
 ) -> dict[str, dict[str, IrrepProjector]]:
     if irreps is None:
         irreps = get_all_irreps(mapper)
@@ -39,7 +46,11 @@ def build_irrep_projector_cache(
     allowed_irreps = set(cache.keys())
 
     for pair_key in mapper.edge_types:
-        pair_irreps = mapper.get_pair_irreps(pair_key)
+        pair_irreps = (
+            layout.irreps_out
+            if layout is not None
+            else mapper.get_pair_irreps(pair_key)
+        )
         map_key = mapper._canonical_pair(pair_key)
         item = mapper._lookup(map_key)
 
@@ -63,6 +74,7 @@ def build_irrep_projector_cache(
                 indices=indices,
                 dim_i=item.dim_i,
                 dim_j=item.dim_j,
+                layout=layout,
             )
 
     return cache
@@ -74,13 +86,20 @@ def project_irrep_vectors_to_blocks(
     mapper: BlockIrrepMapper,
 ) -> torch.Tensor:
     pair = mapper._canonical_pair(projector.pair_key)
+    if projector.layout is not None:
+        selected = torch.zeros_like(vectors_full)
+        indices = projector.indices.to(vectors_full.device)
+        selected[:, indices] = vectors_full[:, indices]
+        return mapper.vectors_to_blocks(pair, selected, layout=projector.layout)
     q_full = mapper._get_q(pair)
     idx_for_vectors = projector.indices.to(device=vectors_full.device)
     idx_for_q = projector.indices.to(device=q_full.device)
 
     vec_sel = vectors_full.index_select(1, idx_for_vectors)
     q_subset = q_full.index_select(0, idx_for_q)
-    if vec_sel.dtype != q_subset.dtype:
+    if vec_sel.is_complex():
+        q_subset = q_subset.to(dtype=vec_sel.dtype)
+    elif vec_sel.dtype != q_subset.dtype:
         vec_sel = vec_sel.to(dtype=q_subset.dtype)
 
     block_flat = vec_sel @ q_subset
@@ -97,7 +116,11 @@ def filter_irreps_block_data_by_irrep(
 
     filtered_vectors: dict[str, torch.Tensor] = {}
     for edge_type, vectors in irreps_block_data.pair_vectors.items():
-        pair_irreps = mapper.get_pair_irreps(edge_type)
+        pair_irreps = (
+            irreps_block_data.layout.irreps_out
+            if irreps_block_data.layout is not None
+            else mapper.get_pair_irreps(edge_type)
+        )
         filtered_vec = torch.zeros_like(vectors)
         start_idx = 0
         for mul, irrep in pair_irreps:
@@ -117,6 +140,7 @@ def filter_irreps_block_data_by_irrep(
         lookup=irreps_block_data.lookup,
         orbital_cfg=irreps_block_data.orbital_cfg,
         basis=irreps_block_data.basis,
+        layout=irreps_block_data.layout,
     )
 
 
@@ -134,8 +158,10 @@ def build_irrep_block_matrix_cache(
     matrix: BlockMatrix,
     mapper: BlockIrrepMapper,
     all_irreps: Iterable[Irrep] | None = None,
+    *,
+    layout=None,
 ) -> dict[str, BlockMatrix]:
-    matrix_irreps = matrix.to_vectors(mapper)
+    matrix_irreps = matrix.to_vectors(mapper, layout=layout)
     if all_irreps is None:
         all_irreps = get_all_irreps(mapper)
 
@@ -193,8 +219,8 @@ def compute_irrep_metrics(
             targ_sel = targ_blocks_full[:target_n]
             diff = pred_sel - targ_sel
 
-            l2_error_blocks_sq = torch.sum(diff**2, dim=(1, 2))
-            l2_target_blocks_sq = torch.sum(targ_sel**2, dim=(1, 2))
+            l2_error_blocks_sq = torch.sum(diff.abs() ** 2, dim=(1, 2))
+            l2_target_blocks_sq = torch.sum(targ_sel.abs() ** 2, dim=(1, 2))
 
             sum_l2_block_sq += torch.sum(l2_error_blocks_sq).item()
             sum_l2_target_block_sq += torch.sum(l2_target_blocks_sq).item()

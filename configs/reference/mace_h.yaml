@@ -1,3 +1,12 @@
+species:
+  ordering: atomic_number
+symmetrize_hamiltonian_targets: false
+symmetrize_overlap_targets: false
+symmetrize_density_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
+revert_on_spike: false
+checkpoint_monitor: val/loss
 # Official MACE-H defaults as neighbor-density, correlation, angular and edge
 # streams. Statistics must be fitted exclusively on explicit training records.
 schema_version: 1
@@ -44,6 +53,12 @@ layout_rules:
     angular: ${parameters.angular_irreps}
     output: ${layout.post_irreps}
 data:
+  representation: packed_shells
+  basis: openmx
+  geometry_dtype: float64
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
   support_file: hamiltonians.h5
   target_frame: global
   local_coordinates: false
@@ -156,16 +171,19 @@ pipeline:
       outputs: [edge_3]
       options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${layout.post_irreps}'}
     - id: edge_readout
+      role: readout
       transform: irrep_linear
       inputs: [edge_3]
       outputs: [coupled_raw]
       options: {irreps_out: '${layout.coupled_irreps}', biases: true}
     - id: output_affine
+      role: readout
       transform: species_irrep_affine
       inputs: [coupled_raw, edge_type_idx]
       outputs: [coupled]
       options: {num_species: '${species.count}', gradient_mode: identity}
     - id: native_decode
+      role: readout
       transform: shell_tensor_decode
       inputs: [coupled]
       outputs: [hamiltonian_native]

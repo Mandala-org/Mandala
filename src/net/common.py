@@ -42,6 +42,56 @@ class Config:
     pipeline: dict | None = None
     objective: dict | None = None
     optimization: dict | None = None
+    schema_version: int = 1
+    data: dict = field(default_factory=dict)
+    training: dict = field(default_factory=dict)
+    parameters: dict = field(default_factory=dict)
+    species: dict = field(default_factory=dict)
+    layout: dict = field(default_factory=dict)
+    layout_rules: dict = field(default_factory=dict)
+    codec: dict = field(default_factory=dict)
+    reference: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(cls, document):
+        """Load component recipes and flat settings through the same Config."""
+        unknown = set(document) - set(cls.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f"Unknown configuration fields: {sorted(unknown)}")
+        values = dict(document)
+        for key, value in values.get("training", {}).items():
+            if key in cls.__dataclass_fields__:
+                if key in values and values[key] != value:
+                    raise ValueError(f"Conflicting root and training values for {key}")
+                values[key] = value
+        if isinstance(values.get("dtype"), str):
+            values["dtype"] = get_torch_dtype(values["dtype"])
+        if "matrix_targets" not in values and values.get("pipeline"):
+            values["matrix_targets"] = list(values["pipeline"]["outputs"])
+        return cls(**values)
+
+    def to_mapping(self):
+        """Plain serializable configuration for either graph representation."""
+        from dataclasses import asdict
+
+        def plain(value):
+            if isinstance(value, torch.dtype):
+                return str(value).removeprefix("torch.")
+            if isinstance(value, dict):
+                return {key: plain(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [plain(item) for item in value]
+            return value
+
+        return plain(asdict(self))
+
+    @classmethod
+    def resolve(cls, source, *, species_shells, spinful=None, overrides=None):
+        from net.configuration import resolve_configuration
+
+        return resolve_configuration(
+            source, species_shells=species_shells, spinful=spinful, overrides=overrides
+        )
 
     # radii (unified cutoff - no small/large graph split)
     cutoff_radius: float = 11.0
@@ -133,6 +183,8 @@ class Config:
     l1_reg_coef: float = 0.0
     l2_reg_coef: float = 0.0
     init_weights_factor: float = 1.0
+    grad_clip_algorithm: str = "value"
+    wall_clock_scope: str = "session"
     grad_clip_val: float | None = 2.0
     accumulate_grad_batches: int = 1  # gradient accumulation steps
 
@@ -160,6 +212,9 @@ class Config:
     train_on_num_electrons: bool = False
     matrix_targets: list = field(default_factory=lambda: ["hamiltonian"])
     train_observables_on_gt: bool = True
+    symmetrize_validation_output: bool = True
+    symmetrize_overlap_targets: bool = True
+    symmetrize_density_targets: bool = True
     symmetrize_output: bool = False  # symmetrize matrix outputs
     symmetrize_hamiltonian_targets: bool = True
     rescale_density_to_num_electrons: bool = False

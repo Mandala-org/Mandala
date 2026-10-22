@@ -12,4 +12,4 @@ export MPLCONFIGDIR=/tmp/mandala-siox-models-mpl
 export OMP_NUM_THREADS=8
 export MKL_NUM_THREADS=8
 export OPENBLAS_NUM_THREADS=1
-exec python -u -m scripts.train_siox_models.run prepare --workers 8
+exec python -u -m scripts.train_siox_models.run prepare

@@ -1,3 +1,12 @@
+species:
+  ordering: atomic_number
+symmetrize_hamiltonian_targets: false
+symmetrize_overlap_targets: false
+symmetrize_density_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
+revert_on_spike: false
+checkpoint_monitor: val/loss
 schema_version: 1
 reference:
   repository: https://github.com/mzjb/DeepH-pack
@@ -12,12 +21,21 @@ parameters:
   gauss_stop: 6
   num_l: 5
   angular_dim: 25
+  envelope_sigma: 3.0
+  filter_activation: sigmoid
+  message_activation: softplus
 codec:
   spinful: false
   ignore_parity: false
   sort_irreps: false
   block_kind: all
 data:
+  representation: packed_shells
+  basis: openmx
+  geometry_dtype: float64
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
   support_file: overlaps.h5
   target_frame: bond
   local_coordinates: true
@@ -29,6 +47,7 @@ training:
   batch_size: 3
   max_epochs: 4000
   grad_clip_val: 4.2
+  grad_clip_algorithm: norm
   split:
     train_ratio: 0.6
     val_ratio: 0.2
@@ -42,6 +61,11 @@ optimization:
     - 0.999
     eps: 1.0e-08
     weight_decay: 0
+  scheduler:
+    kind: milestone_decay
+    # Apply after these zero-based training epochs, as in the source loop.
+    milestones: [500, 2000, 3000]
+    factors: [0.4, 0.5, 0.5]
 objective:
   kind: mse
   epoch_weight: elements
@@ -82,6 +106,9 @@ pipeline:
     options:
       normalization: layer
       distance_envelope: true
+      envelope_sigma: ${parameters.envelope_sigma}
+      filter_activation: ${parameters.filter_activation}
+      message_activation: ${parameters.message_activation}
   - id: edge_update_1
     transform: endpoint_scalar_edge
     inputs:
@@ -106,6 +133,9 @@ pipeline:
     options:
       normalization: layer
       distance_envelope: true
+      envelope_sigma: ${parameters.envelope_sigma}
+      filter_activation: ${parameters.filter_activation}
+      message_activation: ${parameters.message_activation}
   - id: edge_update_2
     transform: endpoint_scalar_edge
     inputs:
@@ -146,6 +176,9 @@ pipeline:
     options:
       normalization: layer
       distance_envelope: true
+      envelope_sigma: ${parameters.envelope_sigma}
+      filter_activation: ${parameters.filter_activation}
+      message_activation: ${parameters.message_activation}
   - id: edge_update_3
     transform: endpoint_scalar_edge
     inputs:
@@ -170,6 +203,9 @@ pipeline:
     options:
       normalization: layer
       distance_envelope: true
+      envelope_sigma: ${parameters.envelope_sigma}
+      filter_activation: ${parameters.filter_activation}
+      message_activation: ${parameters.message_activation}
   - id: edge_update_4
     transform: endpoint_scalar_edge
     inputs:
@@ -210,6 +246,9 @@ pipeline:
     options:
       normalization: layer
       distance_envelope: true
+      envelope_sigma: ${parameters.envelope_sigma}
+      filter_activation: ${parameters.filter_activation}
+      message_activation: ${parameters.message_activation}
   - id: edge_update_5
     transform: endpoint_scalar_edge
     inputs:
@@ -222,6 +261,7 @@ pipeline:
       out_dim: ${parameters.post_edge_width}
       final_activation: true
   - id: local_coordinate_readout
+    role: readout
     transform: local_coordinate_message
     inputs:
     - node5
@@ -238,7 +278,11 @@ pipeline:
       out_dim: ${layout.real_packed_dim}
       normalization: none
       distance_envelope: true
+      envelope_sigma: ${parameters.envelope_sigma}
+      filter_activation: ${parameters.filter_activation}
+      message_activation: ${parameters.message_activation}
   - id: native_local_operator
+    role: readout
     transform: local_orbital_output
     inputs:
     - local_entries

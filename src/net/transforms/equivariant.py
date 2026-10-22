@@ -495,6 +495,8 @@ class EndpointTensorProductNodeUpdate(nn.Module):
         nonlin=False,
         norm="graph_irrep",
         if_sort_irreps=False,
+        aggregation="sum",
+        residual=True,
     ):
         super().__init__()
         node_in, angular, node_out, edge_in = map(
@@ -546,6 +548,10 @@ class EndpointTensorProductNodeUpdate(nn.Module):
         self.concat = concat
         self.only_ij = only_ij
         self.if_sort_irreps = if_sort_irreps
+        from net.transforms.composition import IndexedAggregation
+
+        self.aggregation = IndexedAggregation(aggregation, receiver=0)
+        self.use_residual = residual
 
     def forward(
         self,
@@ -570,7 +576,7 @@ class EndpointTensorProductNodeUpdate(nn.Module):
         else:
             value = nodes[index_j]
         messages = self.conv(value, edge_sh, edge_length_embedded, batch[index_i])
-        nodes = scatter(messages, index_i, dim=0, dim_size=old.shape[0], reduce="add")
+        nodes = self.aggregation(messages, edge_index, old)
         if self.only_ij:
             if selfloop_edge is None:
                 raise ValueError(
@@ -590,7 +596,8 @@ class EndpointTensorProductNodeUpdate(nn.Module):
             nodes = self.nonlin(nodes)
         if self.norm is not None:
             nodes = self.norm(nodes, batch)
-        nodes = self.skip_connect(old, nodes)
+        if self.use_residual:
+            nodes = self.skip_connect(old, nodes)
         if self.self_tp is not None:
             nodes = self.self_tp(nodes)
         return nodes
@@ -621,6 +628,7 @@ class EndpointTensorProductEdgeUpdate(nn.Module):
         nonlin=False,
         norm="graph_irrep",
         if_sort_irreps=False,
+        residual=True,
     ):
         super().__init__()
         if init_edge and use_sc:
@@ -675,6 +683,7 @@ class EndpointTensorProductEdgeUpdate(nn.Module):
         self.use_sc = use_sc
         self.init_edge = init_edge
         self.if_sort_irreps = if_sort_irreps
+        self.use_residual = residual
 
     def forward(
         self,
@@ -704,7 +713,7 @@ class EndpointTensorProductEdgeUpdate(nn.Module):
             edges = self.nonlin(edges)
         if self.norm is not None:
             edges = self.norm(edges, batch[index_i])
-        if not self.init_edge:
+        if not self.init_edge and self.use_residual:
             edges = self.skip_connect(old, edges)
         if self.self_tp is not None:
             edges = self.self_tp(edges)

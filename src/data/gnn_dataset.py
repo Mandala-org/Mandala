@@ -54,10 +54,9 @@ from data.spectral_fermi_cache import (
 from net.spectral_loss import build_spectral_reference
 from tqdm.auto import tqdm
 
-
 # Native spin=0 density normalization; invalidate old doubled-density targets.
-SNAPSHOT_CACHE_VERSION = "v4"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v7"
+SNAPSHOT_CACHE_VERSION = "v5"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v8"
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
@@ -90,6 +89,14 @@ def _geometry_source_payload(info_path: Path, cfg: Config) -> dict[str, object]:
             "orbitals": _stat_payload(info_path.parent / "orbital_types.dat"),
             "positions": _stat_payload(info_path.parent / "site_positions.dat"),
             "lattice": _stat_payload(info_path.parent / "lat.dat"),
+            "operator_files": {
+                operator: _stat_payload(info_path.parent / filename)
+                for operator, filename in cfg.data.get("matrix_files", {}).items()
+            },
+            "frames": _stat_payload(info_path.parent / "rc.h5"),
+            "support": _stat_payload(
+                info_path.parent / cfg.data.get("support_file", "hamiltonians.h5")
+            ),
             "overlap": _stat_payload(info_path.parent / "overlaps.h5"),
             "density": _stat_payload(info_path.parent / "density_matrixs.h5"),
         }
@@ -118,9 +125,18 @@ class E3GNNDataset(Dataset):
         mapper: BlockIrrepMapper,
         cfg: Config,
         convention: str = "e3nn",
+        *,
+        preprocessing=None,
+        split="train",
     ):
         self.cfg = cfg
+        self.device = torch.device("cpu")
         self.convention = convention
+        self.preprocessing = preprocessing
+        from data.sample import collate_graph_samples
+
+        self.collate_fn = collate_graph_samples
+        self.split = split
         self.snapshot_paths = list(snapshot_paths)
 
         if not self.snapshot_paths:
@@ -130,6 +146,13 @@ class E3GNNDataset(Dataset):
         self.mapper: BlockIrrepMapper = mapper
         self.orbital_cfg = mapper.orbital_cfg
 
+        self.species_order = tuple(
+            self.cfg.species.get("order", mapper.orbital_cfg.elements())
+        )
+        self.edge_types = tuple(
+            f"{a}-{b}" for a in self.species_order for b in self.species_order
+        )
+        self.edge_type2idx = {pair: index for index, pair in enumerate(self.edge_types)}
         self.dtype = self.cfg.dtype
 
         if self.cfg.train_target not in {"matrix", "irreps"}:
@@ -177,7 +200,7 @@ class E3GNNDataset(Dataset):
                 )
             self.envelope_table = load_pair_envelope_table(
                 envelope_path,
-                pair_order=self.mapper.edge_types,
+                pair_order=self.edge_types,
                 dtype=self.dtype,
                 device="cpu",
             )
@@ -363,6 +386,13 @@ class E3GNNDataset(Dataset):
         key = json.dumps(
             {
                 "version": SNAPSHOT_CACHE_VERSION,
+                "loader_policy": self.cfg.data,
+                "symmetrize_density": self.cfg.symmetrize_density_targets,
+                "preprocessing": (
+                    self.preprocessing.signature()
+                    if self.preprocessing is not None
+                    else None
+                ),
                 "matrix": _stat_payload(matrix_path),
                 "info": _stat_payload(info_path),
                 "geometry": _geometry_source_payload(info_path, self.cfg),
@@ -385,10 +415,21 @@ class E3GNNDataset(Dataset):
         cache_root = Path(snapshot_cache_dir).expanduser() / "preprocessed_samples"
         key_payload = {
             "version": PREPROCESSED_SAMPLE_CACHE_VERSION,
+            "loader_policy": self.cfg.data,
+            "symmetrize_overlap": self.cfg.symmetrize_overlap_targets,
+            "symmetrize_density": self.cfg.symmetrize_density_targets,
+            "enable_forces": self.cfg.enable_forces,
+            "enable_stress": self.cfg.enable_stress,
             "matrix": _stat_payload(matrix_path),
             "info": _stat_payload(info_path),
             "geometry": _geometry_source_payload(info_path, self.cfg),
             "orbital_cfg": _serialize_orbital_cfg_key(self.mapper),
+            "preprocessing": (
+                self.preprocessing.signature()
+                if self.preprocessing is not None
+                else None
+            ),
+            "split": self.split,
             "convention": self.convention,
             "l_max": int(self.cfg.l_max),
             "n_radial": int(self.cfg.n_radial),
@@ -497,11 +538,27 @@ class E3GNNDataset(Dataset):
     ) -> tuple[dict, dict]:
         cache_file = self._preprocessed_sample_cache_file(matrix_path, info_path)
         self.preprocessed_cache_misses += 1
-        sample = self._process_snapshot_to_sample(
+        process = (
+            self._process_snapshot_to_sample
+            if self.preprocessing is None
+            else self.preprocessing
+        )
+        if self.cfg.apply_cutoff_to_targets and self.cfg.cutoff_radius is not None:
+            snapshot = snapshot.filter_by_distance(self.cfg.cutoff_radius)
+        snapshot = snapshot.symmetrize_matrices(
+            hamiltonian=self.cfg.symmetrize_hamiltonian_targets,
+            overlap=self.cfg.symmetrize_overlap_targets,
+            density=self.cfg.symmetrize_density_targets,
+        )
+        sample = process(
             snapshot,
             matrix_path=matrix_path,
             info_path=info_path,
             snapshot_label=matrix_path.name,
+            **({"split": self.split} if self.preprocessing is not None else {}),
+        )
+        sample = self._add_scientific_features(
+            sample, snapshot, matrix_path, info_path, matrix_path.name
         )
         if cache_file is not None and not cache_file.exists():
             self._save_preprocessed_sample(cache_file, sample)
@@ -523,13 +580,23 @@ class E3GNNDataset(Dataset):
 
         self.snapshot_cache_misses += 1
         snapshot_cutoff = None
+        from net.common import get_torch_dtype
+
+        geometry_dtype = get_torch_dtype(
+            self.cfg.data.get("geometry_dtype", self.dtype)
+        )
         if is_deeph_e3_snapshot(matrix_path, info_path):
             snapshot = Snapshot.from_deeph_e3(
                 info_path.parent,
                 convention=self.convention,
                 cutoff_radius=snapshot_cutoff,
-                dtype=self.dtype,
+                dtype=geometry_dtype,
                 cfg=self.cfg,
+                matrix_files=self.cfg.data.get("matrix_files"),
+                validate_hermitian=self.cfg.data.get("validate_hermitian", True),
+                validate_support=self.cfg.data.get("validate_support", True),
+                canonicalize=self.cfg.data.get("canonicalize_edges", True),
+                symmetrize_density=self.cfg.symmetrize_density_targets,
             )
         elif matrix_path.suffix == ".npz" or info_path.suffix == ".json":
             snapshot = Snapshot.from_pyscf(
@@ -546,7 +613,8 @@ class E3GNNDataset(Dataset):
                     matrix_path=matrix_path,
                     info_path=info_path,
                     convention=self.convention,
-                    symmetrize_density=True,
+                    symmetrize_density=self.cfg.symmetrize_density_targets,
+                    dtype=geometry_dtype,
                     cutoff_radius=snapshot_cutoff,
                     cfg=self.cfg,
                 )
@@ -620,18 +688,6 @@ class E3GNNDataset(Dataset):
                 edges.shape[1] for edges in snap.hamiltonian.pair_edges.values()
             )
             target_edges_after_cutoff = target_edges_before_cutoff
-            if self.cfg.apply_cutoff_to_targets and self.cfg.cutoff_radius is not None:
-                snap = snap.filter_by_distance(self.cfg.cutoff_radius)
-                target_edges_after_cutoff = sum(
-                    edges.shape[1] for edges in snap.hamiltonian.pair_edges.values()
-                )
-
-            snap = snap.symmetrize_matrices(
-                hamiltonian=self.cfg.symmetrize_hamiltonian_targets,
-                overlap=True,
-                density=True,
-            )
-
             hamiltonian_target_matrix = snap.hamiltonian
             hamiltonian_target = hamiltonian_target_matrix
             overlap_target = snap.overlap
@@ -649,7 +705,7 @@ class E3GNNDataset(Dataset):
             atoms = snap.density.atoms
             atoms_tuple = tuple(atoms)
             atom_counts = dict(snap.density.atom_counts)
-            elem2idx = {el: i for i, el in enumerate(self.orbital_cfg.elements())}
+            elem2idx = {el: i for i, el in enumerate(self.species_order)}
             node_type_idx = torch.tensor(
                 [elem2idx[el] for el in atoms], dtype=torch.long
             )
@@ -657,22 +713,56 @@ class E3GNNDataset(Dataset):
             graph_source = str(
                 getattr(self.cfg, "graph_source", "geometry_cutoff")
             ).lower()
+            declared_graph = self.cfg.data.get("graph_source")
+            if declared_graph is not None:
+                graph_source = {
+                    "stored": "target_edges",
+                    "radius": "geometry_cutoff",
+                }.get(declared_graph, declared_graph)
             graph_kwargs = {
                 "positions": snap.positions,
                 "box": snap.box,
                 "atoms": snap.density.atoms,
                 "cfg": self.cfg,
                 "sh_irreps": self.sh_irreps,
-                "edge_type2idx": self.mapper.edge_type2idx,
+                "edge_type2idx": self.edge_type2idx,
                 "edge_type_r0": (
                     self.edge_type_r0
                     if self.pair_distance_normalization == "pair_r0"
                     else None
                 ),
             }
+            if (
+                declared_graph == "radius"
+                and self.cfg.data.get("graph_radius") is not None
+            ):
+                from dataclasses import replace
+                import math
+
+                radius = float(self.cfg.data["graph_radius"])
+                if not math.isfinite(radius) or radius <= 0:
+                    raise ValueError(
+                        "Radius graph requires a finite positive graph_radius"
+                    )
+                graph_kwargs["cfg"] = replace(self.cfg, cutoff_radius=radius)
             if graph_source == "target_edges":
+                support_operator = self.cfg.data.get("support_operator") or {
+                    "hamiltonians.h5": "hamiltonian",
+                    "overlaps.h5": "overlap",
+                    "density_matrixs.h5": "density",
+                    **{
+                        filename: name
+                        for name, filename in self.cfg.data.get(
+                            "matrix_files", {}
+                        ).items()
+                    },
+                }.get(self.cfg.data.get("support_file", "hamiltonians.h5"))
+                if support_operator not in available_matrices:
+                    raise ValueError(
+                        "Stored graph requires its declared support operator"
+                    )
                 graph_features = compute_graph_features_from_target_edges(
-                    pair_edges=snap.hamiltonian.pair_edges,
+                    pair_edges=snap[support_operator].pair_edges,
                     **graph_kwargs,
                 )
             elif graph_source == "geometry_cutoff":
@@ -692,11 +782,35 @@ class E3GNNDataset(Dataset):
                 edge_lengths,
             ) = graph_features
 
+            # Graph builders may partition stored edges differently from the file.
+            # Align targets explicitly; storage order is not a scientific policy.
+            graph_keys = torch.cat((edge_shift, edge_index)).T.tolist()
+            graph_order = {tuple(edge): index for index, edge in enumerate(graph_keys)}
+
+            def align_target(matrix):
+                orders = {
+                    pair: torch.tensor(
+                        sorted(
+                            range(edges.shape[1]),
+                            key=lambda row: graph_order.get(
+                                tuple(edges[:, row].tolist()), len(graph_order)
+                            ),
+                        ),
+                        device=edges.device,
+                    )
+                    for pair, edges in matrix.pair_edges.items()
+                }
+                return matrix.reorder_edges(orders)
+
+            hamiltonian_target_matrix = align_target(hamiltonian_target_matrix)
+            hamiltonian_target = hamiltonian_target_matrix
+            overlap_target = align_target(overlap_target)
+            density_target = align_target(density_target)
             strict_reverse_edge_check(edge_index, edge_shift, edge_set_name="graph")
             for matrix_name, matrix_target in (
-                ("hamiltonian", snap.hamiltonian),
-                ("overlap", snap.overlap),
-                ("density", snap.density),
+                ("hamiltonian", hamiltonian_target),
+                ("overlap", overlap_target),
+                ("density", density_target),
             ):
                 strict_edge_alignment_check(
                     matrix_target,
@@ -704,7 +818,7 @@ class E3GNNDataset(Dataset):
                     edge_shift=edge_shift,
                     edge_type_idx=edge_type_idx,
                     atoms_list=list(atoms),
-                    edge_types=self.mapper.edge_types,
+                    edge_types=self.edge_types,
                     matrix_name=matrix_name,
                     require_exact=self.cfg.require_exact_edge_match,
                 )
@@ -735,8 +849,8 @@ class E3GNNDataset(Dataset):
                 edge_shift=edge_shift,
                 edge_type_idx=edge_type_idx,
                 atoms=atoms_tuple,
-                edge_types=self.mapper.edge_types,
-                edge_type2idx=self.mapper.edge_type2idx,
+                edge_types=self.edge_types,
+                edge_type2idx=self.edge_type2idx,
                 separate_shifted_self=bool(self.cfg.separate_shifted_self),
                 target_pair_edges=hamiltonian_target_matrix.pair_edges,
             )
@@ -795,42 +909,119 @@ class E3GNNDataset(Dataset):
             if self.cfg.precompute_edge_features:
                 x["edge_length_emb"] = edge_length_emb
                 x["edge_sh"] = edge_sh
-            if self.spectral_loss_enabled:
-                fermi_level, fermi_source = self._resolve_spectral_fermi_level(
-                    snap=snap,
-                    matrix_path=matrix_path,
-                    info_path=info_path,
-                )
-                print(
-                    f"--- [{snapshot_label}] Starting spectral reference precompute "
-                    f"(fermi source: {fermi_source}) ---",
-                    flush=True,
-                )
-                spectral_t0 = time.perf_counter()
-                spectral_payload = build_spectral_reference(
-                    hamiltonian=hamiltonian_target,
-                    overlap=overlap_target,
-                    box=snap.box,
-                    fermi_level_hartree=fermi_level,
-                    kmesh_spec=str(self.cfg.spectral_loss_kmesh),
-                    window_ev=float(self.cfg.spectral_loss_window_ev),
-                    taper_ev=float(self.cfg.spectral_loss_taper_ev),
-                    overlap_psd_cleanup=bool(
-                        getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", True)
-                    ),
-                    overlap_jitter=bool(
-                        getattr(self.cfg, "spectral_loss_overlap_jitter", False)
-                    ),
-                    progress_label=snapshot_label,
-                    verbose=True,
-                )
-                print(
-                    f"--- [{snapshot_label}] Finished spectral reference precompute "
-                    f"in {time.perf_counter() - spectral_t0:.2f}s ---",
-                    flush=True,
-                )
-                x.update(spectral_payload)
         return x, y
+
+    def _add_scientific_features(
+        self, sample, snap, matrix_path, info_path, snapshot_label
+    ):
+        """Optional physical targets and geometry apply to every representation."""
+        from data.sample import GraphSample
+        from data.graph_features import complete_graph_metadata
+
+        x, y = sample
+        available = set(
+            getattr(
+                snap.info, "available_matrices", {"hamiltonian", "overlap", "density"}
+            )
+        )
+        for name in available:
+            y.setdefault(name, snap[name])
+        physical = {"hamiltonian", "overlap", "density"}.issubset(available)
+        if (
+            self.cfg.train_on_energy or self.cfg.train_on_num_electrons
+        ) and not physical:
+            raise ValueError(
+                "Observable guidance requires Hamiltonian, overlap and density references"
+            )
+        for name, value in {
+            "energy": snap.get_energy() if physical else None,
+            "num_electrons": snap.get_number_of_electrons() if physical else None,
+            "forces": snap.forces,
+            "stress": snap.stress,
+        }.items():
+            y[name] = value
+        if self.cfg.train_on_forces and snap.forces is None:
+            raise ValueError(
+                "Force supervision requested but snapshot has no force labels"
+            )
+        if self.cfg.train_on_stress and snap.stress is None:
+            raise ValueError(
+                "Stress supervision requested but snapshot has no stress labels"
+            )
+        if self.cfg.enable_forces:
+            x["positions"].requires_grad_()
+        if self.cfg.enable_stress and x.get("box") is not None:
+            x["box"].requires_grad_()
+        if self.cfg.spectral_loss_enabled and "overlap" not in available:
+            raise ValueError("Spectral loss requires an overlap reference")
+        complete_graph_metadata(
+            x,
+            self.mapper,
+            species_order=self.species_order,
+            separate_shifted_self=self.cfg.separate_shifted_self,
+        )
+        from data.graph_topology import prepare_graph_topology
+
+        prepare_graph_topology(x, self.cfg.data.get("supports"))
+        x["_geometry_reference"] = {
+            key: x[key].detach().clone()
+            for key in ("positions", "box")
+            if x.get(key) is not None
+        }
+        lengths = x.get("edge_length", x.get("edge_lengths"))
+        x["edge_length"] = lengths
+        if self.envelope_table is not None:
+            x["edge_envelope"] = build_edge_envelope(
+                edge_lengths=lengths,
+                edge_type_idx=x["edge_type_idx"],
+                envelope_table=self.envelope_table,
+            ).to(self.dtype)
+            x["edge_r0"] = self.envelope_table.r0.index_select(
+                0, x["edge_type_idx"]
+            ).to(self.dtype)
+        hamiltonian_target, overlap_target = snap.hamiltonian, snap.overlap
+        if self.spectral_loss_enabled:
+            fermi_level, fermi_source = self._resolve_spectral_fermi_level(
+                snap=snap,
+                matrix_path=matrix_path,
+                info_path=info_path,
+            )
+            print(
+                f"--- [{snapshot_label}] Starting spectral reference precompute "
+                f"(fermi source: {fermi_source}) ---",
+                flush=True,
+            )
+            spectral_t0 = time.perf_counter()
+            spectral_payload = build_spectral_reference(
+                hamiltonian=hamiltonian_target,
+                overlap=overlap_target,
+                box=snap.box,
+                fermi_level_hartree=fermi_level,
+                kmesh_spec=str(self.cfg.spectral_loss_kmesh),
+                window_ev=float(self.cfg.spectral_loss_window_ev),
+                taper_ev=float(self.cfg.spectral_loss_taper_ev),
+                overlap_psd_cleanup=bool(
+                    getattr(self.cfg, "spectral_loss_overlap_psd_cleanup", True)
+                ),
+                overlap_jitter=bool(
+                    getattr(self.cfg, "spectral_loss_overlap_jitter", False)
+                ),
+                progress_label=snapshot_label,
+                verbose=True,
+            )
+            print(
+                f"--- [{snapshot_label}] Finished spectral reference precompute "
+                f"in {time.perf_counter() - spectral_t0:.2f}s ---",
+                flush=True,
+            )
+            x.update(spectral_payload)
+        return (
+            sample
+            if isinstance(sample, GraphSample)
+            else GraphSample(
+                x, y, {"id": str(matrix_path.parent.resolve()), "split": self.split}
+            )
+        )
 
     # ------------------- torch Dataset interface ---------------------------
     def __len__(self) -> int:
@@ -852,94 +1043,21 @@ class E3GNNDataset(Dataset):
         """
         Move all dataset inputs and targets to the specified device.
         """
+        from data.sample import GraphSample, move_tree
+
         device = torch.device(device)
-        if device == self.device:
-            return self
-        self.device = device
-        # Explicitly move known fields
-        for idx, (x, y) in enumerate(self.snapshots):
-            # x
-            if "positions" in x:
-                x["positions"] = x["positions"].to(device)
-            if "box" in x and x["box"] is not None:
-                x["box"] = x["box"].to(device)
-            if "node_type_idx" in x:
-                x["node_type_idx"] = x["node_type_idx"].to(device)
-            if "node_one_hot" in x:
-                x["node_one_hot"] = x["node_one_hot"].to(device)
-            if "edge_index" in x:
-                x["edge_index"] = x["edge_index"].to(device)
-            if "edge_shift" in x:
-                x["edge_shift"] = x["edge_shift"].to(device)
-            if "edge_type_idx" in x:
-                x["edge_type_idx"] = x["edge_type_idx"].to(device)
-            if "edge_one_hot" in x:
-                x["edge_one_hot"] = x["edge_one_hot"].to(device)
-            if "edge_length_emb" in x:
-                x["edge_length_emb"] = x["edge_length_emb"].to(device)
-            if "edge_sh" in x:
-                x["edge_sh"] = x["edge_sh"].to(device)
-            if "edge_length" in x:
-                x["edge_length"] = x["edge_length"].to(device)
-            if "edge_envelope" in x:
-                x["edge_envelope"] = x["edge_envelope"].to(device)
-            if "edge_r0" in x:
-                x["edge_r0"] = x["edge_r0"].to(device)
-            if "pred_pair_edges_static" in x:
-                x["pred_pair_edges_static"] = {
-                    k: v.to(device) for k, v in x["pred_pair_edges_static"].items()
-                }
-            for alignment_key in (
-                "pred_trace_alignment",
-                "pred_reverse_alignment",
-                "target_reverse_alignment",
-            ):
-                alignment = x.get(alignment_key)
-                if alignment is not None:
-                    x[alignment_key] = {
-                        k: (rev_key, idx.to(device))
-                        for k, (rev_key, idx) in alignment.items()
-                    }
-            if "edge_partitions" in x:
-                x["edge_partitions"] = {
-                    key: {name: value.to(device) for name, value in parts.items()}
-                    for key, parts in x["edge_partitions"].items()
-                }
-            for key in (
-                "spectral_kpoints_abs",
-                "spectral_shifts",
-                "spectral_gt_overlap_k",
-                "spectral_gt_overlap_cholesky",
-                "spectral_phase",
-                "spectral_gt_eigs_ev",
-                "spectral_gt_fermi_ev",
-                "spectral_window_weights",
-                "spectral_weight_sum",
-            ):
-                if key in x:
-                    x[key] = x[key].to(device)
-            if "spectral_scatter_metadata" in x:
-                x["spectral_scatter_metadata"] = {
-                    key: (source.to(device), destination.to(device))
-                    for key, (source, destination) in x[
-                        "spectral_scatter_metadata"
-                    ].items()
-                }
-
-            # Matrix containers are infrastructure-required, while observables
-            # may legitimately be unavailable (for example Hamiltonian-only
-            # DeepH-E3 archives).
-            for key in ("hamiltonian", "overlap", "density"):
-                value = y.get(key)
-                if value is None:
-                    raise ValueError(
-                        f"Dataset sample {idx} is missing required matrix target {key!r}."
-                    )
-                y[key] = value.to(device)
-            for key in ("energy", "num_electrons", "forces", "stress"):
-                value = y.get(key)
-                if value is not None:
-                    y[key] = value.to(device)
-
-            self.snapshots[idx] = (x, y)
+        if device != self.device:
+            self.snapshots = [
+                (
+                    sample.to(device)
+                    if isinstance(sample, GraphSample)
+                    else move_tree(sample, device)
+                )
+                for sample in self.snapshots
+            ]
+            self.device = device
         return self
+
+    @property
+    def samples(self):
+        return self.snapshots

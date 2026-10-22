@@ -184,7 +184,7 @@ def print_dataset_summary(
         total_nodes += num_nodes
 
         # Target edge statistics (from one of the matrices, e.g., density)
-        density = y["density"]
+        density = y.get("density", y.get("hamiltonian"))
         if isinstance(density, (BlockMatrix, IrrepsBlockData)):
             stats = analyze_block_matrix_edges(density)
             total_target_edges += stats["total_edges"]

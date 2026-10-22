@@ -34,7 +34,7 @@ from ase.data import atomic_numbers
 from e3nn.o3 import Irrep, Irreps
 from omegaconf import OmegaConf
 
-from net.operator_codecs import ShellTensorCodec
+from core.operator_layout import ShellTensorCodec
 
 
 def validate_configuration_sections(config):
@@ -53,6 +53,9 @@ def validate_configuration_sections(config):
         "optimization",
         "pipeline",
     }
+    from net.common import Config
+
+    allowed.update(Config.__dataclass_fields__)
     unknown = set(config) - allowed
     if unknown:
         raise ValueError(f"Unknown configuration sections: {sorted(unknown)}")
@@ -69,6 +72,15 @@ def validate_configuration_sections(config):
             "units",
             "graph_source",
             "graph_radius",
+            "representation",
+            "basis",
+            "support_operator",
+            "geometry_dtype",
+            "validate_hermitian",
+            "validate_support",
+            "canonicalize_edges",
+            "supports",
+            "neighborhood_support",
         },
         "objective": {"kind", "epoch_weight", "weights", "complex_reduction"},
         "optimization": {"optimizer", "scheduler", "stop_lr"},
@@ -76,12 +88,14 @@ def validate_configuration_sections(config):
     }
     for section, names in sections.items():
         values = config.get(section, {})
+        if values is None:
+            continue
         if not OmegaConf.is_dict(values) and not isinstance(values, Mapping):
             raise ValueError(f"{section} must be a mapping")
         unknown = set(values) - names
         if unknown:
             raise ValueError(f"Unknown {section} options: {sorted(unknown)}")
-    objective = config.get("objective", {})
+    objective = config.get("objective") or {}
     if objective.get("kind", "mse") not in {"mse", "mae"}:
         raise ValueError("objective.kind must be mse or mae")
     if objective.get("epoch_weight", "edges") not in {"edges", "elements"}:
@@ -92,6 +106,9 @@ def validate_configuration_sections(config):
     }:
         raise ValueError("objective.complex_reduction must be magnitude or components")
     units = config.get("data", {}).get("units", {})
+    from data.graph_topology import validate_support_policies
+
+    validate_support_policies(config.get("data", {}).get("supports", {}))
     expected = {
         "energy": "eV",
         "length": "Angstrom",
@@ -221,7 +238,17 @@ def resolve_configuration(
     if not shells:
         raise ValueError("Provide the complete nonempty species-shell vocabulary.")
     requested_order = OmegaConf.select(config, "species.order")
-    order = _species_order(shells, requested_order)
+    ordering = OmegaConf.select(config, "species.ordering", default="alphabetical")
+    if ordering not in {"alphabetical", "atomic_number"}:
+        raise ValueError("species.ordering must be alphabetical or atomic_number")
+    order = _species_order(
+        shells,
+        (
+            requested_order
+            if requested_order is not None
+            else sorted(shells) if ordering == "alphabetical" else None
+        ),
+    )
     shells = {key: shells[key] for key in order}
     OmegaConf.update(
         config,
@@ -235,6 +262,17 @@ def resolve_configuration(
         },
         merge=True,
     )
+    # Full orbital-block supervision does not require the native s/p/d/f
+    # shell codec. Keep higher-angular-momentum mapper configurations valid.
+    if (
+        config.get("pipeline") is None
+        and OmegaConf.select(config, "data.representation", default="orbital_blocks")
+        == "orbital_blocks"
+        and not config.get("codec")
+        and not config.get("layout_rules")
+    ):
+        OmegaConf.update(config, "layout.spinful", bool(spinful), merge=False)
+        return OmegaConf.to_container(config, resolve=True, throw_on_missing=True), None
     if "codec" not in config:
         config.codec = {}
     if spinful is not None:
@@ -276,7 +314,7 @@ def resolve_configuration(
         else:
             raise ValueError(f"Unknown layout rule {operation!r}.")
         OmegaConf.update(config, f"layout.{name}", value, merge=False)
-    if "pipeline" in config:
+    if config.get("pipeline") is not None:
         signature = codec.layout_signature()
         existing = OmegaConf.select(config, "pipeline.operator_layout")
         if (
@@ -288,8 +326,8 @@ def resolve_configuration(
             )
         OmegaConf.update(config, "pipeline.operator_layout", signature, merge=False)
     resolved = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
-    if "pipeline" in resolved:
-        weights = resolved.get("objective", {}).get("weights", {})
+    if resolved.get("pipeline") is not None:
+        weights = (resolved.get("objective") or {}).get("weights", {})
         unknown = set(weights) - set(resolved["pipeline"]["outputs"])
         if unknown:
             raise ValueError(

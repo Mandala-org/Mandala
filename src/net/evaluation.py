@@ -9,6 +9,13 @@ format.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import shutil
+import h5py
+from core.orbital_irrep_config import OrbitalIrrepConfig
+from data.operator_features import load_operator_sample
+from utils.units import HARTREE_TO_EV
 from pathlib import Path
 from typing import Any
 
@@ -190,3 +197,151 @@ __all__ = [
     "restore_model_for_snapshot",
     "snapshot_model_input",
 ]
+
+
+def export_operator_prediction(
+    checkpoint, snapshot, output, *, graph_radius=None, device="cpu"
+):
+    checkpoint, snapshot, output = map(Path, (checkpoint, snapshot, output))
+    payload = load_checkpoint(checkpoint)
+    cfg = restore_config(payload)
+    dtype = get_torch_dtype(cfg.dtype)
+    previous_dtype = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(dtype)
+        orbital_spec = payload.get("hyper_parameters", {}).get("orbital_cfg")
+        if orbital_spec is None:
+            raise ValueError("Inference requires checkpointed orbital metadata")
+        mapper = BlockIrrepMapper(
+            OrbitalIrrepConfig.from_dict(orbital_spec), dtype=dtype
+        )
+        model = E3GNN.load_from_checkpoint_with_mapper(
+            str(checkpoint), mapper, map_location="cpu"
+        )
+        model.to(device=device, dtype=dtype)
+        data = cfg.data
+        codec = model.output_layout
+        if codec is None:
+            from core.operator_layout import ShellTensorCodec
+
+            shells = {
+                name: tuple(ir.l for mul, ir in irreps for _ in range(mul))
+                for name, irreps in mapper.orbital_cfg.element_to_irreps.items()
+            }
+            codec = ShellTensorCodec.from_species_shells(shells, dtype=dtype)
+            data = dict(data)
+            data.setdefault(
+                "graph_source",
+                "stored" if cfg.graph_source == "target_edges" else "radius",
+            )
+            data.setdefault("graph_radius", cfg.cutoff_radius)
+        sample = load_operator_sample(
+            snapshot,
+            codec,
+            species=tuple(codec.species_shells),
+            split="inference",
+            matrix_files={},
+            support_file=data.get("support_file", "hamiltonians.h5"),
+            local_coordinates=data.get("local_coordinates", False),
+            num_l=data.get("num_l", 5),
+            frame_source=data.get("frame_source", "derive"),
+            target_frame=data.get("target_frame", "global"),
+            graph_source=(
+                "radius"
+                if graph_radius is not None
+                else data.get("graph_source", "stored")
+            ),
+            graph_radius=(
+                graph_radius if graph_radius is not None else data.get("graph_radius")
+            ),
+            dtype=dtype,
+        )
+        matrices = model.predict_matrices(sample["inputs"])
+        predictions = {
+            name: (
+                {
+                    key: matrix.pair_blocks[pair][index]
+                    * (HARTREE_TO_EV if name == "hamiltonian" else 1.0)
+                    for key, (pair, index) in matrix.lookup.items()
+                },
+                {
+                    key: matrix.coverage_masks[pair][index]
+                    for key, (pair, index) in matrix.lookup.items()
+                },
+            )
+            for name, matrix in matrices.items()
+        }
+        if output.exists() and any(output.iterdir()):
+            raise FileExistsError(
+                f"Prediction output must be a new or empty directory: {output}"
+            )
+        output.mkdir(parents=True, exist_ok=True)
+        for filename in (
+            "element.dat",
+            "orbital_types.dat",
+            "site_positions.dat",
+            "lat.dat",
+        ):
+            shutil.copyfile(snapshot / filename, output / filename)
+        names = {
+            "hamiltonian": "hamiltonians.h5",
+            "overlap": "overlaps.h5",
+            "density": "density_matrixs.h5",
+        }
+        for name, (blocks, masks) in predictions.items():
+            filename = names.get(name, f"{name}.h5")
+            with (
+                h5py.File(output / filename, "w") as values,
+                h5py.File(output / f"{name}_coverage.h5", "w") as coverage,
+            ):
+                for key, block in blocks.items():
+                    native_key = str([*key[:3], key[3] + 1, key[4] + 1])
+                    values[native_key] = block.detach().cpu().numpy()
+                    coverage[native_key] = masks[key].detach().cpu().numpy()
+        digest = hashlib.sha256()
+        with checkpoint.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024**2), b""):
+                digest.update(chunk)
+        info = json.loads((snapshot / "info.json").read_text())
+        sources = {
+            name: hashlib.sha256((snapshot / name).read_bytes()).hexdigest()
+            for name in (
+                "element.dat",
+                "orbital_types.dat",
+                "site_positions.dat",
+                "lat.dat",
+                "info.json",
+            )
+        }
+        info["prediction"] = {
+            "checkpoint": str(checkpoint.resolve()),
+            "sha256": digest.hexdigest(),
+            "units": {"energy": "eV", "length": "Angstrom"},
+            "orbital_basis": "openmx",
+            "frame": "global",
+            "hermitian_projection": False,
+            "source_snapshot": str(snapshot.resolve()),
+            "source_sha256": sources,
+            "graph": {
+                "source": (
+                    "radius"
+                    if graph_radius is not None
+                    else data.get("graph_source", "stored")
+                ),
+                "radius": (
+                    graph_radius
+                    if graph_radius is not None
+                    else data.get("graph_radius")
+                ),
+                "support_file": (
+                    None
+                    if graph_radius is not None
+                    else data.get("support_file", "hamiltonians.h5")
+                ),
+            },
+            "coverage_files": {name: f"{name}_coverage.h5" for name in predictions},
+        }
+        (output / "info.json").write_text(json.dumps(info, indent=2) + "\n")
+        return predictions
+    finally:
+        torch.set_default_dtype(previous_dtype)

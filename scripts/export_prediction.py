@@ -28,12 +28,14 @@ def main(argv=None):
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument(
         "--structure",
+        "--snapshot",
         type=Path,
         required=True,
         help="XYZ/extxyz structure; periodic inputs require lattice metadata.",
     )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--format", choices=("openmx",), default="openmx")
+    parser.add_argument("--format", choices=("openmx", "native"), default="openmx")
+    parser.add_argument("--graph-radius", type=float)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     args = parser.parse_args(argv)
     device = (
@@ -43,6 +45,17 @@ def main(argv=None):
         device = "cpu"
     if device == "cuda" and not torch.cuda.is_available():
         parser.error("CUDA requested but unavailable")
+    if args.format == "native":
+        from net.evaluation import export_operator_prediction
+
+        export_operator_prediction(
+            args.checkpoint,
+            args.structure,
+            args.output,
+            graph_radius=args.graph_radius,
+            device=device,
+        )
+        return
     checkpoint = load_checkpoint(args.checkpoint)
     cfg = restore_config(checkpoint)
     if not cfg.matrix_targets or set(cfg.matrix_targets) - {
@@ -51,6 +64,10 @@ def main(argv=None):
         "density",
     }:
         raise ValueError("Checkpoint must predict a nonempty subset of H/S/D matrices.")
+    if args.graph_radius is not None:
+        cfg.data = dict(cfg.data, graph_source="radius", graph_radius=args.graph_radius)
+        cfg.graph_source = "geometry_cutoff"
+        cfg.cutoff_radius = args.graph_radius
     cfg.verbosity = 0
     cfg.dataset_device = None
     cfg.snapshot_cache_dir = None

@@ -538,6 +538,26 @@ class ShellTensorCodec(nn.Module):
                 mask[..., self.packed_slices[i] : self.packed_slices[i + 1]] = True
         return mask
 
+    @classmethod
+    def from_signature(cls, signature, *, device="cpu", dtype=None):
+        """Restore and validate the complete frozen convention without RNG effects."""
+        with torch.random.fork_rng(devices=[]):
+            shells = {
+                name: signature["species_shells"][name]
+                for name in signature["species_order"]
+            }
+            options = dict(
+                channel_assignments=signature["channel_assignments"],
+                spinful=signature["spinful"],
+                ignore_parity=signature["ignore_parity"],
+            )
+            codec = cls.from_species_shells(shells, **options)
+            if codec.layout_signature() != signature:
+                codec = cls.from_species_shells(shells, sort_irreps=True, **options)
+            if codec.layout_signature() != signature:
+                raise ValueError("Frozen orbital layout cannot be reconstructed")
+        return codec.to(device=device, dtype=dtype or torch.get_default_dtype())
+
     def layout_signature(self):
         """Serializable identity of native shell slots and coupled conventions."""
         if self.species_shells is None or self.channel_assignments is None:

@@ -334,7 +334,7 @@ def test_irrep_part_loss_zero_on_matching_target():
     }
 
     logged_metrics = {}
-    model.forward = lambda batch_x: {"hamiltonian": target_irreps}
+    model.forward = lambda batch_x, **kwargs: {"hamiltonian": target_irreps}
     model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
 
     loss = model._shared_step((x, y), batch_idx=0, stage="train")
@@ -405,7 +405,7 @@ def test_irrep_metrics_logged_for_all_matrix_targets():
     }
 
     logged_metrics = {}
-    model.forward = lambda batch_x: {
+    model.forward = lambda batch_x, **kwargs: {
         "hamiltonian": target_irreps,
         "overlap": target_irreps,
         "density": target_irreps,
@@ -479,7 +479,7 @@ def test_energy_mae_gt_hamiltonian_logged():
     }
 
     logged_metrics = {}
-    model.forward = lambda batch_x: {"density": block}
+    model.forward = lambda batch_x, **kwargs: {"density": block}
     model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
 
     loss = model._shared_step((x, y), batch_idx=0, stage="train")
@@ -541,7 +541,7 @@ def test_energy_mae_gt_density_logged():
     }
 
     logged_metrics = {}
-    model.forward = lambda batch_x: {"hamiltonian": block}
+    model.forward = lambda batch_x, **kwargs: {"hamiltonian": block}
     model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
 
     loss = model._shared_step((x, y), batch_idx=0, stage="train")
@@ -599,7 +599,7 @@ def test_num_electrons_half_gt_metrics_logged():
     )
     model_density = E3GNN(mapper, cfg_density)
     logged_density = {}
-    model_density.forward = lambda batch_x: {"density": block}
+    model_density.forward = lambda batch_x, **kwargs: {"density": block}
     model_density.log_dict = lambda metrics, **kwargs: logged_density.update(metrics)
     model_density._shared_step((x, y), batch_idx=0, stage="train")
     assert "train/num_electrons_mae_gt_overlap" in logged_density
@@ -615,7 +615,7 @@ def test_num_electrons_half_gt_metrics_logged():
     )
     model_overlap = E3GNN(mapper, cfg_overlap)
     logged_overlap = {}
-    model_overlap.forward = lambda batch_x: {"overlap": block}
+    model_overlap.forward = lambda batch_x, **kwargs: {"overlap": block}
     model_overlap.log_dict = lambda metrics, **kwargs: logged_overlap.update(metrics)
     model_overlap._shared_step((x, y), batch_idx=0, stage="train")
     assert "train/num_electrons_mae_gt_density" in logged_overlap
@@ -740,7 +740,7 @@ def test_energy_half_gt_training_accepts_length_one_energy_target():
     }
 
     logged_metrics = {}
-    model.forward = lambda batch_x: {"hamiltonian": block}
+    model.forward = lambda batch_x, **kwargs: {"hamiltonian": block}
     model.log_dict = lambda metrics, **kwargs: logged_metrics.update(metrics)
 
     loss = model._shared_step((x, y), batch_idx=0, stage="val")

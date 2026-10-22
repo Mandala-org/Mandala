@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import importlib.util
 import json
 import sys
@@ -247,7 +249,11 @@ def test_run_training_uses_wandb_run_name_for_run_dir(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "_maybe_move_datasets_to_device", lambda a, b, c: (a, b))
     monkeypatch.setattr(mod, "_build_dataloaders", fake_build_dataloaders)
     monkeypatch.setattr(mod, "_build_callbacks", fake_build_callbacks)
-    monkeypatch.setattr(mod, "E3GNN", lambda mapper, cfg: object())
+    monkeypatch.setattr(
+        mod,
+        "E3GNN",
+        lambda mapper, cfg: SimpleNamespace(fit_training_data=lambda dataset: None),
+    )
     monkeypatch.setattr(mod, "_log_dataset_and_model_context", lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resolve_resume_checkpoint", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -335,3 +341,11 @@ def test_split_manifest_rejects_leakage(tmp_path):
             test_ds=None,
             data_split_seed=42,
         )
+
+
+def test_explicit_cpu_device_is_honored_when_cuda_is_available(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: True)
+    cfg = mod.Config(device="cpu", gpus=1)
+    assert mod._resolve_accelerator_and_device(cfg) == ("cpu", "auto")
+    assert str(cfg.device) == "cpu"

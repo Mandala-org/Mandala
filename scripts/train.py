@@ -11,10 +11,12 @@ import subprocess
 import sys
 import inspect
 import time
+import platform
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from omegaconf import OmegaConf
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import TQDMProgressBar
@@ -47,6 +49,8 @@ from net.time_budget import (
 )  # noqa: E402
 from net.restart import EpochBoundaryCheckpoint, EpochShuffleSampler  # noqa: E402
 from scripts.dataset import (  # noqa: E402
+    dataset_paths,
+    input_manifest,
     build_datasets_from_manifest,
     build_deeph_e3_datasets,
     build_datasets_from_yaml,
@@ -59,6 +63,14 @@ from scripts.dataset import (  # noqa: E402
 from utils.run_name import resolve_run_name  # noqa: E402
 
 
+def _prepare_reproducibility_environment():
+    # Lightning sets this for deterministic training. Set it before freezing
+    # provenance too, so a fresh run and its continuation record the same state.
+    import os
+
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+
 def run_training(
     run_args: argparse.Namespace | SimpleNamespace | dict[str, Any],
     *,
@@ -67,12 +79,15 @@ def run_training(
     objective_metric: str | None = None,
 ) -> dict[str, float]:
     args = _as_namespace(run_args)
-    args._training_session_start = time.perf_counter()
+    args._training_session_start = getattr(
+        args, "_training_session_start", time.perf_counter()
+    )
     print("=== Mandala training run starting ===")
-    cfg = _populate_config_from_args(args)
-    if getattr(args, "dataset_kind", None) == "deeph_e3":
-        cfg.graph_source = "target_edges"
-    pl.seed_everything(int(cfg.seed), workers=True)
+    cfg = getattr(args, "_config", None) or _populate_config_from_args(args)
+    if getattr(args, "_model", None) is None:
+        pl.seed_everything(int(cfg.seed), workers=True)
+    if cfg.epoch_boundary_resume:
+        _prepare_reproducibility_environment()
     requested_run_name = getattr(args, "run_name", None)
     cfg.save_dir = str(getattr(args, "checkpoint_dir", cfg.save_dir))
     resume_checkpoint = _resolve_resume_checkpoint(
@@ -87,10 +102,16 @@ def run_training(
     cfg.run_name = run_name
     _print_run_summary(args, cfg, run_name, resume_checkpoint, accelerator, devices)
 
-    dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
+    dataset_bundle = getattr(args, "_dataset_bundle", None)
+    if dataset_bundle is None:
+        dataset_bundle = _build_dataset_bundle(args, cfg, parsed_yaml)
     train_ds, val_ds, test_ds, mapper = _normalize_dataset_bundle(dataset_bundle)
     run_dir = Path(getattr(args, "checkpoint_dir", cfg.save_dir)) / run_name
-    if run_dir.exists() and (resume_checkpoint is None or compatibility_mode):
+    if (
+        run_dir.exists()
+        and (resume_checkpoint is None or compatibility_mode)
+        and not getattr(args, "_prepared_output", False)
+    ):
         raise FileExistsError(
             f"Run directory already exists: {run_dir}. Use a unique run name or resume explicitly."
         )
@@ -124,7 +145,11 @@ def run_training(
     train_loader, val_loader = _build_dataloaders(train_ds, val_ds, accelerator, cfg)
     test_loader = _build_test_dataloader(test_ds, accelerator, cfg)
 
-    model = E3GNN(mapper=mapper, cfg=cfg)
+    model = getattr(args, "_model", None)
+    if model is None:
+        model = E3GNN(mapper=mapper, cfg=cfg)
+    if resume_checkpoint is None:
+        model.fit_training_data(train_ds)
     compatibility_report = None
     if compatibility_mode:
         if resume_checkpoint is None:
@@ -144,9 +169,10 @@ def run_training(
         accelerator=accelerator,
         log_every_n_steps=cfg.log_every_n_steps,
         gradient_clip_val=cfg.grad_clip_val,
-        gradient_clip_algorithm="value",
+        gradient_clip_algorithm=cfg.grad_clip_algorithm,
         accumulate_grad_batches=cfg.accumulate_grad_batches,
         precision=getattr(args, "precision", "32-true"),
+        inference_mode=not (cfg.enable_forces or cfg.enable_stress),
         **(
             {
                 "num_sanity_val_steps": 0,
@@ -346,7 +372,7 @@ def _resolve_resume_checkpoint(path: str | None, resume_mode: str) -> Path | Non
 
 
 def _resolve_accelerator_and_device(cfg: Config) -> tuple[str, int | str]:
-    if cfg.gpus > 0 and torch.cuda.is_available():
+    if cfg.gpus > 0 and str(cfg.device) != "cpu" and torch.cuda.is_available():
         accelerator = "gpu"
         devices: int | str = cfg.gpus
         cfg.device = torch.device("cuda:0")
@@ -354,8 +380,9 @@ def _resolve_accelerator_and_device(cfg: Config) -> tuple[str, int | str]:
         return accelerator, devices
     accelerator = "cpu"
     devices = "auto"
+    requested_cpu = str(cfg.device) == "cpu"
     cfg.device = torch.device("cpu")
-    if cfg.gpus > 0:
+    if cfg.gpus > 0 and not requested_cpu:
         print("--- Warning: --gpus was > 0 but CUDA is not available. Using CPU. ---")
     else:
         print("--- Using CPU ---")
@@ -365,6 +392,10 @@ def _resolve_accelerator_and_device(cfg: Config) -> tuple[str, int | str]:
 def _build_logger(
     args: argparse.Namespace, cfg: Config, run_name: str | None
 ) -> WandbLogger | None:
+    if getattr(args, "log_dir", None) is not None:
+        from pytorch_lightning.loggers import CSVLogger
+
+        return CSVLogger(str(args.log_dir), name="")
     wandb_mode = getattr(args, "wandb_mode", None)
     if wandb_mode is None:
         wandb_mode = os.getenv("WANDB_MODE", "online")
@@ -536,7 +567,7 @@ def _build_dataloaders(
         use_persistent_workers = num_workers > 0
         return DataLoader(
             ds or [],
-            batch_size=1,
+            batch_size=cfg.batch_size,
             shuffle=shuffle and not cfg.epoch_boundary_resume,
             sampler=(
                 EpochShuffleSampler(ds, cfg.seed)
@@ -551,7 +582,7 @@ def _build_dataloaders(
             num_workers=num_workers,
             pin_memory=use_pin_memory,
             persistent_workers=use_persistent_workers,
-            collate_fn=lambda b: b[0],
+            collate_fn=getattr(ds, "collate_fn", lambda b: b[0]),
         )
 
     train_loader = _dl(train_ds, shuffle=True, num_workers=train_workers)
@@ -597,12 +628,12 @@ def _build_test_dataloader(test_ds: Any, accelerator: str, cfg: Config):
     dataset_on_device = _dataset_is_on_device(test_ds)
     return DataLoader(
         test_ds,
-        batch_size=1,
+        batch_size=cfg.batch_size,
         shuffle=False,
         num_workers=0,
         pin_memory=accelerator == "gpu" and not dataset_on_device,
         persistent_workers=False,
-        collate_fn=lambda b: b[0],
+        collate_fn=getattr(test_ds, "collate_fn", lambda b: b[0]),
     )
 
 
@@ -744,6 +775,56 @@ def _update_run_reproducibility_metadata(
         pass
 
 
+def _execution_provenance(cfg):
+    """One content/runtime contract for all training entry points."""
+    import importlib.metadata
+    import os
+
+    root = Path(__file__).resolve().parents[1]
+    paths = sorted((root / "src").rglob("*.py")) + [
+        root / "scripts/train.py",
+        root / "scripts/dataset.py",
+    ]
+    artifacts = {
+        name: getattr(cfg, name, None)
+        for name in ("hamiltonian_envelope_path", "spectral_fermi_cache_path")
+    }
+    return {
+        "source_sha256": {
+            str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in paths
+        },
+        "artifacts_sha256": {
+            name: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+            for name, path in artifacts.items()
+            if path is not None
+        },
+        "packages": {
+            name: importlib.metadata.version(name)
+            for name in (
+                "torch",
+                "e3nn",
+                "numpy",
+                "pytorch-lightning",
+                "torch-geometric",
+                "scipy",
+                "ase",
+            )
+        },
+        "python": platform.python_version(),
+        "environment": {
+            name: os.environ.get(name)
+            for name in (
+                "PYTHONHASHSEED",
+                "CUBLAS_WORKSPACE_CONFIG",
+                "OMP_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "OPENBLAS_NUM_THREADS",
+            )
+        },
+    }
+
+
 def _write_run_manifest(
     run_dir: Path,
     *,
@@ -754,6 +835,7 @@ def _write_run_manifest(
 ) -> None:
     payload = {
         "schema_version": 1,
+        "execution": _execution_provenance(cfg),
         "config": dataclasses.asdict(cfg),
         "dataset": {
             key: getattr(args, key, None)
@@ -773,6 +855,9 @@ def _write_run_manifest(
         "resume_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
         "git": _git_provenance(),
     }
+    specification = getattr(args, "_run_specification", None)
+    if specification is not None:
+        payload["specification"] = specification
     path = run_dir / "run_manifest.json"
     if cfg.epoch_boundary_resume and path.exists():
         # Keep the initial specification and record each continuation separately.
@@ -898,7 +983,9 @@ def _build_callbacks(
         callbacks.append(artifact_callback)
     if cfg.max_wall_clock_seconds is not None:
         budget_seconds = cfg.max_wall_clock_seconds
-        if cfg.epoch_boundary_resume:
+        if cfg.wall_clock_scope not in {"session", "fit"}:
+            raise ValueError("wall_clock_scope must be session or fit")
+        if cfg.epoch_boundary_resume and cfg.wall_clock_scope == "session":
             budget_seconds -= time.perf_counter() - getattr(
                 args, "_training_session_start", time.perf_counter()
             )
@@ -973,3 +1060,165 @@ def _write_compatibility_report(run_dir: Path, report: Any) -> None:
     with path.open("w", encoding="utf-8") as f:
         json.dump(report.to_dict(), f, indent=2, sort_keys=True)
     print(f"--- Wrote compatibility report to {path} ---")
+
+
+def build_components(document, *, resume=False):
+    from data.factory import DatasetFactory
+    from scripts.dataset import _resolve_single_snapshot_info_path
+
+    splits = dataset_paths(document)
+    data_cfg = Config.from_mapping(document)
+    factory = DatasetFactory(data_cfg)
+    for split, paths in splits.items():
+        for path in paths:
+            if (path / "HS.out").is_file():
+                info = _resolve_single_snapshot_info_path(path)
+                if info is None:
+                    raise FileNotFoundError(f"Missing OpenMX metadata under {path}")
+                factory.add_snapshot(path / "HS.out", info, purpose=split)
+            else:
+                factory.add_snapshot(
+                    path
+                    / document.get("data", {})
+                    .get("matrix_files", {})
+                    .get("hamiltonian", "hamiltonians.h5"),
+                    path / "info.json",
+                    purpose=split,
+                )
+    train, val, test, mapper = factory.create(include_test=True)
+    resolved, codec = factory.configuration, factory.operator_layout
+    resolved.setdefault("training", {})
+    optimization = dict(resolved.get("optimization") or {})
+    if resolved["training"].get("min_lr") is not None:
+        optimization["stop_lr"] = resolved["training"]["min_lr"]
+    cfg = Config.from_mapping(resolved)
+    cfg.optimization = optimization or None
+    cfg.verbosity = 0
+    pl.seed_everything(int(cfg.seed), workers=True)
+    model = E3GNN(mapper, cfg)
+    datasets = {"train": train, "val": val, "test": test or []}
+    if not resume:
+        model.fit_training_data(train)
+    return resolved, codec, model, datasets, input_manifest(splits)
+
+
+def splits_for_statistics(dataset):
+    return [str(matrix.parent.resolve()) for matrix, info in dataset.snapshot_paths]
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--resume", type=Path)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--accelerator", default="auto")
+    parser.add_argument("--max-wall-clock-seconds", type=float)
+    parser.add_argument("--wall-clock-scope", choices=("session", "fit"), default="fit")
+    parser.add_argument("--log-dir", type=Path)
+    args = parser.parse_args(argv)
+    _prepare_reproducibility_environment()
+    document = OmegaConf.to_container(
+        OmegaConf.merge(OmegaConf.load(args.config), OmegaConf.from_dotlist(args.set)),
+        resolve=False,
+    )
+    dtype_name = document.get("training", {}).get(
+        "dtype", document.get("dtype", "float32")
+    )
+    if dtype_name not in {"float32", "float64"}:
+        raise ValueError("Supported training dtypes are float32 and float64")
+    torch.set_default_dtype(getattr(torch, dtype_name))
+    resolved, codec, model, datasets, manifest = build_components(
+        document, resume=args.resume is not None
+    )
+    if args.dry_run:
+        if args.resume:
+            checkpoint = torch.load(args.resume, map_location="cpu", weights_only=False)
+            model.load_state_dict(checkpoint["state_dict"])
+        batch = datasets["train"].collate_fn([datasets["train"][0]])
+        loss = model._shared_step(batch, 0, "train")
+        loss.backward()
+        print(
+            json.dumps(
+                {
+                    "parameters": sum(p.numel() for p in model.parameters()),
+                    "loss": float(loss.detach()),
+                    "split_sizes": {k: len(v) for k, v in datasets.items()},
+                },
+                indent=2,
+            )
+        )
+        return
+    args.output.mkdir(parents=True, exist_ok=True)
+    statistics_manifest = {
+        name: component.fitting_provenance(
+            training_ids=[
+                str(paths) for paths in splits_for_statistics(datasets["train"])
+            ]
+        )
+        for name, component in model.named_modules()
+        if hasattr(component, "fitting_provenance")
+    }
+    statistics_manifest = {
+        name.removeprefix("pipeline.transforms."): value
+        for name, value in statistics_manifest.items()
+    }
+    specification = {
+        "configuration": resolved,
+        "inputs": manifest,
+        "statistics": statistics_manifest,
+        "execution": _execution_provenance(model.cfg),
+    }
+    record = args.output / "run_manifest.json"
+    if record.exists():
+        if (
+            args.resume is None
+            or json.loads(record.read_text()).get("specification") != specification
+        ):
+            raise ValueError(
+                "Output run already exists or its immutable specification changed"
+            )
+    elif args.resume:
+        raise ValueError("Resume requires the original run specification")
+    cfg = model.cfg
+    cfg.dtype = getattr(torch, dtype_name)
+    cfg.device = (
+        "cpu"
+        if args.accelerator == "cpu"
+        else "cuda" if args.accelerator == "gpu" or torch.cuda.is_available() else "cpu"
+    )
+    cfg.num_workers = 0
+    cfg.epoch_boundary_resume = True
+    if args.max_wall_clock_seconds is not None:
+        cfg.max_wall_clock_seconds = args.max_wall_clock_seconds
+    cfg.wall_clock_scope = args.wall_clock_scope
+    cfg.run_name = args.output.name
+    cfg.save_dir = str(args.output.parent)
+    run_training(
+        {
+            "_config": cfg,
+            "_model": model,
+            "_dataset_bundle": (
+                datasets["train"],
+                datasets["val"],
+                datasets["test"],
+                model.mapper,
+            ),
+            "_prepared_output": True,
+            "_run_specification": specification,
+            "run_name": cfg.run_name,
+            "checkpoint_dir": cfg.save_dir,
+            "dataset_kind": "manifest",
+            "resume_from_checkpoint": str(args.resume) if args.resume else None,
+            "wandb_mode": "disabled",
+            "log_dir": args.log_dir,
+            "precision": "64-true" if dtype_name == "float64" else "32-true",
+            "log_artifacts": False,
+            "evaluate_test_after_fit": False,
+        }
+    )
+
+
+if __name__ == "__main__":
+    main()

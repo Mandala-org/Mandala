@@ -24,11 +24,14 @@ class FeatureSpec:
     width: int | None = None
     support: str | None = None
     angular_basis: str | None = None
+    batch: dict | None = None
 
     def __post_init__(self):
         if self.domain not in {"node", "edge", "bond_neighbor", "graph", "relation"}:
             raise ValueError(f"Unknown feature domain {self.domain}")
         if self.representation not in {
+            "object",
+            "block_vectors",
             "scalar",
             "irreps",
             "channel_irreps",
@@ -85,7 +88,13 @@ def default_input_specs(num_species):
         "edge_lengths": FeatureSpec("edge", width=1),
         "edge_vectors": FeatureSpec("edge", "geometry", width=3),
         "edge_index": FeatureSpec("relation", "index", frame="none"),
+        "edge_shift": FeatureSpec("relation", "index", frame="none"),
+        "positions": FeatureSpec("node", "geometry", width=3),
+        "box": FeatureSpec("graph", "geometry", width=9),
         "message_edge_index": FeatureSpec(
+            "relation", "index", frame="none", support="message"
+        ),
+        "message_shift": FeatureSpec(
             "relation", "index", frame="none", support="message"
         ),
         "message_vectors": FeatureSpec("edge", "geometry", width=3, support="message"),
@@ -226,9 +235,26 @@ class _LocalOrbitalOutput(nn.Module):
         return complex_values[:, :, self.component_indices].transpose(1, 2)
 
 
+_TRANSFORMS = {}
+
+
+def register_transform(name):
+    """Register an operation factory; graph compilation never selects a model."""
+
+    def decorator(factory):
+        if name in _TRANSFORMS:
+            raise ValueError(f"Transformation already registered: {name}")
+        _TRANSFORMS[name] = factory
+        return factory
+
+    return decorator
+
+
 def build_transform(name, options, inputs, *, mapper=None):
     """Return (module, output specs). Inputs are positional, never inferred by name."""
     p = dict(options)
+    if name in _TRANSFORMS:
+        return _TRANSFORMS[name](p, inputs, mapper)
     if name == "embedding":
         if inputs[0].representation != "index":
             raise ValueError("embedding requires integer species indices")
@@ -496,7 +522,7 @@ def build_transform(name, options, inputs, *, mapper=None):
 
         return build_cluster_transform(name, p, inputs)
     if name == "shell_tensor_decode":
-        from net.operator_codecs import ShellTensorCodec
+        from core.operator_layout import ShellTensorCodec
 
         p.setdefault("dtype", torch.get_default_dtype())
         codec = ShellTensorCodec(**p)
@@ -505,11 +531,7 @@ def build_transform(name, options, inputs, *, mapper=None):
                 "Readout irreps must exactly match the shell-channel codec"
             )
         basis = _same_angular_basis(inputs[0])
-        if basis not in {None, "yzx"}:
-            raise ValueError(
-                "Native shell decoding requires cyclic yzx irreps; insert irrep_cartesian_basis"
-            )
-        return _CodecDecode(codec), [
+        return _CodecDecode(codec, basis or "xyz"), [
             FeatureSpec(
                 "edge",
                 "matrix",
@@ -546,27 +568,32 @@ def build_transform(name, options, inputs, *, mapper=None):
 
         _index_spec(inputs[1], "edge")
         _same_support(*inputs)
-        return SpeciesIrrepAffine(irreps=_global_irreps(inputs[0], "edge"), **p), [
-            inputs[0]
-        ]
+        return SpeciesIrrepAffine(
+            irreps=_global_irreps(inputs[0], "edge"),
+            feature_basis=inputs[0].angular_basis,
+            **p,
+        ), [inputs[0]]
     if name in {
         "endpoint_message_aggregation",
-        "partitioned_operator_readout",
+        "partitioned_blocks_to_shells",
         "irrep_cartesian_basis",
     }:
-        from net.transforms.mandala_components import build_mandala_transform
+        from net.transforms.orbital import build_orbital_transform
 
-        return build_mandala_transform(name, p, inputs, mapper=mapper)
+        return build_orbital_transform(name, p, inputs, mapper=mapper)
     raise ValueError(f"Unknown transformation {name!r}")
 
 
 class _CodecDecode(nn.Module):
-    def __init__(self, codec):
+    def __init__(self, codec, basis="yzx"):
         super().__init__()
         self.codec = codec
+        from net.transforms.orbital import IrrepCartesianBasis
+
+        self.coordinates = IrrepCartesianBasis(codec.irreps_out, basis, "yzx")
 
     def forward(self, x):
-        return self.codec.decode(x)
+        return self.codec.decode(self.coordinates(x))
 
 
 class FeaturePipeline(nn.Module):
@@ -578,22 +605,79 @@ class FeaturePipeline(nn.Module):
         from copy import deepcopy
 
         self.operator_layout = deepcopy(specification.get("operator_layout"))
+        self.convention_adapters = nn.ModuleDict()
+
+        def canonicalize(slot, spec):
+            if (
+                spec.frame == "global"
+                and spec.irreps
+                and spec.angular_basis not in {None, "xyz"}
+            ):
+                from net.transforms.orbital import IrrepCartesianBasis
+
+                self.convention_adapters[slot] = IrrepCartesianBasis(
+                    spec.irreps, spec.angular_basis, "xyz"
+                )
+                return replace(spec, angular_basis="xyz")
+            return spec
+
         specs = default_input_specs(num_species)
         for slot, value in specification.get("inputs", {}).items():
             declared = FeatureSpec(**value)
+            if (
+                declared.representation == "geometry"
+                and declared.frame == "global"
+                and declared.angular_basis != "xyz"
+            ):
+                raise ValueError("Normalize Cartesian geometry to xyz at import")
             if slot in specs and declared != specs[slot]:
                 raise ValueError(f"Cannot redefine built-in input contract {slot}")
             specs[slot] = declared
+        self.input_layouts = {
+            slot: {"entity": spec.support or spec.domain, **spec.batch}
+            for slot, spec in specs.items()
+            if spec.batch is not None
+        }
+        self.input_adapters = tuple(
+            slot
+            for slot, spec in specs.items()
+            if spec.frame == "global"
+            and spec.irreps
+            and spec.angular_basis not in {None, "xyz"}
+        )
+        specs = {slot: canonicalize(slot, spec) for slot, spec in specs.items()}
         self.transforms = nn.ModuleDict()
         self.bindings = []
+        self.roles = {}
         for stage in specification["stages"]:
-            extra = set(stage) - {"id", "transform", "inputs", "outputs", "options"}
+            extra = set(stage) - {
+                "id",
+                "transform",
+                "inputs",
+                "outputs",
+                "options",
+                "role",
+                "initialization",
+            }
             if extra:
                 raise ValueError(f"Unknown stage keys: {sorted(extra)}")
             sid = stage["id"]
             if not sid or "." in sid or sid in self.transforms:
                 raise ValueError(f"Stage IDs must be unique module names: {sid}")
             reads, writes = tuple(stage["inputs"]), tuple(stage["outputs"])
+            if (
+                stage["transform"] == "local_coordinate_message"
+                and len(reads) > 4
+                and reads[4] == "sub_edge_ang"
+            ):
+                width = stage.get("options", {}).get("angular_dim")
+                if width is not None:
+                    old = specs["sub_edge_ang"]
+                    if old.dim is not None and old.dim != width:
+                        raise ValueError(
+                            "Local angular feature widths disagree between consumers"
+                        )
+                    specs["sub_edge_ang"] = replace(old, width=width)
             missing = set(reads) - specs.keys()
             if missing:
                 raise ValueError(
@@ -601,24 +685,83 @@ class FeaturePipeline(nn.Module):
                 )
             if len(set(writes)) != len(writes) or set(writes) & specs.keys():
                 raise ValueError(f"Stage {sid} overwrites a saved feature slot")
-            module, produced = build_transform(
-                stage["transform"],
-                stage.get("options", {}),
-                [specs[s] for s in reads],
-                mapper=mapper,
-            )
+            from contextlib import nullcontext
+
+            initialization = dict(stage.get("initialization", {}))
+            unknown = set(initialization) - {"seed", "kind", "gain", "std", "bound"}
+            if unknown:
+                raise ValueError(f"Unknown initialization options: {sorted(unknown)}")
+            import math
+
+            for option in ("gain", "std", "bound"):
+                if option in initialization and not math.isfinite(
+                    float(initialization[option])
+                ):
+                    raise ValueError(f"Initialization {option} must be finite")
+            seed = initialization.get("seed")
+            if seed is not None and (
+                isinstance(seed, bool) or not isinstance(seed, int) or seed < 0
+            ):
+                raise ValueError("Initialization seed must be a nonnegative integer")
+            with (
+                torch.random.fork_rng(devices=[]) if seed is not None else nullcontext()
+            ):
+                if seed is not None:
+                    torch.random.default_generator.manual_seed(seed)
+                if stage["transform"] == "spherical_harmonics" and sorted(
+                    stage.get("options", {}).get("permutation", (0, 1, 2))
+                ) != [0, 1, 2]:
+                    raise ValueError(
+                        "Harmonic permutation must contain each Cartesian axis exactly once"
+                    )
+                module, produced = build_transform(
+                    stage["transform"],
+                    (
+                        dict(stage.get("options", {}), permutation=(0, 1, 2))
+                        if stage["transform"] == "spherical_harmonics"
+                        else stage.get("options", {})
+                    ),
+                    [specs[s] for s in reads],
+                    mapper=mapper,
+                )
+                kind = initialization.get("kind", "component")
+                if kind not in {"component", "normal", "uniform", "zeros"}:
+                    raise ValueError(f"Unknown initialization kind {kind!r}")
+                with torch.no_grad():
+                    for parameter in module.parameters():
+                        if kind == "normal":
+                            parameter.normal_(std=initialization.get("std", 0.01))
+                        elif kind == "uniform":
+                            bound = initialization.get("bound", 0.01)
+                            parameter.uniform_(-bound, bound)
+                        elif kind == "zeros":
+                            parameter.zero_()
+                        parameter.mul_(initialization.get("gain", 1.0))
             if len(writes) != len(produced):
                 raise ValueError(f"Stage {sid} declares the wrong number of outputs")
+            self.roles[sid] = stage.get("role", "feature")
             self.transforms[sid] = module
             self.bindings.append((sid, reads, writes))
-            specs.update(zip(writes, produced))
+            specs.update(
+                (slot, canonicalize(slot, spec)) for slot, spec in zip(writes, produced)
+            )
         self.outputs = dict(specification["outputs"])
         if set(self.outputs.values()) - specs.keys():
             raise ValueError("Pipeline output references an undefined feature slot")
         self.feature_specs = specs
 
-    def forward(self, inputs, *, return_trace=False, physical_derivatives=False):
+    def forward(
+        self,
+        inputs,
+        *,
+        return_trace=False,
+        physical_derivatives=False,
+        activation_mags=None,
+    ):
         slots = dict(inputs)
+        for slot in self.input_adapters:
+            if slot in slots:
+                slots[slot] = self.convention_adapters[slot](slots[slot])
         for sid, reads, writes in self.bindings:
             missing = set(reads) - slots.keys()
             if missing:
@@ -631,6 +774,8 @@ class FeaturePipeline(nn.Module):
                 if getattr(module, "accepts_physical_derivatives", False)
                 else {}
             )
+            if getattr(module, "accepts_activation_mags", False):
+                kwargs["activation_mags"] = activation_mags
             result = module(*(slots[key] for key in reads), **kwargs)
             values = (
                 (result,)
@@ -645,6 +790,35 @@ class FeaturePipeline(nn.Module):
                 raise RuntimeError(
                     f"Stage {sid} returned an unexpected number of tensors"
                 )
-            slots.update(zip(writes, values))
+            if activation_mags is not None:
+                from net.layers import _magnitude_splits
+
+                for slot, value in zip(writes, values):
+                    spec = self.feature_specs[slot]
+                    if spec.representation == "irreps":
+                        for irrep, magnitude in _magnitude_splits(
+                            value, o3.Irreps(spec.irreps)
+                        ).items():
+                            activation_mags[f"mag_{sid}_{irrep}"] = magnitude
+            slots.update(
+                (
+                    slot,
+                    (
+                        self.convention_adapters[slot](value)
+                        if slot in self.convention_adapters
+                        else value
+                    ),
+                )
+                for slot, value in zip(writes, values)
+            )
         output = {name: slots[slot] for name, slot in self.outputs.items()}
         return (output, slots) if return_trace else output
+
+
+from net.component_defaults import register_components
+
+register_components(register_transform)
+
+from net.transforms.composition import register_components as register_composition
+
+register_composition(register_transform)

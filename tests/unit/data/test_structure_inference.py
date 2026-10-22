@@ -53,3 +53,28 @@ def test_load_structure_from_cif_and_build_model_input():
     assert "pred_pair_edges_static" in x
     assert "pred_trace_alignment" in x
     assert "edge_partitions" in x
+
+
+def test_structure_inputs_use_frozen_species_order():
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+    from core.block_irrep_mapper import BlockIrrepMapper
+    from net.common import Config
+    from data.structure_inference import build_model_input_from_structure
+
+    mapper = BlockIrrepMapper(
+        OrbitalIrrepConfig.from_dict({"C": ["1x0e"], "H": ["1x0e"]})
+    )
+    cfg = Config(species={"order": ["H", "C"]}, cutoff_radius=2.0, l_max=0, n_radial=2)
+    inputs = build_model_input_from_structure(
+        atoms=("C", "H"),
+        positions=torch.tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        box=None,
+        cfg=cfg,
+        mapper=mapper,
+    )
+    assert inputs["node_type_idx"].tolist() == [1, 0]
+    for index, (left, right) in enumerate(inputs["edge_index"].T):
+        assert (
+            inputs["edge_type_idx"][index]
+            == inputs["node_type_idx"][left] * 2 + inputs["node_type_idx"][right]
+        )

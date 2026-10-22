@@ -6,7 +6,6 @@ from pathlib import Path
 
 import torch
 
-
 EPS = 1.0e-12
 
 
@@ -285,4 +284,5 @@ def scale_block_matrix_by_edge_values(
         lookup=matrix.lookup,
         orbital_cfg=matrix.orbital_cfg,
         basis=matrix.basis,
+        _coverage_masks=matrix._coverage_masks,
     )

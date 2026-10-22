@@ -7,17 +7,17 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+from data.sample import disjoint_union_samples
 import pytest
 import torch
 
 from data.bond_geometry import bond_frames
-from data.operator_dataset import (
-    collate_operator_samples,
+from data.operator_features import (
     load_operator_sample,
     reconstruct_operator_blocks,
     statistics_records,
 )
-from net.operator_codecs import ShellTensorCodec
+from core.operator_layout import ShellTensorCodec
 from net.transforms.local_coordinates import (
     LocalCoordinateMessage,
     ScalarGatedNodeUpdate,
@@ -174,7 +174,7 @@ def test_disjoint_batch_local_relations_and_training_are_graph_independent(tmp_p
         )
         for name in ("a", "b")
     ]
-    xs, ys = collate_operator_samples(samples)
+    xs, ys = disjoint_union_samples(samples)
     first = samples[0]["inputs"]
     n, e, r = (
         len(first["node_type_idx"]),
@@ -349,3 +349,62 @@ def test_native_support_and_labels_match_independent_equivariant_source(
         block = reconstructed[key]
         expected = graph.Aij[edge, : block.shape[0], : block.shape[1]]
         torch.testing.assert_close(block, expected, rtol=0, atol=0)
+
+
+def test_factory_preserves_interleaved_shells_and_declared_filenames(tmp_path):
+    from data.factory import DatasetFactory
+    from net.common import Config
+
+    path = tmp_path / "native"
+    write_native(path)
+    # All atoms of a given species share an explicit, nonsorted p,s order.
+    (path / "orbital_types.dat").write_text("1 0\n1 0\n1 0\n")
+    # write_native has H and O atoms; each now has four orbitals.
+    import h5py
+
+    for filename in ("hamiltonians.h5", "overlaps.h5"):
+        with h5py.File(path / filename, "w") as handle:
+            for i in range(3):
+                for j in range(3):
+                    handle[str([0, 0, 0, i + 1, j + 1])] = torch.eye(4).numpy()
+    (path / "hamiltonians.h5").rename(path / "custom.h5")
+    cfg = Config(
+        verbosity=0,
+        apply_cutoff_to_targets=False,
+        graph_source="target_edges",
+        matrix_targets=["hamiltonian"],
+        data={"matrix_files": {"hamiltonian": "custom.h5"}},
+    )
+    factory = DatasetFactory(cfg, convention="openmx")
+    factory.add_snapshot(path / "custom.h5", path / "info.json")
+    dataset, _, mapper = factory.create()
+    shells = {
+        atom: [ir.l for mul, ir in irreps for _ in range(mul)]
+        for atom, irreps in mapper.orbital_cfg.element_to_irreps.items()
+    }
+    assert all(value == [1, 0] for value in shells.values())
+    assert all(
+        block.shape[-2:] == (4, 4)
+        for block in dataset[0][1]["hamiltonian"].pair_blocks.values()
+    )
+
+
+def test_differentiable_local_harmonics_match_values_and_remain_finite_at_poles():
+    from data.bond_geometry import tesseral_harmonics, cartesian_tesseral_harmonics
+
+    vectors = torch.randn(19, 3, dtype=torch.float64)
+    torch.testing.assert_close(
+        cartesian_tesseral_harmonics(vectors, 6),
+        tesseral_harmonics(vectors, 6),
+        rtol=1e-11,
+        atol=1e-12,
+    )
+    poles = torch.tensor([[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]], requires_grad=True)
+    output = tesseral_harmonics(poles, 6)
+    (gradient,) = torch.autograd.grad(output.sum(), poles, create_graph=True)
+    (curvature,) = torch.autograd.grad(gradient.square().sum(), poles)
+    assert (
+        torch.isfinite(output).all()
+        and torch.isfinite(gradient).all()
+        and torch.isfinite(curvature).all()
+    )

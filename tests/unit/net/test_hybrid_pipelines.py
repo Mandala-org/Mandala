@@ -22,6 +22,9 @@ def inputs():
     lengths = vectors.norm(dim=-1)
     onsite = edges[0] == edges[1]
     return dict(
+        positions=positions,
+        box=torch.eye(3) * 10,
+        edge_shift=torch.zeros(3, 9, dtype=torch.long),
         node_one_hot=torch.ones(3, 1),
         node_type_idx=torch.zeros(3, dtype=torch.long),
         edge_one_hot=torch.ones(9, 1),
@@ -61,7 +64,7 @@ def test_config_only_hybrid_forward_gradient_optimizer_and_serialization(path):
         torch.manual_seed(13)
         model, codec = build(path)
         x = inputs()
-        output = model(x)["hamiltonian"]
+        output = model(x)["hamiltonian"].packed_values
         assert output.shape == (9, codec.packed_dim)
         assert torch.isfinite(output).all()
         optimizer = model.configure_optimizers()
@@ -70,7 +73,7 @@ def test_config_only_hybrid_forward_gradient_optimizer_and_serialization(path):
         }
         for _ in range(2):
             optimizer.zero_grad()
-            model(x)["hamiltonian"].square().mean().backward()
+            model(x)["hamiltonian"].packed_values.square().mean().backward()
             assert all(
                 torch.isfinite(p.grad).all()
                 for p in model.parameters()
@@ -87,7 +90,10 @@ def test_config_only_hybrid_forward_gradient_optimizer_and_serialization(path):
         restored, _ = build(path)
         restored.load_state_dict(torch.load(buffer, weights_only=True))
         torch.testing.assert_close(
-            restored(x)["hamiltonian"], model(x)["hamiltonian"], rtol=0, atol=0
+            restored(x)["hamiltonian"].packed_values,
+            model(x)["hamiltonian"].packed_values,
+            rtol=0,
+            atol=0,
         )
     finally:
         torch.set_default_dtype(old)
@@ -137,11 +143,16 @@ def test_local_readout_is_invariant_under_joint_spatial_and_bond_frame_rotation(
         x = inputs()
         rotation = o3.rand_matrix()
         rotated = dict(x)
+        rotated["positions"] = x["positions"] @ rotation.T
+        rotated["box"] = x["box"] @ rotation.T
         rotated["edge_vectors"] = x["edge_vectors"] @ rotation.T
         rotated["message_vectors"] = x["message_vectors"] @ rotation.T
         rotated["bond_frames"] = rotation[None] @ x["bond_frames"]
         torch.testing.assert_close(
-            model(rotated)["hamiltonian"], model(x)["hamiltonian"], atol=3e-8, rtol=3e-8
+            model(rotated)["hamiltonian"].packed_values,
+            model(x)["hamiltonian"].packed_values,
+            atol=3e-8,
+            rtol=3e-8,
         )
     finally:
         torch.set_default_dtype(old)
@@ -151,7 +162,7 @@ def test_global_hybrids_have_declared_native_orbital_rotation_covariance():
     old = torch.get_default_dtype()
     torch.set_default_dtype(torch.float64)
     try:
-        from net.operator_codecs import OrbitalFrameRotation
+        from core.operator_layout import OrbitalFrameRotation
 
         for path in sorted(ROOT.glob("*.yaml")):
             if path.name.startswith("equivariant_nodes"):
@@ -162,11 +173,17 @@ def test_global_hybrids_have_declared_native_orbital_rotation_covariance():
             rotation = o3.rand_matrix()
             rotated = {
                 **x,
+                "positions": x["positions"] @ rotation.T,
+                "box": x["box"] @ rotation.T,
                 "edge_vectors": x["edge_vectors"] @ rotation.T,
                 "message_vectors": x["message_vectors"] @ rotation.T,
             }
-            observed = codec.unpack_blocks(("H", "H"), model(rotated)["hamiltonian"])
-            blocks = codec.unpack_blocks(("H", "H"), model(x)["hamiltonian"])
+            observed = codec.unpack_blocks(
+                ("H", "H"), model(rotated)["hamiltonian"].packed_values
+            )
+            blocks = codec.unpack_blocks(
+                ("H", "H"), model(x)["hamiltonian"].packed_values
+            )
             expected = OrbitalFrameRotation(dtype=torch.float64).rotate_blocks(
                 blocks, rotation.T, [0, 1], [0, 1]
             )
@@ -176,7 +193,6 @@ def test_global_hybrids_have_declared_native_orbital_rotation_covariance():
 
 
 def test_partitioned_readout_handles_rectangular_multispecies_and_shifted_self():
-    from net.transforms.mandala_components import PartitionedOperatorReadout
 
     old = torch.get_default_dtype()
     torch.set_default_dtype(torch.float64)
@@ -184,7 +200,7 @@ def test_partitioned_readout_handles_rectangular_multispecies_and_shifted_self()
         mapper = BlockIrrepMapper(
             OrbitalIrrepConfig.from_dict({"H": "1s", "O": "1s1p"}), dtype=torch.float64
         )
-        readout = PartitionedOperatorReadout(
+        readout = _partitioned_readout(
             "2x0e+1x1o",
             "2x0e+1x1o",
             mapper=mapper,
@@ -222,7 +238,6 @@ def test_partitioned_readout_handles_rectangular_multispecies_and_shifted_self()
 
 def test_partitioned_readout_pair_ids_follow_resolved_atomic_order_not_mapper_order():
     """H,C atomic-number order differs from the mapper's C,H alphabetic order."""
-    from net.transforms.mandala_components import PartitionedOperatorReadout
 
     old = torch.get_default_dtype()
     torch.set_default_dtype(torch.float64)
@@ -231,7 +246,7 @@ def test_partitioned_readout_pair_ids_follow_resolved_atomic_order_not_mapper_or
             OrbitalIrrepConfig.from_dict({"C": "1s1p", "H": "1s"}), dtype=torch.float64
         )
         assert tuple(mapper.edge_types) == ("C-C", "C-H", "H-C", "H-H")
-        readout = PartitionedOperatorReadout(
+        readout = _partitioned_readout(
             "2x0e+1x1o",
             "2x0e+1x1o",
             mapper=mapper,
@@ -289,11 +304,10 @@ def test_partitioned_readout_pair_ids_follow_resolved_atomic_order_not_mapper_or
 
 @pytest.mark.parametrize("order", [["H", "H"], ["H"], ["H", "C", "O"]])
 def test_partitioned_readout_rejects_invalid_frozen_species_vocabulary(order):
-    from net.transforms.mandala_components import PartitionedOperatorReadout
 
     mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": "1s", "C": "1s1p"}))
     with pytest.raises(ValueError, match="exactly once"):
-        PartitionedOperatorReadout(
+        _partitioned_readout(
             "1x0e",
             "1x0e",
             mapper=mapper,
@@ -301,3 +315,63 @@ def test_partitioned_readout_rejects_invalid_frozen_species_vocabulary(order):
             species_order=order,
             irreps_neck="1x0e",
         )
+
+
+def _partitioned_readout(
+    node_irreps,
+    edge_irreps,
+    *,
+    mapper,
+    species_shells,
+    irreps_neck,
+    species_order=None,
+    config=None,
+):
+    from net.transforms.orbital import PartitionedBlockPack
+    from net.heads import DeepHead
+    from net.common import Config
+    from e3nn.o3 import Irreps
+
+    class Assembly(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.pack = PartitionedBlockPack(
+                mapper=mapper,
+                species_shells=species_shells,
+                species_order=species_order,
+            )
+            self.codec, self.edge_types = self.pack.codec, self.pack.edge_types
+            self.head = DeepHead(
+                Irreps(node_irreps),
+                Irreps(edge_irreps),
+                Irreps(irreps_neck),
+                list(mapper.edge_types),
+                mapper,
+                Config(**(config or {})),
+            )
+
+        def forward(self, node, edge, edge_index, pair_types, onsite):
+            partitions, pair_edges = {}, {}
+            for type_id, pair in enumerate(self.pack.edge_types):
+                selected = torch.where(pair_types == type_id)[0]
+                ends = edge_index[:, selected]
+                diagonal = onsite[selected]
+                shifted = (
+                    (ends[0] == ends[1]) & ~diagonal
+                    if self.head.separate_shifted_self
+                    else torch.zeros_like(diagonal)
+                )
+                partitions[pair] = {
+                    "global_idx": selected,
+                    "diag_local_idx": torch.where(diagonal)[0],
+                    "shifted_self_local_idx": torch.where(shifted)[0],
+                    "offdiag_local_idx": torch.where(~diagonal & ~shifted)[0],
+                }
+                pair_edges[pair] = torch.cat((ends.new_zeros((3, len(selected))), ends))
+            x = {"pred_pair_edges_static": pair_edges, "edge_partitions": partitions}
+            vectors = self.head(
+                node, edge, x["pred_pair_edges_static"], x["edge_partitions"]
+            )
+            return self.pack(vectors, x["edge_partitions"])
+
+    return Assembly()

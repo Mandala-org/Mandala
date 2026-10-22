@@ -4,15 +4,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from data.gnn_dataset import E3GNNDataset
+from net.common import Config
 
 
 def test_density_normalization_change_invalidates_both_cache_layers(
     tmp_path, monkeypatch
 ):
     import data.gnn_dataset as module
-    from net.common import Config
 
     ds = object.__new__(E3GNNDataset)
+    ds.preprocessing, ds.split = None, "train"
     ds.cfg = Config(snapshot_cache_dir=str(tmp_path / "cache"))
     ds.convention, ds.dtype = "e3nn", torch.float32
     ds.mapper = SimpleNamespace(
@@ -35,6 +36,7 @@ def test_density_normalization_change_invalidates_both_cache_layers(
 @pytest.mark.unit
 def test_load_preprocessed_sample_uses_weights_only_false(monkeypatch, tmp_path):
     ds = object.__new__(E3GNNDataset)
+    ds.preprocessing, ds.split = None, "train"
     cache_file = tmp_path / "sample.pt"
     cache_file.write_bytes(b"placeholder")
     captured = {}
@@ -60,6 +62,7 @@ def test_load_preprocessed_sample_reports_and_deletes_bad_cache(
     monkeypatch, tmp_path, capsys
 ):
     ds = object.__new__(E3GNNDataset)
+    ds.preprocessing, ds.split = None, "train"
     cache_file = tmp_path / "sample.pt"
     cache_file.write_bytes(b"placeholder")
 
@@ -80,6 +83,7 @@ def test_load_preprocessed_sample_reports_and_deletes_bad_cache(
 @pytest.mark.unit
 def test_preprocessed_cache_hit_bypasses_raw_snapshot_loading(monkeypatch, tmp_path):
     ds = object.__new__(E3GNNDataset)
+    ds.preprocessing, ds.split = None, "train"
     ds.preprocessed_cache_hits = 0
     matrix_path = tmp_path / "HS.out"
     info_path = tmp_path / "sample.out"
@@ -109,7 +113,8 @@ def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
     monkeypatch,
 ):
     ds = object.__new__(E3GNNDataset)
-    cfg = SimpleNamespace(
+    ds.preprocessing, ds.split = None, "train"
+    cfg = Config(
         dtype=torch.float32,
         train_on_forces=False,
         train_on_stress=False,
@@ -129,7 +134,7 @@ def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
         shuffle_snapshot_load_order=True,
     )
     mapper = SimpleNamespace(
-        orbital_cfg=SimpleNamespace(to_dict=lambda: {}),
+        orbital_cfg=SimpleNamespace(to_dict=lambda: {}, elements=lambda: []),
     )
     ds.cfg = cfg
     ds.mapper = mapper
@@ -183,6 +188,7 @@ def test_gnn_dataset_shuffles_warmup_order_but_preserves_final_order(
 @pytest.mark.unit
 def test_snapshot_cache_file_changes_when_cif_metadata_changes(tmp_path):
     ds = object.__new__(E3GNNDataset)
+    ds.preprocessing, ds.split = None, "train"
     cache_root = tmp_path / "cache"
     matrix_path = tmp_path / "sample" / "HS.out"
     info_path = tmp_path / "sample" / "ZnCuSeS.out"
@@ -192,7 +198,7 @@ def test_snapshot_cache_file_changes_when_cif_metadata_changes(tmp_path):
     info_path.write_text("info")
     cif_path.write_text("cif-v1")
 
-    ds.cfg = SimpleNamespace(
+    ds.cfg = Config(
         snapshot_cache_dir=str(cache_root),
         allow_openmx_positions_box_from_out=False,
     )
@@ -212,6 +218,7 @@ def test_snapshot_cache_file_changes_when_cif_metadata_changes(tmp_path):
 @pytest.mark.unit
 def test_preprocessed_cache_file_changes_when_geometry_source_mode_changes(tmp_path):
     ds = object.__new__(E3GNNDataset)
+    ds.preprocessing, ds.split = None, "train"
     cache_root = tmp_path / "cache"
     matrix_path = tmp_path / "sample" / "HS.out"
     info_path = tmp_path / "sample" / "ZnCuSeS.out"
@@ -229,7 +236,7 @@ def test_preprocessed_cache_file_changes_when_geometry_source_mode_changes(tmp_p
     ds.hamiltonian_envelope_mode = "off"
     ds.pair_distance_normalization = "off"
     ds.loss_weighting_mode = "off"
-    ds.cfg = SimpleNamespace(
+    ds.cfg = Config(
         snapshot_cache_dir=str(cache_root),
         l_max=5,
         n_radial=8,

@@ -7,16 +7,17 @@ wide hyperparameter optimization and distributed training on HPC clusters.
 
 ## Modular operator architectures
 
-The single `E3GNN` entry point can also assemble typed transformation pipelines.
+Every `E3GNN` uses the same typed transformation graph. Flat `Config` settings
+compile into that graph; explicit recipes select and connect its components.
 The reference presets in [`configs/reference`](configs/reference) represent
 DeepH, DeepH-E3, and MACE-H; [`configs/hybrids`](configs/hybrids) demonstrates
 mixing their transformations with existing MANDALA attention and readouts.
 Paper names select configuration files, not separate model classes.
 
 ```bash
-PYTHONPATH=src:. python -m scripts.train_modular \
+PYTHONPATH=src:. python -m scripts.train \
   --config configs/reference/deeph_e3.yaml \
-  --set data.root=/path/to/native_operator_snapshots \
+  --set data.root=/path/to/openmx_or_native_snapshots \
   --output /path/to/new_run --dry-run
 ```
 
@@ -156,7 +157,8 @@ PYTHONPATH=src:. python -m pytest -q \
 To launch training, pick a config and run:
 
 ```bash
-python scripts/train.py --config-name debug_cpu
+PYTHONPATH=src:. python -m scripts.train --config configs/reference/deeph_e3.yaml \
+  --set data.root=/path/to/snapshots --output /path/to/new_run --accelerator cpu --dry-run
 ```
 
 For a short end-to-end inference example, see

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import math
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,32 @@ def build_model_input_from_structure(
     cfg: Config,
     mapper: BlockIrrepMapper,
 ) -> dict[str, Any]:
+    # Structure-only inputs need an explicit geometric support when training
+    # used a stored DFT graph. This is an input policy, independent of the model.
+    data = getattr(cfg, "data", {})
+    graph_source = data.get(
+        "graph_source",
+        (
+            "stored"
+            if data.get("representation") == "packed_shells"
+            or cfg.graph_source == "target_edges"
+            else "radius"
+        ),
+    )
+    if graph_source == "stored":
+        raise ValueError(
+            "Structure-only inference requires data.graph_source=radius and an explicit graph_radius; use native input to preserve stored support"
+        )
+    if data.get("graph_source") == "radius":
+        from dataclasses import replace
+
+        radius = data.get("graph_radius")
+        if radius is None or not math.isfinite(float(radius)) or radius <= 0:
+            raise ValueError("Radius graph requires a finite positive graph_radius")
+        cfg = replace(cfg, cutoff_radius=float(radius))
+    species = tuple(cfg.species.get("order", mapper.orbital_cfg.elements()))
+    edge_types = [f"{left}-{right}" for left in species for right in species]
+    edge_type2idx = {pair: index for index, pair in enumerate(edge_types)}
     dtype = get_torch_dtype(cfg.dtype)
     sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
     envelope_mode = str(getattr(cfg, "hamiltonian_envelope_mode", "off")).lower()
@@ -87,7 +114,7 @@ def build_model_input_from_structure(
             )
         envelope_table = load_pair_envelope_table(
             envelope_path,
-            pair_order=mapper.edge_types,
+            pair_order=edge_types,
             dtype=dtype,
             device=positions.device,
         )
@@ -108,12 +135,12 @@ def build_model_input_from_structure(
         atoms=atoms,
         cfg=cfg,
         sh_irreps=sh_irreps,
-        edge_type2idx=mapper.edge_type2idx,
+        edge_type2idx=edge_type2idx,
         edge_type_r0=edge_type_r0,
     )
     strict_reverse_edge_check(edge_index, edge_shift, edge_set_name="graph")
 
-    elem2idx = {el: i for i, el in enumerate(mapper.orbital_cfg.elements())}
+    elem2idx = {el: i for i, el in enumerate(species)}
     try:
         node_type_idx = torch.tensor(
             [elem2idx[el] for el in atoms],
@@ -139,8 +166,8 @@ def build_model_input_from_structure(
         edge_shift=edge_shift,
         edge_type_idx=edge_type_idx,
         atoms=atoms,
-        edge_types=mapper.edge_types,
-        edge_type2idx=mapper.edge_type2idx,
+        edge_types=edge_types,
+        edge_type2idx=edge_type2idx,
         separate_shifted_self=bool(cfg.separate_shifted_self),
     )
 

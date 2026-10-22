@@ -1,7 +1,6 @@
-"""Typed bridges to existing MANDALA transformations and explicit basis changes.
+"""Orbital packing and explicit Cartesian basis transformations.
 
-These components reuse the existing attention update and partitioned readout;
-there is no second model or architecture-name dispatch.
+Learned readouts remain independent graph stages.
 """
 
 from __future__ import annotations
@@ -25,6 +24,13 @@ class IrrepCartesianBasis(nn.Module):
         try:
             torch.set_default_dtype(torch.float64)
             matrix = self.irreps.D_from_matrix(permutation)
+            # Axis permutations have exact zero/unit entries. Remove angular
+            # exponential roundoff there, which otherwise creates spurious
+            # near-zero gradients amplified by Adam's epsilon normalization.
+            for value in (0.0, 1.0, -1.0):
+                matrix = torch.where(
+                    (matrix - value).abs() < 1e-14, matrix.new_tensor(value), matrix
+                )
         finally:
             torch.set_default_dtype(previous)
         self.register_buffer("matrix", matrix.to(previous))
@@ -33,71 +39,22 @@ class IrrepCartesianBasis(nn.Module):
         return features @ self.matrix.to(features).T
 
 
-class EndpointMessageAggregation(nn.Module):
-    def __init__(
-        self,
-        node_irreps,
-        edge_irreps,
-        angular_irreps,
-        radial_width,
-        species_count,
-        *,
-        irreps_out,
-        config=None,
-    ):
-        super().__init__()
-        from net.common import Config
-        from net.layers import NodeUpdateBlock
-
-        options = dict(config or {})
-        options.setdefault("dtype", torch.get_default_dtype())
-        angular = o3.Irreps(angular_irreps)
-        if angular != o3.Irreps.spherical_harmonics(angular.lmax):
-            raise ValueError(
-                "Existing endpoint message aggregation requires full ordered spherical harmonics"
-            )
-        for key, value in (("l_max", angular.lmax), ("n_radial", radial_width)):
-            if key in options and options[key] != value:
-                raise ValueError(
-                    f"{key} is determined by the typed angular/radial inputs"
-                )
-            options[key] = value
-        self.block = NodeUpdateBlock(
-            o3.Irreps(node_irreps),
-            o3.Irreps(edge_irreps),
-            species_count,
-            Config(**options),
-            node_irreps_out=o3.Irreps(irreps_out),
-            n_edge_types=species_count**2,
-        )
-        self.irreps_out = self.block.irreps_out
-
-    def forward(self, node, edge, edge_index, angular, radial, species, pair_types):
-        return self.block(node, edge, edge_index, angular, radial, species, pair_types)
-
-
-class PartitionedOperatorReadout(nn.Module):
-    """Existing pair head, followed by explicit xyz → native orbital conversion."""
+class PartitionedBlockPack(nn.Module):
+    """Pack partitioned orbital vectors with an explicit Cartesian basis change."""
 
     def __init__(
         self,
-        node_irreps,
-        edge_irreps,
         *,
         mapper,
         species_shells,
-        irreps_neck,
         species_order=None,
-        config=None,
     ):
         super().__init__()
-        from net.common import Config
-        from net.heads import DeepHead
-        from net.operator_codecs import ShellTensorCodec
+        from core.operator_layout import ShellTensorCodec
 
         if mapper is None:
             raise ValueError(
-                "partitioned_operator_readout requires the E3GNN orbital mapper"
+                "partitioned_blocks_to_shells requires the E3GNN orbital mapper"
             )
         supplied_shells = {str(k): tuple(v) for k, v in species_shells.items()}
         self.species_order = (
@@ -129,16 +86,7 @@ class PartitionedOperatorReadout(nn.Module):
         self.codec = ShellTensorCodec.from_species_shells(
             self.species_shells, dtype=torch.get_default_dtype()
         )
-        head_options = dict(config or {})
-        head_options.setdefault("dtype", torch.get_default_dtype())
-        self.head = DeepHead(
-            o3.Irreps(node_irreps),
-            o3.Irreps(edge_irreps),
-            o3.Irreps(irreps_neck),
-            list(mapper.edge_types),
-            mapper,
-            Config(**head_options),
-        )
+        self.mapper = mapper
         # Dataset pair IDs follow the resolved vocabulary, independent of the
         # legacy mapper's alphabetically ordered projection dictionary.
         self.edge_types = tuple(
@@ -156,31 +104,13 @@ class PartitionedOperatorReadout(nn.Module):
             )
             self.register_buffer(f"native_basis_{species}", permutation.T @ basis)
 
-    def forward(self, node, edge, edge_index, pair_types, onsite):
-        pair_edges, partitions = {}, {}
-        for pair_index, pair in enumerate(self.edge_types):
-            selected = torch.where(pair_types == pair_index)[0]
-            ends = edge_index[:, selected]
-            diagonal = onsite[selected]
-            shifted = (
-                (ends[0] == ends[1]) & ~diagonal
-                if self.head.separate_shifted_self
-                else torch.zeros_like(diagonal)
-            )
-            pair_edges[pair] = torch.cat(
-                [ends.new_zeros((3, len(selected))), ends], dim=0
-            )
-            partitions[pair] = {
-                "global_idx": selected,
-                "diag_local_idx": torch.where(diagonal)[0],
-                "shifted_self_local_idx": torch.where(shifted)[0],
-                "offdiag_local_idx": torch.where(~diagonal & ~shifted)[0],
-            }
-        vectors = self.head(node, edge, pair_edges, partitions)
-        output = edge.new_zeros((len(edge), self.codec.packed_dim))
+    def forward(self, vectors, partitions):
+        count = sum(len(part["global_idx"]) for part in partitions.values())
+        exemplar = next(iter(vectors.values()))
+        output = exemplar.new_zeros((count, self.codec.packed_dim))
         for pair, values in vectors.items():
             left, right = pair.split("-")
-            blocks = self.head.mapper.vectors_to_blocks(pair, values)
+            blocks = self.mapper.vectors_to_blocks(pair, values)
             a, b = (
                 getattr(self, f"native_basis_{left}").to(blocks),
                 getattr(self, f"native_basis_{right}").to(blocks),
@@ -190,7 +120,7 @@ class PartitionedOperatorReadout(nn.Module):
         return output
 
 
-def build_mandala_transform(name, parameters, inputs, *, mapper=None):
+def build_orbital_transform(name, parameters, inputs, *, mapper=None):
     from dataclasses import replace
     from net.pipeline import (
         FeatureSpec,
@@ -239,9 +169,31 @@ def build_mandala_transform(name, parameters, inputs, *, mapper=None):
             )
         if any(ir.l or ir.p != 1 for _, ir in radial + attrs):
             raise ValueError("Radial and species inputs must be invariant scalars")
-        module = EndpointMessageAggregation(
-            node, edge, angular, radial.dim, attrs.dim, **p
+        from net.layers import NodeUpdateBlock
+        from net.common import Config
+
+        options = dict(p.pop("config", {}))
+        options.setdefault("dtype", torch.get_default_dtype())
+        for key, value in (("l_max", angular.lmax), ("n_radial", radial.dim)):
+            if key in options and options[key] != value:
+                raise ValueError(
+                    f"{key} is determined by the typed angular/radial inputs"
+                )
+            options[key] = value
+        if angular != o3.Irreps.spherical_harmonics(angular.lmax):
+            raise ValueError(
+                "Endpoint aggregation requires full ordered spherical harmonics"
+            )
+        module = NodeUpdateBlock(
+            node,
+            edge,
+            attrs.dim,
+            Config(**options),
+            node_irreps_out=o3.Irreps(p.pop("irreps_out")),
+            n_edge_types=attrs.dim**2,
         )
+        if p:
+            raise ValueError(f"Unknown endpoint aggregation options: {sorted(p)}")
         return module, [
             FeatureSpec(
                 "node",
@@ -251,28 +203,22 @@ def build_mandala_transform(name, parameters, inputs, *, mapper=None):
                 angular_basis="xyz",
             )
         ]
-    if name == "partitioned_operator_readout":
-        if len(inputs) != 5:
+    if name == "partitioned_blocks_to_shells":
+        if (
+            len(inputs) != 2
+            or inputs[0].representation != "block_vectors"
+            or inputs[1].representation != "object"
+        ):
             raise ValueError(
-                "Partitioned readout expects node, edge, edge index, pair types and onsite mask"
+                "Block packing expects partitioned vectors and edge partitions"
             )
-        node, edge = (
-            _global_irreps(inputs[0], "node"),
-            _global_irreps(inputs[1], "edge"),
-        )
-        _index_spec(inputs[2], "relation")
-        _index_spec(inputs[3], "edge")
-        _index_spec(inputs[4], "edge")
-        support = _same_support(*inputs[1:])
-        basis = _same_angular_basis(inputs[0], inputs[1])
-        if basis not in {None, "xyz"}:
-            raise ValueError(
-                "Partitioned orbital readout requires xyz; insert irrep_cartesian_basis"
-            )
-        module = PartitionedOperatorReadout(node, edge, mapper=mapper, **p)
+        module = PartitionedBlockPack(mapper=mapper, **p)
         return module, [
             FeatureSpec(
-                "edge", "matrix", width=module.codec.packed_dim, support=support
+                "edge",
+                "matrix",
+                width=module.codec.packed_dim,
+                support=inputs[0].support,
             )
         ]
-    raise ValueError(f"Unknown MANDALA transformation {name!r}")
+    raise ValueError(f"Unknown orbital transformation {name!r}")

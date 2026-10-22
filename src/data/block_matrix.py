@@ -47,6 +47,18 @@ class BlockMatrix:
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
     orbital_cfg: OrbitalIrrepConfig
     basis: str  # "openmx" | "e3nn"
+    _coverage_masks: dict | None = None
+
+    @property
+    def coverage_masks(self):
+        return (
+            self._coverage_masks
+            if self._coverage_masks is not None
+            else {
+                key: torch.ones_like(value, dtype=torch.bool)
+                for key, value in self.pair_blocks.items()
+            }
+        )
 
     # --------------- convenience constructors ------------------------------ #
     @classmethod
@@ -141,6 +153,10 @@ class BlockMatrix:
             self.lookup,
             self.orbital_cfg,
             self.basis,
+            _coverage_masks={
+                k: v.to(device, non_blocking=non_blocking)
+                for k, v in self.coverage_masks.items()
+            },
         )
 
     def pin_memory(self) -> "BlockMatrix":
@@ -154,6 +170,7 @@ class BlockMatrix:
             self.lookup,
             self.orbital_cfg,
             self.basis,
+            _coverage_masks={k: v.pin_memory() for k, v in self.coverage_masks.items()},
         )
 
     def detach(self) -> "BlockMatrix":
@@ -167,14 +184,15 @@ class BlockMatrix:
             self.lookup,
             self.orbital_cfg,
             self.basis,
+            _coverage_masks=self.coverage_masks,
         )
 
     # --------------- change-of-basis --------------------------------------- #
-    def to_vectors(self, mapper: BlockIrrepMapper) -> IrrepsBlockData:
+    def to_vectors(self, mapper: BlockIrrepMapper, *, layout=None) -> IrrepsBlockData:
         """Convert blocks to irreducible representation vectors using a mapper."""
         pair_vec: Dict[PairKey, torch.Tensor] = {}
         for key, blk in self.pair_blocks.items():
-            pair_vec[key] = mapper.blocks_to_vectors(key, blk)
+            pair_vec[key] = mapper.blocks_to_vectors(key, blk, layout=layout)
         return IrrepsBlockData(
             self.atoms,
             self.atom_counts,
@@ -183,6 +201,7 @@ class BlockMatrix:
             self.lookup,
             self.orbital_cfg,
             self.basis,
+            layout=layout,
         )
 
         # ------------------------------------------------------------------ transpose
@@ -331,6 +350,10 @@ class BlockMatrix:
             lookup=lookup,
             orbital_cfg=self.orbital_cfg,
             basis=self.basis,
+            _coverage_masks={
+                k: mask[order_dict[k]] if k in order_dict else mask
+                for k, mask in self.coverage_masks.items()
+            },
         )
 
     def relabel_atom_images(self, atom_image_shifts: torch.Tensor) -> "BlockMatrix":
@@ -489,13 +512,25 @@ class BlockMatrix:
             new_blocks[k] = self.pair_blocks[k] - other.pair_blocks[k]
         return self._replace_pair_blocks(new_blocks, basis=self.basis)
 
+    def conjugate(self):
+        return self._replace_pair_blocks(
+            {key: value.conj() for key, value in self.pair_blocks.items()},
+            basis=self.basis,
+        )
+
+    def adjoint(self):
+        return self.transpose().conjugate()
+
     def symmetrize_aligned(
         self, reverse_alignment: Dict[str, Tuple[str, torch.Tensor]]
     ) -> "BlockMatrix":
         """
         Compute ``0.5 * (M + M^T)`` using precomputed reverse-edge permutations.
         """
-        return self.add_aligned(self.transpose_aligned(reverse_alignment)) * 0.5
+        return (
+            self.add_aligned(self.transpose_aligned(reverse_alignment).conjugate())
+            * 0.5
+        )
 
     def __rsub__(self, other):
         # allow (0 - BlockMatrix)
@@ -505,10 +540,23 @@ class BlockMatrix:
 
     # --------------------- dense helpers --------------------------------------
     # global dim offsets ---------------------------------------------------------
+    def _physical_dimension(self, species):
+        dimensions = {
+            block.shape[-2 + position]
+            for pair, block in self.pair_blocks.items()
+            for position, atom in enumerate(pair.split("-"))
+            if atom == species
+        }
+        if len(dimensions) != 1:
+            raise ValueError(
+                f"Inconsistent or absent physical block dimension for {species}"
+            )
+        return dimensions.pop()
+
     def _atom_offsets(self) -> Tuple[torch.Tensor, int]:
         """Return 1-D tensor of start indices per atom and total dimension."""
         dims = torch.tensor(
-            [self.orbital_cfg.block_dims(f"{el}-{el}")[0] for el in self.atoms],
+            [self._physical_dimension(el) for el in self.atoms],
             dtype=torch.long,
         )
         offsets = torch.cumsum(
@@ -530,7 +578,7 @@ class BlockMatrix:
         dense = torch.zeros(total, total, device=device, dtype=dtype)
 
         for (_sx, _sy, _sz, i, j), (key, k) in self.lookup.items():
-            d_i, d_j = self.orbital_cfg.block_dims(key)
+            d_i, d_j = self.pair_blocks[key].shape[-2:]
             r0 = int(offsets[i])
             c0 = int(offsets[j])
             dense[r0 : r0 + d_i, c0 : c0 + d_j] += self.pair_blocks[key][k]
@@ -549,6 +597,9 @@ class BlockMatrix:
             "pair_edges": edges_cpu,
             "type": "block",
             "basis": self.basis,
+            "coverage_masks": {
+                k: v.detach().cpu() for k, v in self.coverage_masks.items()
+            },
         }
 
     def save(self, path: str | "os.PathLike[str]") -> None:
@@ -590,6 +641,7 @@ class BlockMatrix:
             lookup,
             orb_cfg,
             payload.get("basis", "openmx"),
+            _coverage_masks=payload.get("coverage_masks"),
         ).to(device)
 
     # ------------- internal helper to clone with new blocks / basis ---------
@@ -605,6 +657,7 @@ class BlockMatrix:
             lookup=self.lookup,
             orbital_cfg=self.orbital_cfg,
             basis=basis,
+            _coverage_masks=self._coverage_masks,
         )
 
     def _apply_edge_mask(
@@ -857,6 +910,10 @@ class BlockMatrix:
             lookup=lookup,
             orbital_cfg=orb_cfg,
             basis=payload.get("basis", "openmx"),
+            _coverage_masks={
+                k: v.to(device) for k, v in payload.get("coverage_masks", {}).items()
+            }
+            or None,
         )
 
     # ════════════════════════════════════════════════════════════════════════════
@@ -913,59 +970,151 @@ class IrrepsBlockData:
     lookup: Dict[Tuple[int, int], Tuple[PairKey, int]]
     orbital_cfg: OrbitalIrrepConfig
     basis: str = "e3nn"  # always "e3nn"
+    layout: object | None = None
+    packed_values: torch.Tensor | None = None
+    packed_edges: torch.Tensor | None = None
+    frames: torch.Tensor | None = None
+    operator: str | None = None
+
+    @staticmethod
+    def pack_matrix(matrix, edges, layout, *, frames=None, operator=None):
+        """Express physical blocks in a declared supervision frame and unit."""
+        rows = []
+        from utils.units import HARTREE_TO_EV
+
+        if matrix.basis != "openmx":
+            from core.basis_converter import OpenMXE3NNConverter
+
+            matrix = OpenMXE3NNConverter(matrix.orbital_cfg).matrix_to_openmx(matrix)
+
+        for index, edge in enumerate(edges.T.tolist()):
+            pair, row = matrix.lookup[tuple(edge)]
+            block = matrix.pair_blocks[pair][row]
+            atoms = tuple(pair.split("-"))
+            if frames is not None:
+                block = layout.rotation.rotate_blocks(
+                    block,
+                    frames[index],
+                    layout.species_shells[atoms[0]],
+                    layout.species_shells[atoms[1]],
+                )
+            if operator == "hamiltonian":
+                block = block * HARTREE_TO_EV
+            rows.append(layout.pack_blocks(atoms, block))
+        return torch.stack(rows)
+
+    @classmethod
+    def from_packed(cls, values, x, mapper, layout, *, frame="global", operator=None):
+        """Represent packed orbital channels through MANDALA's public container."""
+        from collections import Counter
+
+        species = tuple(layout.species_shells)
+        atoms = tuple(species[int(index)] for index in x["node_type_idx"])
+        edges = x.get("edge_keys")
+        if edges is None:
+            shifts = x.get(
+                "edge_shift", x["edge_index"].new_zeros((3, x["edge_index"].shape[1]))
+            )
+            edges = torch.cat((shifts, x["edge_index"]), dim=0)
+        pair_vectors, pair_edges, lookup = {}, {}, {}
+        for left in species:
+            for right in species:
+                selected = torch.tensor(
+                    [
+                        index
+                        for index, edge in enumerate(edges.T)
+                        if atoms[int(edge[3])] == left and atoms[int(edge[4])] == right
+                    ],
+                    device=values.device,
+                    dtype=torch.long,
+                )
+                if not len(selected):
+                    continue
+                pair = f"{left}-{right}"
+                pair_vectors[pair] = layout.encode(values.index_select(0, selected))
+                pair_edges[pair] = edges.index_select(1, selected)
+                for local, global_index in enumerate(selected.tolist()):
+                    lookup[tuple(edges[:, global_index].tolist())] = (pair, local)
+        frames = x.get("bond_frames") if frame == "bond" else None
+        if frame == "bond" and frames is None:
+            raise ValueError("Bond-frame output requires explicit frames")
+        return cls(
+            atoms,
+            Counter(atoms),
+            pair_vectors,
+            pair_edges,
+            lookup,
+            mapper.orbital_cfg,
+            "openmx",
+            layout,
+            values,
+            edges,
+            frames,
+            operator,
+        )
 
     # -------- device -------- #
-    def to(self, device, non_blocking: bool = False):
-        vecs = {
-            k: v.to(device, non_blocking=non_blocking)
-            for k, v in self.pair_vectors.items()
-        }
-        edges = {
-            k: v.to(device, non_blocking=non_blocking)
-            for k, v in self.pair_edges.items()
-        }
-        return IrrepsBlockData(
-            self.atoms,
-            self.atom_counts,
-            vecs,
-            edges,
-            self.lookup,
-            self.orbital_cfg,
-            self.basis,
+    def _map_tensors(self, operation):
+        from dataclasses import replace
+
+        return replace(
+            self,
+            pair_vectors={
+                key: operation(value) for key, value in self.pair_vectors.items()
+            },
+            pair_edges={
+                key: operation(value) for key, value in self.pair_edges.items()
+            },
+            packed_values=(
+                operation(self.packed_values)
+                if self.packed_values is not None
+                else None
+            ),
+            packed_edges=(
+                operation(self.packed_edges) if self.packed_edges is not None else None
+            ),
+            frames=operation(self.frames) if self.frames is not None else None,
         )
 
-    def pin_memory(self) -> "IrrepsBlockData":
-        pinned_vecs = {k: v.pin_memory() for k, v in self.pair_vectors.items()}
-        pinned_edges = {k: v.pin_memory() for k, v in self.pair_edges.items()}
-        return IrrepsBlockData(
-            self.atoms,
-            self.atom_counts,
-            pinned_vecs,
-            pinned_edges,
-            self.lookup,
-            self.orbital_cfg,
-            self.basis,
+    def to(self, device, non_blocking=False):
+        return self._map_tensors(
+            lambda value: value.to(device, non_blocking=non_blocking)
         )
 
-    def detach(self) -> "IrrepsBlockData":
-        detached_vecs = {k: v.detach() for k, v in self.pair_vectors.items()}
-        detached_edges = {k: v.detach() for k, v in self.pair_edges.items()}
-        return IrrepsBlockData(
-            self.atoms,
-            self.atom_counts,
-            detached_vecs,
-            detached_edges,
-            self.lookup,
-            self.orbital_cfg,
-            self.basis,
-        )
+    def pin_memory(self):
+        return self._map_tensors(lambda value: value.pin_memory())
+
+    def detach(self):
+        return self._map_tensors(lambda value: value.detach())
 
     # -------- inverse change-of-basis ----- #
     def to_blocks(self, mapper: BlockIrrepMapper) -> BlockMatrix:
         pair_blk: Dict[PairKey, torch.Tensor] = {}
         for key, vec in self.pair_vectors.items():
-            pair_blk[key] = mapper.vectors_to_blocks(key, vec)
-        return BlockMatrix(
+            pair_blk[key] = mapper.vectors_to_blocks(key, vec, layout=self.layout)
+            if self.frames is not None:
+                global_rows = {
+                    tuple(edge.tolist()): index
+                    for index, edge in enumerate(self.packed_edges.T)
+                }
+                frames = torch.stack(
+                    [
+                        self.frames[global_rows[tuple(edge.tolist())]]
+                        for edge in self.pair_edges[key].T
+                    ]
+                )
+                left, right = key.split("-")
+                pair_blk[key] = self.layout.rotation.rotate_blocks(
+                    pair_blk[key],
+                    frames.transpose(-1, -2),
+                    self.layout.species_shells[left],
+                    self.layout.species_shells[right],
+                )
+            if self.layout is not None and self.operator == "hamiltonian":
+                from utils.units import HARTREE_TO_EV
+
+                pair_blk[key] = pair_blk[key] / HARTREE_TO_EV
+        result = BlockMatrix(
             self.atoms,
             self.atom_counts,
             pair_blk,
@@ -974,6 +1123,17 @@ class IrrepsBlockData:
             self.orbital_cfg,
             self.basis,
         )
+        if self.layout is not None:
+            result._coverage_masks = {
+                pair: self.layout.unpack_blocks(
+                    tuple(pair.split("-")),
+                    self.layout.packed_mask(
+                        tuple(pair.split("-")), device=block.device
+                    ),
+                ).expand_as(block)
+                for pair, block in pair_blk.items()
+            }
+        return result
 
     # ─────────────────────────────────────────────────────────────────────────
     #   diag / offdiag access for vector form
@@ -1100,6 +1260,22 @@ class IrrepsBlockData:
             "pair_vectors": vec_cpu,
             "pair_edges": edges_cpu,
             "type": "irrep",
+            "basis": self.basis,
+            "layout": (
+                self.layout.layout_signature() if self.layout is not None else None
+            ),
+            "packed_values": (
+                self.packed_values.detach().cpu()
+                if self.packed_values is not None
+                else None
+            ),
+            "packed_edges": (
+                self.packed_edges.detach().cpu()
+                if self.packed_edges is not None
+                else None
+            ),
+            "frames": self.frames.detach().cpu() if self.frames is not None else None,
+            "operator": self.operator,
         }
 
     def save(self, path: str | "os.PathLike[str]") -> None:
@@ -1118,6 +1294,8 @@ class IrrepsBlockData:
             raise ValueError("file does not contain irrep snapshot")
 
         orb_cfg = OrbitalIrrepConfig.from_dict(payload["orbital_cfg"])
+
+        from core.operator_layout import ShellTensorCodec
 
         pair_vec = {k: v.to(device) for k, v in payload["pair_vectors"].items()}
         pair_edges = {k: v.to(device) for k, v in payload["pair_edges"].items()}
@@ -1141,4 +1319,17 @@ class IrrepsBlockData:
             lookup,
             orb_cfg,
             payload.get("basis", "e3nn"),
+            layout=(
+                ShellTensorCodec.from_signature(
+                    payload["layout"],
+                    device=device,
+                    dtype=next(iter(pair_vec.values())).real.dtype,
+                )
+                if payload.get("layout") is not None
+                else None
+            ),
+            packed_values=payload.get("packed_values"),
+            packed_edges=payload.get("packed_edges"),
+            frames=payload.get("frames"),
+            operator=payload.get("operator"),
         ).to(device)

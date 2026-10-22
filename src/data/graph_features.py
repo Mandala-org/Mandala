@@ -42,11 +42,18 @@ def compute_edge_geometry_from_static_edges(
     radial_embedding_scale: str,
     radial_lengths: torch.Tensor | None = None,
     radial_basis_end: float | None = None,
+    edge_batch: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if box is not None:
         shift_float = edge_shift.T.to(dtype=positions.dtype)
         edge_disp = (
-            positions[edge_index[1]] - positions[edge_index[0]] + shift_float @ box
+            positions[edge_index[1]]
+            - positions[edge_index[0]]
+            + (
+                torch.einsum("ei,eij->ej", shift_float, box[edge_batch])
+                if box.ndim == 3
+                else shift_float @ box
+            )
         )
     else:
         edge_disp = positions[edge_index[1]] - positions[edge_index[0]]
@@ -378,4 +385,142 @@ def compute_graph_features_from_target_edges(
         edge_sh,
         len(diag_indices),
         edge_lengths,
+    )
+
+
+def complete_graph_metadata(
+    inputs, mapper, *, species_order=None, separate_shifted_self=True
+):
+    """Supply common sparse-operator metadata for any declared graph support."""
+    from collections import Counter
+    from data.edge_alignment import build_prediction_edge_metadata
+
+    if "pred_pair_edges_static" in inputs:
+        return inputs
+    species = tuple(species_order or mapper.orbital_cfg.elements())
+    atoms = tuple(species[int(index)] for index in inputs["node_type_idx"])
+    index = inputs["edge_index"]
+    shifts = inputs.get("edge_shift", index.new_zeros((3, index.shape[1])))
+    pairs = [f"{left}-{right}" for left in species for right in species]
+    pair_to_index = {pair: i for i, pair in enumerate(pairs)}
+    inputs.update(
+        edge_shift=shifts,
+        atoms=atoms,
+        atoms_tuple=atoms,
+        atom_counts=dict(Counter(atoms)),
+    )
+    inputs.update(
+        build_prediction_edge_metadata(
+            edge_index=index,
+            edge_shift=shifts,
+            edge_type_idx=inputs["edge_type_idx"],
+            atoms=atoms,
+            edge_types=pairs,
+            edge_type2idx=pair_to_index,
+            separate_shifted_self=separate_shifted_self,
+        )
+    )
+    return inputs
+
+
+def evaluate_graph_geometry(
+    inputs,
+    *,
+    local_coordinates=False,
+    num_l=5,
+    require_frames=False,
+    recompute_geometry=False,
+    derive_frames=True,
+    neighborhood_support="output",
+):
+    """Evaluate geometry on prepared supports without selecting any edges.
+
+    Recalculation is required for coordinate derivatives. Explicit relations,
+    including periodic images and neighborhood membership, remain unchanged.
+    """
+    from data.graph_topology import edge_displacements
+
+    index, shifts = inputs["edge_index"], inputs["edge_shift"]
+    if "edge_vectors" not in inputs or recompute_geometry:
+        if "positions" not in inputs:
+            if "edge_vectors" not in inputs:
+                raise ValueError("Geometry needs positions or explicit edge vectors")
+        else:
+            inputs["edge_vectors"] = edge_displacements(inputs, index, shifts)
+    vectors = inputs["edge_vectors"]
+    lengths = vectors.norm(dim=-1)
+    inputs.update(
+        edge_lengths=lengths,
+        edge_length=lengths,
+        edge_keys=torch.cat((shifts, index)),
+        selfloop_edge=(index[0] == index[1]) & (shifts == 0).all(0),
+    )
+    inputs.setdefault("edge_batch", inputs["node_batch"][index[0]])
+    for name in inputs.get("_support_policies", {"message": {}}):
+        relation = inputs[f"{name}_edge_index"]
+        if "positions" in inputs:
+            value = edge_displacements(inputs, relation, inputs[f"{name}_shift"])
+        else:
+            mapping = inputs[f"{name}_to_output"]
+            if (mapping < 0).any():
+                raise ValueError("Independent supports need positions for geometry")
+            value = vectors[mapping]
+        inputs[f"{name}_vectors"] = value
+        inputs[f"{name}_lengths"] = value.norm(dim=-1)
+    if require_frames or local_coordinates:
+        from data.bond_geometry import (
+            bond_frames,
+            bond_neighborhood_relations,
+            tesseral_harmonics,
+        )
+
+        selection = None
+        if neighborhood_support != "output":
+            selection = inputs[f"{neighborhood_support}_to_output"]
+            if (selection < 0).any():
+                raise ValueError(
+                    "Bond neighborhoods must reference output-edge features"
+                )
+        if "bond_frames" not in inputs or (recompute_geometry and derive_frames):
+            inputs["bond_frames"] = bond_frames(
+                index, vectors, neighbor_selection=selection
+            )
+        if local_coordinates:
+            if "sub_index" not in inputs:
+                inputs.update(
+                    bond_neighborhood_relations(index, neighbor_selection=selection)
+                )
+            local = -torch.einsum(
+                "ei,eij->ej",
+                vectors[inputs["sub_edge_idx"]],
+                inputs["bond_frames"][inputs["sub_index"] // 2],
+            )
+            inputs["sub_edge_ang"] = tesseral_harmonics(local, num_l)
+    return inputs
+
+
+def add_graph_views(
+    inputs,
+    *,
+    local_coordinates=False,
+    num_l=5,
+    require_frames=False,
+    refresh=False,
+    derive_frames=True,
+):
+    """Compatibility helper: prepare missing relations, then evaluate geometry.
+
+    New workflows explicitly prepare topology and evaluate geometry separately.
+    ``refresh`` only recomputes geometric values and never replaces supports.
+    """
+    from data.graph_topology import prepare_graph_topology
+
+    prepare_graph_topology(inputs)
+    return evaluate_graph_geometry(
+        inputs,
+        local_coordinates=local_coordinates,
+        num_l=num_l,
+        require_frames=require_frames,
+        recompute_geometry=refresh,
+        derive_frames=derive_frames,
     )

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from net.operator_codecs import ShellTensorCodec
+from core.operator_layout import ShellTensorCodec
 from net.pipeline import (
     FeaturePipeline,
     FeatureSpec,
@@ -280,14 +280,18 @@ def test_stage_unknown_keys_are_rejected_instead_of_silently_ignored():
         )
 
 
-def test_shell_readout_rejects_silent_xyz_to_cyclic_mixing():
+def test_shell_readout_converts_canonical_xyz_at_reconstruction_boundary():
     codec = ShellTensorCodec([(0, 1)])
-    with pytest.raises(ValueError, match="cyclic yzx"):
-        build_transform(
-            "shell_tensor_decode",
-            {"shell_pairs": [(0, 1)]},
-            [FeatureSpec("edge", "irreps", str(codec.irreps_out), angular_basis="xyz")],
-        )
+    decoder, _ = build_transform(
+        "shell_tensor_decode",
+        {"shell_pairs": [(0, 1)]},
+        [FeatureSpec("edge", "irreps", str(codec.irreps_out), angular_basis="xyz")],
+    )
+    from net.transforms.orbital import IrrepCartesianBasis
+
+    values = torch.randn(3, codec.irreps_out.dim)
+    conversion = IrrepCartesianBasis(codec.irreps_out, "xyz", "yzx")
+    torch.testing.assert_close(decoder(values), codec.decode(conversion(values)))
 
 
 def test_bond_linear_refuses_global_irreps_without_frame_rotation():

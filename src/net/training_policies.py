@@ -15,7 +15,13 @@ from torch import nn
 
 
 def masked_error(
-    prediction, target, mask=None, *, kind="mse", complex_reduction="magnitude"
+    prediction,
+    target,
+    mask=None,
+    *,
+    kind="mse",
+    complex_reduction="magnitude",
+    weights=None,
 ):
     """Global masked reduction, with an explicit complex-value convention."""
     if prediction.shape != target.shape:
@@ -38,10 +44,19 @@ def masked_error(
             else selected.abs()
         )
     if kind == "mse":
-        return selected.square().mean()
-    if kind == "mae":
-        return selected.abs().mean()
-    raise ValueError(f"Unknown objective kind: {kind}")
+        errors = selected.square()
+    elif kind == "mae":
+        errors = selected.abs()
+    else:
+        raise ValueError(f"Unknown objective kind: {kind}")
+    if weights is None:
+        return errors.mean()
+    weights = weights.reshape((-1,) + (1,) * (target.ndim - 1)).expand_as(target)[mask]
+    if errors.ndim > weights.ndim:
+        weights = weights.unsqueeze(-1).expand_as(errors)
+    if (weights < 0).any() or not torch.isfinite(weights).all() or weights.sum() <= 0:
+        raise ValueError("Objective weights must be finite, nonnegative and nonempty")
+    return (errors * weights).sum() / weights.sum()
 
 
 class SpeciesIrrepAffine(nn.Module):
@@ -62,6 +77,8 @@ class SpeciesIrrepAffine(nn.Module):
         gradient_mode="physical",
         eps=1e-12,
         target="hamiltonian",
+        feature_basis=None,
+        statistics_basis="yzx",
     ):
         super().__init__()
         from e3nn.o3 import Irreps
@@ -71,11 +88,19 @@ class SpeciesIrrepAffine(nn.Module):
             raise ValueError("gradient_mode must be identity or physical")
         self.gradient_mode = gradient_mode
         self.target = target
+        self.statistics_coordinates = None
+        if feature_basis is not None and feature_basis != statistics_basis:
+            from net.transforms.orbital import IrrepCartesianBasis
+
+            self.statistics_coordinates = IrrepCartesianBasis(
+                self.irreps, feature_basis, statistics_basis
+            )
         self.eps = float(eps)
         self.register_buffer("mean", torch.zeros(num_species**2, self.irreps.dim))
         self.register_buffer("std", torch.ones(num_species**2, self.irreps.dim))
         self.register_buffer("fitted", torch.tensor(False))
         self.training_manifest_hash = ""
+        self.training_ids = ()
 
     @torch.no_grad()
     def fit(self, training_records: Iterable[Mapping], *, training_ids):
@@ -87,6 +112,7 @@ class SpeciesIrrepAffine(nn.Module):
         ids = tuple(str(x) for x in training_ids)
         if not ids or len(set(ids)) != len(ids):
             raise ValueError("training_ids must be a nonempty unique manifest")
+        self.training_ids = ids
         allowed = set(ids)
         records = list(training_records)
         if len(records) != len(ids) or {str(r["id"]) for r in records} != allowed:
@@ -121,6 +147,30 @@ class SpeciesIrrepAffine(nn.Module):
             json.dumps(ids).encode()
         ).hexdigest()
 
+    def fit_training_data(self, samples, *, layout, mapper=None, target_frame="global"):
+        from data.operator_features import statistics_records
+
+        self.fit(
+            statistics_records(
+                samples,
+                layout,
+                target=self.target,
+                mapper=mapper,
+                target_frame=target_frame,
+            ),
+            training_ids=[sample["id"] for sample in samples],
+        )
+
+    def fitting_provenance(self, *, training_ids=None):
+        ids = tuple(training_ids) if training_ids is not None else self.training_ids
+        return {
+            "target": self.target,
+            "training_ids": list(ids),
+            "training_manifest_hash": hashlib.sha256(
+                json.dumps(ids).encode()
+            ).hexdigest(),
+        }
+
     def get_extra_state(self):
         return {"training_manifest_hash": self.training_manifest_hash}
 
@@ -133,9 +183,18 @@ class SpeciesIrrepAffine(nn.Module):
                 "Output statistics must be fitted on training data first"
             )
         mean, std = self.mean[pair_type], self.std[pair_type]
+        if self.statistics_coordinates is not None:
+            # Statistics are target-representation quantities. Normalize their
+            # affine operator at the representation boundary; shared features
+            # remain canonical even for non-isotropic imported statistics.
+            coordinates = self.statistics_coordinates.matrix.to(x)
+            scaled = ((x @ coordinates.T) * std) @ coordinates
+            mean = mean @ coordinates
+        else:
+            scaled = x * std
         if self.gradient_mode == "identity" and not physical_derivatives:
-            return x + (x * (std - 1)).detach() + mean
-        return x * std + mean
+            return x + (scaled - x).detach() + mean
+        return scaled + mean
 
 
 def make_optimizer(parameters, options):
@@ -151,6 +210,37 @@ def make_optimizer(parameters, options):
     if kind not in constructors:
         raise ValueError(f"Unknown optimizer: {kind}")
     return constructors[kind](parameters, **options)
+
+
+class MilestoneDecay(torch.optim.lr_scheduler.LRScheduler):
+    """Multiply LR after explicitly numbered zero-based training epochs.
+
+    ``last_epoch`` counts scheduler steps including its initialization step;
+    the event for training epoch k therefore occurs at scheduler step k+1.
+    Ordinary scheduler state is sufficient for exact segmented continuation.
+    """
+
+    def __init__(self, optimizer, milestones, factors, last_epoch=-1):
+        import math
+
+        if (
+            len(milestones) != len(factors)
+            or any(
+                isinstance(k, bool) or not isinstance(k, int) or k < 0
+                for k in milestones
+            )
+            or sorted(set(milestones)) != list(milestones)
+            or any(not math.isfinite(f) or f <= 0 for f in factors)
+        ):
+            raise ValueError(
+                "Milestones must be increasing unique epochs with positive finite factors"
+            )
+        self.events = dict(zip(milestones, factors))
+        super().__init__(optimizer, last_epoch=last_epoch)
+
+    def get_lr(self):
+        factor = self.events.get(self.last_epoch - 1, 1.0)
+        return [group["lr"] * factor for group in self.optimizer.param_groups]
 
 
 class SmoothedPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
@@ -183,6 +273,8 @@ def make_scheduler(optimizer, options):
         scheduler = SmoothedPlateau(optimizer, **options)
     elif kind == "multistep":
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, **options)
+    elif kind == "milestone_decay":
+        scheduler = MilestoneDecay(optimizer, **options)
     else:
         raise ValueError(f"Unknown scheduler kind {kind}")
     return {"scheduler": scheduler, "monitor": monitor, "interval": "epoch"}

@@ -13,7 +13,6 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
 from net.common import Config
 
-
 _CATEGORY_BY_DIRECTORY = {
     "unit": "unit",
     "integration": "integration",
@@ -224,7 +223,7 @@ def si_snapshot():
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def factory_results(small_multispecies_snapshot_e3nn):
     patcher = pytest.MonkeyPatch()
     patcher.setattr(

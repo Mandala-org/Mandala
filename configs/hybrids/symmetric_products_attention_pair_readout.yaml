@@ -1,4 +1,10 @@
-# Symmetric product densities, existing MANDALA attention and pair-partitioned head.
+species:
+  ordering: atomic_number
+symmetrize_hamiltonian_targets: false
+symmetrize_overlap_targets: false
+symmetrize_density_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
 schema_version: 1
 codec:
   spinful: false
@@ -6,6 +12,12 @@ parameters:
   width: 4
   radial_width: 8
 data:
+  representation: packed_shells
+  basis: openmx
+  geometry_dtype: float64
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
   target_frame: global
   local_coordinates: false
 objective:
@@ -149,18 +161,16 @@ pipeline:
       fc_len_in: 8
       irreps_out_edge: 4x0e+4x1o
   - id: partitioned_readout
-    transform: partitioned_operator_readout
+    role: readout
+    transform: partitioned_irrep_readout
     inputs:
     - node_attention
     - edge_final
-    - edge_index
-    - edge_type_idx
-    - selfloop_edge
+    - pred_pair_edges_static
+    - edge_partitions
     outputs:
-    - hamiltonian
+    - partitioned_vectors
     options:
-      species_shells: ${species.shells}
-      species_order: ${species.order}
       irreps_neck: 4x0e+4x1o
       config:
         neck_depth: 1
@@ -172,5 +182,23 @@ pipeline:
         nonlin_kind: normact
         dropout: 0.0
         e3layernorm: false
+  - id: orbital_pack
+    role: readout
+    transform: partitioned_blocks_to_shells
+    inputs:
+    - partitioned_vectors
+    - edge_partitions
+    outputs:
+    - hamiltonian
+    options:
+      species_shells: ${species.shells}
+      species_order: ${species.order}
   outputs:
     hamiltonian: hamiltonian
+  inputs:
+    pred_pair_edges_static:
+      domain: relation
+      representation: object
+    edge_partitions:
+      domain: relation
+      representation: object

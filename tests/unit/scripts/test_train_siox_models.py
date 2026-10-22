@@ -1,4 +1,4 @@
-"""SiOx split parity, paper recipe, conversion integrity and safe continuation."""
+"""SiOx split parity, paper recipe, direct source integrity and safe continuation."""
 
 import json
 from pathlib import Path
@@ -25,7 +25,7 @@ def synthetic_source(root, count=105):
 
 def test_split_exactly_matches_paper_builder(tmp_path, monkeypatch):
     source = synthetic_source(tmp_path / "raw")
-    selection = run.select_inputs(source, tmp_path / "native")
+    selection = run.select_inputs(source)
     captured = {}
 
     def capture(train, val, test, cfg, *, convention):
@@ -74,13 +74,13 @@ def test_split_exactly_matches_paper_builder(tmp_path, monkeypatch):
     for key, value in paper["config"].items():
         if key not in ignored:
             assert settings[3][key] == value, key
-    assert settings[3]["dataset_manifest"] == str(manifest)
+    assert settings[3]["data"]["splits"] == native_splits
     assert settings[3]["lr"] == 0.0027
     assert settings[3]["compatibility"] is False
     assert settings[3].get("resume_from_checkpoint") is None
 
 
-def test_real_openmx_conversion_can_resume_and_detects_tampering(tmp_path):
+def test_frozen_raw_manifest_can_resume_and_detects_tampering(tmp_path):
     source = tmp_path / "raw"
     fixture = run.ROOT / "data/small/Si"
     for index in range(2):
@@ -102,10 +102,8 @@ def test_real_openmx_conversion_can_resume_and_detects_tampering(tmp_path):
     run.prepare(args)
     assert path.read_bytes() == first
     manifest = run.validate_manifest(path)
-    assert len(manifest["conversions"]) == 2
-    for conversion in manifest["conversions"]:
-        assert conversion["validation"]["hamiltonian_roundtrip_max_abs_ha"] < 1e-6
-        assert conversion["validation"]["num_overlap_blocks"] > 0
+    assert "conversions" not in manifest
+    assert not args.native_root.exists()
     raw = Path(manifest["splits"]["train"][0]["matrix_path"])
     original = raw.read_bytes()
     raw.write_bytes(original + b"\n")
@@ -117,11 +115,6 @@ def test_real_openmx_conversion_can_resume_and_detects_tampering(tmp_path):
     with pytest.raises(ValueError, match="inventory changed"):
         run.validate_manifest(path)
     extra.unlink()
-    native = Path(manifest["splits"]["val"][0]["native_path"]) / "hamiltonians.h5"
-    with native.open("ab") as handle:
-        handle.write(b"changed")
-    with pytest.raises(ValueError, match="Native snapshot changed"):
-        run.validate_manifest(path)
 
 
 def test_safe_recovery_and_duplicate_writer_protection(tmp_path):
@@ -147,7 +140,7 @@ def test_safe_recovery_and_duplicate_writer_protection(tmp_path):
 
 
 def test_train_resumes_its_own_run_and_stops_at_completion(tmp_path, monkeypatch):
-    from scripts import train_modular
+    from scripts import train as shared_training
 
     args = SimpleNamespace(
         records=tmp_path / "records",
@@ -164,7 +157,6 @@ def test_train_resumes_its_own_run_and_stops_at_completion(tmp_path, monkeypatch
         "model_settings",
         lambda *args: {"training": {"max_epochs": 3, "min_lr": 0.00003}},
     )
-    monkeypatch.setattr(run, "runtime_contract", lambda *args: {"fixed": True})
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     calls = []
 
@@ -181,7 +173,7 @@ def test_train_resumes_its_own_run_and_stops_at_completion(tmp_path, monkeypatch
             output / "latest_checkpoint.pt",
         )
 
-    monkeypatch.setattr(train_modular, "main", fit)
+    monkeypatch.setattr(shared_training, "main", fit)
     run.train(args)
     assert "--resume" not in calls[0]
     assert (args.records / "deeph_e3.last_segment.json").is_file()
@@ -197,7 +189,7 @@ def test_train_resumes_its_own_run_and_stops_at_completion(tmp_path, monkeypatch
 
 def test_preparation_does_not_change_a_frozen_selection(tmp_path):
     source = synthetic_source(tmp_path / "raw", count=3)
-    first = run.select_inputs(source, tmp_path / "native", num_train=2, num_val=1)
+    first = run.select_inputs(source, num_train=2, num_val=1)
     path = tmp_path / "selection.json"
     run.immutable_json(path, first)
     random.Random(1).shuffle(first["splits"]["train"])
@@ -227,50 +219,51 @@ def test_legacy_trainer_dispatches_explicit_manifest_before_discovery(monkeypatc
         train._build_dataset_bundle(args, dataset.Config(), {"parameters": {}})
 
 
-def test_paper_launcher_uses_frozen_settings_and_full_checkpoint(tmp_path, monkeypatch):
+@pytest.mark.parametrize("model", run.MODELS)
+def test_every_preset_uses_same_training_command_and_full_checkpoint(
+    tmp_path, monkeypatch, model
+):
     from scripts import train
 
-    manifest = tmp_path / "records/dataset.json"
-    run.write_json(manifest, {})
     args = SimpleNamespace(
-        records=manifest.parent,
-        model="mandala_paper",
+        records=tmp_path / "records",
+        model=model,
         checkpoint_root=tmp_path / "checkpoints",
         plan=False,
         action="auto",
     )
-    monkeypatch.setattr(run, "validate_manifest", lambda path: {})
-    monkeypatch.setattr(run, "runtime_contract", lambda *args: {"fixed": True})
+    args.records.mkdir()
+    manifest = {"splits": {key: [] for key in ("train", "val", "test")}}
+    run.write_json(args.records / "dataset.json", manifest)
+    monkeypatch.setattr(run, "validate_manifest", lambda path: manifest)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     calls = []
 
-    def fit(values):
-        calls.append(values)
-        cfg = train._populate_config_from_args(SimpleNamespace(**values))
-        assert cfg.lr == 0.0027
-        assert cfg.epoch_boundary_resume
-        assert not cfg.compatibility
-        assert cfg.max_wall_clock_seconds == 162000
-        assert cfg.loss_l1_fraction == 1
-        assert cfg.hamiltonian_envelope_mode == "multiply_prediction"
-        assert values["dataset_manifest"] == str(manifest)
-        assert values["wandb_mode"] == "offline"
-        output = Path(values["checkpoint_dir"]) / values["run_name"]
+    def fit(cli):
+        calls.append(cli)
+        document = OmegaConf.to_container(
+            OmegaConf.load(cli[cli.index("--config") + 1]), resolve=False
+        )
+        if model == "mandala_paper":
+            cfg = train.Config.from_mapping(document)
+            assert cfg.lr == 0.0027
+            assert cfg.loss_l1_fraction == 1
+            assert cfg.hamiltonian_envelope_mode == "multiply_prediction"
+        output = Path(cli[cli.index("--output") + 1])
         output.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
-                "epoch": 1 if len(calls) == 1 else 4000,
+                "epoch": 1 if len(calls) == 1 else 10000,
                 "epoch_boundary_resume": {"safe_to_resume": True},
                 "optimizer_states": [{"param_groups": [{"lr": 0.0001}]}],
             },
             output / "latest_checkpoint.pt",
         )
 
-    monkeypatch.setattr(train, "run_training", fit)
+    monkeypatch.setattr(train, "main", fit)
     run.train(args)
-    assert calls[0]["resume_from_checkpoint"] is None
+    assert "--resume" not in calls[0]
     run.train(args)
-    assert calls[1]["resume_from_checkpoint"] == str(
-        args.checkpoint_root / args.model / "latest_checkpoint.pt"
-    )
-    assert (args.records / "mandala_paper.complete.json").is_file()
+    assert "--resume" in calls[1]
+    run.train(args)
+    assert len(calls) == 2

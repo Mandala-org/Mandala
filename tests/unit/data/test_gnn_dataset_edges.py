@@ -39,6 +39,9 @@ def test_process_snapshot_to_sample():
                 {"edge_type2idx": {"H-H": 0}, "edge_types": ["H-H"]},
             )()
             self.orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "1s"})
+            self.species_order = ("H",)
+            self.edge_types = self.mapper.edge_types
+            self.edge_type2idx = self.mapper.edge_type2idx
 
         def _process_snapshot_to_sample(self, snap):
             return E3GNNDataset._process_snapshot_to_sample(

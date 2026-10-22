@@ -1,3 +1,10 @@
+species:
+  ordering: atomic_number
+symmetrize_hamiltonian_targets: false
+symmetrize_overlap_targets: false
+symmetrize_density_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
 # Tensor-product node updates, angular expansion, shared shell-channel readout.
 schema_version: 1
 codec:
@@ -6,6 +13,12 @@ parameters:
   width: 4
   radial_width: 8
 data:
+  representation: packed_shells
+  basis: openmx
+  geometry_dtype: float64
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
   target_frame: global
   local_coordinates: false
 objective:
@@ -111,18 +124,10 @@ pipeline:
     - shell_xyz
     options:
       irreps_out: ${layout.coupled_irreps}
-  - id: shell_basis
-    transform: irrep_cartesian_basis
-    inputs:
-    - shell_xyz
-    outputs:
-    - shell_yzx
-    options:
-      target: yzx
   - id: shell_readout
     transform: shell_tensor_decode
     inputs:
-    - shell_yzx
+    - shell_xyz
     outputs:
     - hamiltonian
     options:

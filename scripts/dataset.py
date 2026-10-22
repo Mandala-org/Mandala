@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import hashlib
+import json
+import numpy as np
 import random
 import sys
 from pathlib import Path
@@ -168,7 +171,6 @@ def _split_shuffled_pairs(
 
 def build_datasets_from_manifest(manifest_path, cfg, *, convention="e3nn"):
     """Load explicit OpenMX split pairs without discovering or reshuffling data."""
-    import json
 
     document = json.loads(Path(manifest_path).read_text())
     if document.get("schema_version") != 1:
@@ -415,12 +417,6 @@ def build_deeph_e3_datasets(
         raise ValueError(
             "DeepH-E3 datasets support only convention='openmx' or 'e3nn'."
         )
-    if cfg.graph_source != "target_edges":
-        print(
-            "--- DeepH-E3: forcing graph_source=target_edges so model and HDF5 "
-            "blocks have identical DFT support ---"
-        )
-        cfg.graph_source = "target_edges"
     print(
         "--- DeepH-E3 units: source Hamiltonian/Fermi=eV -> internal=Hartree; "
         "positions/lattice/edge lengths=Angstrom; logged hamiltonian MAE=eV, "
@@ -866,3 +862,162 @@ def _get_dataset_value(
             elif spec is not None:
                 return spec
     return default
+
+
+def validate_training_options(document):
+    training = document.get("training", {})
+    allowed = {
+        "seed",
+        "data_split_seed",
+        "dtype",
+        "batch_size",
+        "max_epochs",
+        "min_lr",
+        "grad_clip_val",
+        "grad_clip_algorithm",
+        "accumulate_grad_batches",
+        "split",
+    }
+    unknown = set(training) - allowed
+    if unknown:
+        raise ValueError(f"Unknown training options: {sorted(unknown)}")
+    if training.get("grad_clip_algorithm", "norm") not in {"norm", "value"}:
+        raise ValueError("grad_clip_algorithm must be norm or value")
+    for key in (
+        "seed",
+        "data_split_seed",
+        "batch_size",
+        "max_epochs",
+        "accumulate_grad_batches",
+    ):
+        if key in training:
+            value = training[key]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < (0 if "seed" in key else 1)
+            ):
+                raise ValueError(
+                    f"training.{key} must be an integer in its valid positive range"
+                )
+    for key in ("min_lr", "grad_clip_val"):
+        if training.get(key) is not None:
+            value = training[key]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not np.isfinite(value)
+                or value <= 0
+            ):
+                raise ValueError(f"training.{key} must be finite and positive")
+    settings = training.get("split", {})
+    allowed_split = {
+        f"{name}_{kind}"
+        for name in ("train", "val", "test")
+        for kind in ("size", "ratio")
+    }
+    if set(settings) - allowed_split:
+        raise ValueError(
+            f"Unknown split options: {sorted(set(settings) - allowed_split)}"
+        )
+    for key, value in settings.items():
+        if key.endswith("_size"):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{key} must be a nonnegative integer")
+        elif (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not np.isfinite(value)
+            or not 0 <= value <= 1
+        ):
+            raise ValueError(f"{key} must be a finite ratio in [0,1]")
+
+
+def dataset_paths(document):
+    validate_training_options(document)
+    data, training = document["data"], document.get("training", {})
+    graph_source = data.get("graph_source", "stored")
+    if graph_source not in {"stored", "radius"}:
+        raise ValueError("graph_source must be stored or radius")
+    if graph_source == "radius":
+        radius = data.get("graph_radius")
+        if (
+            isinstance(radius, bool)
+            or not isinstance(radius, (int, float))
+            or not np.isfinite(radius)
+            or radius <= 0
+        ):
+            raise ValueError("Radius graph requires a finite positive graph_radius")
+    if "splits" in data:
+        splits = {
+            key: [Path(p) for p in data["splits"].get(key, [])]
+            for key in ("train", "val", "test")
+        }
+    else:
+        root = Path(data["root"])
+        paths = sorted(
+            {p.parent for p in root.rglob("HS.out")}
+            | {
+                p.parent
+                for p in root.rglob("info.json")
+                if graph_source == "radius"
+                or (
+                    p.parent
+                    / data.get(
+                        "support_file",
+                        data.get("matrix_files", {}).get(
+                            "hamiltonian", "hamiltonians.h5"
+                        ),
+                    )
+                ).is_file()
+            }
+        )
+        if not paths:
+            raise ValueError(f"No operator snapshots under {root}")
+        order = np.random.RandomState(
+            training.get("data_split_seed", training.get("seed", 42))
+        ).permutation(len(paths))
+        settings = training.get("split", {})
+        ntrain = settings.get(
+            "train_size", int(settings.get("train_ratio", 0.67) * len(paths))
+        )
+        nval = settings.get(
+            "val_size", int(settings.get("val_ratio", 0.33) * len(paths))
+        )
+        ntest = settings.get(
+            "test_size", int(settings.get("test_ratio", 0.0) * len(paths))
+        )
+        if min(ntrain, nval, ntest) < 0 or ntrain + nval + ntest > len(paths):
+            raise ValueError("Requested split sizes exceed available snapshots")
+        splits = {
+            "train": [paths[i] for i in order[:ntrain]],
+            "val": [paths[i] for i in order[ntrain : ntrain + nval]],
+            "test": [paths[i] for i in order[ntrain + nval : ntrain + nval + ntest]],
+        }
+    flat = [p.resolve() for values in splits.values() for p in values]
+    if len(flat) != len(set(flat)):
+        raise ValueError("Dataset splits overlap or contain duplicate snapshots")
+    if not splits["train"] or not splits["val"]:
+        raise ValueError("Both training and validation splits must be nonempty")
+    return splits
+
+
+def input_manifest(splits):
+    result = {}
+    for split, paths in splits.items():
+        result[split] = []
+        for path in paths:
+            hashes = {}
+            for source in sorted(path.iterdir()):
+                if (
+                    source.suffix not in {".dat", ".json", ".h5", ".out", ".cif"}
+                    or not source.is_file()
+                ):
+                    continue
+                digest = hashlib.sha256()
+                with source.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024**2), b""):
+                        digest.update(chunk)
+                hashes[source.name] = digest.hexdigest()
+            result[split].append({"path": str(path.resolve()), "sha256": hashes})
+    return result

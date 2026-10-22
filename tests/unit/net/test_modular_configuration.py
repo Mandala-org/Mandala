@@ -11,7 +11,6 @@ from net.common import Config
 from net.configuration import resolve_configuration
 from net.e3gnn import E3GNN
 
-
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -51,7 +50,7 @@ def test_old_slotted_config_checkpoint_receives_new_optional_defaults():
     assert not hasattr(restored, "pipeline")
     mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": ["1x0e"]}))
     E3GNN(mapper, restored)
-    assert restored.pipeline is None
+    assert restored.pipeline["stages"]
     assert restored.objective is None
     assert restored.optimization is None
 
@@ -59,13 +58,43 @@ def test_old_slotted_config_checkpoint_receives_new_optional_defaults():
 @pytest.mark.parametrize(
     "override",
     [
-        {"train_on_energy": True},
-        {"train_on_forces": True},
+        {"train_on_energy": True, "loss_coef_observables": 1.0},
+        {"train_on_forces": True, "enable_forces": True, "loss_coef_forces": 1.0},
         {"spectral_loss_enabled": True},
         {"freeze_backbone_train_heads_only": True},
     ],
 )
-def test_modular_constructor_rejects_ignored_legacy_scientific_flags(override):
+def test_explicit_graph_uses_common_scientific_configuration(override):
+    from net.component_defaults import default_graph
+
     mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": ["1x0e"]}))
-    with pytest.raises(ValueError, match="legacy Config overrides"):
-        E3GNN(mapper, Config(pipeline={}, **override))
+    cfg = Config(
+        hidden_irreps="2x0e",
+        l_max=0,
+        n_radial=2,
+        num_layers_gnn=0,
+        neck_depth=1,
+        head_e3mlp_layers=1,
+        verbosity=0,
+        **override,
+    )
+    cfg.pipeline = default_graph(cfg, 1)
+    model = E3GNN(mapper, cfg)
+    assert all(getattr(model.cfg, name) == value for name, value in override.items())
+    if cfg.freeze_backbone_train_heads_only:
+        assert not any(
+            parameter.requires_grad for parameter in model.node_enc.parameters()
+        )
+        assert any(
+            parameter.requires_grad
+            for parameter in model.heads["hamiltonian"].parameters()
+        )
+
+
+def test_orbital_block_configuration_does_not_require_native_shell_codec():
+    resolved, codec = Config.resolve(
+        Config().to_mapping(), species_shells={"X": [0, 4]}, spinful=False
+    )
+    assert resolved["species"]["shells"] == {"X": [0, 4]}
+    assert codec is None
+    assert resolved["pipeline"] is None

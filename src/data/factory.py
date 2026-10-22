@@ -17,6 +17,8 @@ Typical usage
 
 from __future__ import annotations
 
+import torch
+
 import os
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple, Literal, Optional
@@ -43,10 +45,24 @@ class DatasetFactory:
     def __init__(
         self,
         cfg: Config,
-        convention: str = "e3nn",
+        convention: str | None = None,
+        preprocessing=None,
     ):
         self.cfg = cfg
-        self.convention = convention
+        representation = cfg.data.get("representation", "orbital_blocks")
+        if representation not in {"orbital_blocks", "packed_shells"}:
+            raise ValueError(
+                "data.representation must be orbital_blocks or packed_shells"
+            )
+        self.convention = convention or cfg.data.get(
+            "basis", "openmx" if representation == "packed_shells" else "e3nn"
+        )
+        cfg.data = dict(cfg.data, basis=self.convention)
+        if preprocessing is None and representation == "packed_shells":
+            from data.preprocessing import PackedOperatorPreprocessing
+
+            preprocessing = PackedOperatorPreprocessing(cfg.to_mapping())
+        self.preprocessing = preprocessing
 
         # paths grouped by purpose --------------------------------------
         self._pairs: Dict[Purpose, List[Tuple[Path, Path]]] = {
@@ -82,8 +98,14 @@ class DatasetFactory:
     # ------------------------------------------------------------------ helpers
     def _load_info(self, matrix_path: Path, path: Path) -> InfoOutData:
         if is_deeph_e3_snapshot(matrix_path, path):
-            meta = load_deeph_e3_metadata(path.parent, dtype=self.cfg.dtype)
-            return SimpleNamespace(orbital_set=meta.orbital_set)
+            meta = load_deeph_e3_metadata(
+                path.parent,
+                dtype=self.cfg.dtype,
+                matrix_files=self.cfg.data.get("matrix_files"),
+            )
+            return SimpleNamespace(
+                orbital_set=meta.orbital_set, is_spinful=meta.is_spinful
+            )
         if path.suffix == ".json":
             meta = load_pyscf_metadata(path)
             return SimpleNamespace(orbital_set=meta.orbital_set)
@@ -105,13 +127,39 @@ class DatasetFactory:
         """
         # ①  Merge all orbital configs ---------------------------------
         info_all = []
-        for matrix_path, info_p in (
-            self._pairs["train"] + self._pairs["val"] + self._pairs["test"]
-        ):
+        for matrix_path, info_p in self._pairs["train"]:
             info_all.append(self._load_info(matrix_path, info_p))
+        if not info_all:
+            raise ValueError("A dataset factory requires training metadata")
 
-        # OrbitalIrrepConfig utility: union of all elements / orbitals
-        orb_cfg = OrbitalIrrepConfig.from_info_list(info_all)  # type: ignore[attr-defined]
+        declared = self.cfg.species.get("shells")
+        orb_cfg = (
+            OrbitalIrrepConfig.from_dict(
+                {
+                    species: [
+                        f"1x{ell}{'e' if ell % 2 == 0 else 'o'}" for ell in shells
+                    ]
+                    for species, shells in declared.items()
+                }
+            )
+            if declared
+            else OrbitalIrrepConfig.from_info_list(info_all)
+        )
+        spinful = bool(getattr(info_all[0], "is_spinful", False))
+        for split, pairs in self._pairs.items():
+            for matrix_path, info_path in pairs:
+                metadata = self._load_info(matrix_path, info_path)
+                if bool(getattr(metadata, "is_spinful", False)) != spinful:
+                    raise ValueError(f"{split} spin layout differs from training")
+                vocabulary = OrbitalIrrepConfig.from_info_list([metadata])
+                for species, irreps in vocabulary.element_to_irreps.items():
+                    if (
+                        species not in orb_cfg.element_to_irreps
+                        or orb_cfg.element_to_irreps[species] != irreps
+                    ):
+                        raise ValueError(
+                            f"{split} orbital vocabulary differs from declared/training vocabulary for {species}"
+                        )
 
         # ②  Global mapper ---------------------------------------------
         mapper = BlockIrrepMapper(
@@ -121,18 +169,39 @@ class DatasetFactory:
             dtype=self.cfg.dtype,
         )
 
-        # ④  Build datasets --------------------------------------------
-        train_ds = E3GNNDataset(self._pairs["train"], mapper, self.cfg, self.convention)
-        val_ds = (
-            E3GNNDataset(self._pairs["val"], mapper, self.cfg, self.convention)
-            if self._pairs["val"]
-            else None
-        )
-        test_ds = (
-            E3GNNDataset(self._pairs["test"], mapper, self.cfg, self.convention)
-            if self._pairs["test"]
-            else None
-        )
+        # Resolve one common configuration against declared/training metadata.
+        shells = {
+            species: tuple(ir.l for mul, ir in irreps for _ in range(mul))
+            for species, irreps in mapper.orbital_cfg.element_to_irreps.items()
+        }
+        with torch.random.fork_rng(devices=[]):
+            self.configuration, self.operator_layout = Config.resolve(
+                self.cfg.to_mapping(), species_shells=shells, spinful=spinful
+            )
+        resolved = Config.from_mapping(self.configuration)
+        for name in Config.__dataclass_fields__:
+            setattr(self.cfg, name, getattr(resolved, name))
+        if self.preprocessing is not None:
+            self.preprocessing.prepare(
+                mapper,
+                info_all,
+                configuration=self.configuration,
+                layout=self.operator_layout,
+            )
+
+        def build(split):
+            return E3GNNDataset(
+                self._pairs[split],
+                mapper,
+                self.cfg,
+                self.convention,
+                preprocessing=self.preprocessing,
+                split=split,
+            )
+
+        train_ds = build("train")
+        val_ds = build("val") if self._pairs["val"] else None
+        test_ds = build("test") if self._pairs["test"] else None
 
         # Print dataset summaries if verbosity >= 1
         print_dataset_summary(

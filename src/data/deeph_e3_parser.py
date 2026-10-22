@@ -70,10 +70,14 @@ def is_deeph_e3_snapshot(matrix_path: str | Path, info_path: str | Path) -> bool
     matrix_path = Path(matrix_path)
     info_path = Path(info_path)
     return (
-        matrix_path.name == "hamiltonians.h5"
+        matrix_path.suffix == ".h5"
         and info_path.name == "info.json"
         and matrix_path.parent == info_path.parent
-        and all((matrix_path.parent / name).is_file() for name in REQUIRED_FILES)
+        and all(
+            (matrix_path.parent / name).is_file()
+            for name in REQUIRED_FILES
+            if name != "hamiltonians.h5"
+        )
     )
 
 
@@ -122,26 +126,32 @@ def _orbital_set_from_atoms(
 
     result: dict[str, list[str]] = {}
     for atom, ordered_ls in by_element.items():
-        counts = Counter(ordered_ls)
-        # Mandala's block basis groups orbital copies by l. Reject unusual
-        # interleaving instead of silently changing the raw block order.
-        grouped = tuple(l for l in sorted(counts) for _ in range(counts[l]))
-        if ordered_ls != grouped:
-            raise DeepHE3ParseError(
-                f"Element {atom} has non-grouped orbital order {ordered_ls}; "
-                f"Mandala requires {grouped}."
-            )
+        from itertools import groupby
+
         result[atom] = [
-            f"{counts[l]}x{l}{'e' if l % 2 == 0 else 'o'}" for l in sorted(counts)
+            f"{len(list(group))}x{ell}{'e' if ell % 2 == 0 else 'o'}"
+            for ell, group in groupby(ordered_ls)
         ]
     return result
 
 
 def load_deeph_e3_metadata(
-    snapshot_dir: str | Path, *, dtype: torch.dtype = torch.float32
+    snapshot_dir: str | Path,
+    *,
+    dtype: torch.dtype = torch.float32,
+    require_matrices: bool = True,
+    matrix_files: dict | None = None,
 ) -> DeepHE3Metadata:
     snapshot_dir = Path(snapshot_dir).expanduser().resolve()
-    missing = [name for name in REQUIRED_FILES if not (snapshot_dir / name).is_file()]
+    filenames = {
+        "hamiltonian": "hamiltonians.h5",
+        "overlap": "overlaps.h5",
+        "density": "density_matrixs.h5",
+    } | (matrix_files or {})
+    required = [name for name in REQUIRED_FILES if name != "hamiltonians.h5"]
+    if require_matrices:
+        required.append(filenames["hamiltonian"])
+    missing = [name for name in required if not (snapshot_dir / name).is_file()]
     if missing:
         raise FileNotFoundError(
             f"DeepH-E3 snapshot {snapshot_dir} is missing required files: {missing}"
@@ -183,22 +193,17 @@ def load_deeph_e3_metadata(
     with (snapshot_dir / "info.json").open() as handle:
         info_payload = json.load(handle)
     is_spinful = bool(info_payload.get("isspinful", False))
-    if is_spinful:
-        raise DeepHE3ParseError(
-            "Spinful/SOC DeepH-E3 snapshots are not supported by Mandala's current "
-            "real-valued orbital-block model."
-        )
     fermi_ev = info_payload.get("fermi_level")
     fermi_level = (
         None
         if fermi_ev is None
         else torch.tensor(float(fermi_ev) / HARTREE_TO_EV, dtype=dtype)
     )
-    available = {"hamiltonian"}
-    if (snapshot_dir / "overlaps.h5").is_file():
-        available.add("overlap")
-    if (snapshot_dir / "density_matrixs.h5").is_file():
-        available.add("density")
+    available = {
+        operator
+        for operator, filename in filenames.items()
+        if (snapshot_dir / filename).is_file()
+    }
 
     return DeepHE3Metadata(
         snapshot_dir=snapshot_dir,
@@ -233,6 +238,28 @@ def _parse_hdf5_key(raw_key: str, *, num_atoms: int) -> tuple[int, int, int, int
     return sx, sy, sz, src_one - 1, dst_one - 1
 
 
+def read_periodic_blocks(path, *, num_atoms, dtype=torch.float32):
+    """Read directed periodic HDF5 tensors, preserving file iteration order.
+
+    This low-level interchange reader also handles geometric tensors such as
+    bond frames. Physical matrix shape, units and Hermiticity are caller policies.
+    """
+    entries = {}
+    with h5py.File(path, "r") as handle:
+        for raw_key, dataset in handle.items():
+            key = _parse_hdf5_key(raw_key, num_atoms=num_atoms)
+            if key in entries:
+                raise DeepHE3ParseError(f"Duplicate edge {key} in {path}")
+            array = np.asarray(dataset)
+            tensor_dtype = (
+                (torch.complex128 if dtype == torch.float64 else torch.complex64)
+                if np.iscomplexobj(array)
+                else dtype
+            )
+            entries[key] = torch.tensor(array, dtype=tensor_dtype)
+    return entries
+
+
 def load_deeph_e3_block_matrix(
     path: str | Path,
     metadata: DeepHE3Metadata,
@@ -240,51 +267,45 @@ def load_deeph_e3_block_matrix(
     matrix_name: str,
     dtype: torch.dtype = torch.float32,
     validate_hermitian: bool = True,
+    validate_support: bool = True,
+    energy_unit: str = "Hartree",
 ) -> BlockMatrix:
     path = Path(path)
     orbital_cfg = OrbitalIrrepConfig.from_dict(metadata.orbital_set)
-    entries: dict[tuple[int, int, int, int, int], torch.Tensor] = {}
-    with h5py.File(path, "r") as handle:
-        for raw_key, dataset in handle.items():
-            edge = _parse_hdf5_key(raw_key, num_atoms=len(metadata.atoms))
-            if edge in entries:
-                raise DeepHE3ParseError(f"Duplicate edge {edge} in {path}")
-            sx, sy, sz, src, dst = edge
-            pair_key = f"{metadata.atoms[src]}-{metadata.atoms[dst]}"
-            expected_shape = orbital_cfg.block_dims(pair_key)
-            array = np.asarray(dataset)
-            if np.iscomplexobj(array):
-                raise DeepHE3ParseError(
-                    f"Complex block {raw_key} in {path}; spinful matrices are unsupported."
-                )
-            if array.shape != expected_shape:
-                raise DeepHE3ParseError(
-                    f"Block {raw_key} in {path} has shape {array.shape}, expected "
-                    f"{expected_shape} for {pair_key}. This usually indicates wrong "
-                    "atom indexing or orbital order."
-                )
-            block = torch.tensor(array, dtype=dtype)
-            if matrix_name == "hamiltonian":
-                block = block / HARTREE_TO_EV
-            entries[edge] = block
+    if energy_unit not in {"Hartree", "eV"}:
+        raise ValueError("energy_unit must be Hartree or eV")
+    entries = read_periodic_blocks(path, num_atoms=len(metadata.atoms), dtype=dtype)
+    for edge, block in entries.items():
+        pair = f"{metadata.atoms[edge[3]]}-{metadata.atoms[edge[4]]}"
+        expected = tuple(
+            d * (2 if metadata.is_spinful else 1) for d in orbital_cfg.block_dims(pair)
+        )
+        if tuple(block.shape) != expected:
+            raise DeepHE3ParseError(
+                f"Block {edge} in {path} has shape {tuple(block.shape)}, expected {expected} for {pair}"
+            )
+        if matrix_name == "hamiltonian" and energy_unit == "Hartree":
+            entries[edge] = block / HARTREE_TO_EV
 
     if not entries:
         raise DeepHE3ParseError(f"No matrix blocks found in {path}")
-    for atom_idx in range(len(metadata.atoms)):
+    for atom_idx in range(len(metadata.atoms)) if validate_support else ():
         edge = (0, 0, 0, atom_idx, atom_idx)
         if edge not in entries:
             raise DeepHE3ParseError(f"Missing zero-shift self block {edge} in {path}")
     for edge, block in entries.items():
         sx, sy, sz, src, dst = edge
         reverse = (-sx, -sy, -sz, dst, src)
-        if reverse not in entries:
+        if reverse not in entries and validate_support:
             raise DeepHE3ParseError(
                 f"Edge {edge} in {path} has no reciprocal {reverse}"
             )
-        if validate_hermitian and not torch.allclose(
-            block, entries[reverse].T, rtol=1.0e-5, atol=1.0e-8
+        if (
+            validate_hermitian
+            and reverse in entries
+            and not torch.allclose(block, entries[reverse].mH, rtol=1.0e-5, atol=1.0e-8)
         ):
-            error = float(torch.max(torch.abs(block - entries[reverse].T)).item())
+            error = float(torch.max(torch.abs(block - entries[reverse].mH)).item())
             raise DeepHE3ParseError(
                 f"Reciprocal blocks {edge} and {reverse} are not transposes in {path}; "
                 f"max_abs_error={error:.6e}"

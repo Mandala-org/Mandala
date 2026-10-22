@@ -26,6 +26,39 @@ from net.activations import make_nonlinearity
 from net.layer_norm import E3LayerNorm
 
 
+def projected_attention_reduce(
+    node,
+    edge_messages,
+    edge_length_emb,
+    dst,
+    query_proj,
+    key_proj,
+    value_projs,
+    num_heads,
+    head_dim,
+):
+    """Shared invariant projected multihead attention reduction."""
+    query = query_proj(node).reshape(node.shape[0], num_heads, head_dim)
+    key_input = torch.cat([edge_length_emb, edge_messages], dim=-1)
+    key = key_proj(key_input).reshape(edge_messages.shape[0], num_heads, head_dim)
+    values = torch.stack([proj(edge_messages) for proj in value_projs], dim=1)
+    scores = (query[dst] * key).sum(dim=-1) / float(head_dim) ** 0.5
+    max_per_dst = scatter(scores, dst, dim=0, dim_size=node.size(0), reduce="max")
+    scores = scores - max_per_dst.index_select(0, dst)
+    exp_scores = torch.exp(scores)
+    denom = scatter(exp_scores, dst, dim=0, dim_size=node.size(0), reduce="sum")
+    weights = exp_scores / denom.index_select(0, dst).clamp_min(1e-12)
+    weighted_values = values * weights.unsqueeze(-1)
+    head_outputs = scatter(
+        weighted_values,
+        dst,
+        dim=0,
+        dim_size=node.size(0),
+        reduce="sum",
+    )
+    return head_outputs.mean(dim=1)
+
+
 def _assert_irreps_equal(a: Irreps, b: Irreps, *, what: str) -> None:
     if Irreps(a).simplify() != Irreps(b).simplify():
         raise AssertionError(f"{what} requires matching irreps, got {a} vs {b}")
@@ -766,35 +799,17 @@ class NodeUpdateBlock(nn.Module):
                 edge_messages, dst, dim=0, dim_size=node_old.size(0), reduce="mean"
             )
         else:
-            query = self.query_proj(node).reshape(
-                node.shape[0], self.attn_num_heads, self.attn_head_dim
-            )
-            key_input = torch.cat([edge_length_emb, edge_messages], dim=-1)
-            key = self.key_proj(key_input).reshape(
-                edge.shape[0], self.attn_num_heads, self.attn_head_dim
-            )
-            values = torch.stack(
-                [proj(edge_messages) for proj in self.value_projs], dim=1
-            )
-            scores = (query[dst] * key).sum(dim=-1) / float(self.attn_head_dim) ** 0.5
-            max_per_dst = scatter(
-                scores, dst, dim=0, dim_size=node_old.size(0), reduce="max"
-            )
-            scores = scores - max_per_dst.index_select(0, dst)
-            exp_scores = torch.exp(scores)
-            denom = scatter(
-                exp_scores, dst, dim=0, dim_size=node_old.size(0), reduce="sum"
-            )
-            weights = exp_scores / denom.index_select(0, dst).clamp_min(1e-12)
-            weighted_values = values * weights.unsqueeze(-1)
-            head_outputs = scatter(
-                weighted_values,
+            node = projected_attention_reduce(
+                node,
+                edge_messages,
+                edge_length_emb,
                 dst,
-                dim=0,
-                dim_size=node_old.size(0),
-                reduce="sum",
+                self.query_proj,
+                self.key_proj,
+                self.value_projs,
+                self.attn_num_heads,
+                self.attn_head_dim,
             )
-            node = head_outputs.mean(dim=1)
 
         # Post-linear
         node = self.lin_post(node)

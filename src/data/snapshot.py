@@ -304,16 +304,12 @@ class Snapshot:
         Return a new snapshot with selected matrices symmetrized by 0.5 * (M + M^T).
         """
         ham = (
-            0.5 * (self.hamiltonian + self.hamiltonian.transpose())
+            0.5 * (self.hamiltonian + self.hamiltonian.adjoint())
             if hamiltonian
             else self.hamiltonian
         )
-        ovl = (
-            0.5 * (self.overlap + self.overlap.transpose()) if overlap else self.overlap
-        )
-        den = (
-            0.5 * (self.density + self.density.transpose()) if density else self.density
-        )
+        ovl = 0.5 * (self.overlap + self.overlap.adjoint()) if overlap else self.overlap
+        den = 0.5 * (self.density + self.density.adjoint()) if density else self.density
         return Snapshot(
             ham,
             ovl,
@@ -1007,6 +1003,10 @@ class Snapshot:
         cutoff_radius: float | None = None,
         dtype: torch.dtype = torch.float32,
         cfg: Config | None = None,
+        validate_hermitian: bool = True,
+        validate_support: bool = True,
+        canonicalize: bool = True,
+        matrix_files: dict | None = None,
     ) -> "Snapshot":
         """Load one snapshot in DeepH-E3's processed OpenMX HDF5 format."""
         from data.deeph_e3_parser import (
@@ -1016,12 +1016,21 @@ class Snapshot:
         )
 
         snapshot_dir = Path(snapshot_dir).expanduser().resolve()
-        metadata = load_deeph_e3_metadata(snapshot_dir, dtype=dtype)
+        filenames = {
+            "hamiltonian": "hamiltonians.h5",
+            "overlap": "overlaps.h5",
+            "density": "density_matrixs.h5",
+        } | (matrix_files or {})
+        metadata = load_deeph_e3_metadata(
+            snapshot_dir, dtype=dtype, matrix_files=filenames
+        )
         hamiltonian = load_deeph_e3_block_matrix(
-            snapshot_dir / "hamiltonians.h5",
+            snapshot_dir / filenames["hamiltonian"],
             metadata,
             matrix_name="hamiltonian",
             dtype=dtype,
+            validate_hermitian=validate_hermitian,
+            validate_support=validate_support,
         )
 
         def load_optional(filename: str, matrix_name: str) -> BlockMatrix:
@@ -1033,8 +1042,10 @@ class Snapshot:
                 metadata,
                 matrix_name=matrix_name,
                 dtype=dtype,
+                validate_hermitian=validate_hermitian,
+                validate_support=validate_support,
             )
-            if matrix.lookup.keys() != hamiltonian.lookup.keys():
+            if validate_support and matrix.lookup.keys() != hamiltonian.lookup.keys():
                 missing = sorted(set(hamiltonian.lookup) - set(matrix.lookup))[:5]
                 extra = sorted(set(matrix.lookup) - set(hamiltonian.lookup))[:5]
                 raise ValueError(
@@ -1043,18 +1054,18 @@ class Snapshot:
                 )
             return matrix
 
-        overlap = load_optional("overlaps.h5", "overlap")
-        density = load_optional("density_matrixs.h5", "density")
+        overlap = load_optional(filenames["overlap"], "overlap")
+        density = load_optional(filenames["density"], "density")
         if "density" in metadata.available_matrices and symmetrize_density:
             # Match the text loader: average without changing occupations.
-            density = 0.5 * (density + density.transpose())
+            density = 0.5 * (density + density.adjoint())
         snapshot = Snapshot(
             hamiltonian,
             overlap,
             density,
             positions=metadata.positions,
             box=metadata.box,
-            matrix_path=snapshot_dir / "hamiltonians.h5",
+            matrix_path=snapshot_dir / filenames["hamiltonian"],
             info_path=snapshot_dir / "info.json",
             cfg=cfg,
             info=metadata.as_snapshot_info(),
@@ -1062,7 +1073,7 @@ class Snapshot:
         if cutoff_radius is not None:
             snapshot = snapshot.filter_by_distance(cutoff_radius)
         snapshot = snapshot._change_basis(convention)
-        return snapshot.canonicalize_edges()
+        return snapshot.canonicalize_edges() if canonicalize else snapshot
 
     @staticmethod
     def from_openmx(

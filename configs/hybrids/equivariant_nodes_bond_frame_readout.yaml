@@ -1,3 +1,10 @@
+species:
+  ordering: atomic_number
+symmetrize_hamiltonian_targets: false
+symmetrize_overlap_targets: false
+symmetrize_density_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
 # Global equivariant node features explicitly rotated before a local readout.
 schema_version: 1
 codec:
@@ -6,6 +13,12 @@ parameters:
   width: 4
   radial_width: 8
 data:
+  representation: packed_shells
+  basis: openmx
+  geometry_dtype: float64
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
   target_frame: bond
   local_coordinates: true
 objective:
@@ -93,6 +106,7 @@ pipeline:
     options:
       out_features: ${layout.packed_dim}
   - id: local_readout
+    role: readout
     transform: local_orbital_output
     inputs:
     - local_entries

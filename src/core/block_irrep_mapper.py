@@ -74,7 +74,9 @@ class _IrrepToMatrix:
         """
         Map ``(..., d_i, d_j)`` blocks -> ``(..., n_vec)`` irrep vectors.
         """
-        if blocks.dtype != q.dtype:
+        if blocks.is_complex():
+            q = q.to(blocks)
+        elif blocks.dtype != q.dtype:
             blocks = blocks.to(dtype=q.dtype)
         flat = blocks.flatten(-2)  # (..., d_i*d_j)
         return flat @ q.T
@@ -83,7 +85,9 @@ class _IrrepToMatrix:
         """
         Inverse of :meth:`blocks_to_vectors`.
         """
-        if vectors.dtype != q.dtype:
+        if vectors.is_complex():
+            q = q.to(vectors)
+        elif vectors.dtype != q.dtype:
             vectors = vectors.to(dtype=q.dtype)
         flat = vectors @ q  # (..., d_i*d_j)
         return flat.view(*vectors.shape[:-1], self.dim_i, self.dim_j)
@@ -163,6 +167,8 @@ class BlockIrrepMapper(nn.Module):
         self,
         pair: Tuple[str, str] | str,
         blocks: torch.Tensor,
+        *,
+        layout=None,
     ) -> torch.Tensor:
         """
         Convert matrix blocks **for a given atom pair** to irrep vectors.
@@ -170,6 +176,8 @@ class BlockIrrepMapper(nn.Module):
         ``pair`` can be ``("Si","H")`` or `"Si-H"` (string with hyphen).
         """
         key = self._canonical_pair(pair)
+        if layout is not None:
+            return layout.encode(layout.pack_blocks(key, blocks))
         itm = self._maps[key]
         q = self._get_q(key)
         return itm.blocks_to_vectors(blocks, q)
@@ -178,14 +186,27 @@ class BlockIrrepMapper(nn.Module):
         self,
         pair: Tuple[str, str] | str,
         vectors: torch.Tensor,
+        *,
+        layout=None,
     ) -> torch.Tensor:
         """
         Inverse mapping vector -> block.
         """
         key = self._canonical_pair(pair)
+        if layout is not None:
+            return layout.unpack_blocks(key, layout.decode(vectors))
         itm = self._maps[key]
         q = self._get_q(key)
         return itm.vectors_to_blocks(vectors, q)
+
+    def resolve_layout(self, signature):
+        """Resolve an explicit shell/spin convention through the common mapper."""
+        from core.operator_layout import ShellTensorCodec
+
+        buffer = next(self.buffers())
+        return ShellTensorCodec.from_signature(
+            signature, device=buffer.device, dtype=buffer.dtype
+        )
 
     # ------------------------- meta-info ------------------------------------ #
     def vector_dim(self, pair: Tuple[str, str] | str) -> int:

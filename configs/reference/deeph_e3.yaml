@@ -1,3 +1,12 @@
+species:
+  ordering: atomic_number
+symmetrize_hamiltonian_targets: false
+symmetrize_overlap_targets: false
+symmetrize_density_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
+revert_on_spike: false
+checkpoint_monitor: val/loss
 # Official DeepH-E3 default training architecture assembled from common stages.
 # No architecture class or architecture-name dispatch is used.
 schema_version: 1
@@ -27,6 +36,12 @@ layout_rules:
     angular: ${parameters.angular_irreps}
     output: ${layout.post_irreps}
 data:
+  representation: packed_shells
+  basis: openmx
+  geometry_dtype: float64
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
   support_file: hamiltonians.h5
   target_frame: global
   local_coordinates: false
@@ -95,16 +110,19 @@ pipeline:
       outputs: [edge_3]
       options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${layout.post_irreps}', use_selftp: '${parameters.terminal_self_product}'}
     - id: node_readout
+      role: readout
       transform: irrep_linear
       inputs: [node_3]
       outputs: [node_auxiliary]
       options: {irreps_out: 1x0e, biases: true}
     - id: edge_readout
+      role: readout
       transform: irrep_linear
       inputs: [edge_3]
       outputs: [coupled]
       options: {irreps_out: '${layout.coupled_irreps}', biases: true}
     - id: native_decode
+      role: readout
       transform: shell_tensor_decode
       inputs: [coupled]
       outputs: [hamiltonian_native]

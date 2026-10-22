@@ -1,0 +1,104 @@
+# A tensor-product message map followed by independently selected attention.
+schema_version: 1
+species: {ordering: atomic_number}
+symmetrize_hamiltonian_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
+revert_on_spike: false
+checkpoint_monitor: val/loss
+data:
+  representation: packed_shells
+  basis: openmx
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
+  supports:
+    message: {kind: subset, source: output, exclude_self: true, cutoff: 7.2}
+training: {seed: 42, dtype: float32, batch_size: 1, max_epochs: 3000, grad_clip_val: 4.2, grad_clip_algorithm: norm}
+objective: {kind: mse, epoch_weight: elements}
+optimization:
+  optimizer: {kind: adam, lr: 0.002}
+pipeline:
+  inputs:
+    message_batch: {domain: edge, representation: index, frame: none, support: message}
+  stages:
+    - id: message_geometry
+      transform: periodic_displacement
+      inputs: [positions, box, message_edge_index, message_shift, node_batch]
+      outputs: [message_vectors_live]
+    - id: message_lengths
+      transform: vector_lengths
+      inputs: [message_vectors_live]
+      outputs: [message_lengths_live]
+    - id: output_geometry
+      transform: periodic_displacement
+      inputs: [positions, box, edge_index, edge_shift, node_batch]
+      outputs: [output_vectors_live]
+    - id: output_lengths
+      transform: vector_lengths
+      inputs: [output_vectors_live]
+      outputs: [output_lengths_live]
+    - id: embedding
+      transform: irrep_linear
+      inputs: [node_one_hot]
+      outputs: [node0]
+      options: {irreps_out: 8x0e+4x1o}
+    - id: radial
+      transform: gaussian_basis
+      inputs: [message_lengths_live]
+      outputs: [radial]
+      options: {start: 0.0, stop: 7.2, n_gaussians: 8}
+    - id: angular
+      transform: spherical_harmonics
+      inputs: [message_vectors_live]
+      outputs: [angular]
+      options: {irreps: 0e+1o+2e}
+    - id: gather
+      transform: endpoint_gather
+      inputs: [node0, radial, message_edge_index]
+      outputs: [endpoints]
+    - id: messages
+      transform: radial_tensor_product
+      inputs: [endpoints, angular, radial, message_batch]
+      outputs: [messages]
+      options: {irreps_out: 8x0e+4x1o, radial_hidden: [8, 8]}
+    - id: aggregate
+      transform: projected_attention
+      inputs: [messages, node0, radial, message_edge_index]
+      outputs: [node1]
+      options: {scalar_dim: 8, heads: 2, receiver: 0}
+    - id: activation
+      transform: irrep_activation
+      inputs: [node1]
+      outputs: [activated]
+    - id: residual
+      transform: irrep_residual
+      inputs: [node0, activated]
+      outputs: [nodes]
+    - id: output_angular
+      transform: spherical_harmonics
+      inputs: [output_vectors_live]
+      outputs: [output_angular]
+      options: {irreps: 0e+1o+2e}
+    - id: output_radial
+      transform: gaussian_basis
+      inputs: [output_lengths_live]
+      outputs: [output_radial]
+      options: {start: 0.0, stop: 7.2, n_gaussians: 8}
+    - id: output_encoding
+      transform: endpoint_gather
+      inputs: [nodes, output_radial, edge_index]
+      outputs: [output_endpoints]
+    - id: output_tensor_product
+      role: readout
+      transform: radial_tensor_product
+      inputs: [output_endpoints, output_angular, output_radial, edge_batch]
+      outputs: [coupled]
+      options: {irreps_out: '${layout.coupled_irreps}', nonlin: false, radial_hidden: [8]}
+    - id: decode
+      role: readout
+      transform: shell_tensor_decode
+      inputs: [coupled]
+      outputs: [matrix]
+      options: {shell_pairs: '${layout.shell_pairs}', spinful: '${layout.spinful}'}
+  outputs: {hamiltonian: matrix}

@@ -25,17 +25,14 @@ paper recipe's sorted discovery and Python `random.Random(42)` shuffle, selects
 no test split or test evaluation in these paper-training reproductions.
 All four runs use those exact lists, rather than independently shuffling them.
 
-OpenMX inputs are converted once into native operator HDF5/text files under
-`/bigdata/casus/wdm/hamiltonian_learning/data/DeepH-E3/SiOx_models_v1`.
-Hamiltonians are converted from Hartree to eV, overlaps and both directed
-blocks are retained, and the existing exporter verifies numerical round trips.
-No target symmetrization is added during conversion. MANDALA's paper run
-continues using the original OpenMX loader, its original geometry graph and
-target symmetrization policy. Preparation can be rerun: verified conversions
-are reused; changed inputs or unverified existing directories cause an error.
+Preparation only freezes the source file lists and hashes. All four runs read
+the original OpenMX pairs through `DatasetFactory`; no HDF5 conversion or CPU
+preparation allocation is required. Optional format export remains a separate
+shared data utility. Each preset explicitly declares its graph support,
+representation, basis, target symmetrization and scientific policies.
 
 Small selection/provenance files, resolved run configurations, runtime contracts,
-segment summaries and modular CSV logs go under
+segment summaries and shared CSV logs go under
 `researchops/runs/siox_models_v1` in this checkout. Preserve that directory
 between submissions. Large checkpoints go under
 `/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/siox_models_v1`,
@@ -60,7 +57,7 @@ and scheduler defaults remain intact.
 | `deeph.sh` | `configs/reference/deeph.yaml` | 0.001 | 4000 | 3 |
 | `deeph_e3.sh` | `configs/reference/deeph_e3.yaml` | 0.002 | 3000 | 1 |
 | `mace_h.sh` | `configs/reference/mace_h.yaml` | 0.002 | 3000 | 1 |
-| `mandala_paper.sh` | `mandala_paper.json` in this directory | 0.0027 | 4000 | 1 |
+| `mandala_paper.sh` | `configs/reference/mandala_paper.yaml` | 0.0027 | 4000 | 1 |
 
 MANDALA retains the paper's two attention layers, hidden irreps, 10 Å cutoff,
 128 radial functions, frozen radial envelope, MAE objective, LR scheduler and
@@ -68,7 +65,7 @@ spike-recovery settings. The initial LR comes from the selected sweep recipe;
 weights and optimizer state start fresh. DeepH uses local-coordinate targets;
 DeepH-E3 and MACE-H use global equivariant targets. MACE-H fits output statistics
 on **training snapshots only**, retaining its configurable identity-gradient
-scaling. The models' native training losses, target policies and graph supports
+scaling. The models' configured training losses, target policies and graph supports
 differ, so their logged loss values are not directly comparable accuracy metrics.
 
 Submit each launcher independently using a single GPU and 48-hour allocation
@@ -93,11 +90,11 @@ preparing these scripts. Full reference widths are retained.
 ## 3. Continue after a segment
 
 Resubmit the **same** launcher. It automatically finds its own
-`latest_checkpoint.pt`, verifies the frozen data/configuration/code/runtime,
+`latest_checkpoint.pt`, verifies the shared immutable data/configuration/code/runtime manifest,
 and restores the full optimizer, scheduler and RNG state at an epoch boundary.
 An exclusive lock prevents simultaneous writers for a model. It refuses an
 existing run without a safe checkpoint, or a recovery without its original
-contract. For an explicit fresh/continue requirement use the Python CLI's
+manifest. For an explicit fresh/continue requirement use the Python CLI's
 `--action start` or `--action continue`; the zero-argument launchers use `auto`.
 
 Each segment requests a stop at the first completed epoch after 45 hours of
@@ -108,7 +105,7 @@ are automatically resubmitted. An interrupted epoch is replayed from its last
 safe boundary. The epoch limit is cumulative across all submissions. Completed
 runs produce `<model>.complete.json` and subsequent submissions exit harmlessly.
 
-Python CLI options expose alternate input/native/checkpoint/records directories
+Python CLI options expose alternate input/checkpoint/records directories
 and preparation counts for small checks. Changing scientific settings, inputs,
-source code or runtime requires a new run namespace; do not delete contracts to
+source code or runtime requires a new run namespace; do not delete manifests to
 force a continuation. Keep the checkout fixed until these runs finish.

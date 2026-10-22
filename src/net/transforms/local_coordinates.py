@@ -12,6 +12,12 @@ from torch import nn
 from torch.nn import functional as F
 from torch_geometric.nn import LayerNorm, GraphNorm, InstanceNorm, PairNorm
 from e3nn import o3
+from net.transforms.composition import (
+    activation,
+    GaussianEnvelope,
+    IndexedAggregation,
+    ScalarActivation,
+)
 
 
 def _normalization(width, kind):
@@ -49,13 +55,29 @@ class ScalarGatedNodeUpdate(nn.Module):
     """
 
     def __init__(
-        self, node_dim, edge_dim, *, normalization="layer", distance_envelope=True
+        self,
+        node_dim,
+        edge_dim,
+        *,
+        normalization="layer",
+        distance_envelope=True,
+        envelope_sigma=3.0,
+        filter_activation="sigmoid",
+        message_activation="softplus",
+        aggregation="sum",
+        residual=True,
     ):
         super().__init__()
         self.lin_f = nn.Linear(2 * node_dim + edge_dim, node_dim)
         self.lin_s = nn.Linear(2 * node_dim + edge_dim, node_dim)
         self.norm = _normalization(node_dim, normalization)
         self.distance_envelope = distance_envelope
+        self.envelope = GaussianEnvelope(envelope_sigma)
+        self.filter_activation, self.message_activation = activation(
+            filter_activation
+        ), activation(message_activation)
+        self.aggregation = IndexedAggregation(aggregation, receiver=1)
+        self.residual = residual
         # This is part of the original from-scratch initialization schedule.
         self.lin_f.reset_parameters()
         self.lin_s.reset_parameters()
@@ -65,24 +87,36 @@ class ScalarGatedNodeUpdate(nn.Module):
     def forward(self, node, edge_index, edge, batch, distance):
         source, target = edge_index
         z = torch.cat([node[target], node[source], edge], -1)
-        message = self.lin_f(z).sigmoid() * F.softplus(self.lin_s(z))
+        message = self.filter_activation(self.lin_f(z)) * self.message_activation(
+            self.lin_s(z)
+        )
         if self.distance_envelope:
-            message = message * torch.exp(-distance.pow(2) / 18)[:, None]
-        return node + _apply_norm(self.norm, _sum(message, target, len(node)), batch)
+            message = message * self.envelope(distance)
+        update = _apply_norm(
+            self.norm, self.aggregation(message, edge_index, node), batch
+        )
+        return node + update if self.residual else update
 
 
 class EndpointScalarEdgeUpdate(nn.Module):
     def __init__(
-        self, node_dim, edge_dim, out_dim, *, hidden_dim=128, final_activation=True
+        self,
+        node_dim,
+        edge_dim,
+        out_dim,
+        *,
+        hidden_dim=128,
+        final_activation=True,
+        activation_name="silu",
     ):
         super().__init__()
         layers = [
             nn.Linear(2 * node_dim + edge_dim, hidden_dim),
-            nn.SiLU(),
+            ScalarActivation(activation_name),
             nn.Linear(hidden_dim, out_dim),
         ]
         if final_activation:
-            layers.append(nn.SiLU())
+            layers.append(ScalarActivation(activation_name))
         self.e_lin = nn.Sequential(*layers)
 
     def forward(self, node, edge_index, edge):
@@ -104,6 +138,10 @@ class LocalCoordinateMessage(nn.Module):
         hidden_dim=128,
         normalization="none",
         distance_envelope=True,
+        envelope_sigma=3.0,
+        filter_activation="sigmoid",
+        message_activation="softplus",
+        readout_activation="silu",
     ):
         super().__init__()
         self.lin_f = nn.Linear(2 * node_dim + edge_dim + angular_dim, node_dim)
@@ -111,7 +149,7 @@ class LocalCoordinateMessage(nn.Module):
         self.bn = nn.BatchNorm1d(node_dim)
         self.e_lin = nn.Sequential(
             nn.Linear(2 * node_dim + edge_dim, hidden_dim),
-            nn.SiLU(),
+            ScalarActivation(readout_activation),
             nn.Linear(hidden_dim, out_dim),
         )
         if normalization not in {"none", "batch"}:
@@ -120,6 +158,10 @@ class LocalCoordinateMessage(nn.Module):
             )
         self.normalization = normalization
         self.distance_envelope = distance_envelope
+        self.envelope = GaussianEnvelope(envelope_sigma)
+        self.filter_activation, self.message_activation = activation(
+            filter_activation
+        ), activation(message_activation)
         self.lin_f.reset_parameters()
         self.lin_s.reset_parameters()
         if normalization == "batch":
@@ -137,11 +179,11 @@ class LocalCoordinateMessage(nn.Module):
             ],
             -1,
         )
-        messages = self.lin_f(z).sigmoid() * F.softplus(self.lin_s(z))
+        messages = self.filter_activation(self.lin_f(z)) * self.message_activation(
+            self.lin_s(z)
+        )
         if self.distance_envelope:
-            messages = (
-                messages * torch.exp(-distance[sub_edge_idx].square() / 18)[:, None]
-            )
+            messages = messages * self.envelope(distance[sub_edge_idx])
         endpoints = _sum(messages, sub_index, 2 * len(edge))
         if self.normalization == "batch":
             endpoints = self.bn(endpoints)

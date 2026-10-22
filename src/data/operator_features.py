@@ -7,87 +7,40 @@ The native layout also supports complex spin-major SOC blocks.
 
 from __future__ import annotations
 
-import ast
-import json
 from pathlib import Path
 
-import h5py
 import numpy as np
 import torch
-from torch.utils.data import Dataset
-from ase.data import chemical_symbols
 
-from data.bond_geometry import bond_frames, bond_neighborhoods
-from net.operator_codecs import ShellTensorCodec
+from data.bond_geometry import bond_frames
+from core.operator_layout import ShellTensorCodec
 
 
 def read_native_metadata(directory, *, dtype=torch.float32):
-    directory = Path(directory)
-    zs = tuple(np.atleast_1d(np.loadtxt(directory / "element.dat", dtype=int)).tolist())
-    atoms = tuple(chemical_symbols[z] for z in zs)
-    shells = tuple(
-        tuple(map(int, line.split()))
-        for line in (directory / "orbital_types.dat").read_text().splitlines()
-        if line.strip()
-    )
-    if len(shells) != len(atoms):
-        raise ValueError("Orbital metadata must contain exactly one row per atom")
-    species = {}
-    for atom, ls in zip(atoms, shells):
-        if atom in species and species[atom] != ls:
-            raise ValueError(f"Inconsistent orbital layout for species {atom}")
-        species[atom] = ls
-    positions = torch.as_tensor(
-        np.loadtxt(directory / "site_positions.dat").reshape(3, -1).T.copy(),
-        dtype=dtype,
-    )
-    if positions.shape != (len(atoms), 3):
-        raise ValueError("Native positions must be stored as 3 x number-of-atoms")
-    box = torch.as_tensor(np.loadtxt(directory / "lat.dat").T.copy(), dtype=dtype)
-    if box.shape != (3, 3):
-        raise ValueError("Lattice must be a 3x3 matrix with native column vectors")
+    """Read the common Snapshot metadata format without a second parser."""
+    from data.deeph_e3_parser import load_deeph_e3_metadata
+
+    meta = load_deeph_e3_metadata(directory, dtype=dtype, require_matrices=False)
+    species = dict(zip(meta.atoms, meta.orbital_types))
     if (
-        not torch.isfinite(positions).all()
-        or not torch.isfinite(box).all()
-        or torch.linalg.det(box).abs() == 0
+        not torch.isfinite(meta.positions).all()
+        or not torch.isfinite(meta.box).all()
+        or torch.linalg.det(meta.box).abs() == 0
     ):
-        raise ValueError("Native positions and nonsingular lattice must be finite")
-    info = json.loads((directory / "info.json").read_text())
+        raise ValueError("Positions and nonsingular lattice must be finite")
     return {
-        "atoms": atoms,
+        "atoms": meta.atoms,
         "species_shells": species,
-        "positions": positions,
-        "box": box,
-        "spinful": bool(info.get("isspinful", False)),
+        "positions": meta.positions,
+        "box": meta.box,
+        "spinful": meta.is_spinful,
     }
 
 
 def _read_blocks(path, num_atoms, dtype):
-    entries = {}
-    with h5py.File(path) as handle:
-        for raw, value in handle.items():
-            key = ast.literal_eval(raw)
-            if len(key) != 5 or any(
-                not isinstance(v, int) or isinstance(v, bool) for v in key
-            ):
-                raise ValueError(f"Invalid periodic key: {raw}")
-            r1, r2, r3, i, j = key
-            if not (1 <= i <= num_atoms and 1 <= j <= num_atoms):
-                raise ValueError(f"Native atom indices are one-based: {raw}")
-            array = np.asarray(value)
-            tensor = torch.as_tensor(array.copy())
-            tensor = (
-                tensor.to(
-                    torch.complex128 if dtype == torch.float64 else torch.complex64
-                )
-                if tensor.is_complex()
-                else tensor.to(dtype)
-            )
-            canonical = (r1, r2, r3, i - 1, j - 1)
-            if canonical in entries:
-                raise ValueError(f"Duplicate native periodic key: {raw}")
-            entries[canonical] = tensor
-    return entries
+    from data.deeph_e3_parser import read_periodic_blocks
+
+    return read_periodic_blocks(path, num_atoms=num_atoms, dtype=dtype)
 
 
 def load_operator_sample(
@@ -106,9 +59,73 @@ def load_operator_sample(
     graph_source="stored",
     graph_radius=None,
     dtype=torch.float32,
+    supports=None,
+    neighborhood_support="output",
 ):
     directory = Path(directory)
+    if frame_source not in {"stored", "derive"}:
+        raise ValueError("frame_source must be stored or derive")
     meta = read_native_metadata(directory, dtype=dtype)
+    matrix_files = (
+        {"hamiltonian": "hamiltonians.h5"} if matrix_files is None else matrix_files
+    )
+    blocks = {
+        name: _read_blocks(directory / filename, len(meta["atoms"]), dtype)
+        for name, filename in matrix_files.items()
+    }
+    support = (
+        _read_blocks(directory / support_file, len(meta["atoms"]), dtype)
+        if graph_source == "stored"
+        else {}
+    )
+    frame_meta = read_native_metadata(directory, dtype=torch.float64)
+    stored_frames = (
+        _read_blocks(directory / "rc.h5", len(meta["atoms"]), dtype)
+        if frame_source == "stored" and (local_coordinates or target_frame == "bond")
+        else None
+    )
+    return build_operator_sample(
+        meta,
+        blocks,
+        support,
+        codec,
+        species=species,
+        split=split,
+        sample_id=sample_id if sample_id is not None else str(directory.resolve()),
+        local_coordinates=local_coordinates,
+        num_l=num_l,
+        target_frame=target_frame,
+        graph_source=graph_source,
+        graph_radius=graph_radius,
+        dtype=dtype,
+        frame_meta=frame_meta,
+        stored_frames=stored_frames,
+        supports=supports,
+        neighborhood_support=neighborhood_support,
+    )
+
+
+def build_operator_sample(
+    meta,
+    matrices,
+    support,
+    codec,
+    *,
+    species,
+    split="train",
+    sample_id="snapshot",
+    local_coordinates=False,
+    num_l=5,
+    target_frame="global",
+    graph_source="stored",
+    graph_radius=None,
+    dtype=torch.float32,
+    frame_meta=None,
+    stored_frames=None,
+    supports=None,
+    neighborhood_support="output",
+):
+    """Format-independent graph/target preprocessing on already parsed tensors."""
     if meta["spinful"] != codec.spinful:
         raise ValueError("Dataset spin layout and output codec disagree")
     if codec.species_shells is None:
@@ -124,7 +141,7 @@ def load_operator_sample(
     if set(atoms) - set(species):
         raise ValueError("Dataset contains species absent from the frozen vocabulary")
     if graph_source == "stored":
-        entries = _read_blocks(directory / support_file, len(atoms), dtype)
+        entries = support
         # Source builders group HDF5 iteration order by the first atom.
         keys = [key for i in range(len(atoms)) for key in entries if key[3] == i]
     elif graph_source == "radius":
@@ -176,24 +193,44 @@ def load_operator_sample(
         "atoms": atoms,
         "edge_keys": edges,
     }
+    from data.graph_topology import prepare_graph_topology
+
+    # Support policies select relations once, before differentiable geometry.
+    if supports:
+        for key in (
+            "message_edge_index",
+            "message_vectors",
+            "message_lengths",
+            "message_to_output",
+        ):
+            inputs.pop(key, None)
+    prepare_graph_topology(inputs, supports)
     frames = None
     if local_coordinates or target_frame == "bond":
-        if frame_source == "stored":
-            raw_frames = _read_blocks(directory / "rc.h5", len(atoms), dtype)
-            frames = torch.stack([raw_frames[key] for key in keys])
-        elif frame_source == "derive":
+        if stored_frames is not None:
+            frames = torch.stack([stored_frames[key] for key in keys])
+        else:
             # The native preprocessing derives frames in the original text
             # precision before casting them to the network dtype. Preserve
             # that order so float32 rounding cannot introduce distance ties.
-            raw = read_native_metadata(directory, dtype=torch.float64)
+            raw = frame_meta or meta
             frame_vectors = (
                 raw["positions"][index[1]]
                 + shifts.T.to(torch.float64) @ raw["box"]
                 - raw["positions"][index[0]]
             )
-            frames = bond_frames(index, frame_vectors).to(dtype)
-        else:
-            raise ValueError("frame_source must be stored or derive")
+            selection = (
+                inputs.get(f"{neighborhood_support}_to_output")
+                if neighborhood_support != "output"
+                else None
+            )
+            if selection is not None and (selection < 0).any():
+                raise ValueError(
+                    "Bond frame neighborhoods must reference output support"
+                )
+            frames = bond_frames(index, frame_vectors, neighbor_selection=selection).to(
+                dtype
+            )
         if frames.shape != (len(keys), 3, 3) or not torch.isfinite(frames).all():
             raise ValueError("Stored bond frames must be finite 3x3 matrices")
         identity = torch.eye(3, dtype=frames.dtype, device=frames.device)
@@ -209,15 +246,25 @@ def load_operator_sample(
             raise ValueError("Bond frames must be proper orthonormal matrices")
         inputs["bond_frames"] = frames
         if local_coordinates:
-            inputs.update(bond_neighborhoods(index, vectors, frames, num_l=num_l))
+            from data.graph_features import evaluate_graph_geometry
+
+            evaluate_graph_geometry(
+                inputs,
+                local_coordinates=True,
+                num_l=num_l,
+                neighborhood_support=neighborhood_support,
+            )
+    from data.graph_features import evaluate_graph_geometry
+
+    evaluate_graph_geometry(inputs)
+    inputs["_geometry_reference"] = {
+        "positions": positions.detach().clone(),
+        "box": box.detach().clone(),
+    }
     if target_frame not in {"global", "bond"}:
         raise ValueError("target_frame must be global or bond")
     targets, full_blocks = {}, {}
-    matrix_files = (
-        {"hamiltonian": "hamiltonians.h5"} if matrix_files is None else matrix_files
-    )
-    for name, filename in matrix_files.items():
-        native = _read_blocks(directory / filename, len(atoms), dtype)
+    for name, native in matrices.items():
         values, masks = [], []
         for e, key in enumerate(keys):
             i, j = key[3:]
@@ -260,13 +307,13 @@ def load_operator_sample(
             masks.append(mask)
         targets[name] = {"values": torch.stack(values), "mask": torch.stack(masks)}
         full_blocks[name] = native
-    sid = str(sample_id if sample_id is not None else directory.resolve())
+    sid = str(sample_id)
     return {
         "id": sid,
         "split": split,
         "inputs": inputs,
         "targets": targets,
-        "source": str(directory.resolve()),
+        "source": sid,
         "keys": keys,
         "full_blocks": full_blocks,
         "species_shells": meta["species_shells"],
@@ -274,78 +321,41 @@ def load_operator_sample(
     }
 
 
-def collate_operator_samples(samples):
-    """Disjoint union with independent offsets for atoms, edges and local relations."""
-    if not samples:
-        raise ValueError("Cannot collate an empty batch")
-    first_inputs = (
-        samples[0]["inputs"] if isinstance(samples[0], dict) else samples[0][0]
-    )
-    first_targets = (
-        samples[0]["targets"] if isinstance(samples[0], dict) else samples[0][1]
-    )
-    xs, ys = {}, {}
-    node_offset, edge_offset = 0, 0
-    skip = {"box", "positions", "atoms", "edge_keys"}
-    for graph, sample in enumerate(samples):
-        x = sample["inputs"] if "inputs" in sample else sample[0]
-        targets = sample["targets"] if "targets" in sample else sample[1]
-        if x.keys() != first_inputs.keys() or targets.keys() != first_targets.keys():
-            raise ValueError(
-                "All graphs in a batch must have identical feature and target schemas"
-            )
-        if any(
-            record.keys() != first_targets[name].keys()
-            for name, record in targets.items()
-        ):
-            raise ValueError(
-                "All target records in a batch must have identical schemas"
-            )
-        for key, value in x.items():
-            if key in skip:
-                continue
-            if key in {"edge_index", "message_edge_index", "sub_atom_idx"}:
-                value = value + node_offset
-            elif key in {"sub_edge_idx", "message_to_output"}:
-                value = value + edge_offset
-            elif key == "sub_index":
-                value = value + 2 * edge_offset
-            elif key in {"node_batch", "edge_batch"}:
-                value = torch.full_like(value, graph)
-            xs.setdefault(key, []).append(value)
-        for name, record in targets.items():
-            for key, value in record.items():
-                ys.setdefault(name, {}).setdefault(key, []).append(value)
-        node_offset += len(x["node_type_idx"])
-        edge_offset += len(x["edge_lengths"])
-    for key, values in xs.items():
-        xs[key] = torch.cat(
-            values,
-            dim=1 if key in {"edge_index", "message_edge_index", "edge_shift"} else 0,
-        )
-    ys = {
-        name: {key: torch.cat(values) for key, values in record.items()}
-        for name, record in ys.items()
-    }
-    return xs, ys
-
-
-class OperatorDataset(Dataset):
-    def __init__(self, samples):
-        self.samples = list(samples)
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, index):
-        return self.samples[index]
-
-
-def statistics_records(samples, codec, *, target="hamiltonian"):
+def statistics_records(
+    samples, codec, *, target="hamiltonian", mapper=None, target_frame="global"
+):
     for sample in samples:
         if sample["split"] != "train":
             raise ValueError("Statistics cannot access validation or test samples")
         record = sample["targets"][target]
+        if not isinstance(record, dict):
+            from data.block_matrix import IrrepsBlockData
+
+            if isinstance(record, IrrepsBlockData):
+                if mapper is None:
+                    raise ValueError("Vector supervision requires its orbital mapper")
+                record = record.to_blocks(mapper)
+            x = sample["inputs"]
+            edges = x.get("edge_keys")
+            if edges is None:
+                edges = torch.cat((x["edge_shift"], x["edge_index"]))
+            values = IrrepsBlockData.pack_matrix(
+                record,
+                edges,
+                codec,
+                frames=x.get("bond_frames") if target_frame == "bond" else None,
+                operator=target,
+            )
+            mask = torch.stack(
+                [
+                    codec.packed_mask(
+                        (record.atoms[int(edge[3])], record.atoms[int(edge[4])]),
+                        device=values.device,
+                    )
+                    for edge in edges.T
+                ]
+            ) & torch.isfinite(values)
+            record = {"values": values, "mask": mask}
         yield {
             "id": sample["id"],
             "split": "train",

@@ -12,7 +12,7 @@ import pytest
 import torch
 from e3nn.o3 import rand_matrix
 
-from net.operator_codecs import (
+from core.operator_layout import (
     OrbitalFrameRotation,
     ShellTensorCodec,
     build_shell_targets,
