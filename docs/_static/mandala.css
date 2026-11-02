@@ -1,0 +1,8 @@
+.wy-nav-content { max-width: 980px; }
+.rst-content .math { overflow-x: auto; }
+.rst-content table.docutils td, .rst-content table.docutils th { white-space: normal; vertical-align: top; }
+.rst-content div.graphviz { text-align: center; margin: 1.2em 0; }
+.rst-content .admonition.contract { border-left: 4px solid #2f8f6b; background: #f2faf6; }
+.rst-content .admonition.contract > .admonition-title { background: #2f8f6b; }
+.rst-content .admonition.theorem { border-left: 4px solid #315b7d; background: #f3f7fb; }
+.rst-content .admonition.theorem > .admonition-title { background: #315b7d; }

@@ -1,0 +1,35 @@
+# A compact MANDALA model for the bundled silicon calculations.
+#
+# Flat fields configure the default E3GNN (encoders, attention message
+# passing, split per-pair readout heads). The data and training sections
+# select the snapshots and the run settings.
+cutoff_radius: 8.0
+l_max: 2
+hidden_irreps: 32x0e+8x0o+16x1o+8x1e+8x2e+4x2o+4x3o+4x3e+2x4e
+n_radial: 16
+radial_layers: [32]
+num_layers_gnn: 2
+node_update_message_agg: attention
+node_update_attention_scalar_dim: 32
+neck_depth: 1
+head_e3mlp_layers: 1
+matrix_targets: [hamiltonian, overlap, density]
+loss_l1_fraction: 1.0
+lr: 0.003
+lr_scheduler_patience: 40
+lr_scheduler_target: val/loss_total
+revert_on_spike: false
+checkpoint_monitor: val/loss_total
+log_per_irrep_metrics: false
+log_per_pair_loss_metrics: false
+log_hamiltonian_irrep_contrib_metrics: false
+log_hamiltonian_pair_contrib_metrics: false
+data:
+  representation: orbital_blocks
+  splits:
+    train: [data/small/Si]
+    val: [data/small/Si_perturbed_scale1_078]
+training:
+  seed: 7
+  dtype: float32
+  max_epochs: 600

@@ -1,0 +1,136 @@
+# A complete E3GNN assembled exclusively from the cookbook layers in layers.py.
+#
+# Every stage reads named feature slots and writes new ones. Interpolations
+# such as ${species.order} and ${layout.coupled_irreps} are resolved against
+# the orbital vocabulary of the training data before the model is built.
+schema_version: 1
+species: {ordering: atomic_number}
+symmetrize_hamiltonian_targets: false
+symmetrize_validation_output: false
+apply_cutoff_to_targets: false
+revert_on_spike: false
+checkpoint_monitor: val/loss
+parameters:
+  cutoff: 6.0
+  angular_irreps: 1x0e+1x1o+1x2e+1x3o+1x4e
+  edge_irreps: 16x0e+8x1o+8x2e+4x3o+4x4e
+  node_irreps: 32x0e+16x1o+16x1e+8x2e+8x2o+8x3o+8x3e+4x4e
+  pair_irreps: 16x0e+8x1o+8x1e+8x2e+8x2o+4x3o+4x3e+4x4e
+data:
+  representation: packed_shells
+  basis: openmx
+  graph_source: radius
+  graph_radius: 6.0
+  validate_hermitian: false
+  validate_support: false
+  canonicalize_edges: false
+training:
+  seed: 7
+  dtype: float32
+  batch_size: 1
+  max_epochs: 200
+objective: {kind: mse, epoch_weight: elements}
+optimization:
+  optimizer: {kind: adam, lr: 0.003}
+pipeline:
+  stages:
+    # -- geometry embeddings ------------------------------------------------
+    - id: radial
+      transform: bessel_basis
+      inputs: [edge_lengths]
+      outputs: [radial]
+      options: {cutoff: '${parameters.cutoff}', n_basis: 8}
+    - id: angular
+      transform: spherical_harmonics
+      inputs: [edge_vectors]
+      outputs: [angular]
+      options: {irreps: '${parameters.angular_irreps}'}
+    # -- encoders -----------------------------------------------------------
+    - id: node_encoder
+      role: encoder
+      transform: periodic_table_embedding
+      inputs: [node_type_idx]
+      outputs: [node_0]
+      options: {elements: '${species.order}', width: 32}
+    - id: edge_encoder
+      role: encoder
+      transform: radial_angular_encoder
+      inputs: [radial, angular]
+      outputs: [edge_0]
+      options: {irreps_out: '${parameters.edge_irreps}'}
+    # -- message passing layer 1 -------------------------------------------
+    - id: convolution_1
+      role: message
+      transform: depthwise_convolution
+      inputs: [node_0, angular, radial, edge_index]
+      outputs: [messages_1]
+      options: {lmax: 4}
+    - id: aggregation_1
+      role: message
+      transform: tempered_softmax_aggregation
+      inputs: [messages_1, radial, edge_index, node_0]
+      outputs: [aggregated_1]
+    - id: mlp_1
+      transform: equivariant_glu
+      inputs: [aggregated_1]
+      outputs: [mixed_1]
+      options: {irreps_out: '${parameters.node_irreps}'}
+    - id: norm_1
+      transform: degree_rms_norm
+      inputs: [mixed_1]
+      outputs: [normalized_1]
+    - id: activation_1
+      transform: squash_activation
+      inputs: [normalized_1]
+      outputs: [node_1]
+    # -- message passing layer 2 -------------------------------------------
+    - id: convolution_2
+      role: message
+      transform: depthwise_convolution
+      inputs: [node_1, angular, radial, edge_index]
+      outputs: [messages_2]
+      options: {lmax: 4}
+    - id: aggregation_2
+      role: message
+      transform: tempered_softmax_aggregation
+      inputs: [messages_2, radial, edge_index, node_1]
+      outputs: [aggregated_2]
+    - id: mlp_2
+      transform: equivariant_glu
+      inputs: [aggregated_2]
+      outputs: [mixed_2]
+      options: {irreps_out: '${parameters.node_irreps}'}
+    - id: activation_2
+      transform: squash_activation
+      inputs: [mixed_2]
+      outputs: [update_2]
+    - id: residual_2
+      transform: rezero_residual
+      inputs: [node_1, update_2]
+      outputs: [node_2]
+    # -- pair features and operator readout --------------------------------
+    - id: edge_update
+      role: message
+      transform: endpoint_bilinear_edge_update
+      inputs: [node_2, edge_0, edge_index]
+      outputs: [edge_1]
+      options: {irreps_out: '${parameters.pair_irreps}'}
+    - id: readout
+      role: readout
+      transform: pair_mixture_readout
+      inputs: [edge_1, edge_type_idx]
+      outputs: [coupled]
+      options: {irreps_out: '${layout.coupled_irreps}', num_pairs: '${species.pair_count}', rank: 4}
+    - id: envelope
+      role: readout
+      transform: learned_pair_envelope
+      inputs: [coupled, edge_lengths, edge_type_idx]
+      outputs: [coupled_scaled]
+      options: {num_pairs: '${species.pair_count}'}
+    - id: decode
+      role: readout
+      transform: shell_tensor_decode
+      inputs: [coupled_scaled]
+      outputs: [hamiltonian_native]
+      options: {shell_pairs: '${layout.shell_pairs}', spinful: '${layout.spinful}'}
+  outputs: {hamiltonian: hamiltonian_native}
