@@ -135,7 +135,7 @@ class SpeciesIrrepAffine(nn.Module):
                 x = torch.cat(values).to(self.mean)
                 if x.numel() == 0:
                     continue
-                if ir.l == 0:
+                if ir.l == 0 and ir.p == 1:
                     self.mean[pair, sl] = x.mean()
                 # Source std uses Bessel's correction. Empty/constant channels
                 # safely use unit scale, with no synthetic validation samples.

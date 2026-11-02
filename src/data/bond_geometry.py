@@ -40,9 +40,17 @@ def bond_frames(edge_index, vectors, *, tolerance=1e-6, neighbor_selection=None)
 
 def cartesian_tesseral_harmonics(vectors, num_l):
     """Same harmonics without angular-coordinate singularities at bond poles."""
-    radius = vectors.square().sum(-1).clamp_min(1e-24).sqrt()
-    x = vectors[:, 0] / radius
+    squared_radius = vectors.square().sum(-1)
+    radius = squared_radius.clamp_min(1e-24).sqrt()
+    # The source neighborhood construction assigns the north-pole value to
+    # an onsite zero displacement. Canonicalize it before evaluating either
+    # path: signed negative zeros from a negated einsum must not turn it into
+    # the south pole, nor should the Cartesian path use the equator (x=0).
+    x = torch.where(
+        squared_radius > 1e-24, vectors[:, 0] / radius, torch.ones_like(radius)
+    )
     azimuth = torch.complex(vectors[:, 1], vectors[:, 2]) / radius
+    azimuth = torch.where(squared_radius > 1e-24, azimuth, torch.zeros_like(azimuth))
     columns = {}
     diagonal = torch.ones_like(azimuth)
     for order in range(num_l):
@@ -80,7 +88,12 @@ def tesseral_harmonics(vectors, num_l):
         torch.sqrt(vectors[:, 1].square() + vectors[:, 2].square()), vectors[:, 0]
     )
     phi = torch.atan2(vectors[:, 2], vectors[:, 1])
-    x = theta.cos()
+    # Canonical source north-pole convention for zero onsite displacements, shared
+    # with the Cartesian differentiable expression and independent of IEEE
+    # signed zeros introduced by negating a displacement.
+    x = torch.where(
+        vectors.square().sum(-1) > 1e-24, theta.cos(), torch.ones_like(theta)
+    )
     result = []
     for degree in range(num_l):
         for order in range(-degree, degree + 1):

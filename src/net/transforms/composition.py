@@ -148,7 +148,9 @@ class PeriodicDisplacement(nn.Module):
 
 class VectorLengths(nn.Module):
     def forward(self, vectors):
-        return vectors.norm(dim=-1)
+        from core.norms import zero_safe_norm
+
+        return zero_safe_norm(vectors, dim=-1)
 
 
 class BondFrames(nn.Module):

@@ -24,6 +24,7 @@ from typing import Dict, Callable
 
 import torch
 from torch import nn
+from core.norms import zero_safe_norm
 from e3nn.o3 import Irreps
 from e3nn.nn import NormActivation, S2Activation
 
@@ -120,43 +121,26 @@ class GateScalarsMLP(nn.Module):
         torch.Tensor
             Output tensor of shape (..., irreps.dim).
         """
-        # Split scalars and non-scalars
-        scalars = []
-        start = 0
-        for mul, ir in self.irreps:
+        # Extract invariant scalars by their actual slices. Irreps are allowed
+        # to be unsorted; output coordinates must retain the input ordering.
+        specs = list(zip(self.irreps, self.irreps.slices()))
+        scalars = torch.cat(
+            [x[..., sl] for (mul, ir), sl in specs if ir.l == 0 and ir.p == 1], dim=-1
+        )
+        gates = self.mlp(scalars)
+        activated_scalars = self.nonlin_scalars(scalars)
+        output, scalar_cursor, gate_cursor = [], 0, 0
+        for (mul, ir), sl in specs:
             if ir.l == 0 and ir.p == 1:
-                # Scalars
-                end = start + mul * ir.dim
-                scalars.append(x[..., start:end])
-                start = end
+                output.append(
+                    activated_scalars[..., scalar_cursor : scalar_cursor + mul]
+                )
+                scalar_cursor += mul
             else:
-                # Non-scalars
-                end = start + mul * ir.dim
-                start = end
-        scalars = torch.cat(scalars, dim=-1)
-
-        # Apply MLP to scalars and multiply with non-scalars
-        gate_output = self.mlp(scalars)
-
-        # Apply non-linearity to scalars
-        scalars = self.nonlin_scalars(scalars)
-
-        output = [scalars]
-        start_g = 0
-        start_x = self.n_scalars
-        for mul, ir in self.irreps:
-            if not (ir.l == 0 and ir.p == 1):
-                # Non-scalars
-                end_x = start_x + mul * ir.dim
-                non_scalars = x[..., start_x:end_x]
-                # Get the gate values for this irrep
-                end_g = start_g + mul
-                gate = gate_output[..., start_g:end_g].unsqueeze(-1)
-                # Reshape non_scalars to be able to multiply by gate
-                non_scalars = non_scalars.reshape(*non_scalars.shape[:-1], mul, ir.dim)
-                output.append((non_scalars * gate).reshape(*non_scalars.shape[:-2], -1))
-                start_g = end_g
-                start_x = end_x
+                block = x[..., sl].reshape(*x.shape[:-1], mul, ir.dim)
+                gate = gates[..., gate_cursor : gate_cursor + mul, None]
+                output.append((block * gate).reshape(*x.shape[:-1], mul * ir.dim))
+                gate_cursor += mul
         return torch.cat(output, dim=-1)
 
 
@@ -207,7 +191,7 @@ class GateMagnitudes(nn.Module):
                 end = start + mul * ir.dim
                 non_scalars = x[..., start:end].reshape(*x.shape[:-1], mul, ir.dim)
                 # Compute magnitudes
-                magnitudes = torch.linalg.norm(non_scalars, dim=-1)
+                magnitudes = zero_safe_norm(non_scalars, dim=-1).clamp_min(1e-8)
                 # Apply non-linearity to magnitudes
                 activations = self.nonlin_gate(magnitudes)
                 # Multiply non-scalars by magnitudes

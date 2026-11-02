@@ -146,11 +146,15 @@ class _Harmonics(nn.Module):
             )
         self.permutation = tuple(permutation)
         self.sh = o3.SphericalHarmonics(
-            irreps, normalize=True, normalization=normalization
+            irreps, normalize=False, normalization=normalization
         )
 
     def forward(self, vectors):
-        return self.sh(vectors[:, self.permutation])
+        from core.norms import zero_safe_norm
+
+        vectors = vectors[:, self.permutation]
+        directions = vectors / zero_safe_norm(vectors, keepdim=True).clamp_min(1e-12)
+        return self.sh(directions)
 
 
 def _global_irreps(spec, domain=None):

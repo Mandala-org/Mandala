@@ -6,6 +6,7 @@ from typing import Tuple, Dict
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
+from core.norms import zero_safe_norm
 
 
 def _non_scalar_sh_slices(sh_irreps: Irreps) -> list[slice]:
@@ -58,9 +59,10 @@ def compute_edge_geometry_from_static_edges(
     else:
         edge_disp = positions[edge_index[1]] - positions[edge_index[0]]
 
-    edge_lengths = torch.linalg.norm(edge_disp, dim=-1)
+    edge_lengths = zero_safe_norm(edge_disp)
+    directions = edge_disp / zero_safe_norm(edge_disp, keepdim=True).clamp_min(1e-12)
     edge_sh = spherical_harmonics(
-        sh_irreps, edge_disp, normalize=True, normalization="component"
+        sh_irreps, directions, normalize=False, normalization="component"
     )
     is_zero_shift_self_edge = (edge_index[0] == edge_index[1]) & (edge_shift == 0).all(
         dim=0
@@ -261,7 +263,7 @@ def compute_graph_features(
         edge_disp = positions[edge_dst] - positions[edge_src] + shift_float @ box
     else:
         edge_disp = positions[edge_dst] - positions[edge_src]
-    edge_lengths = torch.linalg.norm(edge_disp, dim=-1)
+    edge_lengths = zero_safe_norm(edge_disp)
 
     # 9. Calculate geometric features for the final edge order
     radial_lengths = None
@@ -448,7 +450,7 @@ def evaluate_graph_geometry(
         else:
             inputs["edge_vectors"] = edge_displacements(inputs, index, shifts)
     vectors = inputs["edge_vectors"]
-    lengths = vectors.norm(dim=-1)
+    lengths = zero_safe_norm(vectors)
     inputs.update(
         edge_lengths=lengths,
         edge_length=lengths,
@@ -466,7 +468,7 @@ def evaluate_graph_geometry(
                 raise ValueError("Independent supports need positions for geometry")
             value = vectors[mapping]
         inputs[f"{name}_vectors"] = value
-        inputs[f"{name}_lengths"] = value.norm(dim=-1)
+        inputs[f"{name}_lengths"] = zero_safe_norm(value)
     if require_frames or local_coordinates:
         from data.bond_geometry import (
             bond_frames,

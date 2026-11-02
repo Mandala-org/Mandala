@@ -323,7 +323,13 @@ class GraphIrrepNorm(nn.Module):
                 ).mean(dim=[1, 2], keepdim=True)
                 if self.normalization == "norm":
                     variance = variance * ir.dim
-                field = field / (variance.sqrt()[batch] + self.eps)
+                # Singleton graphs and absent irrep channels have exact zero
+                # variance. Evaluate that inactive square-root branch at one:
+                # masking sqrt(0) afterwards still produces NaN derivatives.
+                zero = variance == 0
+                std = torch.where(zero, torch.ones_like(variance), variance).sqrt()
+                std = torch.where(zero, torch.zeros_like(std), std)
+                field = field / (std[batch] + self.eps)
             if self.weight is not None:
                 field = field * self.weight[self.weight_slices[index]][None, :, None]
             if self.bias is not None and ir.is_scalar():

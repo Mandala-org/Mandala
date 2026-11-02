@@ -166,8 +166,12 @@ class InvariantFiLMActivation(nn.Module):
         for start, dim, _, ir in self.copy_specs:
             block = x[..., start : start + dim]
             blocks.append(block)
-            if ir.l == 0:
+            if ir.l == 0 and ir.p == 1:
                 invariants.append(block.reshape(*block.shape[:-1], -1))
+            elif ir.l == 0:
+                # A pseudoscalar changes sign under inversion. Conditioning
+                # invariant gains on its signed value would break O(3).
+                invariants.append(block.square())
             else:
                 invariants.append(zero_safe_norm(block, dim=-1, keepdim=True))
 
@@ -183,7 +187,10 @@ class InvariantFiLMActivation(nn.Module):
             y = gain * block
             if ir.l == 0:
                 bias = scalar_biases[..., bias_cursor : bias_cursor + 1]
-                y = y + bias
+                # Even scalars admit an invariant additive shift; odd scalars
+                # only admit an invariant multiplicative adjustment. Keep the
+                # parameter layout so existing checkpoints remain readable.
+                y = y + bias if ir.p == 1 else y + bias * block
                 y = (
                     self.scalar_activation(y)
                     if ir.p == 1
@@ -320,14 +327,54 @@ class GateBlock(nn.Module):
         return self.post(self.gate(self.linear(x)))
 
 
+def _expand_irrep_scales(scales, irreps):
+    """One learned scale per copy, shared by all magnetic components."""
+    return torch.cat(
+        [
+            field[:, None].expand(mul, ir.dim).reshape(-1)
+            for field, (mul, ir) in zip(
+                scales.split([mul for mul, _ in irreps]), irreps
+            )
+        ]
+    )
+
+
+def _load_legacy_scales(state_dict, key, irreps):
+    """Accept old coordinate arrays only if they already respect irreps."""
+    if key not in state_dict or state_dict[key].numel() == irreps.num_irreps:
+        return
+    values = state_dict[key]
+    if values.numel() != irreps.dim:
+        return  # Let ordinary strict loading report the incompatible shape.
+    copies = []
+    for (_, ir), field in zip(
+        irreps, values.split([mul * ir.dim for mul, ir in irreps])
+    ):
+        field = field.reshape(-1, ir.dim)
+        if not torch.equal(field, field[:, :1].expand_as(field)):
+            raise RuntimeError(
+                f"Legacy {key} has different scales within an irrep and violates rotational symmetry; "
+                "explicitly project the old coordinate scales to their per-irrep means before migration"
+            )
+        copies.append(field[:, 0])
+    state_dict[key] = torch.cat(copies)
+
+
 class ResidualBlock(nn.Module):
-    def __init__(self, block: nn.Module, width: int, residual_scale: float) -> None:
+    def __init__(self, block: nn.Module, irreps, residual_scale: float) -> None:
         super().__init__()
         self.block = block
-        self.layerscale = nn.Parameter(torch.full((width,), residual_scale))
+        self.irreps = Irreps(irreps)
+        self.layerscale = nn.Parameter(
+            torch.full((self.irreps.num_irreps,), residual_scale)
+        )
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        _load_legacy_scales(state_dict, prefix + "layerscale", self.irreps)
+        super()._load_from_state_dict(state_dict, prefix, *args)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.layerscale * self.block(x)
+        return x + _expand_irrep_scales(self.layerscale, self.irreps) * self.block(x)
 
 
 class BilinearSelfTPBlock(nn.Module):
@@ -381,12 +428,19 @@ class BilinearSelfTPBlock(nn.Module):
             output_scale=1.0,
             weight_init_scale=1.0,
         )
-        self.skip = nn.Parameter(torch.full((irreps_hidden.dim,), residual_scale))
+        self.irreps = irreps_hidden
+        self.skip = nn.Parameter(
+            torch.full((irreps_hidden.num_irreps,), residual_scale)
+        )
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        _load_legacy_scales(state_dict, prefix + "skip", self.irreps)
+        super()._load_from_state_dict(state_dict, prefix, *args)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         q = self.tp(self.lin_a(x), self.lin_b(x))
         q = self.norm(q)
-        return x + self.skip * self.proj(q)
+        return x + _expand_irrep_scales(self.skip, self.irreps) * self.proj(q)
 
 
 class InvariantFiLME3MLPBlock(nn.Module):
@@ -491,9 +545,9 @@ def make_variant_block(
                 ScaledLinear(
                     irreps_in, irreps_hidden, output_scale=1.0, weight_init_scale=1.0
                 ),
-                ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale),
+                ResidualBlock(inner, Irreps(irreps_hidden), cfg.residual_scale),
             )
-        return ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale)
+        return ResidualBlock(inner, Irreps(irreps_hidden), cfg.residual_scale)
     if variant == "resgatemagnitudes":
         inner = LinearThenAct(
             irreps_hidden,
@@ -512,9 +566,9 @@ def make_variant_block(
                 ScaledLinear(
                     irreps_in, irreps_hidden, output_scale=1.0, weight_init_scale=1.0
                 ),
-                ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale),
+                ResidualBlock(inner, Irreps(irreps_hidden), cfg.residual_scale),
             )
-        return ResidualBlock(inner, Irreps(irreps_hidden).dim, cfg.residual_scale)
+        return ResidualBlock(inner, Irreps(irreps_hidden), cfg.residual_scale)
     if variant == "bilinear":
         if Irreps(irreps_in) != Irreps(irreps_hidden):
             return nn.Sequential(

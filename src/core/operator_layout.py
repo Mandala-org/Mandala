@@ -220,7 +220,12 @@ class OrbitalFrameRotation(nn.Module):
 
             dl, dr = spin_orbital_product(dl), spin_orbital_product(dr)
         coupling = self.to_coupling_basis(blocks, left_shells, right_shells)
-        rotated = dl.to(blocks).transpose(-1, -2).conj() @ coupling @ dr.to(blocks)
+        if self.spinful:
+            # A real SOC input can acquire imaginary components under a spin
+            # rotation. Casting the spin unitary to the input's real dtype
+            # silently discards those components and is not a basis change.
+            coupling = coupling.to(spin)
+        rotated = dl.to(coupling).transpose(-1, -2).conj() @ coupling @ dr.to(coupling)
         return self.from_coupling_basis(rotated, left_shells, right_shells)
 
     # Explicit source conventions retained for reference-import tools.
