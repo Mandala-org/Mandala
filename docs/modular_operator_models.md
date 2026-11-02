@@ -127,6 +127,14 @@ as columns, distances in Å, Hamiltonians in eV, and orbitals in native OpenMX
 order. HDF5 keys are `[Rx,Ry,Rz,i,j]` with one-based atom indices. SOC uses
 complex spin-major full matrices. Unit/convention declarations are checked.
 
+For already-converted HDF5 inputs, declare `data.source_basis` (`openmx` or
+`e3nn`) and `data.source_cartesian_axes` (`xyz` or `yzx`), or the equivalent
+`orbital_basis` and `cartesian_axes` fields in `info.json`. These describe the
+files, separately from the requested `data.basis`. Conflicting declarations
+fail. The shared source loader and `Snapshot` normalize geometry and orbitals
+once; untagged native archives default to OpenMX/xyz. See the
+[benchmark data contract](operator_benchmark_pilots.md#basis-and-units).
+
 Both reverse directions, onsite and shifted-self edges remain distinct. The
 reference presets disable target symmetrization and output projection; these
 remain explicit policies in the common interface. Shell
@@ -161,6 +169,20 @@ writer converts Hamiltonians to eV. `model(inputs)` always returns
 `IrrepsBlockData`, including for explicit transformation graphs.
 
 ## Objectives and scaling
+
+For original orbital-block supervision, `matrix_loss_reduction: pair_sum`
+preserves the historical sum of species-pair means. `pair_mean` averages those
+means, while `elements` weights each observed matrix entry equally within a
+structure. The latter two require `loss_weighting_mode: off` and matrix-space
+orbital-block supervision; they do not redefine packed-shell or irrep losses.
+Historical diagnostic names retain their original reduction. Physical-entry
+MAE/MSE/RMSE use explicit `*_elementwise` names, independently of the selected
+objective; see [metric conventions](operator_benchmark_pilots.md#comparable-errors).
+
+For flat configurable message layers, `radial_weight_granularity: term` keeps
+one radial gate per irrep term. `copy` gives each multiplicity copy its own
+gate, shared across its magnetic components. Both remain equivariant; `copy`
+changes parameter shapes and requires a new run rather than an old checkpoint.
 
 Reference presets use global masked matrix-element MSE and Adam with explicit hyperparameters.
 Epoch weighting is explicit: matrix elements for original DeepH, edges for
@@ -250,8 +272,9 @@ and spin layout. Shell order is preserved, including interleaved shells.
 For a batch the network runs once on a disjoint graph union, preserving batch
 normalization and graph-local relations. Predictions are separated again before
 observable and spectral calculations, each using its own cell and references.
-Masked matrix objectives reduce across supervised entries for each operator;
-observable objectives reduce across cells. The independent disjoint-union
+Packed-shell matrix objectives reduce across supervised entries for each
+operator; orbital-block objectives use the declared matrix reduction above.
+Observable objectives reduce across cells. The independent disjoint-union
 utility is also available for testing tensor primitives.
 
 The common step composes matrix objectives, missing-entry masks, partial-edge

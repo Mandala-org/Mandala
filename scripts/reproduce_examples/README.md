@@ -1,10 +1,13 @@
 # Reproducible numerical-example training, version 1
 
-Prepared for review on 2026-10-20. These files do not submit jobs. No ROSI
-training has been launched. The three recipes initialize all learned weights
+These launchers prepare and run one training segment; they do not submit Slurm
+jobs. They were first prepared on 20 October 2026 and subsequently corrected
+for canonical envelope checksums and the 96 available silicon structures.
+Execution status belongs to the run manifests and scheduler records, not this
+README. The three recipes initialize all learned weights
 from scratch; historical checkpoints and W&B are not needed at execution time.
 
-## Review and invocation
+## Invocation
 
 From the repository root in the project Python environment:
 
@@ -15,7 +18,7 @@ bash scripts/reproduce_examples/train_silicon.sh --plan
 ```
 
 `--plan` prints the resolved recipe without creating run files or using a GPU.
-After approval, the corresponding zero-argument commands train one segment:
+The corresponding zero-argument commands train one segment inside a GPU allocation:
 
 ```bash
 bash scripts/reproduce_examples/train_zncusnses.sh
@@ -33,7 +36,8 @@ Use the same immutable checkout and software environment for all segments.
 The ROSI main checkout may be on the pair-Hamiltonian branch: use the approved
 isolated GNN workspace rather than switching an active checkout. The project
 environment is supplied by the execution profile; these scripts do not activate
-or modify environments. B200 is the proposed initial target for all three.
+or modify environments. Choose and record the hardware/software for a new run once; continuation must
+retain its frozen runtime contract.
 
 ## Frozen training choices
 
@@ -51,7 +55,7 @@ best-model selection. Silicon retains the selected checkpoint's
 `train_observables_on_gt=True` and `rescale_density_to_num_electrons=False`;
 some older shell launchers disagree with the actual saved configuration.
 
-The LR changes are intentional, frozen proposals for scratch training:
+The learning-rate choices are intentional, frozen scratch-training settings:
 
 - ZnCuSnSeS uses the verified original `dandy-sweep-34` sweep LR.
 - Silicon uses the verified `leafy-sweep-15` sweep LR rather than its final
@@ -205,6 +209,6 @@ The two opt-in CUDA continuation cases can be run inside the target GPU
 allocation with `MANDALA_RUN_GPU_TESTS=1` and the same CUBLAS setting as the
 launchers. They compare clean and interrupted/resumed stochastic training.
 
-Before approval, review the three initial LRs, total epoch caps, silicon data
-inventory requirement, corrected density convention, and offline logging choice.
-After approval, environment/inventory checks precede long GPU training.
+Before starting a new run, check the frozen initial learning rate, epoch cap,
+dataset inventory, density convention and logging configuration. Environment
+and inventory checks precede long GPU training.

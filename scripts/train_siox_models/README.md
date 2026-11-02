@@ -11,19 +11,17 @@ including when the environment's editable installation points elsewhere.
 
 ## 1. Prepare data once
 
-On a scheduled 64-CPU allocation, run:
+Run the lightweight manifest preparation from the isolated checkout:
 
 ```bash
 bash scripts/train_siox_models/prepare.sh
 ```
 
-The frozen launcher uses eight conversion processes with up to eight OpenMP/MKL
-threads each. Preparation reads the existing
-`/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new` dataset. It repeats the
-paper recipe's sorted discovery and Python `random.Random(42)` shuffle, selects
-90 training and 10 validation snapshots, and records explicit lists. There is
-no test split or test evaluation in these paper-training reproductions.
-All four runs use those exact lists, rather than independently shuffling them.
+Preparation reads the existing
+`/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new` file list, repeats sorted
+discovery and Python `random.Random(42)` shuffling, and freezes 90 training and
+10 validation snapshots. All four models use those exact lists. This paper
+comparison has no test split or test evaluation.
 
 Preparation only freezes the source file lists and hashes. All four runs read
 the original OpenMX pairs through `DatasetFactory`; no HDF5 conversion or CPU
@@ -84,8 +82,9 @@ selects the intended Mandala environment and a 48-hour allocation before using
 it; the current researchops setup also provides `runbc1` for B200 CASUS. The
 repository launchers themselves simply run `python`, so they work inside an
 explicit Slurm allocation too. Save scheduler stdout/stderr under the records
-directory above. No jobs have been submitted or GPU memory sizing measured by
-preparing these scripts. Full reference widths are retained.
+directory above. Full reference widths are retained. These launchers have been used for ROSI
+runs; completed segments, budgets and metrics must be read from the immutable
+run records. This README is an invocation contract, not a live job-status page.
 
 ## 3. Continue after a segment
 

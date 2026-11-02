@@ -1,9 +1,9 @@
 # Mandala
 
-An E(3)-equivariant Graph Neural Network implementation framework to predict
-**block-sparse DFT matrices** (Hamiltonian **H** and Density **D**)
-in linear time using E3NN + PyTorch. Designed for arbitrary chemistry,
-wide hyperparameter optimization and distributed training on HPC clusters.
+An E(3)-equivariant graph neural network framework for block-sparse electronic-
+structure operators: Hamiltonian **H**, overlap **S**, and density **D**.
+Models, data interfaces, training, continuation, and physical evaluation share
+one configurable framework.
 
 ## Modular operator architectures
 
@@ -29,7 +29,9 @@ See [configuration, training and inference](docs/modular_operator_models.md)
 and the [reference coverage and verification matrix](docs/reference_architecture_coverage.md).
 The [SiOx ROSI launchers](scripts/train_siox_models/README.md) prepare a shared
 paper split and resumable DeepH, DeepH-E3, MACE-H and paper-configured MANDALA runs.
-Existing flat `Config` models and checkpoints retain their original assembly.
+Flat `Config` settings remain supported. Old checkpoints with symmetry-breaking
+coordinate-wise residual scales require explicit migration; see the
+[scientific contract audit](docs/test_suite_audit.md#scientific-contract-follow-up--23-october-2026).
 
 ## Template-free OpenMX-compatible prediction export
 
@@ -83,69 +85,44 @@ snapshots trained/stored with doubled densities are not automatically converted.
 Density-grid reconstruction and `Tr(DH)`/`Tr(DS)` use the supplied normalization;
 physical spin sums, where needed, must be explicit.
 
-## Quickstart
+## Installation
 
-To install run
+Package metadata currently declares **Python 3.10** (`>=3.10,<3.11`). Broader
+Python support has not yet been certified. The commands below reproduce the
+recorded PyTorch 2.5.1 CPU environment; they are a versioned installation example,
+not a claim that every other PyTorch/CUDA combination is unsupported.
+
+With Python 3.10 and platform build tools already installed:
 
 ```bash
-# Clone the repository
 git clone git@github.com:Mandala-org/Mandala.git mandala
 cd mandala
-# Get proper Python version and utils (provided for Debian-based systems)
-sudo add-apt-repository -y 'ppa:deadsnakes/ppa'
-sudo apt install python3.10 python3.10-venv python3.10-distutils
-sudo apt install python3-dev build-essential
-# Create venv
 python3.10 -m venv mandala-venv
 source mandala-venv/bin/activate
-# Update pip
-python -m pip install --upgrade pip
-# Install torch if you don't have it
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-# Install wheel and then torch-scatter
-pip install wheel
-pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1.html --no-build-isolation
-# Install Mandala
-pip install -e .[dev]
+python -m pip install --upgrade pip wheel
+python -m pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cpu.html --no-build-isolation
+python -m pip install -e '.[dev]'
 ```
 
-Installation requires gcc>=9.3.0 and cmake.
-Requires Python >=3.10,<3.11.
-
-## HPC (CUDA) Quickstart
-
-To install run
+For the recorded CUDA 12.1 wheel stack, replace the PyTorch and torch-scatter
+installation commands with:
 
 ```bash
-# Clone the repository
-git clone git@github.com:Mandala-org/Mandala.git mandala
-cd mandala
-# Create venv
-python3.10 -m venv mandala-venv
-source mandala-venv/bin/activate
-# Update pip
-python -m pip install --upgrade pip
-# Install torch if you don't have it
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-# Install torch-scatter
-pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
-# Install Mandala
-pip install -e .[dev]
+python -m pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
 ```
 
-Installation requires gcc>=9.3.0 and cmake.
-The instructions depend on having cuda12.1 installed.
-Other versions of cuda or torch have not been tested.
-Requires Python >=3.10,<3.11.
+Match compiled extensions to the selected PyTorch/CUDA stack and the host GPU
+driver. On HPC systems use the site's project environment/profile and record
+its exact runtime. Source builds also require compatible compiler/build tools.
+Recorded GPU probes and their limited scope are described in the
+[benchmark protocol](docs/operator_benchmark_pilots.md); they do not establish
+compatibility for every GPU, Python version, or dependency combination.
 
-Before running tests make sure to download lsf-handled files (see [#7](https://github.com/Mandala-org/Mandala/issues/7) if not on debian-based system)
-```bash
-sudo apt install git-lfs
-git lfs install
-git lfs pull
-```
+## Focused verification
 
-Run focused checks relevant to your changes. For modular models, start with
+Run tests for the behavior being changed. A starting set for modular models is:
 
 ```bash
 PYTHONPATH=src:. python -m pytest -q \
@@ -154,21 +131,44 @@ PYTHONPATH=src:. python -m pytest -q \
   tests/workflow/test_modular_training.py
 ```
 
-The [test-suite audit](docs/test_suite_audit.md) records the scope, numerical
-oracles, infrastructure requirements, and remaining validation limits. Its
-[complete inventory](docs/test_inventory.json) contains an individual review
-and disposition for every test, including parametrized cases. GPU tests require
-`MANDALA_RUN_GPU_TESTS=1`; upstream differential checks require the pinned source
-checkouts described in the audit. Collection alone does not execute tests.
-
-To launch training, pick a config and run:
+The scientific contract checks exercise trained symmetry, raw-source training
+parity, periodic geometry, composable transformations, physical observables,
+label isolation, and actual learning:
 
 ```bash
-PYTHONPATH=src:. python -m scripts.train --config configs/reference/deeph_e3.yaml \
-  --set data.root=/path/to/snapshots --output /path/to/new_run --accelerator cpu --dry-run
+PYTHONPATH=src:. python -m pytest -q \
+  tests/physics/test_o3_model_contracts.py \
+  tests/physics/test_geometry_contracts.py \
+  tests/physics/test_independent_operator_oracle.py \
+  tests/unit/net/test_scientific_composition.py \
+  tests/workflow/test_scientific_training_contracts.py
 ```
 
-For a short end-to-end inference example, see
-[`demos/demo_07_checkpoint_evaluation.py`](demos/demo_07_checkpoint_evaluation.py).
-Checkpoint evaluation uses the existing `Snapshot` and `E3GNN` classes together
-with stateless helpers; no new checkpoint format is required.
+Their frozen upstream oracles and synthetic inputs run without source checkouts
+or scientific datasets. Four learning experiments are marked `slow` and take
+several minutes on CPU. Live source comparisons require the pinned checkouts
+listed in [reference coverage](docs/reference_architecture_coverage.md).
+GPU tests require `MANDALA_RUN_GPU_TESTS=1`; large-data tests require
+`MANDALA_LARGE_DATA_ROOT`. Tests using repository scientific data additionally
+need the relevant Git LFS objects (`git lfs install`, then `git lfs pull`).
+
+The [test audit](docs/test_suite_audit.md) records dated verification results
+and remaining limits. Its [22 October inventory](docs/test_inventory.json) is a
+historical snapshot, not a current test count or measured line/branch coverage.
+There is currently no tracked CI workflow; local passes do not imply CI exists.
+
+## Workflows and demonstrations
+
+- [Model configuration, training, continuation and inference](docs/modular_operator_models.md)
+- [Original publication-example recipes](scripts/reproduce_examples/README.md)
+- [Four-model SiOx comparison](scripts/train_siox_models/README.md)
+- [Public benchmark pilots and metric conventions](docs/operator_benchmark_pilots.md)
+- [Accuracy-investigation protocol and staged-compute policy](docs/mandala_accuracy_ablation_protocol.md)
+- [Dated investigation summary](docs/mandala_accuracy_investigation.md)
+- [Research execution and storage](docs/RESEARCHOPS.md)
+- [Executable Python demos](demos/README.md), including checkpoint evaluation
+- [Offline interactive SOC rotation lab](demos/soc_rotations/index.html)
+
+The documentation above is maintained in this repository. A searchable API
+website and an expanded compatibility matrix remain release work; neither is
+implied by the existing tutorials.

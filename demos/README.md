@@ -17,5 +17,8 @@ Suggested order:
 6. `demo_06_silicon_snapshot_density_blockmatrix.py`
 7. `demo_07_checkpoint_evaluation.py`
 
+For an offline visual demonstration of spin–orbit basis rotations, open
+[`soc_rotations/index.html`](soc_rotations/index.html) directly in a browser.
+
 `demo_07` requires a trained checkpoint. It prints an actionable message when
 `best_model.pt` is absent rather than fabricating predictions.
