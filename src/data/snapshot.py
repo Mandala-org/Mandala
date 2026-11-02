@@ -1012,6 +1012,8 @@ class Snapshot:
         validate_support: bool = True,
         canonicalize: bool = True,
         matrix_files: dict | None = None,
+        source_basis: str | None = None,
+        source_cartesian_axes: str | None = None,
     ) -> "Snapshot":
         """Load one snapshot in DeepH-E3's processed OpenMX HDF5 format."""
         from data.deeph_e3_parser import (
@@ -1027,7 +1029,11 @@ class Snapshot:
             "density": "density_matrixs.h5",
         } | (matrix_files or {})
         metadata = load_deeph_e3_metadata(
-            snapshot_dir, dtype=dtype, matrix_files=filenames
+            snapshot_dir,
+            dtype=dtype,
+            matrix_files=filenames,
+            source_basis=source_basis,
+            source_cartesian_axes=source_cartesian_axes,
         )
         hamiltonian = load_deeph_e3_block_matrix(
             snapshot_dir / filenames["hamiltonian"],

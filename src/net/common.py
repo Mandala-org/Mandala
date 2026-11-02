@@ -61,7 +61,15 @@ class Config:
         values = dict(document)
         for key, value in values.get("training", {}).items():
             if key in cls.__dataclass_fields__:
-                if key in values and values[key] != value:
+                # Lowering a Config into component stages can retain torch.dtype
+                # at the root while YAML training settings use its string name.
+                # Compare their meaning, without accepting different precisions.
+                if key == "dtype":
+                    value = get_torch_dtype(value)
+                root_value = values.get(key)
+                if key == "dtype" and key in values:
+                    root_value = get_torch_dtype(root_value)
+                if key in values and root_value != value:
                     raise ValueError(f"Conflicting root and training values for {key}")
                 values[key] = value
         if isinstance(values.get("dtype"), str):
@@ -193,6 +201,7 @@ class Config:
     radial_layers: Sequence[int] = field(
         default_factory=lambda: (128, 128, 128)
     )  # e.g. (128,) -> 2-layer MLP
+    radial_weight_granularity: str = "term"  # term (legacy) | copy
     pair_conditioned_radial_mlp: bool = False
     pair_distance_normalization: str = "off"  # off | pair_r0
 
@@ -221,6 +230,8 @@ class Config:
 
     # -------------- loss weighting --------------------------------------
     loss_l1_fraction: float = 1.0  # 0.0 for L2, 1.0 for L1
+    # Orbital-block matrix objective only; diagnostic reductions stay fixed.
+    matrix_loss_reduction: str = "pair_sum"  # pair_sum | pair_mean | elements
     loss_coef_observables: float = 0.0
     allow_zero_observable_loss_control: bool = False
     observable_loss_kind: str = "mae"  # mse | mae

@@ -22,15 +22,12 @@ import torch
 import os
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple, Literal, Optional
-from types import SimpleNamespace
 
 
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.gnn_dataset import E3GNNDataset
-from data.openmx_info_parser import parse_info_out, InfoOutData
-from data.pyscf_baseline_parser import load_pyscf_metadata
-from data.deeph_e3_parser import is_deeph_e3_snapshot, load_deeph_e3_metadata
+from data.sources import resolve_snapshot_source, load_source_metadata
 from net.common import Config
 from utils.summary import print_dataset_summary
 
@@ -75,11 +72,11 @@ class DatasetFactory:
     def add_snapshot(
         self,
         matrix_path: str | os.PathLike,
-        info_path: str | os.PathLike,
+        info_path: str | os.PathLike | None = None,
         purpose: Purpose = "train",
     ) -> None:
         """
-        Register one OpenMX **(matrix, info)** file pair.
+        Register a snapshot directory or an explicit **(matrix, info)** pair.
 
         Parameters
         ----------
@@ -92,24 +89,19 @@ class DatasetFactory:
         """
         if purpose not in ("train", "val", "test"):
             raise ValueError("purpose must be 'train', 'val', or 'test'")
-        pair = (Path(matrix_path), Path(info_path))
+        source = resolve_snapshot_source(
+            matrix_path, info_path, matrix_files=self.cfg.data.get("matrix_files")
+        )
+        pair = (source.matrix_path, source.info_path)
         self._pairs[purpose].append(pair)
 
     # ------------------------------------------------------------------ helpers
-    def _load_info(self, matrix_path: Path, path: Path) -> InfoOutData:
-        if is_deeph_e3_snapshot(matrix_path, path):
-            meta = load_deeph_e3_metadata(
-                path.parent,
-                dtype=self.cfg.dtype,
-                matrix_files=self.cfg.data.get("matrix_files"),
-            )
-            return SimpleNamespace(
-                orbital_set=meta.orbital_set, is_spinful=meta.is_spinful
-            )
-        if path.suffix == ".json":
-            meta = load_pyscf_metadata(path)
-            return SimpleNamespace(orbital_set=meta.orbital_set)
-        return parse_info_out(path)
+    def _load_info(self, matrix_path: Path, path: Path):
+        return load_source_metadata(
+            resolve_snapshot_source(matrix_path, path),
+            dtype=self.cfg.dtype,
+            options=self.cfg.data,
+        )
 
     # ------------------------------------------------------------------ create
     def create(self, *, include_test: bool = False):

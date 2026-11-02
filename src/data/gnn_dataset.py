@@ -46,7 +46,6 @@ from data.graph_features import (
     compute_graph_features_from_target_edges,
 )
 from data.snapshot import Snapshot
-from data.deeph_e3_parser import is_deeph_e3_snapshot
 from data.spectral_fermi_cache import (
     load_spectral_fermi_cache,
     lookup_spectral_fermi_record,
@@ -579,50 +578,20 @@ class E3GNNDataset(Dataset):
                 pass
 
         self.snapshot_cache_misses += 1
-        snapshot_cutoff = None
         from net.common import get_torch_dtype
 
         geometry_dtype = get_torch_dtype(
             self.cfg.data.get("geometry_dtype", self.dtype)
         )
-        if is_deeph_e3_snapshot(matrix_path, info_path):
-            snapshot = Snapshot.from_deeph_e3(
-                info_path.parent,
-                convention=self.convention,
-                cutoff_radius=snapshot_cutoff,
-                dtype=geometry_dtype,
-                cfg=self.cfg,
-                matrix_files=self.cfg.data.get("matrix_files"),
-                validate_hermitian=self.cfg.data.get("validate_hermitian", True),
-                validate_support=self.cfg.data.get("validate_support", True),
-                canonicalize=self.cfg.data.get("canonicalize_edges", True),
-                symmetrize_density=self.cfg.symmetrize_density_targets,
-            )
-        elif matrix_path.suffix == ".npz" or info_path.suffix == ".json":
-            snapshot = Snapshot.from_pyscf(
-                npz_path=matrix_path,
-                json_path=info_path,
-                convention=self.convention,
-                cutoff_radius=snapshot_cutoff,
-                dtype=self.dtype,
-                cfg=self.cfg,
-            )
-        else:
-            try:
-                snapshot = Snapshot.from_openmx(
-                    matrix_path=matrix_path,
-                    info_path=info_path,
-                    convention=self.convention,
-                    symmetrize_density=self.cfg.symmetrize_density_targets,
-                    dtype=geometry_dtype,
-                    cutoff_radius=snapshot_cutoff,
-                    cfg=self.cfg,
-                )
-            except Exception as exc:
-                raise RuntimeError(
-                    "Failed to load OpenMX snapshot "
-                    f"matrix_path={matrix_path} info_path={info_path}: {exc}"
-                ) from exc
+        from data.sources import resolve_snapshot_source, load_source_snapshot
+
+        source = resolve_snapshot_source(matrix_path, info_path)
+        snapshot = load_source_snapshot(
+            source,
+            cfg=self.cfg,
+            convention=self.convention,
+            dtype=geometry_dtype,
+        )
         if cache_file is not None:
             try:
                 cache_file.parent.mkdir(parents=True, exist_ok=True)

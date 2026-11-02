@@ -715,6 +715,16 @@ def _write_split_manifest(
 
 
 def _git_provenance() -> dict[str, Any]:
+    snapshot = project_root / "SOURCE_MANIFEST.json"
+    if snapshot.is_file():
+        document = json.loads(snapshot.read_text())
+        return {
+            "commit": document["base_commit"],
+            "branch": document["branch"],
+            "dirty": document["dirty"],
+            "source_snapshot_sha256": document["source_snapshot_sha256"],
+        }
+
     def run_git(*args: str) -> str | None:
         try:
             result = subprocess.run(
@@ -781,10 +791,9 @@ def _execution_provenance(cfg):
     import os
 
     root = Path(__file__).resolve().parents[1]
-    paths = sorted((root / "src").rglob("*.py")) + [
-        root / "scripts/train.py",
-        root / "scripts/dataset.py",
-    ]
+    paths = sorted((root / "src").rglob("*.py")) + sorted(
+        (root / "scripts").rglob("*.py")
+    )
     artifacts = {
         name: getattr(cfg, name, None)
         for name in ("hamiltonian_envelope_path", "spectral_fermi_cache_path")
@@ -1064,27 +1073,13 @@ def _write_compatibility_report(run_dir: Path, report: Any) -> None:
 
 def build_components(document, *, resume=False):
     from data.factory import DatasetFactory
-    from scripts.dataset import _resolve_single_snapshot_info_path
 
     splits = dataset_paths(document)
     data_cfg = Config.from_mapping(document)
     factory = DatasetFactory(data_cfg)
     for split, paths in splits.items():
         for path in paths:
-            if (path / "HS.out").is_file():
-                info = _resolve_single_snapshot_info_path(path)
-                if info is None:
-                    raise FileNotFoundError(f"Missing OpenMX metadata under {path}")
-                factory.add_snapshot(path / "HS.out", info, purpose=split)
-            else:
-                factory.add_snapshot(
-                    path
-                    / document.get("data", {})
-                    .get("matrix_files", {})
-                    .get("hamiltonian", "hamiltonians.h5"),
-                    path / "info.json",
-                    purpose=split,
-                )
+            factory.add_snapshot(path, purpose=split)
     train, val, test, mapper = factory.create(include_test=True)
     resolved, codec = factory.configuration, factory.operator_layout
     resolved.setdefault("training", {})
@@ -1107,6 +1102,7 @@ def splits_for_statistics(dataset):
 
 
 def main(argv=None):
+    session_started = time.perf_counter()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
@@ -1195,8 +1191,9 @@ def main(argv=None):
     cfg.wall_clock_scope = args.wall_clock_scope
     cfg.run_name = args.output.name
     cfg.save_dir = str(args.output.parent)
-    run_training(
+    return run_training(
         {
+            "_training_session_start": session_started,
             "_config": cfg,
             "_model": model,
             "_dataset_bundle": (

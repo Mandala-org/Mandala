@@ -104,11 +104,9 @@ def discover_deeph_e3_snapshot_pairs(root: Path) -> list[tuple[Path, Path]]:
 
 
 def _resolve_single_snapshot_info_path(sample_dir: Path) -> Path | None:
-    for name in ("Si.out", "SiO2.out", "ZnCuSeS.out", "info.dat", "info.txt"):
-        candidate = sample_dir / name
-        if candidate.exists():
-            return candidate
-    return None
+    from data.sources import openmx_info_path
+
+    return openmx_info_path(sample_dir)
 
 
 def _create_datasets_from_pairs(

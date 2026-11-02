@@ -275,18 +275,28 @@ class EquiConv(nn.Module):
         else:
             self.irreps_out = irreps_tp_out
 
-        # Element-wise multiplication weights (learned per-irrep scaling)
-        # This is computed from radial features via MLP
+        # Keep the historical output width in both modes so existing checkpoint
+        # shapes and initialization are unchanged. ``term`` shares a gate across
+        # every multiplicity in a grouped term; ``copy`` uses all emitted gates.
+        self.radial_weight_granularity = str(cfg.radial_weight_granularity).lower()
+        if self.radial_weight_granularity not in {"term", "copy"}:
+            raise ValueError("radial_weight_granularity must be 'term' or 'copy'.")
         self.radial_mlp = RadialMLP(
             in_dim=radial_in_dim,
-            out_dim=self.irreps_out.num_irreps,  # One weight per irrep
+            out_dim=self.irreps_out.num_irreps,
             layers=self.cfg.radial_layers,
             act="silu",
             dtype=self.cfg.dtype,
         )
         radial_weight_index = []
+        copy_offset = 0
         for idx, (mul, ir) in enumerate(self.irreps_out):
-            radial_weight_index.extend([idx] * (mul * ir.dim))
+            if self.radial_weight_granularity == "term":
+                radial_weight_index.extend([idx] * (mul * ir.dim))
+            else:
+                for copy in range(mul):
+                    radial_weight_index.extend([copy_offset + copy] * ir.dim)
+            copy_offset += mul
         self.register_buffer(
             "_radial_weight_index",
             torch.tensor(radial_weight_index, dtype=torch.long),

@@ -118,6 +118,26 @@ class E3GNN(pl.LightningModule):
             )
         if cfg.train_target not in {"matrix", "irreps"}:
             raise ValueError("train_target must be one of 'matrix' or 'irreps'.")
+        if cfg.matrix_loss_reduction not in {"pair_sum", "pair_mean", "elements"}:
+            raise ValueError(
+                "matrix_loss_reduction must be pair_sum, pair_mean or elements"
+            )
+        if cfg.matrix_loss_reduction != "pair_sum":
+            if cfg.train_target != "matrix" or cfg.train_on_irrep_parts:
+                raise ValueError(
+                    "matrix_loss_reduction requires orbital_blocks matrix-space "
+                    "supervision, not irrep objectives"
+                )
+            if cfg.data.get("representation") == "packed_shells":
+                raise ValueError(
+                    "matrix_loss_reduction applies to orbital_blocks; packed_shells "
+                    "already uses its declared masked-entry objective"
+                )
+            if str(cfg.loss_weighting_mode).lower() != "off":
+                raise ValueError(
+                    "matrix_loss_reduction pair_mean/elements requires "
+                    "loss_weighting_mode='off'"
+                )
         validate_observable_config(cfg)
         observable_loss_kind = str(getattr(cfg, "observable_loss_kind", "mse")).lower()
         if observable_loss_kind not in {"mse", "mae"}:
@@ -613,6 +633,26 @@ class E3GNN(pl.LightningModule):
             return 0.0
         return float(self.cfg.loss_l1_fraction)
 
+    def _observed_block_losses(self, preds, targets, mask):
+        """Differentiable unweighted means and count for observed block entries."""
+        if preds.shape != targets.shape or mask.shape != targets.shape:
+            raise ValueError("Observed block predictions, targets and mask must align")
+        if mask.dtype != torch.bool:
+            raise ValueError("Observed block coverage mask must be boolean")
+        difference = (preds - targets)[mask]
+        if not difference.numel():
+            return None
+        if not torch.isfinite(difference).all():
+            raise ValueError("Nonfinite observed matrix objective error")
+        mixture = self._objective_l1_fraction()
+        mse_difference = difference if mixture < 1.0 else difference.detach()
+        mae_difference = difference if mixture > 0.0 else difference.detach()
+        return (
+            mse_difference.abs().square().mean(),
+            mae_difference.abs().mean(),
+            difference.numel(),
+        )
+
     def _should_recompute_edge_features(self, x: Dict[str, Any]) -> bool:
         if "positions" in x:
             reference = x.get("_geometry_reference", {})
@@ -961,6 +1001,10 @@ class E3GNN(pl.LightningModule):
             for name, record in y.items()
             if isinstance(record, dict) and "values" in record
         }
+        if supervision and self.cfg.matrix_loss_reduction != "pair_sum":
+            raise ValueError(
+                "matrix_loss_reduction applies to orbital_blocks, not packed supervision"
+            )
         y = dict(y)
         for name, record in supervision.items():
             y[name] = IrrepsBlockData.from_packed(
@@ -1060,7 +1104,22 @@ class E3GNN(pl.LightningModule):
                     targets = targets[partial_mask]
                 if preds.shape[0] == 0:
                     continue
-                diff = (preds - targets).detach()
+                if self.cfg.matrix_loss_reduction != "pair_sum":
+                    mask = target_matrix.coverage_masks.get(key)
+                    mask = (
+                        torch.ones_like(
+                            target_matrix.pair_blocks[key], dtype=torch.bool
+                        )
+                        if mask is None
+                        else mask
+                    )[:target_n]
+                    if partial_mask is not None:
+                        mask = mask[partial_mask]
+                    diff = (preds - targets)[mask].detach()
+                    if not diff.numel():
+                        continue
+                else:
+                    diff = (preds - targets).detach()
                 mse_val += torch.mean(diff.abs().square())
                 mae_val += torch.mean(torch.abs(diff))
             return mse_val, mae_val
@@ -1093,6 +1152,7 @@ class E3GNN(pl.LightningModule):
                 )
             )
             physical_pred_matrices[name] = metric_pred_matrix
+            raw_metric_pred_matrix = metric_pred_matrix
             matrix_edge_weights = (
                 edge_loss_weights if name in {"hamiltonian", "overlap"} else None
             )
@@ -1358,6 +1418,12 @@ class E3GNN(pl.LightningModule):
                 loss_mse_val = torch.tensor(0.0, device=self.device)
                 loss_mae_val = torch.tensor(0.0, device=self.device)
 
+                reduction = self.cfg.matrix_loss_reduction
+                diagnostic_mse_val = torch.tensor(0.0, device=self.device)
+                diagnostic_mae_val = torch.tensor(0.0, device=self.device)
+                reduction_count = 0
+                coverage = t.coverage_masks if reduction != "pair_sum" else {}
+
                 # Vectorized loss calculation
                 for key in t_items.keys():
                     if key not in p_items.keys():
@@ -1390,6 +1456,31 @@ class E3GNN(pl.LightningModule):
                     if preds.shape[0] == 0:
                         continue
 
+                    if reduction != "pair_sum":
+                        mask = coverage.get(key)
+                        mask = (
+                            torch.ones_like(t_items[key], dtype=torch.bool)
+                            if mask is None
+                            else mask
+                        )[:target_n]
+                        if partial_mask is not None:
+                            mask = mask[partial_mask]
+                        observed = self._observed_block_losses(preds, targets, mask)
+                        if observed is None:
+                            continue
+                        weighted_pair_mse, weighted_pair_mae, entry_count = observed
+                        diagnostic_mse_val += weighted_pair_mse.detach()
+                        diagnostic_mae_val += weighted_pair_mae.detach()
+                        factor = entry_count if reduction == "elements" else 1
+                        loss_mse_val += weighted_pair_mse * factor
+                        loss_mae_val += weighted_pair_mae * factor
+                        reduction_count += factor
+                        pair_losses[key] = factor * (
+                            (1 - self._objective_l1_fraction()) * weighted_pair_mse
+                            + self._objective_l1_fraction() * weighted_pair_mae
+                        )
+                        continue
+
                     edge_weights_selected = None
                     if matrix_edge_weights is not None:
                         selected_global_idx = x["edge_partitions"][key]["global_idx"][
@@ -1413,13 +1504,33 @@ class E3GNN(pl.LightningModule):
                         1 - self._objective_l1_fraction()
                     ) * weighted_pair_mse + self._objective_l1_fraction() * weighted_pair_mae
 
+                if reduction != "pair_sum":
+                    if reduction_count == 0:
+                        raise ValueError("No observed matrix entries for objective")
+                    loss_mse_val /= reduction_count
+                    loss_mae_val /= reduction_count
+                    pair_losses = {
+                        key: value / reduction_count
+                        for key, value in pair_losses.items()
+                    }
+
                 if (
                     metric_pred_matrix is p
                     and t is raw_target_matrix
                     and matrix_edge_weights is None
                 ):
-                    metric_mse_val = loss_mse_val.detach()
-                    metric_mae_val = loss_mae_val.detach()
+                    # Historical diagnostics are sums of pair means even when
+                    # the training objective has a different denominator.
+                    metric_mse_val = (
+                        loss_mse_val.detach()
+                        if reduction == "pair_sum"
+                        else diagnostic_mse_val
+                    )
+                    metric_mae_val = (
+                        loss_mae_val.detach()
+                        if reduction == "pair_sum"
+                        else diagnostic_mae_val
+                    )
                 else:
                     metric_mse_val, metric_mae_val = _compute_physical_matrix_metrics(
                         metric_pred_matrix,
@@ -1479,6 +1590,25 @@ class E3GNN(pl.LightningModule):
                     mae_val = metric_mae_val * HARTREE_TO_EV
             metrics[f"{stage}/{name}_mae"] = mae_val
             metrics[f"{stage}/{name}_mse"] = mse_val
+            # Explicit physical-entry reduction, independent of diagnostic flags.
+            # Preserve the historical objectives/monitors of existing runs.
+            from net.operator_metrics import matrix_error_metrics
+
+            for metric, value in matrix_error_metrics(
+                raw_metric_pred_matrix,
+                raw_target_matrix,
+                scale=HARTREE_TO_EV if name == "hamiltonian" else 1.0,
+                edge_selector=self._partial_train_mask,
+            ).items():
+                metrics[f"{stage}/{name}_{metric}"] = value
+            if metric_pred_matrix is not raw_metric_pred_matrix:
+                for metric, value in matrix_error_metrics(
+                    metric_pred_matrix,
+                    raw_target_matrix,
+                    scale=HARTREE_TO_EV if name == "hamiltonian" else 1.0,
+                    edge_selector=self._partial_train_mask,
+                ).items():
+                    metrics[f"{stage}/{name}_{metric}_projected"] = value
             if self.cfg.log_per_irrep_metrics or self.cfg.train_on_irrep_parts:
                 for irrep_key, irrep_vals in per_irrep_metrics.items():
                     irrep_mse = irrep_vals["mse"]
@@ -1980,12 +2110,22 @@ class E3GNN(pl.LightningModule):
                 f"{stage}/loss_block_total": matrix_loss,
             }
         )
+        entry_metrics = {
+            key: value for key, value in metrics.items() if "_elementwise" in key
+        }
         self.log_dict(
-            metrics,
+            {key: value for key, value in metrics.items() if key not in entry_metrics},
             prog_bar=True,
             on_step=self.cfg.log_on_step,
             on_epoch=self.cfg.log_on_epoch,
             batch_size=sum(result[2] for result in results),
+        )
+        self.log_dict(
+            entry_metrics,
+            prog_bar=False,
+            on_step=self.cfg.log_on_step,
+            on_epoch=self.cfg.log_on_epoch,
+            batch_size=len(results),
         )
         return loss
 

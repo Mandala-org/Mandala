@@ -50,6 +50,8 @@ class DeepHE3Metadata:
     fermi_level: torch.Tensor | None
     is_spinful: bool
     available_matrices: frozenset[str]
+    orbital_basis: str = "openmx"
+    source_cartesian_axes: str = "xyz"
 
     def as_snapshot_info(self) -> SimpleNamespace:
         return SimpleNamespace(
@@ -63,6 +65,8 @@ class DeepHE3Metadata:
             internal_energy_unit="Hartree",
             source_length_unit="Angstrom",
             internal_length_unit="Angstrom",
+            source_orbital_basis=self.orbital_basis,
+            source_cartesian_axes=self.source_cartesian_axes,
         )
 
 
@@ -141,6 +145,8 @@ def load_deeph_e3_metadata(
     dtype: torch.dtype = torch.float32,
     require_matrices: bool = True,
     matrix_files: dict | None = None,
+    source_basis: str | None = None,
+    source_cartesian_axes: str | None = None,
 ) -> DeepHE3Metadata:
     snapshot_dir = Path(snapshot_dir).expanduser().resolve()
     filenames = {
@@ -192,6 +198,29 @@ def load_deeph_e3_metadata(
 
     with (snapshot_dir / "info.json").open() as handle:
         info_payload = json.load(handle)
+    declared_basis = info_payload.get("orbital_basis")
+    if source_basis is not None and declared_basis not in {None, source_basis}:
+        raise DeepHE3ParseError("Configured source basis conflicts with info.json")
+    orbital_basis = source_basis or declared_basis or "openmx"
+    if orbital_basis not in {"openmx", "e3nn"}:
+        raise DeepHE3ParseError(f"Unsupported source orbital basis: {orbital_basis}")
+    expected_axes = "xyz" if orbital_basis == "openmx" else "yzx"
+    declared_axes = info_payload.get("cartesian_axes")
+    if source_cartesian_axes is not None and declared_axes not in {
+        None,
+        source_cartesian_axes,
+    }:
+        raise DeepHE3ParseError("Configured Cartesian axes conflict with info.json")
+    axes = source_cartesian_axes or declared_axes or expected_axes
+    if axes not in {"xyz", "yzx"}:
+        raise DeepHE3ParseError(f"Unsupported source Cartesian axes: {axes}")
+    # A basis label describes orbital ordering, not the file's Cartesian frame.
+    # Normalize geometry to that basis's expected axes before Snapshot converts
+    # the combined representation. Already-converted matrices are never reordered.
+    if axes != expected_axes:
+        order = [1, 2, 0] if expected_axes == "yzx" else [2, 0, 1]
+        positions_raw = positions_raw[:, order]
+        box_raw = box_raw[:, order]
     is_spinful = bool(info_payload.get("isspinful", False))
     fermi_ev = info_payload.get("fermi_level")
     fermi_level = (
@@ -216,6 +245,8 @@ def load_deeph_e3_metadata(
         fermi_level=fermi_level,
         is_spinful=is_spinful,
         available_matrices=frozenset(available),
+        orbital_basis=orbital_basis,
+        source_cartesian_axes=axes,
     )
 
 
@@ -336,7 +367,7 @@ def load_deeph_e3_block_matrix(
         pair_edges=pair_edges,
         lookup=lookup,
         orbital_cfg=orbital_cfg,
-        basis="openmx",
+        basis=metadata.orbital_basis,
     )
 
 

@@ -103,6 +103,7 @@ analysis_outputs/
 configs/*
 !configs/reference/
 !configs/hybrids/
+!configs/pilots/
 tmp/
 local_cache/
 

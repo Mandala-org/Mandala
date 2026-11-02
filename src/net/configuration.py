@@ -74,6 +74,8 @@ def validate_configuration_sections(config):
             "graph_radius",
             "representation",
             "basis",
+            "source_basis",
+            "source_cartesian_axes",
             "support_operator",
             "geometry_dtype",
             "validate_hermitian",
@@ -96,6 +98,14 @@ def validate_configuration_sections(config):
         if unknown:
             raise ValueError(f"Unknown {section} options: {sorted(unknown)}")
     objective = config.get("objective") or {}
+    if config.get("matrix_loss_reduction", "pair_sum") not in {
+        "pair_sum",
+        "pair_mean",
+        "elements",
+    }:
+        raise ValueError(
+            "matrix_loss_reduction must be pair_sum, pair_mean or elements"
+        )
     if objective.get("kind", "mse") not in {"mse", "mae"}:
         raise ValueError("objective.kind must be mse or mae")
     if objective.get("epoch_weight", "edges") not in {"edges", "elements"}:
@@ -106,13 +116,18 @@ def validate_configuration_sections(config):
     }:
         raise ValueError("objective.complex_reduction must be magnitude or components")
     units = config.get("data", {}).get("units", {})
+    data = config.get("data", {})
+    if data.get("source_basis") not in {None, "openmx", "e3nn"}:
+        raise ValueError("data.source_basis must be openmx or e3nn")
+    if data.get("source_cartesian_axes") not in {None, "xyz", "yzx"}:
+        raise ValueError("data.source_cartesian_axes must be xyz or yzx")
     from data.graph_topology import validate_support_policies
 
     validate_support_policies(config.get("data", {}).get("supports", {}))
     expected = {
         "energy": "eV",
         "length": "Angstrom",
-        "orbitals": "openmx",
+        "orbitals": data.get("source_basis", "openmx"),
         "spin": "spin_major",
     }
     for key, value in units.items():
