@@ -12,6 +12,7 @@ runs/
 checkpoints/
 wandb/
 benchmarks/
+!scripts/benchmarks/
 lightning_logs/
 outputs/
 eval_outputs/
