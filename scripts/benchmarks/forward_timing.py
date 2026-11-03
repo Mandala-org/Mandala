@@ -125,8 +125,24 @@ def build_model(config_path, shells, radius, dtype):
 
 
 def model_inputs(model, cfg, mapper, symbols, positions, box, device, dtype):
+    import data.structure_inference as inference
     from data.structure_inference import build_model_input_from_structure
     from data.sample import move_tree
+
+    # The pre-decomposition tree builds a per-edge r0 lookup whenever an
+    # envelope is loaded and fails for families without r0. Its model reads
+    # edge_r0 only for pair_r0 normalization, which needs such a family, so
+    # NaNs stand in for the unused values.
+    lookup = getattr(inference, "build_edge_r0_lookup", None)
+    if lookup is not None and not getattr(lookup, "benchmark_wrapper", False):
+
+        def r0_lookup(edge_type_idx, envelope_table):
+            if envelope_table.r0_parameter_index is None:
+                return torch.full(edge_type_idx.shape, float("nan"))
+            return lookup(edge_type_idx=edge_type_idx, envelope_table=envelope_table)
+
+        r0_lookup.benchmark_wrapper = True
+        inference.build_edge_r0_lookup = r0_lookup
 
     x = build_model_input_from_structure(
         atoms=symbols,
