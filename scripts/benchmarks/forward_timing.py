@@ -224,8 +224,23 @@ def main(argv=None):
         )
         loss.backward()
 
-    if str(args.device).startswith("cuda"):
-        torch.cuda.reset_peak_memory_stats()
+    cuda = str(args.device).startswith("cuda")
+
+    def measure(function, name):
+        # Running out of memory is a result of the comparison, not a failure
+        # of the batch: it is recorded with the peak reached so far.
+        if cuda:
+            torch.cuda.reset_peak_memory_stats()
+        try:
+            timing = timed(function, args.device, args.warmup, args.repeats)
+        except torch.OutOfMemoryError:
+            timing = {"out_of_memory": True}
+            print(f"{args.label}: {name} ran out of CUDA memory", flush=True)
+        if cuda:
+            timing["peak_memory_bytes"] = torch.cuda.max_memory_allocated()
+            torch.cuda.empty_cache()
+        return timing
+
     result = {
         "label": args.label,
         "config": str(args.config),
@@ -241,17 +256,25 @@ def main(argv=None):
         ),
         "dtype": args.dtype,
         "torch": torch.__version__,
-        "forward": timed(forward, args.device, args.warmup, args.repeats),
-        "train_step": timed(train_step, args.device, args.warmup, args.repeats),
+        "forward": measure(forward, "forward"),
+        "train_step": measure(train_step, "train step"),
     }
-    if str(args.device).startswith("cuda"):
-        result["peak_memory_bytes"] = torch.cuda.max_memory_allocated()
+    if cuda:
+        result["peak_memory_bytes"] = max(
+            result[key]["peak_memory_bytes"] for key in ("forward", "train_step")
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2))
+
+    def milliseconds(timing):
+        if timing.get("out_of_memory"):
+            return "out of memory"
+        return f"{timing['median_s'] * 1e3:.2f} ms"
+
     print(
         f"{args.label}: {result['parameters']} parameters, {result['edges']} edges, "
-        f"forward {result['forward']['median_s'] * 1e3:.2f} ms, "
-        f"train step {result['train_step']['median_s'] * 1e3:.2f} ms"
+        f"forward {milliseconds(result['forward'])}, "
+        f"train step {milliseconds(result['train_step'])}"
     )
 
 

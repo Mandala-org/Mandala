@@ -46,6 +46,8 @@ def main(argv=None):
     by_transform, pooled, devices = defaultdict(list), [], set()
     for path in args.profiles:
         profile = json.loads(path.read_text())
+        if profile.get("out_of_memory"):
+            continue
         devices.add(profile["device_name"])
         for stage in profile["stages"]:
             if stage["measured_s"] is None:

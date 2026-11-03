@@ -117,13 +117,31 @@ def main(argv=None):
     x = model_inputs(model, cfg, mapper, symbols, positions, box, args.device, dtype)
     x.pop("_static_features", None)  # time every stage, including the cached ones
     timer = StageTimer(model.pipeline, args.device)
-    with torch.no_grad():
-        for _ in range(args.warmup):
-            model(x)
-        synchronize(args.device)
-        timer.reset()
-        for _ in range(args.repeats):
-            model(x)
+    try:
+        with torch.no_grad():
+            for _ in range(args.warmup):
+                model(x)
+            synchronize(args.device)
+            timer.reset()
+            for _ in range(args.repeats):
+                model(x)
+    except torch.OutOfMemoryError:
+        # A size that does not fit is recorded and left out of the cost fit.
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(
+                {
+                    "config": str(args.config),
+                    "atoms": args.atoms,
+                    "edges": int(x["edge_index"].shape[1]),
+                    "out_of_memory": True,
+                    "stages": [],
+                },
+                indent=2,
+            )
+        )
+        print(f"{args.config} ({args.atoms} atoms): out of CUDA memory")
+        return
     measured = timer.seconds()
     edges = int(x["edge_index"].shape[1])
     size = SystemSize(atoms=args.atoms, neighbors=edges / args.atoms)

@@ -9,15 +9,17 @@ Tools that measure the modular pipeline and calibrate the cost model used by
 | `stage_profile.py` | Time of every pipeline stage (CUDA events) next to its cost-model operation count and parameter count. |
 | `fit_cost_constants.py` | Per-transform `seconds = overhead + rate x operations` fits (non-negative least squares) in the format of `src/net/cost_constants.json`. |
 | `compare_timings.py` | Markdown table of base-versus-modular medians and ratios. |
-| `run_pipeline_benchmarks.sh` | The frozen batch: A/B timings of three model sizes, stage profiles of six reference recipes at 32/64/128 atoms, and the constant fit. |
+| `run_pipeline_benchmarks.sh` | The frozen batch: A/B timings of the MANDALA models and of DeepH, DeepH-E3 and MACE-H at 32 and 64 atoms, stage profiles of six reference recipes at 32/64/128 atoms, and the constant fit. |
 
 ## Running the batch
 
 The launcher takes no arguments, runs from the repository root, needs one GPU
-and stops at the first failure. With Slurm:
+and stops at the first failure. Running out of CUDA memory is not a failure:
+the run is recorded with its peak memory and shown as OOM in the summary
+(profiles that do not fit are left out of the constant fit). With Slurm:
 
 ```bash
-sbatch --gres=gpu:1 --cpus-per-task=4 --mem=64G --time=03:00:00 --wrap "bash scripts/benchmarks/run_pipeline_benchmarks.sh"
+sbatch --gres=gpu:1 --cpus-per-task=4 --mem=64G --time=06:00:00 --wrap "bash scripts/benchmarks/run_pipeline_benchmarks.sh"
 ```
 
 Results are written to `benchmark_data/pipeline_modularity_v1/<job id>/`:

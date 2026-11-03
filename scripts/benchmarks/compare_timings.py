@@ -12,6 +12,19 @@ import json
 from pathlib import Path
 
 
+def milliseconds(result, key):
+    timing = result[key]
+    if timing.get("out_of_memory"):
+        return "OOM"
+    return timing["median_s"] * 1e3
+
+
+def text(value):
+    if value is None:
+        return "-"
+    return value if isinstance(value, str) else f"{value:.2f}"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
@@ -44,12 +57,15 @@ def main(argv=None):
         # The ratio uses the uncached arm when present: like the base tree it
         # recomputes structure-only stages, isolating the decomposition's cost.
         for key in ("forward", "train_step"):
-            b, m = base[key]["median_s"] * 1e3, modular[key]["median_s"] * 1e3
-            u = uncached[key]["median_s"] * 1e3 if uncached else None
-            ratio = (u if u is not None else m) / b
-            cells.append(
-                f"{b:.2f} / {m:.2f} / {'-' if u is None else f'{u:.2f}'} / {ratio:.3f}"
+            b, m = milliseconds(base, key), milliseconds(modular, key)
+            u = milliseconds(uncached, key) if uncached else None
+            reference = u if uncached else m
+            ratio = (
+                f"{reference / b:.3f}"
+                if isinstance(reference, float) and isinstance(b, float)
+                else "-"
             )
+            cells.append(f"{text(b)} / {text(m)} / {text(u)} / {ratio}")
         memory = [result.get("peak_memory_bytes") for result in (base, modular)]
         cells.append(
             " / ".join(f"{value / 2**20:.0f}" if value else "-" for value in memory)

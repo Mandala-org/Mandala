@@ -17,6 +17,9 @@ ROOT="$(pwd)"
 OUT="benchmark_data/pipeline_modularity_v1/${SLURM_JOB_ID:-local-$(date +%Y%m%d-%H%M%S)}"
 export PYTHONHASHSEED=42 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=1
 export MPLCONFIGDIR=/tmp/mandala-benchmarks-mpl
+# Large graphs fragment the caching allocator (job 820553 ran out of memory
+# with 30 GiB reserved but unallocated).
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 mkdir -p "$OUT/base_source" "$OUT/ab" "$OUT/profiles"
 git archive "$BASE_COMMIT" src configs | tar -x -C "$OUT/base_source"
 git rev-parse HEAD > "$OUT/modular_commit.txt"
@@ -29,6 +32,12 @@ CASES=(
   "paper_sio2_96|configs/reference/mandala_paper.yaml|$SIO2|96"
   "paper_sio2_192|configs/reference/mandala_paper.yaml|$SIO2|192"
   "first_model_si_64|examples/first_model/silicon.yaml|$SI|64"
+  # The reference models also run at 32 atoms: at 64, the pre-decomposition
+  # DeepH training step needs more than 55 GiB, and an out-of-memory run is
+  # recorded instead of timed.
+  "deeph_si_32|configs/reference/deeph.yaml|$SI|32"
+  "deeph_e3_si_32|configs/reference/deeph_e3.yaml|$SI|32"
+  "mace_h_si_32|configs/reference/mace_h.yaml|$SI|32"
   "deeph_si_64|configs/reference/deeph.yaml|$SI|64"
   "deeph_e3_si_64|configs/reference/deeph_e3.yaml|$SI|64"
   "mace_h_si_64|configs/reference/mace_h.yaml|$SI|64"
