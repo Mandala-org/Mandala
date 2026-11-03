@@ -15,7 +15,6 @@ import torch
 
 from core.block_irrep_mapper import BlockIrrepMapper
 
-
 pytestmark = pytest.mark.physics
 
 

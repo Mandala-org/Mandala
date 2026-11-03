@@ -5,30 +5,9 @@ from e3nn.o3 import Irreps
 from net.common import Config, build_hidden_irreps
 from net.common import RadialMLP
 from net.activations import scalar_activation, make_nonlinearity
-from net.layers import MessageBlock
 from core.sparse_math import trace_matmul_sparse
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig, OrbitalIrrepConfigError
-
-
-@pytest.mark.unit
-def test_message_block_edge_and_node_update():
-    cfg = Config(node_update_message_agg="attention", safety_checks=True, l_max=2)
-    hid_ir = Irreps("8x0e")
-    num_species = 2
-    blk = MessageBlock(hid_ir, hid_ir, num_species, cfg)
-    N, E = 3, 2
-    node = torch.randn(N, hid_ir.dim)
-    edge = torch.randn(E, hid_ir.dim)
-    idx = torch.tensor([[0, 1], [1, 2]])
-    sh_irreps = Irreps.spherical_harmonics(cfg.l_max)
-    edge_sh = torch.randn(E, sh_irreps.dim)
-    edge_length_emb = torch.randn(E, cfg.n_radial)
-    node2, edge2 = blk(node, edge, idx, edge_sh, edge_length_emb)
-    assert node2.shape == (N, hid_ir.dim)
-    assert edge2.shape == (E, hid_ir.dim)
-    assert blk.node_upd.value_projs is not None
-    assert len(blk.node_upd.value_projs) == cfg.node_update_attention_heads
 
 
 @pytest.mark.unit

@@ -73,7 +73,10 @@ def test_training_step_with_force_loss(tiny_dataset):
     y = dict(y, forces=torch.full_like(x["positions"], 0.25))
     batch = (x, y)
     parameters = tuple(model.parameters())
+    from net.objectives import Objective, default_objective
+
     model.cfg.loss_coef_forces = 0.0
+    model.objective = Objective(default_objective(model.cfg))
     baseline = model.training_step(batch, 0)
     baseline_grad = torch.autograd.grad(baseline, parameters, allow_unused=True)
 
@@ -87,6 +90,7 @@ def test_training_step_with_force_loss(tiny_dataset):
     assert any(grad is not None and grad.abs().max() > 1e-10 for grad in expected_grad)
 
     model.cfg.loss_coef_forces = coefficient
+    model.objective = Objective(default_objective(model.cfg))
     total = model.training_step(batch, 0)
     torch.testing.assert_close(
         total - baseline, expected_force_loss, rtol=1e-4, atol=1e-6

@@ -67,36 +67,28 @@ def test_linear_layers_preserve_edge_support():
         assert produced[0].support == "message"
 
 
-@pytest.mark.parametrize(
-    "name", ["endpoint_tensor_product_node", "endpoint_tensor_product_edge"]
-)
-def test_endpoint_tensor_products_reject_wrong_edge_index_support(name):
+def test_endpoint_stages_reject_wrong_edge_index_support():
     node = FeatureSpec("node", "irreps", "2x0e")
-    attrs = FeatureSpec("node" if name.endswith("node") else "edge", irreps="2x0e")
     edge = FeatureSpec("edge", "irreps", "2x0e")
-    specs = [
-        node,
-        attrs,
-        edge,
-        edge,
-        edge,
-        FeatureSpec("relation", "index", frame="none", support="message"),
-        FeatureSpec("node", "index", frame="none"),
-    ]
+    message_index = FeatureSpec("relation", "index", frame="none", support="message")
     with pytest.raises(ValueError, match="support mismatch"):
-        build_transform(name, {}, specs)
+        build_transform("endpoint_concat", {}, [node, edge, message_index])
+    with pytest.raises(ValueError, match="support mismatch"):
+        build_transform(
+            "radial_channel_scale",
+            {},
+            [FeatureSpec("edge", "irreps", "2x0e", support="message"), edge],
+        )
 
 
-def test_neighbor_density_rejects_equal_width_radial_features_from_another_graph():
+def test_channelwise_convolution_rejects_equal_width_radial_features_from_another_graph():
     specs = [
-        FeatureSpec("node", irreps="2x0e"),
-        FeatureSpec("node", "irreps", "2x0e"),
+        FeatureSpec("edge", "irreps", "2x0e", support="message"),
         FeatureSpec("edge", "irreps", "0e+1o", support="message"),
         FeatureSpec("edge", irreps="3x0e"),
-        FeatureSpec("relation", "index", frame="none", support="message"),
     ]
     with pytest.raises(ValueError, match="support mismatch"):
-        build_transform("neighbor_density", {}, specs)
+        build_transform("channelwise_tensor_product", {"irreps_out": "2x0e"}, specs)
 
 
 def test_graph_norm_rejects_batch_indices_from_another_edge_support():
@@ -112,22 +104,12 @@ def test_graph_norm_rejects_batch_indices_from_another_edge_support():
 
 
 def test_local_message_rejects_bond_neighborhoods_for_another_output_graph():
-    specs = default_input_specs(2)
-    ports = [
-        specs["node_one_hot"],
-        specs["edge_one_hot"],
-        specs["sub_atom_idx"],
-        specs["sub_edge_idx"],
-        FeatureSpec(
-            "bond_neighbor", "local_components", frame="bond", support="message"
-        ),
-        specs["sub_index"],
-        specs["edge_lengths"],
-    ]
+    gathered = FeatureSpec("bond_neighbor", irreps="2x0e", width=2)
+    angles = FeatureSpec(
+        "bond_neighbor", "local_components", frame="bond", width=4, support="message"
+    )
     with pytest.raises(ValueError, match="support mismatch"):
-        build_transform(
-            "local_coordinate_message", {"angular_dim": 4, "out_dim": 2}, ports
-        )
+        build_transform("concat", {}, [gathered, angles])
 
 
 def test_local_orbital_output_spinless_identity_and_bond_frame_contract():
@@ -199,6 +181,7 @@ def test_shell_decoder_uses_current_default_precision_and_preserves_support():
 
 def test_explicit_message_view_pipeline_excludes_zero_distance_output_self_edges():
     configuration = {
+        "block_libraries": ["mace"],
         "stages": [
             {
                 "id": "nodes",
@@ -223,21 +206,20 @@ def test_explicit_message_view_pipeline_excludes_zero_distance_output_self_edges
             },
             {
                 "id": "density",
-                "transform": "neighbor_density",
+                "transform": "density_interaction",
                 "inputs": [
-                    "node_one_hot",
                     "hidden",
                     "message_sh",
                     "message_radial",
                     "message_edge_index",
                     "node_batch",
                 ],
-                "outputs": ["rho", "skip"],
+                "outputs": ["rho", "message"],
                 "options": {
-                    "target_irreps": "2x0e+2x1o",
-                    "hidden_irreps": "2x0e+2x1o",
-                    "avg_num_neighbors": 1.0,
+                    "irreps_out": "2x0e+2x1o",
                     "radial_layers": [4],
+                    "graph_norm": False,
+                    "degree_scale": True,
                 },
             },
         ],
@@ -313,36 +295,23 @@ def test_scalar_local_readout_requires_global_to_bond_adapter():
 
 
 @pytest.mark.parametrize("irreps", ["1x1o", "1x0o"])
-def test_scalar_endpoint_edge_rejects_global_tensor_and_pseudoscalar_channels(irreps):
-    specs = default_input_specs(1)
-    with pytest.raises(ValueError, match="invariant edge"):
+def test_scalar_edge_mlp_rejects_global_tensor_and_pseudoscalar_channels(irreps):
+    with pytest.raises(ValueError, match="invariant scalar"):
         build_transform(
-            "endpoint_scalar_edge",
-            {"out_dim": 3},
-            [
-                specs["node_one_hot"],
-                specs["edge_index"],
-                FeatureSpec("edge", "irreps", irreps),
-            ],
+            "scalar_mlp", {"out_features": 3}, [FeatureSpec("edge", "irreps", irreps)]
         )
 
 
 @pytest.mark.parametrize("irreps", ["1x1o", "1x0o"])
 def test_local_messages_reject_unrotated_tensor_and_pseudoscalar_edges(irreps):
     specs = default_input_specs(1)
-    ports = [
-        specs["node_one_hot"],
-        FeatureSpec("edge", "irreps", irreps),
-        specs["sub_atom_idx"],
-        specs["sub_edge_idx"],
-        specs["sub_edge_ang"],
-        specs["sub_index"],
-        specs["edge_lengths"],
-    ]
-    with pytest.raises(ValueError, match="invariant edge"):
-        build_transform(
-            "local_coordinate_message", {"angular_dim": 4, "out_dim": 3}, ports
-        )
+    angles = FeatureSpec("bond_neighbor", "local_components", frame="bond", width=4)
+    bond = FeatureSpec("bond_neighbor", "irreps", irreps)
+    with pytest.raises(ValueError, match="share entity, frame"):
+        build_transform("concat", {}, [bond, angles])
+    with pytest.raises(ValueError, match="invariant scalar"):
+        build_transform("gated_scalar_message", {"out_features": 3}, [bond])
+    assert specs["sub_edge_ang"].width is None
 
 
 @pytest.mark.parametrize("irreps", ["1x1o", "1x0o"])

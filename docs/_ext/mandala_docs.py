@@ -9,7 +9,7 @@
     blocks, computed with e3nn and the MANDALA orbital mapper.
 
 ``.. transform-registry::``
-    All transformation names accepted by the pipeline compiler.
+    Every registered transformation by category, with ports and key options.
 """
 
 from __future__ import annotations
@@ -155,22 +155,33 @@ class TransformRegistry(Directive):
     has_content = False
 
     def run(self):
-        from net.pipeline import _TRANSFORMS
+        from itertools import groupby
 
-        source = (ROOT / "src" / "net" / "pipeline.py").read_text()
-        body = source[
-            source.index("def build_transform") : source.index("class _CodecDecode")
-        ]
-        built_in = set(re.findall(r'name == "([a-z_]+)"', body))
-        for group in re.findall(r"name in \{([^}]*)\}", body):
-            built_in |= set(re.findall(r'"([a-z_]+)"', group))
-        names = sorted(built_in | set(_TRANSFORMS))
-        lines = [
-            f"The compiler currently accepts **{len(names)}** transformation names:",
-            "",
-        ]
-        lines.append(", ".join(f"``{name}``" for name in names))
-        lines.append("")
+        from net.registry import transform_catalog
+
+        catalog = transform_catalog()
+        lines = [f"The registry holds **{len(catalog)}** transformations.", ""]
+        for category, entries in groupby(catalog, key=lambda entry: entry["category"]):
+            rows = []
+            for entry in entries:
+                ports = ", ".join(
+                    port["name"]
+                    + ("?" if port["optional"] else "")
+                    + ("..." if port["variadic"] else "")
+                    for port in entry["inputs"]
+                )
+                key = ", ".join(
+                    f"``{o['name']}``" for o in entry["options"] if o["key"]
+                )
+                rows.append(
+                    (f"``{entry['name']}``", ports, entry["summary"], key or "-")
+                )
+            lines += [f".. rubric:: {category.replace('_', ' ').capitalize()}", ""]
+            lines += _table(
+                ("Transformation", "Inputs", "Computes", "Key options"),
+                rows,
+                (22, 24, 38, 16),
+            )
         return _render(self, lines)
 
 

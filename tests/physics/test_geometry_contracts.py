@@ -420,9 +420,10 @@ def cutoff_model(smooth):
                 ),
                 dict(
                     id="gather",
-                    transform="endpoint_gather",
+                    transform="endpoint_concat",
                     inputs=["node_sum", "edge_one_hot", "edge_index"],
                     outputs=["endpoints"],
+                    options=dict(simplify=False),
                 ),
                 dict(
                     id="readout",

@@ -30,15 +30,40 @@ Pipeline
 
 .. autofunction:: net.component_defaults.default_graph
 
+.. autofunction:: net.component_defaults.pipeline_specification
+
+Registry, blocks and analysis
+-----------------------------
+
+.. autoclass:: net.registry.Port
+.. autoclass:: net.registry.Option
+.. autoclass:: net.registry.TransformResult
+.. autofunction:: net.registry.transform_catalog
+.. autofunction:: net.blocks.expand_blocks
+.. autofunction:: net.inspection.analyze_recipe
+.. autofunction:: net.inspection.analyze_pipeline
+.. autoclass:: net.cost_model.SystemSize
+.. autofunction:: net.plugins.load_plugins
+
+Objectives
+----------
+
+.. autofunction:: net.objectives.register_objective_term
+.. autoclass:: net.objectives.Objective
+   :members: evaluate
+.. autoclass:: net.objectives.ObjectiveContext
+.. autofunction:: net.objectives.default_objective
+.. autofunction:: net.objectives.objective_catalog
+
 Layers
 ------
 
-.. autoclass:: net.encoders.NodeEncoder
-.. autoclass:: net.encoders.EdgeEncoder
-.. autoclass:: net.layers.EquiConv
-.. autoclass:: net.layers.NodeUpdateBlock
-.. autoclass:: net.layers.EdgeUpdateBlock
-.. autoclass:: net.heads.DeepHead
+.. autoclass:: net.transforms.mandala.EquivariantConvolution
+.. autoclass:: net.transforms.mandala.EndpointConcat
+.. autoclass:: net.transforms.mandala.SelfConnection
+.. autoclass:: net.transforms.mandala.Routed
+.. autoclass:: net.transforms.mandala.EdgeRoles
+.. autoclass:: net.transforms.mandala.PairProjection
 .. autoclass:: net.common.E3MLP
 .. autoclass:: net.common.RadialMLP
 .. autoclass:: net.common.SeparateWeightTensorProduct
@@ -47,11 +72,13 @@ Layers
 .. autoclass:: net.layer_norm.E3LayerNorm
 .. autofunction:: net.e3mlp_variants.make_variant_block
 .. autoclass:: net.transforms.equivariant.GaussianBasis
-.. autoclass:: net.transforms.equivariant.GatedRadialTensorProduct
+.. autoclass:: net.transforms.equivariant.GatedFactorizedTensorProduct
+.. autoclass:: net.transforms.equivariant.RadialChannelScale
 .. autoclass:: net.transforms.equivariant.GraphIrrepNorm
-.. autoclass:: net.transforms.cluster.NeighborDensityInteraction
-.. autoclass:: net.transforms.cluster.SymmetricProductContraction
-.. autoclass:: net.transforms.cluster.AngularDegreeExpansion
+.. autoclass:: net.transforms.cluster.ChannelwiseTensorProduct
+.. autoclass:: net.transforms.local_coordinates.ScalarNormalization
+.. autoclass:: net.transforms.local_coordinates.BondEndpointSum
+.. autoclass:: net.transforms.envelope.PairEnvelope
 .. autoclass:: net.transforms.composition.ProjectedAttention
 .. autoclass:: net.training_policies.SpeciesIrrepAffine
 

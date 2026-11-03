@@ -8,10 +8,11 @@ Operators live on edges: the off-diagonal block :math:`H_{ij}^{\bm L}`
 depends on both atoms *and* on the bond between them. Edge updates bring the
 latest node information into the pair state that the readout consumes.
 
-Built-in members of this kind: ``endpoint_irrep_edge`` (MANDALA: convolution
-of :math:`\bm h_i\oplus\bm h_j\oplus\bm e_{ij}` with the bond harmonics,
-``edge_update_node_combine``), ``endpoint_tensor_product_edge`` (DeepH-E3)
-and ``endpoint_scalar_edge`` (DeepH).
+Built-in members of this kind: MANDALA's ``edge_update`` block
+(``endpoint_concat`` of :math:`\bm h_i, \bm h_j, \bm e_{ij}` followed by
+``equivariant_convolution`` with the bond harmonics),
+the library blocks ``e3_edge_update`` (DeepH-E3) and ``endpoint_edge_update``
+(DeepH).
 
 The new layer
 -------------

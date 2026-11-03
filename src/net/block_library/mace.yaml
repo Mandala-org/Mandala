@@ -1,0 +1,38 @@
+# MACE (Batatia et al., NeurIPS 2022) interaction and product layers and the
+# MACE-H angular-degree expansion as pipeline blocks (MACE-H 3d6248b).
+density_interaction:
+  summary: MACE atomic basis - channel-wise products of lifted neighbor features with harmonics, radial path weights, summed onto receivers
+  inputs: [hidden, harmonics, radial, edge_index, node_batch]
+  outputs: [density, message]
+  options: {irreps_out: null, radial_layers: [64, 64, 64], graph_norm: true, degree_scale: false, avg_num_neighbors: 1.0}
+  stages:
+    - {id: lift, transform: irrep_linear, inputs: [hidden], outputs: [lifted]}
+    - {id: sender, transform: gather_rows, inputs: [lifted, edge_index], outputs: [sender], options: {endpoint: 0}}
+    - {id: convolution, transform: channelwise_tensor_product, inputs: [sender, harmonics, radial], outputs: [products], options: {irreps_out: $irreps_out, radial_layers: $radial_layers}}
+    - {id: aggregate, transform: indexed_aggregation, inputs: [products, edge_index, hidden], outputs: [summed], options: {reduction: sum, receiver: 1}}
+    - {id: norm, transform: graph_irrep_norm, inputs: [summed, node_batch], outputs: [message], enabled: $graph_norm}
+    - {id: project, transform: irrep_linear, inputs: [message], outputs: [projected], options: {irreps_out: $irreps_out}}
+    - {id: degree, transform: constant_scale, inputs: [projected], outputs: [scaled], options: {divisor: $avg_num_neighbors}, enabled: $degree_scale}
+    - {id: channels, transform: channel_reshape, inputs: [scaled], outputs: [density]}
+symmetric_product:
+  summary: MACE product basis - species-conditioned symmetric contraction, linear mix, skip
+  inputs: [density, species, skip]
+  outputs: [updated]
+  options: {irreps_out: null, correlation: 3}
+  stages:
+    - {id: contraction, transform: symmetric_contraction, inputs: [density, species], outputs: [contracted], options: {irreps_out: $irreps_out, correlation: $correlation}}
+    - {id: mix, transform: irrep_linear, inputs: [contracted], outputs: [mixed]}
+    - {id: skip, transform: residual, inputs: [skip, mixed], outputs: [updated], options: {mode: add}}
+angular_expansion:
+  summary: Couple a hidden node stream to a separate angular stream (gated factorized product), self-connection, graph norm, biased skip
+  inputs: [hidden, angular, species, node_batch]
+  outputs: [expanded]
+  options: {irreps_out: null, gate: true, graph_norm: true}
+  stages:
+    - {id: hidden_projection, transform: irrep_linear, inputs: [hidden], outputs: [hidden_projected], options: {degrees_of: $irreps_out}}
+    - {id: angular_projection, transform: irrep_linear, inputs: [angular], outputs: [angular_projected], options: {degrees_of: $irreps_out}}
+    - {id: product, transform: factorized_tensor_product, inputs: [hidden_projected, angular_projected], outputs: [products], options: {irreps_out: $irreps_out, gate: $gate}}
+    - {id: post, transform: irrep_linear, inputs: [products], outputs: [post], options: {biases: true}}
+    - {id: connection, transform: self_connection, inputs: [hidden, species, post], outputs: [connected]}
+    - {id: norm, transform: graph_irrep_norm, inputs: [connected, node_batch], outputs: [normalized], enabled: $graph_norm}
+    - {id: skip, transform: residual, inputs: [hidden, normalized], outputs: [expanded], options: {mode: linear, bias: true}}

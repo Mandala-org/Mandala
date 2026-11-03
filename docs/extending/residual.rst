@@ -9,10 +9,12 @@ Residual connections combine a layer's update with its input,
 layer learn a correction rather than a replacement. In a pipeline the old and
 new states are separate slots, so the residual is an explicit stage.
 
-Built-in members of this kind: ``node_update_residual`` and
-``edge_update_residual`` of the MANDALA blocks, the scaled residuals of the
-``res*`` E3MLP variants, ``irrep_residual`` (with a projection when layouts
-differ) and ``add``.
+Built-in members of this kind: ``residual`` (``mode``: add_if_matching, add,
+project; MANDALA's ``node_update_residual``/``edge_update_residual``),
+``self_connection`` (species-dependent skip path), the scaled residuals of the
+``res*`` E3MLP variants, ``residual`` (modes ``add_if_matching``, ``add``,
+``project``, ``linear``) and ``add``. Disabling a ``residual`` stage
+(``enabled: false``) passes the update through: an ablation without rewiring.
 
 The new layer
 -------------

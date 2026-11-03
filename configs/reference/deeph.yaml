@@ -71,225 +71,45 @@ objective:
   epoch_weight: elements
   complex_reduction: components
 pipeline:
+  inputs:
+    sub_edge_ang: {domain: bond_neighbor, representation: local_components, frame: bond, width: '${parameters.angular_dim}'}
+  block_libraries: [deeph]
   stages:
   - id: species_embedding
     transform: embedding
-    inputs:
-    - node_type_idx
-    outputs:
-    - node0
-    options:
-      num_embeddings: ${species.count}
-      extra_embeddings: 5
-      width: ${parameters.node_width}
+    inputs: [node_type_idx]
+    outputs: [node0]
+    options: {num_embeddings: '${species.count}', extra_embeddings: 5, width: '${parameters.node_width}'}
   - id: distance_expansion
     transform: gaussian_basis
-    inputs:
-    - edge_lengths
-    outputs:
-    - edge0
-    options:
-      start: 0
-      stop: ${parameters.gauss_stop}
-      n_gaussians: ${parameters.edge_width}
-      trainable: false
-  - id: node_update_1
-    transform: scalar_gated_node
-    inputs:
-    - node0
-    - edge_index
-    - edge0
-    - node_batch
-    - edge_lengths
-    outputs:
-    - node1
-    options:
-      normalization: layer
-      distance_envelope: true
-      envelope_sigma: ${parameters.envelope_sigma}
-      filter_activation: ${parameters.filter_activation}
-      message_activation: ${parameters.message_activation}
-  - id: edge_update_1
-    transform: endpoint_scalar_edge
-    inputs:
-    - node1
-    - edge_index
-    - edge0
-    outputs:
-    - edge1
-    options:
-      out_dim: ${parameters.edge_width}
-      final_activation: true
-  - id: node_update_2
-    transform: scalar_gated_node
-    inputs:
-    - node1
-    - edge_index
-    - edge1
-    - node_batch
-    - edge_lengths
-    outputs:
-    - node2
-    options:
-      normalization: layer
-      distance_envelope: true
-      envelope_sigma: ${parameters.envelope_sigma}
-      filter_activation: ${parameters.filter_activation}
-      message_activation: ${parameters.message_activation}
-  - id: edge_update_2
-    transform: endpoint_scalar_edge
-    inputs:
-    - node2
-    - edge_index
-    - edge1
-    outputs:
-    - edge2
-    options:
-      out_dim: ${parameters.edge_width}
-      final_activation: true
-  - id: node_residual_2
-    transform: add
-    inputs:
-    - node0
-    - node2
-    outputs:
-    - node_residual_2
-    options: {}
-  - id: edge_residual_2
-    transform: add
-    inputs:
-    - edge0
-    - edge2
-    outputs:
-    - edge_residual_2
-    options: {}
-  - id: node_update_3
-    transform: scalar_gated_node
-    inputs:
-    - node_residual_2
-    - edge_index
-    - edge_residual_2
-    - node_batch
-    - edge_lengths
-    outputs:
-    - node3
-    options:
-      normalization: layer
-      distance_envelope: true
-      envelope_sigma: ${parameters.envelope_sigma}
-      filter_activation: ${parameters.filter_activation}
-      message_activation: ${parameters.message_activation}
-  - id: edge_update_3
-    transform: endpoint_scalar_edge
-    inputs:
-    - node3
-    - edge_index
-    - edge_residual_2
-    outputs:
-    - edge3
-    options:
-      out_dim: ${parameters.edge_width}
-      final_activation: true
-  - id: node_update_4
-    transform: scalar_gated_node
-    inputs:
-    - node3
-    - edge_index
-    - edge3
-    - node_batch
-    - edge_lengths
-    outputs:
-    - node4
-    options:
-      normalization: layer
-      distance_envelope: true
-      envelope_sigma: ${parameters.envelope_sigma}
-      filter_activation: ${parameters.filter_activation}
-      message_activation: ${parameters.message_activation}
-  - id: edge_update_4
-    transform: endpoint_scalar_edge
-    inputs:
-    - node4
-    - edge_index
-    - edge3
-    outputs:
-    - edge4
-    options:
-      out_dim: ${parameters.edge_width}
-      final_activation: true
-  - id: node_residual_4
-    transform: add
-    inputs:
-    - node_residual_2
-    - node4
-    outputs:
-    - node_residual_4
-    options: {}
-  - id: edge_residual_4
-    transform: add
-    inputs:
-    - edge_residual_2
-    - edge4
-    outputs:
-    - edge_residual_4
-    options: {}
-  - id: node_update_5
-    transform: scalar_gated_node
-    inputs:
-    - node_residual_4
-    - edge_index
-    - edge_residual_4
-    - node_batch
-    - edge_lengths
-    outputs:
-    - node5
-    options:
-      normalization: layer
-      distance_envelope: true
-      envelope_sigma: ${parameters.envelope_sigma}
-      filter_activation: ${parameters.filter_activation}
-      message_activation: ${parameters.message_activation}
-  - id: edge_update_5
-    transform: endpoint_scalar_edge
-    inputs:
-    - node5
-    - edge_index
-    - edge_residual_4
-    outputs:
-    - edge5
-    options:
-      out_dim: ${parameters.post_edge_width}
-      final_activation: true
+    inputs: [edge_lengths]
+    outputs: [edge0]
+    options: {start: 0, stop: '${parameters.gauss_stop}', n_gaussians: '${parameters.edge_width}', trainable: false}
+  - {id: node_update_1, transform: crystal_graph_update, inputs: [node0, edge0, edge_index, node_batch, edge_lengths], outputs: [node1], options: {width: '${parameters.node_width}', envelope_sigma: '${parameters.envelope_sigma}', filter_activation: '${parameters.filter_activation}', message_activation: '${parameters.message_activation}'}}
+  - {id: edge_update_1, transform: endpoint_edge_update, inputs: [node1, edge0, edge_index], outputs: [edge1], options: {width: '${parameters.edge_width}'}}
+  - {id: node_update_2, transform: crystal_graph_update, inputs: [node1, edge1, edge_index, node_batch, edge_lengths], outputs: [node2], options: {width: '${parameters.node_width}', envelope_sigma: '${parameters.envelope_sigma}', filter_activation: '${parameters.filter_activation}', message_activation: '${parameters.message_activation}'}}
+  - {id: edge_update_2, transform: endpoint_edge_update, inputs: [node2, edge1, edge_index], outputs: [edge2], options: {width: '${parameters.edge_width}'}}
+  - {id: node_residual_2, transform: add, inputs: [node0, node2], outputs: [node_residual_2]}
+  - {id: edge_residual_2, transform: add, inputs: [edge0, edge2], outputs: [edge_residual_2]}
+  - {id: node_update_3, transform: crystal_graph_update, inputs: [node_residual_2, edge_residual_2, edge_index, node_batch, edge_lengths], outputs: [node3], options: {width: '${parameters.node_width}', envelope_sigma: '${parameters.envelope_sigma}', filter_activation: '${parameters.filter_activation}', message_activation: '${parameters.message_activation}'}}
+  - {id: edge_update_3, transform: endpoint_edge_update, inputs: [node3, edge_residual_2, edge_index], outputs: [edge3], options: {width: '${parameters.edge_width}'}}
+  - {id: node_update_4, transform: crystal_graph_update, inputs: [node3, edge3, edge_index, node_batch, edge_lengths], outputs: [node4], options: {width: '${parameters.node_width}', envelope_sigma: '${parameters.envelope_sigma}', filter_activation: '${parameters.filter_activation}', message_activation: '${parameters.message_activation}'}}
+  - {id: edge_update_4, transform: endpoint_edge_update, inputs: [node4, edge3, edge_index], outputs: [edge4], options: {width: '${parameters.edge_width}'}}
+  - {id: node_residual_4, transform: add, inputs: [node_residual_2, node4], outputs: [node_residual_4]}
+  - {id: edge_residual_4, transform: add, inputs: [edge_residual_2, edge4], outputs: [edge_residual_4]}
+  - {id: node_update_5, transform: crystal_graph_update, inputs: [node_residual_4, edge_residual_4, edge_index, node_batch, edge_lengths], outputs: [node5], options: {width: '${parameters.node_width}', envelope_sigma: '${parameters.envelope_sigma}', filter_activation: '${parameters.filter_activation}', message_activation: '${parameters.message_activation}'}}
+  - {id: edge_update_5, transform: endpoint_edge_update, inputs: [node5, edge_residual_4, edge_index], outputs: [edge5], options: {width: '${parameters.post_edge_width}'}}
   - id: local_coordinate_readout
     role: readout
-    transform: local_coordinate_message
-    inputs:
-    - node5
-    - edge5
-    - sub_atom_idx
-    - sub_edge_idx
-    - sub_edge_ang
-    - sub_index
-    - edge_lengths
-    outputs:
-    - local_entries
-    options:
-      angular_dim: ${parameters.angular_dim}
-      out_dim: ${layout.real_packed_dim}
-      normalization: none
-      distance_envelope: true
-      envelope_sigma: ${parameters.envelope_sigma}
-      filter_activation: ${parameters.filter_activation}
-      message_activation: ${parameters.message_activation}
+    transform: local_coordinate_readout
+    inputs: [node5, edge5, sub_atom_idx, sub_edge_idx, sub_edge_ang, sub_index, edge_lengths]
+    outputs: [local_entries]
+    options: {width: '${parameters.node_width}', out_features: '${layout.real_packed_dim}', envelope_sigma: '${parameters.envelope_sigma}', filter_activation: '${parameters.filter_activation}', message_activation: '${parameters.message_activation}'}
   - id: native_local_operator
     role: readout
     transform: local_orbital_output
-    inputs:
-    - local_entries
-    outputs:
-    - hamiltonian
-    options:
-      packed_dim: ${layout.packed_dim}
-      spinful: ${codec.spinful}
+    inputs: [local_entries]
+    outputs: [hamiltonian]
+    options: {packed_dim: '${layout.packed_dim}', spinful: '${codec.spinful}'}
   outputs:
     hamiltonian: hamiltonian

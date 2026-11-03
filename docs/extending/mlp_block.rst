@@ -10,9 +10,10 @@ expressiveness between message-passing steps. In MANDALA they appear as the
 pre/post maps and refinements of every update and as the necks and
 projections of the readout (:class:`~net.common.E3MLP` and its variants).
 
-Built-in members of this kind: the E3MLP variants ``basic``, ``normact``,
-``gate``, ``gatemagnitudes``, ``film``, ``resnormact``,
-``resgatemagnitudes`` and ``bilinear``; ``irrep_linear`` as a stage.
+Built-in members of this kind: the ``e3mlp`` stage with the variants
+``basic``, ``normact``, ``gate``, ``gatemagnitudes``, ``film``,
+``resnormact``, ``resgatemagnitudes`` and ``bilinear`` (optionally routed:
+one copy per edge role or species pair), and ``irrep_linear``.
 
 The new layer
 -------------

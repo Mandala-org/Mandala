@@ -842,7 +842,7 @@ def test_weighted_edge_loss_gradient_uses_resolved_objective_mixture(
             loss_l1_fraction=configured_fraction,
         )
     )
-    model._objective_l1_fraction = E3GNN._objective_l1_fraction.__get__(model)
+    model.objective_l1_fraction = E3GNN.objective_l1_fraction.__get__(model)
     initial = torch.tensor([[[1.0, 3.0]], [[2.0, 6.0]]], dtype=torch.float64)
     target = torch.zeros_like(initial)
     weights = torch.tensor([1.0, 3.0], dtype=torch.float64)

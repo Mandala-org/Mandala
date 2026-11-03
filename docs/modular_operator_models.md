@@ -104,17 +104,20 @@ scalar irreps. Invalid combinations fail during model construction.
 | Transform family | Examples and purpose |
 |---|---|
 | Encodings | `embedding`, `one_hot`, `gaussian_basis`, `spherical_harmonics`, `cutoff_radial_expansion` |
-| Equivariant messages | `endpoint_tensor_product_node`, `endpoint_tensor_product_edge`, `graph_irrep_norm` |
-| Many-body aggregation | `neighbor_density`, then `symmetric_product`; `angular_degree_expansion` consumes explicitly saved features |
-| Invariant/local messages | `scalar_gated_node`, `endpoint_scalar_edge`, `local_coordinate_message` |
-| Existing MANDALA features | `endpoint_message_aggregation` reuses configurable attention; `partitioned_irrep_readout` reuses `DeepHead` |
+| Equivariant messages | `factorized_tensor_product`, `radial_channel_scale`, `channelwise_tensor_product`, `graph_irrep_norm` (library blocks `e3_node_update`, `e3_edge_update`) |
+| Many-body aggregation | `channel_reshape`, `symmetric_contraction` (library blocks `density_interaction`, `symmetric_product`, `angular_expansion`) |
+| Invariant/local messages | `gather_rows`, `gated_scalar_message`, `bond_endpoint_sum`, `scalar_normalization`, `scalar_mlp` (library blocks `crystal_graph_update`, `endpoint_edge_update`, `local_coordinate_readout`) |
+| Existing MANDALA features | `projected_attention`, `equivariant_convolution`, `e3mlp` and the `readout` stages (`edge_roles`, `onsite_from_nodes`, `pair_projection`) |
 | Explicit adapters | `irrep_cartesian_basis`, `irrep_to_bond`, `bond_local_linear`, `shell_tensor_decode`, `local_orbital_output` |
-| Independent message operations | `endpoint_gather`, `radial_tensor_product`, `indexed_aggregation`, `projected_attention` |
+| Independent message operations | `endpoint_concat`, `gather_rows`, `indexed_aggregation`, `projected_attention` |
 | Geometry on fixed supports | `periodic_displacement`, `vector_lengths`, `bond_frames`, `bond_harmonics` |
-| Independent feature operations | `gated_scalar_message`, `gaussian_envelope`, `scale_features`, `irrep_activation`, `species_tensor_product`, `irrep_residual` |
+| Independent feature operations | `gated_scalar_message`, `gaussian_envelope`, `scale_features`, `irrep_activation`, `species_tensor_product`, `residual` |
 | Composition/scaling | `irrep_linear`, `scalar_linear`, `add`, `concat`, `pair_distance_affine`, `species_irrep_affine` |
 
-`FeaturePipeline` is the assembler, not another architecture implementation.
+The DeepH, DeepH-E3 and MACE layers are composite blocks of these stages,
+shipped as block libraries (`src/net/block_library/*.yaml`) and imported by a
+recipe with `pipeline.block_libraries`. `FeaturePipeline` is the assembler, not
+another architecture implementation.
 Component modules are in `net.transforms`; shell/spin codecs are in
 `core.operator_layout`. Paper-named model classes are not used.
 
@@ -297,9 +300,11 @@ stage seeds isolate that stage's RNG stream. `uniform` and `zeros` are also
 available. `role: readout` selects trainable readout stages when freezing the
 backbone; it is independent of stage/model names.
 
-Original node and edge updates are separate `endpoint_irrep_node` and
-`endpoint_irrep_edge` transformations. `partitioned_irrep_readout` and
-`partitioned_blocks_to_shells` separate learned readout from orbital packing.
+MANDALA's node and edge updates are composite blocks of individual stages
+(`e3mlp`, `endpoint_concat`, `equivariant_convolution`, `projected_attention`
+or `indexed_aggregation`, `self_connection`, `irrep_nonlinearity`,
+`residual`). `pair_projection` and `partitioned_blocks_to_shells` separate
+learned readout from orbital packing.
 These can be interchanged with scalar/local-coordinate, tensor-product,
 neighbor-density, correlation and angular-expansion components. Composite
 mathematical transformations remain reusable library components, with typed

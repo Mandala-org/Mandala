@@ -47,9 +47,10 @@ def test_edge_sets(dataset):
     assert {tuple(edge) for edge in actual_edges.T.tolist()} == expected_edges
     assert x["edge_index"].shape[1] == len(expected_edges)
 
-    # ----  SH & radial embed sizes
-    assert x["edge_sh"].shape[1] == dataset.sh_irreps.dim
-    assert x["edge_length_emb"].shape[1] == dataset.cfg.n_radial
+    # ----  cached structure-only stages: radial basis, harmonics, edge roles
+    static = x["_static_features"]["values"]
+    assert static["harmonics"].shape[1] == dataset.sh_irreps.dim
+    assert static["radial"].shape[1] == dataset.cfg.n_radial
 
 
 @pytest.mark.unit

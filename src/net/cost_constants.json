@@ -1,0 +1,274 @@
+{
+  "device": "cpu",
+  "calibration": "provisional: CPU (8 threads, float32), 8-32 atoms, 3 repeats; refit on the GPU with scripts/benchmarks/run_pipeline_benchmarks.sh",
+  "default": {
+    "seconds_per_operation": 2e-10,
+    "overhead_seconds": 2e-05
+  },
+  "pooled_fit": {
+    "overhead_seconds": 0.013521190454290042,
+    "seconds_per_operation": 5.957301064959464e-11,
+    "samples": 969,
+    "median_relative_error": 37.0383388570485
+  },
+  "transforms": {
+    "add": {
+      "overhead_seconds": 2.2561362129636112e-05,
+      "seconds_per_operation": 0.0,
+      "samples": 36,
+      "median_relative_error": 3.16628077009514
+    },
+    "bond_endpoint_sum": {
+      "overhead_seconds": 0.1029274873386991,
+      "seconds_per_operation": 0.0,
+      "samples": 3,
+      "median_relative_error": 0.39936699955013616
+    },
+    "bond_local_linear": {
+      "overhead_seconds": 9.428973357344359e-05,
+      "seconds_per_operation": 1.6032232383982214e-11,
+      "samples": 3,
+      "median_relative_error": 0.18597554510794537
+    },
+    "channel_reshape": {
+      "overhead_seconds": 6.279688871776064e-05,
+      "seconds_per_operation": 0.0,
+      "samples": 9,
+      "median_relative_error": 0.15890643155744275
+    },
+    "channelwise_tensor_product": {
+      "overhead_seconds": 0.0,
+      "seconds_per_operation": 7.049302356092001e-11,
+      "samples": 9,
+      "median_relative_error": 0.09166508525148855
+    },
+    "concat": {
+      "overhead_seconds": 0.15527898333352316,
+      "seconds_per_operation": 0.0,
+      "samples": 9,
+      "median_relative_error": 113.76626354311873
+    },
+    "constant_scale": {
+      "overhead_seconds": 3.032109816558659e-06,
+      "seconds_per_operation": 0.0,
+      "samples": 9,
+      "median_relative_error": 0.07754525613044036
+    },
+    "e3mlp": {
+      "overhead_seconds": 0.013351590456975312,
+      "seconds_per_operation": 1.418304088246273e-10,
+      "samples": 42,
+      "median_relative_error": 5.150909905114858
+    },
+    "edge_roles": {
+      "overhead_seconds": 7.578400739779076e-05,
+      "seconds_per_operation": 0.0,
+      "samples": 3,
+      "median_relative_error": 0.2862417241839309
+    },
+    "embedding": {
+      "overhead_seconds": 3.4914332597206034e-05,
+      "seconds_per_operation": 0.0,
+      "samples": 9,
+      "median_relative_error": 0.45424186315944315
+    },
+    "endpoint_concat": {
+      "overhead_seconds": 0.0034176599619035507,
+      "seconds_per_operation": 0.0,
+      "samples": 78,
+      "median_relative_error": 4.9817395714640895
+    },
+    "envelope_scale": {
+      "overhead_seconds": 0.0001291993394261226,
+      "seconds_per_operation": 0.0,
+      "samples": 3,
+      "median_relative_error": 0.34350933881486523
+    },
+    "equivariant_convolution": {
+      "overhead_seconds": 0.9823499585989631,
+      "seconds_per_operation": 5.960801962672937e-12,
+      "samples": 12,
+      "median_relative_error": 1.15946751639239
+    },
+    "factorized_tensor_product": {
+      "overhead_seconds": 0.011160940656118258,
+      "seconds_per_operation": 5.2454605706785346e-11,
+      "samples": 84,
+      "median_relative_error": 9.24020282014627
+    },
+    "fc_tensor_product": {
+      "overhead_seconds": 0.11045360000302108,
+      "seconds_per_operation": 3.525703902347207e-12,
+      "samples": 3,
+      "median_relative_error": 0.5109257305050683
+    },
+    "gated_scalar_message": {
+      "overhead_seconds": 0.0,
+      "seconds_per_operation": 1.0521095867705368e-09,
+      "samples": 18,
+      "median_relative_error": 141.40889794850668
+    },
+    "gather_rows": {
+      "overhead_seconds": 0.04542465490383272,
+      "seconds_per_operation": 0.0,
+      "samples": 21,
+      "median_relative_error": 16.29961519430033
+    },
+    "gaussian_basis": {
+      "overhead_seconds": 0.0019093304581474513,
+      "seconds_per_operation": 0.0,
+      "samples": 24,
+      "median_relative_error": 1.4322086343647196
+    },
+    "gaussian_envelope": {
+      "overhead_seconds": 0.001470450168805352,
+      "seconds_per_operation": 0.0,
+      "samples": 18,
+      "median_relative_error": 32.11621256747557
+    },
+    "graph_irrep_norm": {
+      "overhead_seconds": 0.0025100160687130356,
+      "seconds_per_operation": 1.0785118685501825e-08,
+      "samples": 57,
+      "median_relative_error": 2.7145010126365063
+    },
+    "indexed_aggregation": {
+      "overhead_seconds": 0.0008783927176129791,
+      "seconds_per_operation": 0.0,
+      "samples": 39,
+      "median_relative_error": 3.660575856842761
+    },
+    "irrep_linear": {
+      "overhead_seconds": 0.00098150019973289,
+      "seconds_per_operation": 1.0882069848838326e-10,
+      "samples": 168,
+      "median_relative_error": 6.075855614216955
+    },
+    "irrep_nonlinearity": {
+      "overhead_seconds": 0.00639777155227595,
+      "seconds_per_operation": 3.034159477536156e-10,
+      "samples": 12,
+      "median_relative_error": 1.379446085683795
+    },
+    "irrep_sort": {
+      "overhead_seconds": 2.732749433360166e-06,
+      "seconds_per_operation": 0.0,
+      "samples": 36,
+      "median_relative_error": 0.12105002298173276
+    },
+    "irrep_to_bond": {
+      "overhead_seconds": 0.00768018767121248,
+      "seconds_per_operation": 0.0,
+      "samples": 3,
+      "median_relative_error": 0.42505276832062244
+    },
+    "local_orbital_output": {
+      "overhead_seconds": 5.145331670064481e-06,
+      "seconds_per_operation": 0.0,
+      "samples": 6,
+      "median_relative_error": 0.07713453310809094
+    },
+    "onsite_from_nodes": {
+      "overhead_seconds": 0.0027347903281527888,
+      "seconds_per_operation": 0.0,
+      "samples": 3,
+      "median_relative_error": 0.6564718770015457
+    },
+    "pair_envelope": {
+      "overhead_seconds": 0.0022480320039903745,
+      "seconds_per_operation": 0.0,
+      "samples": 3,
+      "median_relative_error": 7.3228998512978825
+    },
+    "pair_projection": {
+      "overhead_seconds": 0.002340211901845427,
+      "seconds_per_operation": 9.837573154263706e-11,
+      "samples": 3,
+      "median_relative_error": 0.0434453606506731
+    },
+    "projected_attention": {
+      "overhead_seconds": 0.05067167987086168,
+      "seconds_per_operation": 2.6354358145341188e-11,
+      "samples": 6,
+      "median_relative_error": 0.5187786079087935
+    },
+    "radial_channel_scale": {
+      "overhead_seconds": 0.0014252272994209195,
+      "seconds_per_operation": 2.7411757295096737e-11,
+      "samples": 36,
+      "median_relative_error": 0.923490986951133
+    },
+    "residual": {
+      "overhead_seconds": 0.00026111923667946274,
+      "seconds_per_operation": 8.306281179198322e-11,
+      "samples": 48,
+      "median_relative_error": 1.2642495612249225
+    },
+    "scalar_mlp": {
+      "overhead_seconds": 0.0,
+      "seconds_per_operation": 8.014512908372755e-12,
+      "samples": 18,
+      "median_relative_error": 0.4534172339081655
+    },
+    "scalar_normalization": {
+      "overhead_seconds": 4.3473579449039934e-05,
+      "seconds_per_operation": 5.027808503768083e-08,
+      "samples": 18,
+      "median_relative_error": 0.2848733465207418
+    },
+    "scale_features": {
+      "overhead_seconds": 0.01521312211035466,
+      "seconds_per_operation": 0.0,
+      "samples": 18,
+      "median_relative_error": 846.581823264123
+    },
+    "self_connection": {
+      "overhead_seconds": 0.001804136317907314,
+      "seconds_per_operation": 9.721651662470895e-11,
+      "samples": 48,
+      "median_relative_error": 8.266769966092982
+    },
+    "shell_tensor_decode": {
+      "overhead_seconds": 0.0068952345560925705,
+      "seconds_per_operation": 0.0,
+      "samples": 9,
+      "median_relative_error": 0.4081755723675889
+    },
+    "soft_one_hot_basis": {
+      "overhead_seconds": 0.00011234936887088325,
+      "seconds_per_operation": 3.488745986880848e-10,
+      "samples": 3,
+      "median_relative_error": 0.0026658411597500612
+    },
+    "species_irrep_affine": {
+      "overhead_seconds": 0.0035210633310877406,
+      "seconds_per_operation": 0.0,
+      "samples": 3,
+      "median_relative_error": 0.4438503800208705
+    },
+    "species_tensor_product": {
+      "overhead_seconds": 0.00013654722271723698,
+      "seconds_per_operation": 4.557724993274023e-11,
+      "samples": 9,
+      "median_relative_error": 0.22337417129995416
+    },
+    "spherical_harmonics": {
+      "overhead_seconds": 0.00017931967231256732,
+      "seconds_per_operation": 8.226584412569277e-10,
+      "samples": 18,
+      "median_relative_error": 0.09620042114076999
+    },
+    "symmetric_contraction": {
+      "overhead_seconds": 0.0017461854925689586,
+      "seconds_per_operation": 3.800126364429359e-08,
+      "samples": 9,
+      "median_relative_error": 0.04410644808978008
+    },
+    "tensor_square": {
+      "overhead_seconds": 0.008950230856037272,
+      "seconds_per_operation": 1.472294262495893e-10,
+      "samples": 3,
+      "median_relative_error": 0.3163773291310708
+    }
+  }
+}

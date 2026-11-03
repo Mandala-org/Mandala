@@ -35,6 +35,7 @@ training:
   batch_size: 1
   max_epochs: 3000
 pipeline:
+  block_libraries: [deeph_e3, mace]
   stages:
   - id: embedding
     transform: irrep_linear
@@ -71,51 +72,20 @@ pipeline:
     options:
       irreps: 0e+1o
   - id: node_update
-    transform: endpoint_tensor_product_node
-    inputs:
-    - node_0
-    - node_one_hot
-    - angular
-    - edge_0
-    - radial
-    - edge_index
-    - node_batch
-    - edge_batch
-    - selfloop_edge
-    outputs:
-    - node_tp
-    options:
-      num_species: ${species.count}
-      fc_len_in: 8
-      irreps_out_node: 4x0e+4x1o
+    transform: e3_node_update
+    inputs: [node_0, node_one_hot, angular, edge_0, radial, edge_index, node_batch]
+    outputs: [node_tp]
+    options: {irreps_out: 4x0e+4x1o}
   - id: degree_expansion
-    transform: angular_degree_expansion
-    inputs:
-    - node_tp
-    - node_tp
-    - node_one_hot
-    - node_batch
-    outputs:
-    - node_expanded
-    options:
-      irreps_out: 4x0e+4x1o
-      normalization: none
+    transform: angular_expansion
+    inputs: [node_tp, node_tp, node_one_hot, node_batch]
+    outputs: [node_expanded]
+    options: {irreps_out: 4x0e+4x1o, graph_norm: false}
   - id: edge_update
-    transform: endpoint_tensor_product_edge
-    inputs:
-    - node_expanded
-    - edge_one_hot
-    - angular
-    - edge_0
-    - radial
-    - edge_index
-    - node_batch
-    outputs:
-    - edge_final
-    options:
-      num_species: ${species.count}
-      fc_len_in: 8
-      irreps_out_edge: ${layout.post_irreps}
+    transform: e3_edge_update
+    inputs: [node_expanded, edge_one_hot, angular, edge_0, radial, edge_index, edge_batch]
+    outputs: [edge_final]
+    options: {irreps_out: '${layout.post_irreps}'}
   - id: shell_projection
     transform: irrep_linear
     inputs:

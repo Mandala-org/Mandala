@@ -10,9 +10,10 @@ variable number of them. The paper's silicon ablation shows that the choice
 matters: replacing averaging by attention lowered the validation Hamiltonian
 MAE by 10 %.
 
-Built-in members of this kind: ``sum``, ``average`` and multi-head
-``attention`` in the MANDALA node update (``node_update_message_agg``),
-``indexed_aggregation`` and ``projected_attention`` as separate stages.
+Built-in members of this kind: ``indexed_aggregation`` (sum or mean) and
+``projected_attention`` (multi-head attention, the MANDALA default). The
+flat setting ``node_update_message_agg`` selects one of them inside the
+``node_update`` block.
 
 The new layer
 -------------

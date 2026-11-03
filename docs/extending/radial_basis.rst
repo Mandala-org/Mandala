@@ -10,9 +10,9 @@ network — radial filters of convolutions, attention scores, encoder
 amplitudes — is a learned function of these features, so the basis sets the
 radial resolution of the model.
 
-Built-in members of this kind: the Gaussian soft one-hot basis of the flat
-MANDALA network and ``gaussian_basis`` (fixed or trainable centres), and the
-sine basis with polynomial cutoff ``cutoff_radial_expansion``.
+Built-in members of this kind: ``soft_one_hot_basis`` (the e3nn bases; the
+Gaussian one is MANDALA's default), ``gaussian_basis`` (fixed or trainable
+centres) and the sine basis with polynomial cutoff ``cutoff_radial_expansion``.
 
 The new layer
 -------------
@@ -78,7 +78,7 @@ Usage
 
 ``radial`` is a ``8x0e`` edge feature and can be consumed by any layer that
 expects invariant radial features, including the built-in
-``radial_tensor_product`` and ``projected_attention``.
+``radial_channel_scale`` and ``projected_attention``.
 
 Variations
 ----------

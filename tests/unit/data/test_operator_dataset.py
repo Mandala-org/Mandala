@@ -18,10 +18,8 @@ from data.operator_features import (
     statistics_records,
 )
 from core.operator_layout import ShellTensorCodec
-from net.transforms.local_coordinates import (
-    LocalCoordinateMessage,
-    ScalarGatedNodeUpdate,
-)
+from net.block_library import library_blocks
+from net.pipeline import FeaturePipeline
 
 
 @pytest.fixture(autouse=True)
@@ -194,27 +192,51 @@ def test_disjoint_batch_local_relations_and_training_are_graph_independent(tmp_p
     )
     node = torch.randn(2 * n, 4)
     edge = torch.randn(2 * e, 3)
-    node_module = ScalarGatedNodeUpdate(4, 3)
-    local_module = LocalCoordinateMessage(4, 3, 25, 2)
+    slots = ["sub_atom_idx", "sub_edge_idx", "sub_edge_ang", "sub_index"]
+    model = FeaturePipeline(
+        {
+            "blocks": library_blocks(["deeph"]),
+            "inputs": {
+                "nodes": {"domain": "node", "irreps": "4x0e"},
+                "edges": {"domain": "edge", "irreps": "3x0e"},
+                "sub_edge_ang": {
+                    "domain": "bond_neighbor",
+                    "representation": "local_components",
+                    "frame": "bond",
+                    "width": 25,
+                },
+            },
+            "stages": [
+                {
+                    "id": "node_update",
+                    "transform": "crystal_graph_update",
+                    "inputs": [
+                        "nodes",
+                        "edges",
+                        "edge_index",
+                        "node_batch",
+                        "edge_lengths",
+                    ],
+                    "outputs": ["updated"],
+                    "options": {"width": 4},
+                },
+                {
+                    "id": "readout",
+                    "transform": "local_coordinate_readout",
+                    "inputs": ["updated", "edges", *slots, "edge_lengths"],
+                    "outputs": ["entries"],
+                    "options": {"width": 4, "out_features": 2},
+                },
+            ],
+            "outputs": {"entries": "entries"},
+        },
+        num_species=2,
+    )
 
     def predict(x, nfeat, efeat):
-        nodes = node_module(
-            nfeat, x["edge_index"], efeat, x["node_batch"], x["edge_lengths"]
-        )
-        return local_module(
-            nodes,
-            efeat,
-            *(
-                x[name]
-                for name in (
-                    "sub_atom_idx",
-                    "sub_edge_idx",
-                    "sub_edge_ang",
-                    "sub_index",
-                )
-            ),
-            x["edge_lengths"],
-        )
+        names = ["edge_index", "node_batch", "edge_lengths", *slots]
+        inputs = {"nodes": nfeat, "edges": efeat, **{k: x[k] for k in names}}
+        return model(inputs)["entries"]
 
     whole = predict(xs, node, edge)
     separate = torch.cat(

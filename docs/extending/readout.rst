@@ -9,11 +9,12 @@ of the operator blocks. The irreps it must produce are fixed by the orbital
 bases of the two atoms (:doc:`../theory/operators`); the readout decides how
 parameters are shared between species pairs and edge classes.
 
-Built-in members of this kind: ``partitioned_irrep_readout``
-(:class:`~net.heads.DeepHead`: necks per edge class, one projection per
-species pair in ``split`` mode or a single pair-conditioned projection in
-``shared_conditioned`` mode), and ``irrep_linear`` onto
-``${layout.coupled_irreps}`` followed by ``shell_tensor_decode`` (DeepH-E3).
+Built-in members of this kind: MANDALA's ``readout`` block (an ``e3mlp``
+trunk routed by ``edge_roles``, onsite rows from ``onsite_from_nodes``, and
+``pair_projection``: one projection per species pair in ``split`` mode or a
+single pair-conditioned projection in ``shared_conditioned`` mode), and
+``irrep_linear`` onto ``${layout.coupled_irreps}`` followed by
+``shell_tensor_decode`` (DeepH-E3).
 
 The new layer
 -------------

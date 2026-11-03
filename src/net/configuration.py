@@ -52,6 +52,8 @@ def validate_configuration_sections(config):
         "objective",
         "optimization",
         "pipeline",
+        "plugins",
+        "studio",
     }
     from net.common import Config
 
@@ -84,9 +86,23 @@ def validate_configuration_sections(config):
             "supports",
             "neighborhood_support",
         },
-        "objective": {"kind", "epoch_weight", "weights", "complex_reduction"},
+        "objective": {
+            "kind",
+            "epoch_weight",
+            "weights",
+            "complex_reduction",
+            "terms",
+            "expression",
+        },
         "optimization": {"optimizer", "scheduler", "stop_lr"},
-        "pipeline": {"inputs", "stages", "outputs", "operator_layout"},
+        "pipeline": {
+            "inputs",
+            "blocks",
+            "block_libraries",
+            "stages",
+            "outputs",
+            "operator_layout",
+        },
     }
     for section, names in sections.items():
         values = config.get(section, {})
@@ -245,6 +261,9 @@ def resolve_configuration(
     if overrides:
         config = OmegaConf.merge(config, overrides)
     validate_configuration_sections(config)
+    from net.plugins import load_plugins
+
+    load_plugins(OmegaConf.to_container(config, resolve=False).get("plugins"))
     if config.get("schema_version", 1) != 1:
         raise ValueError("Unsupported modular configuration schema_version.")
     shells = {

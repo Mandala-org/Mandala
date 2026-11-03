@@ -1,0 +1,45 @@
+# DeepH (Li et al., Nat. Comput. Sci. 2022) layers as pipeline blocks:
+# crystal-graph node updates, endpoint edge updates and the local-coordinate
+# readout. Seeded parameters are drawn in the order of DeepH-pack 141faaa.
+crystal_graph_update:
+  summary: Gated crystal-graph messages [h_j, h_i, e_ij], distance envelope, sum onto receivers, normalization, residual
+  inputs: [nodes, edges, edge_index, node_batch, lengths]
+  outputs: [updated]
+  options: {width: null, normalization: layer, envelope_sigma: 3.0, filter_activation: sigmoid, message_activation: softplus}
+  # The reference draws the message weights, then redraws them after the normalization.
+  initialization_order: [message, norm, message]
+  stages:
+    - {id: gather, transform: endpoint_concat, inputs: [nodes, edges, edge_index], outputs: [pairs], options: {order: receiver_sender}}
+    - {id: message, transform: gated_scalar_message, inputs: [pairs], outputs: [messages], options: {out_features: $width, filter_activation: $filter_activation, message_activation: $message_activation}}
+    - {id: envelope, transform: gaussian_envelope, inputs: [lengths], outputs: [envelope], options: {sigma: $envelope_sigma}}
+    - {id: damp, transform: scale_features, inputs: [messages, envelope], outputs: [damped]}
+    - {id: aggregate, transform: indexed_aggregation, inputs: [damped, edge_index, nodes], outputs: [summed], options: {reduction: sum, receiver: 1}}
+    - {id: norm, transform: scalar_normalization, inputs: [summed, node_batch], outputs: [normalized], options: {kind: $normalization}}
+    - {id: residual, transform: residual, inputs: [nodes, normalized], outputs: [updated], options: {mode: add}}
+endpoint_edge_update:
+  summary: Edge features from [h_i, h_j, e_ij] through a two-layer MLP
+  inputs: [nodes, edges, edge_index]
+  outputs: [updated]
+  options: {width: null, hidden: [128], activate_last: true}
+  stages:
+    - {id: gather, transform: endpoint_concat, inputs: [nodes, edges, edge_index], outputs: [pairs]}
+    - {id: mlp, transform: scalar_mlp, inputs: [pairs], outputs: [updated], options: {out_features: $width, hidden: $hidden, activate_last: $activate_last}}
+local_coordinate_readout:
+  summary: Gated messages from each bond's two endpoint neighborhoods in the bond frame, then an MLP of [both endpoints, e_ij]
+  inputs: [nodes, edges, neighbor_atoms, neighbor_edges, angles, endpoint_index, lengths]
+  outputs: [entries]
+  options: {width: null, out_features: null, hidden: [128], normalization: none, envelope_sigma: 3.0, filter_activation: sigmoid, message_activation: softplus}
+  initialization_order: [message, norm, readout, message]
+  stages:
+    - {id: center, transform: gather_rows, inputs: [nodes, neighbor_atoms], outputs: [center], options: {endpoint: 0}}
+    - {id: neighbor, transform: gather_rows, inputs: [nodes, neighbor_atoms], outputs: [neighbor], options: {endpoint: 1}}
+    - {id: bond, transform: gather_rows, inputs: [edges, neighbor_edges], outputs: [bond]}
+    - {id: assemble, transform: concat, inputs: [center, neighbor, bond, angles], outputs: [local]}
+    - {id: message, transform: gated_scalar_message, inputs: [local], outputs: [messages], options: {out_features: $width, filter_activation: $filter_activation, message_activation: $message_activation}}
+    - {id: distance, transform: gather_rows, inputs: [lengths, neighbor_edges], outputs: [distance]}
+    - {id: envelope, transform: gaussian_envelope, inputs: [distance], outputs: [envelope], options: {sigma: $envelope_sigma}}
+    - {id: damp, transform: scale_features, inputs: [messages, envelope], outputs: [damped]}
+    - {id: endpoints, transform: bond_endpoint_sum, inputs: [damped, endpoint_index, edges], outputs: [endpoint_sums]}
+    - {id: norm, transform: scalar_normalization, inputs: [endpoint_sums], outputs: [normalized], options: {kind: $normalization, segments: 2}}
+    - {id: assemble_bond, transform: concat, inputs: [normalized, edges], outputs: [bond_features]}
+    - {id: readout, transform: scalar_mlp, inputs: [bond_features], outputs: [entries], options: {out_features: $out_features, hidden: $hidden}}

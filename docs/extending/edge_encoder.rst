@@ -9,10 +9,11 @@ Unlike nodes, edges have a direction, so their initial state can already
 contain non-scalar irreps built from the spherical harmonics of
 :math:`\hat{\bm r}_{ij}`.
 
-Built-in members of this kind: ``pair_radial_angular_embedding`` (MANDALA's
-rich encoder, a fully connected tensor product of a pair-type embedding with
-:math:`\bm\varphi\oplus\mathrm{TS}(Y)`), and ``gaussian_basis`` used directly
-as a scalar edge state (DeepH-E3 preset).
+Built-in members of this kind: MANDALA's ``edge_encoder`` block (an
+``embedding`` of the pair type, a ``tensor_square`` of the harmonics, a
+``concat`` with the radial basis and an ``fc_tensor_product`` of the two:
+:math:`\mathrm{TP}(\mathrm{Emb}(t),\bm\varphi\oplus\mathrm{TS}(Y))`), and
+``gaussian_basis`` used directly as a scalar edge state (DeepH-E3 preset).
 
 The new layer
 -------------

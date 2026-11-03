@@ -10,10 +10,10 @@ a learned function of distance. It is the only place where angular momentum
 is *created* from geometry during message passing, and it dominates the cost
 of the network.
 
-Built-in members of this kind: :class:`~net.layers.EquiConv` inside the
-MANDALA update blocks (separate-weight or fully connected product, gate,
-radial channel weights), ``radial_tensor_product`` (factorized product, gate,
-radial scaling) and the neighbour-density product of ``neighbor_density``.
+Built-in members of this kind: ``equivariant_convolution`` (MANDALA:
+separate-weight or fully connected product, gate, radial channel weights),
+``factorized_tensor_product`` followed by ``radial_channel_scale`` (the DeepH-E3
+convolution) and ``channelwise_tensor_product`` (the MACE convolution).
 
 The new layer
 -------------

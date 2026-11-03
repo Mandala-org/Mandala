@@ -220,7 +220,39 @@ def union_graph_inputs(samples, *, layouts=None):
             result["_geometry_reference"]["box"] = torch.stack(
                 [r["box"] for r in references]
             )
+    static = _union_static_features(samples)
+    if static is not None:
+        result["_static_features"] = static
     return result
+
+
+def _union_static_features(samples):
+    """Concatenate cached structure-only features of samples from one recipe.
+
+    Only per-entity features (and labelled categories) are concatenated; any
+    other cached value is recomputed by the model on the batched graph.
+    """
+    caches = [
+        (sample["inputs"] if isinstance(sample, dict) else sample[0]).get(
+            "_static_features"
+        )
+        for sample in samples
+    ]
+    if not caches or any(cache is None for cache in caches):
+        return None
+    first = caches[0]
+    if any(cache["fingerprint"] != first["fingerprint"] for cache in caches):
+        return None
+    if not all(first.get("concatenable", {}).get(slot) for slot in first["values"]):
+        return None
+    return {
+        "fingerprint": first["fingerprint"],
+        "concatenable": first["concatenable"],
+        "values": {
+            slot: torch.cat([cache["values"][slot] for cache in caches])
+            for slot in first["values"]
+        },
+    }
 
 
 def disjoint_union_samples(samples):

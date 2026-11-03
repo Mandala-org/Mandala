@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-
 MATRIX_ALIAS = {"hamiltonian": "H", "overlap": "S", "density": "D"}
 IRREP_PREFIX_BY_MATRIX = {"hamiltonian": "H_", "overlap": "S_", "density": "D_"}
 
@@ -129,12 +128,11 @@ def log_strict_checks_passed() -> None:
 
 
 def log_graph(x: dict) -> None:
-    if "edge_index" not in x or "edge_length_emb" not in x:
+    if "edge_index" not in x:
         return
     atoms_list = list(x.get("atoms", ()))
     edge_index = x["edge_index"]
     num_self_edges = int(x.get("num_self_edges", 0))
-    edge_length_emb = x["edge_length_emb"]
     print("\n[GRAPH] Constructing molecular graph...")
     print(f"  Atoms: {atoms_list}")
     if "positions" in x:
@@ -145,9 +143,8 @@ def log_graph(x: dict) -> None:
         f"  Total edges: {edge_index.shape[1]} "
         f"({num_self_edges} self + {edge_index.shape[1] - num_self_edges} off-diagonal)"
     )
-    print(f"  Edge length embedding shape: {tuple(edge_length_emb.shape)}")
-    if "edge_sh" in x:
-        print(f"  Edge SH shape: {tuple(x['edge_sh'].shape)}")
+    for slot, value in (x.get("_static_features") or {}).get("values", {}).items():
+        print(f"  Cached {slot}: {tuple(value.shape)}")
 
 
 def log_per_irrep_metrics(

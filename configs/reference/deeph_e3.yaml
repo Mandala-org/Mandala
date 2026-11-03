@@ -58,6 +58,7 @@ optimization:
   optimizer: {kind: adam, lr: 0.002, betas: [0.9, 0.999], eps: 0.00000001, weight_decay: 0.0}
   scheduler: {kind: plateau, ema_alpha: 0.1, factor: 0.5, cooldown: 40, patience: 120, threshold: 0.05, monitor: val/loss}
 pipeline:
+  block_libraries: [deeph_e3]
   stages:
     - id: embedding
       transform: irrep_linear
@@ -80,35 +81,35 @@ pipeline:
       outputs: [angular]
       options: {irreps: '${parameters.angular_irreps}', permutation: [1, 2, 0]}
     - id: node_update_0
-      transform: endpoint_tensor_product_node
+      transform: e3_node_update
       inputs: [node_0, node_one_hot, angular, edge_0, radial, edge_index, node_batch]
       outputs: [node_1]
-      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_node: '${parameters.node_irreps}'}
+      options: {irreps_out: '${parameters.node_irreps}'}
     - id: edge_update_0
-      transform: endpoint_tensor_product_edge
-      inputs: [node_1, edge_one_hot, angular, edge_0, radial, edge_index, node_batch]
+      transform: e3_edge_update
+      inputs: [node_1, edge_one_hot, angular, edge_0, radial, edge_index, edge_batch]
       outputs: [edge_1]
-      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${parameters.edge_irreps}'}
+      options: {irreps_out: '${parameters.edge_irreps}'}
     - id: node_update_1
-      transform: endpoint_tensor_product_node
+      transform: e3_node_update
       inputs: [node_1, node_one_hot, angular, edge_1, radial, edge_index, node_batch]
       outputs: [node_2]
-      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_node: '${parameters.node_irreps}'}
+      options: {irreps_out: '${parameters.node_irreps}'}
     - id: edge_update_1
-      transform: endpoint_tensor_product_edge
-      inputs: [node_2, edge_one_hot, angular, edge_1, radial, edge_index, node_batch]
+      transform: e3_edge_update
+      inputs: [node_2, edge_one_hot, angular, edge_1, radial, edge_index, edge_batch]
       outputs: [edge_2]
-      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${parameters.edge_irreps}'}
+      options: {irreps_out: '${parameters.edge_irreps}'}
     - id: node_update_2
-      transform: endpoint_tensor_product_node
+      transform: e3_node_update
       inputs: [node_2, node_one_hot, angular, edge_2, radial, edge_index, node_batch]
       outputs: [node_3]
-      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_node: '${layout.post_node_irreps}', use_selftp: '${parameters.terminal_self_product}'}
+      options: {irreps_out: '${layout.post_node_irreps}', self_product: '${parameters.terminal_self_product}'}
     - id: edge_update_2
-      transform: endpoint_tensor_product_edge
-      inputs: [node_3, edge_one_hot, angular, edge_2, radial, edge_index, node_batch]
+      transform: e3_edge_update
+      inputs: [node_3, edge_one_hot, angular, edge_2, radial, edge_index, edge_batch]
       outputs: [edge_3]
-      options: {num_species: '${species.count}', fc_len_in: '${parameters.radial_width}', irreps_out_edge: '${layout.post_irreps}', use_selftp: '${parameters.terminal_self_product}'}
+      options: {irreps_out: '${layout.post_irreps}', self_product: '${parameters.terminal_self_product}'}
     - id: node_readout
       role: readout
       transform: irrep_linear

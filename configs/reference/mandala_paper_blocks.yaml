@@ -1,0 +1,477 @@
+# Explicit recipe of configs/reference/mandala_paper.yaml, written by scripts/export_recipe.py.
+cutoff_radius: 10.0
+separate_shifted_self: true
+lr: 0.0027
+max_epochs: 4000
+max_wall_clock_seconds: 162000
+batch_size: 1
+use_lr_scheduler: true
+lr_scheduler_factor: 0.5
+lr_scheduler_patience: 60
+lr_scheduler_min_lr: 1.0e-08
+lr_scheduler_target: val/loss_total
+revert_on_spike: true
+revert_monitor: val/loss_total
+revert_decay_patience: 4
+revert_decay_rate: 0.5
+revert_spike_factor: 2.0
+checkpoint_monitor: val/loss_total
+l1_reg_coef: 0.0
+l2_reg_coef: 0.0
+init_weights_factor: 1.0
+grad_clip_val: 2.0
+accumulate_grad_batches: 1
+pair_distance_normalization: 'off'
+enable_forces: false
+enable_stress: false
+enable_energy: true
+enable_num_electrons: false
+train_target: matrix
+partial_train: null
+train_on_forces: false
+train_on_stress: false
+train_on_energy: false
+train_on_num_electrons: false
+matrix_targets:
+- hamiltonian
+train_observables_on_gt: false
+symmetrize_output: false
+symmetrize_hamiltonian_targets: true
+rescale_density_to_num_electrons: false
+loss_l1_fraction: 1.0
+loss_coef_observables: 0.0
+allow_zero_observable_loss_control: false
+observable_loss_kind: mae
+loss_coef_forces: 0.0
+loss_coef_stress: 0.0
+hamiltonian_envelope_mode: multiply_prediction
+hamiltonian_envelope_path: scripts/reproduce_examples/sio2_envelope.json
+hamiltonian_envelope_eps: 1.0e-12
+loss_weighting_mode: 'off'
+loss_weight_min: 0.0
+loss_weight_max: 100.0
+spectral_loss_enabled: false
+train_on_spectral: true
+spectral_loss_coef: 0.0
+spectral_loss_kmesh: 2x2x2
+spectral_loss_window_ev: 10.0
+spectral_loss_taper_ev: 2.0
+spectral_loss_huber_delta_ev: 0.1
+spectral_loss_kind: huber
+spectral_loss_overlap_psd_cleanup: false
+spectral_loss_overlap_jitter: true
+spectral_fermi_cache_path: null
+freeze_backbone_train_heads_only: false
+run_name: mandala_paper
+experiment_id: null
+ablation_name: null
+ablation_setting: null
+ablation_setting_from: null
+verbosity: 1
+bench_verbosity: 1
+log_partial_gt_observables: true
+log_per_irrep_metrics: false
+print_per_irrep_metrics: false
+log_per_irrep_images: false
+log_train_metrics: false
+log_per_pair_loss_metrics: false
+log_hamiltonian_irrep_contrib_metrics: false
+log_hamiltonian_pair_contrib_metrics: false
+log_activation_mag: false
+log_grad_norm: false
+wandb_project: mandala-siox-models-v1
+log_every_n_steps: 1
+log_on_step: false
+log_on_epoch: true
+log_data: false
+log_forward: false
+benchmark: false
+log_interval: 10
+adaptive_log_interval: true
+video_max_atoms: 6
+safety_checks: true
+dtype: float32
+device: cuda
+gpus: 1
+num_workers: 0
+save_dir: /bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/siox_models_v1
+log_model: false
+snapshot_cache_dir: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/snapshot_cache_siox_models_v1
+dataset_device: cuda
+shuffle_snapshot_load_order: false
+data_split_seed: 42
+seed: 42
+epoch_boundary_resume: true
+precompute_edge_features: true
+allow_incomplete_dataset: false
+apply_cutoff_to_targets: true
+graph_source: geometry_cutoff
+require_exact_edge_match: true
+allow_openmx_positions_box_from_out: false
+tune: null
+train_on_irrep_parts: false
+compatibility: false
+num_block: 3
+r_max: 8.0
+num_basis: 128
+use_sc: true
+use_sbf: false
+data:
+  root: /bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new
+  representation: orbital_blocks
+training:
+  seed: 42
+  data_split_seed: 42
+species:
+  order:
+  - O
+  - Si
+pipeline:
+  blocks:
+    edge_encoder:
+      summary: 'Edge features: pair embedding (x) [radial basis, harmonics (x) harmonics]'
+      inputs:
+      - pair_type
+      - radial
+      - harmonics
+      outputs:
+      - out
+      stages:
+      - id: pair_embedding
+        transform: embedding
+        inputs:
+        - pair_type
+        outputs:
+        - pair_embedding
+        initialization:
+          kind: normal
+          std: 0.2
+      - id: square
+        transform: tensor_square
+        inputs:
+        - harmonics
+        outputs:
+        - squared
+        options:
+          irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+      - id: geometry
+        transform: concat
+        inputs:
+        - radial
+        - squared
+        outputs:
+        - geometry
+        options:
+          simplify: true
+      - id: mix
+        transform: fc_tensor_product
+        inputs:
+        - pair_embedding
+        - geometry
+        outputs:
+        - out
+        options:
+          irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+    node_update:
+      summary: 'MANDALA node update: gated convolution of endpoint features, aggregation, refinement'
+      inputs:
+      - node
+      - edge
+      - edge_index
+      - harmonics
+      - radial
+      outputs:
+      - out
+      options:
+        irreps_out: null
+      stages:
+      - id: pre
+        transform: e3mlp
+        inputs:
+        - node
+        outputs:
+        - pre
+      - id: gather
+        transform: endpoint_concat
+        inputs:
+        - pre
+        - edge
+        - edge_index
+        outputs:
+        - gathered
+      - id: convolution
+        transform: equivariant_convolution
+        inputs:
+        - gathered
+        - harmonics
+        - radial
+        outputs:
+        - messages
+        options:
+          irreps_out: $irreps_out
+          radial_layers:
+          - 128
+          - 128
+          - 128
+      - id: aggregate
+        transform: projected_attention
+        inputs:
+        - messages
+        - pre
+        - radial
+        - edge_index
+        outputs:
+        - aggregated
+      - id: post
+        transform: e3mlp
+        inputs:
+        - aggregated
+        outputs:
+        - update
+      - id: activation
+        transform: irrep_nonlinearity
+        inputs:
+        - update
+        outputs:
+        - activated
+      - id: refine
+        transform: e3mlp
+        inputs:
+        - activated
+        outputs:
+        - out
+        options:
+          variant: resnormact
+          irreps_out: $irreps_out
+          irreps_hidden: $irreps_out
+    edge_update:
+      summary: 'MANDALA edge update: gated convolution of both endpoints and the edge'
+      inputs:
+      - node
+      - edge
+      - edge_index
+      - harmonics
+      - radial
+      outputs:
+      - out
+      options:
+        irreps_out: null
+      stages:
+      - id: pre
+        transform: e3mlp
+        inputs:
+        - edge
+        outputs:
+        - pre
+      - id: gather
+        transform: endpoint_concat
+        inputs:
+        - node
+        - pre
+        - edge_index
+        outputs:
+        - gathered
+      - id: convolution
+        transform: equivariant_convolution
+        inputs:
+        - gathered
+        - harmonics
+        - radial
+        outputs:
+        - messages
+        options:
+          irreps_out: $irreps_out
+          radial_layers:
+          - 128
+          - 128
+          - 128
+      - id: post
+        transform: e3mlp
+        inputs:
+        - messages
+        outputs:
+        - update
+      - id: activation
+        transform: irrep_nonlinearity
+        inputs:
+        - update
+        outputs:
+        - activated
+      - id: refine
+        transform: e3mlp
+        inputs:
+        - activated
+        outputs:
+        - out
+        options:
+          variant: resnormact
+          irreps_out: $irreps_out
+          irreps_hidden: $irreps_out
+    readout:
+      summary: Per-role trunk MLP and per species-pair projection to orbital irreps
+      inputs:
+      - node
+      - edge
+      - edge_index
+      - partitions
+      - roles
+      outputs:
+      - out
+      stages:
+      - id: onsite_trunk
+        transform: e3mlp
+        inputs:
+        - node
+        outputs:
+        - onsite_trunk
+        options:
+          irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+          activate_last: true
+      - id: trunk
+        transform: e3mlp
+        inputs:
+        - edge
+        - roles
+        outputs:
+        - edge_trunk
+        options:
+          irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+          activate_last: true
+          inactive_routes:
+          - onsite
+      - id: merge
+        transform: onsite_from_nodes
+        inputs:
+        - edge_trunk
+        - onsite_trunk
+        - edge_index
+        - roles
+        outputs:
+        - trunk
+      - id: project
+        transform: pair_projection
+        inputs:
+        - trunk
+        - partitions
+        - roles
+        outputs:
+        - out
+        options:
+          route_scales:
+            onsite: 1.0
+            shifted_self: 1.0
+            offsite: 1.0
+  stages:
+  - id: radial
+    transform: soft_one_hot_basis
+    inputs:
+    - edge_lengths
+    outputs:
+    - radial
+    options:
+      number: 128
+      end: 10.0
+    role: geometry
+  - id: harmonics
+    transform: spherical_harmonics
+    inputs:
+    - edge_vectors
+    outputs:
+    - harmonics
+    options:
+      irreps: 1x0e+1x1o+1x2e+1x3o+1x4e
+    role: geometry
+  - id: roles
+    transform: edge_roles
+    inputs:
+    - edge_index
+    - edge_shift
+    outputs:
+    - roles
+    role: geometry
+  - id: node_encoder
+    transform: embedding
+    inputs:
+    - node_type_idx
+    outputs:
+    - node_0
+    options:
+      width: 64
+    role: encoder
+    initialization:
+      kind: normal
+      std: 0.2
+  - id: edge_encoder
+    transform: edge_encoder
+    inputs:
+    - edge_type_idx
+    - radial
+    - harmonics
+    outputs:
+    - edge_0
+    role: encoder
+  - id: node_update_0
+    transform: node_update
+    inputs:
+    - node_0
+    - edge_0
+    - edge_index
+    - harmonics
+    - radial
+    outputs:
+    - node_1
+    options:
+      irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+    role: message
+  - id: edge_update_0
+    transform: edge_update
+    inputs:
+    - node_1
+    - edge_0
+    - edge_index
+    - harmonics
+    - radial
+    outputs:
+    - edge_1
+    options:
+      irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+    role: message
+  - id: node_update_1
+    transform: node_update
+    inputs:
+    - node_1
+    - edge_1
+    - edge_index
+    - harmonics
+    - radial
+    outputs:
+    - node_2
+    options:
+      irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+    role: message
+  - id: edge_update_1
+    transform: edge_update
+    inputs:
+    - node_2
+    - edge_1
+    - edge_index
+    - harmonics
+    - radial
+    outputs:
+    - edge_2
+    options:
+      irreps_out: 128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e
+    role: message
+  - id: readout_hamiltonian
+    transform: readout
+    inputs:
+    - node_2
+    - edge_2
+    - edge_index
+    - edge_partitions
+    - roles
+    outputs:
+    - hamiltonian_vectors
+    role: readout
+  outputs:
+    hamiltonian: hamiltonian_vectors

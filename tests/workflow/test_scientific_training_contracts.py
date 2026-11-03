@@ -409,36 +409,6 @@ def _unpack(record):
     ).reshape(record["shape"])
 
 
-def _source_parameter_name(kind, name):
-    _, stage, tail = name.split(".", 2)
-    if kind == "deeph_e3":
-        prefix = {
-            "embedding": "embedding",
-            "node_readout": "lin_node",
-            "edge_readout": "lin_edge",
-        }.get(stage)
-        if stage.startswith("node_update_"):
-            prefix = f"node_update_blocks.{stage.rsplit('_', 1)[-1]}"
-        if stage.startswith("edge_update_"):
-            prefix = f"edge_update_blocks.{stage.rsplit('_', 1)[-1]}"
-    else:
-        prefix = {
-            "node_embedding": "mace.node_embedding.linear",
-            "density_radial_basis": "mace.radial_embedding",
-            "edge_readout": "edge_update.lin_edge",
-        }.get(stage)
-        for start, source in [
-            ("density_", "mace.interactions"),
-            ("product_", "mace.products"),
-            ("angular_expansion_", "expansion.node_order_expansion_blocks"),
-            ("edge_update_", "edge_update.edge_update_blocks"),
-        ]:
-            if stage.startswith(start) and stage.rsplit("_", 1)[-1].isdigit():
-                prefix = f"{source}.{stage.rsplit('_', 1)[-1]}"
-    assert prefix is not None, name
-    return f"{prefix}.{tail}"
-
-
 @pytest.mark.parametrize(
     "kind,frame_source",
     [
@@ -550,13 +520,15 @@ def test_raw_native_records_reproduce_pinned_source_preprocessing_and_three_adam
         y["values"], _unpack(oracle["target"]), rtol=2e-12, atol=2e-12
     )
     assert y["mask"].all()
+    from tests.reference_parameters import source_name, unused_source_parameters
+
     parameters = list(model.pipeline.named_parameters())
-    coordinates = (
-        dict(zip(oracle["initial_parameters"], (p for _, p in parameters)))
-        if kind == "deeph"
-        else {_source_parameter_name(kind, n): p for n, p in parameters}
-    )
-    assert coordinates.keys() == oracle["initial_parameters"].keys()
+    coordinates = {source_name(kind, n): p for n, p in parameters}
+    assert len(coordinates) == len(parameters)
+    # The source builds a normalization even when it is disabled.
+    expected = oracle["initial_parameters"].keys()
+    assert coordinates.keys() <= expected
+    assert expected - coordinates.keys() <= unused_source_parameters(oracle)
     for name, p in coordinates.items():
         torch.testing.assert_close(
             p, _unpack(oracle["initial_parameters"][name]), rtol=0, atol=0
@@ -691,7 +663,7 @@ def test_configured_batch_normalization_uses_explicit_pooled_unequal_graph_stati
 
     recipe = _recipe("deeph")
     for stage in recipe["pipeline"]["stages"]:
-        if stage["transform"] == "scalar_gated_node":
+        if stage["transform"] == "crystal_graph_update":
             stage["options"]["normalization"] = "batch"
     config, codec = resolve_configuration(recipe, species_shells={"H": [0]})
     pipeline = FeaturePipeline(config["pipeline"], num_species=1).double().train()
@@ -735,7 +707,6 @@ def test_configured_batch_normalization_uses_explicit_pooled_unequal_graph_stati
         module.register_forward_hook(check_pooled)
         for module in pipeline.modules()
         if isinstance(module, torch.nn.BatchNorm1d)
-        and module is not pipeline.transforms["local_coordinate_readout"].bn
     ]
     pipeline(union)["hamiltonian"].square().sum().backward()
     assert len(captured) == 5

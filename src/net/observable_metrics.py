@@ -251,7 +251,21 @@ def observable_loss(
     num_electrons_target: torch.Tensor | None,
     mse_fn,
     device: torch.device,
+    coefficient: float | None = None,
+    energy: bool | None = None,
+    num_electrons: bool | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Energy and electron-count losses times ``coefficient``.
+
+    ``coefficient`` defaults to ``cfg.loss_coef_observables``; pass 1 for the
+    unweighted errors. ``energy``/``num_electrons`` override
+    ``cfg.train_on_energy``/``cfg.train_on_num_electrons``.
+    """
+    energy = cfg.train_on_energy if energy is None else energy
+    num_electrons = (
+        cfg.train_on_num_electrons if num_electrons is None else num_electrons
+    )
+    coefficient = cfg.loss_coef_observables if coefficient is None else coefficient
     loss_E_weighted = torch.tensor(0.0, device=device)
     loss_N_weighted = torch.tensor(0.0, device=device)
     energy_target = _normalize_scalar_target(energy_target, name="energy")
@@ -267,7 +281,7 @@ def observable_loss(
             return torch.mean(torch.abs(prediction - target))
         return mse_fn(prediction, target)
 
-    if cfg.train_on_energy and energy_target is not None:
+    if energy and energy_target is not None:
         if cfg.train_observables_on_gt:
             losses = []
             if "energy_gt_hamiltonian" in observable_values:
@@ -281,13 +295,13 @@ def observable_loss(
                     scalar_loss(observable_values["energy_gt_density"], energy_target)
                 )
             if losses:
-                loss_E_weighted = cfg.loss_coef_observables * sum(losses) / len(losses)
+                loss_E_weighted = coefficient * sum(losses) / len(losses)
         elif "energy" in observable_values:
-            loss_E_weighted = cfg.loss_coef_observables * scalar_loss(
+            loss_E_weighted = coefficient * scalar_loss(
                 observable_values["energy"], energy_target
             )
 
-    if cfg.train_on_num_electrons and num_electrons_target is not None:
+    if num_electrons and num_electrons_target is not None:
         if cfg.train_observables_on_gt:
             losses = []
             if "num_electrons_gt_overlap" in observable_values:
@@ -305,9 +319,9 @@ def observable_loss(
                     )
                 )
             if losses:
-                loss_N_weighted = cfg.loss_coef_observables * sum(losses) / len(losses)
+                loss_N_weighted = coefficient * sum(losses) / len(losses)
         elif "num_electrons" in observable_values:
-            loss_N_weighted = cfg.loss_coef_observables * scalar_loss(
+            loss_N_weighted = coefficient * scalar_loss(
                 observable_values["num_electrons"], num_electrons_target
             )
 

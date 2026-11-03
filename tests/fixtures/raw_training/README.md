@@ -26,3 +26,7 @@ calibration for this model-math oracle; separate real-data tests verify
 training-only statistics and supervision isolation. These short traces do not
 certify every historical training-controller detail or publication accuracy.
 The older supplied-feature oracles remain under `../reference_operators/`.
+
+The `configuration.pipeline` sections were re-resolved from the current
+recipes after the reference layers were decomposed into library blocks; the
+upstream expectations are unchanged.

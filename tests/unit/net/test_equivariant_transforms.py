@@ -1,5 +1,10 @@
 """Analytic contracts and optional pinned-source differential checks.
 
+The DeepH-E3 endpoint updates are blocks of these primitives (library
+``deeph_e3``); they are checked against the former monolithic layers in
+``tests/physics/test_reference_decomposition.py`` and against the pinned
+source through ``tests/fixtures/reference_operators``.
+
 Run the differential checks with::
 
     MANDALA_DEEPHE3_REFERENCE=/path/to/DeepH-E3 pytest -q \
@@ -23,15 +28,11 @@ import torch
 from e3nn.o3 import Irreps
 
 from net.transforms.equivariant import (
-    EndpointTensorProductEdgeUpdate,
-    EndpointTensorProductNodeUpdate,
     FactorizedTensorProduct,
     GaussianBasis,
-    GatedRadialTensorProduct,
     GraphIrrepNorm,
-    IrrepChannelScale,
     IrrepPermutation,
-    IrrepResidual,
+    RadialChannelScale,
     SymmetricFactorizedTensorProduct,
     make_tensor_product_gate,
 )
@@ -181,11 +182,13 @@ def test_graph_norm_vector_equivariance_and_scalar_only_bias():
 
 def test_channel_scale_and_irrep_permutation_contracts():
     value = torch.arange(16.0).reshape(2, 8)
-    scale = IrrepChannelScale("1x1o+2x0e+1x1o")
-    weights = torch.tensor([[2.0, 3, 4, 5], [6, 7, 8, 9]])
-    expanded = weights[:, [0, 0, 0, 1, 2, 3, 3, 3]]
-    torch.testing.assert_close(scale(value, weights), value * expanded)
-    permutation = IrrepPermutation(scale.irreps_in)
+    scale = RadialChannelScale("1x1o+2x0e+1x1o", radial_dim=1, hidden=())
+    with torch.no_grad():
+        scale.fc[0].weight.zero_()
+        scale.fc[0].bias.copy_(torch.tensor([2.0, 3, 4, 5]))
+    expanded = torch.tensor([2.0, 3, 4, 5])[[0, 0, 0, 1, 2, 3, 3, 3]]
+    torch.testing.assert_close(scale(value, torch.ones(2, 1)), value * expanded)
+    permutation = IrrepPermutation(scale.irreps)
     torch.testing.assert_close(permutation.inverse(permutation(value)), value)
 
 
@@ -230,34 +233,6 @@ def test_graph_norm_reference_initialization_forward_and_gradients(
     )
 
 
-@pytest.mark.parametrize("project", [False, True])
-def test_residual_reference_initialization_forward_and_gradients(reference, project):
-    args = ("2x0e+1x1o", "1x0e+1x1o" if project else "2x0e+1x1o")
-    _assert_initialization_and_vjp(
-        lambda: IrrepResidual(*args),
-        lambda: reference.e3.SkipConnection(*args),
-        [torch.randn(4, Irreps(args[0]).dim), torch.randn(4, Irreps(args[1]).dim)],
-    )
-
-
-@pytest.mark.parametrize("nonlin", [False, True])
-def test_radial_convolution_reference_initialization_forward_and_gradients(
-    reference, nonlin
-):
-    args = (4, "2x0e+1x1o", "1x0e+1x1o", "2x0e+1x1o+1x2e")
-    kwargs = dict(norm="e3LayerNorm", nonlin=nonlin)
-    _assert_initialization_and_vjp(
-        lambda: GatedRadialTensorProduct(*args, **kwargs),
-        lambda: reference.model.EquiConv(*args, **kwargs),
-        [
-            torch.randn(6, 5),
-            torch.randn(6, 4),
-            torch.randn(6, 4),
-            torch.tensor([0, 0, 0, 1, 1, 1]),
-        ],
-    )
-
-
 def _endpoint_arguments(edge_update):
     edge_index = torch.tensor([[0, 1, 0, 2, 3, 2], [0, 1, 1, 2, 3, 3]])
     species = torch.tensor([0, 1, 1, 0])
@@ -278,52 +253,6 @@ def _endpoint_arguments(edge_update):
     return [torch.randn(4, 5), one_hot, *common, None, None]
 
 
-@pytest.mark.parametrize("nonlin,sort", [(False, False), (True, True)])
-def test_endpoint_node_reference_initialization_forward_and_gradients(
-    reference, nonlin, sort
-):
-    kwargs = dict(
-        num_species=2,
-        fc_len_in=4,
-        irreps_sh="1x0e+1x1o",
-        irreps_in_node="2x0e+1x1o",
-        irreps_out_node="3x0e+2x1o+1x2e",
-        irreps_in_edge="2x0e",
-        act={1: torch.nn.functional.silu, -1: torch.tanh},
-        act_gates={1: torch.sigmoid, -1: torch.tanh},
-        nonlin=nonlin,
-        if_sort_irreps=sort,
-    )
-    _assert_initialization_and_vjp(
-        lambda: EndpointTensorProductNodeUpdate(**kwargs),
-        lambda: reference.model.NodeUpdateBlock(**kwargs),
-        _endpoint_arguments(False),
-    )
-
-
-@pytest.mark.parametrize("nonlin,sort", [(False, False), (True, True)])
-def test_endpoint_edge_reference_initialization_forward_and_gradients(
-    reference, nonlin, sort
-):
-    kwargs = dict(
-        num_species=2,
-        fc_len_in=4,
-        irreps_sh="1x0e+1x1o",
-        irreps_in_node="2x0e+1x1o",
-        irreps_in_edge="2x0e",
-        irreps_out_edge="3x0e+2x1o+1x2e",
-        act={1: torch.nn.functional.silu, -1: torch.tanh},
-        act_gates={1: torch.sigmoid, -1: torch.tanh},
-        nonlin=nonlin,
-        if_sort_irreps=sort,
-    )
-    _assert_initialization_and_vjp(
-        lambda: EndpointTensorProductEdgeUpdate(**kwargs),
-        lambda: reference.model.EdgeUpdateBlock(**kwargs),
-        _endpoint_arguments(True),
-    )
-
-
 def test_gate_reference_irreps_and_reachable_path_selection(reference):
     args = tuple(map(Irreps, ("1x0e+1x1o", "1x0e+1x1o", "2x0e+1x1o+1x2e+1x3o")))
     actual = make_tensor_product_gate(*args)
@@ -341,28 +270,60 @@ def test_gate_reference_irreps_and_reachable_path_selection(reference):
 
 @pytest.mark.parametrize("edge_update", [False, True])
 def test_endpoint_update_equivariance_without_external_source(edge_update):
-    kwargs = dict(
-        num_species=2,
-        fc_len_in=4,
-        irreps_sh="1x0e+1x1o",
-        irreps_in_node="2x0e+1x1o",
-        irreps_in_edge="2x0e",
-    )
+    from net.block_library import library_blocks
+    from net.pipeline import FeaturePipeline
+
     output_irreps = Irreps("3x0e+2x1o+1x2e")
-    constructor = (
-        EndpointTensorProductEdgeUpdate
-        if edge_update
-        else EndpointTensorProductNodeUpdate
+    batch_slot = "edge_batch" if edge_update else "node_batch"
+    model = FeaturePipeline(
+        {
+            "blocks": library_blocks(["deeph_e3"]),
+            "inputs": {
+                "nodes": {"domain": "node", "irreps": "2x0e+1x1o"},
+                "attributes": {
+                    "domain": "edge" if edge_update else "node",
+                    "irreps": "4x0e" if edge_update else "2x0e",
+                },
+                "harmonics": {"domain": "edge", "irreps": "1x0e+1x1o"},
+                "edges": {"domain": "edge", "irreps": "2x0e"},
+                "radial": {"domain": "edge", "irreps": "4x0e"},
+            },
+            "stages": [
+                {
+                    "id": "update",
+                    "transform": "e3_edge_update" if edge_update else "e3_node_update",
+                    "inputs": [
+                        "nodes",
+                        "attributes",
+                        "harmonics",
+                        "edges",
+                        "radial",
+                        "edge_index",
+                        batch_slot,
+                    ],
+                    "outputs": ["out"],
+                    "options": {"irreps_out": str(output_irreps)},
+                }
+            ],
+            "outputs": {"out": "out"},
+        },
+        num_species=2,
     )
-    kwargs["irreps_out_edge" if edge_update else "irreps_out_node"] = output_irreps
-    update = constructor(**kwargs)
-    inputs = _endpoint_arguments(edge_update)
+    names = ["nodes", "attributes", "harmonics", "edges", "radial", "edge_index"]
+    arguments = _endpoint_arguments(edge_update)
+    inputs = dict(zip(names, arguments))
+    batch = arguments[6]
+    inputs[batch_slot] = batch[inputs["edge_index"][0]] if edge_update else batch
     rotation = torch.tensor([[0.0, -1, 0], [1, 0, 0], [0, 0, 1]])
-    rotated = list(inputs)
-    rotated[0] = inputs[0] @ Irreps(kwargs["irreps_in_node"]).D_from_matrix(rotation).T
-    rotated[2] = inputs[2] @ Irreps(kwargs["irreps_sh"]).D_from_matrix(rotation).T
-    actual = update(*rotated)
-    expected = update(*inputs) @ output_irreps.D_from_matrix(rotation).T
+    rotated = dict(inputs)
+    rotated["nodes"] = inputs["nodes"] @ Irreps("2x0e+1x1o").D_from_matrix(rotation).T
+    rotated["harmonics"] = (
+        inputs["harmonics"] @ Irreps("1x0e+1x1o").D_from_matrix(rotation).T
+    )
+    actual = model(rotated)["out"]
+    expected = model(inputs)["out"] @ output_irreps.D_from_matrix(rotation).T
     torch.testing.assert_close(actual, expected, rtol=1e-9, atol=1e-9)
-    gradients = torch.autograd.grad(update(*inputs).square().sum(), update.parameters())
+    gradients = torch.autograd.grad(
+        model(inputs)["out"].square().sum(), list(model.parameters())
+    )
     assert all(torch.isfinite(gradient).all() for gradient in gradients)

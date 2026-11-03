@@ -1,11 +1,9 @@
-"""
-E3GNN - PyTorch-Lightning implementation
-----------------------------------------
+"""E3GNN: a compiled feature pipeline trained against a symbolic objective.
 
-*  encoders.py         -> NodeEncoder / EdgeEncoder
-*  layers.py           -> MessageBlock (small & large graphs)
-*  heads.py            -> DeepHead (H, S, D)
-*  sparse_math.trace_* -> Energy / electron count losses
+The network is a ``net.pipeline.FeaturePipeline`` compiled from the recipe (or
+from the flat configuration via ``net.component_defaults``); the loss is a
+``net.objectives.Objective``. This module adds data plumbing, operator
+assembly, metrics and the Lightning training loop.
 """
 
 from __future__ import annotations
@@ -13,19 +11,18 @@ from typing import Dict, Any
 
 import torch
 import pytorch_lightning as pl
+from torch import nn
 
 from collections import OrderedDict
 
-from e3nn.o3 import Irreps
 import time
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.snapshot import Snapshot
 from data.block_matrix import BlockMatrix, IrrepsBlockData
 from data.envelope import scale_block_matrix_by_edge_values
-from data.graph_features import compute_edge_geometry_from_static_edges
 
-from net.common import Config, resolve_hidden_irreps
+from net.common import Config
 from net.irrep_tools import (
     build_irrep_projector_cache,
     build_irrep_block_matrix_cache,
@@ -78,10 +75,9 @@ class E3GNN(pl.LightningModule):
         # automatically by PyTorch Lightning.
         self.mapper: BlockIrrepMapper = mapper
 
-        if cfg.pipeline is None:
-            from net.component_defaults import default_graph
+        from net.component_defaults import pipeline_specification
 
-            cfg.pipeline = default_graph(cfg, len(mapper.orbital_cfg.elements()))
+        cfg.pipeline = pipeline_specification(cfg, mapper)
 
         allow_zero_observable_control = bool(
             getattr(cfg, "allow_zero_observable_loss_control", False)
@@ -185,41 +181,66 @@ class E3GNN(pl.LightningModule):
                 "spectral_loss_enabled requires 'hamiltonian' to be present in matrix_targets."
             )
 
-        # ---------- shared irreps ---------------------------------------
-        self.hidden_irreps: Irreps = resolve_hidden_irreps(self.cfg)
-        self.neck_irreps: Irreps = resolve_hidden_irreps(self.cfg)
-        self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
-
-        if cfg.data.get("representation") == "packed_shells" and not cfg.pipeline.get(
-            "operator_layout"
-        ):
-            shells = {
-                species: tuple(ir.l for mul, ir in irreps for _ in range(mul))
-                for species, irreps in mapper.orbital_cfg.element_to_irreps.items()
-            }
-            with torch.random.fork_rng(devices=[]):
-                resolved, _ = Config.resolve(
-                    cfg.to_mapping(),
-                    species_shells=shells,
-                    spinful=cfg.layout.get("spinful", False),
-                )
-            cfg.pipeline = resolved["pipeline"]
-
         from net.pipeline import FeaturePipeline
 
         self.pipeline = FeaturePipeline(
             cfg.pipeline, num_species=len(mapper.orbital_cfg.elements()), mapper=mapper
         )
-        for operator, slot in self.pipeline.outputs.items():
-            spec = self.pipeline.feature_specs[slot]
-            if (
-                spec.domain != "edge"
-                or spec.representation not in {"matrix", "block_vectors"}
-                or spec.support != "output"
-            ):
+        # Edge matrices on the output support are operators; any other output
+        # is auxiliary and reaches the objective through ``output_error``.
+        self.operator_outputs = [
+            name
+            for name, slot in self.pipeline.outputs.items()
+            if (spec := self.pipeline.feature_specs[slot]).domain == "edge"
+            and spec.representation in {"matrix", "block_vectors"}
+            and spec.support == "output"
+        ]
+        # Operators the graph itself multiplies by the envelope.
+        producer = {
+            slot: record.transform
+            for record in self.pipeline.records
+            for slot in record.outputs
+        }
+        self.envelope_scaled = {
+            name
+            for name, slot in self.pipeline.outputs.items()
+            if producer.get(slot) == "envelope_scale"
+        }
+        if (
+            self._matrix_envelope_mode() != "off"
+            or str(cfg.loss_weighting_mode).lower().startswith("envelope")
+        ) and "edge_envelope" not in self.pipeline.outputs:
+            raise ValueError(
+                "Envelope-based modes need a pipeline output 'edge_envelope' "
+                "(pair_envelope stage) and operators scaled by envelope_scale"
+            )
+        if self._matrix_envelope_mode() != "off":
+            unscaled = (
+                {"hamiltonian", "overlap"} & set(cfg.matrix_targets)
+            ) - self.envelope_scaled
+            if unscaled:
                 raise ValueError(
-                    f"Operator {operator!r} must select matrix features on the output-edge support"
+                    f"hamiltonian_envelope_mode needs {sorted(unscaled)} produced "
+                    "by an envelope_scale stage"
                 )
+        unknown = set(cfg.matrix_targets) - set(self.operator_outputs)
+        if unknown:
+            raise ValueError(
+                f"Operators {sorted(unknown)} must select matrix features on the output-edge support"
+            )
+        from net.objectives import Objective, default_objective
+
+        self.objective = Objective(default_objective(cfg))
+        if "terms" in (cfg.objective or {}):
+            # A flat configuration keeps its historical zero for terms whose
+            # quantity is not computed; an explicit objective must not.
+            self.objective.check_requirements(cfg)
+        for _, (term, options) in self.objective.terms.items():
+            for operator in term.operator_inputs(options).values():
+                if operator not in self.operator_outputs:
+                    raise ValueError(
+                        f"Objective references operator {operator!r}, which the model does not predict"
+                    )
         signature = self.pipeline.operator_layout
         self.output_layout = (
             self.mapper.resolve_layout(signature) if signature is not None else None
@@ -293,6 +314,13 @@ class E3GNN(pl.LightningModule):
                 _, operator, suffix = key.split(".", 2)
                 key = f"pipeline.transforms.readout_{operator}.{suffix}"
             translated[key] = value
+        from net.legacy_weights import translate_monolithic_state_dict
+
+        translated = translate_monolithic_state_dict(
+            translated,
+            separate_shifted_self=bool(self.cfg.separate_shifted_self),
+            onsite_from_nodes=bool(self.cfg.head_use_node_embeddings_for_self_edges),
+        )
         # Frozen basis buffers did not exist in older public checkpoints.
         # Reconstruct only these constants; learned parameters remain strict.
         learned = dict(self.named_parameters())
@@ -366,34 +394,23 @@ class E3GNN(pl.LightningModule):
     def _matrix_envelope_mode(self) -> str:
         return str(getattr(self.cfg, "hamiltonian_envelope_mode", "off")).lower()
 
-    def _physicalize_predicted_matrix(
-        self,
-        *,
-        name: str,
-        pred_matrix: BlockMatrix,
-        x: Dict[str, Any],
-    ) -> BlockMatrix:
-        mode = self._matrix_envelope_mode()
-        if name not in {"hamiltonian", "overlap"} or mode == "off":
-            return pred_matrix
-        if "edge_envelope" not in x:
+    def _pipeline_outputs(self, x: Dict[str, Any]) -> Dict[str, Any]:
+        """Pipeline outputs belonging to the graph(s) of ``x``.
+
+        A batch is evaluated as one union graph and its loss graph by graph;
+        each graph then carries its slice of the outputs.
+        """
+        return x.get("_pipeline_outputs", getattr(self, "_last_outputs", {}))
+
+    def _envelope(self, x: Dict[str, Any]) -> torch.Tensor:
+        """The edge envelope the pipeline computed for the graph(s) of ``x``."""
+        envelope = self._pipeline_outputs(x).get("edge_envelope")
+        if envelope is None:
             raise ValueError(
-                "hamiltonian_envelope_mode requires edge_envelope in the batch."
+                "Envelope-based modes need the pipeline output 'edge_envelope' "
+                "(a pair_envelope stage)."
             )
-        if "edge_partitions" not in x:
-            raise ValueError(
-                "hamiltonian_envelope_mode requires edge_partitions in the batch."
-            )
-        if mode in {"multiply_prediction", "normalize_target"}:
-            return scale_block_matrix_by_edge_values(
-                pred_matrix,
-                x["edge_envelope"],
-                x["edge_partitions"],
-            )
-        raise ValueError(
-            "hamiltonian_envelope_mode must be one of 'off', "
-            "'normalize_target', or 'multiply_prediction'."
-        )
+        return envelope
 
     def predicted_irreps_to_block_matrices(
         self,
@@ -405,13 +422,21 @@ class E3GNN(pl.LightningModule):
         matrices = {
             name: pred.to_blocks(self.mapper) for name, pred in predictions.items()
         }
-        if not physical:
+        if physical or not self.envelope_scaled:
             return matrices
+        # The pipeline predicts physical blocks; undo its envelope scaling.
+        eps = float(getattr(self.cfg, "hamiltonian_envelope_eps", 1.0e-12))
         return {
-            name: self._physicalize_predicted_matrix(
-                name=name,
-                pred_matrix=matrix,
-                x=x,
+            name: (
+                scale_block_matrix_by_edge_values(
+                    matrix,
+                    self._envelope(x),
+                    x["edge_partitions"],
+                    inverse=True,
+                    eps=eps,
+                )
+                if name in self.envelope_scaled
+                else matrix
             )
             for name, matrix in matrices.items()
         }
@@ -507,46 +532,32 @@ class E3GNN(pl.LightningModule):
         target_matrix: BlockMatrix,
         x: Dict[str, Any],
     ) -> tuple[BlockMatrix, BlockMatrix, BlockMatrix]:
+        """``(loss prediction, loss target, physical prediction)``.
+
+        Predictions are physical (the pipeline applies the envelope); with
+        ``normalize_target`` the loss compares both relative to the envelope.
+        """
         mode = self._matrix_envelope_mode()
-        if name not in {"hamiltonian", "overlap"} or mode == "off":
+        if name not in self.envelope_scaled or mode != "normalize_target":
             return pred_matrix, target_matrix, pred_matrix
-        if "edge_envelope" not in x:
-            raise ValueError(
-                "hamiltonian_envelope_mode requires edge_envelope in the batch."
-            )
         if "edge_partitions" not in x:
             raise ValueError(
                 "hamiltonian_envelope_mode requires edge_partitions in the batch."
             )
-        edge_envelope = x["edge_envelope"]
-        edge_partitions = x["edge_partitions"]
+        envelope = self._envelope(x)
         eps = float(getattr(self.cfg, "hamiltonian_envelope_eps", 1.0e-12))
-        if mode == "multiply_prediction":
-            scaled_pred = scale_block_matrix_by_edge_values(
-                pred_matrix,
-                edge_envelope,
-                edge_partitions,
-            )
-            return scaled_pred, target_matrix, scaled_pred
-        if mode == "normalize_target":
-            physical_pred = scale_block_matrix_by_edge_values(
-                pred_matrix,
-                edge_envelope,
-                edge_partitions,
-            )
-            normalized_target = scale_block_matrix_by_edge_values(
-                target_matrix,
-                edge_envelope,
-                edge_partitions,
-                inverse=True,
-                eps=eps,
-                allow_prefix_trim=True,
-            )
-            return pred_matrix, normalized_target, physical_pred
-        raise ValueError(
-            "hamiltonian_envelope_mode must be one of 'off', "
-            "'normalize_target', or 'multiply_prediction'."
+        normalized_pred = scale_block_matrix_by_edge_values(
+            pred_matrix, envelope, x["edge_partitions"], inverse=True, eps=eps
         )
+        normalized_target = scale_block_matrix_by_edge_values(
+            target_matrix,
+            envelope,
+            x["edge_partitions"],
+            inverse=True,
+            eps=eps,
+            allow_prefix_trim=True,
+        )
+        return normalized_pred, normalized_target, pred_matrix
 
     def _edge_loss_weights(self, x: Dict[str, Any]) -> torch.Tensor | None:
         mode = str(getattr(self.cfg, "loss_weighting_mode", "off")).lower()
@@ -557,11 +568,7 @@ class E3GNN(pl.LightningModule):
                 "loss_weighting_mode requires edge_partitions in the batch."
             )
         if mode in {"envelope_inverse_sqrt_clipped", "envelope_inverse_clipped"}:
-            if "edge_envelope" not in x:
-                raise ValueError(
-                    "loss_weighting_mode based on envelope requires edge_envelope in the batch."
-                )
-            base = x["edge_envelope"]
+            base = self._envelope(x)
             eps = float(getattr(self.cfg, "hamiltonian_envelope_eps", 1.0e-12))
             if mode == "envelope_inverse_sqrt_clipped":
                 weights = torch.rsqrt(base.clamp_min(eps))
@@ -604,7 +611,7 @@ class E3GNN(pl.LightningModule):
             )
 
         diff = preds - targets
-        mixture = self._objective_l1_fraction()
+        mixture = self.objective_l1_fraction()
         mse_diff = diff if mixture < 1.0 else diff.detach()
         mae_diff = diff if mixture > 0.0 else diff.detach()
         per_edge_mse = torch.mean(mse_diff.abs().square(), dim=(1, 2))
@@ -624,7 +631,7 @@ class E3GNN(pl.LightningModule):
         weighted_mae = torch.sum(edge_weights * per_edge_mae) / weight_sum
         return weighted_mse, weighted_mae
 
-    def _objective_l1_fraction(self) -> float:
+    def objective_l1_fraction(self) -> float:
         """Return the actual objective mixture used by loss aggregation."""
         kind = (self.cfg.objective or {}).get("kind")
         if kind == "mae":
@@ -644,7 +651,7 @@ class E3GNN(pl.LightningModule):
             return None
         if not torch.isfinite(difference).all():
             raise ValueError("Nonfinite observed matrix objective error")
-        mixture = self._objective_l1_fraction()
+        mixture = self.objective_l1_fraction()
         mse_difference = difference if mixture < 1.0 else difference.detach()
         mae_difference = difference if mixture > 0.0 else difference.detach()
         return (
@@ -652,26 +659,6 @@ class E3GNN(pl.LightningModule):
             mae_difference.abs().mean(),
             difference.numel(),
         )
-
-    def _should_recompute_edge_features(self, x: Dict[str, Any]) -> bool:
-        if "positions" in x:
-            reference = x.get("_geometry_reference", {})
-            if any(
-                key not in reference or not torch.equal(value, reference[key].to(value))
-                for key in ("positions", "box")
-                if (value := x.get(key)) is not None
-            ):
-                return True
-        if not self.cfg.precompute_edge_features:
-            return True
-        required = {slot for _, reads, _ in self.pipeline.bindings for slot in reads}
-        if ({"edge_sh", "edge_length_emb"} & required) - x.keys():
-            return True
-        if "positions" in x and x["positions"].requires_grad:
-            return True
-        if x.get("box") is not None and x["box"].requires_grad:
-            return True
-        return False
 
     def _geometry_num_l(self):
         import math
@@ -690,71 +677,29 @@ class E3GNN(pl.LightningModule):
             return degree
         return declared if declared is not None else 5
 
-    def _populate_edge_features(self, x: Dict[str, Any]) -> None:
-        from data.graph_features import evaluate_graph_geometry
-
-        reads = {slot for _, slots, _ in self.pipeline.bindings for slot in slots}
-        evaluate_graph_geometry(
-            x,
-            local_coordinates=bool(
-                reads & {"sub_edge_ang", "sub_index", "sub_atom_idx", "sub_edge_idx"}
-            ),
-            num_l=self._geometry_num_l(),
-            require_frames="bond_frames" in reads,
-            recompute_geometry=True,
-            derive_frames=self.cfg.data.get("frame_source", "derive") == "derive",
-            neighborhood_support=self.cfg.data.get("neighborhood_support", "output"),
+    def _geometry_requires_grad(self, x):
+        return any(
+            value is not None and value.requires_grad
+            for value in (x.get("positions"), x.get("box"))
         )
-        if getattr(self.cfg, "hamiltonian_envelope_path", None) is not None:
-            from data.envelope import load_pair_envelope_table, build_edge_envelope
 
-            order = self.cfg.species.get("order") or (
-                tuple(self.output_layout.species_shells)
-                if self.output_layout is not None
-                else self.mapper.orbital_cfg.elements()
-            )
-            pairs = [f"{a}-{b}" for a in order for b in order]
-            table = load_pair_envelope_table(
-                self.cfg.hamiltonian_envelope_path,
-                pair_order=pairs,
-                dtype=x["edge_lengths"].dtype,
-                device=x["edge_lengths"].device,
-            )
-            x["edge_envelope"] = build_edge_envelope(
-                x["edge_lengths"], x["edge_type_idx"], table
-            )
-            if self.cfg.pair_distance_normalization == "pair_r0":
-                x["edge_r0"] = table.r0[x["edge_type_idx"]]
-        if not ({"edge_sh", "edge_length_emb"} & reads):
-            return
-        radial_lengths = None
-        radial_basis_end = None
+    def _cached_static_features(self, x):
+        """Static stage outputs precomputed with the sample, when still valid."""
+        cache = x.get("_static_features")
         if (
-            str(getattr(self.cfg, "pair_distance_normalization", "off")).lower()
-            == "pair_r0"
+            not cache
+            or cache.get("fingerprint") != self.pipeline.static_fingerprint
+            or self._geometry_requires_grad(x)
         ):
-            if "edge_length" not in x or "edge_r0" not in x:
-                raise ValueError(
-                    "pair_distance_normalization='pair_r0' requires edge_length "
-                    "and edge_r0 in the batch."
-                )
-            radial_lengths = x["edge_length"] / x["edge_r0"].clamp_min(1e-12)
-            radial_basis_end = 1.0
-        edge_length_emb, edge_sh, _ = compute_edge_geometry_from_static_edges(
-            positions=x["positions"],
-            box=x["box"],
-            edge_index=x["edge_index"],
-            edge_shift=x["edge_shift"],
-            sh_irreps=self.sh_irreps,
-            cutoff_radius=self.cfg.cutoff_radius,
-            n_radial=self.cfg.n_radial,
-            radial_embedding_scale=self.cfg.radial_embedding_scale,
-            radial_lengths=radial_lengths,
-            radial_basis_end=radial_basis_end,
-            edge_batch=x.get("edge_batch"),
-        )
-        x["edge_length_emb"] = edge_length_emb
-        x["edge_sh"] = edge_sh
+            return {}
+        reference = x.get("_geometry_reference", {})
+        for key in ("positions", "box"):
+            value = x.get(key)
+            if value is not None and (
+                key not in reference or not torch.equal(value, reference[key].to(value))
+            ):
+                return {}
+        return cache["values"]
 
     def _partial_train_mask(self, edges_5d: torch.Tensor) -> torch.Tensor | None:
         if self.cfg.partial_train is None:
@@ -871,10 +816,10 @@ class E3GNN(pl.LightningModule):
         # Forward-local values must not leave stale autograd graphs in a dataset.
         x = dict(x)
         from data.graph_topology import prepare_graph_topology
+        from data.graph_features import complete_graph_metadata, evaluate_graph_geometry
+        from net.features import DERIVED_GEOMETRY_SLOTS
 
         prepare_graph_topology(x, self.cfg.data.get("supports"))
-        from data.graph_features import complete_graph_metadata
-
         complete_graph_metadata(
             x,
             self.mapper,
@@ -886,22 +831,10 @@ class E3GNN(pl.LightningModule):
             ),
             separate_shifted_self=self.cfg.separate_shifted_self,
         )
-        from data.graph_features import evaluate_graph_geometry
-
-        reads = {slot for _, slots, _ in self.pipeline.bindings for slot in slots}
-        geometric = {
-            "edge_vectors",
-            "edge_lengths",
-            "message_vectors",
-            "message_lengths",
-            "message_edge_index",
-            "message_to_output",
-            "selfloop_edge",
-            "bond_frames",
-            "sub_edge_ang",
-            "sub_index",
-        }
-        if (reads & geometric) - x.keys():
+        x.update(self._cached_static_features(x))
+        reads = self.pipeline.required_inputs()
+        recompute = self._geometry_requires_grad(x)
+        if recompute or (reads & DERIVED_GEOMETRY_SLOTS) - x.keys():
             evaluate_graph_geometry(
                 x,
                 local_coordinates=bool(
@@ -910,18 +843,20 @@ class E3GNN(pl.LightningModule):
                 ),
                 num_l=self._geometry_num_l(),
                 require_frames="bond_frames" in reads,
+                recompute_geometry=recompute,
+                derive_frames=self.cfg.data.get("frame_source", "derive") == "derive",
                 neighborhood_support=self.cfg.data.get(
                     "neighborhood_support", "output"
                 ),
             )
         activation_mags = OrderedDict() if self.cfg.log_activation_mag else None
-        if self._should_recompute_edge_features(x):
-            self._populate_edge_features(x)
         outputs = self.pipeline(
             x,
             physical_derivatives=physical_derivatives,
             activation_mags=activation_mags,
         )
+        self._last_outputs = outputs
+        outputs = {name: outputs[name] for name in self.operator_outputs}
         predictions = {
             name: (
                 self._wrap_head_output(value, x)
@@ -962,32 +897,20 @@ class E3GNN(pl.LightningModule):
         return predictions
 
     @property
-    def node_enc(self):
-        return self.pipeline.transforms["node_encoding"]
-
-    @property
-    def edge_enc(self):
-        return self.pipeline.transforms["edge_encoding"]
-
-    @property
-    def mp_blocks(self):
-        from types import SimpleNamespace
-
-        return [
-            SimpleNamespace(
-                node_upd=self.pipeline.transforms[f"node_message_{index}"],
-                edge_upd=self.pipeline.transforms[f"edge_message_{index}"],
-            )
-            for index in range(self.cfg.num_layers_gnn)
-        ]
-
-    @property
     def heads(self):
-        return {
-            name.removeprefix("readout_"): module
-            for name, module in self.pipeline.transforms.items()
-            if self.pipeline.roles[name] == "readout"
-        }
+        """Readout stages of each operator (the stages its output depends on)."""
+        heads = {}
+        for operator in self.pipeline.outputs:
+            modules = nn.ModuleDict(
+                {
+                    record.id.replace("/", "__"): self.pipeline.transforms[record.id]
+                    for record in self.pipeline.records
+                    if record.role == "readout"
+                    and (record.group or record.id).endswith(operator)
+                }
+            )
+            heads[operator] = modules
+        return heads
 
     # ==================== Lightning steps ====================================
     def _graph_step(self, batch, batch_idx, stage: str, predictions=None):
@@ -1040,6 +963,7 @@ class E3GNN(pl.LightningModule):
         t_map_end = time.perf_counter() if record_timings else 0.0
 
         # --- Matrix Loss Calculation ------------------------------------
+        components: dict[str, torch.Tensor] = {}
         combined_matrix_losses = {}
         combined_pair_losses: dict[str, dict[str, torch.Tensor]] = {}
         physical_pred_matrices: dict[str, BlockMatrix] = {}
@@ -1363,8 +1287,8 @@ class E3GNN(pl.LightningModule):
                     loss_mse_val += pair_mse
                     loss_mae_val += pair_mae
                     pair_losses[key] = (
-                        1 - self._objective_l1_fraction()
-                    ) * pair_mse + self._objective_l1_fraction() * pair_mae
+                        1 - self.objective_l1_fraction()
+                    ) * pair_mse + self.objective_l1_fraction() * pair_mae
 
                 if (
                     stage != "train" and self.cfg.symmetrize_validation_output
@@ -1476,8 +1400,8 @@ class E3GNN(pl.LightningModule):
                         loss_mae_val += weighted_pair_mae * factor
                         reduction_count += factor
                         pair_losses[key] = factor * (
-                            (1 - self._objective_l1_fraction()) * weighted_pair_mse
-                            + self._objective_l1_fraction() * weighted_pair_mae
+                            (1 - self.objective_l1_fraction()) * weighted_pair_mse
+                            + self.objective_l1_fraction() * weighted_pair_mae
                         )
                         continue
 
@@ -1501,8 +1425,8 @@ class E3GNN(pl.LightningModule):
                     loss_mse_val += weighted_pair_mse
                     loss_mae_val += weighted_pair_mae
                     pair_losses[key] = (
-                        1 - self._objective_l1_fraction()
-                    ) * weighted_pair_mse + self._objective_l1_fraction() * weighted_pair_mae
+                        1 - self.objective_l1_fraction()
+                    ) * weighted_pair_mse + self.objective_l1_fraction() * weighted_pair_mae
 
                 if reduction != "pair_sum":
                     if reduction_count == 0:
@@ -1614,8 +1538,8 @@ class E3GNN(pl.LightningModule):
                     irrep_mse = irrep_vals["mse"]
                     irrep_mae = irrep_vals["mae"]
                     irrep_loss = (
-                        1 - self._objective_l1_fraction()
-                    ) * irrep_mse + self._objective_l1_fraction() * irrep_mae
+                        1 - self.objective_l1_fraction()
+                    ) * irrep_mse + self.objective_l1_fraction() * irrep_mae
                     if name == "hamiltonian":
                         metrics[f"{stage}/{name}_irrep_{irrep_key}_mae"] = (
                             irrep_mae * HARTREE_TO_EV
@@ -1629,8 +1553,10 @@ class E3GNN(pl.LightningModule):
                     if self.cfg.train_on_irrep_parts:
                         metrics[f"{stage}/{name}_irrep_{irrep_key}_loss"] = irrep_loss
 
+            components[f"matrix_mse:{name}"] = mse_for_loss
+            components[f"matrix_mae:{name}"] = mae_for_loss
             options = self.cfg.objective or {}
-            mixture = self._objective_l1_fraction()
+            mixture = self.objective_l1_fraction()
             combined_matrix_losses[name] = options.get("weights", {}).get(name, 1.0) * (
                 (1 - mixture) * mse_for_loss + mixture * mae_for_loss
             )
@@ -1711,13 +1637,22 @@ class E3GNN(pl.LightningModule):
             num_electrons_target=N_true,
         )
         # Training losses always use the original, unscaled predictions.
-        loss_E_weighted, loss_N_weighted = observable_loss(
+        energy_error, electron_error = observable_loss(
             cfg=self.cfg,
             observable_values=observable_values,
             energy_target=E_true,
             num_electrons_target=N_true,
             mse_fn=self._mse,
             device=self.device,
+            coefficient=1.0,
+            energy=True,
+            num_electrons=True,
+        )
+        components["energy"], components["num_electrons"] = energy_error, electron_error
+        coefficient = float(self.cfg.loss_coef_observables)
+        loss_E_weighted, loss_N_weighted = (
+            coefficient * energy_error,
+            coefficient * electron_error,
         )
         energy_loss_active = bool(
             self.cfg.train_on_energy
@@ -1765,6 +1700,7 @@ class E3GNN(pl.LightningModule):
                 torch.abs(forces_pred - forces_true)
             )
             metrics[f"{stage}/forces_mse"] = self._mse(forces_pred, forces_true)
+            components["forces"] = metrics[f"{stage}/forces_mse"]
             if self.cfg.train_on_forces:
                 loss_F_weighted = self.cfg.loss_coef_forces * self._mse(
                     forces_pred, forces_true
@@ -1780,6 +1716,7 @@ class E3GNN(pl.LightningModule):
             stress_pred = self.get_stress(preds_irreps, x["positions"], x["box"], x=x)
             metrics[f"{stage}/stress_mae"] = self._mae(stress_pred, y["stress"])
             metrics[f"{stage}/stress_mse"] = self._mse(stress_pred, y["stress"])
+            components["stress"] = metrics[f"{stage}/stress_mse"]
             if stress_loss_active:
                 loss_stress_weighted = (
                     self.cfg.loss_coef_stress * metrics[f"{stage}/stress_mse"]
@@ -1837,31 +1774,31 @@ class E3GNN(pl.LightningModule):
                 )
                 spectral_loss_active = float(self.cfg.spectral_loss_coef) != 0.0
             metrics[f"{stage}/loss_spectral"] = spectral_loss
+            components["spectral"] = spectral_loss
             metrics[f"{stage}/loss_spectral_weighted"] = loss_spectral_weighted
             metrics[f"{stage}/spectral_mae_ev"] = spectral_stats["spectral_mae_ev"]
             metrics[f"{stage}/spectral_weight_sum"] = spectral_stats[
                 "spectral_weight_sum"
             ]
 
-        # --- Total Loss Aggregation ---
-        loss = (
-            loss_matrix
-            + loss_E_weighted
-            + loss_N_weighted
-            + loss_F_weighted
-            + loss_stress_weighted
-            + loss_spectral_weighted
-        )
+        # --- Total Loss: the objective expression over its terms ---------
+        from net.objectives import ObjectiveContext
 
-        # L1 and L2 regularization
-        if self.cfg.l1_reg_coef > 0:
-            l1_reg = sum(p.abs().sum() for p in self.parameters())
-            loss += self.cfg.l1_reg_coef * l1_reg
-            metrics[f"{stage}/loss_l1_reg"] = l1_reg
-        if self.cfg.l2_reg_coef > 0:
-            l2_reg = sum(p.pow(2).sum() for p in self.parameters())
-            loss += self.cfg.l2_reg_coef * l2_reg
-            metrics[f"{stage}/loss_l2_reg"] = l2_reg
+        loss, term_values = self.objective.evaluate(
+            ObjectiveContext(
+                model=self,
+                x=x,
+                y=y,
+                stage=stage,
+                predictions=preds_irreps,
+                matrices=physical_pred_matrices,
+                targets=target_matrices,
+                outputs=self._pipeline_outputs(x),
+                components=components,
+            )
+        )
+        for label, value in term_values.items():
+            metrics[f"{stage}/objective_{label}"] = value
 
         if self._stop_training_on_nonfinite_loss(
             loss,
@@ -1963,6 +1900,19 @@ class E3GNN(pl.LightningModule):
         )
         return loss, metrics, weight
 
+    def _slice_outputs(self, node_offset, nodes, edge_offset, edges):
+        """One graph's rows of the node and output-edge pipeline outputs."""
+        sliced = {}
+        for name, value in getattr(self, "_last_outputs", {}).items():
+            spec = self.pipeline.feature_specs[self.pipeline.outputs[name]]
+            if not torch.is_tensor(value):
+                continue
+            if spec.domain == "node":
+                sliced[name] = value[node_offset : node_offset + nodes]
+            elif spec.domain == "edge" and spec.support == "output":
+                sliced[name] = value[edge_offset : edge_offset + edges]
+        return sliced
+
     def _split_batch_predictions(self, predictions, graphs, union):
         result = []
         node_offset, edge_offset = 0, 0
@@ -1982,9 +1932,10 @@ class E3GNN(pl.LightningModule):
                 separate_shifted_self=self.cfg.separate_shifted_self,
             )
             n, e = len(x["node_type_idx"]), x["edge_index"].shape[1]
-            for key in ("bond_frames", "edge_envelope", "edge_r0"):
+            for key in ("bond_frames",):
                 if key in union:
                     x[key] = union[key][edge_offset : edge_offset + e]
+            x["_pipeline_outputs"] = self._slice_outputs(node_offset, n, edge_offset, e)
             records = {}
             for name, prediction in predictions.items():
                 if prediction.packed_values is not None:
@@ -2241,11 +2192,6 @@ class E3GNN(pl.LightningModule):
             raise ValueError(
                 "Energy-derived force/stress evaluation requires predictions for "
                 f"hamiltonian, overlap, and density; missing: {', '.join(missing)}."
-            )
-        if x is None and self._matrix_envelope_mode() != "off":
-            raise ValueError(
-                "predictions_to_snapshot requires the input batch `x` when "
-                "hamiltonian_envelope_mode is enabled."
             )
         block_matrices = self.predicted_irreps_to_block_matrices(
             predictions,

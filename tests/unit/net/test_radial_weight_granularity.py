@@ -1,4 +1,4 @@
-"""Controlled radial-gate ablation without changing historical checkpoints."""
+"""Radial weights shared per irrep term or per irrep copy."""
 
 import pytest
 import torch
@@ -6,20 +6,25 @@ from e3nn.o3 import Irreps, rand_matrix
 
 from net.common import Config
 from net.component_defaults import default_graph
-from net.layers import EquiConv
+from net.transforms.mandala import EquivariantConvolution
 
 
 def _conv(mode=None, *, nonlin=False):
     options = {} if mode is None else {"radial_weight_granularity": mode}
-    cfg = Config(n_radial=3, radial_layers=(5,), **options)
-    return EquiConv(
-        3,
-        Irreps("4x0e + 2x1e"),
-        Irreps("1x0e + 1x1o"),
-        Irreps("4x0e + 2x1o"),
-        cfg,
-        nonlin=nonlin,
-    ).double()
+    with torch.random.fork_rng():
+        torch.set_default_dtype(torch.float64)
+        try:
+            return EquivariantConvolution(
+                3,
+                Irreps("4x0e + 2x1e"),
+                Irreps("1x0e + 1x1o"),
+                Irreps("4x0e + 2x1o"),
+                gate=nonlin,
+                radial_layers=(5,),
+                **options,
+            )
+        finally:
+            torch.set_default_dtype(torch.float32)
 
 
 def _inputs(conv):
@@ -30,19 +35,19 @@ def _inputs(conv):
     )
 
 
-def test_default_gate_map_and_checkpoint_preserve_grouped_terms():
+def test_default_gate_map_groups_terms_and_shares_parameters_with_copy_mode():
     torch.manual_seed(14)
-    legacy = _conv()
+    default = _conv()
     explicit = _conv("term")
-    explicit.load_state_dict(legacy.state_dict(), strict=True)
-    inputs = _inputs(legacy)
-    assert legacy._radial_weight_index.tolist() == [0] * 4 + [1] * 6
-    assert torch.equal(legacy(*inputs), explicit(*inputs))
-    assert legacy.state_dict().keys() == explicit.state_dict().keys()
+    explicit.load_state_dict(default.state_dict(), strict=True)
+    inputs = _inputs(default)
+    assert default._radial_weight_index.tolist() == [0] * 4 + [1] * 6
+    assert torch.equal(default(*inputs), explicit(*inputs))
+    assert default.state_dict().keys() == explicit.state_dict().keys()
 
-    # A checkpoint can initialize the controlled mapping ablation unchanged.
+    # Both modes have the same parameters; only the weight-to-copy map differs.
     per_copy = _conv("copy")
-    per_copy.load_state_dict(legacy.state_dict(), strict=True)
+    per_copy.load_state_dict(default.state_dict(), strict=True)
     assert per_copy._radial_weight_index.tolist() == [0, 1, 2, 3, 4, 4, 4, 5, 5, 5]
 
 
@@ -125,10 +130,15 @@ def test_gate_granularity_survives_configuration_and_common_graph_lowering():
     restored = Config.from_mapping(cfg.to_mapping())
     assert restored.radial_weight_granularity == "copy"
     graph = default_graph(restored, num_species=2)
-    messages = [stage for stage in graph["stages"] if stage["role"] == "message"]
-    assert len(messages) == 2
-    for stage in messages:
-        assert stage["options"]["config"]["radial_weight_granularity"] == "copy"
+    convolutions = [
+        stage
+        for name in ("node_update", "edge_update")
+        for stage in graph["blocks"][name]["stages"]
+        if stage["transform"] == "equivariant_convolution"
+    ]
+    assert len(convolutions) == 2
+    for stage in convolutions:
+        assert stage["options"]["radial_weight_granularity"] == "copy"
 
 
 def test_invalid_gate_granularity_fails_explicitly():

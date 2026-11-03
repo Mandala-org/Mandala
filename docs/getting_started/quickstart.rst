@@ -56,16 +56,19 @@ A model on the same structure
 .. code-block:: text
 
    parameters: 514156
-   pipeline stages: ['node_encoding', 'edge_encoding', 'node_message_0', 'edge_message_0',
-                     'node_message_1', 'edge_message_1', 'readout_hamiltonian',
-                     'readout_overlap', 'readout_density']
+   pipeline stages: 46
+   composite blocks: ['edge_encoder', 'node_update_0', 'edge_update_0', 'node_update_1',
+                      'edge_update_1', 'readout_hamiltonian', 'readout_overlap', 'readout_density']
    Si-Si irrep vectors: (376, 169)
    Si-Si blocks: (376, 13, 13)
-   Tr(DS) of the untrained model: -10.288435935974121
+   Tr(DS) of the untrained model: -6.163149356842041
 
-The flat :class:`~net.common.Config` compiles into the nine-stage
-:class:`~net.pipeline.FeaturePipeline` listed above: two encoders, two
-node/edge message-passing layers and one readout per operator. ``model(x)``
+The flat :class:`~net.common.Config` compiles into a
+:class:`~net.pipeline.FeaturePipeline` of 46 stages grouped into the composite
+blocks listed above: the edge encoder, two node/edge message-passing layers
+and one readout per operator. Each block is a small graph of elementary
+stages (convolution, aggregation, MLPs, activation, ...) that recipes can
+replace one by one (:doc:`../architecture/pipeline`). ``model(x)``
 returns :class:`~data.block_matrix.IrrepsBlockData` (irrep coefficients per
 atom pair); :meth:`~net.e3gnn.E3GNN.predict_matrices` converts them into
 physical :class:`~data.block_matrix.BlockMatrix` operators on the 376 edges of

@@ -19,8 +19,6 @@ objective: {kind: mse, epoch_weight: elements}
 optimization:
   optimizer: {kind: adam, lr: 0.002}
 pipeline:
-  inputs:
-    message_batch: {domain: edge, representation: index, frame: none, support: message}
   stages:
     - id: message_geometry
       transform: periodic_displacement
@@ -54,14 +52,20 @@ pipeline:
       outputs: [angular]
       options: {irreps: 0e+1o+2e}
     - id: gather
-      transform: endpoint_gather
+      transform: endpoint_concat
       inputs: [node0, radial, message_edge_index]
       outputs: [endpoints]
+      options: {simplify: false}
+    - id: products
+      transform: factorized_tensor_product
+      inputs: [endpoints, angular]
+      outputs: [products]
+      options: {irreps_out: 8x0e+4x1o, gate: true}
     - id: messages
-      transform: radial_tensor_product
-      inputs: [endpoints, angular, radial, message_batch]
+      transform: radial_channel_scale
+      inputs: [products, radial]
       outputs: [messages]
-      options: {irreps_out: 8x0e+4x1o, radial_hidden: [8, 8]}
+      options: {hidden: [8, 8]}
     - id: aggregate
       transform: projected_attention
       inputs: [messages, node0, radial, message_edge_index]
@@ -72,9 +76,10 @@ pipeline:
       inputs: [node1]
       outputs: [activated]
     - id: residual
-      transform: irrep_residual
+      transform: residual
       inputs: [node0, activated]
       outputs: [nodes]
+      options: {mode: project}
     - id: output_angular
       transform: spherical_harmonics
       inputs: [output_vectors_live]
@@ -86,15 +91,22 @@ pipeline:
       outputs: [output_radial]
       options: {start: 0.0, stop: 7.2, n_gaussians: 8}
     - id: output_encoding
-      transform: endpoint_gather
+      transform: endpoint_concat
       inputs: [nodes, output_radial, edge_index]
       outputs: [output_endpoints]
+      options: {simplify: false}
     - id: output_tensor_product
       role: readout
-      transform: radial_tensor_product
-      inputs: [output_endpoints, output_angular, output_radial, edge_batch]
+      transform: factorized_tensor_product
+      inputs: [output_endpoints, output_angular]
+      outputs: [output_products]
+      options: {irreps_out: '${layout.coupled_irreps}'}
+    - id: output_radial_scale
+      role: readout
+      transform: radial_channel_scale
+      inputs: [output_products, output_radial]
       outputs: [coupled]
-      options: {irreps_out: '${layout.coupled_irreps}', nonlin: false, radial_hidden: [8]}
+      options: {hidden: [8]}
     - id: decode
       role: readout
       transform: shell_tensor_decode

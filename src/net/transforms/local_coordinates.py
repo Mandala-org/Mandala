@@ -1,7 +1,8 @@
-"""Invariant messages and explicit bond-frame operations.
+"""Invariant-channel operations and explicit bond-frame operations.
 
-The formulas implement gated crystal messages and endpoint-local aggregation;
-these modules have no dependency on an architecture implementation or dataset.
+DeepH's crystal-graph and local-coordinate message layers are compositions of
+these stages with the generic gather, gated-message and envelope stages (see
+``configs/reference/deeph.yaml``).
 """
 
 from __future__ import annotations
@@ -12,12 +13,13 @@ from torch import nn
 from torch.nn import functional as F
 from torch_geometric.nn import LayerNorm, GraphNorm, InstanceNorm, PairNorm
 from e3nn import o3
-from net.transforms.composition import (
-    activation,
-    GaussianEnvelope,
-    IndexedAggregation,
-    ScalarActivation,
+from net.features import (
+    FeatureSpec,
+    global_irreps,
+    index_spec,
+    same_support,
 )
+from net.registry import Option, Port, register_transform
 
 
 def _normalization(width, kind):
@@ -44,151 +46,40 @@ def _apply_norm(norm, x, batch):
     )
 
 
-def _sum(x, index, size):
-    return x.new_zeros((size, *x.shape[1:])).index_add(0, index, x)
+class ScalarNormalization(nn.Module):
+    """Normalization of invariant channels; ``segments`` equal channel groups
+    of a row are normalized as separate rows sharing statistics and affine
+    parameters (e.g. the two endpoint halves of a bond feature)."""
+
+    def __init__(self, width, kind="layer", segments=1):
+        super().__init__()
+        if width % segments:
+            raise ValueError("Feature width must be divisible by segments")
+        self.segments = int(segments)
+        self.norm = _normalization(width // self.segments, kind)
+
+    def forward(self, values, batch=None):
+        if self.norm is None:
+            return values
+        if self.segments > 1:
+            rows = values.reshape(-1, values.shape[-1] // self.segments)
+            if batch is not None:
+                batch = batch.repeat_interleave(self.segments)
+            return _apply_norm(self.norm, rows, batch).reshape(values.shape)
+        return _apply_norm(self.norm, values, batch)
 
 
-class ScalarGatedNodeUpdate(nn.Module):
-    """sigmoid-filtered softplus messages, target sum, normalization, residual.
+class BondEndpointSum(nn.Module):
+    """Sum bond-neighborhood messages into the two endpoints of each bond.
 
-    Directed edge_index[0] sends to edge_index[1], matching PyG's default flow.
+    ``endpoint_index`` holds ``2 * bond + endpoint`` per neighborhood row; the
+    result has one row per bond with the two endpoint sums side by side.
     """
 
-    def __init__(
-        self,
-        node_dim,
-        edge_dim,
-        *,
-        normalization="layer",
-        distance_envelope=True,
-        envelope_sigma=3.0,
-        filter_activation="sigmoid",
-        message_activation="softplus",
-        aggregation="sum",
-        residual=True,
-    ):
-        super().__init__()
-        self.lin_f = nn.Linear(2 * node_dim + edge_dim, node_dim)
-        self.lin_s = nn.Linear(2 * node_dim + edge_dim, node_dim)
-        self.norm = _normalization(node_dim, normalization)
-        self.distance_envelope = distance_envelope
-        self.envelope = GaussianEnvelope(envelope_sigma)
-        self.filter_activation, self.message_activation = activation(
-            filter_activation
-        ), activation(message_activation)
-        self.aggregation = IndexedAggregation(aggregation, receiver=1)
-        self.residual = residual
-        # This is part of the original from-scratch initialization schedule.
-        self.lin_f.reset_parameters()
-        self.lin_s.reset_parameters()
-        if isinstance(self.norm, nn.BatchNorm1d):
-            self.norm.reset_parameters()
-
-    def forward(self, node, edge_index, edge, batch, distance):
-        source, target = edge_index
-        z = torch.cat([node[target], node[source], edge], -1)
-        message = self.filter_activation(self.lin_f(z)) * self.message_activation(
-            self.lin_s(z)
-        )
-        if self.distance_envelope:
-            message = message * self.envelope(distance)
-        update = _apply_norm(
-            self.norm, self.aggregation(message, edge_index, node), batch
-        )
-        return node + update if self.residual else update
-
-
-class EndpointScalarEdgeUpdate(nn.Module):
-    def __init__(
-        self,
-        node_dim,
-        edge_dim,
-        out_dim,
-        *,
-        hidden_dim=128,
-        final_activation=True,
-        activation_name="silu",
-    ):
-        super().__init__()
-        layers = [
-            nn.Linear(2 * node_dim + edge_dim, hidden_dim),
-            ScalarActivation(activation_name),
-            nn.Linear(hidden_dim, out_dim),
-        ]
-        if final_activation:
-            layers.append(ScalarActivation(activation_name))
-        self.e_lin = nn.Sequential(*layers)
-
-    def forward(self, node, edge_index, edge):
-        return self.e_lin(
-            torch.cat([node[edge_index[0]], node[edge_index[1]], edge], -1)
-        )
-
-
-class LocalCoordinateMessage(nn.Module):
-    """Two endpoint environments per output edge, with bond-local angles."""
-
-    def __init__(
-        self,
-        node_dim,
-        edge_dim,
-        angular_dim,
-        out_dim,
-        *,
-        hidden_dim=128,
-        normalization="none",
-        distance_envelope=True,
-        envelope_sigma=3.0,
-        filter_activation="sigmoid",
-        message_activation="softplus",
-        readout_activation="silu",
-    ):
-        super().__init__()
-        self.lin_f = nn.Linear(2 * node_dim + edge_dim + angular_dim, node_dim)
-        self.lin_s = nn.Linear(2 * node_dim + edge_dim + angular_dim, node_dim)
-        self.bn = nn.BatchNorm1d(node_dim)
-        self.e_lin = nn.Sequential(
-            nn.Linear(2 * node_dim + edge_dim, hidden_dim),
-            ScalarActivation(readout_activation),
-            nn.Linear(hidden_dim, out_dim),
-        )
-        if normalization not in {"none", "batch"}:
-            raise ValueError(
-                "Local endpoint aggregation supports none or batch normalization"
-            )
-        self.normalization = normalization
-        self.distance_envelope = distance_envelope
-        self.envelope = GaussianEnvelope(envelope_sigma)
-        self.filter_activation, self.message_activation = activation(
-            filter_activation
-        ), activation(message_activation)
-        self.lin_f.reset_parameters()
-        self.lin_s.reset_parameters()
-        if normalization == "batch":
-            self.bn.reset_parameters()
-
-    def forward(
-        self, node, edge, sub_atom_idx, sub_edge_idx, sub_edge_ang, sub_index, distance
-    ):
-        z = torch.cat(
-            [
-                node[sub_atom_idx[:, 0]],
-                node[sub_atom_idx[:, 1]],
-                edge[sub_edge_idx],
-                sub_edge_ang,
-            ],
-            -1,
-        )
-        messages = self.filter_activation(self.lin_f(z)) * self.message_activation(
-            self.lin_s(z)
-        )
-        if self.distance_envelope:
-            messages = messages * self.envelope(distance[sub_edge_idx])
-        endpoints = _sum(messages, sub_index, 2 * len(edge))
-        if self.normalization == "batch":
-            endpoints = self.bn(endpoints)
-        endpoints = endpoints.reshape(len(edge), 2, -1)
-        return self.e_lin(torch.cat([endpoints[:, 0], endpoints[:, 1], edge], -1))
+    def forward(self, messages, endpoint_index, bonds):
+        sums = messages.new_zeros((2 * len(bonds), messages.shape[-1]))
+        sums = sums.index_add(0, endpoint_index, messages)
+        return sums.reshape(len(bonds), 2 * messages.shape[-1])
 
 
 class ChannelLinear(nn.Module):
@@ -270,73 +161,176 @@ class IrrepToBondFrame(nn.Module):
         return torch.einsum("eij,ej->ei", rotation, node[edge_index[self.endpoint]])
 
 
-def build_local_transform(name, p, inputs):
-    from net.pipeline import FeatureSpec, _global_irreps
+def _invariant_width(spec, what):
+    """Width of invariant channels: even scalars or bond-frame components."""
+    if spec.representation == "local_components" and spec.frame == "bond":
+        if spec.dim is None:
+            raise ValueError(f"{what} need a declared width")
+        return spec.dim
+    irreps = global_irreps(spec)
+    if any(ir.l or ir.p != 1 for _, ir in irreps):
+        raise ValueError(f"{what} require invariant scalar channels")
+    return irreps.dim
 
-    if name == "irrep_to_bond":
-        irreps = _global_irreps(inputs[0], "node")
-        return IrrepToBondFrame(irreps, **p), [
-            FeatureSpec("edge", "local_components", str(irreps), "bond")
-        ]
-    if name == "pair_distance_affine":
-        return PairDistanceAffine(**p), [inputs[0]]
-    if name == "channel_linear":
-        if len(inputs) != 1:
-            raise ValueError("channel_linear requires one feature input")
-        source = inputs[0]
-        if source.domain != "edge":
-            raise ValueError("channel_linear requires edge-scoped features")
-        if source.representation == "local_components" and source.frame == "bond":
-            representation, frame = "local_components", "bond"
-        else:
-            irreps = _global_irreps(source, "edge")
-            if any(ir.l or ir.p != 1 for _, ir in irreps):
-                raise ValueError(
-                    "channel_linear requires invariant scalars or explicitly rotated bond components"
-                )
-            representation, frame = "scalar", "global"
-        if source.dim != p["in_features"]:
-            raise ValueError(
-                "channel_linear input width disagrees with the declared feature layout"
-            )
-        width = p["num_channels"] * p["out_features"]
-        return FlatChannelLinear(**p), [
-            FeatureSpec(
-                "edge",
-                representation,
-                irreps=f"{width}x0e" if representation == "scalar" else None,
-                frame=frame,
-                width=width,
-            )
-        ]
-    node_ir = _global_irreps(inputs[0], "node")
-    if any(ir.l or ir.p != 1 for _, ir in node_ir):
-        raise ValueError(
-            "Scalar message updates require invariant scalar node features"
+
+@register_transform(
+    "scalar_normalization",
+    category="normalization",
+    summary="Layer / batch / graph / instance / pair normalization of invariant channels",
+    inputs=[
+        Port("features", None, "invariant"),
+        Port("batch", None, "index", optional=True, doc="Graph of each row"),
+    ],
+    options=[
+        Option(
+            "kind",
+            "choice",
+            "layer",
+            key=True,
+            choices=("layer", "batch", "graph", "instance", "pair", "none"),
+            doc="layer/graph/instance/pair statistics are taken per graph",
+        ),
+        Option(
+            "segments",
+            "int",
+            1,
+            doc="Normalize this many equal channel groups of a row as separate rows",
+        ),
+    ],
+)
+def _scalar_normalization(p, inputs, mapper):
+    width = _invariant_width(inputs[0], "Scalar normalization")
+    if len(inputs) > 1:
+        index_spec(inputs[1], inputs[0].domain)
+        same_support(*inputs)
+    elif p["kind"] not in {"batch", "none"}:
+        raise ValueError(f"{p['kind']} normalization needs the graph index input")
+    return ScalarNormalization(width, p["kind"], p["segments"]), [inputs[0]]
+
+
+@register_transform(
+    "bond_endpoint_sum",
+    category="aggregation",
+    summary="Sum bond-neighborhood messages into [endpoint i, endpoint j] per bond",
+    inputs=[
+        Port("messages", "bond_neighbor"),
+        Port("endpoint_index", "bond_neighbor", "index", doc="2 * bond + endpoint"),
+        Port("bonds", "edge", doc="Reference for the bond count"),
+    ],
+)
+def _bond_endpoint_sum(p, inputs, mapper):
+    messages = inputs[0]
+    if messages.domain != "bond_neighbor":
+        raise ValueError("bond_endpoint_sum sums bond-neighborhood messages")
+    index_spec(inputs[1], "bond_neighbor")
+    same_support(*inputs)
+    width = _invariant_width(messages, "Bond endpoint sums")
+    if messages.representation == "local_components":
+        spec = FeatureSpec(
+            "edge",
+            "local_components",
+            frame="bond",
+            width=2 * width,
+            support=inputs[2].support,
         )
-    node_dim = node_ir.dim
-    if name == "scalar_gated_node":
-        edge = _global_irreps(inputs[2], "edge")
-        if any(ir.l or ir.p != 1 for _, ir in edge):
-            raise ValueError("Scalar messages require invariant edge channels")
-        return ScalarGatedNodeUpdate(node_dim, edge.dim, **p), [inputs[0]]
-    if name == "endpoint_scalar_edge":
-        edge = _global_irreps(inputs[2], "edge")
-        if any(ir.l or ir.p != 1 for _, ir in edge):
-            raise ValueError("Scalar edge updates require invariant edge channels")
-        width = p["out_dim"]
-        return EndpointScalarEdgeUpdate(node_dim, edge.dim, **p), [
-            FeatureSpec("edge", irreps=f"{width}x0e", width=width)
-        ]
-    if name == "local_coordinate_message":
-        edge = _global_irreps(inputs[1], "edge")
-        if any(ir.l or ir.p != 1 for _, ir in edge):
+    else:
+        spec = FeatureSpec(
+            "edge",
+            irreps=f"{2 * width}x0e",
+            width=2 * width,
+            support=inputs[2].support,
+        )
+    return BondEndpointSum(), [spec]
+
+
+@register_transform(
+    "channel_linear",
+    category="linear",
+    summary="Independent dense map per channel (DeepH multi-channel output)",
+    inputs=[Port("features", "edge")],
+    options=[
+        Option("num_channels", "int", key=True),
+        Option(
+            "in_features",
+            "int",
+            infer=lambda inputs, mapper, options: inputs[0].dim,
+            infer_doc="input width",
+        ),
+        Option("out_features", "int", key=True),
+        Option("activation", "bool", False),
+    ],
+)
+def _channel_linear(p, inputs, mapper):
+    source = inputs[0]
+    if source.domain != "edge":
+        raise ValueError("channel_linear requires edge-scoped features")
+    if source.representation == "local_components" and source.frame == "bond":
+        representation, frame = "local_components", "bond"
+    else:
+        irreps = global_irreps(source, "edge")
+        if any(ir.l or ir.p != 1 for _, ir in irreps):
             raise ValueError(
-                "Local coordinate messages require invariant edge channels"
+                "channel_linear requires invariant scalars or explicitly rotated bond components"
             )
-        if inputs[4].frame != "bond":
-            raise ValueError("Local messages require bond-frame angular features")
-        return LocalCoordinateMessage(node_dim, edge.dim, **p), [
-            FeatureSpec("edge", "local_components", frame="bond", width=p["out_dim"])
-        ]
-    raise ValueError(f"Unknown local transformation {name}")
+        representation, frame = "scalar", "global"
+    if source.dim != p["in_features"]:
+        raise ValueError(
+            "channel_linear input width disagrees with the declared feature layout"
+        )
+    width = p["num_channels"] * p["out_features"]
+    return FlatChannelLinear(**p), [
+        FeatureSpec(
+            "edge",
+            representation,
+            irreps=f"{width}x0e" if representation == "scalar" else None,
+            frame=frame,
+            width=width,
+            support=source.support,
+            angular_basis=source.angular_basis,
+        )
+    ]
+
+
+@register_transform(
+    "pair_distance_affine",
+    category="radial_basis",
+    summary="Learned per species-pair affine rescaling of distances",
+    inputs=[Port("lengths", "edge"), Port("pair_type", "edge", "index")],
+    options=[Option("num_pairs", "int", key=True)],
+)
+def _pair_distance_affine(p, inputs, mapper):
+    index_spec(inputs[1], "edge")
+    same_support(*inputs)
+    return PairDistanceAffine(**p), [inputs[0]]
+
+
+@register_transform(
+    "irrep_to_bond",
+    category="frame",
+    summary="Rotate endpoint irreps into the local bond frame",
+    inputs=[
+        Port("nodes", "node", "irreps"),
+        Port("edge_index", "relation", "index"),
+        Port("bond_frames", "edge", "geometry"),
+    ],
+    options=[Option("endpoint", "choice", 0, choices=(0, 1))],
+)
+def _irrep_to_bond(p, inputs, mapper):
+    index_spec(inputs[1], "relation")
+    if inputs[2].domain != "edge" or inputs[2].frame != "bond":
+        raise ValueError("Bond-frame rotation requires edge-scoped bond frames")
+    support = same_support(inputs[1], inputs[2])
+    basis = inputs[0].angular_basis or "xyz"
+    permutation = tuple("xyz".index(axis) for axis in basis)
+    irreps = global_irreps(inputs[0], "node")
+    module = IrrepToBondFrame(irreps, axis_permutation=permutation, **p)
+    return module, [
+        FeatureSpec(
+            "edge",
+            "local_components",
+            str(irreps),
+            "bond",
+            support=support,
+            angular_basis=inputs[0].angular_basis,
+        )
+    ]

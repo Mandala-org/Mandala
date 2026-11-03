@@ -28,22 +28,23 @@ Geometry and embeddings
      - edge lengths
      - :math:`\sqrt{2/r_c}\,\sin(n\pi r/r_c)/r` times a polynomial envelope
        (``r_max``, ``num_basis``, ``cutoff_order``).
+   * - ``soft_one_hot_basis``
+     - edge lengths
+     - e3nn radial basis (``number``, ``end``, ``basis``: gaussian, cosine,
+       smooth_finite, fourier, bessel; ``cutoff``; ``scale``). MANDALA's radial basis.
    * - ``spherical_harmonics``
      - edge vectors
-     - :math:`Y^\ell(\hat{\bm r})` for ``irreps``; ``normalization``.
+     - :math:`Y^\ell(\hat{\bm r})` for ``irreps``; ``normalization``;
+       ``permutation`` evaluates in permuted axes and labels the output basis.
+   * - ``edge_roles``
+     - edge index, shifts
+     - Route index: onsite, shifted self-image (``separate_shifted_self``), off-site.
    * - ``bond_frames``, ``bond_harmonics``
      - edge index, vectors (+ frames, neighbourhood)
      - Local orthonormal bond frames and harmonics of neighbours expressed in them.
    * - ``embedding``, ``one_hot``
      - species index
      - Learned embedding (``num_embeddings``, ``width``) or one-hot features.
-   * - ``species_irrep_embedding``
-     - node species index
-     - MANDALA node encoder, :math:`h^0=\mathrm{Emb}(z)`.
-   * - ``pair_radial_angular_embedding``
-     - pair index, radial, angular
-     - MANDALA rich edge encoder,
-       :math:`\mathrm{TP}(\mathrm{Emb}(t),\varphi\oplus\mathrm{TS}(Y))`.
 
 Message passing
 ---------------
@@ -55,42 +56,48 @@ Message passing
    * - Transformation
      - Inputs
      - Output and key options
-   * - ``endpoint_irrep_node``, ``endpoint_irrep_edge``
-     - node, edge, edge index, harmonics, radial, one-hot, pair index
-     - MANDALA node/edge update blocks (:doc:`../theory/architecture`).
-   * - ``endpoint_tensor_product_node``, ``endpoint_tensor_product_edge``
-     - node, species, angular, edge, radial, edge index, node batch
-     - DeepH-E3 style updates: gated tensor-product convolution,
-       species self-connection, graph normalization.
-   * - ``endpoint_gather``
+   * - ``endpoint_concat``
      - node, edge, edge index
-     - :math:`\bm h_i\oplus\bm h_j\oplus\bm e_{ij}`.
-   * - ``radial_tensor_product``
-     - features, angular, radial, edge batch
-     - Factorized tensor product, gate, radial channel scaling
-       (``irreps_out``, ``radial_hidden``, ``nonlin``).
+     - :math:`[\bm h_i,\bm h_j,\bm e_{ij}]`, :math:`[\bm h_i+\bm h_j,\bm e_{ij}]` or
+       :math:`[\mathrm{TP}(\bm h_i,\bm h_j),\bm e_{ij}]` (``combine``; ``order``
+       puts the receiver first).
+   * - ``gather_rows``
+     - values, index
+     - Rows selected by an index, e.g. :math:`\bm h_i` per edge (``endpoint`` of a
+       pair index).
+   * - ``equivariant_convolution``
+     - features, harmonics, radial [, pair index]
+     - MANDALA gated convolution (``irreps_out``, ``tensor_product``, ``gate``,
+       ``radial_layers``, ``radial_weight_granularity``, ``pair_embedding_dim``).
+   * - ``factorized_tensor_product``
+     - left [, right]
+     - Tensor product with factorized path weights :math:`W_1[u,w]W_2[v,w]`, optionally
+       gated (``gate``); one input gives the symmetric square (DeepH-E3).
+   * - ``radial_channel_scale``
+     - irreps, radial
+     - Each irrep copy times a weight from an MLP of the radial features
+       (``hidden``, ``granularity``).
+   * - ``channelwise_tensor_product``
+     - features, harmonics, radial
+     - MACE convolution: channel-wise product with per-edge path weights from a
+       radial MLP (``irreps_out``, ``radial_layers``).
    * - ``indexed_aggregation``
      - messages, edge index, node reference
      - ``sum`` or ``mean`` onto ``receiver`` 0 or 1.
    * - ``projected_attention``
      - messages, nodes, radial, edge index
      - MANDALA invariant multi-head attention reducer (``scalar_dim``, ``heads``).
-   * - ``endpoint_message_aggregation``
-     - as the node update
-     - MANDALA attention node update as one stage.
-   * - ``neighbor_density``, ``symmetric_product``
-     - node attributes and features, edge attributes, radial, edge index
-     - MACE-style atomic basis :math:`A_i=\sum_j R(r_{ij})Y(\hat{\bm r}_{ij})\otimes h_j`
-       and its learned symmetric powers up to ``correlation``.
-   * - ``angular_degree_expansion``
-     - hidden stream, angular stream, species
-     - Couples a node stream with a separately carried angular stream.
-   * - ``scalar_gated_node``, ``endpoint_scalar_edge``, ``local_coordinate_message``
-     - invariant node/edge features, bond neighbourhood relations
-     - DeepH-style invariant and local-coordinate messages.
-   * - ``gated_scalar_message``
-     - invariant features
-     - Gated MLP on scalars (``out_features``).
+   * - ``channel_reshape``, ``symmetric_contraction``
+     - density / channel density, species attributes
+     - MACE product basis: channel-first layout and learned symmetric powers up to
+       ``correlation``.
+   * - ``bond_endpoint_sum``, ``scalar_normalization``
+     - bond-neighbourhood messages / invariant channels
+     - DeepH local readout: sums into both bond endpoints; layer, batch, graph,
+       instance or pair normalization (``segments``).
+   * - ``gated_scalar_message``, ``scalar_mlp``
+     - invariant features (scalars or bond-frame components)
+     - :math:`\sigma(W_f x)\odot\mathrm{softplus}(W_s x)`; dense MLP.
 
 Feature operations
 ------------------
@@ -105,6 +112,21 @@ Feature operations
    * - ``irrep_linear``
      - irreps
      - Equivariant linear map to ``irreps_out`` (``biases``).
+   * - ``e3mlp``
+     - irreps [, route index]
+     - Equivariant MLP (``layers``, ``variant``, ``irreps_out``,
+       ``activate_last``); one parameter copy per route category
+       (``routes``, ``inactive_routes``).
+   * - ``tensor_square``, ``fc_tensor_product``
+     - irreps [, route index] / two irreps on the same entities
+     - Symmetric square and fully connected product (``irreps_out``).
+   * - ``irrep_nonlinearity``, ``layer_norm``, ``irrep_dropout``
+     - irreps
+     - MANDALA activations (``nonlin_kind``), per-entity normalization, copy dropout.
+   * - ``self_connection``, ``residual``
+     - previous, species one-hot, update / previous, update
+     - Species-dependent skip path; residual sum (``mode``: add_if_matching, add, project,
+       linear).
    * - ``scalar_linear``, ``channel_linear``, ``bond_local_linear``
      - invariant / channel / bond-frame features
      - Dense maps where no rotation acts.
@@ -117,12 +139,16 @@ Feature operations
    * - ``species_tensor_product``
      - irreps, species attributes
      - Species-conditioned self-connection.
-   * - ``irrep_residual``, ``add``, ``concat``
-     - two or more feature slots
-     - Residual (with projection when layouts differ), sum, direct sum.
+   * - ``add``, ``concat``, ``constant_scale``, ``irrep_sort``
+     - feature slots
+     - Sum, direct sum, ``values * factor / divisor``, irrep reordering.
    * - ``gaussian_envelope``, ``scale_features``, ``pair_distance_affine``
      - lengths / values and invariant weights
      - Invariant edge weights and their application.
+   * - ``pair_envelope``, ``envelope_scale``
+     - lengths and pair index / operator blocks and envelope
+     - Fitted per species-pair distance envelope of the operator blocks and the
+       scaling of predictions by it (``hamiltonian_envelope_mode`` lowers to these).
 
 Frames and adapters
 -------------------
@@ -151,9 +177,13 @@ Readout and operator decoding
    * - Transformation
      - Inputs
      - Output and key options
-   * - ``partitioned_irrep_readout``
-     - node, edge, pair edges, edge partitions
-     - MANDALA :class:`~net.heads.DeepHead` producing per-pair irrep vectors.
+   * - ``onsite_from_nodes``
+     - edge, node, edge index, roles
+     - Onsite rows take their atom's features.
+   * - ``pair_projection``
+     - features, edge partitions [, roles]
+     - Per species-pair (and per role) projection to orbital-pair irreps
+       (``mode``: split or shared_conditioned; ``route_scales``, ``log_scale``).
    * - ``partitioned_blocks_to_shells``
      - per-pair vectors
      - Repacks per-pair vectors into the shell codec layout.
@@ -167,6 +197,10 @@ Readout and operator decoding
    * - ``local_orbital_output``
      - bond-frame components
      - Bond-frame orbital entries, including spin–orbit components.
+
+The flat MANDALA configuration lowers to these stages, grouped into the
+composite blocks ``edge_encoder``, ``node_update``, ``edge_update`` and
+``readout`` (:doc:`pipeline`).
 
 Reference presets
 -----------------
@@ -191,7 +225,8 @@ Reference presets
    * - ``hybrids/tensor_messages_projected_attention.yaml``
      - Factorized radial tensor-product messages with MANDALA attention.
    * - ``hybrids/symmetric_products_attention_pair_readout.yaml``
-     - MACE-style symmetric products with attention and a pair readout.
+     - MACE-style symmetric products, a MANDALA attention update and a pair
+       readout, written as two composite blocks.
    * - ``hybrids/tensor_products_degree_expansion_shell_readout.yaml``
      - Tensor products, angular degree expansion and a shell readout.
    * - ``hybrids/equivariant_nodes_bond_frame_readout.yaml``

@@ -44,6 +44,9 @@ dev = [
     "sphinx-rtd-theme>=2.0",
 ]
 
+[tool.setuptools.package-data]
+net = ["block_library/*.yaml", "cost_constants.json"]
+
 # pyproject.toml
 [tool.ruff]
 # (any other ruff settings that still belong at the top level,

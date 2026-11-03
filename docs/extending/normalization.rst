@@ -10,9 +10,10 @@ scale of its input. As with nonlinearities, the statistics used for
 normalizing must be invariant, and means may only be subtracted from even
 scalars.
 
-Built-in members of this kind: ``e3layernorm`` (graph-level equivariant layer
-normalization), ``graph_irrep_norm`` (per-graph normalization as in DeepH-E3),
-and the per-copy ``EquivariantRMSNorm`` used by ``e3mlp_pre_norm``.
+Built-in members of this kind: ``layer_norm`` (equivariant layer
+normalization, ``e3layernorm`` in the flat configuration), ``graph_irrep_norm``
+(per-graph normalization as in DeepH-E3), and the per-copy
+``EquivariantRMSNorm`` used by ``e3mlp_pre_norm``.
 
 The new layer
 -------------

@@ -29,3 +29,9 @@ intentional identity-gradient affine rule. No statistics are fitted to a dataset
 and no validation/test population is consulted. Population-fitting behavior is
 tested separately. Probes include three coordinates and two global moments per
 parameter. Optional direct-source tests compare all parameter coordinates.
+
+The `configuration.pipeline` sections were re-resolved from the current
+recipes after the reference layers were decomposed into library blocks
+(`src/net/block_library`); the upstream numbers (inputs, outputs, gradients,
+parameter probes) are unchanged. The replay maps pipeline parameter names to
+the source names with `tests/reference_parameters.py`.

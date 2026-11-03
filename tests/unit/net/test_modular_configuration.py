@@ -83,7 +83,9 @@ def test_explicit_graph_uses_common_scientific_configuration(override):
     assert all(getattr(model.cfg, name) == value for name, value in override.items())
     if cfg.freeze_backbone_train_heads_only:
         assert not any(
-            parameter.requires_grad for parameter in model.node_enc.parameters()
+            parameter.requires_grad
+            for module in model.pipeline.stages_with_role("encoder").values()
+            for parameter in module.parameters()
         )
         assert any(
             parameter.requires_grad

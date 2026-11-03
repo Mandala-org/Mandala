@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,7 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from net.common import Config, SeparateWeightTensorProduct
 from net.e3mlp_variants import ScaledLinear
+from net.legacy_weights import translate_monolithic_state_dict
 
 if TYPE_CHECKING:
     from net.e3gnn import E3GNN
@@ -45,6 +47,49 @@ class CompatibilityReport:
             "source_num_species": self.source_num_species,
             "source_head_pair_mode": self.source_head_pair_mode,
         }
+
+
+READOUT = "pipeline.transforms.readout_"
+NODE_EMBEDDING = "pipeline.transforms.node_encoder.weight"
+PAIR_EMBEDDING = "pipeline.transforms.edge_encoder/pair_embedding.weight"
+
+
+def _roles(separate_shifted_self):
+    return (
+        ("onsite", "shifted_self", "offsite")
+        if separate_shifted_self
+        else ("onsite", "offsite")
+    )
+
+
+_ROUTE_KEYS = re.compile(
+    r"(?P<head>pipeline\.transforms\.readout_[^.]+/(?:(?:trunk|square)\.routes\.|project\.shared\.|"
+    r"project\.(?:projections|log_scales)\.))(?P<route>\d+)(?P<tail>[._].*)"
+)
+
+
+def remap_role_routes(state_dict, *, source_separate, target_separate):
+    """Renumber role-routed readout weights from the source to the target roles.
+
+    Routes are numbered by edge role: (onsite, shifted_self, offsite) with
+    ``separate_shifted_self`` and (onsite, offsite) without. Weights of a role
+    the target does not have are dropped.
+    """
+    if source_separate == target_separate:
+        return state_dict
+    source, target = _roles(source_separate), _roles(target_separate)
+    result = {}
+    for key, value in state_dict.items():
+        match = _ROUTE_KEYS.fullmatch(key)
+        if match is None:
+            result[key] = value
+            continue
+        role = (
+            source[int(match["route"])] if int(match["route"]) < len(source) else None
+        )
+        if role in target:
+            result[f"{match['head']}{target.index(role)}{match['tail']}"] = value
+    return result
 
 
 def strip_mapper_keys(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -83,11 +128,23 @@ def initialize_model_from_checkpoint(
     checkpoint_path = str(Path(checkpoint_path).expanduser())
     checkpoint = load_checkpoint_payload(checkpoint_path)
     source_state = load_checkpoint_state_dict(checkpoint_path)
+    source_cfg = _extract_source_config(checkpoint)
+    source_state = translate_monolithic_state_dict(
+        source_state,
+        separate_shifted_self=bool(getattr(source_cfg, "separate_shifted_self", True)),
+        onsite_from_nodes=bool(
+            getattr(source_cfg, "head_use_node_embeddings_for_self_edges", True)
+        ),
+    )
+    source_state = remap_role_routes(
+        source_state,
+        source_separate=bool(getattr(source_cfg, "separate_shifted_self", True)),
+        target_separate=bool(getattr(model.cfg, "separate_shifted_self", True)),
+    )
     target_state = model.state_dict()
     report = CompatibilityReport(checkpoint_path=checkpoint_path)
     report.source_targets = _discover_source_targets(source_state)
     report.source_num_species = _infer_source_num_species(source_state)
-    source_cfg = _extract_source_config(checkpoint)
     report.source_head_pair_mode = getattr(source_cfg, "head_pair_mode", None)
     print(
         "[compat] initialize_model_from_checkpoint "
@@ -111,8 +168,8 @@ def initialize_model_from_checkpoint(
     for dst_target, src_target in clone_sources.items():
         if src_target == dst_target:
             continue
-        src_prefix = f"heads.{src_target}."
-        dst_prefix = f"heads.{dst_target}."
+        src_prefix = f"{READOUT}{src_target}/"
+        dst_prefix = f"{READOUT}{dst_target}/"
         for key, value in source_state.items():
             if not key.startswith(src_prefix):
                 continue
@@ -192,7 +249,7 @@ def _extract_source_config(checkpoint: dict[str, Any]) -> Config:
 
 
 def _infer_source_num_species(source_state: dict[str, torch.Tensor]) -> int | None:
-    node_key = "node_enc.elem_emb.weight"
+    node_key = NODE_EMBEDDING
     if node_key not in source_state:
         return None
     return int(source_state[node_key].shape[0])
@@ -257,11 +314,8 @@ def _safe_dataclass_to_dict(obj: Any) -> dict[str, Any]:
 def _discover_source_targets(state_dict: dict[str, torch.Tensor]) -> list[str]:
     targets: set[str] = set()
     for key in state_dict:
-        if not key.startswith("heads."):
-            continue
-        parts = key.split(".")
-        if len(parts) >= 2:
-            targets.add(parts[1])
+        if key.startswith(READOUT):
+            targets.add(key[len(READOUT) :].split("/")[0].split(".")[0])
     return sorted(targets)
 
 
@@ -290,7 +344,7 @@ def _apply_embedding_remaps(
     staged_state: dict[str, torch.Tensor],
     report: CompatibilityReport,
 ) -> None:
-    node_key = "node_enc.elem_emb.weight"
+    node_key = NODE_EMBEDDING
     if node_key in source_state and node_key not in staged_state:
         src = source_state[node_key]
         dst = model.state_dict().get(node_key)
@@ -303,7 +357,7 @@ def _apply_embedding_remaps(
                 f"src_shape={tuple(src.shape)} dst_shape={tuple(dst.shape)}"
             )
 
-    edge_key = "edge_enc.edge_emb.weight"
+    edge_key = PAIR_EMBEDDING
     if edge_key in source_state and edge_key not in staged_state:
         src = source_state[edge_key]
         dst = model.state_dict().get(edge_key)
@@ -587,90 +641,59 @@ def _apply_shared_projector_initialization(
     staged_state: dict[str, torch.Tensor],
     report: CompatibilityReport,
 ) -> None:
-    target_heads = getattr(target_model, "heads", None)
-    source_heads = getattr(source_model, "heads", None)
-    if target_heads is None or source_heads is None:
-        return
-    for target_name, target_head in target_heads.items():
-        source_target_name = report.target_clone_sources.get(target_name, target_name)
-        if source_target_name not in source_heads:
-            continue
-        source_head = source_heads[source_target_name]
-        if getattr(target_head, "head_pair_mode", "split") != "shared_conditioned":
-            continue
-        if getattr(source_head, "head_pair_mode", "split") != "split":
-            continue
-        print(
-            "[compat] initializing shared projector from split head "
-            f"target={target_name} source_target={source_target_name}"
-        )
-        _init_shared_proj_from_split(
-            source_head=source_head,
-            target_head=target_head,
-            source_state=source_state,
-            staged_state=staged_state,
-            report=report,
-            branch_name="diag",
-        )
-        _init_shared_proj_from_split(
-            source_head=source_head,
-            target_head=target_head,
-            source_state=source_state,
-            staged_state=staged_state,
-            report=report,
-            branch_name="offdiag",
-        )
+    """Average split per-pair projections into a shared conditioned projector."""
+    from net.transforms.mandala import PairProjection
+
+    source_modules = dict(source_model.named_modules())
+    target_state = target_model.state_dict()
+    for name, target in target_model.named_modules():
         if (
-            getattr(target_head, "shared_shifted_self_proj", None) is not None
-            and getattr(source_head, "shifted_self_projs", None) is not None
+            not isinstance(target, PairProjection)
+            or target.mode != "shared_conditioned"
         ):
-            _init_shared_proj_from_split(
-                source_head=source_head,
-                target_head=target_head,
+            continue
+        source_name = name
+        for dst, src in report.target_clone_sources.items():
+            marker = f"readout_{dst}/"
+            if marker in name:
+                source_name = name.replace(marker, f"readout_{src}/")
+        source = source_modules.get(source_name)
+        if not isinstance(source, PairProjection) or source.mode != "split":
+            continue
+        print(f"[compat] initializing shared projector {name} from split {source_name}")
+
+        # Staged keys use the target's role numbering; modules keep the source's.
+        def source_route(route):
+            if {source.routes, target.routes} <= {2, 3}:
+                role = _roles(target.routes == 3)[route]
+                roles = _roles(source.routes == 3)
+                return roles.index(role) if role in roles else None
+            return route if route < source.routes else None
+
+        for route in range(target.routes):
+            origin = source_route(route)
+            if origin is None:
+                continue
+            keys = [
+                key
+                for key in source.pair_keys
+                if f"{origin}_{key.replace('-', '_')}" in source.projections
+            ]
+            _aggregate_module_group(
+                src_modules=[
+                    source.projections[f"{origin}_{k.replace('-', '_')}"] for k in keys
+                ],
+                src_prefixes=[
+                    f"{source_name}.projections.{route}_{k.replace('-', '_')}"
+                    for k in keys
+                ],
+                dst_module=target.shared[route],
+                dst_prefix=f"{name}.shared.{route}",
                 source_state=source_state,
                 staged_state=staged_state,
+                target_state=target_state,
                 report=report,
-                branch_name="shifted_self",
             )
-
-
-def _init_shared_proj_from_split(
-    *,
-    source_head: nn.Module,
-    target_head: nn.Module,
-    source_state: dict[str, torch.Tensor],
-    staged_state: dict[str, torch.Tensor],
-    report: CompatibilityReport,
-    branch_name: str,
-) -> None:
-    src_proj_dict = getattr(source_head, f"{branch_name}_projs", None)
-    dst_shared_proj = getattr(target_head, f"shared_{branch_name}_proj", None)
-    if src_proj_dict is None or dst_shared_proj is None:
-        return
-    pair_keys = list(getattr(source_head, "pair_keys", []))
-    if not pair_keys:
-        return
-    source_matrix_name = _head_matrix_name(source_head)
-    target_matrix_name = _head_matrix_name(target_head)
-    print(
-        "[compat] shared projector aggregation "
-        f"branch={branch_name} n_source_pairs={len(pair_keys)} "
-        f"source_matrix={source_matrix_name} target_matrix={target_matrix_name}"
-    )
-    _aggregate_module_group(
-        src_modules=[src_proj_dict[key] for key in pair_keys if key in src_proj_dict],
-        src_prefixes=[
-            f"heads.{source_matrix_name}.{branch_name}_projs.{key}"
-            for key in pair_keys
-            if key in src_proj_dict
-        ],
-        dst_module=dst_shared_proj,
-        dst_prefix=f"heads.{target_matrix_name}.shared_{branch_name}_proj",
-        source_state=source_state,
-        staged_state=staged_state,
-        target_state=target_head.state_dict(prefix=f"heads.{target_matrix_name}."),
-        report=report,
-    )
 
 
 def _aggregate_module_group(
@@ -796,13 +819,6 @@ def _aggregate_e3_linear(
         staged_state[weight_key] = acc / float(count)
         report.remapped_keys.append(weight_key)
         print(f"[compat] aggregated shared e3 linear {weight_key} from {count} sources")
-
-
-def _head_matrix_name(head: nn.Module) -> str:
-    info = getattr(head, "info", None)
-    if isinstance(info, dict):
-        return str(info.get("matrix", "hamiltonian"))
-    return "hamiltonian"
 
 
 def _copy_matching_e3_linear_weights(

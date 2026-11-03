@@ -274,7 +274,7 @@ def test_partitioned_readout_pair_ids_follow_resolved_atomic_order_not_mapper_or
                 super().__init__()
                 self.mapper = mapper
 
-            def forward(self, node, edge, pair_edges, partitions):
+            def forward(self, node, edge, edge_index, partitions, edge_roles):
                 # Each named projection must receive the actual associated edge.
                 for i, pair in enumerate(pairs):
                     assert partitions[pair]["global_idx"].tolist() == [i]
@@ -327,10 +327,58 @@ def _partitioned_readout(
     species_order=None,
     config=None,
 ):
+    """Role-routed trunk, onsite rows from atoms, per-pair projection, packing."""
+    from net.pipeline import FeatureSpec, build_transform
     from net.transforms.orbital import PartitionedBlockPack
-    from net.heads import DeepHead
-    from net.common import Config
-    from e3nn.o3 import Irreps
+
+    config = dict(config or {})
+    separate = config.get("separate_shifted_self", True)
+    roles = FeatureSpec("edge", "index", frame="none", width=3 if separate else 2)
+    pairs = FeatureSpec("relation", "object")
+    trunk_options = {
+        "irreps_out": irreps_neck,
+        "layers": config.get("neck_depth", 2),
+        "activate_last": True,
+        "variant": config.get("e3mlp_variant", "film"),
+    }
+    node_spec = FeatureSpec("node", "irreps", node_irreps)
+    edge_spec = FeatureSpec("edge", "irreps", edge_irreps)
+    neck = FeatureSpec("edge", "irreps", irreps_neck)
+
+    class Head(torch.nn.Module):
+        separate_shifted_self = separate
+
+        def __init__(self):
+            super().__init__()
+            self.onsite, _ = build_transform("e3mlp", trunk_options, [node_spec])
+            self.trunk, _ = build_transform(
+                "e3mlp", {**trunk_options, "inactive_routes": [0]}, [edge_spec, roles]
+            )
+            self.merge, _ = build_transform(
+                "onsite_from_nodes",
+                {},
+                [
+                    neck,
+                    FeatureSpec("node", "irreps", irreps_neck),
+                    FeatureSpec("relation", "index"),
+                    roles,
+                ],
+            )
+            self.project, _ = build_transform(
+                "pair_projection",
+                {
+                    "variant": config.get("head_e3mlp_variant", "normact"),
+                    "layers": config.get("head_e3mlp_layers", 1),
+                },
+                [neck, pairs, roles],
+                mapper=mapper,
+            )
+
+        def forward(self, node, edge, edge_index, partitions, edge_roles):
+            hidden = self.merge(
+                self.trunk(edge, edge_roles), self.onsite(node), edge_index, edge_roles
+            )
+            return self.project(hidden, partitions, edge_roles)
 
     class Assembly(torch.nn.Module):
         def __init__(self):
@@ -341,37 +389,18 @@ def _partitioned_readout(
                 species_order=species_order,
             )
             self.codec, self.edge_types = self.pack.codec, self.pack.edge_types
-            self.head = DeepHead(
-                Irreps(node_irreps),
-                Irreps(edge_irreps),
-                Irreps(irreps_neck),
-                list(mapper.edge_types),
-                mapper,
-                Config(**(config or {})),
-            )
+            self.head = Head()
 
         def forward(self, node, edge, edge_index, pair_types, onsite):
-            partitions, pair_edges = {}, {}
+            same_atom = edge_index[0] == edge_index[1]
+            edge_roles = torch.where(
+                onsite, 0, torch.where(same_atom & separate, 1, 2 if separate else 1)
+            )
+            partitions = {}
             for type_id, pair in enumerate(self.pack.edge_types):
                 selected = torch.where(pair_types == type_id)[0]
-                ends = edge_index[:, selected]
-                diagonal = onsite[selected]
-                shifted = (
-                    (ends[0] == ends[1]) & ~diagonal
-                    if self.head.separate_shifted_self
-                    else torch.zeros_like(diagonal)
-                )
-                partitions[pair] = {
-                    "global_idx": selected,
-                    "diag_local_idx": torch.where(diagonal)[0],
-                    "shifted_self_local_idx": torch.where(shifted)[0],
-                    "offdiag_local_idx": torch.where(~diagonal & ~shifted)[0],
-                }
-                pair_edges[pair] = torch.cat((ends.new_zeros((3, len(selected))), ends))
-            x = {"pred_pair_edges_static": pair_edges, "edge_partitions": partitions}
-            vectors = self.head(
-                node, edge, x["pred_pair_edges_static"], x["edge_partitions"]
-            )
-            return self.pack(vectors, x["edge_partitions"])
+                partitions[pair] = {"global_idx": selected}
+            vectors = self.head(node, edge, edge_index, partitions, edge_roles)
+            return self.pack(vectors, partitions)
 
     return Assembly()

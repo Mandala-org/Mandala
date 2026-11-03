@@ -1,4 +1,10 @@
-"""Original local-coordinate scalar primitives against independent DeepH code."""
+"""Original local-coordinate scalar primitives against independent DeepH code.
+
+DeepH's crystal-graph and local-coordinate layers are blocks of generic stages
+(library ``deeph``); they are checked against the former monolithic layers in
+``tests/physics/test_reference_decomposition.py`` and against DeepH-pack
+through ``tests/fixtures/reference_operators``.
+"""
 
 import importlib
 import os
@@ -10,13 +16,8 @@ import torch
 from e3nn import o3
 
 from data.bond_geometry import bond_frames, bond_neighborhoods, tesseral_harmonics
-from net.transforms.local_coordinates import (
-    ChannelLinear,
-    EndpointScalarEdgeUpdate,
-    LocalCoordinateMessage,
-    IrrepToBondFrame,
-    ScalarGatedNodeUpdate,
-)
+from net.transforms.builtin import ScalarMLP
+from net.transforms.local_coordinates import ChannelLinear, IrrepToBondFrame
 
 
 @pytest.fixture(autouse=True)
@@ -133,142 +134,15 @@ def test_tesseral_angles_and_default_frames_match_source(source, num_l):
             )
 
 
-def _assert_parameter_states_and_adam(
-    left, right, left_optimizer, right_optimizer, name_map=lambda name: name
-):
-    right_parameters = dict(right.named_parameters())
-    for name, parameter in left.named_parameters():
-        reference = right_parameters[name_map(name)]
-        torch.testing.assert_close(parameter, reference, rtol=2e-12, atol=2e-12)
-        state = left_optimizer.state[parameter]
-        reference_state = right_optimizer.state[reference]
-        assert state.keys() == reference_state.keys()
-        for key in state:
-            torch.testing.assert_close(
-                state[key], reference_state[key], rtol=2e-12, atol=2e-12
-            )
-
-
-@pytest.mark.parametrize(
-    "normalization,source_normalization",
-    [("layer", "LayerNorm"), ("batch", "BatchNorm"), ("none", None)],
-)
-def test_scalar_messages_forward_gradients_initialization_and_adam(
-    source, normalization, source_normalization
-):
-    model, _ = source
-    torch.manual_seed(881)
-    ours = ScalarGatedNodeUpdate(4, 3, normalization=normalization)
-    torch.manual_seed(881)
-    reference = model.CGConv(4, dim=3, normalization=source_normalization, if_exp=True)
-    # Upstream's stale propagate_type comment omits distance. New PyG codegen
-    # follows that comment; its unchanged generic dispatcher still exposes the
-    # exact upstream message/aggregate/update behavior, including distance.
-    reference.propagate = reference._orig_propagate
-    prefix = "ln" if normalization == "layer" else "bn"
-
-    def name_map(name):
-        return name.replace("norm.", f"{prefix}.")
-
-    for name, value in ours.state_dict().items():
-        torch.testing.assert_close(
-            value, reference.state_dict()[name_map(name)], rtol=0, atol=0
-        )
-    edges = torch.tensor([[0, 1, 2, 0, 3, 4, 3], [1, 2, 0, 0, 4, 3, 3]])
-    batch = torch.tensor([0, 0, 0, 1, 1])
-    left_optimizer = torch.optim.Adam(ours.parameters(), lr=0.001)
-    right_optimizer = torch.optim.Adam(reference.parameters(), lr=0.001)
-    for step in range(3):
-        torch.manual_seed(887 + step)
-        node = torch.randn(5, 4, requires_grad=True)
-        edge = torch.randn(7, 3, requires_grad=True)
-        distance = torch.rand(7, requires_grad=True)
-        ref_node, ref_edge, ref_distance = [
-            value.detach().clone().requires_grad_(True)
-            for value in (node, edge, distance)
-        ]
-        actual = ours(node, edges, edge, batch, distance)
-        expected = reference(ref_node, edges, ref_edge, batch, ref_distance)
-        torch.testing.assert_close(actual, expected, rtol=2e-13, atol=2e-13)
-        left_optimizer.zero_grad()
-        right_optimizer.zero_grad()
-        actual.square().mean().backward()
-        expected.square().mean().backward()
-        for value, ref_value in zip(
-            (node, edge, distance), (ref_node, ref_edge, ref_distance)
-        ):
-            torch.testing.assert_close(
-                value.grad, ref_value.grad, rtol=2e-11, atol=2e-13
-            )
-        for name, parameter in ours.named_parameters():
-            torch.testing.assert_close(
-                parameter.grad,
-                dict(reference.named_parameters())[name_map(name)].grad,
-                rtol=2e-11,
-                atol=2e-13,
-            )
-        left_optimizer.step()
-        right_optimizer.step()
-        _assert_parameter_states_and_adam(
-            ours, reference, left_optimizer, right_optimizer, name_map
-        )
-
-
-@pytest.mark.parametrize("normalization", ["none", "batch"])
-def test_endpoint_local_message_values_gradients_and_adam(source, normalization):
-    model, _ = source
-    torch.manual_seed(891)
-    ours = LocalCoordinateMessage(3, 5, 9, 7, normalization=normalization)
-    torch.manual_seed(891)
-    reference = model.LCMPLayer(
-        3,
-        14,
-        7,
-        3,
-        normalization="BatchNorm" if normalization == "batch" else None,
-        if_exp=True,
-    )
-    for name, value in ours.state_dict().items():
-        torch.testing.assert_close(value, reference.state_dict()[name], rtol=0, atol=0)
-    edges, vectors = graph()
-    relations = bond_neighborhoods(edges, vectors, bond_frames(edges, vectors), num_l=3)
-    node, edge = (
-        torch.randn(3, 3, requires_grad=True),
-        torch.randn(9, 5, requires_grad=True),
-    )
-    ref_node, ref_edge = (
-        node.detach().clone().requires_grad_(),
-        edge.detach().clone().requires_grad_(),
-    )
-    args = [
-        relations[name]
-        for name in ("sub_atom_idx", "sub_edge_idx", "sub_edge_ang", "sub_index")
-    ]
-    actual = ours(node, edge, *args, vectors.norm(dim=-1))
-    expected = reference(ref_node, ref_edge, *args, vectors.norm(dim=-1), False, "")
-    torch.testing.assert_close(actual, expected, rtol=1e-13, atol=1e-13)
-    actual.square().mean().backward()
-    expected.square().mean().backward()
-    torch.testing.assert_close(node.grad, ref_node.grad, rtol=2e-12, atol=2e-13)
-    torch.testing.assert_close(edge.grad, ref_edge.grad, rtol=2e-12, atol=2e-13)
-    left_optimizer = torch.optim.Adam(ours.parameters(), lr=0.001)
-    right_optimizer = torch.optim.Adam(reference.parameters(), lr=0.001)
-    left_optimizer.step()
-    right_optimizer.step()
-    _assert_parameter_states_and_adam(ours, reference, left_optimizer, right_optimizer)
-
-
 def test_edge_and_channel_readouts_match_source(source):
     model, _ = source
     node, edge = torch.randn(3, 4), torch.randn(5, 3)
     indices = torch.tensor([[0, 0, 1, 1, 2], [1, 2, 0, 2, 0]])
-    ours = EndpointScalarEdgeUpdate(4, 3, 7)
+    pairs = torch.cat([node[indices[0]], node[indices[1]], edge], -1)
+    ours = ScalarMLP(11, [128], 7, "silu", activate_last=True, bias=True)
     reference = model.MPLayer(4, 3, 7, True, True, "LayerNorm", "CGConv", 6).e_lin
-    ours.e_lin.load_state_dict(reference.state_dict())
-    torch.testing.assert_close(
-        ours(node, indices, edge),
-        reference(torch.cat([node[indices[0]], node[indices[1]], edge], -1)),
-    )
+    ours.layers.load_state_dict(reference.state_dict())
+    torch.testing.assert_close(ours(pairs), reference(pairs))
     ours_channel = ChannelLinear(7, 4, 2)
     reference_channel = model.MultipleLinear(7, 4, 2)
     ours_channel.load_state_dict(reference_channel.state_dict())

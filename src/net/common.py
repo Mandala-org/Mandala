@@ -40,6 +40,9 @@ class Config:
 
     # None preserves legacy registration order and checkpoints.
     pipeline: dict | None = None
+    plugins: list = field(default_factory=list)
+    # Tool metadata (e.g. MANDALA Studio layout); never read by the model.
+    studio: dict = field(default_factory=dict)
     objective: dict | None = None
     optimization: dict | None = None
     schema_version: int = 1

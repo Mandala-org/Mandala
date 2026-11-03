@@ -37,10 +37,6 @@ from data.edge_alignment import (
     strict_edge_alignment_check,
     strict_reverse_edge_check,
 )
-from data.envelope import (
-    build_edge_envelope,
-    load_pair_envelope_table,
-)
 from data.graph_features import (
     compute_graph_features,
     compute_graph_features_from_target_edges,
@@ -174,37 +170,11 @@ class E3GNNDataset(Dataset):
             )
         self.hamiltonian_envelope_mode = envelope_mode
         self.pair_distance_normalization = pair_distance_normalization
-        envelope_path = getattr(self.cfg, "hamiltonian_envelope_path", None)
-        loss_weighting_mode = str(
+        self.loss_weighting_mode = str(
             getattr(self.cfg, "loss_weighting_mode", "off")
         ).lower()
-        self.loss_weighting_mode = loss_weighting_mode
-        envelope_weight_modes = {
-            "envelope_inverse_sqrt_clipped",
-            "envelope_inverse_clipped",
-        }
-        need_envelope_table = (
-            envelope_path is not None
-            or envelope_mode != "off"
-            or pair_distance_normalization != "off"
-            or loss_weighting_mode in envelope_weight_modes
-        )
-        self.envelope_table = None
-        self.edge_type_r0 = None
-        if need_envelope_table:
-            if envelope_path is None:
-                raise ValueError(
-                    "hamiltonian_envelope_path is required when envelope-based "
-                    "modes are enabled."
-                )
-            self.envelope_table = load_pair_envelope_table(
-                envelope_path,
-                pair_order=self.edge_types,
-                dtype=self.dtype,
-                device="cpu",
-            )
-            if self.pair_distance_normalization == "pair_r0":
-                self.edge_type_r0 = self.envelope_table.r0.clone().detach()
+        # The pair envelope is a static pipeline stage (``pair_envelope``),
+        # cached with the other structure-only features.
 
         if cfg.train_on_forces and not self.cfg.enable_forces:
             raise Exception("Forces must be enabled to train on them")
@@ -212,6 +182,7 @@ class E3GNNDataset(Dataset):
             raise Exception("Stress must be enabled to train on it")
 
         self.sh_irreps: Irreps = Irreps.spherical_harmonics(self.cfg.l_max)
+        self._static_pipeline = None
         self.device = torch.device("cpu")
         self.spectral_loss_enabled = bool(
             getattr(self.cfg, "spectral_loss_enabled", False)
@@ -695,11 +666,6 @@ class E3GNNDataset(Dataset):
                 "cfg": self.cfg,
                 "sh_irreps": self.sh_irreps,
                 "edge_type2idx": self.edge_type2idx,
-                "edge_type_r0": (
-                    self.edge_type_r0
-                    if self.pair_distance_normalization == "pair_r0"
-                    else None
-                ),
             }
             if (
                 declared_graph == "radius"
@@ -801,18 +767,6 @@ class E3GNNDataset(Dataset):
             edge_one_hot = F.one_hot(
                 src_type * num_species + dst_type, num_classes=num_species * num_species
             ).to(dtype=self.dtype)
-            edge_envelope = None
-            edge_r0 = None
-            if self.envelope_table is not None:
-                edge_envelope = build_edge_envelope(
-                    edge_lengths=edge_lengths,
-                    edge_type_idx=edge_type_idx,
-                    envelope_table=self.envelope_table,
-                ).to(dtype=self.dtype)
-                if self.pair_distance_normalization == "pair_r0":
-                    edge_r0 = self.envelope_table.r0.index_select(0, edge_type_idx).to(
-                        dtype=self.dtype
-                    )
             pred_metadata = build_prediction_edge_metadata(
                 edge_index=edge_index,
                 edge_shift=edge_shift,
@@ -871,13 +825,6 @@ class E3GNNDataset(Dataset):
                 "target_edges_after_cutoff": target_edges_after_cutoff,
                 **pred_metadata,
             }
-            if edge_envelope is not None:
-                x["edge_envelope"] = edge_envelope
-            if edge_r0 is not None:
-                x["edge_r0"] = edge_r0
-            if self.cfg.precompute_edge_features:
-                x["edge_length_emb"] = edge_length_emb
-                x["edge_sh"] = edge_sh
         return x, y
 
     def _add_scientific_features(
@@ -937,17 +884,23 @@ class E3GNNDataset(Dataset):
             for key in ("positions", "box")
             if x.get(key) is not None
         }
+        if self.cfg.precompute_edge_features:
+            from data.graph_features import attach_static_features
+
+            if self._static_pipeline is None:
+                from net.component_defaults import static_feature_pipeline
+
+                self._static_pipeline = static_feature_pipeline(self.cfg, self.mapper)
+            attach_static_features(
+                x,
+                self._static_pipeline,
+                num_l=self.cfg.data.get("num_l", 5),
+                neighborhood_support=self.cfg.data.get(
+                    "neighborhood_support", "output"
+                ),
+            )
         lengths = x.get("edge_length", x.get("edge_lengths"))
         x["edge_length"] = lengths
-        if self.envelope_table is not None:
-            x["edge_envelope"] = build_edge_envelope(
-                edge_lengths=lengths,
-                edge_type_idx=x["edge_type_idx"],
-                envelope_table=self.envelope_table,
-            ).to(self.dtype)
-            x["edge_r0"] = self.envelope_table.r0.index_select(
-                0, x["edge_type_idx"]
-            ).to(self.dtype)
         hamiltonian_target, overlap_target = snap.hamiltonian, snap.overlap
         if self.spectral_loss_enabled:
             fermi_level, fermi_source = self._resolve_spectral_fermi_level(

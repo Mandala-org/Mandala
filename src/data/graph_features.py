@@ -526,3 +526,42 @@ def add_graph_views(
         recompute_geometry=refresh,
         derive_frames=derive_frames,
     )
+
+
+def attach_static_features(inputs, pipeline, *, num_l=5, neighborhood_support="output"):
+    """Cache the outputs of ``pipeline``'s structure-only stages with a sample.
+
+    ``pipeline`` is a ``static_only`` FeaturePipeline. The model reuses the
+    cached values while the geometry is unchanged and does not require
+    gradients; the fingerprint ties them to the stages that produced them.
+    """
+    if not pipeline.records:
+        return inputs
+    reads = pipeline.required_inputs()
+    view = dict(inputs)
+    evaluate_graph_geometry(
+        view,
+        local_coordinates=bool(
+            reads & {"sub_edge_ang", "sub_index", "sub_atom_idx", "sub_edge_idx"}
+        ),
+        num_l=num_l,
+        require_frames="bond_frames" in reads,
+        neighborhood_support=neighborhood_support,
+    )
+    with torch.no_grad():
+        values = pipeline.evaluate_static(view)
+    specs = pipeline.feature_specs
+    inputs["_static_features"] = {
+        "fingerprint": pipeline.static_fingerprint,
+        "values": {key: value.detach() for key, value in values.items()},
+        # Per-entity features concatenate across a batch; node/edge indices do not.
+        "concatenable": {
+            key: specs[key].domain in {"node", "edge"}
+            and (
+                specs[key].representation != "index"
+                or specs[key].categories is not None
+            )
+            for key in values
+        },
+    }
+    return inputs

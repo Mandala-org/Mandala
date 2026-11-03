@@ -37,9 +37,11 @@ factory.add_snapshot(SILICON / "HS.out", SILICON / "Si.out", purpose="train")
 train, _, mapper = factory.create()
 x, y = train[0]
 
+torch.manual_seed(0)
 model = E3GNN(mapper=mapper, cfg=cfg)
 print("parameters:", sum(p.numel() for p in model.parameters()))
-print("pipeline stages:", list(model.pipeline.transforms))
+print("pipeline stages:", len(model.pipeline.records))
+print("composite blocks:", list(model.pipeline.groups))
 
 # The forward pass returns irrep coefficients per atom pair ...
 irreps = model(x)

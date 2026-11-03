@@ -12,8 +12,8 @@ nonlinearities therefore act on vectors only through their *norms*, through
 invariant gates, or through functions on the sphere.
 
 Built-in members of this kind: ``normact``, ``gate_magnitudes``,
-``gate_scalars_mlp`` and ``s2act`` (``nonlin_kind``), the e3nn gate inside
-:class:`~net.layers.EquiConv`, and ``irrep_activation`` as a stage.
+``gate_scalars_mlp`` and ``s2act`` (the ``irrep_nonlinearity`` stage), the
+e3nn gate inside ``equivariant_convolution``, and ``irrep_activation``.
 
 The new layer
 -------------

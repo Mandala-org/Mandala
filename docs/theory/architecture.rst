@@ -72,7 +72,7 @@ The equivariant convolution
 ---------------------------
 
 Both update blocks are built around one radially weighted, gated tensor
-product (:class:`~net.layers.EquiConv`). Given a geometric feature
+product (the ``equivariant_convolution`` stage). Given a geometric feature
 :math:`\bm f_{ij}` it computes
 
 .. math::
@@ -166,8 +166,8 @@ both atoms *and* the geometry of the bond.
 Readout heads
 -------------
 
-One :class:`~net.heads.DeepHead` per predicted operator maps final features to
-the irreps of each species pair:
+One ``readout`` block per predicted operator maps final features to the
+irreps of each species pair:
 
 .. math::
 
@@ -176,8 +176,9 @@ the irreps of each species pair:
 
 * :math:`\bm u_{ij}` is the final edge feature, or for onsite blocks the final
   node feature :math:`\bm h_i` (``head_use_node_embeddings_for_self_edges``).
-* :math:`N^X_c` is a *neck* E3MLP of depth ``neck_depth`` per edge class;
-  shifted-self edges get their own neck when ``separate_shifted_self`` is set.
+* :math:`N^X_c` is a *neck* E3MLP of depth ``neck_depth`` per edge class: an
+  ``e3mlp`` stage routed by ``edge_roles``, with one parameter copy per class;
+  shifted-self edges get their own copy when ``separate_shifted_self`` is set.
 * :math:`\mathcal T` is an optional tensor square (``head_use_tensor_square``).
 * :math:`\Psi^X_{c,a_ia_j}` projects onto the pair irreps (table in
   :doc:`operators`). ``head_pair_mode: split`` uses one projection per species

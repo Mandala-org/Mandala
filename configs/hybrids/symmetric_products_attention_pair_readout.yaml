@@ -34,6 +34,44 @@ training:
   batch_size: 1
   max_epochs: 3000
 pipeline:
+  block_libraries: [deeph_e3, mace]
+  blocks:
+    attention_update:
+      summary: Gated convolution of endpoint features with attention aggregation
+      inputs: [node, edge, edge_index, harmonics, radial]
+      outputs: [out]
+      options: {irreps_out: null}
+      stages:
+      - {id: pre, transform: e3mlp, inputs: [node], outputs: [pre], options: {variant: basic}}
+      - {id: gather, transform: endpoint_concat, inputs: [pre, edge, edge_index], outputs: [gathered]}
+      - id: convolution
+        transform: equivariant_convolution
+        inputs: [gathered, harmonics, radial]
+        outputs: [messages]
+        options: {irreps_out: $irreps_out, radial_layers: [8]}
+      - id: aggregate
+        transform: projected_attention
+        inputs: [messages, pre, radial, edge_index]
+        outputs: [aggregated]
+        options: {scalar_dim: 4, heads: 2, variant: basic}
+      - {id: post, transform: e3mlp, inputs: [aggregated], outputs: [update], options: {variant: basic}}
+      - {id: activation, transform: irrep_nonlinearity, inputs: [update], outputs: [out]}
+    pair_readout:
+      summary: Per-role trunk and per species-pair projection to orbital irreps
+      inputs: [node, edge, edge_index, partitions, roles]
+      outputs: [out]
+      stages:
+      - {id: onsite, transform: onsite_from_nodes, inputs: [edge, node, edge_index, roles], outputs: [onsite]}
+      - id: trunk
+        transform: e3mlp
+        inputs: [onsite, roles]
+        outputs: [trunk]
+        options: {variant: basic, activate_last: true}
+      - id: project
+        transform: pair_projection
+        inputs: [trunk, partitions, roles]
+        outputs: [out]
+        options: {variant: basic}
   stages:
   - id: embedding
     transform: irrep_linear
@@ -88,100 +126,55 @@ pipeline:
     options:
       irreps: 0e+1o
   - id: density
-    transform: neighbor_density
-    inputs:
-    - node_one_hot
-    - node_0
-    - density_angular
-    - density_radial
-    - message_edge_index
-    - node_batch
-    outputs:
-    - density
-    - skip
-    options:
-      target_irreps: 4x0e+4x1o
-      hidden_irreps: 4x0e+4x1o
-      avg_num_neighbors: 2.0
-      radial_layers:
-      - 8
-      normalization: none
+    transform: density_interaction
+    inputs: [node_0, density_angular, density_radial, message_edge_index, node_batch]
+    outputs: [density, density_message]
+    options: {irreps_out: 4x0e+4x1o, radial_layers: [8], graph_norm: false, degree_scale: true, avg_num_neighbors: 2.0}
+  - id: skip
+    transform: species_tensor_product
+    inputs: [node_0, node_one_hot]
+    outputs: [skip]
+    options: {irreps_out: 4x0e+4x1o}
   - id: products
     transform: symmetric_product
-    inputs:
-    - density
-    - node_one_hot
-    - skip
-    outputs:
-    - node_product
-    options:
-      irreps_out: 4x0e+4x1o
-      correlation: 2
+    inputs: [density, node_one_hot, skip]
+    outputs: [node_product]
+    options: {irreps_out: 4x0e+4x1o, correlation: 2}
   - id: attention
-    transform: endpoint_message_aggregation
+    transform: attention_update
     inputs:
     - node_product
     - edge_0
     - edge_index
     - angular
     - radial
-    - node_one_hot
-    - edge_type_idx
     outputs:
     - node_attention
     options:
       irreps_out: 4x0e+4x1o
-      config:
-        neck_depth: 1
-        internal_e3mlp_layers: 0
-        head_e3mlp_layers: 1
-        e3mlp_variant: basic
-        internal_e3mlp_variant: basic
-        head_e3mlp_variant: basic
-        nonlin_kind: normact
-        dropout: 0.0
-        e3layernorm: false
-        node_update_message_agg: attention
-        node_update_attention_scalar_dim: 4
-        node_update_attention_heads: 2
   - id: edge_update
-    transform: endpoint_tensor_product_edge
+    transform: e3_edge_update
+    inputs: [node_attention, edge_one_hot, angular, edge_0, radial, edge_index, edge_batch]
+    outputs: [edge_final]
+    options: {irreps_out: 4x0e+4x1o}
+  - id: roles
+    transform: edge_roles
     inputs:
-    - node_attention
-    - edge_one_hot
-    - angular
-    - edge_0
-    - radial
     - edge_index
-    - node_batch
+    - edge_shift
     outputs:
-    - edge_final
-    options:
-      num_species: ${species.count}
-      fc_len_in: 8
-      irreps_out_edge: 4x0e+4x1o
-  - id: partitioned_readout
+    - roles
+  - id: readout
     role: readout
-    transform: partitioned_irrep_readout
+    transform: pair_readout
     inputs:
     - node_attention
     - edge_final
-    - pred_pair_edges_static
+    - edge_index
     - edge_partitions
+    - roles
     outputs:
     - partitioned_vectors
-    options:
-      irreps_neck: 4x0e+4x1o
-      config:
-        neck_depth: 1
-        internal_e3mlp_layers: 0
-        head_e3mlp_layers: 1
-        e3mlp_variant: basic
-        internal_e3mlp_variant: basic
-        head_e3mlp_variant: basic
-        nonlin_kind: normact
-        dropout: 0.0
-        e3layernorm: false
   - id: orbital_pack
     role: readout
     transform: partitioned_blocks_to_shells
@@ -195,10 +188,3 @@ pipeline:
       species_order: ${species.order}
   outputs:
     hamiltonian: hamiltonian
-  inputs:
-    pred_pair_edges_static:
-      domain: relation
-      representation: object
-    edge_partitions:
-      domain: relation
-      representation: object

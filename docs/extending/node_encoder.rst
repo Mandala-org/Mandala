@@ -9,9 +9,9 @@ atom from its chemical species. Because the species is a label, the initial
 state is invariant (``0e`` channels only); directional information enters
 later through edges.
 
-Built-in members of this kind: ``species_irrep_embedding`` (one learned
-vector per species, the MANDALA default), ``embedding`` and ``one_hot``
-followed by ``irrep_linear`` (DeepH-E3, MACE-H presets).
+Built-in members of this kind: ``embedding`` (one learned vector per species,
+the MANDALA default) and ``one_hot`` followed by ``irrep_linear`` (DeepH-E3,
+MACE-H presets).
 
 The new layer
 -------------

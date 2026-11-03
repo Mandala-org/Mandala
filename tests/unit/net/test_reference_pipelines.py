@@ -22,7 +22,6 @@ from net.configuration import resolve_configuration
 from net.pipeline import FeaturePipeline
 from net.training_policies import masked_error
 
-
 CONFIG_ROOT = Path(__file__).resolve().parents[3] / "configs" / "reference"
 
 
@@ -213,18 +212,14 @@ def test_presets_describe_complete_default_architectures(kind):
     assert config["layout"]["packed_dim"] == codec.packed_dim == 16
     assert config["layout"]["real_packed_dim"] == 16
     stages = config["pipeline"]["stages"]
-    assert sum(s["transform"] == "endpoint_tensor_product_edge" for s in stages) == 3
+    assert sum(s["transform"] == "e3_edge_update" for s in stages) == 3
     if kind == "deeph_e3":
-        assert (
-            sum(s["transform"] == "endpoint_tensor_product_node" for s in stages) == 3
-        )
+        assert config["pipeline"]["block_libraries"] == ["deeph_e3"]
+        assert sum(s["transform"] == "e3_node_update" for s in stages) == 3
         assert config["parameters"]["terminal_self_product"] is False
     else:
-        for name in (
-            "neighbor_density",
-            "symmetric_product",
-            "angular_degree_expansion",
-        ):
+        assert config["pipeline"]["block_libraries"] == ["mace", "deeph_e3"]
+        for name in ("density_interaction", "symmetric_product", "angular_expansion"):
             assert sum(s["transform"] == name for s in stages) == 3
         assert config["parameters"]["correlation"] == 3
         assert (

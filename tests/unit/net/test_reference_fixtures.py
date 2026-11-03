@@ -13,7 +13,7 @@ import torch
 
 from net.pipeline import FeaturePipeline
 from net.training_policies import masked_error
-
+from tests.reference_parameters import source_name, unused_source_parameters
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures/reference_operators"
 
@@ -30,7 +30,7 @@ def _tensor(value):
     )
 
 
-def _assert_probe(parameter, expected):
+def _assert_probe(parameter, expected, *, moments=(2e-8, 2e-9)):
     if parameter is None or expected is None:
         assert parameter is expected
         return
@@ -40,49 +40,22 @@ def _assert_probe(parameter, expected):
         assert not expected["values"]
         return
     # CPU backend/library updates can move final digits; the tested tolerance
-    # is numerical fidelity, not a cross-version bitwise guarantee.
+    # is numerical fidelity, not a cross-version bitwise guarantee. Harmonics
+    # evaluated in the recipe's declared axis order and converted to the
+    # canonical basis round differently after three optimizer steps.
     torch.testing.assert_close(
         flat[expected["indices"]],
         torch.tensor(expected["values"]),
-        rtol=2e-8,
-        atol=2e-10,
+        rtol=1e-7,
+        atol=1e-9,
+    )
+    rtol, atol = moments
+    torch.testing.assert_close(
+        flat.sum(), torch.tensor(expected["sum"]), rtol=rtol, atol=atol
     )
     torch.testing.assert_close(
-        flat.sum(), torch.tensor(expected["sum"]), rtol=2e-8, atol=2e-9
+        flat.square().sum(), torch.tensor(expected["squared_sum"]), rtol=rtol, atol=atol
     )
-    torch.testing.assert_close(
-        flat.square().sum(), torch.tensor(expected["squared_sum"]), rtol=2e-8, atol=2e-9
-    )
-
-
-def _source_name(kind, name):
-    _, stage, tail = name.split(".", 2)
-    if kind == "deeph_e3":
-        prefix = {
-            "embedding": "embedding",
-            "node_readout": "lin_node",
-            "edge_readout": "lin_edge",
-        }.get(stage)
-        if stage.startswith("node_update_"):
-            prefix = f"node_update_blocks.{stage.rsplit('_', 1)[-1]}"
-        if stage.startswith("edge_update_"):
-            prefix = f"edge_update_blocks.{stage.rsplit('_', 1)[-1]}"
-    else:
-        prefix = {
-            "node_embedding": "mace.node_embedding.linear",
-            "density_radial_basis": "mace.radial_embedding",
-            "edge_readout": "edge_update.lin_edge",
-        }.get(stage)
-        if stage.startswith("density_") and stage.rsplit("_", 1)[-1].isdigit():
-            prefix = f"mace.interactions.{stage.rsplit('_', 1)[-1]}"
-        if stage.startswith("product_"):
-            prefix = f"mace.products.{stage.rsplit('_', 1)[-1]}"
-        if stage.startswith("angular_expansion_"):
-            prefix = f"expansion.node_order_expansion_blocks.{stage.rsplit('_', 1)[-1]}"
-        if stage.startswith("edge_update_"):
-            prefix = f"edge_update.edge_update_blocks.{stage.rsplit('_', 1)[-1]}"
-    assert prefix is not None, f"Unmapped parameter {name}"
-    return f"{prefix}.{tail}"
 
 
 @pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.stem)
@@ -101,17 +74,12 @@ def test_offline_default_topology_outputs_gradients_and_three_fresh_adam_steps(p
         ).double()
         torch.set_default_dtype(torch.float64)
         parameters = list(model.named_parameters())
-        if record["kind"] == "deeph":
-            source_names = list(record["initial_parameters"])
-            assert len(parameters) == len(source_names)
-            coordinates = {
-                source: p for source, (_, p) in zip(source_names, parameters)
-            }
-        else:
-            coordinates = {
-                _source_name(record["kind"], name): p for name, p in parameters
-            }
-        assert coordinates.keys() == record["initial_parameters"].keys()
+        coordinates = {source_name(record["kind"], name): p for name, p in parameters}
+        assert len(coordinates) == len(parameters)
+        # The source builds a normalization even when it is disabled.
+        expected = record["initial_parameters"].keys()
+        assert coordinates.keys() <= expected
+        assert expected - coordinates.keys() <= unused_source_parameters(record)
         for name, parameter in coordinates.items():
             _assert_probe(parameter, record["initial_parameters"][name])
         if record["statistics"]:
@@ -138,8 +106,14 @@ def test_offline_default_topology_outputs_gradients_and_three_fresh_adam_steps(p
             for name, parameter in coordinates.items():
                 _assert_probe(parameter.grad, step["gradients"][name])
             optimizer.step()
+            # Adam moves a parameter by about lr * g / eps when |g| << eps, so
+            # gradient components at round-off level (1e-15) shift updated
+            # parameters by lr / eps = 2e5 times their round-off; aggregate
+            # moments of updated parameters get a correspondingly wider band.
             for name, parameter in coordinates.items():
-                _assert_probe(parameter, step["updated_parameters"][name])
+                _assert_probe(
+                    parameter, step["updated_parameters"][name], moments=(1e-7, 1e-8)
+                )
     finally:
         torch.set_default_dtype(previous_dtype)
         torch.set_num_threads(previous_threads)

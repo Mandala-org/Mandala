@@ -1,0 +1,35 @@
+# DeepH-E3 (Gong et al., Nat. Commun. 2023) endpoint node and edge updates as
+# pipeline blocks. Parameters follow DeepH-E3 036bf95 in creation order.
+e3_node_update:
+  summary: Gated factorized tensor products of [h_i, h_j, e_ij] with the harmonics, radially scaled, summed onto senders; species self-connection, graph norm, residual
+  inputs: [nodes, species, harmonics, edges, radial, edge_index, node_batch]
+  outputs: [updated]
+  options: {irreps_out: null, radial_hidden: [64, 64], self_connection: true, sort_irreps: false, self_product: false}
+  stages:
+    - {id: pre, transform: irrep_linear, inputs: [nodes], outputs: [pre], options: {biases: true}}
+    - {id: gather, transform: endpoint_concat, inputs: [pre, edges, edge_index], outputs: [pairs], options: {simplify: false}}
+    - {id: sort, transform: irrep_sort, inputs: [pairs], outputs: [sorted], enabled: $sort_irreps}
+    - {id: product, transform: factorized_tensor_product, inputs: [sorted, harmonics], outputs: [products], options: {irreps_out: $irreps_out, gate: true}}
+    - {id: radial, transform: radial_channel_scale, inputs: [products, radial], outputs: [messages], options: {hidden: $radial_hidden}}
+    - {id: aggregate, transform: indexed_aggregation, inputs: [messages, edge_index, nodes], outputs: [summed], options: {reduction: sum, receiver: 0}}
+    - {id: post, transform: irrep_linear, inputs: [summed], outputs: [post], options: {biases: true}}
+    - {id: connection, transform: self_connection, inputs: [nodes, species, post], outputs: [connected], enabled: $self_connection}
+    - {id: norm, transform: graph_irrep_norm, inputs: [connected, node_batch], outputs: [normalized]}
+    - {id: residual, transform: residual, inputs: [nodes, normalized], outputs: [summed_state], options: {mode: project}}
+    - {id: square, transform: factorized_tensor_product, inputs: [summed_state], outputs: [updated], enabled: $self_product}
+e3_edge_update:
+  summary: Gated factorized tensor products of [h_i, h_j, e_ij] with the harmonics, radially scaled; pair-species self-connection, graph norm, residual
+  inputs: [nodes, pair_species, harmonics, edges, radial, edge_index, edge_batch]
+  outputs: [updated]
+  options: {irreps_out: null, radial_hidden: [64, 64], self_connection: true, sort_irreps: false, self_product: false}
+  stages:
+    - {id: pre, transform: irrep_linear, inputs: [edges], outputs: [pre], options: {biases: true}}
+    - {id: gather, transform: endpoint_concat, inputs: [nodes, pre, edge_index], outputs: [pairs], options: {simplify: false}}
+    - {id: sort, transform: irrep_sort, inputs: [pairs], outputs: [sorted], enabled: $sort_irreps}
+    - {id: product, transform: factorized_tensor_product, inputs: [sorted, harmonics], outputs: [products], options: {irreps_out: $irreps_out, gate: true}}
+    - {id: radial, transform: radial_channel_scale, inputs: [products, radial], outputs: [messages], options: {hidden: $radial_hidden}}
+    - {id: post, transform: irrep_linear, inputs: [messages], outputs: [post], options: {biases: true}}
+    - {id: connection, transform: self_connection, inputs: [edges, pair_species, post], outputs: [connected], enabled: $self_connection}
+    - {id: norm, transform: graph_irrep_norm, inputs: [connected, edge_batch], outputs: [normalized]}
+    - {id: residual, transform: residual, inputs: [edges, normalized], outputs: [summed_state], options: {mode: project}}
+    - {id: square, transform: factorized_tensor_product, inputs: [summed_state], outputs: [updated], enabled: $self_product}

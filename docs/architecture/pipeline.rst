@@ -132,9 +132,14 @@ The dataset and :meth:`E3GNN.forward` provide these slots for every structure:
      - Local bond frames and bond-neighbourhood relations for local-coordinate
        architectures.
 
-The flat MANDALA graph additionally uses ``edge_length_emb`` (Gaussian radial
-basis), ``edge_sh`` (spherical harmonics), ``pred_pair_edges_static`` and
-``edge_partitions``, which the model computes from the configuration.
+   * - ``edge_partitions``, ``pred_pair_edges_static``
+     - relation, object
+     - The edges of every species pair, keyed by pair name, and their
+       ``(L, i, j)`` labels; read by per-pair readouts.
+
+Index slots carry their number of categories in ``width``
+(``node_type_idx``: :math:`N`, ``edge_type_idx``: :math:`N^2`), from which
+routed layers infer how many parameter copies they need.
 
 Resolution: shapes from data
 ----------------------------
@@ -166,6 +171,134 @@ the coupled layout. Resolution also freezes ``pipeline.operator_layout`` — the
 exact species order, shell assignment and spin convention — into the
 checkpoint; inference verifies it before reconstructing blocks.
 
+Composite blocks
+----------------
+
+A recipe can name a subgraph and reuse it. Blocks declare their inputs,
+outputs and options; instances are ordinary stages whose ``transform`` is the
+block name:
+
+.. code-block:: yaml
+
+   pipeline:
+     blocks:
+       gated_update:
+         inputs: [features, harmonics, radial]
+         outputs: [out]
+         options: {irreps_out: null, hidden: [16]}
+         stages:
+           - {id: conv, transform: equivariant_convolution,
+              inputs: [features, harmonics, radial], outputs: [messages],
+              options: {irreps_out: $irreps_out, radial_layers: $hidden}}
+           - {id: act, transform: irrep_nonlinearity, inputs: [messages], outputs: [out]}
+     stages:
+       - {id: layer0, transform: gated_update, inputs: [edge_0, harmonics, radial],
+          outputs: [edge_1], options: {irreps_out: "16x0e+8x1o"}}
+
+Instances expand before compilation into stages ``layer0/conv`` and
+``layer0/act`` writing slots ``layer0/messages`` and ``edge_1``. An option
+value ``$name`` is replaced by the instance's option; ``null`` removes the
+inner option so that the stage infers it; ``$(name)`` substitutes inside a
+longer string, e.g. ``"$(width)x0e"``. Blocks may contain blocks.
+``model.pipeline.groups`` records every instance, its options and the stages
+it expanded into.
+
+The flat MANDALA configuration lowers to exactly such a recipe
+(:func:`net.component_defaults.default_graph`), with blocks ``edge_encoder``,
+``node_update``, ``edge_update`` and ``readout``; every operation inside them
+is a stage that recipes can replace.
+
+Block libraries
+~~~~~~~~~~~~~~~
+
+The DeepH, DeepH-E3 and MACE layers ship as block libraries
+(``src/net/block_library/*.yaml``). A recipe imports them by name, and its own
+``blocks`` override library blocks of the same name:
+
+.. code-block:: yaml
+
+   pipeline:
+     block_libraries: [mace, deeph_e3]
+     stages:
+       - {id: density_0, transform: density_interaction,
+          inputs: [hidden_0, density_angular, density_radial, message_edge_index, node_batch],
+          outputs: [density_0, message_0], options: {irreps_out: "64x0e+64x1o+64x2e"}}
+
+======================  =====================================================
+library                 blocks
+======================  =====================================================
+``deeph``               ``crystal_graph_update``, ``endpoint_edge_update``,
+                        ``local_coordinate_readout``
+``deeph_e3``            ``e3_node_update``, ``e3_edge_update``
+``mace``                ``density_interaction``, ``symmetric_product``,
+                        ``angular_expansion``
+======================  =====================================================
+
+:func:`net.blocks.block_ports` reports the port contract of each block (the
+port of the first inner stage reading each input). A block may declare
+``initialization_order``, the order in which its parameterized stages draw
+their seeded parameters (a repeated id draws again). The library blocks use it
+where the reference implementation creates parameters in a different order
+than it computes, so that a seeded MANDALA model starts from exactly the
+reference weights.
+
+Ablations: bypassing a stage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``enabled: false`` on a stage or a block instance bypasses it: its single
+output is one of its inputs — the first, or the one a transform declares as
+its ``bypass`` port (the update of ``residual`` and ``self_connection``).
+Inside a block, ``enabled: $option`` makes a stage optional:
+
+.. code-block:: yaml
+
+   - {id: residual, transform: residual, inputs: [nodes, update], outputs: [out],
+      enabled: false}                       # no skip connection
+   - {id: node_update_2, transform: e3_node_update, ..., enabled: false}  # drop a layer
+
+The pair envelope
+~~~~~~~~~~~~~~~~~
+
+``hamiltonian_envelope_mode`` and envelope-based loss weighting lower to two
+stages for any model: ``pair_envelope`` evaluates the fitted per-pair envelope
+on every edge (a static stage, cached with the sample) and ``envelope_scale``
+multiplies the predicted Hamiltonian and overlap blocks by it. The pipeline
+exposes ``edge_envelope`` as an auxiliary output for target normalization and
+loss weighting; ``pair_distance_normalization: pair_r0`` reads the pair radius
+from the same stage. A recipe can place both stages itself.
+
+Structure-only stages
+---------------------
+
+A stage without parameters whose inputs depend on the structure alone (radial
+bases, harmonics, edge roles, frames) is *static*. Datasets evaluate the
+static stages once per structure and store their outputs with the sample;
+the model reuses them while the geometry is unchanged and recomputes them
+whenever positions or the cell require gradients (forces, stress).
+
+Objectives
+----------
+
+The training loss is an expression over named terms:
+
+.. code-block:: yaml
+
+   objective:
+     terms:
+       H: {term: matrix_error, operator: hamiltonian}
+       S: {term: matrix_error, operator: overlap, l1_fraction: 1.0}
+       E: {term: band_energy}
+     expression: "H + 0.5 * S + 1e-3 * E"
+
+Terms are registered functions of the batch (:mod:`net.objectives`);
+``objective_catalog()`` lists them. A term declares which of its options name
+predicted operators (``operators=("operator",)``); these are its input ports
+in MANDALA Studio and are checked against the model's outputs. The expression language has numbers, term
+labels, ``+ - * /``, parentheses and ``sqrt log exp abs min max``. Without an
+``objective`` section the flat loss settings (``loss_coef_*``,
+``objective.weights``, ``l1_reg_coef``, ...) define the terms. Pipeline
+outputs that are not operators reach the loss through ``output_error``.
+
 Inspecting a pipeline
 ---------------------
 
@@ -179,23 +312,49 @@ Inspecting a pipeline
 tool for equivariance debugging: rotate the input and compare slot by slot to
 find the first stage that breaks the transformation law.
 
-The registry
-------------
-
-Transformations are registered by name:
+Without building a model, :func:`net.inspection.analyze_recipe` compiles a
+recipe for a declared species and basis set and reports, per stage, the
+completed options (given, inferred or default), output contracts, parameter
+count and an asymptotic cost estimate; errors of all stages are collected
+instead of raised:
 
 .. code-block:: python
 
-   from net.pipeline import FeatureSpec, register_transform
+   from net.inspection import analyze_recipe
 
-   @register_transform("my_layer")
+   report = analyze_recipe(recipe, species_shells={"Si": [0, 0, 1, 1, 2]})
+   for stage in report["stages"]:
+       print(stage["id"], stage["parameters"], stage["inferred"], stage["error"])
+
+The registry
+------------
+
+Transformations are registered by name, optionally with a description of
+their ports and options:
+
+.. code-block:: python
+
+   from net.pipeline import FeatureSpec, Option, Port, register_transform
+
+   @register_transform(
+       "my_layer",
+       category="nonlinearity",
+       summary="What the layer computes",
+       inputs=[Port("features", None, "irreps")],
+       options=[Option("width", "int", 16, key=True)],
+   )
    def build(options, inputs, mapper):
        ...                       # validate the FeatureSpecs in `inputs`
        return module, [FeatureSpec(...)]
 
-The factory receives the stage ``options`` (a dict), the list of input
-specs and the shared :class:`~core.block_irrep_mapper.BlockIrrepMapper`, and
-returns a ``torch.nn.Module`` together with one spec per output. At run time
+The factory receives the stage ``options`` completed from the declared
+defaults and inference rules, the list of input specs and the shared
+:class:`~core.block_irrep_mapper.BlockIrrepMapper`, and returns a
+``torch.nn.Module`` together with one spec per output. Declared options are
+checked strictly; ``Option(..., infer=...)`` derives a value from the wiring
+(for example output irreps equal to the input irreps) and the compiled stage
+records which options were given and which were inferred. Plugins listed under
+``plugins`` in a recipe are imported before compilation. At run time
 the module is called with the input tensors in order; if it sets
 ``accepts_physical_derivatives = True`` it also receives
 ``physical_derivatives=...``. :doc:`../extending/index` develops this into a

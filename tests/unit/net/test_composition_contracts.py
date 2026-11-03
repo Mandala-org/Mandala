@@ -9,12 +9,6 @@ from data.graph_features import evaluate_graph_geometry
 from data.sample import union_graph_inputs
 from net.pipeline import FeatureSpec, FeaturePipeline, build_transform
 from net.transforms.orbital import IrrepCartesianBasis
-from net.transforms.composition import (
-    ScalarGatedMessage,
-    IndexedAggregation,
-    GaussianEnvelope,
-)
-from net.transforms.local_coordinates import ScalarGatedNodeUpdate
 from net.training_policies import MilestoneDecay
 
 
@@ -34,33 +28,38 @@ def graph(n=3):
     }
 
 
-def test_original_components_reject_noncanonical_features_and_preserve_support():
+def test_mandala_stages_reject_noncanonical_features_and_preserve_support():
     node = FeatureSpec("node", "irreps", "2x0e+1x1o", angular_basis="xyz")
     edge = FeatureSpec("edge", "irreps", "2x0e+1x1o", support="message")
-    inputs = [
-        node,
-        edge,
-        FeatureSpec("relation", "index", support="message"),
-        FeatureSpec("edge", "irreps", "0e+1o", support="message"),
-        FeatureSpec("edge", irreps="2x0e", support="message"),
-        FeatureSpec("edge", irreps="1x0e", support="message"),
-        FeatureSpec("edge", "index", support="message"),
-    ]
-    options = {
-        "num_species": 1,
-        "irreps_out": "2x0e+1x1o",
-        "config": {"l_max": 1, "n_radial": 2, "radial_layers": [3]},
-    }
-    _, specs = build_transform("endpoint_irrep_edge", options, inputs)
-    assert specs[0].support == "message"
-    assert specs[0].angular_basis == "xyz"
+    index = FeatureSpec("relation", "index", support="message")
+    harmonics = FeatureSpec("edge", "irreps", "0e+1o", support="message")
+    radial = FeatureSpec("edge", irreps="2x0e", support="message")
+    _, (gathered,) = build_transform("endpoint_concat", {}, [node, edge, index])
+    assert gathered.support == "message" and gathered.angular_basis == "xyz"
+    _, (messages,) = build_transform(
+        "equivariant_convolution",
+        {"irreps_out": "2x0e+1x1o", "radial_layers": [3]},
+        [gathered, harmonics, radial],
+    )
+    assert messages.support == "message"
     from dataclasses import replace
 
-    cyclic = [
-        replace(spec, angular_basis="yzx") if spec.irreps else spec for spec in inputs
-    ]
     with pytest.raises(ValueError, match="canonical xyz"):
-        build_transform("endpoint_irrep_edge", options, cyclic)
+        build_transform(
+            "endpoint_concat",
+            {},
+            [
+                replace(node, angular_basis="yzx"),
+                replace(edge, angular_basis="yzx"),
+                index,
+            ],
+        )
+    with pytest.raises(ValueError, match="support mismatch"):
+        build_transform(
+            "equivariant_convolution",
+            {"irreps_out": "2x0e"},
+            [gathered, harmonics, replace(radial, support="output")],
+        )
 
 
 def test_external_irreps_normalize_once_at_representation_boundary():
@@ -267,28 +266,6 @@ def test_independent_radius_support_retains_periodic_images_and_batches():
     torch.testing.assert_close(
         union["message_vectors"], x["message_vectors"].repeat(2, 1)
     )
-
-
-def test_scalar_message_envelope_and_reducer_compose_to_reference_update():
-    composite = ScalarGatedNodeUpdate(3, 2, normalization="none").double()
-    message = ScalarGatedMessage(8, 3).double()
-    message.load_state_dict(
-        {
-            key: value
-            for key, value in composite.state_dict().items()
-            if key.startswith(("lin_f.", "lin_s."))
-        }
-    )
-    node, edge = torch.randn(3, 3, dtype=torch.float64), torch.randn(
-        4, 2, dtype=torch.float64
-    )
-    index = torch.tensor([[0, 1, 1, 2], [1, 0, 2, 1]])
-    lengths = torch.rand(4, dtype=torch.float64)
-    z = torch.cat((node[index[1]], node[index[0]], edge), -1)
-    values = message(z) * GaussianEnvelope()(lengths)
-    expected = node + IndexedAggregation()(values, index, node)
-    observed = composite(node, index, edge, torch.zeros(3, dtype=torch.long), lengths)
-    torch.testing.assert_close(observed, expected)
 
 
 def test_milestone_policy_matches_source_epoch_order_and_resumes():

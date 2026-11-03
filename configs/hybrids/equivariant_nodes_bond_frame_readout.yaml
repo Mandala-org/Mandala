@@ -35,6 +35,7 @@ training:
   batch_size: 1
   max_epochs: 3000
 pipeline:
+  block_libraries: [deeph_e3]
   stages:
   - id: embedding
     transform: irrep_linear
@@ -71,23 +72,10 @@ pipeline:
     options:
       irreps: 0e+1o
   - id: node_update
-    transform: endpoint_tensor_product_node
-    inputs:
-    - node_0
-    - node_one_hot
-    - angular
-    - edge_0
-    - radial
-    - edge_index
-    - node_batch
-    - edge_batch
-    - selfloop_edge
-    outputs:
-    - node_tp
-    options:
-      num_species: ${species.count}
-      fc_len_in: 8
-      irreps_out_node: 4x0e+4x1o
+    transform: e3_node_update
+    inputs: [node_0, node_one_hot, angular, edge_0, radial, edge_index, node_batch]
+    outputs: [node_tp]
+    options: {irreps_out: 4x0e+4x1o}
   - id: bond_rotation
     transform: irrep_to_bond
     inputs:

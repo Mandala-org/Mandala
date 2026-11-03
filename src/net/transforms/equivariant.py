@@ -1,6 +1,8 @@
 """Composable equivariant transformations with reference parameter coordinates.
 
-The tensor products, normalization and endpoint updates below are adapted from
+DeepH-E3's endpoint node and edge updates are compositions of these stages
+with the generic ones (see ``configs/reference/deeph_e3.yaml``). The tensor
+products, normalization and gate construction below are adapted from
 DeepH-E3, commit ``036bf95b996052ef778c5c38e3c54c2ac0e2b591``:
 https://github.com/Xiaoxun-Gong/DeepH-E3
 The Gaussian basis originates in SchNetPack.  The equations, parameter creation
@@ -43,7 +45,9 @@ from torch import nn
 from torch.nn import functional as F
 from torch_scatter import scatter
 from e3nn.nn import Extract, Gate
-from e3nn.o3 import FullyConnectedTensorProduct, Irrep, Irreps, Linear, TensorProduct
+from e3nn.o3 import Irrep, Irreps, TensorProduct
+
+from net.registry import Option, Port, infer_from, register_transform
 
 
 def _tensor_product_path_exists(irreps_in1, irreps_in2, ir_out) -> bool:
@@ -339,43 +343,83 @@ class GraphIrrepNorm(nn.Module):
         return torch.cat(result, dim=-1)
 
 
-class IrrepChannelScale:
-    """Multiply each irrep copy by one invariant coefficient per row."""
+class RadialChannelScale(nn.Module):
+    """Multiply every irrep copy by an invariant weight from a radial MLP.
 
-    def __init__(self, irreps_in):
-        self.irreps_in = Irreps(irreps_in)
-        self.irreps_out = self.irreps_in
-        self.len_weight = self.irreps_in.num_irreps
+    The MLP maps the radial features of each row to one weight per irrep copy
+    (``copy``) or per irrep term (``term``); the weights scale whole irreps,
+    so the operation is equivariant.
+    """
 
-    def __call__(self, x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
-        result = []
-        offset = weight_offset = 0
-        for mul, ir in self.irreps_in:
-            field = x[:, offset : offset + mul * ir.dim].reshape(-1, mul, ir.dim)
-            field = field * weight[:, weight_offset : weight_offset + mul, None]
-            result.append(field.reshape(-1, mul * ir.dim))
-            offset += mul * ir.dim
-            weight_offset += mul
-        return torch.cat(result, dim=-1)
-
-
-class IrrepResidual(nn.Module):
-    """Add old and new states, projecting the old state only if irreps differ."""
-
-    def __init__(self, irreps_in, irreps_out):
+    def __init__(
+        self,
+        irreps,
+        radial_dim,
+        hidden: Sequence[int] = (64, 64),
+        granularity: str = "copy",
+    ):
         super().__init__()
-        self.irreps_in = Irreps(irreps_in)
-        self.irreps_out = Irreps(irreps_out)
-        self.sc = (
-            None
-            if self.irreps_in == self.irreps_out
-            else Linear(self.irreps_in, self.irreps_out)
+        self.irreps = Irreps(irreps)
+        if granularity not in {"copy", "term"}:
+            raise ValueError("granularity must be 'copy' or 'term'")
+        outputs = self.irreps.num_irreps if granularity == "copy" else len(self.irreps)
+        layers = []
+        widths = [radial_dim, *hidden, outputs]
+        for index, (width_in, width_out) in enumerate(zip(widths, widths[1:])):
+            layers.append(nn.Linear(width_in, width_out))
+            if index < len(widths) - 2:
+                layers.append(nn.SiLU())
+        self.fc = nn.Sequential(*layers)
+        index, offset = [], 0
+        for term, (mul, ir) in enumerate(self.irreps):
+            for copy in range(mul):
+                index.extend(
+                    [offset + copy if granularity == "copy" else term] * ir.dim
+                )
+            offset += mul
+        self.register_buffer(
+            "_weight_index", torch.tensor(index, dtype=torch.long), persistent=False
         )
 
-    def forward(self, old: torch.Tensor, new: torch.Tensor) -> torch.Tensor:
-        if self.sc is not None:
-            old = self.sc(old)
-        return old + new
+    def forward(self, values, radial):
+        return values * self.fc(radial).index_select(1, self._weight_index)
+
+
+class GatedFactorizedTensorProduct(nn.Module):
+    """Factorized tensor product, optionally followed by its e3nn gate.
+
+    With ``gate`` the product also emits the scalar gates of the requested
+    non-scalar irreps; only irreps reachable by the product are produced.
+    With a single input the product is the symmetric square ``x (x) x``.
+    """
+
+    def __init__(self, irreps_in1, irreps_in2, irreps_out, gate=False):
+        super().__init__()
+        irreps_in1 = Irreps(irreps_in1)
+        right = irreps_in1 if irreps_in2 is None else Irreps(irreps_in2)
+        requested = Irreps(irreps_out)
+        self.nonlin = None
+        if gate:
+            self.nonlin = make_tensor_product_gate(irreps_in1, right, requested)
+            product_out = self.nonlin.irreps_in
+            self.irreps_out = self.nonlin.irreps_out
+        else:
+            product_out = Irreps(
+                [
+                    (mul, ir)
+                    for mul, ir in requested
+                    if _tensor_product_path_exists(irreps_in1, right, ir)
+                ]
+            )
+            self.irreps_out = product_out
+        if irreps_in2 is None:
+            self.tp = SymmetricFactorizedTensorProduct(irreps_in1, product_out)
+        else:
+            self.tp = FactorizedTensorProduct(irreps_in1, right, product_out)
+
+    def forward(self, left, right=None):
+        value = self.tp(left) if right is None else self.tp(left, right)
+        return value if self.nonlin is None else self.nonlin(value)
 
 
 class IrrepPermutation(nn.Module):
@@ -404,323 +448,91 @@ class IrrepPermutation(nn.Module):
         return torch.cat(self.extr_inv(x), dim=-1)
 
 
-def _graph_norm(norm, irreps):
-    if not norm or norm in {"none", "off"}:
-        return None
-    if norm not in {"graph_irrep", "e3LayerNorm"}:
-        raise ValueError(f"Unknown graph irrep normalization: {norm!r}.")
-    return GraphIrrepNorm(irreps)
+def _irrep_spec(source, irreps, basis=None):
+    from net.features import FeatureSpec
+
+    irreps = Irreps(irreps)
+    return FeatureSpec(
+        source.domain,
+        "irreps",
+        str(irreps),
+        support=source.support,
+        angular_basis=(basis or source.angular_basis) if irreps.lmax > 0 else None,
+    )
 
 
-class GatedRadialTensorProduct(nn.Module):
-    """Factorized TP, optional gate, then invariant radial channel scaling.
+@register_transform(
+    "factorized_tensor_product",
+    category="product",
+    summary="Tensor product with factorized path weights W1[u,w] W2[v,w], optionally gated",
+    inputs=[
+        Port("left", None, "irreps"),
+        Port("right", None, "irreps", optional=True, doc="Omit for x (x) x"),
+    ],
+    options=[
+        Option(
+            "irreps_out",
+            "irreps",
+            key=True,
+            infer=infer_from(0),
+            infer_doc="left irreps",
+        ),
+        Option(
+            "gate",
+            "bool",
+            False,
+            key=True,
+            doc="Emit gate scalars and apply the gate (silu/tanh, sigmoid/tanh)",
+        ),
+    ],
+)
+def _factorized_tensor_product(p, inputs, mapper):
+    from net.features import global_irreps, same_angular_basis, same_support
 
-    Unlike a tensor product whose *path weights* come from the radial MLP,
-    this transformation applies the MLP's channel scales *after* its gate.
-    Optional normalization acts on the resulting edge rows per graph.
-    """
-
-    def __init__(
-        self,
-        fc_len_in,
-        irreps_in1,
-        irreps_in2,
-        irreps_out,
-        norm="",
-        nonlin=True,
-        act=None,
-        act_gates=None,
-        radial_hidden: Sequence[int] = (64, 64),
-    ):
-        super().__init__()
-        self.irreps_in1 = Irreps(irreps_in1)
-        self.irreps_in2 = Irreps(irreps_in2)
-        requested = Irreps(irreps_out)
-        self.nonlin = None
-        if nonlin:
-            self.nonlin = make_tensor_product_gate(
-                self.irreps_in1, self.irreps_in2, requested, act, act_gates
-            )
-            product_out = self.nonlin.irreps_in
-        else:
-            product_out = Irreps(
-                [
-                    (mul, ir)
-                    for mul, ir in requested
-                    if _tensor_product_path_exists(self.irreps_in1, self.irreps_in2, ir)
-                ]
-            )
-        self.tp = FactorizedTensorProduct(self.irreps_in1, self.irreps_in2, product_out)
-        self.cfconv = IrrepChannelScale(
-            self.nonlin.irreps_out if self.nonlin is not None else product_out
-        )
-        self.irreps_out = self.cfconv.irreps_out
-        layers = []
-        widths = [fc_len_in, *radial_hidden, self.cfconv.len_weight]
-        for index, (width_in, width_out) in enumerate(zip(widths, widths[1:])):
-            layers.append(nn.Linear(width_in, width_out))
-            if index < len(widths) - 2:
-                layers.append(nn.SiLU())
-        self.fc = nn.Sequential(*layers)
-        self.norm = _graph_norm(norm, self.irreps_out)
-
-    def forward(self, fea_in1, fea_in2, fea_weight, batch_edge):
-        value = self.tp(fea_in1, fea_in2)
-        if self.nonlin is not None:
-            value = self.nonlin(value)
-        value = self.cfconv(value, self.fc(fea_weight))
-        if self.norm is not None:
-            value = self.norm(value, batch_edge)
-        return value
+    if len(inputs) == 2 and inputs[0].domain != inputs[1].domain:
+        raise ValueError("Tensor product operands must share their entities")
+    same_support(*inputs)
+    basis = same_angular_basis(*inputs)
+    right = global_irreps(inputs[1]) if len(inputs) == 2 else None
+    module = GatedFactorizedTensorProduct(
+        global_irreps(inputs[0]), right, p["irreps_out"], p["gate"]
+    )
+    return module, [_irrep_spec(inputs[0], module.irreps_out, basis)]
 
 
-class EndpointTensorProductNodeUpdate(nn.Module):
-    """Aggregate endpoint/edge tensor-product messages onto ``edge_index[0]``.
+@register_transform(
+    "radial_channel_scale",
+    category="convolution",
+    summary="Scale every irrep copy by a weight from an MLP of radial features",
+    inputs=[Port("features", None, "irreps"), Port("radial", None, "invariant")],
+    options=[
+        Option(
+            "hidden", "int_list", (64, 64), key=True, doc="Radial MLP hidden widths"
+        ),
+        Option("granularity", "choice", "copy", choices=("copy", "term")),
+    ],
+)
+def _radial_channel_scale(p, inputs, mapper):
+    from net.features import global_irreps, invariant_irreps, same_support
 
-    All nodes/edges are directed and ``batch`` has one graph index per node.
-    ``edge_sh`` contains the configured angular features; ``edge_length_embedded``
-    contains invariant radial features.  With default ``nonlin=False``, gating
-    occurs inside the message convolution before aggregation.  With
-    ``nonlin=True``, gating follows aggregation and the species self-connection.
-    """
-
-    def __init__(
-        self,
-        num_species,
-        fc_len_in,
-        irreps_sh,
-        irreps_in_node,
-        irreps_out_node,
-        irreps_in_edge,
-        act=None,
-        act_gates=None,
-        use_selftp=False,
-        use_sc=True,
-        concat=True,
-        only_ij=False,
-        nonlin=False,
-        norm="graph_irrep",
-        if_sort_irreps=False,
-        aggregation="sum",
-        residual=True,
-    ):
-        super().__init__()
-        node_in, angular, node_out, edge_in = map(
-            Irreps, (irreps_in_node, irreps_sh, irreps_out_node, irreps_in_edge)
-        )
-        product_in = node_in + node_in + edge_in if concat else node_in
-        if concat and if_sort_irreps:
-            self.sort = IrrepPermutation(product_in)
-            product_in = self.sort.irreps_out
-        self.lin_pre = Linear(node_in, node_in, biases=True)
-        self.nonlin = None
-        if nonlin:
-            self.nonlin = make_tensor_product_gate(
-                product_in, angular, node_out, act, act_gates
-            )
-            convolution_out = self.nonlin.irreps_in
-        else:
-            convolution_out = node_out
-        self.conv = GatedRadialTensorProduct(
-            fc_len_in,
-            product_in,
-            angular,
-            convolution_out,
-            nonlin=not nonlin,
-            act=act,
-            act_gates=act_gates,
-        )
-        self.lin_post = Linear(self.conv.irreps_out, self.conv.irreps_out, biases=True)
-        self.irreps_out = (
-            self.nonlin.irreps_out if self.nonlin is not None else self.conv.irreps_out
-        )
-        self.sc = (
-            FullyConnectedTensorProduct(
-                node_in, f"{num_species}x0e", self.conv.irreps_out
-            )
-            if use_sc
-            else None
-        )
-        self.norm = _graph_norm(norm, self.irreps_out)
-        self.skip_connect = IrrepResidual(node_in, self.irreps_out)
-        self.self_tp = (
-            SymmetricFactorizedTensorProduct(self.irreps_out, self.irreps_out)
-            if use_selftp
-            else None
-        )
-        self.irreps_in_node = node_in
-        self.irreps_in_edge = edge_in
-        self.use_sc = use_sc
-        self.concat = concat
-        self.only_ij = only_ij
-        self.if_sort_irreps = if_sort_irreps
-        from net.transforms.composition import IndexedAggregation
-
-        self.aggregation = IndexedAggregation(aggregation, receiver=0)
-        self.use_residual = residual
-
-    def forward(
-        self,
-        node_fea,
-        node_one_hot,
-        edge_sh,
-        edge_fea,
-        edge_length_embedded,
-        edge_index,
-        batch,
-        selfloop_edge=None,
-        edge_length=None,
-    ):
-        old = node_fea
-        connection = self.sc(node_fea, node_one_hot) if self.sc is not None else None
-        nodes = self.lin_pre(node_fea)
-        index_i, index_j = edge_index
-        if self.concat:
-            value = torch.cat([nodes[index_i], nodes[index_j], edge_fea], dim=-1)
-            if self.if_sort_irreps:
-                value = self.sort(value)
-        else:
-            value = nodes[index_j]
-        messages = self.conv(value, edge_sh, edge_length_embedded, batch[index_i])
-        nodes = self.aggregation(messages, edge_index, old)
-        if self.only_ij:
-            if selfloop_edge is None:
-                raise ValueError(
-                    "only_ij requires an explicit zero-shift self-edge mask."
-                )
-            nodes = nodes + scatter(
-                messages[~selfloop_edge],
-                index_j[~selfloop_edge],
-                dim=0,
-                dim_size=old.shape[0],
-                reduce="add",
-            )
-        nodes = self.lin_post(nodes)
-        if connection is not None:
-            nodes = nodes + connection
-        if self.nonlin is not None:
-            nodes = self.nonlin(nodes)
-        if self.norm is not None:
-            nodes = self.norm(nodes, batch)
-        if self.use_residual:
-            nodes = self.skip_connect(old, nodes)
-        if self.self_tp is not None:
-            nodes = self.self_tp(nodes)
-        return nodes
+    if inputs[0].domain != inputs[1].domain:
+        raise ValueError("Radial weights must belong to the scaled entities")
+    same_support(*inputs)
+    radial = invariant_irreps(inputs[1], what="Radial features")
+    module = RadialChannelScale(
+        global_irreps(inputs[0]), radial.dim, p["hidden"], p["granularity"]
+    )
+    return module, [inputs[0]]
 
 
-class EndpointTensorProductEdgeUpdate(nn.Module):
-    """Update each directed edge from its two node states and previous edge.
+@register_transform(
+    "irrep_sort",
+    category="combine",
+    summary="Sort the irrep terms by degree and parity (no mixing or rescaling)",
+    inputs=[Port("features", None, "irreps")],
+)
+def _irrep_sort(p, inputs, mapper):
+    from net.features import global_irreps
 
-    The node input is normally the newly updated state.  This component does
-    not symmetrize reverse edges or impose a matrix constraint.  Default
-    parameter creation and gating/normalization/residual order match the
-    endpoint tensor-product update in the pinned reference.
-    """
-
-    def __init__(
-        self,
-        num_species,
-        fc_len_in,
-        irreps_sh,
-        irreps_in_node,
-        irreps_in_edge,
-        irreps_out_edge,
-        act=None,
-        act_gates=None,
-        use_selftp=False,
-        use_sc=True,
-        init_edge=False,
-        nonlin=False,
-        norm="graph_irrep",
-        if_sort_irreps=False,
-        residual=True,
-    ):
-        super().__init__()
-        if init_edge and use_sc:
-            raise ValueError(
-                "init_edge=True cannot use a previous-edge self-connection."
-            )
-        node_in, angular, edge_in, edge_out = map(
-            Irreps, (irreps_in_node, irreps_sh, irreps_in_edge, irreps_out_edge)
-        )
-        product_in = node_in + node_in + edge_in
-        if if_sort_irreps:
-            self.sort = IrrepPermutation(product_in)
-            product_in = self.sort.irreps_out
-        self.lin_pre = Linear(edge_in, edge_in, biases=True)
-        self.nonlin = None
-        if nonlin:
-            self.nonlin = make_tensor_product_gate(
-                product_in, angular, edge_out, act, act_gates
-            )
-            convolution_out = self.nonlin.irreps_in
-        else:
-            convolution_out = edge_out
-        self.conv = GatedRadialTensorProduct(
-            fc_len_in,
-            product_in,
-            angular,
-            convolution_out,
-            nonlin=not nonlin,
-            act=act,
-            act_gates=act_gates,
-        )
-        self.lin_post = Linear(self.conv.irreps_out, self.conv.irreps_out, biases=True)
-        self.sc = (
-            FullyConnectedTensorProduct(
-                edge_in, f"{num_species**2}x0e", self.conv.irreps_out
-            )
-            if use_sc
-            else None
-        )
-        self.irreps_out = (
-            self.nonlin.irreps_out if self.nonlin is not None else self.conv.irreps_out
-        )
-        self.norm = _graph_norm(norm, self.irreps_out)
-        self.skip_connect = IrrepResidual(edge_in, self.irreps_out)
-        self.self_tp = (
-            SymmetricFactorizedTensorProduct(self.irreps_out, self.irreps_out)
-            if use_selftp
-            else None
-        )
-        self.irreps_in_node = node_in
-        self.irreps_in_edge = edge_in
-        self.use_sc = use_sc
-        self.init_edge = init_edge
-        self.if_sort_irreps = if_sort_irreps
-        self.use_residual = residual
-
-    def forward(
-        self,
-        node_fea,
-        edge_one_hot,
-        edge_sh,
-        edge_fea,
-        edge_length_embedded,
-        edge_index,
-        batch,
-    ):
-        old = edge_fea
-        connection = None
-        if not self.init_edge:
-            if self.sc is not None:
-                connection = self.sc(edge_fea, edge_one_hot)
-            edge_fea = self.lin_pre(edge_fea)
-        index_i, index_j = edge_index
-        value = torch.cat([node_fea[index_i], node_fea[index_j], edge_fea], dim=-1)
-        if self.if_sort_irreps:
-            value = self.sort(value)
-        edges = self.conv(value, edge_sh, edge_length_embedded, batch[index_i])
-        edges = self.lin_post(edges)
-        if connection is not None:
-            edges = edges + connection
-        if self.nonlin is not None:
-            edges = self.nonlin(edges)
-        if self.norm is not None:
-            edges = self.norm(edges, batch[index_i])
-        if not self.init_edge and self.use_residual:
-            edges = self.skip_connect(old, edges)
-        if self.self_tp is not None:
-            edges = self.self_tp(edges)
-        return edges
+    module = IrrepPermutation(global_irreps(inputs[0]))
+    return module, [_irrep_spec(inputs[0], module.irreps_out)]
