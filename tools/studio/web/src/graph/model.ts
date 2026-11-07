@@ -102,7 +102,14 @@ export function recordsOf(analysis: Analysis | null, key: string, isBlock: boole
 }
 
 // Unconnected inputs are reported by the editor's own checks, per port.
-const UNCONNECTED = /reads undefined slots: \[''\]|produced by a failing stage/;
+export const UNCONNECTED = /input\(s\) .* not connected|reads undefined slots: \[''\]|produced by a failing stage|outputs reference undefined slots \[''\]/;
+
+/** A compiler message without the stage name it starts with (shown beside it). */
+export function compilerMessage(stage: string, message: string): string {
+  // "Stage radial (soft_one_hot_basis): ...", "Stage radial: ..." or "radial: ...".
+  const escaped = stage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return message.replace(new RegExp(`^(Stage )?${escaped}( \\([^)]*\\))?: `), "");
+}
 
 export interface StageMetrics {
   parameters: number;
@@ -118,11 +125,18 @@ export function metricsOf(records: StageAnalysis[]): StageMetrics {
     seconds: records.reduce((t, r) => t + (r.seconds ?? 0), 0),
     errors: records
       .filter((r) => r.error && !UNCONNECTED.test(r.error))
-      .map((r) => (r.id.includes("/") ? `${r.id}: ${r.error}` : r.error!)),
+      .map((r) => (r.id.includes("/") ? `${r.id}: ${compilerMessage(r.id, r.error!)}` : compilerMessage(r.id, r.error!))),
     static: records.length > 0 && records.every((r) => r.static),
     analyzed: records.length > 0,
   };
 }
+
+/**
+ * The last known spec of every slot of the open recipe. A disconnected input
+ * makes everything downstream fail to compile; what the slots carried before
+ * still says what an input should read.
+ */
+export const slotMemory: { specs: Record<string, FeatureSpecJson> } = { specs: {} };
 
 /** Block port contracts reported by the last analysis (net.blocks.block_ports). */
 export const blockPortMemory: { ports: Record<string, BlockPorts> } = { ports: {} };
@@ -196,8 +210,58 @@ export function formatCount(value: number): string {
 }
 
 export function formatSeconds(value: number): string {
-  if (value <= 0) return "0";
+  if (value <= 0) return "0 s";
   if (value >= 1) return `${value.toFixed(2)} s`;
   if (value >= 1e-3) return `${(value * 1e3).toFixed(1)} ms`;
   return `${(value * 1e6).toFixed(0)} µs`;
+}
+
+/** Stages that failed to compile: totals count them as zero, so they are lower bounds. */
+export function failedStages(analysis: Analysis | null): number {
+  return analysis?.stages?.filter((s) => s.error).length ?? 0;
+}
+
+export function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/** Values a new top-level stage can read: structure inputs and top-level slots. */
+export function availableSlots(analysis: Analysis | null, catalog: Catalog | null): Record<string, FeatureSpecJson> {
+  const result: Record<string, FeatureSpecJson> = { ...(catalog?.inputs ?? {}), ...(analysis?.inputs ?? {}) };
+  for (const [slot, spec] of Object.entries(analysis?.slots ?? {})) if (!slot.includes("/")) result[slot] = spec;
+  for (const slot of Object.keys(result)) if (isShift(slot)) delete result[slot];
+  return result;
+}
+
+/** Whether a key press goes to a text field (shortcuts leave it alone). */
+export function typingInto(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (target.closest("textarea, [contenteditable='true']")) return true;
+  return target instanceof HTMLInputElement && !["checkbox", "radio", "button", "range", "color", "file"].includes(target.type);
+}
+
+/** Whether a compiler message repeats a problem the editor already reports. */
+export function alreadyReported(messages: string[], message: string): boolean {
+  const option = /requires option '([^']+)'/.exec(message)?.[1];
+  return messages.some((m) => m === message || message.endsWith(m) || (option !== undefined && m === `Option ${option} is required`));
+}
+
+/** Edge relations and their lattice shifts: one variable in recipes and the editor. */
+export const RELATION_SHIFTS: Record<string, string> = { edge_index: "edge_shift", message_edge_index: "message_shift" };
+const SHIFTS = new Set(Object.values(RELATION_SHIFTS));
+
+/** A shift slot, which travels with its relation and is never wired by hand. */
+export function isShift(slot: string): boolean {
+  return SHIFTS.has(slot);
+}
+
+/** Why a port that reads a relation with its shifts cannot read ``slot``. */
+export function shiftProblem(slot: string, port: PortInfo): string | null {
+  if (!port.with_shift || slot in RELATION_SHIFTS) return null;
+  return `${port.name} reads an edge relation with its lattice shifts: ${Object.keys(RELATION_SHIFTS).join(" or ")}`;
+}
+
+/** Inputs a model rarely changes: relations, batch membership, partitions. */
+export function isRoutine(slot: string, spec: FeatureSpecJson | undefined): boolean {
+  return spec?.domain === "relation" || ["node_batch", "edge_batch", "selfloop_edge"].includes(slot);
 }

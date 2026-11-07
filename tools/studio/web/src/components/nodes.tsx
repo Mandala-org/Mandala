@@ -1,10 +1,10 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useStudio } from "../store";
-import { formatCount, formatSeconds } from "../graph/model";
-import { DOMAIN_COLORS, specColor, type ExprNodeData, type FrameNodeData, type InputNodeData, type StageNodeData, type TargetNodeData, type TermNodeData } from "../graph/build";
+import { alreadyReported, formatCount, formatSeconds } from "../graph/model";
+import { DOMAIN_COLORS, specColor, type ExprNodeData, type FrameNodeData, type InputNodeData, type RefNodeData, type StageNodeData, type TargetNodeData, type TermNodeData } from "../graph/build";
 import type { FeatureSpecJson, PortInfo } from "../types";
-import type { Problem } from "../graph/validate";
+import { connectionProblem, type Problem } from "../graph/validate";
 
 export const CATEGORY_COLORS: Record<string, string> = {
   input: "#5cc8ff",
@@ -63,10 +63,7 @@ function describe(spec?: FeatureSpecJson) {
 
 function shortIrreps(spec?: FeatureSpecJson) {
   if (!spec) return "";
-  if (spec.irreps) {
-    const terms = spec.irreps.split("+");
-    return terms.length > 4 ? `${terms.slice(0, 3).join("+")}+… (${spec.width})` : spec.irreps;
-  }
+  if (spec.irreps) return irrepsSummary(spec.irreps) ?? spec.irreps;
   if (spec.representation === "matrix") return `blocks ${spec.width ?? ""}`;
   if (spec.representation === "block_vectors") return "pair vectors";
   if (spec.representation === "index") return spec.width ? `index /${spec.width}` : "index";
@@ -78,12 +75,12 @@ function ProblemBadge({ problems }: { problems: Problem[] }) {
   const errors = problems.filter((p) => p.level === "error").length;
   return (
     <span className={`badge ${errors ? "badge-error" : "badge-warning"}`} title={problems.map((p) => p.message).join("\n")}>
-      {errors ? "!" : "?"} {problems.length}
+      {errors ? "✕" : "⚠"} {problems.length}
     </span>
   );
 }
 
-export function WeightsBar({ parameters }: { parameters: number }) {
+export function WeightsBar({ parameters, label = true }: { parameters: number; label?: boolean }) {
   const fraction = Math.min(1, Math.log10(parameters + 1) / 7);
   return (
     <div className="weights" title={`${parameters.toLocaleString()} weights (log scale, full bar = 10M)`}>
@@ -93,7 +90,7 @@ export function WeightsBar({ parameters }: { parameters: number }) {
         ))}
         <div className="weights-fill" style={{ width: `${fraction * 100}%` }} />
       </div>
-      <span className="weights-label">{parameters ? formatCount(parameters) : "—"}</span>
+      {label && <span className="weights-label">{parameters ? formatCount(parameters) : "—"}</span>}
     </div>
   );
 }
@@ -109,19 +106,40 @@ function TimeRing({ share }: { share: number }) {
   );
 }
 
+const IRREP_TERM = /^(\d+)x(\d+)[eo]$/;
+
+/** Long irreps as their first term and total dimension: 128x0e+… (dim 704). */
+export function irrepsSummary(value: string): string | null {
+  const terms = value.split("+").map((t) => t.trim());
+  if (terms.length <= 2 || !terms.every((t) => IRREP_TERM.test(t))) return null;
+  const dim = terms.reduce((total, t) => {
+    const [, mul, l] = IRREP_TERM.exec(t)!;
+    return total + Number(mul) * (2 * Number(l) + 1);
+  }, 0);
+  return `${terms[0]}+… (dim ${dim})`;
+}
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value.length > 26 ? `${value.slice(0, 24)}…` : value;
+  if (typeof value === "string") return irrepsSummary(value) ?? (value.length > 26 ? `${value.slice(0, 24)}…` : value);
   if (Array.isArray(value)) return `[${value.join(", ")}]`.slice(0, 26);
   if (typeof value === "object") return "{…}";
   return String(value);
 }
 
-function InputHandles({ ports, count }: { ports: { port: PortInfo; index: number; slot: string; spec?: FeatureSpecJson }[]; count: number }) {
+/** Where a handle is drawn along its side: its place in the layout's order. */
+function place(order: number[] | undefined, handle: number, fallback: number) {
+  const at = order ? order.indexOf(handle) : -1;
+  return at >= 0 ? at : fallback;
+}
+
+function InputHandles({ ports, count, order }: { ports: { port: PortInfo; index: number; slot: string; spec?: FeatureSpecJson }[]; count: number; order?: number[] }) {
   const orientation = useOrientation();
+  const drag = useStudio((s) => s.drag);
   return (
     <>
-      {ports.map(({ port, index, slot, spec }, i) => {
+      {ports.map(({ port, index, slot, spec }, j) => {
+        const i = place(order, index, j);
         const color = spec ? specColor(spec) : port.domain && !Array.isArray(port.domain) ? DOMAIN_COLORS[port.domain] ?? "#6b7686" : "#6b7686";
         const position = orientation === "TB" ? Position.Top : Position.Left;
         const style = orientation === "TB" ? { left: spread(count, i) } : { top: `${40 + i * 22}px` };
@@ -131,9 +149,9 @@ function InputHandles({ ports, count }: { ports: { port: PortInfo; index: number
             id={`in-${index}`}
             type="target"
             position={position}
-            className="port"
+            className={`port ${drag ? (connectionProblem(drag.spec, port) || (!port.domain && spec && drag.spec && spec.domain !== drag.spec.domain) ? "port-no" : "port-yes") : ""}`}
             style={{ ...style, ...portStyle(color, port.kind, Boolean(slot)) }}
-            title={`${port.name}${port.optional ? " (optional)" : ""}${port.variadic ? " (repeatable)" : ""}\naccepts: ${port.domain ? [port.domain].flat().join("/") : "any entity"}, ${port.kind}\n${slot ? `${slot}: ${describe(spec)}` : "not connected"}${port.doc ? `\n${port.doc}` : ""}`}
+            title={`${port.name}${port.with_shift ? " (an edge relation; its lattice shifts come with it)" : ""}${port.optional ? " (optional)" : ""}${port.variadic ? " (repeatable)" : ""}\naccepts: ${port.domain ? [port.domain].flat().join("/") : "any entity"}, ${port.kind}\n${slot ? `${slot}: ${describe(spec)}` : "not connected"}${port.doc ? `\n${port.doc}` : ""}`}
           />
         );
       })}
@@ -151,13 +169,25 @@ export const StageNode = memo(function StageNode({ data, selected }: NodeProps) 
   return (
     <div
       className={`stage ${selected ? "selected" : ""} ${errors ? "has-error" : ""} ${d.diff ? `diff-${d.diff}` : ""} ${d.isBlock ? "is-block" : ""} ${d.visible.stage.enabled === false ? "bypassed" : ""}`}
-      style={{ "--accent": color, fontSize: `${12 * Math.min(d.scale, 1.5)}px` } as React.CSSProperties}
+      style={{ "--accent": color, fontSize: `${12 * d.scale}px` } as React.CSSProperties}
     >
-      <InputHandles ports={d.ports} count={portCount} />
-      {orientation === "TB" && (
+      <InputHandles ports={d.ports} count={portCount} order={d.inputOrder} />
+      <div className="stage-far" style={{ fontSize: Math.min((d.size.width * 0.86) / (0.62 * Math.max(d.visible.localId.length, 6)), d.size.height * 0.36) }}>
+        {d.visible.localId}
+      </div>
+      {orientation === "TB" ? (
         <div className="port-labels top">
-          {d.ports.map(({ port, index, slot }, i) => (
-            <span key={index} className={`port-label ${slot ? "" : "open"}`} style={{ left: spread(portCount, i) }}>
+          {d.ports.map(({ port, index, slot }, j) => (
+            <span key={index} className={`port-label ${slot ? "" : "open"}`} style={{ left: spread(portCount, place(d.inputOrder, index, j)), maxWidth: `calc(100% / ${portCount + 1})` }} title={port.name}>
+              {port.name}
+              {port.with_shift ? " + shifts" : ""}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="port-labels side-in">
+          {d.ports.map(({ port, index, slot }, j) => (
+            <span key={index} className={`port-label ${slot ? "" : "open"}`} style={{ top: 40 + place(d.inputOrder, index, j) * 22 }} title={port.name}>
               {port.name}
             </span>
           ))}
@@ -170,7 +200,7 @@ export const StageNode = memo(function StageNode({ data, selected }: NodeProps) 
         </span>
         {d.diff && <span className={`badge badge-${d.diff}`}>{d.diff === "added" ? "+" : "~"}</span>}
         {d.visible.stage.enabled === false && <span className="badge badge-bypassed" title="Disabled: passes one input through unchanged (the first, or the update of a residual or self-connection)">bypassed</span>}
-        <ProblemBadge problems={[...d.problems, ...d.metrics.errors.map((m) => ({ level: "error" as const, key: d.visible.key, message: m }))]} />
+        <ProblemBadge problems={[...d.problems, ...d.metrics.errors.filter((m) => !alreadyReported(d.problems.map((p) => p.message), m)).map((m) => ({ level: "error" as const, key: d.visible.key, message: m }))]} />
       </div>
       <div className="stage-transform">
         {d.isBlock ? "◆ " : ""}
@@ -179,7 +209,7 @@ export const StageNode = memo(function StageNode({ data, selected }: NodeProps) 
       </div>
       <div className="stage-options">
         {d.keyOptions.map((o) => (
-          <div key={o.name} className={`option option-${o.state}`} title={o.state === "inferred" ? "inferred from the wiring" : o.state === "default" ? "default value" : "set in the recipe"}>
+          <div key={o.name} className={`option option-${o.state}`} title={`${o.name} = ${typeof o.value === "string" ? o.value : JSON.stringify(o.value)}\n${o.state === "inferred" ? "inferred from the wiring" : o.state === "default" ? "default value" : "set in the recipe"}`}>
             <span className="option-name">{o.name}</span>
             <span className="option-value">{formatValue(o.value)}</span>
           </div>
@@ -197,7 +227,8 @@ export const StageNode = memo(function StageNode({ data, selected }: NodeProps) 
           ⊕ expand {d.blockInstances > 1 ? `· ${d.blockInstances} instances` : ""}
         </button>
       )}
-      {d.outputs.map((o, i) => {
+      {d.outputs.map((o, j) => {
+        const i = place(d.outputOrder, j, j);
         const position = orientation === "TB" ? Position.Bottom : Position.Right;
         const style = orientation === "TB" ? { left: spread(d.outputs.length, i) } : { top: `${40 + i * 22}px` };
         return (
@@ -212,15 +243,21 @@ export const StageNode = memo(function StageNode({ data, selected }: NodeProps) 
           />
         );
       })}
-      {orientation === "TB" && (
-        <div className="port-labels bottom">
-          {d.outputs.map((o, i) => (
-            <span key={i} className={`port-label out ${o.manual ? "manual" : "inferred"}`} style={{ left: spread(d.outputs.length, i) }} title={`${o.slot}: ${describe(o.spec)}${o.manual ? "" : "\n(irreps inferred)"}`}>
-              {shortIrreps(o.spec) || o.name}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className={`port-labels ${orientation === "TB" ? "bottom" : "side-out"}`}>
+        {d.outputs.map((o, j) => {
+          const i = place(d.outputOrder, j, j);
+          return (
+          <span
+            key={j}
+            className={`port-label out ${o.manual ? "manual" : "inferred"}`}
+            style={orientation === "TB" ? { left: spread(d.outputs.length, i), maxWidth: `calc(100% / ${d.outputs.length + 1})` } : { top: 40 + i * 22 }}
+            title={`${o.slot}: ${describe(o.spec)}${o.manual ? "" : "\n(irreps inferred)"}`}
+          >
+            {shortIrreps(o.spec) || o.name}
+          </span>
+          );
+        })}
+      </div>
     </div>
   );
 });
@@ -262,6 +299,27 @@ export const InputNode = memo(function InputNode({ data, selected }: NodeProps) 
   );
 });
 
+function portKind(spec?: FeatureSpecJson) {
+  return spec?.representation === "index" || spec?.representation === "object" ? "index" : spec?.invariant ? "invariant" : "irreps";
+}
+
+export const RefNode = memo(function RefNode({ data, selected }: NodeProps) {
+  const d = data as RefNodeData;
+  const orientation = useOrientation();
+  const color = specColor(d.spec);
+  return (
+    <div
+      className={`ref ${selected ? "selected" : ""}`}
+      style={{ "--accent": color } as React.CSSProperties}
+      title={`${d.slot}: ${describe(d.spec)}\nused by ${d.uses} stages; drawn beside each use${d.producer ? "\nDouble-click to go to the stage that computes it" : " (structure input)"}`}
+    >
+      <span className="ref-arrow">{d.producer ? "↪" : "▸"}</span>
+      <span className="ref-name">{d.slot}</span>
+      <Handle id="out-0" type="source" position={orientation === "TB" ? Position.Bottom : Position.Right} className="port" style={portStyle(color, portKind(d.spec), true)} />
+    </div>
+  );
+});
+
 export const TargetNode = memo(function TargetNode({ data, selected }: NodeProps) {
   const d = data as TargetNodeData;
   const orientation = useOrientation();
@@ -299,12 +357,20 @@ export const TermNode = memo(function TermNode({ data, selected }: NodeProps) {
           />
         );
       })}
+      {d.operators.length > 1 && vertical && (
+        <div className="term-ports">
+          {d.operators.map((port) => (
+            <span key={port}>{port}</span>
+          ))}
+        </div>
+      )}
       <div className="term-label">{d.label}</div>
       <div className="term-kind">
         {String(d.term.term)}
         {read.length ? `(${read.map(String).join(", ")})` : ""}
       </div>
       {options.length > 0 && <div className="term-options">{options.map(([k, v]) => `${k}=${formatValue(v)}`).join(" · ")}</div>}
+      {d.requires.length > 0 && <div className="term-options">needs {d.requires.join(", ")}</div>}
       <Handle id="out-0" type="source" position={orientation === "TB" ? Position.Bottom : Position.Right} className="port" style={portStyle(DOMAIN_COLORS.loss, "invariant", true)} />
     </div>
   );
@@ -345,6 +411,7 @@ export const nodeTypes = {
   stage: StageNode,
   frame: FrameNode,
   slot: InputNode,
+  ref: RefNode,
   target: TargetNode,
   term: TermNode,
   expr: ExprNode,

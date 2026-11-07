@@ -109,6 +109,10 @@ def main() -> None:
     cfg.dataset_device = args.dataset_device
     cfg.data_split_seed = int(args.data_split_seed)
     cfg.verbosity = 0
+    # The relative error divides by the mean absolute reference element, so the
+    # Hamiltonian MAE must be entry-weighted too. Without contribution logging
+    # the validation step reports a sum of per-species-pair means instead.
+    cfg.log_hamiltonian_pair_contrib_metrics = True
 
     _train_ds, val_ds, mapper = _build_dataset_bundle(args, cfg)
     if len(val_ds) == 0:

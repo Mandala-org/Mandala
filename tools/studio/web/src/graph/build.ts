@@ -2,7 +2,7 @@
 
 import type { Edge, Node } from "@xyflow/react";
 import type { Analysis, Catalog, FeatureSpecJson, ObjectiveSpec, Pipeline, PortInfo } from "../types";
-import { countInstances, displayedInputs, metricsOf, outputNamesOf, portsOf, recordsOf, slotSpec, visibleGraph, type StageMetrics, type VisibleGraph, type VisibleStage } from "./model";
+import { countInstances, displayedInputs, isRoutine, metricsOf, outputNamesOf, portsOf, recordsOf, slotSpec, visibleGraph, type StageMetrics, type VisibleGraph, type VisibleStage } from "./model";
 import { childrenOf, parseExpression, type Expr } from "../loss/expression";
 import type { Problem } from "./validate";
 
@@ -36,6 +36,10 @@ export interface StageNodeData extends Record<string, unknown> {
   diff?: "added" | "changed";
   isBlock: boolean;
   blockInstances: number;
+  size: { width: number; height: number };
+  /** Handle numbers in drawing order, as the layout placed them (default: as listed). */
+  inputOrder?: number[];
+  outputOrder?: number[];
 }
 
 export interface FrameNodeData extends Record<string, unknown> {
@@ -52,6 +56,14 @@ export interface InputNodeData extends Record<string, unknown> {
   declared: boolean;
 }
 
+/** A pin standing for a widely shared slot next to one of its uses. */
+export interface RefNodeData extends Record<string, unknown> {
+  slot: string;
+  spec?: FeatureSpecJson;
+  producer: string | null; // node id of the producing stage, null for inputs
+  uses: number;
+}
+
 export interface TargetNodeData extends Record<string, unknown> {
   operator: string;
   slot: string;
@@ -66,6 +78,7 @@ export interface TermNodeData extends Record<string, unknown> {
   summary: string;
   problems: Problem[];
   lowered: boolean;
+  requires: string[];
 }
 
 export interface ExprNodeData extends Record<string, unknown> {
@@ -107,6 +120,8 @@ export function buildGraph(args: {
   objective: ObjectiveSpec | null;
   objectiveLowered: boolean;
   visibleInputs: Set<string>;
+  compactWires?: boolean;
+  hideRoutine?: boolean;
   diff: Map<string, "added" | "changed">;
 }): BuiltGraph {
   const { pipeline, analysis, catalog, expanded, orientation, problems, objective } = args;
@@ -114,7 +129,8 @@ export function buildGraph(args: {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   const sizes = new Map<string, { width: number; height: number }>();
-  const total = analysis?.totals.seconds ?? 0;
+  const total = analysis?.totals?.seconds ?? 0;
+  const incomplete = (analysis?.stages ?? []).some((s) => s.error);
   const problemsOf = (key: string) => problems.filter((p) => p.key === key);
   const nodeIdOf = new Map<string, string>(); // global slot -> producing node id
   const handleOf = new Map<string, string>();
@@ -144,7 +160,10 @@ export function buildGraph(args: {
     const records = recordsOf(analysis, visible.key, visible.isBlock);
     const metrics = metricsOf(records);
     const share = total > 0 ? metrics.seconds / total : 0;
-    const scale = share > 0.1 ? Math.min(2.4, Math.sqrt(share / 0.1)) : 1;
+    // Shares of an incomplete total (failed stages count as zero) mislead.
+    // Structure-only stages are computed once per structure and cached, so
+    // their share of a forward pass does not make them large.
+    const scale = share > 0.1 && !incomplete && !metrics.static ? Math.min(2.4, Math.sqrt(share / 0.1)) : 1;
     const record = !visible.isBlock ? records[0] : undefined;
     const explicit = record?.explicit ?? Object.keys(visible.stage.options ?? {});
     const inferred = record?.inferred ?? [];
@@ -158,8 +177,10 @@ export function buildGraph(args: {
         keyOptions.push({ name: option.name, value, state: optionState(option.name, explicit, inferred) });
       }
     } else {
+      // Block instances show their options as resolved for this instance.
+      const resolved = analysis?.groups?.[visible.key]?.options ?? {};
       for (const [name, value] of Object.entries(visible.stage.options ?? {}).slice(0, 4)) {
-        keyOptions.push({ name, value, state: "explicit" });
+        keyOptions.push({ name, value: resolved[name] ?? value, state: "explicit" });
       }
     }
     const outNames = outputNamesOf(visible.stage, pipeline, catalog);
@@ -181,9 +202,11 @@ export function buildGraph(args: {
       diff: args.diff.get(visible.key),
       isBlock: visible.isBlock,
       blockInstances: visible.isBlock && pipeline ? countInstances(pipeline, visible.stage.transform) : 0,
+      size: { width: 0, height: 0 },
     };
     const id = `stage:${visible.key}`;
     const size = stageSize(data, orientation);
+    data.size = size;
     sizes.set(id, size);
     nodes.push({
       id,
@@ -192,6 +215,7 @@ export function buildGraph(args: {
       data,
       parentId: visible.instance ? `frame:${visible.instance}` : undefined,
       style: { width: size.width, height: size.height },
+      ariaLabel: `${visible.isBlock ? "Block" : "Stage"} ${visible.localId}: ${visible.stage.transform}${visible.stage.enabled === false ? ", bypassed" : ""}${data.problems.length ? `, ${data.problems.length} problems` : ""}`,
     });
     visible.outputs.forEach((slot, i) => {
       nodeIdOf.set(slot, id);
@@ -199,16 +223,34 @@ export function buildGraph(args: {
     });
   }
 
+  // Structure inputs and structure-only (static) features read in many places
+  // are drawn as a pin beside each use instead of wires across the graph.
+  const uses = new Map<string, number>();
+  for (const stage of graph.stages) for (const slot of stage.inputs) if (slot) uses.set(slot, (uses.get(slot) ?? 0) + 1);
+  const pinned = new Set<string>();
+  if (args.compactWires) {
+    for (const [slot, count] of uses) {
+      if (count < 3) continue;
+      const producer = graph.producers.get(slot);
+      const shared = producer ? metricsOf(recordsOf(analysis, producer.key, false)).static : true;
+      if (shared) pinned.add(slot);
+    }
+  }
+
+  // Routine structure inputs (edge relations, batch membership) can be left
+  // undrawn: the ports stay wired, only the inputs and their wires are hidden.
+  const hidden = (slot: string) => Boolean(args.hideRoutine) && !graph.producers.has(slot) && isRoutine(slot, slotSpec(analysis, catalog, slot));
+
   // Input slots read by visible stages, plus inputs the user placed.
   const used = new Set<string>(args.visibleInputs);
-  for (const stage of graph.stages) for (const slot of stage.inputs) if (slot && !graph.producers.has(slot)) used.add(slot);
+  for (const stage of graph.stages) for (const slot of stage.inputs) if (slot && !graph.producers.has(slot) && !pinned.has(slot) && !hidden(slot)) used.add(slot);
   for (const slot of Object.values(pipeline?.outputs ?? {})) if (slot && !graph.producers.has(slot)) used.add(slot);
   for (const slot of used) {
     const spec = slotSpec(analysis, catalog, slot);
     const id = `input:${slot}`;
     const data: InputNodeData = { slot, spec, declared: Boolean(pipeline?.inputs?.[slot]) };
     sizes.set(id, { width: 170, height: 46 });
-    nodes.push({ id, type: "slot", position: { x: 0, y: 0 }, data, style: { width: 170, height: 46 } });
+    nodes.push({ id, type: "slot", position: { x: 0, y: 0 }, data, style: { width: 170, height: 46 }, ariaLabel: `Input ${slot}` });
     nodeIdOf.set(slot, id);
     handleOf.set(slot, "out-0");
   }
@@ -231,8 +273,30 @@ export function buildGraph(args: {
   };
 
   for (const visible of graph.stages) {
+    const target = `stage:${visible.key}`;
     visible.inputs.forEach((slot, index) => {
-      if (slot) edgeFor(slot, `stage:${visible.key}`, `in-${index}`);
+      if (!slot || hidden(slot)) return;
+      if (!pinned.has(slot)) {
+        edgeFor(slot, target, `in-${index}`);
+        return;
+      }
+      const spec = slotSpec(analysis, catalog, slot);
+      const producer = graph.producers.get(slot);
+      const id = `ref:${slot}>${visible.key}#${index}`;
+      const data: RefNodeData = { slot, spec, producer: producer ? `stage:${producer.key}` : null, uses: uses.get(slot) ?? 0 };
+      const size = { width: Math.min(200, Math.max(84, 40 + 7.4 * slot.length)), height: 26 };
+      sizes.set(id, size);
+      nodes.push({ id, type: "ref", position: { x: 0, y: 0 }, data, style: size, parentId: visible.instance ? `frame:${visible.instance}` : undefined });
+      edges.push({
+        id: `${id}->${target}|in-${index}`,
+        source: id,
+        sourceHandle: "out-0",
+        target,
+        targetHandle: `in-${index}`,
+        data: { slot, spec },
+        className: "wire-pin",
+        style: { stroke: specColor(spec), strokeWidth: 1.4 },
+      });
     });
   }
 
@@ -241,7 +305,7 @@ export function buildGraph(args: {
     const id = `target:${operator}`;
     const data: TargetNodeData = { operator, slot, spec: slot ? slotSpec(analysis, catalog, slot) : undefined, problems: problemsOf(id) };
     sizes.set(id, { width: 190, height: 52 });
-    nodes.push({ id, type: "target", position: { x: 0, y: 0 }, data, style: { width: 190, height: 52 } });
+    nodes.push({ id, type: "target", position: { x: 0, y: 0 }, data, style: { width: 190, height: 52 }, ariaLabel: `Predicted operator ${operator}${slot ? `, from ${slot}` : ", not connected"}` });
     if (slot) edgeFor(slot, id, "in-0");
   }
 
@@ -257,10 +321,11 @@ export function buildGraph(args: {
         summary: info?.summary ?? "",
         problems: problemsOf(id),
         lowered: args.objectiveLowered,
+        requires: info?.requires ?? [],
       };
       const size = { width: 200, height: 64 };
       sizes.set(id, size);
-      nodes.push({ id, type: "term", position: { x: 0, y: 0 }, data, style: size });
+      nodes.push({ id, type: "term", position: { x: 0, y: 0 }, data, style: size, ariaLabel: `Loss term ${label}: ${String(term.term)}` });
       data.operators.forEach((port, index) => {
         const operator = term[port] as string | undefined;
         if (!operator || pipeline?.outputs?.[operator] === undefined) return;
@@ -282,7 +347,7 @@ export function buildGraph(args: {
     }
     const lossSize = { width: 150, height: 56 };
     sizes.set("loss", lossSize);
-    nodes.push({ id: "loss", type: "loss", position: { x: 0, y: 0 }, data: { expression: objective.expression ?? "", problems: problemsOf("loss") }, style: lossSize });
+    nodes.push({ id: "loss", type: "loss", position: { x: 0, y: 0 }, data: { expression: objective.expression ?? "", problems: problemsOf("loss") }, style: lossSize, ariaLabel: `Loss: ${objective.expression ?? "no expression"}` });
     if (tree) {
       const place = (expr: Expr, path: number[], parent: string, handle: string) => {
         if (expr.type === "name") {

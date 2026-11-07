@@ -260,8 +260,13 @@ _ACTIVATIONS = ("identity", "sigmoid", "tanh", "softplus", "silu", "leakyrelu", 
     inputs=[
         Port("positions", "node", "geometry"),
         Port("cell", "graph", "geometry"),
-        Port("edge_index", "relation", "index"),
-        Port("shifts", "relation", "index"),
+        Port(
+            "edges",
+            "relation",
+            "index",
+            with_shift=True,
+            doc="Edge relation (edge_index); its lattice shifts come with it",
+        ),
         Port("node_batch", "node", "index"),
     ],
 )

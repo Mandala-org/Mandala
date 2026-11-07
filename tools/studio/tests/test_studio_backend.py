@@ -311,3 +311,61 @@ def test_disabled_stage_is_bypassed_and_reported(client):
     record = next(s for s in analysis["stages"] if s["id"] == "node_update_1")
     assert record["enabled"] is False and record["parameters"] == 0
     assert analysis["totals"]["parameters"] < result["analysis"]["totals"]["parameters"]
+
+
+def test_an_existing_plugin_is_replaced_only_on_request(client):
+    request = {
+        "name": "studio_test_replace",
+        "inputs": X,
+        "source": 'out = linear(x, "8x0e+4x1o")',
+        "outputs": ["out"],
+        "summary": "First",
+        "category": "custom",
+    }
+    assert client.post("/api/plugin", json=request).status_code == 200
+    # The same definition again is harmless; a different one needs consent.
+    assert client.post("/api/plugin", json=request).status_code == 200
+    changed = {**request, "source": 'out = linear(x, "4x0e+4x1o")'}
+    refused = client.post("/api/plugin", json=changed)
+    assert refused.status_code == 400 and refused.get_json()["exists"] is True
+    replaced = client.post("/api/plugin", json={**changed, "overwrite": True})
+    assert replaced.status_code == 200
+
+
+def test_imports_are_answered_and_only_a_pages_own_analyses_supersede():
+    import threading
+
+    from studio.analysis import AnalysisService
+
+    service = AnalysisService()
+    document = recipes.load_preset("configs/reference/mandala_paper.yaml")
+    results = {}
+
+    def run(name, **kwargs):
+        results[name] = service.analyze(document, **kwargs)
+
+    with service._lock:  # hold the queue so every request waits
+        threads = [
+            threading.Thread(target=run, args=("old",), kwargs={"client": "a"}),
+            threading.Thread(target=run, args=("other",), kwargs={"client": "b"}),
+            threading.Thread(target=run, args=("import",), kwargs={"client": "a", "may_skip": False}),
+        ]
+        for thread in threads:
+            thread.start()
+            thread.join(0.2)
+    for thread in threads:
+        thread.join()
+    assert results["old"] == {"stale": True}
+    assert "stages" in results["other"] and "stages" in results["import"]
+
+
+def test_export_writes_the_model_before_the_settings():
+    document = recipes.load_preset("configs/reference/mandala_paper_blocks.yaml")
+    text = recipes.dump_yaml({**document, "studio": {"orientation": "TB"}})
+    model, settings, editor = (
+        text.index("# Model"),
+        text.index("# Training, data and run settings"),
+        text.index("# Editor layout"),
+    )
+    assert model < text.index("\npipeline:") < settings < editor
+    assert recipes.framework_document(yaml.safe_load(text)) == recipes.framework_document(document)

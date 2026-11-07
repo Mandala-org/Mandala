@@ -106,6 +106,11 @@ class FeatureSpec:
         }
 
 
+# The periodic lattice shift of every edge relation, passed along with it to
+# ports that need both (``Port.with_shift``).
+RELATION_SHIFTS = {"edge_index": "edge_shift", "message_edge_index": "message_shift"}
+
+
 def default_input_specs(num_species):
     """Contracts of the input slots every graph batch provides."""
     return {

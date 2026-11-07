@@ -545,7 +545,7 @@ def default_graph(cfg, num_species):
         _stage(
             "roles",
             "edge_roles",
-            ["edge_index", "edge_shift"],
+            ["edge_index"],
             ["roles"],
             {"separate_shifted_self": bool(cfg.separate_shifted_self)},
             role="geometry",

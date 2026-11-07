@@ -705,8 +705,13 @@ class EdgeRoles(nn.Module):
     category="routing",
     summary="Classify edges as onsite / shifted self-image / off-site (route index)",
     inputs=[
-        Port("edge_index", "relation", "index"),
-        Port("edge_shift", "relation", "index"),
+        Port(
+            "edges",
+            "relation",
+            "index",
+            with_shift=True,
+            doc="Edge relation (edge_index); its lattice shifts come with it",
+        ),
     ],
     options=[Option("separate_shifted_self", "bool", True, key=True)],
 )

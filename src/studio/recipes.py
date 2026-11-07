@@ -39,6 +39,24 @@ EXTRA_PRESETS = (
         "examples/layer_cookbook/layers.py",
     ),
 )
+# One line per shipped recipe for the Open dialog (a recipe's own first comment
+# line is used otherwise).
+PRESET_SUMMARIES = {
+    "mandala_paper_blocks": "MANDALA paper model as a stage recipe with reusable blocks",
+    "mandala_paper": "MANDALA paper model as training settings; the graph shows the stages built from them",
+    "deeph": "DeepH: crystal-graph messages in local bond frames",
+    "deeph_e3": "DeepH-E3: gated tensor products of node and edge features",
+    "mace_h": "MACE-H: atomic-basis densities, symmetric products and degree expansion",
+    "equivariant_nodes_bond_frame_readout": "Hybrid: equivariant node updates with a bond-frame readout",
+    "symmetric_products_attention_pair_readout": "Hybrid: MACE products with attention and a pair readout",
+    "tensor_messages_projected_attention": "Hybrid: tensor-product messages with projected attention",
+    "tensor_products_degree_expansion_shell_readout": "Hybrid: tensor products, degree expansion and a shell readout",
+    "graphene_mandala": "MANDALA pilot for graphene",
+    "mos2_mandala": "MANDALA pilot for MoS2",
+    "silicon": "First model: a small MANDALA for silicon",
+    "cookbook": "Layer cookbook: custom layers from a plugin",
+}
+
 PRESET_SYSTEMS = {
     "mandala_paper": "SiO2 s2p2d1",
     "mandala_paper_blocks": "SiO2 s2p2d1",
@@ -78,6 +96,7 @@ def _preset(group, path, plugin):
     comments = [line.lstrip("# ").strip() for line in first if line.startswith("#")]
     if comments:
         summary = comments[0]
+    summary = PRESET_SUMMARIES.get(path.stem, summary)
     return {
         "group": group,
         "name": path.stem,
@@ -249,17 +268,39 @@ def _stage_first(document):
     return {**document, "pipeline": pipeline}
 
 
+# Sections that define the model, written first and in this order; the
+# remaining keys (training, data and run settings) follow under a comment.
+MODEL_SECTIONS = (
+    "species",
+    "parameters",
+    "block_libraries",
+    "plugins",
+    "pipeline",
+    "objective",
+)
+
+
 def dump_yaml(document, *, header=None):
-    ordered = {**framework_document(document)}
+    framework = framework_document(document)
+    model = {key: framework[key] for key in MODEL_SECTIONS if key in framework}
+    settings = {key: value for key, value in framework.items() if key not in model}
+
+    def dump(part):
+        return yaml.dump(
+            _stage_first(part),
+            Dumper=_Dumper,
+            sort_keys=False,
+            allow_unicode=True,
+            width=100,
+        )
+
+    text = ""
+    if model:
+        text += "# Model\n" + dump(model)
+    if settings:
+        text += ("\n" if text else "") + "# Training, data and run settings\n" + dump(settings)
     if document.get("studio"):
-        ordered["studio"] = document["studio"]
-    text = yaml.dump(
-        _stage_first(ordered),
-        Dumper=_Dumper,
-        sort_keys=False,
-        allow_unicode=True,
-        width=100,
-    )
+        text += "\n# Editor layout (ignored by training)\n" + dump({"studio": document["studio"]})
     if header:
         text = "".join(f"# {line}\n" for line in header.splitlines()) + text
     return text

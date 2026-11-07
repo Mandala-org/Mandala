@@ -1,8 +1,9 @@
 """Recipe analysis for the editor: stages, contracts, costs and the objective.
 
 Analyses run one at a time (the stage cache and torch state are shared). When
-several requests queue up, only the newest is computed; older ones return
-``{"stale": true}`` so an editor sending one request per edit stays responsive.
+several requests of one editor page queue up, only the newest is computed;
+older ones return ``{"stale": true}`` so an editor sending one request per edit
+stays responsive. Imports are always answered.
 """
 
 from __future__ import annotations
@@ -79,19 +80,24 @@ def analyze_objective(document, cfg):
 
 
 class AnalysisService:
-    """Serialized, newest-wins analysis of recipe documents."""
+    """Serialized analysis of recipe documents, newest-wins per editor.
+
+    Each editor page (``client``) sees only its own requests superseded, and a
+    request that must be answered (an import) is never answered as stale.
+    """
 
     def __init__(self):
         self._lock = threading.Lock()
         self._counter = threading.Lock()
-        self._generation = 0
+        self._generations = {}
 
-    def analyze(self, document, *, system=None, size=None):
+    def analyze(self, document, *, system=None, size=None, client=None, may_skip=True):
+        key = str(client or "")
         with self._counter:
-            self._generation += 1
-            mine = self._generation
+            mine = self._generations.get(key, 0) + 1
+            self._generations[key] = mine
         with self._lock:
-            if mine != self._generation:
+            if may_skip and mine != self._generations.get(key):
                 return {"stale": True}
             return self._analyze(document, system, size)
 

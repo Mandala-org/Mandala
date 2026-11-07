@@ -64,8 +64,8 @@ textarea {
   scrollbar-width: none;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px 14px;
+  gap: 10px;
+  padding: 8px 12px;
   background: linear-gradient(180deg, #161c26, #121720);
   border-bottom: 1px solid var(--line);
   min-height: 48px;
@@ -91,6 +91,8 @@ textarea {
 }
 
 .recipe-name {
+  flex: 0 1 auto;
+  min-width: 110px;
   font-family: var(--mono);
   color: #cdd6e4;
   padding: 3px 10px;
@@ -107,7 +109,7 @@ textarea {
   display: flex;
   gap: 6px;
   align-items: center;
-  padding-left: 12px;
+  padding-left: 9px;
   border-left: 1px solid var(--line);
 }
 
@@ -118,7 +120,7 @@ textarea {
 .totals {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -270,6 +272,7 @@ textarea {
 }
 
 .canvas {
+  position: relative;
   flex: 1;
   min-height: 0;
 }
@@ -345,6 +348,11 @@ textarea {
   border-radius: 6px;
   border: 1px solid transparent;
   cursor: grab;
+}
+
+.inventory-item:focus-visible {
+  outline: 2px solid #7aa2ff;
+  outline-offset: -2px;
 }
 
 .inventory-item:hover {
@@ -489,7 +497,7 @@ textarea {
 
 .port-row {
   display: grid;
-  grid-template-columns: 90px 1fr;
+  grid-template-columns: 90px 1fr auto;
   gap: 2px 8px;
   padding: 4px 0;
   border-bottom: 1px dashed var(--line);
@@ -838,7 +846,7 @@ textarea {
 
 .option-default .option-value,
 .legend .option-default {
-  color: #6f7a8c;
+  color: #8b96a8;
 }
 
 .stage-metrics {
@@ -1212,8 +1220,21 @@ textarea {
 /* diff */
 .diff-head {
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   justify-content: space-between;
   align-items: center;
+}
+
+.diff-head select {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 140px;
+}
+
+.notice-error {
+  border-color: #b8404f;
+  color: #ffc2c8;
 }
 
 .diff-summary {
@@ -1567,9 +1588,23 @@ textarea {
   background: #2c3646;
 }
 
-@media (max-width: 1200px) {
-  .brand-sub,
-  .recipe-name {
+.toolbar > * {
+  flex-shrink: 0;
+}
+
+.toolbar > .recipe-name,
+.toolbar > .toolbar-spacer {
+  flex-shrink: 1;
+}
+
+@media (max-width: 1600px) {
+  .brand-sub {
+    display: none;
+  }
+}
+
+@media (max-width: 1280px) {
+  .brand-name {
     display: none;
   }
 }
@@ -1620,4 +1655,343 @@ textarea {
 }
 .guide-dots .dot.on {
   background: #ff6b9d;
+}
+
+/* pins for widely shared structure features */
+.ref {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border-radius: 13px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, #141922);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #c9d2e3;
+  cursor: grab;
+}
+
+.ref.selected {
+  border-style: solid;
+  border-color: #8ab0ff;
+}
+
+.ref-arrow {
+  color: var(--accent);
+  flex: none;
+}
+
+.ref-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* far zoom: names only, sized to the box */
+.stage-far {
+  display: none;
+}
+
+.canvas.lod-far .stage-far {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6%;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: #e6e9ef;
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.1;
+}
+
+.canvas.lod-far .stage-header,
+.canvas.lod-far .stage-transform,
+.canvas.lod-far .stage-options,
+.canvas.lod-far .stage-metrics,
+.canvas.lod-far .port-labels,
+.canvas.lod-far .stage .expand,
+.canvas.lod-far .io-spec,
+.canvas.lod-far .term-options,
+.canvas.lod-far .ref-name {
+  display: none;
+}
+
+.canvas.lod-far .stage::before {
+  height: 8px;
+}
+
+.canvas.lod-far .io-name,
+.canvas.lod-far .term-label {
+  font-size: 20px;
+}
+
+.canvas.lod-far .frame-title {
+  font-size: 30px;
+}
+
+.unsaved {
+  color: #f2c94c;
+  margin-left: 6px;
+  font-size: 10px;
+  vertical-align: middle;
+}
+
+.port-row-disconnect {
+  grid-column: 3;
+  grid-row: 1;
+  padding: 0 4px;
+  color: var(--muted);
+}
+
+.port-row-disconnect:hover {
+  color: #ff8f9c;
+}
+
+.term-ports {
+  display: flex;
+  justify-content: space-around;
+  font-size: 9px;
+  color: #b9a3b0;
+  font-family: var(--mono);
+  margin-top: -2px;
+}
+
+/* stage finder */
+.finder,
+.finder-open {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+}
+
+.finder-open {
+  background: rgba(20, 24, 32, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.finder-open:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
+.finder {
+  width: 300px;
+}
+
+.finder input {
+  width: 100%;
+  padding: 6px 10px;
+  background: #141922;
+  border: 1px solid #7aa2ff;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.finder-results {
+  margin-top: 4px;
+  background: #141922;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.finder-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 5px 10px;
+  background: none;
+  border: 0;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.finder-item.on,
+.finder-item:hover {
+  background: #232b3a;
+}
+
+.finder-empty {
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.canvas.lod-far .stage.selected,
+.canvas.lod-far .io.selected,
+.canvas.lod-far .term.selected {
+  outline: 6px solid #8ab0ff;
+  outline-offset: 2px;
+}
+
+.diff-row.clickable {
+  cursor: pointer;
+}
+
+.diff-row.clickable:hover {
+  background: var(--panel-2);
+}
+
+.banner-recovered {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #2a2614;
+  border-bottom-color: #5a4d1e;
+  color: #f2e2a8;
+}
+
+.crash {
+  margin: 40px auto;
+  max-width: 560px;
+  padding: 20px 24px;
+  background: var(--panel);
+  border: 1px solid #b8404f;
+  border-radius: 10px;
+}
+
+.crash h3 {
+  margin: 0 0 8px;
+}
+
+.totals.updating b {
+  opacity: 0.55;
+}
+
+.totals.incomplete b {
+  color: #f2c94c;
+}
+
+/* larger targets for small ports */
+.react-flow__handle.port::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}
+
+/* while a wire is drawn: ports that accept it, and those that do not */
+.react-flow__handle.port-yes {
+  box-shadow: 0 0 0 4px rgba(87, 214, 141, 0.55);
+}
+
+.react-flow__handle.port-no {
+  opacity: 0.25;
+}
+
+.react-flow__handle.connectingto:not(.valid) {
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.65);
+}
+
+.port-row select.port-row-slot {
+  min-width: 0;
+  width: 100%;
+  padding: 1px 4px;
+  font-size: 11px;
+}
+
+.canvas.lod-far .stage.bypassed .stage-far {
+  text-decoration: line-through;
+}
+
+.recipe-name-input {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.recipe-name-input:focus {
+  outline: 1px solid #7aa2ff;
+  outline-offset: 2px;
+}
+
+.narrow-only {
+  display: none;
+}
+
+@media (max-width: 1400px) {
+  .wide-only {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .roomy-only {
+    display: none;
+  }
+
+  .toolbar {
+    gap: 6px;
+    padding: 8px 8px;
+  }
+
+  .toolbar-group {
+    padding-left: 6px;
+    gap: 4px;
+  }
+
+  .totals {
+    gap: 6px;
+  }
+
+  .narrow-only {
+    display: inline;
+  }
+}
+
+/* left-to-right flow: port names beside the ports, outside the box */
+.port-labels.side-in,
+.port-labels.side-out {
+  top: 0;
+  bottom: 0;
+}
+
+.port-labels.side-in .port-label {
+  left: -8px;
+  transform: translate(-100%, -50%);
+  text-align: right;
+}
+
+.port-labels.side-out .port-label {
+  left: calc(100% + 8px);
+  transform: translateY(-50%);
+}
+
+.button-row.wrap {
+  flex-wrap: wrap;
+}
+
+.empty-hint {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: 520px;
+  padding: 12px 16px;
+  background: rgba(20, 24, 32, 0.92);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  color: #c9d2e3;
+  font-size: 12.5px;
+  line-height: 1.5;
 }

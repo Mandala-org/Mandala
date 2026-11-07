@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { currentPipeline, useStudio } from "../store";
 import { addStage } from "../graph/edit";
+import { availableSlots, isShift } from "../graph/model";
 import { CATEGORY_COLORS } from "./nodes";
 
 const ORDER = [
@@ -29,10 +30,23 @@ const ORDER = [
 ];
 
 export function Inventory() {
-  const { catalog, document, analysis, setModal, edit, showInput } = useStudio();
+  const { catalog, document, analysis, setModal, edit, showInput, notify } = useStudio();
   const add = (name: string, kind: string) => {
     if (kind === "input") showInput(name);
-    else edit((doc) => addStage(doc, name, catalog).document, `Added ${name}`);
+    else {
+      let id = "";
+      let connected: string[] = [];
+      const ok = edit((doc) => {
+        const result = addStage(doc, name, catalog, availableSlots(analysis, catalog));
+        id = result.id;
+        connected = result.connected;
+        return result.document;
+      });
+      if (ok) {
+        useStudio.setState({ pendingSelection: [`stage:${id}`] });
+        notify(`Added ${name}${connected.length ? `, connected ${connected.join(", ")} by name` : ""}; connect the rest in the inspector or by dragging`);
+      }
+    }
   };
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set(["Inputs"]));
@@ -45,14 +59,15 @@ export function Inventory() {
     if (blocks.length) result.push({ title: "Blocks in this recipe", color: CATEGORY_COLORS.block, items: blocks.map(([name, def]) => ({ name, summary: def.summary ?? `${def.stages.length} stages`, kind: "block", detail: def.inputs.join(", ") })) });
     const library = Object.entries(catalog?.block_library ?? {}).filter(([name, def]) => !pipeline?.blocks?.[name] && match(name, def.summary ?? "", def.library));
     if (library.length) result.push({ title: "Block library", color: CATEGORY_COLORS.block, items: library.map(([name, def]) => ({ name, summary: `${def.library}: ${def.summary ?? `${def.stages.length} stages`}`, kind: "block", detail: def.inputs.join(", ") })) });
+    // Shifts travel with their edge relation and are not placed on their own.
+    const inputs = Object.entries(catalog?.inputs ?? {}).filter(([name]) => !isShift(name) && match(name, "input"));
+    if (inputs.length) result.push({ title: "Inputs", color: CATEGORY_COLORS.input, items: inputs.map(([name, spec]) => ({ name, summary: `${spec.domain} ${spec.irreps ?? spec.representation}`, kind: "input" })) });
     const transforms = catalog?.transforms ?? [];
     const categories = [...new Set(transforms.map((t) => t.category))].sort((a, b) => (ORDER.indexOf(a) + 100) % 100 - (ORDER.indexOf(b) + 100) % 100);
     for (const category of categories) {
       const items = transforms.filter((t) => t.category === category && match(t.name, t.summary, category));
       if (items.length) result.push({ title: category.replace("_", " "), color: CATEGORY_COLORS[category] ?? CATEGORY_COLORS.custom, items: items.map((t) => ({ name: t.name, summary: t.summary, kind: "transform", detail: t.inputs.map((p) => p.name).join(", ") })) });
     }
-    const inputs = Object.entries(catalog?.inputs ?? {}).filter(([name]) => match(name, "input"));
-    if (inputs.length) result.push({ title: "Inputs", color: CATEGORY_COLORS.input, items: inputs.map(([name, spec]) => ({ name, summary: `${spec.domain} ${spec.irreps ?? spec.representation}`, kind: "input" })) });
     return result;
   }, [catalog, pipeline, query]);
 
@@ -66,7 +81,7 @@ export function Inventory() {
   return (
     <aside className="inventory">
       <div className="inventory-head">
-        <input className="search" placeholder="Search blocks…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="search" placeholder="Search transformations, blocks, inputs…" aria-label="Search the inventory" value={query} onChange={(e) => setQuery(e.target.value)} />
         <button className="button small accent" onClick={() => setModal("expression")} title="Define a new transformation from an expression">
           ƒ new
         </button>
@@ -85,13 +100,21 @@ export function Inventory() {
                 <div
                   key={item.name}
                   className="inventory-item"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      add(item.name, item.kind);
+                    }
+                  }}
                   draggable
                   onDragStart={(e) => {
                     e.dataTransfer.setData(item.kind === "input" ? "application/mandala-input" : "application/mandala-transform", item.name);
                     e.dataTransfer.effectAllowed = "copy";
                   }}
                   onDoubleClick={() => add(item.name, item.kind)}
-                  title={`${item.summary}${item.detail ? `\ninputs: ${item.detail}` : ""}\nDrag onto the canvas or double-click to add`}
+                  title={`${item.summary}${item.detail ? `\ninputs: ${item.detail}` : ""}\nDrag onto the canvas, double-click or press Enter to add`}
                 >
                   <div className="inventory-name">{item.name}</div>
                   <div className="inventory-summary">{item.summary}</div>
