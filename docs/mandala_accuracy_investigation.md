@@ -1,5 +1,8 @@
 # MANDALA accuracy investigation: evidence snapshot
 
+For the completed allocations and final findings, see the
+[6 November campaign report](mandala_accuracy_final_report.md).
+
 Consolidated **2 November 2026**. The numerical snapshot below was captured
 10:49–10:51 Europe/Warsaw; the operational amendment was verified at 12:00.
 These are dated observations, not live scheduler state. All accuracy analysis

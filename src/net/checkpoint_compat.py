@@ -11,7 +11,7 @@ from e3nn.o3 import FullyConnectedTensorProduct, Linear
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from net.common import Config, SeparateWeightTensorProduct
-from net.e3mlp_variants import ScaledLinear
+from net.e3mlp_variants import ScaledLinear, InvariantFiLMActivation
 
 if TYPE_CHECKING:
     from net.e3gnn import E3GNN
@@ -19,6 +19,35 @@ if TYPE_CHECKING:
 
 MAPPER_KEY_PREFIXES = ("mapper.",)
 MAPPER_KEY_INFIX = ".mapper."
+
+
+def set_checkpoint_film_semantics(model: nn.Module, mode: str) -> dict[str, Any]:
+    """Select an explicit evaluation semantics without changing learned weights.
+
+    ``legacy_2026_07`` reproduces the signed-pseudoscalar conditioning and
+    additive odd-scalar bias of source e78a7c0. These historical operations do
+    not guarantee O(3) equivariance. They must not silently replace the corrected
+    default or be inferred merely from a successful strict state-dict load.
+    Callers must record this returned report with their evaluation provenance.
+    This helper is for forensic replay, not a migration of learned parameters.
+    """
+    if mode not in {"o3", "legacy_2026_07"}:
+        raise ValueError("Unknown checkpoint FiLM semantics")
+    if model.training:
+        raise ValueError("Checkpoint semantics replay requires model.eval()")
+    affected = []
+    for name, module in model.named_modules():
+        if isinstance(module, InvariantFiLMActivation):
+            module.legacy_pseudoscalar_semantics = mode == "legacy_2026_07"
+            affected.append(name)
+    return {
+        "mode": mode,
+        "modules": affected,
+        "historical_source_commit": "e78a7c04e18d005d47def9eb7c9bd0f68b168d99"
+        if mode == "legacy_2026_07"
+        else None,
+        "learned_parameters_changed": False,
+    }
 
 
 @dataclass
@@ -573,7 +602,7 @@ def _remap_separate_weight_tp(
         staged_state[dst_w2_key] = new_w2
         report.remapped_keys.append(dst_w1_key)
         report.remapped_keys.append(dst_w2_key)
-        print(f"[compat] remapped separate weight tp " f"{dst_w1_key} and {dst_w2_key}")
+        print(f"[compat] remapped separate weight tp {dst_w1_key} and {dst_w2_key}")
         matched_any = True
     if matched_any:
         return
