@@ -149,6 +149,9 @@ class InvariantFiLMActivation(nn.Module):
         self.scalar_activation = scalar_activation_fn(scalar_activation)
         self.odd_scalar_activation = odd_safe_activation(odd_scalar_activation)
         self.copy_specs = _copy_slices(Irreps(irreps))
+        # Evaluation-only historical replay is explicitly selected at the
+        # checkpoint boundary. New models retain the corrected O(3) semantics.
+        self.legacy_pseudoscalar_semantics = False
         self.scalar_copy_indices = [
             idx for idx, (_, _, _, ir) in enumerate(self.copy_specs) if ir.l == 0
         ]
@@ -166,7 +169,7 @@ class InvariantFiLMActivation(nn.Module):
         for start, dim, _, ir in self.copy_specs:
             block = x[..., start : start + dim]
             blocks.append(block)
-            if ir.l == 0 and ir.p == 1:
+            if ir.l == 0 and (ir.p == 1 or self.legacy_pseudoscalar_semantics):
                 invariants.append(block.reshape(*block.shape[:-1], -1))
             elif ir.l == 0:
                 # A pseudoscalar changes sign under inversion. Conditioning
@@ -190,7 +193,11 @@ class InvariantFiLMActivation(nn.Module):
                 # Even scalars admit an invariant additive shift; odd scalars
                 # only admit an invariant multiplicative adjustment. Keep the
                 # parameter layout so existing checkpoints remain readable.
-                y = y + bias if ir.p == 1 else y + bias * block
+                y = (
+                    y + bias
+                    if ir.p == 1 or self.legacy_pseudoscalar_semantics
+                    else y + bias * block
+                )
                 y = (
                     self.scalar_activation(y)
                     if ir.p == 1

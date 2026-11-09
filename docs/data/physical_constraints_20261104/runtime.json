@@ -1,0 +1,20 @@
+{
+  "runtime": {
+    "python": "3.10.4",
+    "torch": "2.7.1+cu128",
+    "cuda": "12.8",
+    "threads": 4
+  },
+  "packages": {
+    "torch": "2.7.1+cu128",
+    "e3nn": "0.6.0",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3",
+    "pytorch-lightning": "2.6.1",
+    "torch-geometric": "2.7.0",
+    "torch-scatter": "2.1.2+pt27cu128"
+  },
+  "profile_sha256": "0442da6cfa039b843f5438d0f3417fb7a2f2355ba4d8825c22efc298894f76fe",
+  "gpu_partition": "gpu-h100-casus",
+  "cpus_per_gpu_job": 4
+}

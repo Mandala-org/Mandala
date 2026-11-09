@@ -365,7 +365,7 @@ Q_{a_i a_j}^{-1} \bm{x}_{ij}^{\bm{L}},
 which, in the orthonormal convention used internally, is a transpose.
 In the code these maps are materialized by the \texttt{BlockIrrepMapper}. The same component is reused by the data pipeline, the model heads, and the evaluation routines.
 
-Once the network predicts a consistent set of sparse operators, selected quantities are obtained directly from those operators rather than through a separate surrogate model.
+Once the network predicts sparse operators in a common basis, selected quantities are obtained directly from those operators rather than through a separate surrogate model.
 For sparse block matrices, the trace of a product is evaluated as a sparse contraction
 \begin{equation}
 \Tr(AB)
@@ -376,7 +376,7 @@ A_{ij}^{\bm{L}} B_{ji}^{-\bm{L}}
 \right),
 \end{equation}
 implemented in \texttt{Mandala}. This gives direct access to electron counts and band-energy observables from the same predicted operator set.
-In this way, internal consistency between matrices and observables is built into the model directly.
+Thus the reported trace observables are algebraically determined by the matrices. This does not establish positive definiteness of the overlap, admissible density occupations, or self-consistency between independently predicted operators.
 
 
 \section{Numerical Implementation}
@@ -390,7 +390,7 @@ In this way, internal consistency between matrices and observables is built into
 Figure~\ref{fig:data_preprocessing} summarizes the data-loading and sample-construction path.
 The central data abstractions are \texttt{BlockMatrix}, \texttt{IrrepsBlockData}, and \texttt{Snapshot}.
 A \texttt{Snapshot} contains all matrices and metadata associated with one geometry, including positions and the simulation cell.
-This keeps Hamiltonian, overlap, and density predictions tied to a single physically consistent basis and sparse indexing scheme.
+This keeps Hamiltonian, overlap, and density predictions tied to a common basis and sparse indexing scheme; physical admissibility requires additional checks.
 
 The sparse operator representation stores blocks by ordered species pair and by explicit edge metadata $(\bm{L},i,j)$, where $\bm{L}\in\mathbb{Z}^3$ is the lattice-image shift.
 Basis-conversion modules map backend-specific orbital orderings and sign conventions into the common internal representation expected by the equivariant stack.
@@ -731,6 +731,29 @@ Thus negative and near-zero eigenvalue components are removed from the admissibl
 
 These operations enforce aligned transpose symmetry, an optional positive-definite numerical overlap for eigensolution, and a scalar electron-count normalization. They do not by themselves enforce density-matrix positivity, occupation bounds, generalized idempotency, or mutual consistency among independently predicted $H$, $S$, and $D$. The resulting symmetrized and normalized operators are suitable for the downstream diagnostics described below, while these remaining constraints define limitations of the present model.
 Their place in the analysis pipeline is summarized in Figure~\ref{fig:postprocessing_analysis} after the training objective is introduced.
+
+\subsubsection{Physical-constraint diagnostics}
+\label{subsubsec:physical-constraints}
+
+We distinguish constraints enforced by postprocessing from constraints measured on the predicted operators. For each sampled wave vector, raw Hermiticity is measured before applying the global projection $X^h=(X+X^\dagger)/2$. The audit applies neither overlap eigenvalue clipping nor diagonal jitter nor density rescaling. It reports the minimum eigenvalue and condition number of $S^h$, together with unjittered Cholesky failures. Occupation and consistency tests are unavailable when the overlap is indefinite or has an eigenvalue below $\max(10^{-8},10^{-8}\|S^h\|_2)$; these failures remain in the reported denominators.
+
+For a valid overlap metric, the relevant orthogonalized operators are
+\begin{equation}
+P=(S^h)^{1/2}D^h(S^h)^{1/2},
+\qquad
+F=(S^h)^{-1/2}H^h(S^h)^{-1/2}.
+\end{equation}
+For the restricted spin-summed density convention, the eigenvalues of $P$ must lie in $[0,2]$; ordinary AO density eigenvalues do not provide this test. We report their extrema, the number and mass of bound violations, and the overlap-weighted electron count. The zero-temperature idempotency residual $\|P^2-2P\|_F/(2\|P\|_F)$ is reported as a diagnostic, since the reference calculations use 300~K smearing and need not be idempotent.
+
+Stationarity requires $[F,P]=0$, equivalently $H^hD^hS^h-S^hD^hH^h=0$. We use the energy-gauge-independent residual
+\begin{equation}
+r_{\mathrm{stat}}=
+\frac{\|[F,P]\|_F}
+{\|F-\Tr(F)I/n_{\mathrm{AO}}\|_F\,\|P\|_F}.
+\end{equation}
+Commutation alone does not establish correct filling. We therefore also compare $P$ with $P_{\mathrm{FD}}=2[1+\exp((F-\mu I)/(k_B T))]^{-1}$, using one chemical potential per structure fixed by the prescribed electron count over the sampled $k$ mesh. The relative Frobenius residual includes both wrong occupations and offdiagonal density in the Hamiltonian eigenbasis. This tests algebraic compatibility, rather than the separate DFT self-consistency condition $H=H[D]$.
+
+All tests use complex double-precision Bloch sums of the available periodic blocks and normalized $k$ weights. The same diagnostics are applied to the references, with and without the model cutoff. Omitted density-kernel blocks are zero in this reconstruction; unlike the overlap, an exact density kernel need not have the finite support of overlapping AO pairs. Thus this audit tests the exported finite-support representation, and reference residuals are essential for distinguishing representation effects from model error. An occupation-valid completion of omitted blocks would require a separate calculation.
 
 
 \subsection{Observable guidance with band energies and electron counts}

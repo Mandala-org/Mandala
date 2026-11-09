@@ -1,0 +1,1352 @@
+{
+  "schema_version": 1,
+  "arguments": {
+    "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/SiOx_hamiltonian_mae_stage2_47h25/dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25/best_model.pt",
+    "material": "sio2",
+    "data_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new",
+    "sample_dir": null,
+    "output_dir": "/home/brzoza73/casus/mandala/researchops/runs/paper_physical_constraints_20261104/v2/results/sio2_historical",
+    "mesh": "native",
+    "device": "cuda",
+    "diagnostic_device": null,
+    "envelope_path": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v2/source/eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json",
+    "prediction_source_root": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v2/historical_source",
+    "prediction_cache": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v2/predictions/sio2"
+  },
+  "split": {
+    "seed": 42,
+    "requested_validation_count": 10,
+    "actual_validation_count": 10,
+    "historical_membership_certified": false,
+    "excluded_without_publication_metadata": [],
+    "membership_caveat": "Reconstructed from current discovery; compare with an original saved manifest before asserting historical identity.",
+    "discovered": [
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_50372000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_50372000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_59580000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_59580000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_74928000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_74928000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_76496000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_76496000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_78356000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_78356000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/10_45116000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/10_45116000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/10_47712000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/10_47712000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/10_66192000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/10_66192000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_43084000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_43084000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_44556000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_44556000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_45916000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_45916000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_50592000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_50592000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_71364000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_71364000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_41728000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_41728000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_44560000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_44560000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_65080000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_65080000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_78336000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_78336000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_47308000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_47308000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_50860000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_50860000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_62752000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_62752000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_72972000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_72972000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_48768000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_48768000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_51192000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_51192000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_52524000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_52524000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_58504000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_58504000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_64160000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_64160000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_75500000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_75500000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_78920000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_78920000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_41412000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_41412000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_49204000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_49204000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_59928000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_59928000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_61264000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_61264000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_52016000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_52016000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_58060000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_58060000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_61816000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_61816000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_65956000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_65956000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_69992000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_69992000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78056000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78056000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_45732000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_45732000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_49760000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_49760000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_65172000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_65172000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_67600000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_67600000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_70156000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_70156000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77236000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77236000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77704000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77704000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_43436000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_43436000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_72968000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_72968000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_74300000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_74300000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_76564000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_76564000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_43904000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_43904000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56252000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56252000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56900000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56900000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_59496000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_59496000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_65508000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_65508000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_71800000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_71800000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_73020000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_73020000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_75532000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_75532000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_78940000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_78940000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_52732000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_52732000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_60188000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_60188000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_78612000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_78612000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_56388000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_56388000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_64664000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_64664000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_46048000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_46048000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_53916000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_53916000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_60872000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_60872000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_42120000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_42120000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_43032000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_43032000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_51024000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_51024000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_59504000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_59504000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_71788000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_71788000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_41228000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_41228000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_48576000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_48576000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_51712000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_51712000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_52952000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_52952000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_62112000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_62112000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_66996000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_66996000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_78936000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_78936000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_40076000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_40076000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_45036000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_45036000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_48536000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_48536000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_51872000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_51872000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_62296000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_62296000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_76256000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_76256000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_55480000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_55480000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_63996000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_63996000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_69392000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_69392000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_78524000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_78524000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_42672000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_42672000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_56184000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_56184000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_58932000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_58932000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_63524000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_63524000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_60636000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_60636000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_64752000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_64752000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_55664000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_55664000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56472000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56472000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56684000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56684000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_60376000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_60376000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_63840000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_63840000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74912000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74912000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_76916000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_76916000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_40956000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_40956000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_44092000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_44092000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_64600000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_64600000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_40744000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_40744000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_41960000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_41960000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_49724000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_49724000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_51700000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_51700000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_54020000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_54020000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_75332000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_75332000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_53928000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_53928000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_57980000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_57980000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_65364000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_65364000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/6_61916000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/6_61916000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_44728000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_44728000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_61884000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_61884000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_64148000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_64148000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_65940000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_65940000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_71064000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_71064000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_72948000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_72948000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_77184000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_77184000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_49496000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_49496000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_62948000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_62948000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_67784000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_67784000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_70252000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_70252000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_73188000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_73188000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_54316000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_54316000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_61800000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_61800000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_62084000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_62084000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_72652000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_72652000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_77680000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_77680000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_80000000/SiO2.out"
+      ]
+    ],
+    "train": [
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_51712000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_51712000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_63524000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_63524000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_58060000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_58060000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_64148000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_64148000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_51700000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_51700000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_41228000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_41228000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_45916000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_45916000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_65508000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_65508000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_52524000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_52524000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_56184000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_56184000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_70252000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_70252000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_65080000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_65080000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_62296000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_62296000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56684000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56684000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_50372000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_50372000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_44560000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_44560000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_67600000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_67600000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_63840000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_63840000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_49204000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_49204000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_52732000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_52732000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_41960000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_41960000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_40076000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_40076000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_74928000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_74928000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_78336000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_78336000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_64664000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_64664000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_58932000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_58932000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_71800000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_71800000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_61800000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_61800000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_54316000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_54316000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_44728000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_44728000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_76496000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_76496000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56472000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56472000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77236000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77236000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_58504000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_58504000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_56388000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_56388000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_71364000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_71364000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_65940000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_65940000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_70156000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_70156000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_61816000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_61816000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56252000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56252000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_51872000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_51872000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_45732000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_45732000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_59496000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_59496000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_66996000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_66996000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_64752000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_64752000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56900000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56900000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_41728000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_41728000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_42120000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_42120000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_75532000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_75532000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_40744000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_40744000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_62752000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_62752000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_46048000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_46048000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_65364000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_65364000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_50592000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_50592000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_76256000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_76256000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_57980000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_57980000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_76564000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_76564000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_63996000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_63996000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_78612000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_78612000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_65172000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_65172000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_75332000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_75332000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_78356000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_78356000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_67784000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_67784000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_52016000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_52016000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_49724000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_49724000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_64600000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_64600000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_78936000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_78936000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_71064000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_71064000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_69392000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_69392000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_52952000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_52952000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_60376000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_60376000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_43084000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_43084000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_80000000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_80000000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_75500000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_75500000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_51024000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_51024000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_44092000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_44092000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74912000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74912000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/SiO2.out"
+      ]
+    ],
+    "validation": [
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/SiO2.out"
+      ],
+      [
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/HS.out",
+        "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/SiO2.out"
+      ]
+    ]
+  },
+  "checkpoint_sha256": "18c9376825637077d013c20344ef30b8cbb01466a7005b7f7cd2525cf7961e3f",
+  "input_sha256": [
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/HS.out": "151ea5b7355ca5059168ddf31f8b04ccac9b2342cc12a86221f1705718fa170b",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.out": "2d38d39e164a623690018e3fe9254e7ef4fdfca2d5a293cf45707488bd034432",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.cif": "16877a925e44bf3a57ef81644886a8e0d59de386682171f245f2c0ec1beb3679"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/HS.out": "052c319911021aa0351e397561ac3afbb70b00c70121fba91f068a2c54f695c8",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/SiO2.out": "f558d0f3d0bbefcad7d2962daa19cd303f40f8c93bf47e4200d5254cf75f12f0",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/SiO2.cif": "9c48459f5187cbf19bfade87d46ab49e92fa690383c6288ee8baabe6c81bff9c"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/HS.out": "8e86273c93bb3433ade0fe5a5a366a93abca8f5943995880b42ad202b3892433",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/SiO2.out": "58af2d4458388a3d0125b991c90b55126d19ecf2767cbbe764b38d89f28e2ce1",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/SiO2.cif": "301070c841e29d43544758532716fa772659802399e262682047f0477b4cc365"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/HS.out": "568b9210e1e9266e33a1ef61a2e6e5b5c7072355ee3be401ba4370d2b12754d1",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/SiO2.out": "7d75057b0b74bb3b7a56740163e6b7d9a8fd075d31e38280e63f1887caf1282a",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/SiO2.cif": "ef014090cf5dab5d1b9972ea94731a228deeae1ec09afb9647d83a8a22612da1"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/HS.out": "0a402e351d11d7f29ca9d09854d81689acf21028500845caa8c3f116e4006264",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/SiO2.out": "e5f83d59957c2faf7904337f407c13dc028dcd814f562b4dc8f2c889d16e3aad",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/SiO2.cif": "b78c115547dd7baaf0c8ff35bef5f01e88668fa0ff935a8c33596b38a4deb240"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/HS.out": "5d467fa8595ebd501caf489ec2c275fc64753643c05b39e3e42a372e48f08135",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.out": "a12134c84a7d0e9a0fe93d5133853eb0183b7364e1d1c8d9c1abf92e67bb6de4",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.cif": "e0b50e3e744d4fd33ef8ac34f3730b336d783a39e27357e4e920a5e74353feac"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/HS.out": "bb2c0316e41a3e731d569c34108be2b2d15fea9fbc22e0f6b3fcd2327df31cbd",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/SiO2.out": "fd317a9f1d32f7bba8ddca37163415ac9801d571786a8b5d39fc553049408b8b",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/SiO2.cif": "06d2d2ca40ac23c7a09802e145730a1f8b3efb6bf5b6213078a7a37871bd05df"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/HS.out": "d6021541c315778181d6ab608db99c7abd5031a4d56226968edfc4a58e01f977",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/SiO2.out": "109a183fbe677aaa4d4bd2ed5a7bd7d89a729fbddf1b1c01cdf6525e30847989",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/SiO2.cif": "cf4ac8ccb909241a310959dfb0d30c9078b24421eac74beca806dbf3ca2fb55b"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/HS.out": "dddcac5983e12b4341207aeaa59710f3292e994557735ac9e5276db78494af1f",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/SiO2.out": "6611d16eb47bbe813e8874b0b9ecbe4c671e809d79d4f9f4dd50138dcdef5876",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/SiO2.cif": "56318ca34bd6dbdcf639c45fcfd10e036d5da33c6dbfe83293deee4d94415165"
+    },
+    {
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/HS.out": "c7a9ce930eac002f2ff68b18ad19bf8709e540d1634e1851588943070fdcb69d",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/SiO2.out": "50e99af1feebff7e59c03102959a7a929c19cd2f973acb74194e2001cb84c0fc",
+      "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/SiO2.cif": "2a65b28aa169bdb6947e0dae29697dad33ea6d0a2bdb64ff5a1b69db1fa66fb5"
+    }
+  ],
+  "source_manifest_sha256": "8f6f49e6941ec4c35bc8d9bffce5e4b028a5ebc2413c35d72e03a9b21be227a3",
+  "density_convention": "original paper prediction is restricted-total; native reference spin=0 multiplied by two",
+  "postprocessing": "raw Hermiticity, then evaluation-only Hermitian projection; no clipping, jitter or rescaling",
+  "tolerances": {
+    "occupation": 1e-05,
+    "overlap_atol": 1e-08,
+    "overlap_rtol": 1e-08
+  },
+  "checkpoint_selection": "fixed original paper model; no selection or training",
+  "runtime": {
+    "python": "3.10.4",
+    "torch": "2.7.1+cu128",
+    "cuda": "12.8",
+    "threads": 4
+  },
+  "publication_faithfulness": "not certified by strict weight loading; compare predictive errors with archived paper metrics",
+  "historical_source_manifest_sha256": "8f10d627ee4fb021ec947d7c975cf622c6261d69cb29e64ded71652345d10cc8",
+  "envelope_sha256": "ddd2d169662c9dd34e74b7525b0ec351ba1708117b0b0342e01fdc4cf5e2aa74",
+  "resolved_config": {
+    "pipeline": null,
+    "objective": null,
+    "optimization": null,
+    "schema_version": 1,
+    "data": {},
+    "training": {},
+    "parameters": {},
+    "species": {},
+    "layout": {},
+    "layout_rules": {},
+    "codec": {},
+    "reference": {},
+    "cutoff_radius": 10.0,
+    "l_max": 4,
+    "hidden_base_dim": 64,
+    "hidden_irreps": "128x0e+64x0o+32x1e+32x1o+24x2e+24x2o+16x3e+16x3o+8x4e",
+    "edge_type_emb_dim": 32,
+    "emb_use_odd_features": true,
+    "edge_encoder_style": "rich",
+    "edge_encoder_use_sh_tensor_square": true,
+    "e3layernorm": false,
+    "num_layers_gnn": 2,
+    "tp_type": "separate_weight",
+    "use_self_connection": false,
+    "edge_update_node_combine": "concat",
+    "edge_update_residual": false,
+    "node_update_message_agg": "attention",
+    "node_update_attention_scalar_dim": 64,
+    "node_update_attention_heads": 4,
+    "node_update_residual": false,
+    "head_use_mlp_log_scale": false,
+    "neck_depth": 1,
+    "internal_e3mlp_layers": 1,
+    "head_e3mlp_layers": 1,
+    "head_use_node_embeddings_for_self_edges": true,
+    "separate_shifted_self": true,
+    "head_use_tensor_square": false,
+    "head_pair_mode": "split",
+    "head_diag_output_scale": 1.0,
+    "head_offdiag_output_scale": 1.0,
+    "head_log_scale_mlp_n_layers": 1,
+    "e3mlp_variant": "film",
+    "internal_e3mlp_variant": "resnormact",
+    "head_e3mlp_variant": "normact",
+    "e3mlp_output_scale": 1.0,
+    "e3mlp_weight_init_scale": 1.0,
+    "e3mlp_residual_scale": 0.25,
+    "e3mlp_pre_norm": false,
+    "e3mlp_norm_eps": 1e-08,
+    "e3mlp_film_hidden_dim": 64,
+    "activation_odd_scalar": "tanh",
+    "activation_odd_gate": "tanh",
+    "nonlin_kind": "normact",
+    "activation_scalar": "leakyrelu",
+    "activation_gate": "softplus",
+    "s2act_res": 128,
+    "norm_kind": "component",
+    "lr": 0.0002,
+    "max_epochs": 4000,
+    "max_wall_clock_seconds": 170100.0,
+    "batch_size": 1,
+    "use_lr_scheduler": true,
+    "lr_scheduler_factor": 0.5,
+    "lr_scheduler_patience": 60,
+    "lr_scheduler_min_lr": 1e-08,
+    "lr_scheduler_target": "val/loss_total",
+    "revert_on_spike": true,
+    "revert_monitor": "val/loss_total",
+    "revert_decay_patience": 4,
+    "revert_decay_rate": 0.5,
+    "revert_spike_factor": 2.0,
+    "checkpoint_monitor": "val/hamiltonian_mae",
+    "dropout": 0.0,
+    "l1_reg_coef": 0.0,
+    "l2_reg_coef": 0.0,
+    "init_weights_factor": 1.0,
+    "grad_clip_algorithm": "value",
+    "wall_clock_scope": "session",
+    "grad_clip_val": 2.0,
+    "accumulate_grad_batches": 1,
+    "n_radial": 128,
+    "radial_layers": [
+      128,
+      128,
+      128
+    ],
+    "radial_weight_granularity": "term",
+    "pair_conditioned_radial_mlp": false,
+    "pair_distance_normalization": "off",
+    "enable_forces": false,
+    "enable_stress": false,
+    "enable_energy": true,
+    "enable_num_electrons": false,
+    "train_target": "matrix",
+    "partial_train": null,
+    "train_on_forces": false,
+    "train_on_stress": false,
+    "train_on_energy": false,
+    "train_on_num_electrons": false,
+    "matrix_targets": [
+      "hamiltonian"
+    ],
+    "train_observables_on_gt": false,
+    "symmetrize_validation_output": true,
+    "symmetrize_overlap_targets": true,
+    "symmetrize_density_targets": true,
+    "symmetrize_output": false,
+    "symmetrize_hamiltonian_targets": true,
+    "rescale_density_to_num_electrons": false,
+    "loss_l1_fraction": 1.0,
+    "matrix_loss_reduction": "pair_sum",
+    "loss_coef_observables": 0.0,
+    "allow_zero_observable_loss_control": false,
+    "observable_loss_kind": "mae",
+    "loss_coef_forces": 0.0,
+    "loss_coef_stress": 0.0,
+    "hamiltonian_envelope_mode": "multiply_prediction",
+    "hamiltonian_envelope_path": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v2/source/eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json",
+    "hamiltonian_envelope_eps": 1e-12,
+    "loss_weighting_mode": "off",
+    "loss_weight_min": 0.0,
+    "loss_weight_max": 100.0,
+    "spectral_loss_enabled": false,
+    "train_on_spectral": true,
+    "spectral_loss_coef": 0.0,
+    "spectral_loss_kmesh": "2x2x2",
+    "spectral_loss_window_ev": 10.0,
+    "spectral_loss_taper_ev": 2.0,
+    "spectral_loss_huber_delta_ev": 0.1,
+    "spectral_loss_kind": "huber",
+    "spectral_loss_overlap_psd_cleanup": false,
+    "spectral_loss_overlap_jitter": true,
+    "spectral_fermi_cache_path": null,
+    "freeze_backbone_train_heads_only": false,
+    "run_name": "dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25",
+    "experiment_id": null,
+    "ablation_name": null,
+    "ablation_setting": null,
+    "ablation_setting_from": null,
+    "verbosity": 0,
+    "bench_verbosity": 1,
+    "log_partial_gt_observables": true,
+    "log_per_irrep_metrics": true,
+    "print_per_irrep_metrics": false,
+    "log_per_irrep_images": false,
+    "log_train_metrics": false,
+    "log_per_pair_loss_metrics": true,
+    "log_hamiltonian_irrep_contrib_metrics": true,
+    "log_hamiltonian_pair_contrib_metrics": true,
+    "log_activation_mag": false,
+    "log_grad_norm": false,
+    "wandb_project": "mandala-SiOx-hamiltonian-mae-stage2-47h25",
+    "log_every_n_steps": 1,
+    "log_on_step": false,
+    "log_on_epoch": true,
+    "log_data": false,
+    "log_forward": false,
+    "benchmark": false,
+    "log_interval": 10,
+    "adaptive_log_interval": true,
+    "video_max_atoms": 6,
+    "safety_checks": false,
+    "dtype": "torch.float32",
+    "device": "cuda:0",
+    "gpus": 1,
+    "num_workers": 3,
+    "save_dir": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/SiOx_hamiltonian_mae_stage2_47h25",
+    "log_model": false,
+    "snapshot_cache_dir": null,
+    "dataset_device": "cpu",
+    "shuffle_snapshot_load_order": true,
+    "data_split_seed": 42,
+    "seed": 42,
+    "epoch_boundary_resume": false,
+    "precompute_edge_features": true,
+    "radial_embedding_scale": "none",
+    "allow_incomplete_dataset": false,
+    "apply_cutoff_to_targets": true,
+    "graph_source": "geometry_cutoff",
+    "require_exact_edge_match": true,
+    "allow_openmx_positions_box_from_out": false,
+    "tune": null,
+    "train_on_irrep_parts": false,
+    "compatibility": true,
+    "num_block": 3,
+    "r_max": 8.0,
+    "num_basis": 128,
+    "use_sc": true,
+    "use_sbf": false
+  }
+}

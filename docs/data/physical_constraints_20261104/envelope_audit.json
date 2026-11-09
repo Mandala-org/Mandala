@@ -1,0 +1,8 @@
+{
+  "frozen_artifact": "75df31535a1acee5efc2d5a00ac817e440108c5f71a7415a3df361b994e74bb5",
+  "rosi_active_artifact": "c8d3d893c7011c515a1a49e7613a50fe1a20df67836440d54b1b3ee96d5f6c04",
+  "comparison_grid": "15 pairs, 0..11 Angstrom, step0.001, float64",
+  "max_absolute_envelope_difference": 9.676996047147668e-06,
+  "max_relative_difference_where_reference_gt_1e_minus8": 2.898907553927396e-05,
+  "relative_frobenius_difference": 5.576861755265596e-07
+}
