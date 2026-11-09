@@ -1,5 +1,10 @@
 # Graphene/MoS₂ accuracy ablation protocol
 
+The next recipe comparison follows the separate
+[fixed-recipe common-split benchmark plan](mandala_common_split_benchmark_plan.md).
+Architecture ablations are deferred; the benchmark uses terminal checkpoints
+and no new validation tuning.
+
 This is the current scientific contract, reconciled on **2 November 2026**.
 Historical registrations remain immutable. The 29 October long grid was amended
 on 2 November by holding unstarted repeats and bounding pending continuations;
