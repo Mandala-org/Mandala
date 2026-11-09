@@ -43,7 +43,7 @@ from scripts.evaluate_checkpoint_materials import (  # noqa: E402
 from utils.units import HARTREE_TO_EV  # noqa: E402
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Compute validation MAEs and relative errors whose numerators and "
@@ -69,7 +69,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--convention", default="e3nn")
     parser.add_argument("--output-json", type=Path, required=True)
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def _matrix_mean_abs(matrix: BlockMatrix) -> float:
