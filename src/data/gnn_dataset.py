@@ -945,9 +945,10 @@ class E3GNNDataset(Dataset):
                 edge_type_idx=x["edge_type_idx"],
                 envelope_table=self.envelope_table,
             ).to(self.dtype)
-            x["edge_r0"] = self.envelope_table.r0.index_select(
-                0, x["edge_type_idx"]
-            ).to(self.dtype)
+            if self.envelope_table.r0_parameter_index is not None:
+                x["edge_r0"] = self.envelope_table.r0.index_select(
+                    0, x["edge_type_idx"]
+                ).to(self.dtype)
         hamiltonian_target, overlap_target = snap.hamiltonian, snap.overlap
         if self.spectral_loss_enabled:
             fermi_level, fermi_source = self._resolve_spectral_fermi_level(

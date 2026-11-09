@@ -85,3 +85,38 @@ def test_to_allows_missing_optional_observable_targets():
     assert present_stress.devices == [torch.device("meta")]
     for value in required.values():
         assert value.devices == [torch.device("meta")]
+
+
+def test_soft_wall_envelope_does_not_require_an_r0_parameter(
+    monkeypatch, small_angular_snapshot_e3nn, tmp_path
+):
+    import json
+
+    envelope = tmp_path / "envelope.json"
+    envelope.write_text(
+        json.dumps(
+            {
+                "family": "slater_exp_quad_soft_wall",
+                "pairs": {
+                    "H-H": {"theta": [0.0, -1.0, 0.0, 0.0, 0.0, 0.0], "x_max": 5.0}
+                },
+            }
+        )
+    )
+    cfg = Config(
+        cutoff_radius=5.0,
+        n_radial=4,
+        hamiltonian_envelope_mode="multiply_prediction",
+        hamiltonian_envelope_path=str(envelope),
+    )
+    mapper = BlockIrrepMapper(small_angular_snapshot_e3nn.hamiltonian.orbital_cfg)
+    monkeypatch.setattr(
+        "data.gnn_dataset.Snapshot.from_openmx",
+        lambda *a, **kw: small_angular_snapshot_e3nn,
+    )
+    ds = E3GNNDataset(
+        [(tmp_path / "synthetic.matrix", tmp_path / "synthetic.out")], mapper, cfg
+    )
+    x, _ = ds[0]
+    assert "edge_envelope" in x and torch.isfinite(x["edge_envelope"]).all()
+    assert "edge_r0" not in x
