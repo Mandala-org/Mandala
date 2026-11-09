@@ -134,3 +134,5 @@ sweeps/very_old/
 
 # local Claude Code workspace and worktrees
 .claude/
+CLAUDE.md
+.agents/
