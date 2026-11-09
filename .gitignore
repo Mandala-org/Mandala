@@ -132,3 +132,6 @@ paper/main.log
 # legacy files
 sweeps/old/
 sweeps/very_old/
+
+# local Claude Code workspace and worktrees
+.claude/
