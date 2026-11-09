@@ -33,19 +33,29 @@ The Vite server on port 5173 proxies `/api` to the backend.
 
 | Action | How |
 | --- | --- |
-| Open a recipe | **Open**: reference and hybrid recipes, pilots, examples, or pasted/loaded YAML |
-| Add a block | Drag from the inventory onto the canvas, or double-click it |
+| Open a recipe | **Open**: a blank recipe, reference and hybrid recipes, pilots, examples, or pasted/loaded YAML |
+| Add a block | Drag from the inventory onto the canvas, double-click it, or focus it and press Enter. Inputs named like an existing value of a fitting type (`edge_index`, `node_batch`, `harmonics`, or the port name on its entity: `lengths` → `edge_lengths`) are connected at once; new stages and inputs are placed next to what they connect to |
 | Connect | Drag from an output port to an input port; incompatible wires are refused with the reason |
-| Edit settings | Select a block; key settings are shown, the rest under *more settings* |
+| Edit settings | Select a block; key settings are shown, the rest under *more settings*. Renaming a stage also renames an output named after it |
+| Wire from the inspector | Each input of the selected stage is a list of the values it accepts (no cycles, matching entity and representation); choose one, or ✕ to disconnect |
+| Replace a stage | **replace with** in the inspector swaps the transformation or block and keeps the stage id and output slots, so later stages stay connected; inputs are matched by port name, then position. Options carry over, also under another name (`number` → `n_gaussians`, `end` → `stop`), and the notice lists what was dropped |
+| Ablate | Untick **enabled**: the stage or block passes through the input with the type of its output (**passes through** shows it; the recipe records it as `bypass:`); a stage with no such input cannot be bypassed |
+| Recipe parameters | Select the background: the recipe inspector edits the shared `parameters:` used as `${parameters.name}` |
 | Group | Select stages (Shift-drag a box, Ctrl/Cmd-click) and press **Group** or Ctrl+G |
+| Add a layer | Select a layer's stages (for example `node_update_1` and `edge_update_1`) and press Ctrl+Shift+D (**Insert copy after**): the copies read the layer's outputs where the originals read values of the same type, later stages read the copies, and the graph is laid out again |
+| Duplicate | Ctrl+D (**Duplicate**) copies the selection beside it; wires between the copied stages go to the copies, other inputs are shared |
 | Expand a block | **⊕ expand** on a block instance; **⊖** on its frame collapses it |
 | Dissolve a block | Inspector of a block instance: **Dissolve into stages** |
 | Loss | Select **ℒ loss** to edit the expression or add terms; select an operation to change or wrap it |
 | New transformation | **ƒ new**: define a typed expression; **Create** writes and registers `plugins/<name>.py` |
-| Compare | **Compare** tab: use the current recipe or a preset as baseline |
-| Export | **Export YAML** writes the recipe, including the editor layout under `studio:` |
-| Undo / redo | Ctrl+Z / Ctrl+Shift+Z |
+| Compare | **Compare** tab: use the current recipe or a preset as baseline; switch baselines from its header; click a row to show the stage |
+| Export | **Export** writes the recipe: the model sections first, then training and run settings, then the editor layout and chemical system under `studio:` (ignored by training). Click the recipe name in the toolbar to rename it; the name is the file name |
+| Find a stage | **⌕ Find stage** (Ctrl+F or /): type a stage, block or transformation name; Enter expands the blocks around it and selects it |
+| Undo / redo | Ctrl+Z / Ctrl+Shift+Z; the notice names the change. Restoring recovered work keeps your newer edits one undo away |
 | Layout / direction | **Layout** (L) re-runs the layered layout; ↓ / → switch top-down and left-right |
+| Shared inputs | **↪ pins** draws structure inputs and structure-only features used by three or more stages as a pin beside each use; double-click a pin to go to the stage that computes it |
+| Routine inputs | **⊘ routine** (on by default) hides inputs a model rarely changes: `edge_index` with its lattice shifts, `message_edge_index`, batch membership and partitions. The ports stay wired; the inspector still lists and changes them |
+| Port order | The layout draws each stage's ports in the order that untangles the wires (labels move with them). The order is only a drawing: inputs stay positional in the recipe |
 | Chemical system | **⚛** sets species shells (they fix the readout irreps) and the reference size for cost estimates |
 
 ### Reading the graph
@@ -63,6 +73,17 @@ The Vite server on port 5173 proxies `/api` to the backend.
   forward time are drawn with area proportional to their share.
 * **static** marks parameter-free stages that depend on the structure only;
   they are computed once per structure and cached.
+* Zoomed out, blocks show only their names, sized to the block. A recipe that
+  does not fit on screen at a readable size opens at its inputs; the minimap and
+  the fit-view button show the whole graph.
+* A dot after the recipe name marks unsaved changes. Opening another recipe or
+  closing the page asks before discarding them, and unsaved work is kept in the
+  browser: after a crash or reload the editor offers to restore it.
+* Totals shown as **≥** in yellow leave out stages that failed to compile.
+* While a wire is drawn, ports that accept it glow and the others fade.
+* An edge relation and its lattice shifts are one variable: a port marked
+  **+ shifts** (`edge_roles`, `periodic_displacement`) reads `edge_index` and
+  the compiler passes `edge_shift` with it.
 
 ### Checks
 

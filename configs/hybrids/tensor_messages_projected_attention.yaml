@@ -30,7 +30,7 @@ pipeline:
       outputs: [message_lengths_live]
     - id: output_geometry
       transform: periodic_displacement
-      inputs: [positions, box, edge_index, edge_shift, node_batch]
+      inputs: [positions, box, edge_index, node_batch]
       outputs: [output_vectors_live]
     - id: output_lengths
       transform: vector_lengths

@@ -109,3 +109,23 @@ def test_described_transforms_reject_unknown_options_even_without_option_schema(
     features = FeatureSpec("node", "irreps", "2x0e")
     with pytest.raises(ValueError, match="Unknown options for add"):
         build_transform("add", {"scale": 2.0}, [features, features])
+
+
+def test_concurrent_first_use_sees_the_whole_library():
+    # A fresh interpreter: the first callers race to register the library.
+    import subprocess
+    import sys
+
+    program = (
+        "import threading\n"
+        "from net import registry\n"
+        "sizes = []\n"
+        "threads = [threading.Thread(target=lambda: sizes.append(len(registry.transform_catalog()))) for _ in range(6)]\n"
+        "[t.start() for t in threads]\n"
+        "[t.join() for t in threads]\n"
+        "print(sorted(set(sizes)))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, text=True, check=True
+    )
+    assert len(eval(result.stdout.strip())) == 1

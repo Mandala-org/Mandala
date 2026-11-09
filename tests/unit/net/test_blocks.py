@@ -243,6 +243,52 @@ def test_disabled_stages_and_instances_pass_their_bypass_input_through():
         FeaturePipeline(_pipeline([{**stages[0], "enabled": "no"}], {}), num_species=1)
 
 
+def test_bypass_names_the_input_a_disabled_stage_or_instance_passes():
+    two = {
+        "inputs": ["first", "second"],
+        "outputs": ["y"],
+        "stages": [
+            {
+                "id": "s",
+                "transform": "add",
+                "inputs": ["first", "second"],
+                "outputs": ["y"],
+            }
+        ],
+    }
+    stages = [
+        _linear("a", "h", "a", irreps_out="3x0e+1x1o"),
+        _linear("b", "h", "b", irreps_out="3x0e+1x1o"),
+        {
+            "id": "sum",
+            "transform": "add",
+            "inputs": ["a", "b"],
+            "outputs": ["s"],
+            "enabled": False,
+            "bypass": 1,
+        },
+        {
+            "id": "pair",
+            "transform": "two",
+            "inputs": ["a", "b"],
+            "outputs": ["p"],
+            "enabled": False,
+            "bypass": "second",
+        },
+    ]
+    model = FeaturePipeline(_pipeline(stages, {"two": two}), num_species=1)
+    _, slots = model({"h": torch.randn(4, 6)}, return_trace=True)
+    torch.testing.assert_close(slots["s"], slots["b"])
+    torch.testing.assert_close(slots["p"], slots["b"])
+    stages[3]["bypass"] = "third"
+    with pytest.raises(ValueError, match="bypass 'third' is not an input of two"):
+        FeaturePipeline(_pipeline(stages, {"two": two}), num_species=1)
+    stages[3]["bypass"] = "second"
+    stages[2]["bypass"] = "nope"
+    with pytest.raises(ValueError, match="bypass 'nope' is not an input of add"):
+        FeaturePipeline(_pipeline(stages, {"two": two}), num_species=1)
+
+
 def _ordered_block(order):
     return {
         "inputs": ["x"],
@@ -375,3 +421,32 @@ def test_static_only_compilation_leaves_the_random_state_untouched():
     before = torch.random.get_rng_state()
     FeaturePipeline(spec, num_species=2, static_only=True)
     assert torch.equal(torch.random.get_rng_state(), before)
+
+
+def test_a_relation_port_receives_its_lattice_shifts():
+    # edge_roles reads edge_index; the compiler passes edge_shift with it.
+    stage = {
+        "id": "roles",
+        "transform": "edge_roles",
+        "inputs": ["edge_index"],
+        "outputs": ["roles"],
+    }
+    model = FeaturePipeline(_pipeline([stage], {}), num_species=1)
+    record = model.records[0]
+    assert record.inputs == ("edge_index", "edge_shift")
+    edge_index = torch.tensor([[0, 0, 1], [0, 0, 0]])
+    edge_shift = torch.tensor([[0, 1, 0], [0, 0, 0], [0, 0, 0]])
+    _, slots = model(
+        {"edge_index": edge_index, "edge_shift": edge_shift}, return_trace=True
+    )
+    assert slots["roles"].tolist() == [0, 1, 2]
+    # A recipe that lists the shift explicitly is taken as written.
+    explicit = FeaturePipeline(
+        _pipeline([{**stage, "inputs": ["edge_index", "edge_shift"]}], {}),
+        num_species=1,
+    )
+    assert explicit.records[0].inputs == ("edge_index", "edge_shift")
+    with pytest.raises(ValueError, match="has no lattice shifts"):
+        FeaturePipeline(
+            _pipeline([{**stage, "inputs": ["edge_batch"]}], {}), num_species=1
+        )

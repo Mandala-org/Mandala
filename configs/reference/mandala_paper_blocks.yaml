@@ -385,7 +385,6 @@ pipeline:
     transform: edge_roles
     inputs:
     - edge_index
-    - edge_shift
     outputs:
     - roles
     role: geometry

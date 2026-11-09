@@ -110,6 +110,8 @@ pipeline:
       inputs: [node_3, edge_one_hot, angular, edge_2, radial, edge_index, edge_batch]
       outputs: [edge_3]
       options: {irreps_out: '${layout.post_irreps}', self_product: '${parameters.terminal_self_product}'}
+    # The reference model has a node readout whose output is unused; it is
+    # kept so the parameters match the reference implementation one to one.
     - id: node_readout
       role: readout
       transform: irrep_linear

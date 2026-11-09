@@ -28,7 +28,8 @@ option (a ``null`` value removes the inner option so it is inferred), and
 the order their parameters are drawn from the random generator, when that
 differs from the order of computation (as in some reference implementations).
 A repeated id draws that stage again; the last draw is kept. An instance with
-``enabled: false`` is bypassed as a whole: its single output is its first input.
+``enabled: false`` is bypassed as a whole: its single output is its first input,
+or the block input named by its ``bypass`` key.
 """
 
 from __future__ import annotations
@@ -144,11 +145,21 @@ def expand_blocks(stages, blocks, *, prefix="", groups=None, depth=0):
             "options",
             "role",
             "enabled",
+            "bypass",
         }
         if extra:
             raise ValueError(f"Block instance {path}: unsupported keys {sorted(extra)}")
         if stage.get("enabled", True) is False:
-            flat.append(dict(stage))
+            disabled = dict(stage)
+            chosen = disabled.get("bypass")
+            if isinstance(chosen, str):
+                if chosen not in block["inputs"]:
+                    raise ValueError(
+                        f"Block instance {path}: bypass {chosen!r} is not an input "
+                        f"of {name} ({', '.join(block['inputs'])})"
+                    )
+                disabled["bypass"] = block["inputs"].index(chosen)
+            flat.append(disabled)
             continue
         defaults = dict(block.get("options") or {})
         given = dict(stage.get("options") or {})
@@ -196,13 +207,42 @@ def expand_blocks(stages, blocks, *, prefix="", groups=None, depth=0):
     return flat, groups
 
 
+def _combined_port(name, readers):
+    """One input port accepted by every inner reader ``[(stage id, port)]``."""
+    domains = None
+    for _, port in readers:
+        accepted = port.get("domain")
+        if accepted is None:
+            continue
+        accepted = {accepted} if isinstance(accepted, str) else set(accepted)
+        domains = accepted if domains is None else domains & accepted
+    if domains is not None and not domains:
+        # Readers disagree: the block cannot be wired correctly; keep the
+        # first constraint so the conflict is reported at the first reader.
+        first = next(p["domain"] for _, p in readers if p.get("domain") is not None)
+        domains = {first} if isinstance(first, str) else set(first)
+    kinds = [p.get("kind") for _, p in readers if p.get("kind") not in (None, "any")]
+    first = readers[0][1]
+    return {
+        **first,
+        "domain": (
+            None
+            if domains is None
+            else (next(iter(domains)) if len(domains) == 1 else sorted(domains))
+        ),
+        "kind": kinds[0] if kinds else first.get("kind", "any"),
+        "doc": "read by " + ", ".join(dict.fromkeys(stage for stage, _ in readers)),
+    }
+
+
 def block_ports(blocks):
     """Port contracts of block definitions, as the compiler sees them.
 
-    A block input takes the port of the first inner stage that reads it
-    (recursively through nested blocks); an output takes the output port of
-    the inner stage producing it. Returns ``{block: {"inputs", "outputs"}}``
-    with ports in the catalog's JSON form.
+    A block input combines the ports of every inner stage that reads it
+    (recursively through nested blocks): the entity sets they accept are
+    intersected and the most specific kind is kept. An output takes the output
+    port of the inner stage producing it. Returns ``{block: {"inputs",
+    "outputs"}}`` with ports in the catalog's JSON form.
     """
     from net.registry import Port, get_transform
 
@@ -228,14 +268,13 @@ def block_ports(blocks):
 
         inputs, outputs = [], []
         for name_in in block["inputs"]:
-            port = unknown(name_in)
+            readers = []
             for stage in block["stages"]:
-                if name_in in stage["inputs"]:
-                    ports = stage_ports(stage)[0]
-                    if ports:
-                        index = min(stage["inputs"].index(name_in), len(ports) - 1)
-                        port = ports[index]
-                    break
+                ports = stage_ports(stage)[0]
+                for index, slot in enumerate(stage["inputs"]):
+                    if slot == name_in and ports:
+                        readers.append((stage["id"], ports[min(index, len(ports) - 1)]))
+            port = _combined_port(name_in, readers) if readers else unknown(name_in)
             inputs.append(
                 {**port, "name": name_in, "optional": False, "variadic": False}
             )

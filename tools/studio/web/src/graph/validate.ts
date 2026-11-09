@@ -3,7 +3,7 @@
 // one at a time.
 
 import type { Analysis, Catalog, FeatureSpecJson, Pipeline, PortInfo, RecipeDocument } from "../types";
-import { displayedInputs, portsOf, slotSpec, type VisibleGraph } from "./model";
+import { displayedInputs, isShift, portsOf, shiftProblem, slotMemory, slotSpec, type VisibleGraph, type VisibleStage } from "./model";
 import { parseExpression, labelsOf } from "../loss/expression";
 
 const KIND_LABEL: Record<string, string> = {
@@ -142,11 +142,7 @@ export function lint(document: RecipeDocument, pipeline: Pipeline | null | undef
         }
       }
     }
-    stage.outputs.forEach((slot) => {
-      if (!consumers.has(slot) && !targets.has(slot)) {
-        problems.push({ level: "warning", key: stage.key, message: `Output ${slot} is never used` });
-      }
-    });
+    // Unread outputs are reported once, with the stages that reach no target.
   }
 
   // Stages that do not reach any target.
@@ -163,7 +159,11 @@ export function lint(document: RecipeDocument, pipeline: Pipeline | null | undef
     }
   }
   for (const stage of graph.stages) {
-    if (!live.has(stage.key)) problems.push({ level: "warning", key: stage.key, message: "Does not contribute to any target" });
+    if (!live.has(stage.key)) {
+      const unread = stage.outputs.filter((slot) => !consumers.has(slot) && !targets.has(slot));
+      const detail = unread.length === stage.outputs.length ? `${unread.join(", ")} ${unread.length > 1 ? "are" : "is"} never read` : "its outputs feed only stages that reach no target";
+      problems.push({ level: "warning", key: stage.key, message: `Does not contribute to any target (${detail}); its weights still count. Delete or bypass it unless it is kept on purpose.` });
+    }
   }
   for (const [operator, slot] of Object.entries(pipeline.outputs ?? {})) {
     if (!slot) problems.push({ level: "error", key: `target:${operator}`, message: `Target ${operator} is not connected` });
@@ -172,7 +172,7 @@ export function lint(document: RecipeDocument, pipeline: Pipeline | null | undef
       const spec = slotSpec(analysis, catalog, slot);
       // Other outputs are auxiliary (e.g. edge_envelope); only operators read
       // by objective terms must be decoded blocks.
-      const terms = Object.values((document.objective ?? analysis?.objective.objective ?? null)?.terms ?? {});
+      const terms = Object.values((document.objective ?? analysis?.objective?.objective ?? null)?.terms ?? {});
       const readByTerm = terms.some((term) =>
         (catalog?.objective_terms.find((t) => t.name === term.term)?.operators ?? []).some((port) => term[port] === operator),
       );
@@ -183,7 +183,7 @@ export function lint(document: RecipeDocument, pipeline: Pipeline | null | undef
   }
 
   // Objective.
-  const objective = document.objective ?? analysis?.objective.objective ?? null;
+  const objective = document.objective ?? analysis?.objective?.objective ?? null;
   if (objective?.terms) {
     for (const [label, term] of Object.entries(objective.terms)) {
       const info = catalog?.objective_terms.find((t) => t.name === term.term);
@@ -193,6 +193,12 @@ export function lint(document: RecipeDocument, pipeline: Pipeline | null | undef
         if (!operator) problems.push({ level: "warning", key: `term:${label}`, message: `Term ${label}: operator port ${port} is not connected` });
         if (operator && !(operator in (pipeline.outputs ?? {}))) {
           problems.push({ level: "error", key: `term:${label}`, message: `Term ${label} reads operator ${operator} (${port}), which the model does not predict` });
+        }
+      }
+      // Training rejects a term whose quantity the run is set not to compute.
+      for (const setting of info?.settings ?? []) {
+        if ((document as Record<string, unknown>)[setting] === false) {
+          problems.push({ level: "error", key: `term:${label}`, message: `Term ${label} (${String(term.term)}) needs ${setting}: true; the recipe sets it to false` });
         }
       }
     }
@@ -231,4 +237,60 @@ export function createsCycle(graph: VisibleGraph, source: string, target: string
     stack.push(...(consumers.get(key) ?? []));
   }
   return false;
+}
+
+/**
+ * Slots that may feed input ``index`` of ``target``: the port accepts them, no
+ * cycle results, and a port open to any entity keeps the entity it reads now.
+ * Structure inputs come first, then stage outputs in pipeline order.
+ */
+export function compatibleSlots(
+  graph: VisibleGraph,
+  analysis: Analysis | null,
+  catalog: Catalog | null,
+  target: VisibleStage,
+  port: PortInfo,
+  index: number,
+): { slot: string; spec?: FeatureSpecJson; producer: string | null }[] {
+  const spec = (slot: string) => analysis?.slots[slot] ?? analysis?.inputs[slot] ?? catalog?.inputs[slot] ?? slotMemory.specs[slot];
+  const currentDomain = expectedDomain(graph, analysis, catalog, target, index, port);
+  const result: { slot: string; spec?: FeatureSpecJson; producer: string | null }[] = [];
+  const inputs = new Set([...Object.keys(analysis?.inputs ?? {}), ...Object.keys(catalog?.inputs ?? {})]);
+  for (const slot of inputs) {
+    if (graph.producers.has(slot) || isShift(slot) || shiftProblem(slot, port)) continue;
+    const s = spec(slot);
+    if (connectionProblem(s, port) || (!port.domain && currentDomain && s && s.domain !== currentDomain)) continue;
+    result.push({ slot, spec: s, producer: null });
+  }
+  for (const stage of graph.stages) {
+    if (stage.key === target.key || createsCycle(graph, stage.key, target.key)) continue;
+    for (const slot of stage.outputs) {
+      const s = spec(slot);
+      // A value of unknown type (its stage fails) cannot be checked: not offered.
+      if (!s || shiftProblem(slot, port) || connectionProblem(s, port) || (!port.domain && currentDomain && s.domain !== currentDomain)) continue;
+      result.push({ slot, spec: s, producer: stage.key });
+    }
+  }
+  // A value named like the port (node_batch for node_batch, edge_lengths for
+  // lengths) is the likely one.
+  const rank = (slot: string) => (slot === port.name ? 0 : slot.endsWith(`_${port.name}`) ? 1 : 2);
+  return result.sort((a, b) => rank(a.slot) - rank(b.slot));
+}
+
+/**
+ * The entity an input expects: the port's own, else what it reads now, else
+ * what the same input reads on another stage of the same transformation or
+ * block (a block's node input read only by an any-entity stage inside).
+ */
+export function expectedDomain(graph: VisibleGraph, analysis: Analysis | null, catalog: Catalog | null, target: VisibleStage, index: number, port: PortInfo): string | null {
+  if (port.domain) return null;
+  const spec = (slot: string) => analysis?.slots[slot] ?? analysis?.inputs[slot] ?? catalog?.inputs[slot] ?? slotMemory.specs[slot];
+  const current = target.inputs[index];
+  if (current && spec(current)) return spec(current)!.domain;
+  for (const other of graph.stages) {
+    if (other.key === target.key || other.stage.transform !== target.stage.transform) continue;
+    const slot = other.inputs[index];
+    if (slot && spec(slot)) return spec(slot)!.domain;
+  }
+  return null;
 }

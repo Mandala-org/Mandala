@@ -331,8 +331,13 @@ def _symmetric_contraction(p, inputs, mapper):
     summary="Sine (Bessel) radial basis times a polynomial cutoff envelope",
     inputs=[Port("lengths", "edge")],
     options=[
-        Option("r_max", "float", key=True),
-        Option("num_basis", "int", 8, key=True),
+        Option(
+            "r_max",
+            "float",
+            key=True,
+            doc="Cutoff radius (Angstrom); the basis is zero beyond it",
+        ),
+        Option("num_basis", "int", 8, key=True, doc="Number of sine basis functions"),
         Option("cutoff_order", "int", 5),
     ],
 )

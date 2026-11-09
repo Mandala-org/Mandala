@@ -16,8 +16,8 @@ registered transformation (``net.registry``); composite blocks expand into
 stages before compilation. Architecture names never enter dispatch.
 
 A stage with ``enabled: false`` is bypassed: its single output is one of its
-inputs (the first, or the update of a residual), which makes ablations a
-one-line recipe change. A block may declare an
+inputs (the first, the update of a residual, or the input named by the stage's
+``bypass`` key), which makes ablations a one-line recipe change. A block may declare an
 ``initialization_order`` (see ``net.blocks``) so that seeded parameters are
 drawn in the order of a reference implementation.
 """
@@ -70,6 +70,7 @@ STAGE_KEYS = {
     "role",
     "initialization",
     "enabled",
+    "bypass",
 }
 INITIALIZATION_KEYS = {"seed", "kind", "gain", "std", "bound"}
 
@@ -91,6 +92,37 @@ class StageRecord:
     initialization: dict = field(default_factory=dict)
     error: str | None = None
     enabled: bool = True
+
+
+def _with_shifts(stage, reads):
+    """The stage's inputs with the shifts of every relation a port reads with
+    them (``Port.with_shift``) inserted after it. A recipe that already lists
+    the shift there is taken as written."""
+    from net.features import RELATION_SHIFTS
+
+    try:
+        ports = get_transform(stage["transform"]).inputs
+    except ValueError:
+        return reads  # a block instance or an unknown transformation
+    result, position = [], 0
+    for port in ports:
+        if position >= len(reads):
+            break
+        slot = reads[position]
+        result.append(slot)
+        position += 1
+        if not port.with_shift:
+            continue
+        shift = RELATION_SHIFTS.get(slot)
+        if shift is None:
+            raise ValueError(
+                f"Stage {stage['id']}: {port.name} reads {slot}, which has no "
+                f"lattice shifts; use {' or '.join(RELATION_SHIFTS)}"
+            )
+        if position < len(reads) and reads[position] == shift:
+            position += 1
+        result.append(shift)
+    return tuple(result + list(reads[position:]))
 
 
 class Bypass(nn.Module):
@@ -381,6 +413,7 @@ class FeaturePipeline(nn.Module):
                 ports[min(i, len(ports) - 1)] if ports else f"#{i}" for i in unconnected
             ]
             raise ValueError(f"Stage {sid}: input(s) {', '.join(names)} not connected")
+        reads = _with_shifts(stage, reads)
         upstream = set(reads) & failed
         if upstream:
             raise ValueError(
@@ -398,7 +431,7 @@ class FeaturePipeline(nn.Module):
             raise ValueError(f"Stage {sid}: enabled must be true or false")
         input_specs = [specs[s] for s in reads]
         if not enabled:
-            position = self._bypass_position(stage["transform"])
+            position = self._bypass_position(stage)
             if len(writes) != 1 or position >= len(reads):
                 raise ValueError(
                     f"Stage {sid}: a disabled stage needs one output and an input "
@@ -431,11 +464,31 @@ class FeaturePipeline(nn.Module):
         return built, reads, writes, initialization
 
     @staticmethod
-    def _bypass_position(transform):
-        try:
-            return get_transform(transform).bypass
-        except ValueError:
-            return 0  # a disabled block instance passes its first input
+    def _bypass_position(stage):
+        """Input position a disabled stage passes through.
+
+        ``bypass`` names it (an input port of the transformation, or an index;
+        block expansion turns a block input name into its index). Otherwise the
+        transformation's declared bypass port, or the first input.
+        """
+        chosen = stage.get("bypass")
+        sid = stage["id"]
+        if chosen is None:
+            try:
+                return get_transform(stage["transform"]).bypass
+            except ValueError:
+                return 0  # a disabled block instance passes its first input
+        if isinstance(chosen, bool) or not isinstance(chosen, (int, str)):
+            raise ValueError(f"Stage {sid}: bypass names an input (port name or index)")
+        if isinstance(chosen, int):
+            return chosen
+        names = [port.name for port in get_transform(stage["transform"]).inputs]
+        if chosen not in names:
+            raise ValueError(
+                f"Stage {sid}: bypass {chosen!r} is not an input of "
+                f"{stage['transform']} ({', '.join(names)})"
+            )
+        return names.index(chosen)
 
     @staticmethod
     def _build(stage, input_specs, mapper, build):

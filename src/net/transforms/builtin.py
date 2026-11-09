@@ -172,7 +172,7 @@ def _scalar(spec, width):
             infer_doc="categories of the index",
             doc="Number of classes",
         ),
-        Option("width", "int", 32, key=True),
+        Option("width", "int", 32, key=True, doc="Length of each embedding vector"),
         Option("extra_embeddings", "int", 0, doc="Unused extra rows"),
         Option("padding_idx", "int", None),
     ],
@@ -382,8 +382,14 @@ def _scalar_mlp(p, inputs, mapper):
     summary="values * factor / divisor (e.g. divide by the average neighbor count)",
     inputs=[Port("features")],
     options=[
-        Option("factor", "float", 1.0, key=True),
-        Option("divisor", "float", 1.0, key=True),
+        Option("factor", "float", 1.0, key=True, doc="Multiplier"),
+        Option(
+            "divisor",
+            "float",
+            1.0,
+            key=True,
+            doc="Divisor, for example the average neighbor count",
+        ),
     ],
 )
 def _constant_scale(p, inputs, mapper):
@@ -504,9 +510,15 @@ def _distance_input(spec, name):
     summary="Gaussians on a uniform grid with one-spacing width (SchNet form)",
     inputs=[Port("lengths", "edge", doc="Edge lengths (Angstrom)")],
     options=[
-        Option("n_gaussians", "int", 50, key=True),
-        Option("start", "float", 0.0),
-        Option("stop", "float", 5.0, key=True),
+        Option("n_gaussians", "int", 50, key=True, doc="Number of Gaussians"),
+        Option("start", "float", 0.0, doc="Centre of the first Gaussian (Angstrom)"),
+        Option(
+            "stop",
+            "float",
+            5.0,
+            key=True,
+            doc="Centre of the last Gaussian (Angstrom), usually the cutoff",
+        ),
         Option("centered", "bool", False),
         Option("trainable", "bool", False),
     ],

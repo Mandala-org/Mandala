@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStudio } from "../store";
 
 const SEEN = "studio.guideSeen";
@@ -36,6 +36,12 @@ function usePreset() {
   };
 }
 
+/** Opens another dialog; closing it brings the guide back at the same step. */
+function openFromGuide(modal: "system" | "expression") {
+  useStudio.setState({ returnToGuide: true });
+  useStudio.getState().setModal(modal);
+}
+
 export function GuideModal() {
   const s = useStudio();
   const preset = usePreset();
@@ -44,14 +50,21 @@ export function GuideModal() {
     lastStep = value;
     setStep(value);
   };
-  useEffect(markSeen, []);
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => e.key === "Escape" && close();
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+      else if (e.key === "ArrowRight" && index < steps.length - 1) setIndex(index + 1);
+      else if (e.key === "ArrowLeft" && index > 0) setIndex(index - 1);
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   });
+  const primary = useRef<HTMLButtonElement>(null);
+  useEffect(() => primary.current?.focus(), [index]);
+  // The guide counts as seen once it is closed, not when it first shows.
   const close = () => {
     lastStep = 0;
+    markSeen();
     s.setModal(null);
   };
   const steps: Step[] = [
@@ -61,9 +74,12 @@ export function GuideModal() {
         <>
           <p>
             Every box is one registered transformation (a tensor product, an MLP, an aggregation…) or a <b>block</b> of them. Structure inputs sit at the top, the predicted
-            operators and the loss at the bottom. The graph is compiled by the same code the trainer uses, so what you see is what trains.
+            operators and the loss at the bottom. The graph is compiled by the same code the trainer uses, so the stages, irreps and weights shown are the ones training builds.
           </p>
-          <p className="muted">Wires are coloured by entity (nodes, edges, bond neighbourhoods) and labelled with their irreps.</p>
+          <p className="muted">
+            Wires are coloured by entity (nodes, edges, bond neighbourhoods) and labelled with their irreps. Structure inputs and structure-only features that many stages read
+            appear as small <b>↪ pins</b> beside each use instead of long wires; double-click a pin to go to the stage that computes it. Zoomed out, boxes show only their names.
+          </p>
         </>
       ),
     },
@@ -82,8 +98,8 @@ export function GuideModal() {
       title: "Look inside blocks",
       body: (
         <p>
-          Click <b>⊕ expand</b> on a block to see its stages; editing a stage inside a block changes every instance. Select a few stages and press <b>Ctrl+G</b> to turn them into
-          a new named block. The inventory's <b>Block library</b> holds the DeepH, DeepH-E3 and MACE layers not yet in the recipe, ready to drop into any model.
+          Click <b>⊕ expand</b> on a block to see its stages; editing a stage inside a block changes every instance. <b>⌕ Find stage</b> (Ctrl+F or /) jumps to any stage, opening the
+          blocks around it. Select a few stages and press <b>Ctrl+G</b> to turn them into a new named block. The inventory's <b>Block library</b> holds the DeepH, DeepH-E3 and MACE layers not yet in the recipe, ready to drop into any model.
         </p>
       ),
     },
@@ -91,8 +107,10 @@ export function GuideModal() {
       title: "Wire it: types are checked as you drag",
       body: (
         <p>
-          Drag from an output port to an input port. A connection between incompatible entities, frames or representations is refused with the reason. Output irreps are
-          inferred from the wiring: in the inspector, <i>inferred</i> values are dimmed, values set in the recipe are solid, and <b>reset</b> returns a value to inference.
+          Drag from an output port to an input port: ports that accept the value light up, and an incompatible connection is refused with the reason. Or choose what each
+          input reads from the lists in the inspector, and use <b>replace with</b> to swap a stage while keeping its wiring. Output irreps are inferred from the wiring:{" "}
+          <i>inferred</i> values are cyan italic, values set in the recipe are white, defaults are grey, and <b>reset</b> returns a value to inference. The <b>Problems</b> tab lists everything the
+          compiler rejects; click an entry to go to it.
         </p>
       ),
     },
@@ -100,8 +118,8 @@ export function GuideModal() {
       title: "Ablate without rewiring",
       body: (
         <p>
-          Untick <b>enabled</b> in the inspector to bypass a stage or a whole block: its output becomes one of its inputs: the update for a residual or self-connection, otherwise the first input (for a block, its first
-          input). Only stages with a single output can be bypassed. Use{" "}
+          Untick <b>enabled</b> in the inspector to bypass a stage or a whole block: it passes one input through unchanged, the one with the type of its output (the
+          inspector shows which, and refuses when no input fits). Only stages with a single output can be bypassed. Use{" "}
           the <b>Compare</b> tab to set a baseline and see what changed in weights and estimated time.
         </p>
       ),
@@ -122,7 +140,7 @@ export function GuideModal() {
           and without constants they are relative.
         </p>
       ),
-      action: { label: "Set the system", run: () => s.setModal("system") },
+      action: { label: "Set the system", run: () => openFromGuide("system") },
     },
     {
       title: "The loss is a graph too",
@@ -142,14 +160,14 @@ export function GuideModal() {
           <span className="mono">plugins/</span>, which appears in the inventory at once.
         </p>
       ),
-      action: { label: "Open the expression editor", run: () => s.setModal("expression") },
+      action: { label: "Open the expression editor", run: () => openFromGuide("expression") },
     },
     {
       title: "Save the recipe",
       body: (
         <p>
-          <b>Export YAML</b> writes a self-contained recipe (library blocks included) that <span className="mono">scripts/train.py</span> trains as is; the layout and
-          expanded blocks are kept under <span className="mono">studio:</span>. Undo/redo with Ctrl+Z / Ctrl+Shift+Z, auto-layout with L, and flip the flow direction with ↓/→.
+          <b>Export</b> writes a self-contained recipe (library blocks included) that <span className="mono">scripts/train.py</span> trains as is; the layout and
+          expanded blocks are kept under <span className="mono">studio:</span>. Undo/redo with Ctrl+Z / Ctrl+Shift+Z, add a layer by selecting one and pressing Ctrl+Shift+D (insert a copy after it), auto-layout with L, and flip the flow direction with ↓/→.
         </p>
       ),
     },
@@ -160,7 +178,7 @@ export function GuideModal() {
       <div className="modal guide" role="dialog" aria-modal="true" aria-labelledby="guide-title">
         <div className="modal-head">
           <span>
-            Getting started · {index + 1}/{steps.length}
+            Getting started · {index + 1}/{steps.length} <span className="muted small">(← → to move)</span>
           </span>
           <button className="link" onClick={close} aria-label="Close the guide">
             ✕
@@ -189,11 +207,11 @@ export function GuideModal() {
             Back
           </button>
           {index < steps.length - 1 ? (
-            <button className="button primary" onClick={() => setIndex(index + 1)}>
+            <button ref={primary} className="button primary" onClick={() => setIndex(index + 1)} title="Next (→)">
               Next
             </button>
           ) : (
-            <button className="button primary" onClick={close}>
+            <button ref={primary} className="button primary" onClick={close}>
               Start building
             </button>
           )}

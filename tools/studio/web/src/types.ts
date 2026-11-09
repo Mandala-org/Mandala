@@ -9,6 +9,8 @@ export interface PortInfo {
   optional: boolean;
   variadic: boolean;
   doc: string;
+  /** Reads an edge relation together with its lattice shifts (passed by the compiler). */
+  with_shift?: boolean;
 }
 
 export interface OptionInfo {
@@ -32,6 +34,8 @@ export interface TransformInfo {
   options: OptionInfo[];
   pure: boolean;
   described: boolean;
+  /** Input a disabled stage passes through by default. */
+  bypass?: number;
 }
 
 export interface ObjectiveTermInfo {
@@ -41,6 +45,9 @@ export interface ObjectiveTermInfo {
   options: OptionInfo[];
   /** Options that select a predicted operator: the term's input ports. */
   operators: string[];
+  /** Quantities the term reads besides operators, and the settings that compute them. */
+  requires?: string[];
+  settings?: string[];
 }
 
 export interface FeatureSpecJson {
@@ -77,6 +84,7 @@ export interface StageAnalysis {
   explicit: string[];
   inferred: string[];
   static: boolean;
+  enabled?: boolean;
   error: string | null;
   parameters?: number;
   operations?: number;
@@ -116,6 +124,8 @@ export interface Stage {
   initialization?: Record<string, unknown>;
   /** false bypasses the stage: its output is one of its inputs (ablation). */
   enabled?: boolean;
+  /** The input a disabled stage passes through (input name or position). */
+  bypass?: string | number;
 }
 
 export interface BlockDef {

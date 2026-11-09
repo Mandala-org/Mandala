@@ -48,7 +48,8 @@ class ObjectiveTerm:
         unknown = set(given) - known
         if unknown:
             raise ValueError(
-                f"Unknown options for objective term {self.name}: {sorted(unknown)}"
+                f"Unknown options for objective term {self.name}: "
+                + ", ".join(sorted(unknown))
             )
         resolved = {}
         for option in self.options:
@@ -74,6 +75,14 @@ class ObjectiveTerm:
             "options": [option.to_json() for option in self.options],
             "operators": list(self.operators),
             "requires": list(self.requires),
+            # Settings that make the run compute what the term reads.
+            "settings": sorted(
+                {
+                    switch
+                    for quantity in self.requires
+                    for switch in REQUIREMENTS.get(quantity, ())
+                }
+            ),
         }
 
 
@@ -272,7 +281,11 @@ class Objective:
         undefined = labels - self.terms.keys()
         if undefined:
             raise ValueError(
-                f"Objective expression uses undefined terms {sorted(undefined)}"
+                "Objective expression uses "
+                + ", ".join(sorted(undefined))
+                + ", not a term of the objective (terms: "
+                + (", ".join(self.terms) or "none")
+                + ")"
             )
 
     def requirements(self):

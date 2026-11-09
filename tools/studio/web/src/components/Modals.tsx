@@ -5,17 +5,23 @@ import { groupStages } from "../graph/edit";
 import { GuideModal } from "./Guide";
 
 function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+  // The dialog takes focus: its first field, or the dialog itself.
+  useEffect(() => {
+    const first = box.current?.querySelector<HTMLElement>("input, textarea, select, .button.primary");
+    (first ?? box.current)?.focus();
+  }, []);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? "wide" : ""}`}>
+      <div ref={box} tabIndex={-1} className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <span>{title}</span>
-          <button className="link" onClick={onClose}>
+          <button className="link" onClick={onClose} aria-label="Close" title="Close (Escape)">
             ✕
           </button>
         </div>
@@ -24,6 +30,16 @@ function Modal({ title, children, onClose, wide }: { title: string; children: Re
     </div>
   );
 }
+
+/** An empty model with a Hamiltonian target and its matrix loss, to build from scratch. */
+const BLANK = `pipeline:
+  stages: []
+  outputs: {hamiltonian: ""}
+objective:
+  terms:
+    H: {term: matrix_error, operator: hamiltonian}
+  expression: H
+`;
 
 function OpenModal() {
   const { presets, loadPreset, loadYaml, setModal } = useStudio();
@@ -34,6 +50,14 @@ function OpenModal() {
     <Modal title="Open a recipe" onClose={() => setModal(null)} wide>
       <div className="open-grid">
         <div>
+          <div className="preset-group">
+            <div className="preset-group-title">Start</div>
+            <button className="preset" onClick={() => loadYaml(BLANK, "untitled")}>
+              <span className="preset-name">blank recipe</span>
+              <span className="chip chip-blue">stages</span>
+              <span className="preset-summary">An empty model with a Hamiltonian target and its loss: add stages from the inventory</span>
+            </button>
+          </div>
           {groups.map((group) => (
             <div key={group} className="preset-group">
               <div className="preset-group-title">{group}</div>
@@ -42,7 +66,12 @@ function OpenModal() {
                 .map((p) => (
                   <button key={p.path} className="preset" onClick={() => loadPreset(p)}>
                     <span className="preset-name">{p.name}</span>
-                    <span className={`chip ${p.kind === "flat" ? "" : "chip-blue"}`}>{p.kind}</span>
+                    <span
+                      className={`chip ${p.kind === "flat" ? "" : "chip-blue"}`}
+                      title={p.kind === "flat" ? "Written as training settings: the framework builds the stages; the first edit turns it into a stage recipe" : "Written as stages: the recipe is what you see"}
+                    >
+                      {p.kind === "flat" ? "settings" : "stages"}
+                    </span>
                     {p.summary && <span className="preset-summary">{p.summary}</span>}
                   </button>
                 ))}
@@ -71,20 +100,33 @@ function OpenModal() {
 }
 
 function YamlModal() {
-  const { yamlText, setModal, name, notify } = useStudio();
+  const { yamlText, setModal, name, notify, markSaved } = useStudio();
+  // The recipe counts as saved once it leaves the editor (copied or downloaded).
   const download = () => {
     const blob = new Blob([yamlText], { type: "text/yaml" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${name}.yaml`;
     a.click();
+    markSaved();
   };
   return (
     <Modal title="Recipe YAML" onClose={() => setModal(null)} wide>
       <p className="muted small">Only values set in the recipe are written; inferred and default values stay implicit.</p>
       <textarea className="mono yaml-view" readOnly value={yamlText} rows={26} />
       <div className="button-row">
-        <button className="button" onClick={() => navigator.clipboard.writeText(yamlText).then(() => notify("Copied"))}>
+        <button
+          className="button"
+          onClick={() =>
+            navigator.clipboard.writeText(yamlText).then(
+              () => {
+                markSaved();
+                notify("Copied");
+              },
+              () => notify("Copying was not allowed; select the text and copy it", "error"),
+            )
+          }
+        >
           Copy
         </button>
         <button className="button primary" onClick={download}>
@@ -108,6 +150,7 @@ function SystemModal() {
   const [name, setName] = useState(system.name);
   const apply = () => {
     try {
+      if (!(Number.isInteger(atoms) && atoms >= 1 && Number.isFinite(neighbors) && neighbors >= 1)) throw new Error("Atoms and neighbours per atom must be at least 1");
       const shells: Record<string, number[]> = {};
       for (const line of text.split("\n").filter((l) => l.trim())) {
         const [species, rest] = line.split(":");
@@ -201,7 +244,14 @@ function ExpressionModal() {
   }, [request]);
   const create = async () => {
     try {
-      const result = await api.createPlugin(request);
+      let result;
+      try {
+        result = await api.createPlugin(request);
+      } catch (e) {
+        const exists = (e as { detail?: { exists?: boolean } }).detail?.exists;
+        if (!exists || !window.confirm(`plugins/${name}.py already exists. Replace it with this definition?`)) throw e;
+        result = await api.createPlugin({ ...request, overwrite: true });
+      }
       await refreshCatalog(result.transforms);
       if (document && !(document.plugins ?? []).includes(result.path)) edit((doc) => ({ ...doc, plugins: [...(doc.plugins ?? []), result.path] }));
       notify(`Registered ${name} from ${result.path}; drag it from the inventory`);
@@ -244,7 +294,7 @@ function ExpressionModal() {
                   <option>graph</option>
                 </select>
                 <input className="mono grow" value={input.irreps} onChange={(e) => setInputs(inputs.map((x, j) => (j === i ? { ...x, irreps: e.target.value } : x)))} />
-                <button className="link" onClick={() => setInputs(inputs.filter((_, j) => j !== i))}>
+                <button className="link" onClick={() => setInputs(inputs.filter((_, j) => j !== i))} aria-label={`Remove input ${input.name}`} title={`Remove input ${input.name}`}>
                   ✕
                 </button>
               </div>

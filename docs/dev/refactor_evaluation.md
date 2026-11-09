@@ -128,7 +128,7 @@ None of these blocks use. Several should be addressed before the API is called s
     - There are two activation stages with different activation sets.
     - Port kinds do not match the representation names.
 11. **Hidden coupling in `irrep_linear.degrees_of`** (a MACE-H projection rule living in a generic stage). It is now checked, but it is still a special case.
-12. **Bypass semantics depend on input order.** The passed input is the first one, or the transform's declared `bypass` port. Blocks and multi-output stages cannot be bypassed. A named "update" port would be clearer.
+12. **Bypass semantics depend on input order** unless named. The passed input is the first one, the transform's declared `bypass` port, or (since the Studio usability pass) the input the stage names with its `bypass` key; the Studio chooses an input of the output's type. Multi-output stages cannot be bypassed.
 13. **Still outside the pipeline**, in `E3GNN`:
     - target normalization and loss weighting;
     - Hermitian projection;
@@ -137,7 +137,7 @@ None of these blocks use. Several should be addressed before the API is called s
     - edge-role metadata from `separate_shifted_self`;
     - about 15 cross-setting validity checks;
     - selection of readouts in the `heads` view by name suffix.
-14. **Block port contracts are heuristic.** `block_ports` takes the port of the first inner consumer of each input.
+14. **Block port contracts are heuristic.** `block_ports` intersects the entity sets of all inner readers of each input, but cannot see through stages that accept any entity (an `e3mlp` reading a block's `node` input). The Studio additionally keeps a connected port on the entity it reads.
 
 ### Lost capabilities
 
@@ -172,10 +172,8 @@ None of these blocks use. Several should be addressed before the API is called s
 
 ### Studio
 
-19. **Accessibility and missing affordances.**
-    - Term operator ports are labelled only in tooltips.
-    - Inventory items are not keyboard-operable.
-    - There is no per-input disconnect button.
+19. **Accessibility and missing affordances.** A usability pass with two critic rounds addressed term port labels, keyboard use of the inventory, wiring and disconnecting from the inspector, stage replacement, duplication, a stage finder, autosave and many smaller issues (see `tools/studio/README.md`). Still open:
+    - Ports and canvas nodes are not keyboard-focusable; wiring without a mouse goes through the inspector.
     - A library block cannot be re-added pristine once a same-named block is in the recipe.
     - Recipes that import a library are inlined on import, so an exported recipe no longer follows library updates.
 

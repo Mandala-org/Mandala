@@ -114,7 +114,11 @@ def create_app(*, web=WEB, plugins=PLUGINS):
         except ValueError as error:
             return fail(str(error))
         result = service.analyze(
-            document, system=data.get("system"), size=data.get("size")
+            document,
+            system=data.get("system"),
+            size=data.get("size"),
+            client=data.get("client"),
+            may_skip=False,
         )
         return jsonify({"document": document, "analysis": result})
 
@@ -125,7 +129,12 @@ def create_app(*, web=WEB, plugins=PLUGINS):
         if not isinstance(document, dict):
             return fail("document must be a mapping")
         return jsonify(
-            service.analyze(document, system=data.get("system"), size=data.get("size"))
+            service.analyze(
+                document,
+                system=data.get("system"),
+                size=data.get("size"),
+                client=data.get("client"),
+            )
         )
 
     @app.post("/api/export")
@@ -171,6 +180,15 @@ def create_app(*, web=WEB, plugins=PLUGINS):
         if data["name"] in registered_transforms() and not path.exists():
             return fail(
                 f"{data['name']!r} is a framework transformation; choose another name"
+            )
+        if (
+            path.exists()
+            and not data.get("overwrite")
+            and path.read_text() != result["code"]
+        ):
+            return fail(
+                f"plugins/{data['name']}.py exists; overwrite it or choose another name",
+                exists=True,
             )
         handle, temporary = tempfile.mkstemp(dir=plugins, suffix=".tmp")
         with os.fdopen(handle, "w") as stream:

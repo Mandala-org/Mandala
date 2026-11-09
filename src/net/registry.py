@@ -9,6 +9,8 @@ compiler uses to complete options and which tools use to present it. A bare
 
 from __future__ import annotations
 
+import threading
+
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -68,7 +70,10 @@ class Port:
 
     ``domain`` names the entity set (``None`` accepts any); ``kind`` the
     representation family used for early connection checks. ``variadic``
-    marks the last input as repeatable.
+    marks the last input as repeatable. A ``with_shift`` port reads an edge
+    relation together with its periodic lattice shifts: the recipe wires only
+    the relation (``edge_index``) and the compiler passes the shifts
+    (``edge_shift``) as the next argument.
     """
 
     name: str
@@ -77,6 +82,7 @@ class Port:
     optional: bool = False
     variadic: bool = False
     doc: str = ""
+    with_shift: bool = False
 
     def __post_init__(self):
         if self.kind not in PORT_KINDS:
@@ -91,7 +97,19 @@ class Port:
             "optional": self.optional,
             "variadic": self.variadic,
             "doc": self.doc,
+            "with_shift": self.with_shift,
         }
+
+
+# Descriptions of option names that mean the same in every transformation,
+# used where an option has no doc of its own.
+COMMON_OPTION_DOCS = {
+    "irreps_out": "Irreps of the output",
+    "out_features": "Number of output channels",
+    "radial_layers": "Hidden widths of the radial MLP",
+    "heads": "Number of attention heads",
+    "num_classes": "Number of index categories",
+}
 
 
 @dataclass(frozen=True)
@@ -125,7 +143,7 @@ class Option:
             "choices": list(self.choices),
             "inferred": self.infer is not None,
             "infer_doc": self.infer_doc,
-            "doc": self.doc,
+            "doc": self.doc or COMMON_OPTION_DOCS.get(self.name, ""),
         }
 
 
@@ -208,9 +226,11 @@ class TransformInfo:
     def check_arity(self, count):
         if not self.inputs:
             return
-        required = sum(1 for port in self.inputs if not port.optional)
+        # A port with shifts receives two arguments: the relation and its shifts.
+        width = [2 if port.with_shift else 1 for port in self.inputs]
+        required = sum(w for port, w in zip(self.inputs, width) if not port.optional)
         variadic = bool(self.inputs) and self.inputs[-1].variadic
-        if count < required or (not variadic and count > len(self.inputs)):
+        if count < required or (not variadic and count > sum(width)):
             names = ", ".join(port.name for port in self.inputs)
             raise ValueError(f"{self.name} expects inputs ({names}); received {count}")
 
@@ -333,13 +353,27 @@ def transform_catalog():
 
 
 _LOADED = False
+_IMPORTING = False
+_LOADING = threading.RLock()
 
 
 def _ensure_builtins():
-    global _LOADED
-    if not _LOADED:
-        _LOADED = True
-        import net.transforms  # noqa: F401  (registers the built-in library)
+    """Register the built-in library once. Other threads wait for the import
+    to finish, so none sees a partly registered library; a call made by the
+    import itself returns at once."""
+    global _LOADED, _IMPORTING
+    if _LOADED:
+        return
+    with _LOADING:
+        if _LOADED or _IMPORTING:
+            return
+        _IMPORTING = True
+        try:
+            import net.transforms  # noqa: F401  (registers the built-in library)
+
+            _LOADED = True
+        finally:
+            _IMPORTING = False
 
 
 def infer_from(port_index, attribute="irreps"):

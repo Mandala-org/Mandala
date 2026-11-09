@@ -7,9 +7,12 @@ async function call<T>(url: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({ error: response.statusText }));
-  if (!response.ok) throw new Error(data.error ?? response.statusText);
+  if (!response.ok) throw Object.assign(new Error(data.error ?? response.statusText), { detail: data });
   return data as T;
 }
+
+/** Identifies this editor page, so only its own analyses supersede each other. */
+const CLIENT = Math.random().toString(36).slice(2);
 
 export interface SystemChoice {
   shells: Record<string, number[]>;
@@ -19,20 +22,23 @@ export interface SystemChoice {
 export const api = {
   catalog: () => call<Catalog>("/api/catalog"),
   presets: () => call<Preset[]>("/api/presets"),
-  importPreset: (path: string, system: SystemChoice) =>
+  importPreset: (path: string, system: SystemChoice, purpose = "") =>
     call<{ document: RecipeDocument; analysis: Analysis }>("/api/import", {
       path,
       system: system.shells,
       size: system.size,
+      // A baseline import must not supersede the editor's own analysis.
+      client: purpose ? `${CLIENT}-${purpose}` : CLIENT,
     }),
   importYaml: (yaml: string, system: SystemChoice) =>
     call<{ document: RecipeDocument; analysis: Analysis }>("/api/import", {
       yaml,
       system: system.shells,
       size: system.size,
+      client: CLIENT,
     }),
   analyze: (document: RecipeDocument, system: SystemChoice) =>
-    call<Analysis>("/api/analyze", { document, system: system.shells, size: system.size }),
+    call<Analysis>("/api/analyze", { document, system: system.shells, size: system.size, client: CLIENT }),
   exportYaml: (document: RecipeDocument, header?: string) =>
     call<{ yaml: string }>("/api/export", { document, header }),
   checkExpression: (request: ExpressionRequest) => call<ExpressionCheck>("/api/expression/check", request),
@@ -53,6 +59,8 @@ export interface ExpressionRequest {
   outputs: string[];
   summary: string;
   category: string;
+  /** Replace an existing plugins/<name>.py. */
+  overwrite?: boolean;
 }
 
 export interface ExpressionCheck {

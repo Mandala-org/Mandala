@@ -92,7 +92,9 @@ def test_custom_terms_register_and_reject_undefined_labels():
         {"terms": {"c": {"term": "test_constant"}}, "expression": "3 * c"}
     ).evaluate(_context())
     assert float(total) == 6.0
-    with pytest.raises(ValueError, match="undefined terms"):
+    with pytest.raises(
+        ValueError, match=r"uses d, not a term of the objective \(terms: c\)"
+    ):
         Objective({"terms": {"c": {"term": "test_constant"}}, "expression": "c + d"})
     with pytest.raises(ValueError, match="Unknown objective term"):
         Objective({"terms": {"c": {"term": "no_such_term"}}})

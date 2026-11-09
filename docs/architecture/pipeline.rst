@@ -107,9 +107,12 @@ The dataset and :meth:`E3GNN.forward` provide these slots for every structure:
    * - ``edge_one_hot``
      - edge, ``N²x0e``
      - One-hot species pair.
-   * - ``edge_index``, ``edge_shift``
+   * - ``edge_index`` (with ``edge_shift``)
      - relation, index
-     - Directed output edges :math:`(i,j)` and lattice shifts :math:`\bm L`.
+     - Directed output edges :math:`(i,j)` and their lattice shifts :math:`\bm L`.
+       Stages that need the shifts (``edge_roles``, ``periodic_displacement``)
+       read only ``edge_index``; the compiler passes the matching shifts with
+       it (``message_shift`` for ``message_edge_index``).
    * - ``edge_vectors``, ``edge_lengths``
      - edge, geometry / scalar
      - :math:`\bm r_{ij}^{\bm L}` and :math:`\|\bm r_{ij}^{\bm L}\|`.
@@ -246,8 +249,11 @@ Ablations: bypassing a stage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``enabled: false`` on a stage or a block instance bypasses it: its single
-output is one of its inputs — the first, or the one a transform declares as
-its ``bypass`` port (the update of ``residual`` and ``self_connection``).
+output is one of its inputs — the first, the one a transform declares as its
+``bypass`` port (the update of ``residual`` and ``self_connection``), or the
+input the stage names with its own ``bypass`` key (an input port or block
+input name, or a position). Pass through an input of the output's type: a
+dropped edge update must pass its edge features, not its first (node) input.
 Inside a block, ``enabled: $option`` makes a stage optional:
 
 .. code-block:: yaml
@@ -255,6 +261,8 @@ Inside a block, ``enabled: $option`` makes a stage optional:
    - {id: residual, transform: residual, inputs: [nodes, update], outputs: [out],
       enabled: false}                       # no skip connection
    - {id: node_update_2, transform: e3_node_update, ..., enabled: false}  # drop a layer
+   - {id: edge_update_1, transform: edge_update, inputs: [node_1, edge_0, ...],
+      outputs: [edge_1], enabled: false, bypass: edge}  # keep edge_0
 
 The pair envelope
 ~~~~~~~~~~~~~~~~~
