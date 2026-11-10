@@ -65,3 +65,27 @@ def test_native_block_folding_roundtrip_and_reverse_edges(tmp_path):
     values = torch.linalg.eigvalsh(assembler.at([.17,0,0]))
     expected = sorted(2-.6*np.cos(2*np.pi*(.17+i)/2) for i in (0,1))
     np.testing.assert_allclose(values.numpy(),expected,atol=1e-14)
+
+
+def test_parent_categories_include_shifted_images_and_weight_scalars():
+    from types import SimpleNamespace
+    import torch
+    from pair_categories import atom_mapping, category, category_errors
+
+    mapping = atom_mapping(2, (2,1,1))
+    assert mapping[2] == dict(source_atom_index=0, tile_index=1, tile=[1,0,0])
+    keys = [(0,0,0,0,0), (0,0,0,0,1), (0,0,0,0,2), (1,0,0,0,0)]
+    assert [category(k, mapping) for k in keys] == [
+        'onsite', 'different_parent', 'same_parent_image', 'same_parent_image']
+    # Unequal block sizes distinguish scalar weighting from block averaging.
+    blocks = {str(i): torch.full((1,1,n), float(i+1)) for i,n in enumerate((1,2,3,4))}
+    lookup = {key:(str(i),0) for i,key in enumerate(keys)}
+    p = SimpleNamespace(lookup=lookup, pair_blocks=blocks)
+    r = SimpleNamespace(lookup=lookup, pair_blocks={k:torch.zeros_like(v) for k,v in blocks.items()})
+    result = category_errors(p,r,mapping,1000.)
+    image = result['categories']['same_parent_image']
+    assert image['block_fraction'] == .5
+    assert image['scalar_entry_fraction'] == .7
+    assert image['mae'] == pytest.approx(25/7)
+    assert result['excluding_same_parent_image']['mae_meV'] == pytest.approx(5000/3)
+    assert sum(v['absolute_error_sum'] for v in result['categories'].values()) == 30

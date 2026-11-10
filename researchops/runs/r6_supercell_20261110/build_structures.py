@@ -1,4 +1,6 @@
 """Deterministic cells in ASE tile-major order, with complete geometry provenance."""
+from pair_categories import atom_mapping
+
 import hashlib
 import io
 import json
@@ -42,7 +44,9 @@ def main():
                             source_cell=evidence[source]['directory'],
                             source_geometry='ideal diamond at dataset lattice constant' if material == 'silicon' and not control else 'dataset CIF',
                             repetition=list(repetition), sigma_angstrom=sigma, seed=seed,
-                            atom_count=len(atoms), rms_displacement_angstrom=rms,
+                            atom_count=len(atoms), parent_atom_count=len(base),
+                            atom_parent_mapping=atom_mapping(len(base), repetition),
+                            rms_displacement_angstrom=rms,
                             tiled_control=control, tile_order='ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest',
                             num_electrons=sum(4 if z == 14 else 6 for z in atoms.numbers),
                             diagnostic_mesh=([4]*3 if repetition[0] == 2 else [3]*3) if material == 'silicon' else [1,1,1],
@@ -60,7 +64,7 @@ def main():
         save(f'sio2-2x1x1-{sample}', 'sio2', base, (2,1,1), 0.02, 20262110+sample, key)
         if sample == 1:
             save('sio2-2x1x1-tiled', 'sio2', base, (2,1,1), 0, None, key, True)
-    manifest = dict(schema_version=1, silicon_training=dict(scales=[1], num_train_per_scale=80,
+    manifest = dict(schema_version=2, silicon_training=dict(scales=[1], num_train_per_scale=80,
                     num_val_per_scale=16, split_seed=43, sigma_angstrom=sigma,
                     dataset_generation_seed=7, lattice_constant_angstrom=lattice),
                     sio2_split_seed=42, ase_version=ase.__version__, numpy_version=np.__version__,
