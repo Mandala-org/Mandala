@@ -1,0 +1,15 @@
+{
+  "previous_manifest_entries_unchanged": 13,
+  "structures_checked": 2,
+  "atoms_each": 600,
+  "seed": 20262211,
+  "sigma_angstrom": 0.02,
+  "geometry_atol_angstrom": 1e-10,
+  "workflow_tests": {
+    "command": "OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q researchops/runs/r6_supercell_20261110/test_workflow.py",
+    "passed": 14,
+    "seconds": 3.19
+  },
+  "compileall": "PASS",
+  "bash_n": "PASS (evaluation, DFT, comparison launchers)"
+}

@@ -11,7 +11,7 @@ from fold_reference import folded_keys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'src'))
 
 
-@pytest.mark.parametrize('repeat', [(2, 2, 2), (3, 3, 3), (5, 5, 5), (2, 1, 1)])
+@pytest.mark.parametrize('repeat', [(2, 2, 2), (3, 3, 3), (5, 5, 5), (2, 2, 1), (2, 1, 1)])
 def test_folding_preserves_cartesian_displacement_and_support(repeat):
     keys = [(x,y,z,i,j) for x,y,z in product(range(-2,3), repeat=3)
             for i,j in product(range(2), repeat=2)]
@@ -25,7 +25,7 @@ def test_folding_preserves_cartesian_displacement_and_support(repeat):
         assert i % 2 == keys[old][3] and j % 2 == keys[old][4]
 
 
-@pytest.mark.parametrize('repeat', [(2,2,2), (3,3,3), (5,5,5), (2,1,1)])
+@pytest.mark.parametrize('repeat', [(2,2,2), (3,3,3), (5,5,5), (2,2,1), (2,1,1)])
 def test_folded_spectrum_is_union_of_primitive_bloch_spectra(repeat):
     keys = [(0,0,0,0,0), (1,0,0,0,0), (-1,0,0,0,0),
             (0,1,0,0,0), (0,-1,0,0,0), (0,0,1,0,0), (0,0,-1,0,0)]

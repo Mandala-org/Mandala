@@ -112,7 +112,9 @@ def main():
             hours, memory = min(40, math.ceil(3*seconds/3600)), '1400G'
             ranks, threads = 8, 12
             cost = dict(source_seconds=measured, source_atoms=300,
-                        source_jobs=['837300', '837301'], source_peak_rss_GiB=[349.07, 310.71],
+                        source_jobs=['837300', '837301'], source_peak_rss_KiB=[366021928, 325799980],
+                        source_steps=[55, 45], source_dft_seconds=[5619.11041, 4368.50198],
+                        source_seconds_per_step=[5619.11041/55, 4368.50198/45],
                         cubic_and_kpoint_factor=8, estimated_seconds=seconds, safety_factor=3,
                         uncapped_walltime_hours=3*seconds/3600, walltime_cap_hours=40,
                         node_memory_MB=1500000,

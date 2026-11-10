@@ -236,9 +236,21 @@
       "837300",
       "837301"
     ],
-    "source_peak_rss_GiB": [
-      349.07,
-      310.71
+    "source_peak_rss_KiB": [
+      366021928,
+      325799980
+    ],
+    "source_steps": [
+      55,
+      45
+    ],
+    "source_dft_seconds": [
+      5619.11041,
+      4368.50198
+    ],
+    "source_seconds_per_step": [
+      102.16564381818182,
+      97.07782177777777
     ],
     "cubic_and_kpoint_factor": 8,
     "estimated_seconds": 48752,
