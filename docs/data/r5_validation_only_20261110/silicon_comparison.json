@@ -1,0 +1,111 @@
+{
+  "passed": false,
+  "comparison": "Exact JSON metric equality, without rounding or tolerance",
+  "job_id": 837022,
+  "source_commit": "92afa266f77ce2163bcc56e61d275b98f096c42d",
+  "baseline_source_commit": "4fa1df8804941e1d2b22ce068198a65134554abd",
+  "training_structures": [
+    80,
+    80
+  ],
+  "validation_structures": [
+    16,
+    16
+  ],
+  "fields_compared": 36,
+  "fields_different": 21,
+  "differences": {
+    "hamiltonian": {
+      "mae": {
+        "full": 0.00043516440060726235,
+        "validation_only": 0.00043516437820002
+      },
+      "mae_elementwise_pooled": {
+        "full": 0.0004351643938806527,
+        "validation_only": 0.00043516437110166284
+      },
+      "rmse": {
+        "full": 0.0016137852067336874,
+        "validation_only": 0.0016137851685430504
+      },
+      "max_absolute_error": {
+        "full": 0.07848506698217243,
+        "validation_only": 0.0784850733178202
+      },
+      "p95_absolute_error": {
+        "full": 0.0019616432646289467,
+        "validation_only": 0.00196161792203784
+      },
+      "p99_absolute_error": {
+        "full": 0.005396649339294527,
+        "validation_only": 0.005396671514061746
+      },
+      "r2": {
+        "full": 0.999980188027283,
+        "validation_only": 0.9999801880282206
+      },
+      "residual_sum_squares": {
+        "full": 4.901256000272131,
+        "validation_only": 4.901255768293196
+      }
+    },
+    "density": {
+      "mae": {
+        "full": 5.757722965427092e-05,
+        "validation_only": 5.757722942689725e-05
+      },
+      "mae_elementwise_pooled": {
+        "full": 5.757722897601817e-05,
+        "validation_only": 5.757722905532793e-05
+      },
+      "rmse": {
+        "full": 0.00014105894472175732,
+        "validation_only": 0.00014105894087530917
+      },
+      "p95_absolute_error": {
+        "full": 0.00021396638185251408,
+        "validation_only": 0.0002139632175385482
+      },
+      "p99_absolute_error": {
+        "full": 0.0005581298144534215,
+        "validation_only": 0.0005581303511280548
+      },
+      "r2": {
+        "full": 0.9999119230700665,
+        "validation_only": 0.9999119230748699
+      },
+      "residual_sum_squares": {
+        "full": 0.03744701355546754,
+        "validation_only": 0.03744701151322918
+      }
+    },
+    "overlap": {
+      "mae": {
+        "full": 1.3897776852900279e-05,
+        "validation_only": 1.3897781855121139e-05
+      },
+      "mae_elementwise_pooled": {
+        "full": 1.3897776895898202e-05,
+        "validation_only": 1.3897781746800307e-05
+      },
+      "rmse": {
+        "full": 4.7643607158196445e-05,
+        "validation_only": 4.7643632693174996e-05
+      },
+      "p99_absolute_error": {
+        "full": 0.0001860484480857849,
+        "validation_only": 0.00018605280667543383
+      },
+      "r2": {
+        "full": 0.9999988823940023,
+        "validation_only": 0.9999988823928042
+      },
+      "residual_sum_squares": {
+        "full": 0.00427194051771699,
+        "validation_only": 0.004271945096880711
+      }
+    }
+  },
+  "paper_mae_gate_passed": true,
+  "zn_submitted": false
+}
