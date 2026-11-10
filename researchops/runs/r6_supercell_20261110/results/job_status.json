@@ -1,10 +1,10 @@
 {
-  "captured_utc": "2026-11-10T11:22:28.578014+00:00",
+  "captured_utc": "2026-11-10T18:40:37.406302+00:00",
   "command": [
     "sacct",
     "-P",
     "-j",
-    "837256,837257,837259,837261,837263,837268,837273,837274,837280,837281,837283,837286,837287,837289,837290,837291,837292,837293,837294,837295,837296,837297,837300,837301,837302,837303,837319,837320,837344,837400,837488,837489,837490",
+    "837256,837257,837259,837261,837263,837268,837273,837274,837280,837281,837283,837286,837287,837289,837290,837291,837292,837293,837294,837295,837296,837297,837300,837301,837302,837303,837319,837320,837344,837400,837488,837489,837490,837829,837830,837831",
     "--format=JobIDRaw,JobName%40,State%30,ExitCode,Elapsed,MaxRSS,ReqMem,AllocCPUS,Timelimit,NodeList"
   ],
   "records": [
@@ -1129,7 +1129,7 @@
       "JobName": "r6-dft-si-5x5x5-1",
       "State": "RUNNING",
       "ExitCode": "0:0",
-      "Elapsed": "00:20:54",
+      "Elapsed": "07:39:03",
       "MaxRSS": "",
       "ReqMem": "1T",
       "AllocCPUS": "96",
@@ -1141,7 +1141,7 @@
       "JobName": "batch",
       "State": "RUNNING",
       "ExitCode": "0:0",
-      "Elapsed": "00:20:54",
+      "Elapsed": "07:39:03",
       "MaxRSS": "",
       "ReqMem": "",
       "AllocCPUS": "96",
@@ -1153,7 +1153,7 @@
       "JobName": "extern",
       "State": "RUNNING",
       "ExitCode": "0:0",
-      "Elapsed": "00:20:54",
+      "Elapsed": "07:39:03",
       "MaxRSS": "",
       "ReqMem": "",
       "AllocCPUS": "96",
@@ -1171,6 +1171,114 @@
       "AllocCPUS": "0",
       "Timelimit": "02:00:00",
       "NodeList": "None assigned"
+    },
+    {
+      "JobIDRaw": "837829",
+      "JobName": "r6-eval-sio2-4x",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:05:25",
+      "MaxRSS": "",
+      "ReqMem": "128G",
+      "AllocCPUS": "4",
+      "Timelimit": "02:00:00",
+      "NodeList": "gh003"
+    },
+    {
+      "JobIDRaw": "837829.batch",
+      "JobName": "batch",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:05:25",
+      "MaxRSS": "1651564K",
+      "ReqMem": "",
+      "AllocCPUS": "4",
+      "Timelimit": "",
+      "NodeList": "gh003"
+    },
+    {
+      "JobIDRaw": "837829.extern",
+      "JobName": "extern",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:05:25",
+      "MaxRSS": "0",
+      "ReqMem": "",
+      "AllocCPUS": "4",
+      "Timelimit": "",
+      "NodeList": "gh003"
+    },
+    {
+      "JobIDRaw": "837830",
+      "JobName": "r6-dft-sio2-2x2x1-1",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "04:20:05",
+      "MaxRSS": "",
+      "ReqMem": "1400G",
+      "AllocCPUS": "96",
+      "Timelimit": "1-16:00:00",
+      "NodeList": "cge008"
+    },
+    {
+      "JobIDRaw": "837830.batch",
+      "JobName": "batch",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "04:20:05",
+      "MaxRSS": "579752352K",
+      "ReqMem": "",
+      "AllocCPUS": "96",
+      "Timelimit": "",
+      "NodeList": "cge008"
+    },
+    {
+      "JobIDRaw": "837830.extern",
+      "JobName": "extern",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "04:20:05",
+      "MaxRSS": "0",
+      "ReqMem": "",
+      "AllocCPUS": "96",
+      "Timelimit": "",
+      "NodeList": "cge008"
+    },
+    {
+      "JobIDRaw": "837831",
+      "JobName": "r6-final-sio2-4x",
+      "State": "RUNNING",
+      "ExitCode": "0:0",
+      "Elapsed": "00:04:54",
+      "MaxRSS": "",
+      "ReqMem": "128G",
+      "AllocCPUS": "4",
+      "Timelimit": "02:00:00",
+      "NodeList": "gh003"
+    },
+    {
+      "JobIDRaw": "837831.batch",
+      "JobName": "batch",
+      "State": "RUNNING",
+      "ExitCode": "0:0",
+      "Elapsed": "00:04:54",
+      "MaxRSS": "",
+      "ReqMem": "",
+      "AllocCPUS": "4",
+      "Timelimit": "",
+      "NodeList": "gh003"
+    },
+    {
+      "JobIDRaw": "837831.extern",
+      "JobName": "extern",
+      "State": "RUNNING",
+      "ExitCode": "0:0",
+      "Elapsed": "00:04:54",
+      "MaxRSS": "",
+      "ReqMem": "",
+      "AllocCPUS": "4",
+      "Timelimit": "",
+      "NodeList": "gh003"
     }
   ]
 }
