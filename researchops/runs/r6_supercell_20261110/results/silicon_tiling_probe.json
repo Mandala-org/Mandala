@@ -1,0 +1,61 @@
+{
+  "material": "silicon",
+  "base_edges": 796,
+  "super_edges": 6368,
+  "expected_super_edges": 6368,
+  "common_edges": 6368,
+  "inputs": {
+    "edge_length": {
+      "mean": 1.8974644454879376e-07,
+      "max": 9.5367431640625e-07
+    },
+    "edge_sh": {
+      "mean": 1.1716410500725234e-07,
+      "max": 2.4437904357910156e-06
+    },
+    "edge_length_emb": {
+      "mean": 4.239570225485915e-08,
+      "max": 1.1622905731201172e-05
+    },
+    "edge_one_hot": {
+      "mean": 0.0,
+      "max": 0.0
+    },
+    "edge_type_idx": {
+      "mean": 0.0,
+      "max": 0.0
+    }
+  },
+  "activations": {
+    "node_encoding": {
+      "mean": 0.0,
+      "max": 0.0,
+      "base_absolute_mean": 0.2581976652145386
+    },
+    "edge_encoding": {
+      "mean": 6.613886578128255e-08,
+      "max": 5.7220458984375e-06,
+      "base_absolute_mean": 0.4653054475784302
+    },
+    "node_message_0": {
+      "mean": 0.00011932531754840076,
+      "max": 0.005481719970703125,
+      "base_absolute_mean": 10.32669734954834
+    },
+    "edge_message_0": {
+      "mean": 1.8633190955416064e-06,
+      "max": 0.0004062652587890625,
+      "base_absolute_mean": 0.9051122665405273
+    },
+    "node_message_1": {
+      "mean": 0.00014444038675631978,
+      "max": 0.006237030029296875,
+      "base_absolute_mean": 10.374103546142578
+    },
+    "edge_message_1": {
+      "mean": 9.576171648240261e-06,
+      "max": 0.0022039413452148438,
+      "base_absolute_mean": 1.2480639219284058
+    }
+  }
+}
