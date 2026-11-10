@@ -34,7 +34,12 @@ def test_invalid_policies_are_not_silently_ignored(overrides, match):
         )
 
 
-def test_old_slotted_config_checkpoint_receives_new_optional_defaults():
+def test_old_slotted_config_checkpoint_receives_new_optional_defaults(monkeypatch):
+    # Loading evaluation checkpoints installs a process-wide Config.__setstate__
+    # shim that already fills missing slots. Exercise E3GNN's independent
+    # fallback with the original slotted pickle behavior, regardless of which
+    # tests previously loaded an evaluation checkpoint on this xdist worker.
+    monkeypatch.delattr(Config, "__setstate__", raising=False)
     cfg = Config(
         hidden_irreps="2x0e",
         l_max=0,

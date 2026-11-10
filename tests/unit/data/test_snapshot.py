@@ -43,6 +43,7 @@ def test_energy_and_electron_count(small_angular_snapshot_e3nn):
 
 
 @pytest.mark.unit
+@pytest.mark.large_data
 def test_symmetrize_matrices_keeps_energy_and_electrons(h2o_orbital_cfg):
     snap_raw = parse_openmx_scfout(
         Path("./data/small/H2O/original/H2O.matrix"),
@@ -237,6 +238,7 @@ def test_stress_transforms_under_basis_change_and_rotation():
 
 
 @pytest.mark.unit
+@pytest.mark.large_data
 def test_basis_conversion_roundtrip():
     snap_open = _load_snapshot()  # native OpenMX basis
     snap_e3 = snap_open.to_e3nn()

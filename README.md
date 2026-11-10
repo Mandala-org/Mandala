@@ -1,5 +1,9 @@
 # MANDALA
 
+[![Tests](https://github.com/Mandala-org/Mandala/actions/workflows/tests.yml/badge.svg)](https://github.com/Mandala-org/Mandala/actions/workflows/tests.yml)
+
+**Documentation:** https://mandala-org.github.io/Mandala/
+
 **MANDALA** is an E(3)-equivariant graph neural network framework that learns
 the electronic structure of molecules and materials as sparse operators. From
 atomic positions, species and lattice it predicts the atom-pair-resolved
@@ -59,7 +63,7 @@ reproduction of all paper results. Build it with
 
 ```bash
 source mandala-venv/bin/activate
-python -m pip install sphinx sphinx-rtd-theme
+python -m pip install -e '.[docs]'
 PYTHONPATH=src:. python -m sphinx -b html docs docs/_build/html
 ```
 
@@ -73,6 +77,16 @@ and open `docs/_build/html/index.html`.
 | Typed pipeline and component catalogue | [`docs/architecture`](docs/architecture) |
 | Writing new layers (cookbook) | [`docs/extending`](docs/extending), [`examples/layer_cookbook`](examples/layer_cookbook) |
 | Reproducing the paper | [`docs/reproduction`](docs/reproduction), [`scripts/reproduce_examples`](scripts/reproduce_examples) |
+
+## Tests
+
+GitHub Actions runs the unit, physics and equivariance subsets on CPU with
+Python 3.10 and experimental Python 3.11 (allowed to fail while the package
+requires Python <3.11), and prints line coverage in the job log. GPU, network,
+large-data, slow, integration and workflow tests are excluded; data-file
+exclusions are listed explicitly in [the workflow](.github/workflows/tests.yml).
+Optional comparisons against external upstream source checkouts are skipped
+when those checkouts are unavailable.
 
 ## Repository layout
 
