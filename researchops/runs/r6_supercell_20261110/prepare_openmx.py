@@ -106,6 +106,19 @@ def main():
                         source_peak_rss_K=[125469708, 125593112, 130314552],
                         source_jobs=['837291', '837292', '837293'],
                         note='MaxRSS from sacct batch steps. Hybrid 8 MPI x 12 OMP reduces replicated grids; 1024G allows 8.2x measured peak. Runtime scaling assumes same aggregate 96 CPUs; hybrid efficiency is unverified.')
+        if material == 'sio2' and structure['atom_count'] == 600:
+            measured = [6094, 4848]  # sacct elapsed, including extraction
+            seconds = max(measured) * 8
+            hours, memory = min(40, math.ceil(3*seconds/3600)), '1400G'
+            ranks, threads = 8, 12
+            cost = dict(source_seconds=measured, source_atoms=300,
+                        source_jobs=['837300', '837301'], source_peak_rss_KiB=[366021928, 325799980],
+                        source_steps=[55, 45], source_dft_seconds=[5619.11041, 4368.50198],
+                        source_seconds_per_step=[5619.11041/55, 4368.50198/45],
+                        cubic_and_kpoint_factor=8, estimated_seconds=seconds, safety_factor=3,
+                        uncapped_walltime_hours=3*seconds/3600, walltime_cap_hours=40,
+                        node_memory_MB=1500000,
+                        note='Genoa advertises 1500000 MB, below 1.5 TiB; request 1400G on one node. Same 8 MPI x 12 OMP as completed runs; >4x observed peak, >2x requested 768G unavailable. Walltime capped at 40h; maintenance fit depends on queue start.')
         assert hours <= 48
         name = structure['name']
         run_dir = structure['dft_directory']

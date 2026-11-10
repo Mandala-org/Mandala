@@ -62,7 +62,7 @@ def main():
     model,cfg,provenance = load_model(args.material,args.device)
     provenance['git_commit'] = subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     provenance['historical_control'] = historical_control(model,args.material,cfg,args.device)
-    write_json(RUN / 'results' / (args.material+('_5x' if args.names else '')+'_provenance.json'), provenance)
+    write_json(RUN / 'results' / (args.material+('_4x' if args.names and args.material == 'sio2' else '_5x' if args.names else '')+'_provenance.json'), provenance)
     for structure in manifest()['structures']:
         if structure['material'] != args.material or (args.names and structure['name'] not in args.names):
             continue

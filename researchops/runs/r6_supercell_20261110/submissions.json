@@ -67,6 +67,19 @@
       "second_brain_attempt": 14,
       "result": "COMPLETED, exit 0:0, elapsed 00:12:50",
       "output": "eval-si-5x-837488.out"
+    },
+    "sio2_4x": {
+      "job_id": "837829",
+      "command": [
+        "sbatch",
+        "--parsable",
+        "researchops/runs/r6_supercell_20261110/eval-sio2-4x.sh"
+      ],
+      "submitted_utc": "2026-11-10T14:15:19.025946+00:00",
+      "source_commit": "cfa852ba19c81488f715182971a57b4d74dacc12",
+      "second_brain_attempt": 14,
+      "result": "COMPLETED, exit 0:0, elapsed 00:05:25",
+      "output": "eval-sio2-4x-837829.out"
     }
   },
   "openmx": {
@@ -208,6 +221,18 @@
       "submitted_utc": "2026-11-10T11:01:25.257243+00:00",
       "second_brain_attempt": 14,
       "submitted_script_archive": "openmx/si-5x5x5-1/submitted-837489.sh"
+    },
+    "sio2-2x2x1-1": {
+      "job_id": "837830",
+      "command": [
+        "sbatch",
+        "--parsable",
+        "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/sio2-2x2x1-1/run.sh"
+      ],
+      "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x2x1-1",
+      "submitted_utc": "2026-11-10T14:15:19.244407+00:00",
+      "submitted_script_archive": "openmx/sio2-2x2x1-1/submitted-837830.sh",
+      "second_brain_attempt": 14
     }
   },
   "comparison": {
@@ -354,6 +379,18 @@
       "researchops/runs/r6_supercell_20261110/final_compare_5x.sh"
     ],
     "dependency": "afterok:837489:837488",
+    "second_brain_attempt": 14
+  },
+  "final_comparison_sio2_4x": {
+    "job_id": "837831",
+    "command": [
+      "sbatch",
+      "--parsable",
+      "--dependency=afterok:837830:837829",
+      "researchops/runs/r6_supercell_20261110/final_compare_sio2_4x.sh"
+    ],
+    "dependency": "afterok:837830:837829",
+    "submitted_utc": "2026-11-10T14:15:19.268931+00:00",
     "second_brain_attempt": 14
   }
 }

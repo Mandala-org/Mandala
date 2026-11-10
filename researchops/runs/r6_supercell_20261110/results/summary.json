@@ -19479,6 +19479,217 @@
         }
       },
       "routed_category_errors": null
+    },
+    {
+      "name": "sio2-2x2x1-1",
+      "atoms": 600,
+      "repetition": [
+        2,
+        2,
+        1
+      ],
+      "sigma_angstrom": 0.02,
+      "status": "OpenMX_pending",
+      "job_id": "837830",
+      "H_MAE_meV": null,
+      "H_excluding_same_parent_image_meV": null,
+      "routed_diagnostic_H_MAE_meV": null,
+      "S_MAE": null,
+      "D_MAE": null,
+      "routed_diagnostic_S_MAE": null,
+      "routed_diagnostic_D_MAE": null,
+      "primary_metric": null,
+      "routed_diagnostic_metric": null,
+      "validation_H_MAE_meV": 1.99588,
+      "category_errors": null,
+      "routed_category_errors": null
+    },
+    {
+      "name": "sio2-2x2x1-tiled",
+      "atoms": 600,
+      "repetition": [
+        2,
+        2,
+        1
+      ],
+      "sigma_angstrom": 0,
+      "status": "ok",
+      "job_id": null,
+      "H_MAE_meV": 2.534621893506063,
+      "H_excluding_same_parent_image_meV": 2.5346218935060656,
+      "routed_diagnostic_H_MAE_meV": null,
+      "S_MAE": null,
+      "D_MAE": null,
+      "routed_diagnostic_S_MAE": null,
+      "routed_diagnostic_D_MAE": null,
+      "primary_metric": null,
+      "routed_diagnostic_metric": null,
+      "validation_H_MAE_meV": 1.99588,
+      "category_errors": {
+        "hamiltonian": {
+          "raw_common_support": {
+            "categories": {
+              "onsite": {
+                "blocks": 600,
+                "scalar_entries": 101400,
+                "absolute_error_sum": 108.94273985787561,
+                "block_fraction": 0.006693440428380187,
+                "scalar_entry_fraction": 0.006693440428380187,
+                "mae": 0.0010743859946536055,
+                "mae_meV": 29.235547054917124
+              },
+              "different_parent": {
+                "blocks": 89040,
+                "scalar_entries": 15047760,
+                "absolute_error_sum": 1328.5751047361432,
+                "block_fraction": 0.9933065595716198,
+                "scalar_entry_fraction": 0.9933065595716198,
+                "mae": 8.829055651712569e-05,
+                "mae_meV": 2.402509649610114
+              },
+              "same_parent_image": {
+                "blocks": 0,
+                "scalar_entries": 0,
+                "absolute_error_sum": 0.0,
+                "block_fraction": 0.0,
+                "scalar_entry_fraction": 0.0,
+                "mae": null,
+                "mae_meV": null
+              }
+            },
+            "excluding_same_parent_image": {
+              "scalar_entries": 15149160,
+              "mae": 9.489092758898966e-05,
+              "mae_meV": 2.5821149869950335
+            },
+            "common_blocks": 89640,
+            "common_scalar_entries": 15149160,
+            "full_support": {
+              "prediction": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.00363460140537921,
+                  "scalar_entry_fraction": 0.00363460140537921
+                },
+                "different_parent": {
+                  "blocks": 164480,
+                  "scalar_entries": 27797120,
+                  "block_fraction": 0.9963653985946208,
+                  "scalar_entry_fraction": 0.9963653985946208
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              },
+              "reference": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.006693440428380187,
+                  "scalar_entry_fraction": 0.006693440428380187
+                },
+                "different_parent": {
+                  "blocks": 89040,
+                  "scalar_entries": 15047760,
+                  "block_fraction": 0.9933065595716198,
+                  "scalar_entry_fraction": 0.9933065595716198
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              }
+            }
+          },
+          "hermitian_common_support": {
+            "categories": {
+              "onsite": {
+                "blocks": 600,
+                "scalar_entries": 101400,
+                "absolute_error_sum": 108.94219830566999,
+                "block_fraction": 0.006693440428380187,
+                "scalar_entry_fraction": 0.006693440428380187,
+                "mae": 0.001074380653902071,
+                "mae_meV": 29.235401725590815
+              },
+              "different_parent": {
+                "blocks": 89040,
+                "scalar_entries": 15047760,
+                "absolute_error_sum": 1302.1352399821926,
+                "block_fraction": 0.9933065595716198,
+                "scalar_entry_fraction": 0.9933065595716198,
+                "mae": 8.653349335596744e-05,
+                "mae_meV": 2.3546975011065725
+              },
+              "same_parent_image": {
+                "blocks": 0,
+                "scalar_entries": 0,
+                "absolute_error_sum": 0.0,
+                "block_fraction": 0.0,
+                "scalar_entry_fraction": 0.0,
+                "mae": null,
+                "mae_meV": null
+              }
+            },
+            "excluding_same_parent_image": {
+              "scalar_entries": 15149160,
+              "mae": 9.314558947742731e-05,
+              "mae_meV": 2.5346218935060656
+            },
+            "common_blocks": 89640,
+            "common_scalar_entries": 15149160,
+            "full_support": {
+              "prediction": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.00363460140537921,
+                  "scalar_entry_fraction": 0.00363460140537921
+                },
+                "different_parent": {
+                  "blocks": 164480,
+                  "scalar_entries": 27797120,
+                  "block_fraction": 0.9963653985946208,
+                  "scalar_entry_fraction": 0.9963653985946208
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              },
+              "reference": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.006693440428380187,
+                  "scalar_entry_fraction": 0.006693440428380187
+                },
+                "different_parent": {
+                  "blocks": 89040,
+                  "scalar_entries": 15047760,
+                  "block_fraction": 0.9933065595716198,
+                  "scalar_entry_fraction": 0.9933065595716198
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "routed_category_errors": null
     }
   ]
 }

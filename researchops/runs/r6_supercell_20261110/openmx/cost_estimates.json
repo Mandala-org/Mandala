@@ -213,5 +213,51 @@
     "safety_factor": 3,
     "walltime_cap_hours": 44,
     "note": "No speedup credit because original rank count is unknown. After pre-SCF OOM at 96 MPI ranks/256G, use 8 MPI x 12 OpenMP threads and 768G. 3x estimate capped at 44 h to fit before maintenance on 2026-11-12 08:00 CET."
+  },
+  {
+    "name": "sio2-2x2x1-1",
+    "ranks": 8,
+    "omp_threads": 12,
+    "total_cpus": 96,
+    "memory": "1400G",
+    "walltime": "40:00:00",
+    "input": "SiO2.dat",
+    "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x2x1-1",
+    "original_data_path": "/bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9/DFT_DATA19/",
+    "runtime_data_path": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/DFT_DATA19/",
+    "binary": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx",
+    "basis_version": "public DFT_DATA19",
+    "source_seconds": [
+      6094,
+      4848
+    ],
+    "source_atoms": 300,
+    "source_jobs": [
+      "837300",
+      "837301"
+    ],
+    "source_peak_rss_KiB": [
+      366021928,
+      325799980
+    ],
+    "source_steps": [
+      55,
+      45
+    ],
+    "source_dft_seconds": [
+      5619.11041,
+      4368.50198
+    ],
+    "source_seconds_per_step": [
+      102.16564381818182,
+      97.07782177777777
+    ],
+    "cubic_and_kpoint_factor": 8,
+    "estimated_seconds": 48752,
+    "safety_factor": 3,
+    "uncapped_walltime_hours": 40.626666666666665,
+    "walltime_cap_hours": 40,
+    "node_memory_MB": 1500000,
+    "note": "Genoa advertises 1500000 MB, below 1.5 TiB; request 1400G on one node. Same 8 MPI x 12 OMP as completed runs; >4x observed peak, >2x requested 768G unavailable. Walltime capped at 40h; maintenance fit depends on queue start."
   }
 ]

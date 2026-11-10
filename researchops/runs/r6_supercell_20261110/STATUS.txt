@@ -60,3 +60,18 @@ Extension evaluation 837488 completed exit 0, elapsed 00:12:50.
 Prior queued refresh 837320 completed exit 0, elapsed 00:09:14; its final
 comparison includes all 13 structures, with only si-5x5x5-1 OpenMX pending.
 All 12 new primary/routed operator hashes verified. See EXTENSION_5X_REPORT.txt.
+
+600-atom SiO2 extension (2026-11-10)
+  Built sio2-2x2x1-1 and sio2-2x2x1-tiled from validation 13_67164000.
+  Independent Gaussian sigma 0.02 Angstrom, seed 20262211; complete parent
+  mappings; control is undisplaced. SiO2 checkpoint predicts H only.
+  Jobs: evaluation 837829; OpenMX 837830; comparison 837831 afterok of both.
+  Second-brain CLI reports attempt 14 for these three registered jobs.
+  OpenMX uses public 3.9.9, dataset numerical settings, Gamma only, 8 MPI x
+  12 OMP, 1400G, 40h. Started cge008 Nov 10 15:15:38 CET, allocation ends
+  Nov 12 07:15:38 CET, ahead of maintenance at 08:00 CET.
+  After completion, refresh with:
+    ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_sio2_4x.sh"
+  This compares saved operators, refreshes categories/calibrations/summaries,
+  and does not rerun inference. Folded control requires converged source
+  Gamma sampling. Preserve branch history without rebase per task brief.
