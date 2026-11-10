@@ -274,7 +274,18 @@ The first allocation is 42 hours so it fits before the 12 November 08:00 CET
 maintenance reservation; its existing `INT@600` checkpoint handling remains in
 place, and the other allocations remain 45 hours.
 
-SiO2 jobs 837009–837012 and Zn jobs 837013–837016 are unchanged. Their live
+### Zn shifted-self restart (10 November 2026, 13:45)
+
+The ZnCu2Sn(SeS)2 v2 chain was restarted the same way on the author's request:
+jobs 837013-837016 were cancelled after 7.4 h, their checkpoint directory and
+contract were preserved with the suffix `_separate_shifted_self_cancelled_20261110`,
+and the fresh chain 837639 -> 837640 -> 837641 -> 837642 trains with
+`separate_shifted_self: false` (Second Brain attempt 6). Its first allocation is
+41.5 hours to fit before the maintenance reservation. The Zn cell
+(7.88 x 7.95 x 11.24 A) is smaller than the 11 A cutoff, so image pairs exist and
+the head would have mattered; SiO2 has no image pairs inside its cutoff.
+
+SiO2 jobs 837009-837012 are unchanged. Their live
 recipes still had the legacy head enabled, so their dependent segments continue
 from a verified immutable source snapshot of `e3f18d0` under
 `.cache/publication_retrain_v2/legacy_continuation_source`; 153 source/launcher

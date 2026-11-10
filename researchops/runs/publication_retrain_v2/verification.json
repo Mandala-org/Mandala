@@ -183,5 +183,26 @@
       "result": "passed; epoch 1 running on gh003; remaining three jobs pending dependency",
       "log": "researchops/runs/publication_retrain_v2/logs/r6-silicon-1-837505.log"
     }
+  },
+  "zn_shifted_self_restart_20261110": {
+    "author_decision": "Restart the Zn v2 chain without the shifted-self head (same as silicon).",
+    "cancelled_jobs": [
+      837013,
+      837014,
+      837015,
+      837016
+    ],
+    "cancelled_after_hours": 7.4,
+    "preserved_checkpoint_directory": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v2/zncusnses_separate_shifted_self_cancelled_20261110",
+    "new_jobs": [
+      837639,
+      837640,
+      837641,
+      837642
+    ],
+    "first_segment_time_limit": "41:30:00",
+    "recipe_separate_shifted_self": false,
+    "second_brain_attempt": 6,
+    "by": "claude orchestrator"
   }
 }
