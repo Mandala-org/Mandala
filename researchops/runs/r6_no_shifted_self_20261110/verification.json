@@ -1,0 +1,158 @@
+{
+  "branch": "referee-r6-no-shifted-self",
+  "base_commit": "aae88d8e023f8382aae5ed1de75208661c74b1cb",
+  "implementation_commit": "35702535fe72ed835aa0df3574e5b8b18313fd56",
+  "environment": {
+    "python": "3.10.22",
+    "torch": "2.5.1+cu124",
+    "e3nn": "0.6.0",
+    "pytorch-lightning": "2.6.6",
+    "torch-geometric": "2.7.0",
+    "torch-scatter": "2.1.2+pt25cu124",
+    "cpu_workers": 16,
+    "threads_per_worker": 1,
+    "gpu": "A40",
+    "cuda_visible_devices": "0"
+  },
+  "checks": [
+    {
+      "command": "pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)'",
+      "environment": "PATH=$PWD/.venv/bin:$HOME/.local/bin:$PATH PYTHONPATH=src:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 CUDA_VISIBLE_DEVICES= WANDB_MODE=offline MPLBACKEND=Agg",
+      "passed": 734,
+      "skipped": 68,
+      "subtests_passed": 52,
+      "warnings": 17,
+      "seconds": 95.12,
+      "log": "logs/cpu.log"
+    },
+    {
+      "command": "MANDALA_RUN_GPU_TESTS=1 CUDA_VISIBLE_DEVICES=0 pytest -q tests/gpu/test_cuda_smoke.py",
+      "passed": 2,
+      "seconds": 7.85,
+      "log": "logs/gpu.log"
+    },
+    {
+      "command": "pytest -q tests/analysis/test_validation_error_distribution.py tests/workflow/test_epoch_boundary_resume.py",
+      "passed": 11,
+      "skipped": 2,
+      "warnings": 16,
+      "seconds": 15.48,
+      "log": "logs/compat_workflow.log"
+    },
+    {
+      "command": "git diff -z --name-only github/develop -- '*.py' | xargs -0 ruff check --isolated --select E9,F --ignore E741,F541",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check github/develop",
+      "result": "passed"
+    },
+    {
+      "command": "git fetch github develop && git rebase github/develop",
+      "result": "up to date; no conflicts"
+    }
+  ],
+  "regressions": {
+    "legacy_bit_exact_reload": "4 combinations of split/shared_conditioned and tensor-square/log-scale branches; all three operators; torch.equal",
+    "size_transfer": "2x2x2 periodic tiling; 1s1p blocks; all equivalent primitive/supercell pairs; relative error < 1e-6 and elementwise rtol=1e-6, atol=1e-12",
+    "retired_training": "constructor, nested component/training settings and publication recipes reject true or partial_train=shifted_self before setup",
+    "cache": "preprocessed version v9; routing flag differentiates legacy/new samples; raw snapshot cache unchanged"
+  },
+  "remote": {
+    "worktree": "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
+    "branch": "referee-retrain-v2",
+    "cancelled_jobs": [
+      837005,
+      837006,
+      837007,
+      837008
+    ],
+    "preserved_directory": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v2/silicon_separate_shifted_self_cancelled_20261110",
+    "compatibility_job": 837502,
+    "initial_check_job": 837500,
+    "initial_check_result": "SiO2 strict CPU load passed at epoch 151 with 2491 keys; silicon CLI rejected unsupported --load-split; corrected launcher resubmitted",
+    "sio2_zn_source_commit": "e3f18d0f7e49f33bb07159502c5b89db27adf27a",
+    "sio2_zn_verified_files_each": 153,
+    "sio2_zn_mismatches": 0,
+    "sio2_zn_jobs": [
+      837009,
+      837010,
+      837011,
+      837012,
+      837013,
+      837014,
+      837015,
+      837016
+    ]
+  },
+  "choices": [
+    "Running SiO2/Zn used true, contrary to the brief. Preserve their existing source and recipes for continuation; all new v2 recipes use false.",
+    "Update the deterministic stress-test seed to 751 because removing a head changes random parameter initialization; retain all finite-difference assertions and tolerances.",
+    "Mark the generated PySCF reference-file test as large_data; no generated PySCF results are present. Download real H2O/Si LFS references to exercise the other data-backed CPU tests."
+  ],
+  "unchanged_paths": [
+    "paper/",
+    "README.md",
+    "configs/reference/",
+    "configs/pilots/",
+    "scripts/reproduce_examples/silicon.json",
+    "scripts/reproduce_examples/sio2.json",
+    "scripts/reproduce_examples/zncusnses.json",
+    "scripts/reproduce_examples/*_source.json",
+    "scripts/reproduce_examples/selected_run_configs.json",
+    "scripts/reproduce_examples/source_sweep_configs.json"
+  ],
+  "files": [
+    "docs/theory/architecture.rst",
+    "docs/theory/objectives.rst",
+    "docs/user_guide/configuration.rst",
+    "researchops/runs/r6_no_shifted_self_20261110/check_sio2_checkpoint.py",
+    "researchops/runs/r6_no_shifted_self_20261110/legacy_validation.sbatch",
+    "researchops/runs/r6_no_shifted_self_20261110/preserve_running_chains.py",
+    "scripts/benchmark_silicon_cif_scaling.py",
+    "scripts/benchmark_silicon_inference.py",
+    "scripts/check_compat_reload_equivalence.py",
+    "scripts/debug_hamiltonian_mae_discrepancy.py",
+    "scripts/debug_prediction_support.py",
+    "scripts/evaluate_checkpoint_materials.py",
+    "scripts/evaluate_checkpoint_snapshot.py",
+    "scripts/export_prediction.py",
+    "scripts/report/evaluate_physical_constraints.py",
+    "scripts/report/evaluate_validation_error_distribution.py",
+    "scripts/report/evaluate_validation_relative_metrics.py",
+    "scripts/report/export_paper_operators.py",
+    "scripts/reproduce_examples/README.md",
+    "scripts/reproduce_examples/silicon_v2.json",
+    "scripts/reproduce_examples/sio2_v2.json",
+    "scripts/reproduce_examples/train.py",
+    "scripts/reproduce_examples/zncusnses_v2.json",
+    "scripts/train.py",
+    "src/data/edge_alignment.py",
+    "src/data/gnn_dataset.py",
+    "src/data/graph_features.py",
+    "src/net/checkpoint_compat.py",
+    "src/net/common.py",
+    "src/net/e3gnn.py",
+    "src/net/evaluation.py",
+    "src/net/heads.py",
+    "tests/equivariance/test_equivariance.py",
+    "tests/physics/test_pyscf_rotation_reference_files.py",
+    "tests/unit/data/test_gnn_dataset_cache.py",
+    "tests/unit/data/test_operator_dataset.py",
+    "tests/unit/data/test_structure_inference.py",
+    "tests/unit/net/test_e3gnn.py",
+    "tests/unit/net/test_e3gnn_configs.py",
+    "tests/unit/net/test_hybrid_pipelines.py",
+    "tests/unit/net/test_stress.py",
+    "tests/unit/scripts/test_reproduce_examples.py"
+  ],
+  "commits": [
+    "3570253 Use the supported full-validation CLI for the paper compatibility gate",
+    "4cf5617 Preserve active legacy retrain chains with verified immutable source",
+    "4d72c0b Keep retired selectors in legacy inference and refresh stress fixture seed",
+    "a419efe Add allocated paper-checkpoint and live SiO2 compatibility checks",
+    "4815363 Adapt training setup tests and classify generated PySCF reference data",
+    "1868d73 Cover legacy shifted-self reloads and unit-cell invariant pair predictions",
+    "e6e60a9 Retire shifted-self heads for new training and preserve checkpoint inference"
+  ]
+}
