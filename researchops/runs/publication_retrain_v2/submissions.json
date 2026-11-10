@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "created_utc": "2026-11-10T11:16:04.138400+00:00",
+  "created_utc": "2026-11-10T12:23:43.799816+00:00",
   "worktree": "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
-  "source_commit": "54776dc845f4a6b10d11a1fa114e00041c3e04d8",
+  "source_commit": "24c84bba2aa7e97828b7b497d82c9f6750d332b0",
   "partition": "gpu-h100-casus",
   "account": "casus",
-  "sinfo": "cpu-skylake|up|drained*\ncpu-skylake|up|mixed\ncpu-skylake|up|allocated\ncpu-skylake|up|idle\ncpu-skylake-int|up|drained*\ncpu-skylake-int|up|mixed\ncpu-skylake-int|up|allocated\ncpu-skylake-int|up|idle\ncpu-genoa*|up|mixed\ncpu-genoa*|up|allocated\ncpu-genoa-int|up|mixed\ncpu-genoa-int|up|allocated\ncpu-genoa-casus|up|planned\ncpu-genoa-casus|up|maint\ncpu-genoa-casus|up|mixed\ncpu-genoa-casus|up|allocated\ncpu-genoa-casus|up|idle\ncpu-milan|up|mixed*\ncpu-milan|up|allocated*\ncpu-milan|up|idle*\ncpu-milan|up|allocated\ncpu-milan|up|idle\ncpu-milan-int|up|mixed*\ncpu-milan-int|up|allocated*\ncpu-milan-int|up|idle*\ncpu-milan-int|up|allocated\ncpu-milan-int|up|idle\ncpu-milan-reac|up|idle*\ncpu-milan-reac|up|mixed\ncpu-milan-reac|up|allocated\ncpu-milan-reac|up|idle\ncpu-rome|up|inval\ncpu-rome|up|mixed*\ncpu-rome|up|idle*\ncpu-rome|up|mixed\ncpu-rome|up|allocated\ncpu-rome|up|idle\ncpu-rome-int|up|inval\ncpu-rome-int|up|mixed*\ncpu-rome-int|up|idle*\ncpu-rome-int|up|mixed\ncpu-rome-int|up|allocated\ncpu-rome-int|up|idle\ncpu-turin|up|mixed\ncpu-turin|up|allocated\ncpu-turin|up|idle\ngpu-a100|up|drained*\ngpu-a100|up|drained\ngpu-a100|up|mixed\ngpu-a100-haicu|up|allocated\ngpu-a100-haicu|up|idle\ngpu-b200-casus|up|draining\ngpu-b200-haicore|up|mixed\ngpu-b200-haicore-mig|up|mixed\ngpu-h100|up|mixed\ngpu-h100-casus|up|mixed\ngpu-v100|up|planned\ngpu-v100|up|drained*\ngpu-v100|up|mixed\ngpu-v100|up|allocated\ngpu-v100-int|up|planned\ngpu-v100-int|up|drained*\ngpu-v100-int|up|mixed\ngpu-v100-int|up|allocated\nshort|up|maint\nshort|up|mixed\nshort|up|allocated\nshort|up|idle\nlow|up|planned\nlow|up|maint\nlow|up|drained*\nlow|up|mixed*\nlow|up|allocated*\nlow|up|idle*\nlow|up|mixed\nlow|up|allocated\nlow|up|idle\narchiv|up|idle\nhypercrate|up|idle",
+  "sinfo": "cpu-skylake|up|drained*\ncpu-skylake|up|mixed\ncpu-skylake|up|allocated\ncpu-skylake|up|idle\ncpu-skylake-int|up|drained*\ncpu-skylake-int|up|mixed\ncpu-skylake-int|up|allocated\ncpu-skylake-int|up|idle\ncpu-genoa*|up|mixed\ncpu-genoa*|up|allocated\ncpu-genoa-int|up|mixed\ncpu-genoa-int|up|allocated\ncpu-genoa-casus|up|planned\ncpu-genoa-casus|up|maint\ncpu-genoa-casus|up|mixed\ncpu-genoa-casus|up|allocated\ncpu-genoa-casus|up|idle\ncpu-milan|up|mixed*\ncpu-milan|up|allocated*\ncpu-milan|up|idle*\ncpu-milan|up|allocated\ncpu-milan|up|idle\ncpu-milan-int|up|mixed*\ncpu-milan-int|up|allocated*\ncpu-milan-int|up|idle*\ncpu-milan-int|up|allocated\ncpu-milan-int|up|idle\ncpu-milan-reac|up|idle*\ncpu-milan-reac|up|allocated\ncpu-milan-reac|up|idle\ncpu-rome|up|inval\ncpu-rome|up|mixed*\ncpu-rome|up|allocated*\ncpu-rome|up|idle*\ncpu-rome|up|mixed\ncpu-rome|up|allocated\ncpu-rome|up|idle\ncpu-rome-int|up|inval\ncpu-rome-int|up|mixed*\ncpu-rome-int|up|allocated*\ncpu-rome-int|up|idle*\ncpu-rome-int|up|mixed\ncpu-rome-int|up|allocated\ncpu-rome-int|up|idle\ncpu-turin|up|mixed\ncpu-turin|up|allocated\ncpu-turin|up|idle\ngpu-a100|up|drained*\ngpu-a100|up|drained\ngpu-a100|up|mixed\ngpu-a100-haicu|up|allocated\ngpu-a100-haicu|up|idle\ngpu-b200-casus|up|draining\ngpu-b200-haicore|up|mixed\ngpu-b200-haicore-mig|up|mixed\ngpu-h100|up|mixed\ngpu-h100-casus|up|completing\ngpu-v100|up|planned\ngpu-v100|up|drained*\ngpu-v100|up|mixed\ngpu-v100|up|allocated\ngpu-v100-int|up|planned\ngpu-v100-int|up|drained*\ngpu-v100-int|up|mixed\ngpu-v100-int|up|allocated\nshort|up|maint\nshort|up|mixed\nshort|up|allocated\nshort|up|idle\nlow|up|planned\nlow|up|maint\nlow|up|drained*\nlow|up|mixed*\nlow|up|allocated*\nlow|up|idle*\nlow|up|mixed\nlow|up|allocated\nlow|up|idle\narchiv|up|idle\nhypercrate|up|idle",
   "jobs": [
     {
       "material": "silicon",
@@ -969,6 +969,113 @@
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "silicon"
       ]
+    },
+    {
+      "material": "zncusnses",
+      "segment": 1,
+      "job_id": "837639",
+      "dependency": null,
+      "sbatch_argv": [
+        "sbatch",
+        "--parsable",
+        "--job-name=r6-zncusnses-1",
+        "--partition=gpu-h100-casus",
+        "--account=casus",
+        "--nodes=1",
+        "--ntasks=1",
+        "--gres=gpu:1",
+        "--cpus-per-task=4",
+        "--mem=128G",
+        "--time=45:00:00",
+        "--nice=1000",
+        "--signal=INT@600",
+        "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
+        "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/r6-zncusnses-1-%j.log",
+        "--open-mode=append",
+        "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
+        "zncusnses"
+      ]
+    },
+    {
+      "material": "zncusnses",
+      "segment": 2,
+      "job_id": "837640",
+      "dependency": "afterok:837639",
+      "sbatch_argv": [
+        "sbatch",
+        "--parsable",
+        "--job-name=r6-zncusnses-2",
+        "--partition=gpu-h100-casus",
+        "--account=casus",
+        "--nodes=1",
+        "--ntasks=1",
+        "--gres=gpu:1",
+        "--cpus-per-task=4",
+        "--mem=128G",
+        "--time=45:00:00",
+        "--nice=1000",
+        "--signal=INT@600",
+        "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
+        "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/r6-zncusnses-2-%j.log",
+        "--open-mode=append",
+        "--dependency=afterok:837639",
+        "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
+        "zncusnses"
+      ]
+    },
+    {
+      "material": "zncusnses",
+      "segment": 3,
+      "job_id": "837641",
+      "dependency": "afterok:837640",
+      "sbatch_argv": [
+        "sbatch",
+        "--parsable",
+        "--job-name=r6-zncusnses-3",
+        "--partition=gpu-h100-casus",
+        "--account=casus",
+        "--nodes=1",
+        "--ntasks=1",
+        "--gres=gpu:1",
+        "--cpus-per-task=4",
+        "--mem=128G",
+        "--time=45:00:00",
+        "--nice=1000",
+        "--signal=INT@600",
+        "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
+        "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/r6-zncusnses-3-%j.log",
+        "--open-mode=append",
+        "--dependency=afterok:837640",
+        "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
+        "zncusnses"
+      ]
+    },
+    {
+      "material": "zncusnses",
+      "segment": 4,
+      "job_id": "837642",
+      "dependency": "afterok:837641",
+      "sbatch_argv": [
+        "sbatch",
+        "--parsable",
+        "--job-name=r6-zncusnses-4",
+        "--partition=gpu-h100-casus",
+        "--account=casus",
+        "--nodes=1",
+        "--ntasks=1",
+        "--gres=gpu:1",
+        "--cpus-per-task=4",
+        "--mem=128G",
+        "--time=45:00:00",
+        "--nice=1000",
+        "--signal=INT@600",
+        "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
+        "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/r6-zncusnses-4-%j.log",
+        "--open-mode=append",
+        "--dependency=afterok:837641",
+        "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
+        "zncusnses"
+      ]
     }
   ],
   "previous_submissions": [
@@ -998,6 +1105,15 @@
       "partition": "gpu-h100-casus",
       "account": "casus",
       "sinfo": "cpu-skylake|up|drained*\ncpu-skylake|up|mixed\ncpu-skylake|up|allocated\ncpu-skylake|up|idle\ncpu-skylake-int|up|drained*\ncpu-skylake-int|up|mixed\ncpu-skylake-int|up|allocated\ncpu-skylake-int|up|idle\ncpu-genoa*|up|mixed\ncpu-genoa*|up|allocated\ncpu-genoa-int|up|mixed\ncpu-genoa-int|up|allocated\ncpu-genoa-int|up|idle\ncpu-genoa-casus|up|planned\ncpu-genoa-casus|up|maint\ncpu-genoa-casus|up|mixed\ncpu-genoa-casus|up|allocated\ncpu-genoa-casus|up|idle\ncpu-milan|up|mixed*\ncpu-milan|up|idle*\ncpu-milan|up|mixed\ncpu-milan|up|allocated\ncpu-milan|up|idle\ncpu-milan-int|up|mixed*\ncpu-milan-int|up|idle*\ncpu-milan-int|up|mixed\ncpu-milan-int|up|allocated\ncpu-milan-int|up|idle\ncpu-milan-reac|up|mixed\ncpu-milan-reac|up|allocated\ncpu-milan-reac|up|idle\ncpu-rome|up|inval\ncpu-rome|up|mixed*\ncpu-rome|up|idle*\ncpu-rome|up|mixed\ncpu-rome|up|allocated\ncpu-rome|up|idle\ncpu-rome-int|up|inval\ncpu-rome-int|up|mixed*\ncpu-rome-int|up|idle*\ncpu-rome-int|up|mixed\ncpu-rome-int|up|allocated\ncpu-rome-int|up|idle\ncpu-turin|up|mixed\ncpu-turin|up|allocated\ncpu-turin|up|idle\ngpu-a100|up|drained*\ngpu-a100|up|drained\ngpu-a100|up|mixed\ngpu-a100|up|idle\ngpu-a100-haicu|up|idle\ngpu-b200-casus|up|draining\ngpu-b200-haicore|up|mixed\ngpu-b200-haicore|up|idle\ngpu-b200-haicore-mig|up|mixed\ngpu-h100|up|mixed\ngpu-h100-casus|up|mixed\ngpu-v100|up|planned\ngpu-v100|up|drained*\ngpu-v100|up|mixed\ngpu-v100|up|allocated\ngpu-v100-int|up|planned\ngpu-v100-int|up|drained*\ngpu-v100-int|up|idle*\ngpu-v100-int|up|mixed\ngpu-v100-int|up|allocated\nshort|up|planned\nshort|up|maint\nshort|up|allocated\nshort|up|idle\nlow|up|planned\nlow|up|maint\nlow|up|drained*\nlow|up|mixed*\nlow|up|idle*\nlow|up|mixed\nlow|up|allocated\nlow|up|idle\narchiv|up|idle\nhypercrate|up|idle"
+    },
+    {
+      "schema_version": 1,
+      "created_utc": "2026-11-10T11:16:04.138400+00:00",
+      "worktree": "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
+      "source_commit": "54776dc845f4a6b10d11a1fa114e00041c3e04d8",
+      "partition": "gpu-h100-casus",
+      "account": "casus",
+      "sinfo": "cpu-skylake|up|drained*\ncpu-skylake|up|mixed\ncpu-skylake|up|allocated\ncpu-skylake|up|idle\ncpu-skylake-int|up|drained*\ncpu-skylake-int|up|mixed\ncpu-skylake-int|up|allocated\ncpu-skylake-int|up|idle\ncpu-genoa*|up|mixed\ncpu-genoa*|up|allocated\ncpu-genoa-int|up|mixed\ncpu-genoa-int|up|allocated\ncpu-genoa-casus|up|planned\ncpu-genoa-casus|up|maint\ncpu-genoa-casus|up|mixed\ncpu-genoa-casus|up|allocated\ncpu-genoa-casus|up|idle\ncpu-milan|up|mixed*\ncpu-milan|up|allocated*\ncpu-milan|up|idle*\ncpu-milan|up|allocated\ncpu-milan|up|idle\ncpu-milan-int|up|mixed*\ncpu-milan-int|up|allocated*\ncpu-milan-int|up|idle*\ncpu-milan-int|up|allocated\ncpu-milan-int|up|idle\ncpu-milan-reac|up|idle*\ncpu-milan-reac|up|mixed\ncpu-milan-reac|up|allocated\ncpu-milan-reac|up|idle\ncpu-rome|up|inval\ncpu-rome|up|mixed*\ncpu-rome|up|idle*\ncpu-rome|up|mixed\ncpu-rome|up|allocated\ncpu-rome|up|idle\ncpu-rome-int|up|inval\ncpu-rome-int|up|mixed*\ncpu-rome-int|up|idle*\ncpu-rome-int|up|mixed\ncpu-rome-int|up|allocated\ncpu-rome-int|up|idle\ncpu-turin|up|mixed\ncpu-turin|up|allocated\ncpu-turin|up|idle\ngpu-a100|up|drained*\ngpu-a100|up|drained\ngpu-a100|up|mixed\ngpu-a100-haicu|up|allocated\ngpu-a100-haicu|up|idle\ngpu-b200-casus|up|draining\ngpu-b200-haicore|up|mixed\ngpu-b200-haicore-mig|up|mixed\ngpu-h100|up|mixed\ngpu-h100-casus|up|mixed\ngpu-v100|up|planned\ngpu-v100|up|drained*\ngpu-v100|up|mixed\ngpu-v100|up|allocated\ngpu-v100-int|up|planned\ngpu-v100-int|up|drained*\ngpu-v100-int|up|mixed\ngpu-v100-int|up|allocated\nshort|up|maint\nshort|up|mixed\nshort|up|allocated\nshort|up|idle\nlow|up|planned\nlow|up|maint\nlow|up|drained*\nlow|up|mixed*\nlow|up|allocated*\nlow|up|idle*\nlow|up|mixed\nlow|up|allocated\nlow|up|idle\narchiv|up|idle\nhypercrate|up|idle"
     }
   ]
 }
