@@ -53,15 +53,19 @@ def identities(rows):
     return {(row["matrix"], row["info"]) for row in rows}
 
 
-def compare(splits, reference):
+def compare(splits, reference, *, reduced_training=False):
     current = {name: identities(rows) for name, rows in splits.items()}
     old = {name: identities(rows) for name, rows in reference["splits"].items()}
+    expected_train = reference["splits"]["train"][:80] if reduced_training else reference["splits"]["train"]
+    expected_val = reference["splits"]["train"][80:] if reduced_training else reference["splits"]["val"][:len(splits["val"])]
+    expected_test = reference["splits"]["val"] if reduced_training else reference["splits"]["val"][len(splits["val"]):]
     return {
-        "training_members_identical": current["train"] == old["train"],
-        "training_order_identical": splits["train"] == reference["splits"]["train"],
-        "validation_subset_of_previous_validation": current["val"] <= old["val"],
-        "test_is_previous_validation_remainder": current["test"]
-        == old["val"] - current["val"],
+        "training_members_match_expected": current["train"] == identities(expected_train),
+        "training_order_matches_expected": splits["train"] == expected_train,
+        "training_subset_of_previous_training": current["train"] <= old["train"],
+        "validation_matches_expected": splits["val"] == expected_val,
+        "test_matches_expected": splits["test"] == expected_test,
+        "all_previous_members_retained": set.union(*current.values()) == set.union(*old.values()),
         "splits_disjoint": not (
             current["train"] & current["val"]
             or current["train"] & current["test"]
@@ -108,7 +112,7 @@ def main(argv=None):
             args.checkpoint_root / "publication_retrain_v1" / name / "split_manifest.json"
         )
         reference = json.loads(reference_path.read_text())
-        checks = compare(splits, reference)
+        checks = compare(splits, reference, reduced_training=name == "sio2")
         try:
             previous = construct_splits(path.with_name(f"{name}.json"))
         except (ValueError, FileNotFoundError) as error:
@@ -135,7 +139,7 @@ def main(argv=None):
         ]
         paper_checks = []
         for paper_path in paper_paths:
-            comparison = compare(splits, json.loads(paper_path.read_text()))
+            comparison = compare(splits, json.loads(paper_path.read_text()), reduced_training=name == "sio2")
             paper_checks.append({"path": str(paper_path), "checks": comparison})
             passed = passed and all(comparison.values())
         canonical = json.dumps(splits, sort_keys=True, separators=(",", ":"))

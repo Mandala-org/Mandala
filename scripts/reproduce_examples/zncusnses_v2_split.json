@@ -364,7 +364,9 @@
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_093/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_093/ZnCuSeS.out"
-      },
+      }
+    ],
+    "test": [
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/ZnCuSeS.out"
@@ -372,9 +374,7 @@
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/ZnCuSeS.out"
-      }
-    ],
-    "test": [
+      },
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_029/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_029/ZnCuSeS.out"

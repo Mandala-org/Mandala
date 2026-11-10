@@ -19,9 +19,11 @@ def output(argv):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", action="store_true")
+    parser.add_argument("--materials", nargs="+", choices=("silicon", "sio2", "zncusnses"), default=["silicon", "sio2", "zncusnses"])
+    parser.add_argument("--append", action="store_true", help="Preserve prior submissions and append replacement chains")
     args = parser.parse_args()
     destination = RUN / "submissions.json"
-    if destination.exists() and not args.plan:
+    if destination.exists() and not args.plan and not args.append:
         raise SystemExit("submissions.json already exists; refusing duplicate chains")
     inventory = output(["sinfo", "-h", "-o", "%P|%a|%T"])
     choices = (
@@ -50,10 +52,14 @@ def main():
         "sinfo": inventory,
         "jobs": [],
     }
+    if args.append and destination.exists():
+        previous_record = json.loads(destination.read_text())
+        record["previous_submissions"] = previous_record.get("previous_submissions", []) + [{key: value for key, value in previous_record.items() if key not in ("jobs", "previous_submissions")} ]
+        record["jobs"] = previous_record["jobs"]
     if not args.plan:
         (RUN / "logs").mkdir(exist_ok=True)
         destination.write_text(json.dumps(record, indent=2) + "\n")
-    for material in ("silicon", "sio2", "zncusnses"):
+    for material in dict.fromkeys(args.materials):
         previous = None
         for segment in range(1, 5):
             name = f"mr2-{material}-{segment}"

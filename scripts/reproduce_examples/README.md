@@ -223,12 +223,14 @@ They do not enable `legacy_2026_07` checkpoint semantics. Their matching
 | Recipe | Train | Validation | Held-out test | Split seed |
 | --- | ---: | ---: | ---: | ---: |
 | `silicon_v2.json` | 80 | 10 | 6 | 43 |
-| `sio2_v2.json` | 90 | 6 | 4 | 42 |
-| `zncusnses_v2.json` | 80 | 12 | 8 | 44 |
+| `sio2_v2.json` | 80 | 10 | 10 | 42 |
+| `zncusnses_v2.json` | 80 | 10 | 10 | 44 |
 
-Training members and their order are retained from the recorded v1 runs.
-The former validation set is partitioned into a smaller validation prefix and
-its held-out test remainder. The `*_v2_split.json` files freeze the exact pairs
+Silicon and Zn training members and their order are retained from the recorded
+v1 runs; their former validation sets are partitioned into validation and test
+prefix/remainder lists. SiO2 retains the first 80 of the recorded 90 training
+members, moves the last 10 to validation, and holds out the former 10 validation
+members as test. These test members have not been used to fit the v2 models. The `*_v2_split.json` files freeze the exact pairs
 from the v1 split manifests through the existing `dataset_manifest` option.
 This also bypasses current discovery's rejection of ambiguous OpenMX metadata
 filenames in the original corpus; shared discovery code and data are untouched.

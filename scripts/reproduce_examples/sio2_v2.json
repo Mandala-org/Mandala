@@ -184,10 +184,10 @@
     "generate_video": false,
     "log_artifacts": true,
     "evaluate_test_after_fit": false,
-    "num_test": 4,
+    "num_test": 10,
     "num_test_per_scale": 0,
-    "num_train": 90,
-    "num_val": 6,
+    "num_train": 80,
+    "num_val": 10,
     "dataset_manifest": "scripts/reproduce_examples/sio2_v2_split.json"
   },
   "envelope_file": "sio2_envelope.json",

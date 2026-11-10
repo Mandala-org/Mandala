@@ -322,7 +322,9 @@
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/SiO2.out"
-      },
+      }
+    ],
+    "val": [
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/SiO2.out"
@@ -364,7 +366,7 @@
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/SiO2.out"
       }
     ],
-    "val": [
+    "test": [
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.out"
@@ -388,9 +390,7 @@
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.out"
-      }
-    ],
-    "test": [
+      },
       {
         "matrix_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/HS.out",
         "info_path": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/SiO2.out"

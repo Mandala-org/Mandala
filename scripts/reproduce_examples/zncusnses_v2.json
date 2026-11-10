@@ -185,12 +185,12 @@
     "log_artifacts": true,
     "evaluate_test_after_fit": false,
     "num_test": 0,
-    "num_test_per_scale": 8,
+    "num_test_per_scale": 10,
     "scales": [
       1
     ],
     "num_train_per_scale": 80,
-    "num_val_per_scale": 12,
+    "num_val_per_scale": 10,
     "dataset_manifest": "scripts/reproduce_examples/zncusnses_v2_split.json"
   },
   "envelope_file": "zncusnses_envelope.json",
