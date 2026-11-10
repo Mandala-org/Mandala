@@ -63,6 +63,21 @@
       "command": "squeue -h -u brzoza73 -j 836879,836880,836881,836882,836895,836896,836897,836898,836899,836900,836901,836902 -o \"%i|%j|%T|%r|%E|%P|%C|%m|%l|%a|%y|%b\"",
       "result": "all 12 jobs visible; resources, partition/account, nice, time limits, and all dependencies pass (20 checks)",
       "evidence": "researchops/runs/publication_retrain_v2/resubmission_health_check.json"
+    },
+    {
+      "command": "sbatch researchops/runs/r6_no_shifted_self_20261110/legacy_validation.sbatch",
+      "job": 837502,
+      "result": "passed; paper silicon H MAE 0.435164 meV (16 validation structures); live SiO2 checkpoint strictly loads on CPU"
+    },
+    {
+      "command": "python researchops/runs/publication_retrain_v2/submit.py --materials silicon --append",
+      "jobs": [
+        837505,
+        837506,
+        837507,
+        837508
+      ],
+      "result": "four chained jobs submitted on gpu-h100-casus/account casus; first time limit reduced to 42 h to fit before maintenance"
     }
   ],
   "second_brain": {
@@ -88,13 +103,85 @@
   },
   "limitations": [
     "No original selected paper-run split manifests found; exact older paper membership cannot be independently certified.",
-    "No GPU training or final accuracy verified while first segments await scheduler resources/priority.",
-    "GitHub Actions API reports zero branch runs."
+    "Long retrains are ongoing; no final new-model accuracy or end-of-chain test score is certified by this restart check."
   ],
   "choices": [
     "Use existing explicit dataset_manifest mode with v1-derived lists for all materials; avoids silicon discovery ambiguity without changing shared loader/data.",
     "Use 44-hour session budget inside requested 45-hour allocations, allowing epoch completion and checkpoint I/O.",
     "Use separate mandala-publication-retrain-v2 W&B project as well as requested v2 group.",
     "SiO2 uses the first 80 v1 training members, last 10 v1 training members for validation, and all 10 former validation members as test; Zn uses first 10 former validation members for validation and last 10 as test."
-  ]
+  ],
+  "shifted_self_restart_20261110": {
+    "author_decision": "Remove shifted-self head from new trainings after unit-cell size-transfer experiment.",
+    "cancelled_jobs": [
+      837005,
+      837006,
+      837007,
+      837008
+    ],
+    "preserved_checkpoint_directory": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v2/silicon_separate_shifted_self_cancelled_20261110",
+    "new_silicon_jobs": [
+      837505,
+      837506,
+      837507,
+      837508
+    ],
+    "new_silicon_separate_shifted_self": false,
+    "second_brain_attempt": 5,
+    "legacy_validation_job": 837502,
+    "legacy_validation_h_mae_mev": 0.4351643092546589,
+    "legacy_validation_h_mae_mev_six_decimals": "0.435164",
+    "legacy_validation_structures": 16,
+    "legacy_validation_result": "COMPLETED 0:0",
+    "live_sio2_checkpoint_load": {
+      "job": 837500,
+      "device": "cpu",
+      "epoch": 151,
+      "state_dict_keys": 2491,
+      "strict": true,
+      "result": "passed"
+    },
+    "sio2_and_zn": "Existing jobs and checkpoints untouched. Contrary to the brief, their recipes used true. Dependent segments use an immutable e3f18d0 source snapshot whose 153 source/launcher hashes per chain and recipe hashes match the original contracts; both wrappers verified with --plan.",
+    "retained_sio2_jobs": [
+      837009,
+      837010,
+      837011,
+      837012
+    ],
+    "retained_zn_jobs": [
+      837013,
+      837014,
+      837015,
+      837016
+    ],
+    "first_allocation_override": {
+      "job": 837505,
+      "command": "scontrol update JobId=837505 TimeLimit=42:00:00",
+      "hours": 42,
+      "reason": "45 h crossed cluster maintenance starting 2026-11-12 08:00 CET, preventing startup; existing INT@600 epoch-boundary checkpoint handling remains active. Other three segments retain 45 h."
+    },
+    "cpu_tests": {
+      "passed": 734,
+      "skipped": 68,
+      "subtests_passed": 52
+    },
+    "a40_smoke_tests": {
+      "passed": 2
+    },
+    "checkpoint_and_resume_tests": {
+      "passed": 11,
+      "skipped": 2
+    },
+    "first_epoch": {
+      "job": 837505,
+      "completed_epoch": 0,
+      "observed_next_epoch": 1,
+      "train_loss_total_display": 0.0483,
+      "val_loss_total_display": 0.0185,
+      "training_batches": 80,
+      "validation_batches": 10,
+      "result": "passed; epoch 1 running on gh003; remaining three jobs pending dependency",
+      "log": "researchops/runs/publication_retrain_v2/logs/r6-silicon-1-837505.log"
+    }
+  }
 }

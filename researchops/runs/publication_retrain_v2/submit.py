@@ -62,7 +62,7 @@ def main():
     for material in dict.fromkeys(args.materials):
         previous = None
         for segment in range(1, 5):
-            name = f"mr2-{material}-{segment}"
+            name = f"r6-{material}-{segment}"
             argv = [
                 "sbatch", "--parsable", f"--job-name={name}",
                 f"--partition={partition}", f"--account={account}",
