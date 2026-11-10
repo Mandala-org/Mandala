@@ -89,3 +89,28 @@ def test_parent_categories_include_shifted_images_and_weight_scalars():
     assert image['mae'] == pytest.approx(25/7)
     assert result['excluding_same_parent_image']['mae_meV'] == pytest.approx(5000/3)
     assert sum(v['absolute_error_sum'] for v in result['categories'].values()) == 30
+
+
+def test_manifest_parent_mapping_matches_ase_tile_order():
+    import json
+    from pair_categories import atom_mapping
+    manifest = json.loads((Path(__file__).parent/'structures/manifest.json').read_text())
+    for s in manifest['structures']:
+        assert len(s['atom_parent_mapping']) == s['atom_count']
+        assert s['atom_parent_mapping'] == atom_mapping(s['parent_atom_count'], s['repetition'])
+        if s['material'] == 'silicon':
+            assert s['parent_atom_count'] == 8
+
+
+def test_metric_summary_preserves_per_kpoint_failures():
+    from summarize import metric
+    records = [dict(fractional_k=[0,0,0], overlap=dict(positive_definite=True,
+                well_conditioned_positive_definite=True, lambda_min=.5, cholesky_failed_without_jitter=False)),
+               dict(fractional_k=[.5,0,0], overlap=dict(positive_definite=False,
+                well_conditioned_positive_definite=False, lambda_min=-.1, cholesky_failed_without_jitter=True))]
+    result = metric(dict(records=records))
+    assert result['positive_definite_fraction'] == .5
+    assert result['cholesky_success_count'] == 1
+    assert result['minimum_eigenvalue'] == -.1
+    assert result['per_kpoint'][1]['fractional_k'] == [.5,0,0]
+    assert metric(dict(records=[dict(raw_hermiticity={})])) is None

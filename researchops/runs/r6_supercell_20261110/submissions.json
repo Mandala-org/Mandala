@@ -295,5 +295,26 @@
       "researchops/runs/r6_supercell_20261110/final_compare.sh"
     ],
     "result": "COMPLETED, exit 0, 00:02:57; six Si DFT structures and three tiled controls compared; two SiO2 DFT structures pending"
+  },
+  "parent_routing_diagnostic": {
+    "job_id": "837400",
+    "command": [
+      "sbatch",
+      "--parsable",
+      "researchops/runs/r6_supercell_20261110/route_parent.sh"
+    ],
+    "source_commit": "2da075f",
+    "reason": "parent-routing diagnostic on perturbed cells",
+    "second_brain_attempt": 13,
+    "requires_parent_labels": true,
+    "resources": {
+      "partition": "gpu-h100-casus",
+      "account": "casus",
+      "gpus": 1,
+      "cpus": 4,
+      "memory": "96G",
+      "walltime": "01:00:00"
+    },
+    "script_sha256": "808eb8913f5bb85726026b2706a36cf5fb277ea01c9c4be07c95006ac208864c"
   }
 }

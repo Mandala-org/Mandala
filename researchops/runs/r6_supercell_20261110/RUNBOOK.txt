@@ -109,3 +109,28 @@ OpenMX runtime deviation
   High-MPI SiO2 attempts exhausted memory before SCF. The current resource
   choices share grid data through OpenMP; costs and revisions are documented
   in openmx/cost_estimates.json and archived failed outputs beside each run.
+
+Follow-up: parent categories and labelled routing (2026-11-10)
+  The manifest now explicitly records zero-based source atom, tile index and
+  tile coordinates for every atom, preserved under displacement/wrapping.
+  compare.py partitions raw and Hermitian common-support H/S/D errors by
+  onsite, different_parent and same_parent_image. Fractions of directed blocks
+  and scalar entries use each operator's common support; full prediction and
+  reference support fractions are also recorded. No unmatched block is
+  silently treated as a zero reference.
+  route_parent.sh runs the unchanged silicon checkpoint using these parent
+  labels to choose shifted-self vs ordinary pair heads for all eight Si cells.
+  This is a diagnostic requiring source-cell knowledge, also for perturbed
+  cells; it is not a deployable size-transfer correction. Primary predictions
+  are untouched. Full-support per-k metric results are in parent_routing.json.
+  Job 837400 (source 2da075f), registered as second-brain attempt 13, requests
+  one H100, four CPUs, 96 GB, one hour on gpu-h100-casus/account casus.
+  Reproduce from a compute allocation:
+    python researchops/runs/r6_supercell_20261110/route_parent.py
+    python researchops/runs/r6_supercell_20261110/compare.py --reuse-diagnostics
+    python researchops/runs/r6_supercell_20261110/summarize.py
+  Reuse requires identical saved operator hashes and reference identity.
+  summary.md contains the main table, per-category table and diagnostic table;
+  summary.json retains both primary and routed per-k results. final_compare.sh
+  regenerates the summary when pending SiO2 references become available.
+  The task-specific instruction keeps the existing branch history: no rebase.
