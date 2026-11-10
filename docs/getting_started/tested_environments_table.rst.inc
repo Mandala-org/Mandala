@@ -52,55 +52,6 @@
      - 675 passed, 0 failed, 0 errors, 68 skipped; 47.9 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 12.5 s
      - verified_tonight, 2026-11-10; additional control for Python support
-   * - py314-t2xx-cu128 (terok; NVIDIA A40; driver 550.163.01)
-     - 3.14.10
-     - 2.11.0+cu128 / cu128
-     - 2.1.2+pt211cu128 / 2.8.1
-     - 701 passed, 0 failed, 0 errors, 68 skipped; 27.5 s
-     - 2 passed, 0 failed, 0 errors, 0 skipped; 8.0 s
-     - verified_20261110, 2026-11-10; CUDA scatter wheel; CPU and A40 GPU verified
-   * - py313-latest-cu13x-rosi-attempt1 (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
-     - 3.13.18
-     - 2.15.0+cu134 / cu134
-     - 2.1.2 / 2.8.1
-     - Not run
-     - 0 passed, 2 failed, 0 errors, 0 skipped; 13.1 s
-     - verified_20261110, 2026-11-10; Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry
-   * - py314-latest-cu13x-rosi-attempt1 (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
-     - 3.14.10
-     - 2.15.0+cu134 / cu134
-     - 2.1.2 / 2.8.1
-     - Not run
-     - 0 passed, 2 failed, 0 errors, 0 skipped; 13.8 s
-     - verified_20261110, 2026-11-10; Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry
-   * - py313-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
-     - 3.13.18
-     - 2.15.0+cu134 / cu134
-     - 2.1.2 / 2.8.1
-     - 701 passed, 0 failed, 0 errors, 68 skipped; 43.3 s
-     - Not run
-     - verified_20261110, 2026-11-10; CPU verified; CUDA scatter compiled; GPU blocked by driver
-   * - py314-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
-     - 3.14.10
-     - 2.15.0+cu134 / cu134
-     - 2.1.2 / 2.8.1
-     - 701 passed, 0 failed, 0 errors, 68 skipped; 30.7 s
-     - Not run
-     - verified_20261110, 2026-11-10; CPU verified; CUDA scatter compiled; GPU blocked by driver
-   * - py315-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
-     - 3.15.2
-     - 2.15.0+cu134 / cu134
-     - 2.1.2 / 2.8.1
-     - 701 passed, 0 failed, 0 errors, 68 skipped; 42.4 s
-     - Not run
-     - verified_20261110, 2026-11-10; CPU verified; source CUDA scatter and h5py; GPU untested
-   * - py313-latest-cu13x-rosi (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
-     - 3.13.18
-     - 2.15.0+cu134 / cu134
-     - 2.1.2 / 2.8.1
-     - Not run
-     - 2 passed, 0 failed, 0 errors, 0 skipped; 29.9 s
-     - verified_20261110, 2026-11-10; H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10
    * - rosi-h100-paper-training (ROSI; NVIDIA H100; driver not recorded)
      - 3.10
      - 2.5.1+cu121 / cu121
@@ -129,6 +80,13 @@
      - Not re-tested
      - Not re-tested
      - reported; with patches, see notes
+   * - py314-t2xx-cu128 (terok; NVIDIA A40; driver 550.163.01)
+     - 3.14.10
+     - 2.11.0+cu128 / cu128
+     - 2.1.2+pt211cu128 / 2.8.1
+     - 701 passed, 0 failed, 0 errors, 68 skipped; 27.5 s
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 8.0 s
+     - verified_20261110, 2026-11-10; CUDA scatter wheel; CPU and A40 GPU verified
    * - py315-t2xx-cu128 (terok; NVIDIA A40; driver 550.163.01)
      - 3.15.2
      - none / cu128
@@ -136,3 +94,52 @@
      - No wheels
      - No wheels
      - no_wheels, 2026-11-10; No cp315 wheel on cu128; newest available is cp314 / torch 2.11.0
+   * - py314-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
+     - 3.14.10
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - 701 passed, 0 failed, 0 errors, 68 skipped; 30.7 s
+     - Not run
+     - verified_20261110, 2026-11-10; CPU verified; CUDA scatter compiled; GPU blocked by driver
+   * - py315-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
+     - 3.15.2
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - 701 passed, 0 failed, 0 errors, 68 skipped; 42.4 s
+     - Not run
+     - verified_20261110, 2026-11-10; CPU verified; source CUDA scatter and h5py; GPU untested
+   * - py313-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
+     - 3.13.18
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - 701 passed, 0 failed, 0 errors, 68 skipped; 43.3 s
+     - Not run
+     - verified_20261110, 2026-11-10; CPU verified; CUDA scatter compiled; GPU blocked by driver
+   * - py313-latest-cu13x-rosi-attempt1 (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
+     - 3.13.18
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - Not run
+     - 0 passed, 2 failed, 0 errors, 0 skipped; 13.1 s
+     - verified_20261110, 2026-11-10; Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry
+   * - py314-latest-cu13x-rosi-attempt1 (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
+     - 3.14.10
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - Not run
+     - 0 passed, 2 failed, 0 errors, 0 skipped; 13.8 s
+     - verified_20261110, 2026-11-10; Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry
+   * - py313-latest-cu13x-rosi (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
+     - 3.13.18
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - Not run
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 29.9 s
+     - verified_20261110, 2026-11-10; H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10
+   * - py314-latest-cu13x-rosi (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
+     - 3.14.10
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - Not run
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 8.4 s
+     - verified_20261110, 2026-11-10; H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10

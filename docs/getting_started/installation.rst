@@ -122,8 +122,14 @@ Known version notes
   `forward-compatibility package
   <https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html>`_.
   The system driver is unchanged; this qualification is part of the stack.
-  Python 3.13.18 passes both GPU smoke tests and all four GPU-marked tests
+  Python 3.13.18 and 3.14.10 each pass both GPU smoke tests and all four
+  GPU-marked tests
   (including epoch-boundary resume) with CUDA scatter kernels on this H100.
+* The newest supported combination verified here is Python 3.14.10,
+  PyTorch 2.15.0+cu134, source-built CUDA torch-scatter 2.1.2 and PyG 2.8.1
+  on the H100 with the compatibility-driver qualification above. On the
+  A40 with driver 550.163.01, the newest verified combination is Python
+  3.14.10, PyTorch 2.11.0+cu128 and its matching PyG scatter wheel.
 
 * The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
   see notes" in the table). Their diff was not supplied; that report does not

@@ -13,6 +13,12 @@
     "date": "2026-11-10",
     "partition": "gpu-h100-casus",
     "account": "casus",
-    "reason": "one allowed retry: matched CUDA compiler, libcudart symlink and isolated cuda-compat-13-4"
+    "reason": "one allowed retry: matched CUDA compiler, libcudart symlink and isolated cuda-compat-13-4",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:26:39",
+    "allocated_cpus": 4,
+    "requested_memory": "32G",
+    "result": "Python 3.13 and 3.14 each passed 2 smoke tests and 4 GPU-marked tests"
   }
 ]
