@@ -261,3 +261,31 @@ the allocation ends. The existing training wrapper returns successfully without
 training when the latest safe checkpoint has reached the total epoch cap.
 Submission scripts and scheduler records live under
 `researchops/runs/publication_retrain_v2/` in the isolated ROSI worktree.
+
+### Silicon shifted-self restart (10 November 2026)
+
+The silicon v2 chain now trains with `separate_shifted_self: false`: every
+non-onsite block uses the pair head, including a periodic image of the same atom.
+The previous silicon jobs 837005–837008 were cancelled, and their checkpoint
+directory and contract were preserved with the suffix
+`_separate_shifted_self_cancelled_20261110`. The fresh chain is
+837505 → 837506 → 837507 → 837508 (Second Brain attempt 5).
+The first allocation is 42 hours so it fits before the 12 November 08:00 CET
+maintenance reservation; its existing `INT@600` checkpoint handling remains in
+place, and the other allocations remain 45 hours.
+
+SiO2 jobs 837009–837012 and Zn jobs 837013–837016 are unchanged. Their live
+recipes still had the legacy head enabled, so their dependent segments continue
+from a verified immutable source snapshot of `e3f18d0` under
+`.cache/publication_retrain_v2/legacy_continuation_source`; 153 source/launcher
+hashes per chain and both recipe hashes match their original runtime contracts.
+The current v2 JSON recipes have the head off for future fresh runs. Recreate or
+verify the legacy source with
+`python3 researchops/runs/r6_no_shifted_self_20261110/preserve_running_chains.py`.
+
+Before restart, H100 job 837502 reproduced the paper silicon H MAE of
+**0.435164 meV** on all 16 validation structures under the new legacy loader.
+The live SiO2 recovery checkpoint also loaded strictly on CPU under the new
+code (job 837500, epoch 151, 2,491 state-dict keys). Details and results are in
+`researchops/runs/r6_no_shifted_self_20261110/` and the restart record in
+`researchops/runs/publication_retrain_v2/verification.json`.
