@@ -191,6 +191,7 @@
       1
     ],
     "num_train_per_scale": 80,
-    "num_val_per_scale": 10
+    "num_val_per_scale": 10,
+    "dataset_manifest": "scripts/reproduce_examples/silicon_v2_split.json"
   }
 }

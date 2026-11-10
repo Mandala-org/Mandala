@@ -190,7 +190,8 @@
       1
     ],
     "num_train_per_scale": 80,
-    "num_val_per_scale": 12
+    "num_val_per_scale": 12,
+    "dataset_manifest": "scripts/reproduce_examples/zncusnses_v2_split.json"
   },
   "envelope_file": "zncusnses_envelope.json",
   "envelope_sha256": "9679be29814058b3c784a8956e97c34670c7ac75ee86517d87c319a9db88323f",

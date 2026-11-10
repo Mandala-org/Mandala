@@ -227,9 +227,12 @@ They do not enable `legacy_2026_07` checkpoint semantics. Their matching
 | `zncusnses_v2.json` | 80 | 12 | 8 | 44 |
 
 Training members and their order are retained from the recorded v1 runs.
-The former validation set is partitioned into a smaller validation set and
-its held-out test remainder. Discovery and seeded shuffling precede slicing,
-so these count changes do not change the training prefix. On ROSI, run
+The former validation set is partitioned into a smaller validation prefix and
+its held-out test remainder. The `*_v2_split.json` files freeze the exact pairs
+from the v1 split manifests through the existing `dataset_manifest` option.
+This also bypasses current discovery's rejection of ambiguous OpenMX metadata
+filenames in the original corpus; shared discovery code and data are untouched.
+On ROSI, run
 `python scripts/reproduce_examples/check_v2_splits.py` to verify the real
 training selection path against the v1 manifests without loading matrices.
 The committed `v2_split_check.json` records membership, hashes, and comparisons;

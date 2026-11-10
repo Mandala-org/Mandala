@@ -1,7 +1,7 @@
 """Check publication v2 membership on ROSI without loading matrices or training.
 
-Use the training entrypoint's dataset dispatch and the real discovery/shuffle/
-slice functions, intercepting only the final expensive dataset construction.
+Use the training entrypoint's dataset dispatch, including explicit-manifest
+loading, intercepting only the final expensive dataset construction.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def main(argv=None):
         "source_commit": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
-        "method": "scripts.train._build_dataset_bundle; intercept only "
+        "method": "scripts.train._build_dataset_bundle with explicit v1-derived lists; intercept only "
         "scripts.dataset._create_datasets_from_pairs before matrix loading",
         "selection_source_sha256": {
             str(path.relative_to(ROOT)): digest(path)
@@ -104,15 +104,19 @@ def main(argv=None):
     for name in MATERIALS:
         path = Path(__file__).with_name(f"{name}_v2.json")
         splits = construct_splits(path)
-        previous = construct_splits(path.with_name(f"{name}.json"))
         reference_path = (
             args.checkpoint_root / "publication_retrain_v1" / name / "split_manifest.json"
         )
         reference = json.loads(reference_path.read_text())
         checks = compare(splits, reference)
-        checks["v1_recipe_reconstructs_recorded_members_and_order"] = (
-            previous == reference["splits"]
-        )
+        try:
+            previous = construct_splits(path.with_name(f"{name}.json"))
+        except (ValueError, FileNotFoundError) as error:
+            reconstruction = {"status": "discovery_failed", "reason": str(error)}
+        else:
+            reconstructed = previous == reference["splits"]
+            reconstruction = {"status": "compared", "identical": reconstructed}
+            checks["v1_recipe_reconstructs_recorded_members_and_order"] = reconstructed
         recipe = load_recipe(path)
         counts = {key: len(rows) for key, rows in splits.items()}
         training = recipe["training"]
@@ -141,6 +145,8 @@ def main(argv=None):
             "v1_manifest": str(reference_path),
             "v1_manifest_sha256": digest(reference_path),
             "v1_checks": checks,
+            "v1_recipe_reconstruction": reconstruction,
+            "explicit_manifest_sha256": digest(Path(training["dataset_manifest"])),
             "paper_manifest_search": {
                 "checkpoint_root": str(args.checkpoint_root),
                 "selected_run": selected_run,

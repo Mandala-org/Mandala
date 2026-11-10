@@ -187,7 +187,8 @@
     "num_test": 4,
     "num_test_per_scale": 0,
     "num_train": 90,
-    "num_val": 6
+    "num_val": 6,
+    "dataset_manifest": "scripts/reproduce_examples/sio2_v2_split.json"
   },
   "envelope_file": "sio2_envelope.json",
   "envelope_sha256": "587844b92ed7443d20cc8b9e888c925f0ce6a89373526d4dfe09d4937453143c",
