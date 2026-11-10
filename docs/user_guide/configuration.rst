@@ -138,6 +138,12 @@ A recipe adds ``pipeline`` (stages and outputs) and usually ``objective`` and
      optimizer: {kind: adam, lr: 0.002, betas: [0.9, 0.999]}
      scheduler: {kind: plateau, factor: 0.5, patience: 120, monitor: val/loss, ema_alpha: 0.1}
 
+``objective.terms`` adds registered per-structure scalar losses to the matrix
+objective. Each entry has a ``name``, a nonnegative ``weight`` (default 1),
+and optional ``options`` passed to the function. Import the registration module
+before constructing the model; :doc:`../extending/new_observable` gives a
+complete example and a two-epoch training command.
+
 ``codec`` configures the shell codec (``spinful``, ``ignore_parity``,
 ``sort_irreps``), ``species`` the ordering (``alphabetical`` or
 ``atomic_number``, or an explicit ``order``) and an optional fixed shell

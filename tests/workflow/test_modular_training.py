@@ -299,6 +299,65 @@ def document(tmp_path, name, splits):
     return path
 
 
+def test_registered_observable_through_packed_training_and_batching(tmp_path):
+    from examples.layer_cookbook import new_observable  # noqa: F401
+    from scripts.train import build_components
+    from utils.units import HARTREE_TO_EV
+
+    splits = native_data(tmp_path / "data")
+    config = OmegaConf.load(document(tmp_path, "deeph_e3", splits))
+    config.objective.terms = [{"name": "hamiltonian_trace", "weight": 0.25}]
+    previous = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(torch.float64)
+        _, _, model, datasets, _ = build_components(config)
+        model.eval()
+        graphs = [datasets["train"][i] for i in range(2)]
+        losses = []
+        for x, y in graphs:
+            prediction = model(x)["hamiltonian"].packed_values
+            onsite = (x["edge_shift"] == 0).all(dim=0) & (
+                x["edge_index"][0] == x["edge_index"][1]
+            )
+            # One s orbital per H: independently read the native diagonal.
+            expected = (
+                (prediction[onsite].mean() - y["hamiltonian"]["values"][onsite].mean())
+                / HARTREE_TO_EV
+            ).square()
+            loss, metrics, _ = model._graph_step((x, y), 0, "train")
+            term = metrics["train/loss_term_hamiltonian_trace"]
+            torch.testing.assert_close(term, expected)
+            torch.testing.assert_close(
+                loss, metrics["train/loss_matrix_total"] + 0.25 * expected
+            )
+            losses.append(loss)
+        batch = datasets["train"].collate_fn(graphs)
+        torch.testing.assert_close(
+            model._shared_step(batch, 0, "train"), sum(losses) / 2
+        )
+        term.backward()
+        assert any(
+            p.grad is not None and torch.count_nonzero(p.grad)
+            for p in model.parameters()
+        )
+
+        # A zero-filled, explicitly unobserved diagonal is not a trace label.
+        x, y = graphs[0]
+        y = dict(y)
+        y["hamiltonian"] = dict(y["hamiltonian"])
+        mask = y["hamiltonian"]["mask"].clone()
+        row = (
+            (x["edge_shift"] == 0).all(dim=0)
+            & (x["edge_index"][0] == x["edge_index"][1])
+        ).nonzero()[0, 0]
+        mask[row, 0] = False
+        y["hamiltonian"]["mask"] = mask
+        with pytest.raises(ValueError, match="complete finite onsite"):
+            model._graph_step((x, y), 0, "train")
+    finally:
+        torch.set_default_dtype(previous)
+
+
 @pytest.mark.parametrize("name", ["deeph", "deeph_e3", "mace_h"])
 def test_three_reference_presets_through_actual_training_cli(tmp_path, name):
     splits = native_data(tmp_path / "data")

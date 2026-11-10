@@ -43,6 +43,7 @@ from net.observable_metrics import (
     validate_observable_config,
 )
 from net.spectral_loss import compute_spectral_eigenvalue_loss
+from net.objectives import build_objective_terms
 from net.checkpoint_compat import strip_mapper_keys
 from utils.summary import print_model_summary
 from utils.units import HARTREE_TO_EV
@@ -77,6 +78,7 @@ class E3GNN(pl.LightningModule):
         # The mapper is now an nn.Module and will be moved to the correct device
         # automatically by PyTorch Lightning.
         self.mapper: BlockIrrepMapper = mapper
+        self._objective_terms = build_objective_terms(cfg.objective)
 
         if cfg.pipeline is None:
             from net.component_defaults import default_graph
@@ -1015,6 +1017,22 @@ class E3GNN(pl.LightningModule):
                 frame=self.pipeline.feature_specs[self.pipeline.outputs[name]].frame,
                 operator=name,
             ).to_blocks(self.mapper)
+            if self._objective_terms:
+                # Plugins must see which reference entries were observed,
+                # including missing values zero-filled by the packed loader.
+                edges = x.get("edge_keys")
+                if edges is None:
+                    edges = torch.cat((x["edge_shift"], x["edge_index"]))
+                rows = {tuple(edge.tolist()): i for i, edge in enumerate(edges.T)}
+                y[name]._coverage_masks = {
+                    pair: self.output_layout.unpack_blocks(
+                        tuple(pair.split("-")),
+                        record["mask"][
+                            [rows[tuple(edge.tolist())] for edge in pair_edges.T]
+                        ],
+                    )
+                    for pair, pair_edges in y[name].pair_edges.items()
+                }
         metrics = {}
 
         record_timings = bool(self.cfg.benchmark)
@@ -1852,6 +1870,15 @@ class E3GNN(pl.LightningModule):
             + loss_stress_weighted
             + loss_spectral_weighted
         )
+
+        for term in self._objective_terms:
+            term_loss = term(
+                predictions=physical_pred_matrices, targets=target_matrices, inputs=x
+            )
+            weighted = term.weight * term_loss
+            loss = loss + weighted
+            metrics[f"{stage}/loss_term_{term.name}"] = term_loss
+            metrics[f"{stage}/loss_term_{term.name}_weighted"] = weighted
 
         # L1 and L2 regularization
         if self.cfg.l1_reg_coef > 0:
