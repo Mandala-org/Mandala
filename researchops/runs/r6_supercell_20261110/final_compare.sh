@@ -18,3 +18,4 @@ export PYTHONPATH="$PWD/src:$PWD"
 python -u researchops/runs/r6_supercell_20261110/analyze_tiling.py
 python -u researchops/runs/r6_supercell_20261110/compare.py
 python -u researchops/runs/r6_supercell_20261110/compare_calibration.py
+python -u researchops/runs/r6_supercell_20261110/collect_status.py

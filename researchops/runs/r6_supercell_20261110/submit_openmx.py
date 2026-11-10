@@ -11,8 +11,8 @@ RUN = Path(__file__).resolve().parent
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('names',nargs='+',help='Explicit names; use --remaining after first SCF check')
-    parser.add_argument('--retry-failed',action='store_true',help='Retry a recorded failure before SCF only')
+    parser.add_argument('names',nargs='+',help='Explicit structure names from manifest.json')
+    parser.add_argument('--retry-failed',action='store_true',help='Archive and retry a recorded unsuccessful calculation')
     args = parser.parse_args()
     manifest = json.loads((RUN/'structures/manifest.json').read_text())
     path = RUN/'submissions.json'

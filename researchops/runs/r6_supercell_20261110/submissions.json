@@ -239,11 +239,21 @@
     }
   },
   "postprocessing": {
-    "job_id": "837303",
+    "job_id": "837319",
     "command": [
       "sbatch",
       "--parsable",
       "researchops/runs/r6_supercell_20261110/postprocess.sh"
+    ],
+    "previous_attempts": [
+      {
+        "job_id": "837303",
+        "command": [
+          "sbatch",
+          "--parsable",
+          "researchops/runs/r6_supercell_20261110/postprocess.sh"
+        ]
+      }
     ]
   },
   "auxiliary_jobs": [
@@ -255,5 +265,14 @@
       "job_id": "837281",
       "role": "Activation probe which identified the missing Cartesian conversion"
     }
-  ]
+  ],
+  "final_comparison": {
+    "job_id": "837320",
+    "command": [
+      "sbatch",
+      "--parsable",
+      "--dependency=afterany:837319:837300:837301:837302",
+      "researchops/runs/r6_supercell_20261110/final_compare.sh"
+    ]
+  }
 }
