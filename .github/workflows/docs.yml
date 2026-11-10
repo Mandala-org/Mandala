@@ -62,9 +62,11 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     needs: build
     runs-on: ubuntu-latest
-    # Only the Pages deployment itself must be serialized.
+    # Only the Pages deployment itself must be serialized. The group must be
+    # per ref: a skipped deploy job on another branch still joins the group and
+    # cancels a pending develop deployment (run 42790888308).
     concurrency:
-      group: pages
+      group: pages-${{ github.ref }}
       cancel-in-progress: false
     permissions:
       pages: write
