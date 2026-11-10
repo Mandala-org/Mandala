@@ -793,14 +793,14 @@ class E3GNN(pl.LightningModule):
 
         sx, sy, sz, i, j = edges_5d
         is_diag = (i == j) & (sx == 0) & (sy == 0) & (sz == 0)
-        is_shifted_self = (i == j) & ~((sx == 0) & (sy == 0) & (sz == 0))
 
         if self.cfg.partial_train == "diag":
             return is_diag
         if self.cfg.partial_train == "shifted_self":
-            return is_shifted_self
+            # Only saved configurations can request this retired selector.
+            return (i == j) & ~((sx == 0) & (sy == 0) & (sz == 0))
         if self.cfg.partial_train == "offdiag":
-            if self.cfg.separate_shifted_self:
+            if self.legacy_separate_shifted_self:
                 return i != j
             return ~is_diag
         raise RuntimeError(f"Unsupported partial_train value: {self.cfg.partial_train}")
