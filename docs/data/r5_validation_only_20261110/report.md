@@ -131,3 +131,13 @@ Choices to review/revert: the scoped factory-method interception in the
 report evaluator; retaining all training metadata to guarantee mapper
 identity; the ancestry-only merge preserving the early push; and the
 shortened silicon time limit. No scientific definition was relaxed.
+
+## Final synchronization
+
+A final `git fetch github develop && git rebase github/develop` found a newer
+`develop` tip (`e3f18d0`) and add/add conflicts in the evaluator and its test
+while replaying the retained original evaluator commit. The rebase was aborted
+as instructed. The branch retains the earlier successful rebase onto `41ce77f`;
+it is not rebased onto `e3f18d0`. No conflicts were resolved or forced through.
+ROSI rejected the first final push because this branch was checked out in the
+r5_metrics worktree; detaching that worktree temporarily permits a normal push.
