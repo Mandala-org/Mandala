@@ -7,9 +7,10 @@ on:
 permissions:
   contents: read
 
+# One build per ref; a newer push to the same branch supersedes the older build.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -61,6 +62,10 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     needs: build
     runs-on: ubuntu-latest
+    # Only the Pages deployment itself must be serialized.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
