@@ -13,7 +13,7 @@ def main():
     records = {}
     for material,key,example,ranks,mem,time in (
         ('silicon','silicon','si-2x2x2-1',4,'32G','00:30:00'),
-        ('sio2','sio2_1','sio2-2x1x1-1',32,'96G','04:00:00'),
+        ('sio2','sio2_1','sio2-2x1x1-1',4,'256G','04:00:00'),
     ):
         directory = RUN/'openmx'/('calibration-'+material)
         directory.mkdir(parents=True,exist_ok=True)
@@ -25,13 +25,17 @@ def main():
         script = (RUN/'openmx'/example/'run.sh').read_text()
         script = script.replace('r6-dft-'+example,'r6-cal-'+material)
         script = re.sub(r'^#SBATCH --ntasks=\d+',f'#SBATCH --ntasks={ranks}',script,flags=re.M)
+        threads = 1 if material=='silicon' else 8
+        script = re.sub(r'^#SBATCH --cpus-per-task=\d+',f'#SBATCH --cpus-per-task={threads}',script,flags=re.M)
+        script = re.sub(r'export OMP_NUM_THREADS=\d+',f'export OMP_NUM_THREADS={threads}',script)
+        script = re.sub(r'--map-by slot:PE=\d+',f'--map-by slot:PE={threads}',script)
         script = re.sub(r'^#SBATCH --mem=\S+',f'#SBATCH --mem={mem}',script,flags=re.M)
         script = re.sub(r'^#SBATCH --time=\S+',f'#SBATCH --time={time}',script,flags=re.M)
         script = script.replace('/openmx/'+example+'/', '/openmx/calibration-'+material+'/')
         script = re.sub(r'^cd /bigdata/[^\n]+',f'cd {BASE/material}',script,flags=re.M)
         (directory/'run.sh').write_text(script)
         records[material] = dict(original=evidence[key]['directory'],new=str(BASE/material),
-                                ranks=ranks,memory=mem,walltime=time)
+                                ranks=ranks,omp_threads=threads,memory=mem,walltime=time)
     (RUN/'openmx/calibration.json').write_text(json.dumps(records,indent=2)+'\n')
 
 

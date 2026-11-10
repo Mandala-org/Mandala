@@ -53,6 +53,7 @@ def main():
         updated,count = re.subn(r'^(\s*Atoms.Number\s+)\d+',lambda m:m[1]+str(len(atoms)),updated,flags=re.M)
         assert count == 1
         if material == 'silicon':
+            ranks,threads = 96,1
             updated,count = re.subn(r'^(\s*scf.Kgrid\s+)\d+\s+\d+\s+\d+',
                                     lambda m:m[1]+' '.join(map(str,structure['diagnostic_mesh'])),updated,flags=re.M)
             assert count == 1
@@ -79,17 +80,21 @@ def main():
                         source_ranks=4,cubic_and_kpoint_factor=ratio,assumed_parallel_speedup=6,
                         estimated_seconds=seconds,safety_factor=3)
         else:
+            # High MPI counts replicate large neighboring-atom orbital grids.
+            # The initial 96-rank/256G runs exhausted memory before SCF.
+            # Share those grids among OpenMP threads instead.
+            ranks,threads = 8,12
             lines = evidence[key]['timing_lines']
             total = float(re.search(r'Total Computational Time.*?(\d+\.\d+)\s+\d+\s+(\d+\.\d+)', '\n'.join(lines))[2])
             steps = len([line for line in lines if 'SCF=' in line])
             seconds = total * 8
-            hours,memory = 44,'256G'
+            hours,memory = 44,'768G'
             cost = dict(source_seconds=total,source_steps=steps,
                         source_seconds_per_step=float(re.search(r'DFT in total\s*=\s*([\d.]+)','\n'.join(lines))[1])/steps,
                         source_ranks='unknown; source run script absent',cubic_and_kpoint_factor=8,
                         assumed_parallel_speedup=1,estimated_seconds=seconds,safety_factor=3,
                         walltime_cap_hours=44,
-                        note='Conservative: no credit for increasing to 96 ranks because original rank count is unknown. 3x estimate capped at 44 h to fit before ROSI maintenance beginning 2026-11-12 08:00 CET; initial 48 h requests could not start.')
+                        note='No speedup credit because original rank count is unknown. After pre-SCF OOM at 96 MPI ranks/256G, use 8 MPI x 12 OpenMP threads and 768G. 3x estimate capped at 44 h to fit before maintenance on 2026-11-12 08:00 CET.')
         assert hours <= 48
         name = structure['name']
         run_dir = structure['dft_directory']
@@ -99,8 +104,8 @@ def main():
 #SBATCH --partition=cpu-genoa-casus
 #SBATCH --account=casus
 #SBATCH --nodes=1
-#SBATCH --ntasks=96
-#SBATCH --cpus-per-task=1
+#SBATCH --ntasks={ranks}
+#SBATCH --cpus-per-task={threads}
 #SBATCH --mem={memory}
 #SBATCH --time={hours:02d}:00:00
 #SBATCH --output={REMOTE}/researchops/runs/r6_supercell_20261110/openmx/{name}/slurm-%j.out
@@ -110,13 +115,13 @@ ml purge
 ml genoa
 ml foss/2022a
 export OMPI_MCA_pml=ucx
-export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+export OMP_NUM_THREADS={threads} OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 cd {run_dir}
 test ! -e COMPLETE
 test -x {BIN}/openmx
 test -x {BIN}/analysis_example
 date -u
-mpirun -bind-to core --map-by core -np "$SLURM_NTASKS" {BIN}/openmx {filename} > log.out
+mpirun -bind-to core --map-by slot:PE={threads} -np "$SLURM_NTASKS" {BIN}/openmx {filename} > log.out
 grep -q 'The calculation was normally finished.' log.out
 grep -q 'The SCF was achieved' log.out
 test -s {system}.scfout
@@ -130,7 +135,8 @@ if (( ${{#intermediates[@]}} )); then rm -rf -- "${{intermediates[@]}}"; fi
 date -u > COMPLETE
 '''
         (directory/'run.sh').write_text(script)
-        estimates.append(dict(name=name,ranks=96,memory=memory,walltime=f'{hours:02d}:00:00',
+        estimates.append(dict(name=name,ranks=ranks,omp_threads=threads,total_cpus=ranks*threads,
+                              memory=memory,walltime=f'{hours:02d}:00:00',
                               input=filename,run_directory=run_dir,
                               original_data_path=source_data_path,
                               runtime_data_path=INSTALL+'/DFT_DATA19/',

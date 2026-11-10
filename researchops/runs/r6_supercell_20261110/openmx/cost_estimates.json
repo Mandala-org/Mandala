@@ -2,6 +2,8 @@
   {
     "name": "si-2x2x2-1",
     "ranks": 96,
+    "omp_threads": 1,
+    "total_cpus": 96,
     "memory": "96G",
     "walltime": "02:00:00",
     "input": "conf.dat",
@@ -22,6 +24,8 @@
   {
     "name": "si-2x2x2-2",
     "ranks": 96,
+    "omp_threads": 1,
+    "total_cpus": 96,
     "memory": "96G",
     "walltime": "02:00:00",
     "input": "conf.dat",
@@ -42,6 +46,8 @@
   {
     "name": "si-2x2x2-3",
     "ranks": 96,
+    "omp_threads": 1,
+    "total_cpus": 96,
     "memory": "96G",
     "walltime": "02:00:00",
     "input": "conf.dat",
@@ -62,6 +68,8 @@
   {
     "name": "si-3x3x3-1",
     "ranks": 96,
+    "omp_threads": 1,
+    "total_cpus": 96,
     "memory": "192G",
     "walltime": "18:00:00",
     "input": "conf.dat",
@@ -82,6 +90,8 @@
   {
     "name": "si-3x3x3-2",
     "ranks": 96,
+    "omp_threads": 1,
+    "total_cpus": 96,
     "memory": "192G",
     "walltime": "18:00:00",
     "input": "conf.dat",
@@ -102,6 +112,8 @@
   {
     "name": "si-3x3x3-3",
     "ranks": 96,
+    "omp_threads": 1,
+    "total_cpus": 96,
     "memory": "192G",
     "walltime": "18:00:00",
     "input": "conf.dat",
@@ -121,8 +133,10 @@
   },
   {
     "name": "sio2-2x1x1-1",
-    "ranks": 96,
-    "memory": "256G",
+    "ranks": 8,
+    "omp_threads": 12,
+    "total_cpus": 96,
+    "memory": "768G",
     "walltime": "44:00:00",
     "input": "SiO2.dat",
     "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-1",
@@ -139,12 +153,14 @@
     "estimated_seconds": 74024.696,
     "safety_factor": 3,
     "walltime_cap_hours": 44,
-    "note": "Conservative: no credit for increasing to 96 ranks because original rank count is unknown. 3x estimate capped at 44 h to fit before ROSI maintenance beginning 2026-11-12 08:00 CET; initial 48 h requests could not start."
+    "note": "No speedup credit because original rank count is unknown. After pre-SCF OOM at 96 MPI ranks/256G, use 8 MPI x 12 OpenMP threads and 768G. 3x estimate capped at 44 h to fit before maintenance on 2026-11-12 08:00 CET."
   },
   {
     "name": "sio2-2x1x1-2",
-    "ranks": 96,
-    "memory": "256G",
+    "ranks": 8,
+    "omp_threads": 12,
+    "total_cpus": 96,
+    "memory": "768G",
     "walltime": "44:00:00",
     "input": "SiO2.dat",
     "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2",
@@ -161,6 +177,6 @@
     "estimated_seconds": 49428.256,
     "safety_factor": 3,
     "walltime_cap_hours": 44,
-    "note": "Conservative: no credit for increasing to 96 ranks because original rank count is unknown. 3x estimate capped at 44 h to fit before ROSI maintenance beginning 2026-11-12 08:00 CET; initial 48 h requests could not start."
+    "note": "No speedup credit because original rank count is unknown. After pre-SCF OOM at 96 MPI ranks/256G, use 8 MPI x 12 OpenMP threads and 768G. 3x estimate capped at 44 h to fit before maintenance on 2026-11-12 08:00 CET."
   }
 ]

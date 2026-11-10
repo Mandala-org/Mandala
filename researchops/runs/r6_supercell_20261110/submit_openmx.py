@@ -27,12 +27,21 @@ def main():
             if not args.retry_failed:
                 continue
             state = subprocess.check_output(['sacct','-j',previous['job_id'],'-X','-n','-o','State'],text=True).strip()
-            assert state.startswith(('FAILED','CANCELLED','TIMEOUT')), state
+            assert state.startswith(('FAILED','CANCELLED','TIMEOUT','OUT_OF_MEMORY')), state
         staged = RUN/'openmx'/name
         directory = Path(structure['dft_directory'])
         directory.mkdir(parents=True,exist_ok=True)
         input_name,system = ('conf.dat','Si') if structure['material'] == 'silicon' else ('SiO2.dat','SiO2')
-        assert not (directory/'log.out').exists(), 'Refuse to overwrite an existing calculation'
+        assert not (directory/'COMPLETE').exists(), 'Refuse to overwrite a completed calculation'
+        if (directory/'log.out').exists():
+            assert previous and args.retry_failed, 'Refuse to overwrite an existing calculation'
+            archive = directory/('failed-'+previous['job_id'])
+            archive.mkdir(exist_ok=False)
+            for source in list(directory.iterdir()):
+                if source == archive or source.name.startswith('failed-') or source.name in (input_name,system+'.cif','run.sh'):
+                    continue
+                shutil.move(str(source),str(archive/source.name))
+            previous['archived_outputs'] = str(archive)
         shutil.copy2(staged/input_name,directory/input_name)
         shutil.copy2(RUN/'structures'/structure['cif'],directory/(system+'.cif'))
         shutil.copy2(staged/'run.sh',directory/'run.sh')

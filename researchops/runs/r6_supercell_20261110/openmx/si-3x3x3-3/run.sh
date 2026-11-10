@@ -20,7 +20,7 @@ test ! -e COMPLETE
 test -x /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx
 test -x /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/analysis_example
 date -u
-mpirun -bind-to core --map-by core -np "$SLURM_NTASKS" /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx conf.dat > log.out
+mpirun -bind-to core --map-by slot:PE=1 -np "$SLURM_NTASKS" /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx conf.dat > log.out
 grep -q 'The calculation was normally finished.' log.out
 grep -q 'The SCF was achieved' log.out
 test -s Si.scfout

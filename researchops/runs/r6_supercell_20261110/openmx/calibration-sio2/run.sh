@@ -3,9 +3,9 @@
 #SBATCH --partition=cpu-genoa-casus
 #SBATCH --account=casus
 #SBATCH --nodes=1
-#SBATCH --ntasks=32
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=96G
+#SBATCH --ntasks=4
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=256G
 #SBATCH --time=04:00:00
 #SBATCH --output=/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/calibration-sio2/slurm-%j.out
 set -euo pipefail
@@ -14,13 +14,13 @@ ml purge
 ml genoa
 ml foss/2022a
 export OMPI_MCA_pml=ucx
-export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+export OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 cd /bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/sio2
 test ! -e COMPLETE
 test -x /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx
 test -x /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/analysis_example
 date -u
-mpirun -bind-to core --map-by core -np "$SLURM_NTASKS" /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx SiO2.dat > log.out
+mpirun -bind-to core --map-by slot:PE=8 -np "$SLURM_NTASKS" /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx SiO2.dat > log.out
 grep -q 'The calculation was normally finished.' log.out
 grep -q 'The SCF was achieved' log.out
 test -s SiO2.scfout
