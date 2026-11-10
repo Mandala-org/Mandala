@@ -78,7 +78,7 @@ fresh test run or an inferred pass count. Regenerate it with:
 Known version notes
 ~~~~~~~~~~~~~~~~~~~
 
-* Python 3.14.10 passes the CPU contracts (701 passed, 68 skipped) and both
+* Python 3.14.10 passes the CPU contracts (710 passed, 68 skipped) and both
   GPU smoke tests with PyTorch 2.11.0+cu128 and the matching PyG scatter wheel
   on the A40, driver 550.163.01. PyTorch warns that TorchScript is deprecated
   on Python 3.14; the tested e3nn model still passes forward and backward.
@@ -86,10 +86,15 @@ Known version notes
   This is a wheel availability limit; no cu128 tests ran for Python 3.15.
 
 * Python 3.15.2 with PyTorch 2.15.0+cu134 passes the same CPU selection
-  (701 passed, 68 skipped). h5py 3.16.0 has no cp315 wheel: it was built
+  (710 passed, 68 skipped). h5py 3.16.0 has no cp315 wheel: it was built
   from source against locally extracted HDF5 1.14.5 libraries. Scatter
   was also built from source with CUDA 13.4. GPU execution on Python 3.15
   is not verified, so package metadata retains the ``<3.15`` upper bound.
+* After rebasing onto develop revision ``6fa64e2``, the same CPU command
+  selects nine additional unit tests. All four follow-up environments pass
+  710 tests (602 unit, 69 physics, 39 equivariance), with 68 skips and
+  52 successful subtests. The earlier 701-test measurements are retained
+  in each record under ``pre_rebase_cpu_tests``.
 * The verified CPU selection excludes GPU, slow, large-data, network and
   integration tests. It also excludes the large silicon spatial fixture and
   unshipped generated PySCF reference files. The 68 skips require optional

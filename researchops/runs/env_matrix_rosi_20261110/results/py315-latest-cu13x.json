@@ -7,7 +7,7 @@
   "python": "3.15.2",
   "torch": "2.15.0+cu134",
   "cuda_wheel_tag": "cu134",
-  "source_revision": "18b36a6d553033f94bffdb935758d04235de64ed",
+  "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
   "installation_commands": [
     "uv pip install --python /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/bin/python torch==2.15.0 --index-url https://download.pytorch.org/whl/cu134",
     "uv pip install --python /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/bin/python --reinstall-package torch-scatter torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.15.0+cu134.html --only-binary torch-scatter",
@@ -288,6 +288,81 @@
     "output": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import torch; from torch_scatter import scatter_max; print(scatter_max(torch.tensor([1.,3.,2.],device='cuda'),torch.tensor([0,0,1],device='cuda'))); torch.cuda.synchronize()\n                                                                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/cuda/__init__.py\", line 616, in _lazy_init\n    torch._C._cuda_init()\n    ~~~~~~~~~~~~~~~~~~~^^\nRuntimeError: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver.\n"
   },
   "cpu_tests": {
+    "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/post-rebase-py315-latest-cu13x-cpu.xml",
+    "environment": {
+      "PYTHONPATH": "src:.",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "WANDB_MODE": "offline",
+      "MPLBACKEND": "Agg",
+      "CUDA_VISIBLE_DEVICES": "",
+      "LD_LIBRARY_PATH": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/hdf5/usr/lib/x86_64-linux-gnu"
+    },
+    "exit_code": 0,
+    "runtime_seconds": 42.698,
+    "output": "bringing up nodes...\nbringing up nodes...\n\n..................................................s...................ss [  9%]\nsss.s.......ssss........................................................ [ 18%]\n...s..........................ssssss..............................ssssss [ 27%]\nss............................sss......sssssssss........................ [ 37%]\n........................................................................ [ 46%]\n............ssss.............ssssssssssssssssss......................... [ 55%]\n........................................s..ss........................... [ 64%]\n........................................................................ [ 74%]\n..................................sss.......................uuuuuuuuuuuu [ 81%]\nuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu.........ss..................... [ 85%]\n........................................................................ [ 95%]\n......................................                                   [100%]\n=============================== warnings summary ===============================\n.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/__config__.py:9: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n    return torch._C._show_config()\n\n.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/jit/_script.py:1485: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/jit/_script.py:1485: FutureWarning: `torch.jit.script` is not supported in Python 3.14+ and may break. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_correlation_uses_all_shift_resolved_elements_and_correct_mae\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2597: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_eigenvalue_correlation_mae_uses_only_fixed_energy_window\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2734: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/data/test_openmx_writer.py::test_checkpoint_xyz_cli_without_reference_files\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/ase/atoms.py:432: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.\n  As an alternative, you can create a new view using np.reshape (with copy=False if needed).\n    a.shape = (-1,) + shape\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n710 passed, 68 skipped, 35 warnings, 52 subtests passed in 37.12s\n",
+    "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
+    "passed": 710,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 68,
+    "tests": 778,
+    "counts_by_subset": {
+      "unit": {
+        "passed": 602,
+        "errors": 0,
+        "skipped": 68,
+        "failed": 0
+      },
+      "physics": {
+        "passed": 69,
+        "errors": 0,
+        "skipped": 0,
+        "failed": 0
+      },
+      "equivariance": {
+        "passed": 39,
+        "errors": 0,
+        "skipped": 0,
+        "failed": 0
+      }
+    },
+    "subtests_passed": 52,
+    "subsets": [
+      "unit",
+      "physics",
+      "equivariance"
+    ],
+    "skipped_reasons": {
+      "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+      "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+      "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+      "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+      "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+      "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+      "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+      "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+      "Pinned mace_h source oracle is not configured.": 4,
+      "Pinned deeph_e3 source oracle is not configured.": 4
+    }
+  },
+  "gpu_smoke": {
+    "exit_code": null,
+    "reason": "Not run: Terok driver 550.163.01 cannot initialize CUDA 13.x."
+  },
+  "table_note": "CPU verified; source CUDA scatter and h5py; GPU untested",
+  "gpu_error": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import torch; from torch_scatter import scatter_max; print(scatter_max(torch.tensor([1.,3.,2.],device='cuda'),torch.tensor([0,0,1],device='cuda'))); torch.cuda.synchronize()\n                                                                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/cuda/__init__.py\", line 616, in _lazy_init\n    torch._C._cuda_init()\n    ~~~~~~~~~~~~~~~~~~~^^\nRuntimeError: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver.\n",
+  "h5py_build": {
+    "kind": "source",
+    "version": "3.16.0",
+    "hdf5": "1.14.5+repack-3 (Debian libraries extracted locally)",
+    "preparation_script": "researchops/runs/env_matrix_rosi_20261110/prepare_hdf5_terok.sh",
+    "output": "Using Python 3.15.2 environment at: .venvs/py315-latest-cu13x\nResolved 2 packages in 4ms\n   Building h5py==3.16.0\n      Built h5py==3.16.0\nPrepared 1 package in 2m 10s\nInstalled 2 packages in 157ms\n + h5py==3.16.0\n + numpy==2.5.4\n",
+    "packages_output": "Get:1 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libhdf5-310 amd64 1.14.5+repack-3 [1344 kB]\nGet:2 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libhdf5-dev amd64 1.14.5+repack-3 [3165 kB]\nGet:3 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libhdf5-hl-310 amd64 1.14.5+repack-3 [69.3 kB]\nGet:4 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libaec0 amd64 1.1.3-1+b1 [23.8 kB]\nGet:5 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libsz2 amd64 1.1.3-1+b1 [8080 B]\nFetched 4610 kB in 0s (19.4 MB/s)\n"
+  },
+  "pre_rebase_cpu_tests": {
     "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/py315-latest-cu13x/cpu_tests.xml",
     "environment": {
       "CUDA_VISIBLE_DEVICES": ""
@@ -345,18 +420,5 @@
       "equivariance"
     ]
   },
-  "gpu_smoke": {
-    "exit_code": null,
-    "reason": "Not run: Terok driver 550.163.01 cannot initialize CUDA 13.x."
-  },
-  "table_note": "CPU verified; source CUDA scatter and h5py; GPU untested",
-  "gpu_error": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import torch; from torch_scatter import scatter_max; print(scatter_max(torch.tensor([1.,3.,2.],device='cuda'),torch.tensor([0,0,1],device='cuda'))); torch.cuda.synchronize()\n                                                                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/cuda/__init__.py\", line 616, in _lazy_init\n    torch._C._cuda_init()\n    ~~~~~~~~~~~~~~~~~~~^^\nRuntimeError: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver.\n",
-  "h5py_build": {
-    "kind": "source",
-    "version": "3.16.0",
-    "hdf5": "1.14.5+repack-3 (Debian libraries extracted locally)",
-    "preparation_script": "researchops/runs/env_matrix_rosi_20261110/prepare_hdf5_terok.sh",
-    "output": "Using Python 3.15.2 environment at: .venvs/py315-latest-cu13x\nResolved 2 packages in 4ms\n   Building h5py==3.16.0\n      Built h5py==3.16.0\nPrepared 1 package in 2m 10s\nInstalled 2 packages in 157ms\n + h5py==3.16.0\n + numpy==2.5.4\n",
-    "packages_output": "Get:1 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libhdf5-310 amd64 1.14.5+repack-3 [1344 kB]\nGet:2 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libhdf5-dev amd64 1.14.5+repack-3 [3165 kB]\nGet:3 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libhdf5-hl-310 amd64 1.14.5+repack-3 [69.3 kB]\nGet:4 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libaec0 amd64 1.1.3-1+b1 [23.8 kB]\nGet:5 http://debian.inf.tu-dresden.de/debian trixie/main amd64 libsz2 amd64 1.1.3-1+b1 [8080 B]\nFetched 4610 kB in 0s (19.4 MB/s)\n"
-  }
+  "installation_source_revision": "18b36a6d553033f94bffdb935758d04235de64ed"
 }

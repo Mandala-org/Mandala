@@ -1,0 +1,210 @@
+{
+  "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
+  "cpu": {
+    "py314-t2xx-cu128": {
+      "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-t2xx-cu128/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/post-rebase-py314-t2xx-cu128-cpu.xml",
+      "environment": {
+        "PYTHONPATH": "src:.",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "WANDB_MODE": "offline",
+        "MPLBACKEND": "Agg",
+        "CUDA_VISIBLE_DEVICES": ""
+      },
+      "exit_code": 0,
+      "runtime_seconds": 39.136,
+      "output": "bringing up nodes...\nbringing up nodes...\n\n...........................................................s.......s.... [  9%]\n....ssss...s...sss..s................................................... [ 18%]\n.......................................................s....ssssssssssss [ 27%]\nssssssss..................................s...sssssss................... [ 37%]\n.................................................ss..................... [ 46%]\n.......................sssss.s..sss.ssssssss..................s......... [ 55%]\n.................................ss.ssss................................ [ 64%]\n.....................uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu [ 67%]\nu....................................................................... [ 76%]\n.....................................................ss................. [ 85%]\n........................................................................ [ 95%]\n......................................                                   [100%]\n=============================== warnings summary ===============================\n.venvs/py314-t2xx-cu128/lib/python3.14/site-packages/torch/jit/_script.py:1482: 32 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-t2xx-cu128/lib/python3.14/site-packages/torch/jit/_script.py:1482: DeprecationWarning: `torch.jit.script` is not supported in Python 3.14+ and may break. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_correlation_uses_all_shift_resolved_elements_and_correct_mae\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2597: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_eigenvalue_correlation_mae_uses_only_fixed_energy_window\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2734: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/data/test_openmx_writer.py::test_checkpoint_xyz_cli_without_reference_files\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-t2xx-cu128/lib/python3.14/site-packages/ase/atoms.py:432: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.\n  As an alternative, you can create a new view using np.reshape (with copy=False if needed).\n    a.shape = (-1,) + shape\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n710 passed, 68 skipped, 35 warnings, 52 subtests passed in 34.45s\n",
+      "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
+      "passed": 710,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 68,
+      "tests": 778,
+      "counts_by_subset": {
+        "unit": {
+          "passed": 602,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 68
+        },
+        "physics": {
+          "passed": 69,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "equivariance": {
+          "passed": 39,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "subtests_passed": 52
+    },
+    "py314-latest-cu13x": {
+      "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/post-rebase-py314-latest-cu13x-cpu.xml",
+      "environment": {
+        "PYTHONPATH": "src:.",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "WANDB_MODE": "offline",
+        "MPLBACKEND": "Agg",
+        "CUDA_VISIBLE_DEVICES": ""
+      },
+      "exit_code": 0,
+      "runtime_seconds": 39.624,
+      "output": "bringing up nodes...\nbringing up nodes...\n\n......................................................................ss [  9%]\n.ss...s...........ssssss................................................ [ 18%]\n..............................sssss.s............ssss................... [ 27%]\n.....................sss...s......................ssssss................ [ 37%]\n.....................................................ssssssss........... [ 46%]\n..............................ssssssssssssss.ssss....................... [ 55%]\n.....................................sss.......sss..s................... [ 64%]\n......................................uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu [ 69%]\nuuuuuuuuuuuuuuuuuu................................sss................... [ 76%]\n................................................................s....... [ 85%]\n........................................................................ [ 95%]\n......................................                                   [100%]\n=============================== warnings summary ===============================\n.venvs/py314-latest-cu13x/lib/python3.14/site-packages/torch/__config__.py:9: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n    return torch._C._show_config()\n\n.venvs/py314-latest-cu13x/lib/python3.14/site-packages/torch/jit/_script.py:1485: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/torch/jit/_script.py:1485: FutureWarning: `torch.jit.script` is not supported in Python 3.14+ and may break. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_correlation_uses_all_shift_resolved_elements_and_correct_mae\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2597: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_eigenvalue_correlation_mae_uses_only_fixed_energy_window\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2734: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/data/test_openmx_writer.py::test_checkpoint_xyz_cli_without_reference_files\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/ase/atoms.py:432: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.\n  As an alternative, you can create a new view using np.reshape (with copy=False if needed).\n    a.shape = (-1,) + shape\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n710 passed, 68 skipped, 35 warnings, 52 subtests passed in 35.12s\n",
+      "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
+      "passed": 710,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 68,
+      "tests": 778,
+      "counts_by_subset": {
+        "unit": {
+          "passed": 602,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 68
+        },
+        "physics": {
+          "passed": 69,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "equivariance": {
+          "passed": 39,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "subtests_passed": 52
+    },
+    "py315-latest-cu13x": {
+      "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/post-rebase-py315-latest-cu13x-cpu.xml",
+      "environment": {
+        "PYTHONPATH": "src:.",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "WANDB_MODE": "offline",
+        "MPLBACKEND": "Agg",
+        "CUDA_VISIBLE_DEVICES": "",
+        "LD_LIBRARY_PATH": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/hdf5/usr/lib/x86_64-linux-gnu"
+      },
+      "exit_code": 0,
+      "runtime_seconds": 42.698,
+      "output": "bringing up nodes...\nbringing up nodes...\n\n..................................................s...................ss [  9%]\nsss.s.......ssss........................................................ [ 18%]\n...s..........................ssssss..............................ssssss [ 27%]\nss............................sss......sssssssss........................ [ 37%]\n........................................................................ [ 46%]\n............ssss.............ssssssssssssssssss......................... [ 55%]\n........................................s..ss........................... [ 64%]\n........................................................................ [ 74%]\n..................................sss.......................uuuuuuuuuuuu [ 81%]\nuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu.........ss..................... [ 85%]\n........................................................................ [ 95%]\n......................................                                   [100%]\n=============================== warnings summary ===============================\n.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/__config__.py:9: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n    return torch._C._show_config()\n\n.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/jit/_script.py:1485: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/torch/jit/_script.py:1485: FutureWarning: `torch.jit.script` is not supported in Python 3.14+ and may break. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_correlation_uses_all_shift_resolved_elements_and_correct_mae\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2597: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_eigenvalue_correlation_mae_uses_only_fixed_energy_window\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2734: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/data/test_openmx_writer.py::test_checkpoint_xyz_cli_without_reference_files\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py315-latest-cu13x/lib/python3.15/site-packages/ase/atoms.py:432: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.\n  As an alternative, you can create a new view using np.reshape (with copy=False if needed).\n    a.shape = (-1,) + shape\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n710 passed, 68 skipped, 35 warnings, 52 subtests passed in 37.12s\n",
+      "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
+      "passed": 710,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 68,
+      "tests": 778,
+      "counts_by_subset": {
+        "unit": {
+          "passed": 602,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 68
+        },
+        "physics": {
+          "passed": 69,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "equivariance": {
+          "passed": 39,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "subtests_passed": 52
+    },
+    "py313-latest-cu13x": {
+      "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/post-rebase-py313-latest-cu13x-cpu.xml",
+      "environment": {
+        "PYTHONPATH": "src:.",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "WANDB_MODE": "offline",
+        "MPLBACKEND": "Agg",
+        "CUDA_VISIBLE_DEVICES": ""
+      },
+      "exit_code": 0,
+      "runtime_seconds": 41.451,
+      "output": "bringing up nodes...\nbringing up nodes...\n\n........................................................................ [  9%]\n...ssssss....ss.....ss.........s........................................ [ 18%]\n...s............................ssss.s..sssssssss.s.......s.sssss....... [ 27%]\n..............................................................sssssss... [ 37%]\n..ss.................................................................... [ 46%]\n.....................ssssssssssssss.ss.ss............................... [ 55%]\n....................................ssssss.............................. [ 64%]\n.............................uuuuuuuuuuuuuuuuuuuuuuuuuu..uuuuuuuuuuuuuuu [ 68%]\nuuuuuuuuuuu............................................................. [ 76%]\n........................................................................ [ 85%]\n.....................................................ss................. [ 95%]\n......................................                                   [100%]\n=============================== warnings summary ===============================\n.venvs/py313-latest-cu13x/lib/python3.13/site-packages/torch/__config__.py:9: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n    return torch._C._show_config()\n\n.venvs/py313-latest-cu13x/lib/python3.13/site-packages/torch/jit/_script.py:1491: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_correlation_uses_all_shift_resolved_elements_and_correct_mae\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2597: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_eigenvalue_correlation_mae_uses_only_fixed_energy_window\n  /home/brzoza73/casus/mandala_worktrees/envs2/src/analysis/evaluation.py:2734: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/data/test_openmx_writer.py::test_checkpoint_xyz_cli_without_reference_files\n  /home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/ase/atoms.py:432: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.\n  As an alternative, you can create a new view using np.reshape (with copy=False if needed).\n    a.shape = (-1,) + shape\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n710 passed, 68 skipped, 35 warnings, 52 subtests passed in 36.48s\n",
+      "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
+      "passed": 710,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 68,
+      "tests": 778,
+      "counts_by_subset": {
+        "unit": {
+          "passed": 602,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 68
+        },
+        "physics": {
+          "passed": 69,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "equivariance": {
+          "passed": 39,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "subtests_passed": 52
+    }
+  },
+  "gpu_smoke": {
+    "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-t2xx-cu128/bin/python -m pytest -q tests/gpu/test_cuda_smoke.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/post-rebase-py314-t2xx-cu128-gpu.xml",
+    "environment": {
+      "PYTHONPATH": "src:.",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "WANDB_MODE": "offline",
+      "MPLBACKEND": "Agg",
+      "CUDA_VISIBLE_DEVICES": "0",
+      "MANDALA_RUN_GPU_TESTS": "1"
+    },
+    "exit_code": 0,
+    "runtime_seconds": 8.604,
+    "output": "..                                                                       [100%]\n2 passed in 3.80s\n",
+    "source_revision": "6316230e6d59f9af1bb8e74ce3dd8ae624607cdd",
+    "passed": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "tests": 2,
+    "counts_by_subset": {
+      "gpu": {
+        "passed": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "subtests_passed": 0
+  }
+}

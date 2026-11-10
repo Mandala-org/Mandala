@@ -41,7 +41,7 @@ python3 scripts/report/render_tested_environments.py --check
 
 The CPU command runs in each tested interpreter. JSON records include absolute
 interpreter paths, exact installation commands, JUnit counts and wall times.
-The four current CPU runs each pass 593 unit + 69 physics + 39 equivariance
+The four current CPU runs each pass 602 unit + 69 physics + 39 equivariance
 tests, with 68 optional-reference skips and 52 successful subtests.
 
 Choices and limits
@@ -64,11 +64,11 @@ Final measured follow-up matrix (subprocess wall time):
 
 | Environment (Python) | torch/tag | host / driver | CPU passed / skipped (s) | GPU smoke | GPU subset |
 |---|---|---|---|---|---|
-| py314-t2xx-cu128 (3.14.10) | 2.11.0+cu128 / cu128 | terok / 550.163.01 | 701 passed, 0 failed, 68 skipped (27.481 s) | 2 passed, 0 failed, 0 skipped (8.005 s) | not run |
+| py314-t2xx-cu128 (3.14.10) | 2.11.0+cu128 / cu128 | terok / 550.163.01 | 710 passed, 0 failed, 68 skipped (39.136 s) | 2 passed, 0 failed, 0 skipped (8.604 s) | not run |
 | py315-t2xx-cu128 (3.15.2) | none / cu128 | terok / 550.163.01 | not run | not run | not run |
-| py314-latest-cu13x (3.14.10) | 2.15.0+cu134 / cu134 | terok / 550.163.01 | 701 passed, 0 failed, 68 skipped (30.660 s) | not run | not run |
-| py315-latest-cu13x (3.15.2) | 2.15.0+cu134 / cu134 | terok / 550.163.01 | 701 passed, 0 failed, 68 skipped (42.402 s) | not run | not run |
-| py313-latest-cu13x (3.13.18) | 2.15.0+cu134 / cu134 | terok / 550.163.01 | 701 passed, 0 failed, 68 skipped (43.253 s) | not run | not run |
+| py314-latest-cu13x (3.14.10) | 2.15.0+cu134 / cu134 | terok / 550.163.01 | 710 passed, 0 failed, 68 skipped (39.624 s) | not run | not run |
+| py315-latest-cu13x (3.15.2) | 2.15.0+cu134 / cu134 | terok / 550.163.01 | 710 passed, 0 failed, 68 skipped (42.698 s) | not run | not run |
+| py313-latest-cu13x (3.13.18) | 2.15.0+cu134 / cu134 | terok / 550.163.01 | 710 passed, 0 failed, 68 skipped (41.451 s) | not run | not run |
 | py313-latest-cu13x-rosi-attempt1 (3.13.18) | 2.15.0+cu134 / cu134 | gh003 / 570.158.01 | not run | 0 passed, 2 failed, 0 skipped (13.146 s) | 0 passed, 4 failed, 0 skipped (15.695 s) |
 | py314-latest-cu13x-rosi-attempt1 (3.14.10) | 2.15.0+cu134 / cu134 | gh003 / 570.158.01 | not run | 0 passed, 2 failed, 0 skipped (13.777 s) | 0 passed, 4 failed, 0 skipped (15.684 s) |
 | py313-latest-cu13x-rosi (3.13.18) | 2.15.0+cu134 / cu134 | gh003 / 570.158.01 | not run | 2 passed, 0 failed, 0 skipped (29.850 s) | 4 passed, 0 failed, 0 skipped (20.433 s) |
@@ -84,5 +84,24 @@ ROSI job 837275 completed successfully (0:0) in 00:26:39, 4 CPUs, 32 GB.
 First job 837254 retained failed GPU checks; its exit propagation bug was
 fixed before the retry. Both attempts are registered in the second brain.
 
-The final assembly commit adds the Python 3.14 H100 JSON, retry Slurm log,
-validation.json, and this report; its hash is supplied in the final response.
+Final rebase and published history
+
+Develop advanced to 6fa64e2 with referee-point-7 analysis changes. The rebase
+completed without conflicts (snapshot 04a5549). To honor the no-force-push
+rule, merge 6316230 retains the published 6d4a2f0 ancestry while preserving
+exactly the rebased file tree. This creates duplicate original/rebased commits
+in history; it is an intentional, reversible history choice.
+
+The same CPU command was rerun in all four environments after the rebase:
+710 passed, 68 skipped, 52 successful subtests each. The nine additional
+unit tests came from develop. Pre-rebase 701-test measurements are preserved.
+The A40 smoke recheck also passed 2/2. The model/data/training/GPU-test sources
+are unchanged from the passing H100 revision d2fe08c, as checked with:
+
+```bash
+git diff --exit-code d2fe08c HEAD -- src/net src/core src/data tests/conftest.py tests/gpu tests/workflow/test_epoch_boundary_resume.py scripts/train.py
+```
+
+The final assembly adds the Python 3.14 H100 JSON, retry Slurm log,
+validation.json, post_rebase_checks.json and this report. Its final commit
+hash is supplied in the worker response.

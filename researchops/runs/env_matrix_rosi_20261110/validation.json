@@ -1,10 +1,10 @@
 {
   "cpu_selection": {
     "command": "python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py",
-    "per_environment_passed": 701,
+    "per_environment_passed": 710,
     "per_environment_skipped": 68,
     "per_environment_subtests_passed": 52,
-    "unit_passed": 593,
+    "unit_passed": 602,
     "physics_passed": 69,
     "equivariance_passed": 39
   },
@@ -13,7 +13,8 @@
     "exit_code": 0,
     "sphinx_warnings": 1,
     "warning": "Graphviz dot executable is missing on Terok; CI explicitly installs graphviz.",
-    "final_log_tail": "de... [ 77%] net.objectives\nhighlighting module code... [ 81%] net.observable_metrics\nhighlighting module code... [ 84%] net.pipeline\nhighlighting module code... [ 87%] net.spectral_loss\nhighlighting module code... [ 90%] net.training_policies\nhighlighting module code... [ 94%] net.transforms.cluster\nhighlighting module code... [ 97%] net.transforms.composition\nhighlighting module code... [100%] net.transforms.equivariant\n\nwriting additional pages... search done\ncopying images... [ 50%] ../paper/figures/results/silicon_cif_scaling_time_total.png\ncopying images... [100%] ../paper/figures/results/paper_zncusnses_hamiltonian_correlation.png\n\ndumping search index in English (code: en)... done\ndumping object inventory... done\nbuild succeeded, 1 warning.\n\nThe HTML pages are in .venvs/docs-html.\n"
+    "final_log_tail": "de... [ 77%] net.objectives\nhighlighting module code... [ 81%] net.observable_metrics\nhighlighting module code... [ 84%] net.pipeline\nhighlighting module code... [ 87%] net.spectral_loss\nhighlighting module code... [ 90%] net.training_policies\nhighlighting module code... [ 94%] net.transforms.cluster\nhighlighting module code... [ 97%] net.transforms.composition\nhighlighting module code... [100%] net.transforms.equivariant\n\nwriting additional pages... search done\ncopying images... [ 50%] ../paper/figures/results/silicon_cif_scaling_time_total.png\ncopying images... [100%] ../paper/figures/results/paper_zncusnses_hamiltonian_correlation.png\n\ndumping search index in English (code: en)... done\ndumping object inventory... done\nbuild succeeded, 1 warning.\n\nThe HTML pages are in .venvs/docs-html.\n",
+    "post_rebase_log_tail": "de... [ 77%] net.objectives\nhighlighting module code... [ 81%] net.observable_metrics\nhighlighting module code... [ 84%] net.pipeline\nhighlighting module code... [ 87%] net.spectral_loss\nhighlighting module code... [ 90%] net.training_policies\nhighlighting module code... [ 94%] net.transforms.cluster\nhighlighting module code... [ 97%] net.transforms.composition\nhighlighting module code... [100%] net.transforms.equivariant\n\nwriting additional pages... search done\ncopying images... [ 50%] ../paper/figures/results/silicon_cif_scaling_time_total.png\ncopying images... [100%] ../paper/figures/results/paper_zncusnses_hamiltonian_correlation.png\n\ndumping search index in English (code: en)... done\ndumping object inventory... done\nbuild succeeded, 1 warning.\n\nThe HTML pages are in .venvs/docs-html.\n"
   },
   "record_checks": {
     "original_records_preserved": 10,
@@ -34,5 +35,16 @@
       "smoke_passed": 2,
       "gpu_subset_passed": 4
     }
+  },
+  "rebase": {
+    "upstream": "6fa64e24d5f2d1a5b6d7b17609b0727f2aca403f",
+    "rebased_snapshot": "04a55496ff5ef97f6f88711246e291a0251588b1",
+    "published_tip_retained": "6d4a2f0",
+    "history_merge": "6316230",
+    "force_push": false,
+    "gpu_relevant_sources_unchanged_from": "d2fe08c",
+    "post_rebase_cpu_passed_each": 710,
+    "post_rebase_cpu_skipped_each": 68,
+    "post_rebase_a40_smoke_passed": 2
   }
 }
