@@ -12,3 +12,8 @@ libraries (615.71.10) into .venvs and sets LD_LIBRARY_PATH for this job only.
 This combination is listed as compatible in NVIDIA's forward compatibility
 matrix. install_cuda_compat.py pins and checks the Debian archive SHA256.
 No system driver or administrator-owned files are changed.
+
+Python 3.15 has no h5py 3.16.0 wheel. prepare_hdf5_terok.sh extracts
+Debian HDF5 1.14.5 development/runtime packages below .venvs/hdf5 and
+builds h5py locally. HDF5_INCLUDEDIR, HDF5_LIBDIR and LD_LIBRARY_PATH
+are captured by the subsequent Python 3.15 verification record.
