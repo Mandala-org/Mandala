@@ -34,12 +34,18 @@ def test_density_normalization_change_invalidates_both_cache_layers(
 
 
 def test_target_normalization_settings_invalidate_the_correct_cache_layers(tmp_path):
-    def make_dataset(*, symmetrize_density=False, pair_distance_normalization="off"):
+    def make_dataset(
+        *,
+        symmetrize_density=False,
+        pair_distance_normalization="off",
+        separate_shifted_self=False,
+    ):
         ds = object.__new__(E3GNNDataset)
         ds.preprocessing, ds.split = None, "train"
         ds.cfg = Config(
             snapshot_cache_dir=str(tmp_path / "cache"),
             symmetrize_density_targets=symmetrize_density,
+            separate_shifted_self=separate_shifted_self,
         )
         ds.convention, ds.dtype = "e3nn", torch.float32
         ds.mapper = SimpleNamespace(
@@ -55,6 +61,13 @@ def test_target_normalization_settings_invalidate_the_correct_cache_layers(tmp_p
     info.write_text("info")
 
     baseline = make_dataset()
+    legacy = make_dataset(separate_shifted_self=True)
+    assert baseline._snapshot_cache_file(matrix, info) == legacy._snapshot_cache_file(
+        matrix, info
+    )
+    assert baseline._preprocessed_sample_cache_file(
+        matrix, info
+    ) != legacy._preprocessed_sample_cache_file(matrix, info)
     density_symmetrized = make_dataset(symmetrize_density=True)
     assert baseline._snapshot_cache_file(
         matrix, info
@@ -72,6 +85,34 @@ def test_target_normalization_settings_invalidate_the_correct_cache_layers(tmp_p
     assert baseline._preprocessed_sample_cache_file(
         matrix, info
     ) != pair_normalized._preprocessed_sample_cache_file(matrix, info)
+
+
+def test_old_preprocessed_partition_schema_is_not_reused(tmp_path, monkeypatch):
+    import data.gnn_dataset as module
+
+    ds = object.__new__(E3GNNDataset)
+    ds.preprocessing, ds.split = None, "train"
+    ds.cfg = Config(snapshot_cache_dir=str(tmp_path))
+    ds.mapper = SimpleNamespace(
+        orbital_cfg=SimpleNamespace(to_dict=lambda: {"H": "1s"})
+    )
+    ds.convention, ds.dtype = "e3nn", torch.float32
+    ds.hamiltonian_envelope_mode = ds.pair_distance_normalization = (
+        ds.loss_weighting_mode
+    ) = "off"
+    matrix, info = tmp_path / "HS.out", tmp_path / "info.out"
+    current = ds._preprocessed_sample_cache_file(matrix, info)
+    monkeypatch.setattr(module, "PREPROCESSED_SAMPLE_CACHE_VERSION", "v8")
+    assert current != ds._preprocessed_sample_cache_file(matrix, info)
+
+
+def test_default_dataset_does_not_cache_legacy_partitions(small_angular_dataset_e3nn):
+    dataset, _, cfg = small_angular_dataset_e3nn
+    assert not cfg.separate_shifted_self
+    x, _ = dataset[0]
+    assert all(
+        "shifted_self_local_idx" not in parts for parts in x["edge_partitions"].values()
+    )
 
 
 @pytest.mark.unit

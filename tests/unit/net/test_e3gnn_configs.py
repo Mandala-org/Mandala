@@ -124,6 +124,10 @@ def test_e3gnn_forward_variants(hp_kwargs):
     )
 
     x = make_dummy_graph(cfg, mapper)
+    assert not model.legacy_separate_shifted_self
+    assert all(
+        "shifted_self_local_idx" not in parts for parts in x["edge_partitions"].values()
+    )
     atoms = ("H",) * 4
 
     preds = model(x)

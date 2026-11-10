@@ -267,10 +267,12 @@ def test_message_block_equivariance():
 
 @pytest.mark.parametrize("head_use_mlp_log_scale", [True, False])
 @pytest.mark.parametrize("mlp_layers", [1, 2])
-def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers):
+@pytest.mark.parametrize("legacy", [False, True])
+def test_deep_head_equivariance(head_use_mlp_log_scale, mlp_layers, legacy):
     """Tests the DeepHead for equivariance."""
     cfg = Config(
         head_use_mlp_log_scale=head_use_mlp_log_scale,
+        separate_shifted_self=legacy,
         neck_depth=mlp_layers,
         head_e3mlp_layers=mlp_layers,
         head_log_scale_mlp_n_layers=mlp_layers,

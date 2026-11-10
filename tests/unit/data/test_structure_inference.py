@@ -14,6 +14,29 @@ from data.structure_inference import (
 from net.common import Config
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_structure_partitions_only_split_image_pairs_for_legacy(legacy):
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+
+    cfg = Config(cutoff_radius=1.1, l_max=0, n_radial=2, separate_shifted_self=legacy)
+    mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": "1s"}))
+    x = build_model_input_from_structure(
+        atoms=("H",),
+        positions=torch.zeros(1, 3),
+        box=torch.eye(3),
+        cfg=cfg,
+        mapper=mapper,
+    )
+    parts = x["edge_partitions"]["H-H"]
+    assert parts["diag_local_idx"].numel() == 1
+    if legacy:
+        assert parts["shifted_self_local_idx"].numel() == 6
+        assert parts["offdiag_local_idx"].numel() == 0
+    else:
+        assert "shifted_self_local_idx" not in parts
+        assert parts["offdiag_local_idx"].numel() == 6
+
+
 @pytest.mark.large_data
 def test_load_structure_from_cif_and_build_model_input():
     repo_root = Path(__file__).resolve().parents[3]
