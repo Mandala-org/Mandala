@@ -391,9 +391,9 @@ def compute_graph_features_from_target_edges(
 
 
 def complete_graph_metadata(
-    inputs, mapper, *, species_order=None, separate_shifted_self=True
+    inputs, mapper, *, species_order=None, separate_shifted_self=False
 ):
-    """Supply common sparse-operator metadata for any declared graph support."""
+    """Supply sparse-operator metadata, with image-self partitions only for legacy inference."""
     from collections import Counter
     from data.edge_alignment import build_prediction_edge_metadata
 

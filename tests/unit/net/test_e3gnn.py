@@ -203,7 +203,7 @@ def test_forward_cutoff5_with_split_head(small_angular_dataset_e3nn):
         verbosity=0,
     )
     train_ds, mapper, _ = small_angular_dataset_e3nn
-    model = E3GNN(mapper, cfg)
+    model = E3GNN.from_checkpoint_config(mapper, cfg)
     x, _ = train_ds[0]
 
     preds = model(x)
@@ -230,7 +230,12 @@ def test_partial_train_mask(partial_train, separate_shifted_self, expected):
         safety_checks=True,
         verbosity=0,
     )
-    model = E3GNN(BlockIrrepMapper(orb_cfg), cfg)
+    constructor = (
+        E3GNN.from_checkpoint_config
+        if separate_shifted_self or partial_train == "shifted_self"
+        else E3GNN
+    )
+    model = constructor(BlockIrrepMapper(orb_cfg), cfg)
     edges_5d = torch.tensor(
         [
             [0, 1, 0],
@@ -747,3 +752,152 @@ def test_energy_half_gt_training_accepts_length_one_energy_target():
 
     assert torch.isfinite(loss)
     assert "val/energy_mae_gt_density" in logged_metrics
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"separate_shifted_self": True},
+        {"partial_train": "shifted_self"},
+        {"training": {"separate_shifted_self": True}},
+        {
+            "pipeline": {
+                "stages": [{"options": {"config": {"separate_shifted_self": True}}}]
+            }
+        },
+    ],
+)
+def test_new_training_rejects_retired_shifted_self_settings(settings):
+    mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": "1s"}))
+    with pytest.raises(ValueError, match="retired.*unit-cell.*load_from_checkpoint"):
+        E3GNN(mapper, Config(**settings))
+
+
+@pytest.mark.parametrize("pair_mode", ["split", "shared_conditioned"])
+@pytest.mark.parametrize("extra_branches", [False, True])
+def test_legacy_checkpoint_roundtrip_is_bit_exact(tmp_path, pair_mode, extra_branches):
+    import pytorch_lightning as pl
+    from data.structure_inference import build_model_input_from_structure
+
+    torch.manual_seed(812)
+    cfg = Config(
+        cutoff_radius=2.2,
+        separate_shifted_self=True,
+        head_pair_mode=pair_mode,
+        head_use_tensor_square=extra_branches,
+        head_use_mlp_log_scale=extra_branches,
+        matrix_targets=["hamiltonian", "overlap", "density"],
+    )
+    orbital_cfg = OrbitalIrrepConfig.from_dict({"H": "1s1p"})
+    mapper = BlockIrrepMapper(orbital_cfg)
+    model = E3GNN(mapper, cfg, legacy_separate_shifted_self=True).eval()
+    x = build_model_input_from_structure(
+        atoms=("H", "H"),
+        positions=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.2, 0.1]]),
+        box=torch.eye(3) * 2.0,
+        cfg=cfg,
+        mapper=mapper,
+    )
+    partitions = x["edge_partitions"]["H-H"]
+    assert all(
+        partitions[name].numel()
+        for name in ("diag_local_idx", "shifted_self_local_idx", "offdiag_local_idx")
+    )
+    with torch.no_grad():
+        expected = model(x)
+    checkpoint = tmp_path / "legacy.ckpt"
+    torch.save(
+        {
+            "state_dict": model.state_dict(),
+            "hyper_parameters": dict(model.hparams),
+            "pytorch-lightning_version": pl.__version__,
+        },
+        checkpoint,
+    )
+    restored = E3GNN.load_from_checkpoint(
+        checkpoint, mapper=BlockIrrepMapper(orbital_cfg), map_location="cpu"
+    ).eval()
+    assert restored.legacy_separate_shifted_self
+    assert any("shifted_self_trunk" in name for name in restored.state_dict())
+    with torch.no_grad():
+        actual = restored(x)
+    for name in expected:
+        assert torch.equal(
+            expected[name].pair_edges["H-H"], actual[name].pair_edges["H-H"]
+        )
+        assert torch.equal(
+            expected[name].pair_vectors["H-H"], actual[name].pair_vectors["H-H"]
+        )
+    with pytest.raises(ValueError, match="retired"):
+        restored.on_fit_start()
+
+
+def test_default_pair_blocks_are_invariant_under_2x2x2_tiling():
+    from itertools import product
+    from data.structure_inference import build_model_input_from_structure
+
+    previous_dtype = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(torch.float64)
+        torch.manual_seed(951)
+        cfg = Config(cutoff_radius=2.6, dtype=torch.float64, num_layers_gnn=2)
+        assert not cfg.separate_shifted_self
+        mapper = BlockIrrepMapper(
+            OrbitalIrrepConfig.from_dict({"H": "1s1p"}), dtype=cfg.dtype
+        )
+        model = E3GNN(mapper, cfg).eval()
+        assert not model.legacy_separate_shifted_self
+        assert not any("shifted_self" in name for name in model.state_dict())
+        primitive_positions = torch.tensor([[0.0, 0.0, 0.0], [0.35, 0.6, 0.4]])
+        box = torch.eye(3) * 2.3
+        tiles = torch.tensor(list(product(range(2), repeat=3)), dtype=torch.long)
+        positions = (
+            primitive_positions[None] + (tiles.to(cfg.dtype) @ box)[:, None]
+        ).reshape(-1, 3)
+        primitive_x = build_model_input_from_structure(
+            atoms=("H",) * 2,
+            positions=primitive_positions,
+            box=box,
+            cfg=cfg,
+            mapper=mapper,
+        )
+        supercell_x = build_model_input_from_structure(
+            atoms=("H",) * 16,
+            positions=positions,
+            box=box * 2,
+            cfg=cfg,
+            mapper=mapper,
+        )
+        for x in (primitive_x, supercell_x):
+            assert all(
+                "shifted_self_local_idx" not in parts
+                for parts in x["edge_partitions"].values()
+            )
+        primitive = model.predict_matrices(primitive_x, physical=False)["hamiltonian"]
+        supercell = model.predict_matrices(supercell_x, physical=False)["hamiltonian"]
+        primitive_blocks = {
+            tuple(edge): block
+            for edge, block in zip(
+                primitive.pair_edges["H-H"].T.tolist(), primitive.pair_blocks["H-H"]
+            )
+        }
+        expected, actual = [], []
+        image_pairs_became_ordinary = 0
+        for edge, block in zip(
+            supercell.pair_edges["H-H"].T, supercell.pair_blocks["H-H"]
+        ):
+            shift, i, j = edge[:3], int(edge[3]), int(edge[4])
+            primitive_shift = shift * 2 + tiles[j // 2] - tiles[i // 2]
+            key = (*primitive_shift.tolist(), i % 2, j % 2)
+            expected.append(primitive_blocks[key])
+            actual.append(block)
+            image_pairs_became_ordinary += int(
+                i % 2 == j % 2 and i != j and bool(primitive_shift.any())
+            )
+        assert image_pairs_became_ordinary > 0
+        expected, actual = torch.stack(expected), torch.stack(actual)
+        relative_error = (actual - expected).norm() / expected.norm()
+        assert relative_error < 1e-6, float(relative_error)
+        torch.testing.assert_close(actual, expected, rtol=1e-6, atol=1e-12)
+    finally:
+        torch.set_default_dtype(previous_dtype)

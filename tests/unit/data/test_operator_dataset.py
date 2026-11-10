@@ -119,6 +119,24 @@ def test_native_periodic_blocks_masks_and_soc_export(tmp_path, spinful, frame):
     ).any(0)
     assert shifted_self.sum() == 2
     assert not x["selfloop_edge"][shifted_self].any()
+    from data.graph_features import complete_graph_metadata
+    from core.block_irrep_mapper import BlockIrrepMapper
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+
+    mapper = BlockIrrepMapper(
+        OrbitalIrrepConfig.from_dict({"H": "1s1p", "O": "1s1p1d"})
+    )
+    complete_graph_metadata(x, mapper)
+    assert all(
+        "shifted_self_local_idx" not in parts for parts in x["edge_partitions"].values()
+    )
+    pair_indices = torch.cat(
+        [
+            parts["global_idx"][parts["offdiag_local_idx"]]
+            for parts in x["edge_partitions"].values()
+        ]
+    )
+    assert torch.isin(torch.where(shifted_self)[0], pair_indices).all()
     assert torch.isfinite(targets["values"]).all()
     recovered, masks = reconstruct_operator_blocks(
         sample, codec, targets["values"], return_masks=True

@@ -165,7 +165,7 @@ def restore_model_for_snapshot(
     checkpoint = load_checkpoint(checkpoint_path)
     cfg = restore_config(checkpoint)
     mapper = build_mapper(snapshot, cfg)
-    model = E3GNN(mapper=mapper, cfg=cfg)
+    model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=cfg)
     model.load_state_dict(checkpoint["state_dict"], strict=True)
     return model.to(device).eval()
 

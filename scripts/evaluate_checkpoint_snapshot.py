@@ -470,7 +470,7 @@ def main() -> None:
     x = _move_to_device(x, device)
     y = _move_to_device(y, device)
 
-    model = E3GNN(mapper=mapper, cfg=cfg)
+    model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=cfg)
     model.load_state_dict(checkpoint["state_dict"], strict=True)
     model.to(device)
     model.eval()

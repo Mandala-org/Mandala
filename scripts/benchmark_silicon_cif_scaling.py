@@ -245,7 +245,7 @@ def load_model(args: argparse.Namespace, device: torch.device):
         device="cpu",
         dtype=cfg.dtype,
     )
-    model = E3GNN(mapper=mapper, cfg=cfg)
+    model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=cfg)
     model.load_state_dict(checkpoint["state_dict"], strict=True)
     model.to(device)
     model.eval()

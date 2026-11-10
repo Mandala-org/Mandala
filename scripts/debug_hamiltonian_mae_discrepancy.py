@@ -141,7 +141,7 @@ def main() -> None:
     x = eval_ckpt._move_to_device(x, device)
     y = eval_ckpt._move_to_device(y, device)
 
-    model = E3GNN(mapper=mapper, cfg=cfg).to(device).eval()
+    model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=cfg).to(device).eval()
     model.load_state_dict(checkpoint["state_dict"], strict=True)
     with torch.no_grad():
         pred_irreps = model(x)

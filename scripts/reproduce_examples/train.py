@@ -79,7 +79,7 @@ def main(argv=None):
         return
 
     import torch
-    from net.common import Config
+    from net.common import Config, validate_training_config
     from net.evaluation import load_checkpoint
     from scripts.train import run_training
 
@@ -89,6 +89,7 @@ def main(argv=None):
     }
     if unknown:
         raise ValueError(f"Unknown configuration fields: {sorted(unknown)}")
+    validate_training_config(Config.from_mapping(recipe["config"]))
     if not torch.cuda.is_available():
         raise RuntimeError("These approved recipes require a CUDA GPU.")
     checkpoint_root = Path(values["checkpoint_dir"])

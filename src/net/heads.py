@@ -20,10 +20,10 @@ from net.common import Config, E3MLP
 
 class DeepHead(nn.Module):
     """
-    Split readout head with separate projection paths for:
-    - diagonal zero-shift self edges
-    - shifted-self edges (optional)
-    - off-diagonal edges
+    Onsite and pair readouts; the separate shifted-self path is legacy-only.
+
+    New trainings route every non-onsite block through the pair readout.
+    Saved configurations can reconstruct the historical modules unchanged.
     """
 
     def __init__(
@@ -45,7 +45,7 @@ class DeepHead(nn.Module):
         self.info = info
 
         self.mapper: BlockIrrepMapper = mapper
-        self.separate_shifted_self = bool(self.cfg.separate_shifted_self)
+        self.legacy_separate_shifted_self = bool(self.cfg.separate_shifted_self)
         self.use_node_embeddings_for_self_edges = bool(
             self.cfg.head_use_node_embeddings_for_self_edges
         )
@@ -80,7 +80,7 @@ class DeepHead(nn.Module):
             activate_last=True,
         )
         self.shifted_self_trunk = None
-        if self.separate_shifted_self:
+        if self.legacy_separate_shifted_self:
             self.shifted_self_trunk = E3MLP(
                 self.irreps_edge_in,
                 self.irreps_edge_in,
@@ -100,7 +100,7 @@ class DeepHead(nn.Module):
             self.offdiag_tensor_square = TensorSquare(
                 self.irreps_neck, irreps_out=self.irreps_neck
             )
-            if self.separate_shifted_self:
+            if self.legacy_separate_shifted_self:
                 self.shifted_self_tensor_square = TensorSquare(
                     self.irreps_neck, irreps_out=self.irreps_neck
                 )
@@ -135,7 +135,7 @@ class DeepHead(nn.Module):
                     variant=head_variant,
                     post_scale=self.cfg.head_offdiag_output_scale,
                 )
-                if self.separate_shifted_self:
+                if self.legacy_separate_shifted_self:
                     self.shifted_self_projs[key] = E3MLP(
                         self.irreps_neck,
                         self.irreps_neck,
@@ -179,7 +179,7 @@ class DeepHead(nn.Module):
                 variant=head_variant,
                 post_scale=self.cfg.head_offdiag_output_scale,
             )
-            if self.separate_shifted_self:
+            if self.legacy_separate_shifted_self:
                 self.shared_shifted_self_proj = E3MLP(
                     self.shared_proj_in_irreps,
                     self.shared_proj_in_irreps,
@@ -213,7 +213,7 @@ class DeepHead(nn.Module):
                     self.cfg.head_log_scale_mlp_n_layers,
                     self.cfg,
                 )
-                if self.separate_shifted_self:
+                if self.legacy_separate_shifted_self:
                     shifted_self_log_scales[key] = E3MLP(
                         self.irreps_neck,
                         Irreps("64x0e"),
@@ -223,7 +223,7 @@ class DeepHead(nn.Module):
                     )
             self.diag_log_scales = nn.ModuleDict(diag_log_scales)
             self.offdiag_log_scales = nn.ModuleDict(offdiag_log_scales)
-            if self.separate_shifted_self:
+            if self.legacy_separate_shifted_self:
                 self.shifted_self_log_scales = nn.ModuleDict(shifted_self_log_scales)
 
     # ------------------------------------------------------------------
@@ -277,29 +277,10 @@ class DeepHead(nn.Module):
                 diag_vectors = _match_pair_dtype(diag_vectors)
                 pair_vectors.index_copy_(0, diag_local_idx, diag_vectors)
 
-            shifted_self_local_idx = parts["shifted_self_local_idx"]
-            if shifted_self_local_idx.numel() > 0:
-                shifted_input = key_edge_feat.index_select(0, shifted_self_local_idx)
-                shifted_hidden = self.shifted_self_trunk(shifted_input)
-                if self.shifted_self_tensor_square is not None:
-                    shifted_hidden = self.shifted_self_tensor_square(shifted_hidden)
-                shifted_proj = (
-                    self.shifted_self_projs[key]
-                    if self.head_pair_mode == "split"
-                    else self.shared_shifted_self_proj
+            if self.legacy_separate_shifted_self:
+                self._forward_legacy_shifted_self(
+                    key, key_edge_feat, parts, pair_vectors
                 )
-                shifted_vectors = self._project_pair(
-                    key=key,
-                    hidden=shifted_hidden,
-                    proj=shifted_proj,
-                )
-                if self.shifted_self_log_scales is not None:
-                    shifted_vectors = (
-                        torch.exp(self.shifted_self_log_scales[key](shifted_hidden))
-                        * shifted_vectors
-                    )
-                shifted_vectors = _match_pair_dtype(shifted_vectors)
-                pair_vectors.index_copy_(0, shifted_self_local_idx, shifted_vectors)
 
             offdiag_local_idx = parts["offdiag_local_idx"]
             if offdiag_local_idx.numel() > 0:
@@ -327,6 +308,32 @@ class DeepHead(nn.Module):
 
             result[key] = pair_vectors
         return result
+
+    def _forward_legacy_shifted_self(self, key, key_edge_feat, parts, pair_vectors):
+        """Replay the historical branch with unchanged operations and weights."""
+        shifted_self_local_idx = parts["shifted_self_local_idx"]
+        if shifted_self_local_idx.numel() > 0:
+            shifted_input = key_edge_feat.index_select(0, shifted_self_local_idx)
+            shifted_hidden = self.shifted_self_trunk(shifted_input)
+            if self.shifted_self_tensor_square is not None:
+                shifted_hidden = self.shifted_self_tensor_square(shifted_hidden)
+            shifted_proj = (
+                self.shifted_self_projs[key]
+                if self.head_pair_mode == "split"
+                else self.shared_shifted_self_proj
+            )
+            shifted_vectors = self._project_pair(
+                key=key,
+                hidden=shifted_hidden,
+                proj=shifted_proj,
+            )
+            if self.shifted_self_log_scales is not None:
+                shifted_vectors = (
+                    torch.exp(self.shifted_self_log_scales[key](shifted_hidden))
+                    * shifted_vectors
+                )
+            shifted_vectors = shifted_vectors.to(dtype=pair_vectors.dtype)
+            pair_vectors.index_copy_(0, shifted_self_local_idx, shifted_vectors)
 
     def _project_pair(
         self, key: str, hidden: torch.Tensor, proj: nn.Module | None

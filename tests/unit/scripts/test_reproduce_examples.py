@@ -44,6 +44,8 @@ def test_failed_setup_can_retry_but_existing_run_is_protected(tmp_path, monkeypa
     from scripts import train as training
 
     recipe = json.loads((RECIPES / "silicon.json").read_text())
+    # This test exercises setup recovery, not the frozen legacy architecture.
+    recipe["config"]["separate_shifted_self"] = False
     recipe["training"]["checkpoint_dir"] = str(tmp_path / "checkpoints")
     recipe["training"]["num_val_per_scale"] = 20
     path = tmp_path / "recipe.json"
@@ -95,9 +97,25 @@ def test_completed_recovery_checkpoint_skips_training(tmp_path, monkeypatch):
     run_dir = tmp_path / "checkpoints/silicon"
     run_dir.mkdir()
     (run_dir / "latest_checkpoint.pt").touch()
-    monkeypatch.setattr(evaluation, "load_checkpoint", lambda path: {
-        "epoch_boundary_resume": {"safe_to_resume": True},
-        "epoch": recipe["config"]["max_epochs"],
-    })
+    monkeypatch.setattr(
+        evaluation,
+        "load_checkpoint",
+        lambda path: {
+            "epoch_boundary_resume": {"safe_to_resume": True},
+            "epoch": recipe["config"]["max_epochs"],
+        },
+    )
     train.main(["--recipe", str(path)])
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("flag", ["separate_shifted_self", "partial_train"])
+def test_retired_recipe_fails_before_creating_a_run(tmp_path, flag):
+    recipe = json.loads((RECIPES / "silicon_v2.json").read_text())
+    recipe["config"][flag] = True if flag == "separate_shifted_self" else "shifted_self"
+    recipe["training"]["checkpoint_dir"] = str(tmp_path / "checkpoints")
+    path = tmp_path / "recipe.json"
+    path.write_text(json.dumps(recipe))
+    with pytest.raises(ValueError, match="retired.*load_from_checkpoint"):
+        train.main(["--recipe", str(path)])
+    assert not (tmp_path / "checkpoints").exists()

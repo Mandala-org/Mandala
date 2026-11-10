@@ -83,7 +83,7 @@ def main(argv=None):
     mapper = BlockIrrepMapper(
         OrbitalIrrepConfig.from_dict(orbital_spec), dtype=get_torch_dtype(cfg.dtype)
     )
-    model = E3GNN(mapper=mapper, cfg=cfg)
+    model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=cfg)
     model.load_state_dict(checkpoint["state_dict"], strict=True)
     model.to(device).eval()
     stats = export_model_openmx(

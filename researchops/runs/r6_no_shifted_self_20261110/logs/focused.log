@@ -1,0 +1,11 @@
+bringing up nodes...
+bringing up nodes...
+
+......................................................                   [100%]
+=============================== warnings summary ===============================
+src/data/block_matrix.py:721
+  /home/brzoza73/casus/mandala_worktrees/shifted_self/src/data/block_matrix.py:721: DeprecationWarning: invalid escape sequence '\_'
+    """
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+54 passed, 1 warning in 33.13s

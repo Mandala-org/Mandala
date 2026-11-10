@@ -84,6 +84,9 @@ def run_training(
     )
     print("=== Mandala training run starting ===")
     cfg = getattr(args, "_config", None) or _populate_config_from_args(args)
+    from net.common import validate_training_config
+
+    validate_training_config(cfg)
     if getattr(args, "_model", None) is None:
         pl.seed_everything(int(cfg.seed), workers=True)
     if cfg.epoch_boundary_resume:
@@ -1074,8 +1077,11 @@ def _write_compatibility_report(run_dir: Path, report: Any) -> None:
 def build_components(document, *, resume=False):
     from data.factory import DatasetFactory
 
-    splits = dataset_paths(document)
+    from net.common import validate_training_config
+
     data_cfg = Config.from_mapping(document)
+    validate_training_config(data_cfg)
+    splits = dataset_paths(document)
     factory = DatasetFactory(data_cfg)
     for split, paths in splits.items():
         for path in paths:
