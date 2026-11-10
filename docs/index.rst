@@ -1,6 +1,8 @@
 MANDALA
 =======
 
+The hosted documentation is at https://mandala-org.github.io/Mandala/.
+
 **MANDALA** learns the electronic structure of molecules and materials as
 *operators*. Given atomic positions, species and (for crystals) a lattice, an
 E(3)-equivariant graph neural network predicts the sparse, atom-pair-resolved
