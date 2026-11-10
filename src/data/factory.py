@@ -104,7 +104,9 @@ class DatasetFactory:
         )
 
     # ------------------------------------------------------------------ create
-    def create(self, *, include_test: bool = False, load_splits=None):
+    def create(
+        self, *, include_test: bool = False, load_splits: Sequence[Purpose] | None = None
+    ):
         """
         Build datasets **and** a shared mapper.
 
