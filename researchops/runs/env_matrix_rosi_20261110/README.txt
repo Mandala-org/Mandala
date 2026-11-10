@@ -5,3 +5,10 @@ CUDA source builds request 8.6 (A40), 9.0 (H100), 10.0 (B200).
 NVIDIA CUDA 13 PyPI packages use un-suffixed names; nvidia-cuda-nvcc-cu13
 is a placeholder, so the actual compiler is nvidia-cuda-nvcc==13.4.92.
 No cross-worktree environments are modified.
+
+The first H100 allocation revealed kernel driver 570.158.01 (CUDA 12.8),
+not a CUDA 13 driver. The retry extracts NVIDIA cuda-compat-13-4 userspace
+libraries (615.71.10) into .venvs and sets LD_LIBRARY_PATH for this job only.
+This combination is listed as compatible in NVIDIA's forward compatibility
+matrix. install_cuda_compat.py pins and checks the Debian archive SHA256.
+No system driver or administrator-owned files are changed.

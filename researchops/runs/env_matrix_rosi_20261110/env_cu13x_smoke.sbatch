@@ -18,6 +18,9 @@ nvidia-smi --query-gpu=driver_version --format=csv
 uv python install 3.13
 runner="$PWD/researchops/runs/env_matrix_rosi_20261110/verify_environment.py"
 python_runner=$(uv python find --managed-python 3.13)
+compat_dir=$("$python_runner" "$PWD/researchops/runs/env_matrix_rosi_20261110/install_cuda_compat.py") || exit 1
+export LD_LIBRARY_PATH="$compat_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export MANDALA_CUDA_COMPAT="cuda-compat-13-4 / user-space driver 615.71.10; kernel driver unchanged"
 result=0
 for version in 3.13 3.14; do
     "$python_runner" "$runner" --env "py${version/./}-latest-cu13x" --python "$version" --gpu-only --workers 4 || result=1
