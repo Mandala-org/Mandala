@@ -237,5 +237,23 @@
         }
       ]
     }
-  }
+  },
+  "postprocessing": {
+    "job_id": "837303",
+    "command": [
+      "sbatch",
+      "--parsable",
+      "researchops/runs/r6_supercell_20261110/postprocess.sh"
+    ]
+  },
+  "auxiliary_jobs": [
+    {
+      "job_id": "837273",
+      "role": "Earlier comparison before Cartesian correction; invalid scientific values archived"
+    },
+    {
+      "job_id": "837281",
+      "role": "Activation probe which identified the missing Cartesian conversion"
+    }
+  ]
 }
