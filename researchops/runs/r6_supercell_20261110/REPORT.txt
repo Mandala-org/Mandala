@@ -1,3 +1,9 @@
+Follow-up completed 2026-11-10: see FOLLOWUP_REPORT.txt and
+results/summary.md/json for current category and parent-routing results.
+Job 837400 completed (exit 0, 00:04:53); six perturbed Si cells are included.
+Results commit: 9573cbd. Follow-up report/provenance commit: aadcde2.
+The text below is the historical first-run report captured at 10:04 UTC.
+
 Referee point 6: supercell generalization experiment
 Branch: referee-r6-supercell
 Report captured UTC: 2026-11-10T10:04:34.240547+00:00
