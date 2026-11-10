@@ -7,6 +7,10 @@ Execution status belongs to the run manifests and scheduler records, not this
 README. The three recipes initialize all learned weights
 from scratch; historical checkpoints and W&B are not needed at execution time.
 
+Historical recipes and checkpoints with `separate_shifted_self: true` load
+through the legacy inference path; v2 recipes have this head off, and new
+training rejects the historical setting.
+
 ## Invocation
 
 From the repository root in the project Python environment:

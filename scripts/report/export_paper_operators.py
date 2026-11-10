@@ -68,7 +68,7 @@ def main():
     x, _ = dataset[0]
     from scripts.check_compat_reload_equivalence import _move_to_device
 
-    model = E3GNN(mapper=mapper, cfg=cfg).to(args.device).eval()
+    model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=cfg).to(args.device).eval()
     model.load_state_dict(payload["state_dict"], strict=True)
     with torch.no_grad():
         x = _move_to_device(x, torch.device(args.device))

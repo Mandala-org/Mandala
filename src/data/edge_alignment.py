@@ -9,7 +9,6 @@ from core.block_irrep_mapper import BlockIrrepMapper
 from core.sparse_math import build_trace_alignment_from_pair_edges
 from data.block_matrix import BlockMatrix
 
-
 Edge5D = Tuple[int, int, int, int, int]
 
 
@@ -288,9 +287,10 @@ def build_prediction_edge_metadata(
     atoms: tuple[str, ...],
     edge_types: list[str],
     edge_type2idx: dict[str, int],
-    separate_shifted_self: bool,
+    separate_shifted_self: bool = False,
     target_pair_edges: dict[str, torch.Tensor] | None = None,
 ) -> dict[str, object]:
+    """Partition onsite/pair edges; split image-self edges only for legacy heads."""
     edges_5d = torch.cat([edge_shift, edge_index], dim=0)
     pred_pair_edges_static: dict[str, torch.Tensor] = {}
     pred_lookup_static: dict[Edge5D, tuple[str, int]] = {}
@@ -319,20 +319,19 @@ def build_prediction_edge_metadata(
         is_zero_shift = (key_edges[:3] == 0).all(dim=0)
         is_diag = is_same_atom & is_zero_shift
         if separate_shifted_self:
-            is_shifted_self = is_same_atom & (~is_zero_shift)
             is_offdiag = ~is_same_atom
         else:
-            is_shifted_self = torch.zeros_like(is_diag, dtype=torch.bool)
             is_offdiag = ~is_diag
 
         edge_partitions[key] = {
             "global_idx": global_idx,
             "diag_local_idx": torch.nonzero(is_diag, as_tuple=False).flatten(),
-            "shifted_self_local_idx": torch.nonzero(
-                is_shifted_self, as_tuple=False
-            ).flatten(),
             "offdiag_local_idx": torch.nonzero(is_offdiag, as_tuple=False).flatten(),
         }
+        if separate_shifted_self:
+            edge_partitions[key]["shifted_self_local_idx"] = torch.nonzero(
+                is_same_atom & ~is_zero_shift, as_tuple=False
+            ).flatten()
 
     pred_reverse_alignment = build_trace_alignment_from_pair_edges(
         pred_pair_edges_static

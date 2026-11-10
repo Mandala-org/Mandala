@@ -172,12 +172,14 @@ the irreps of each species pair:
 .. math::
 
    \widehat{\bm x}_{ij}^{\bm L,X}=s_c\,\Psi^{X}_{c,\,a_ia_j}\Big(\mathcal T\big(N^{X}_c(\bm u_{ij})\big)\Big),
-   \qquad c\in\{\text{onsite},\ \text{shifted self},\ \text{offsite}\}.
+   \qquad c\in\{\text{onsite},\ \text{pair}\}.
 
 * :math:`\bm u_{ij}` is the final edge feature, or for onsite blocks the final
   node feature :math:`\bm h_i` (``head_use_node_embeddings_for_self_edges``).
 * :math:`N^X_c` is a *neck* E3MLP of depth ``neck_depth`` per edge class;
-  shifted-self edges get their own neck when ``separate_shifted_self`` is set.
+  all non-onsite edges, including periodic images of the same atom, share
+  the pair neck. Only legacy checkpoints retain ``separate_shifted_self``
+  routing (see :doc:`../user_guide/configuration`).
 * :math:`\mathcal T` is an optional tensor square (``head_use_tensor_square``).
 * :math:`\Psi^X_{c,a_ia_j}` projects onto the pair irreps (table in
   :doc:`operators`). ``head_pair_mode: split`` uses one projection per species

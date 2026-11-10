@@ -25,7 +25,7 @@
     "internal_e3mlp_layers": 1,
     "head_e3mlp_layers": 1,
     "head_use_node_embeddings_for_self_edges": true,
-    "separate_shifted_self": true,
+    "separate_shifted_self": false,
     "head_use_tensor_square": false,
     "head_pair_mode": "split",
     "head_diag_output_scale": 1.0,

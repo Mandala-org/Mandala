@@ -25,7 +25,7 @@ from data.block_matrix import BlockMatrix, IrrepsBlockData
 from data.envelope import scale_block_matrix_by_edge_values
 from data.graph_features import compute_edge_geometry_from_static_edges
 
-from net.common import Config, resolve_hidden_irreps
+from net.common import Config, resolve_hidden_irreps, validate_training_config
 from net.irrep_tools import (
     build_irrep_projector_cache,
     build_irrep_block_matrix_cache,
@@ -62,6 +62,8 @@ class E3GNN(pl.LightningModule):
         self,
         mapper: BlockIrrepMapper,
         cfg: Config,
+        *,
+        legacy_separate_shifted_self: bool = False,
     ):
         super().__init__()
         # Older slotted Config pickles predate these optional fields. Unpickling
@@ -71,7 +73,12 @@ class E3GNN(pl.LightningModule):
         for field in Config.__dataclass_fields__:
             if not hasattr(cfg, field):
                 setattr(cfg, field, getattr(defaults, field))
-        self.save_hyperparameters(ignore=["mapper"])
+        if not legacy_separate_shifted_self:
+            validate_training_config(cfg)
+        self.legacy_separate_shifted_self = bool(
+            legacy_separate_shifted_self and cfg.separate_shifted_self
+        )
+        self.save_hyperparameters(ignore=["mapper", "legacy_separate_shifted_self"])
         # Structure-only restoration must not depend on reference .out files.
         self.save_hyperparameters({"orbital_cfg": mapper.orbital_cfg.to_dict()})
         self.cfg = cfg
@@ -238,6 +245,25 @@ class E3GNN(pl.LightningModule):
 
         # Print model summary if verbosity >= 1
         print_model_summary(self, verbosity=self.cfg.verbosity)
+
+    @classmethod
+    def from_checkpoint_config(cls, mapper: BlockIrrepMapper, cfg: Config) -> "E3GNN":
+        """Construct a saved architecture for strict state-dict loading/inference.
+
+        This explicit legacy boundary preserves shifted-self module names and
+        routing. It does not authorize training a retired architecture.
+        """
+        return cls(mapper, cfg, legacy_separate_shifted_self=True)
+
+    @classmethod
+    def load_from_checkpoint(cls, checkpoint_path, *args, **kwargs):
+        """Restore historical heads automatically from the stored configuration."""
+        kwargs["legacy_separate_shifted_self"] = True
+        kwargs.setdefault("weights_only", False)
+        return super().load_from_checkpoint(checkpoint_path, *args, **kwargs)
+
+    def on_fit_start(self):
+        validate_training_config(self.cfg)
 
     @classmethod
     def load_from_checkpoint_with_mapper(
@@ -889,7 +915,7 @@ class E3GNN(pl.LightningModule):
                 if self.output_layout is not None
                 else None
             ),
-            separate_shifted_self=self.cfg.separate_shifted_self,
+            separate_shifted_self=self.legacy_separate_shifted_self,
         )
         from data.graph_features import evaluate_graph_geometry
 
@@ -2009,7 +2035,7 @@ class E3GNN(pl.LightningModule):
                     if self.output_layout is not None
                     else None
                 ),
-                separate_shifted_self=self.cfg.separate_shifted_self,
+                separate_shifted_self=self.legacy_separate_shifted_self,
             )
             n, e = len(x["node_type_idx"]), x["edge_index"].shape[1]
             for key in ("bond_frames", "edge_envelope", "edge_r0"):

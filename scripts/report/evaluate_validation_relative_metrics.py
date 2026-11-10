@@ -120,7 +120,7 @@ def main() -> None:
 
     device = torch.device(args.device)
     state_dict = checkpoint.get("state_dict", checkpoint)
-    model = E3GNN(mapper=mapper, cfg=deepcopy(cfg)).to(device)
+    model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=deepcopy(cfg)).to(device)
     model.load_state_dict(strip_mapper_keys(state_dict), strict=True)
     model.eval()
 

@@ -174,7 +174,7 @@ def main():
     if not len(val_ds):
         raise RuntimeError("The reconstructed validation split is empty")
     device = torch.device(args.device)
-    model = DistributionModel(mapper=mapper, cfg=deepcopy(cfg)).to(device).eval()
+    model = DistributionModel.from_checkpoint_config(mapper=mapper, cfg=deepcopy(cfg)).to(device).eval()
     model.load_state_dict(strip_mapper_keys(checkpoint.get("state_dict", checkpoint)), strict=True)
     film_report = set_checkpoint_film_semantics(model, args.film_semantics)
     del checkpoint

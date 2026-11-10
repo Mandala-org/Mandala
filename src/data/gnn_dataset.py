@@ -55,7 +55,7 @@ from tqdm.auto import tqdm
 
 # Native spin=0 density normalization; invalidate old doubled-density targets.
 SNAPSHOT_CACHE_VERSION = "v5"
-PREPROCESSED_SAMPLE_CACHE_VERSION = "v8"
+PREPROCESSED_SAMPLE_CACHE_VERSION = "v9"  # legacy-only shifted-self partitions
 
 
 def _serialize_orbital_cfg_key(mapper: BlockIrrepMapper) -> str:
