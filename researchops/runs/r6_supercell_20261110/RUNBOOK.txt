@@ -71,6 +71,16 @@ Physical diagnostics and support
   head-routing replay, when present, is a labelled diagnostic on a perfect
   tiling only and never changes primary predictions or learned parameters.
 
+  Positive-definite success per k point is also affected by exact band folding:
+  a supercell Bloch matrix contains several primitive-cell Bloch spectra and
+  is positive definite only when all contributing primitive spectra are.
+  Therefore a lower per-k success fraction alone does not prove degradation.
+  Also compare minimum eigenvalues and charge traces against the folded source
+  prediction. In the 2x silicon tiled control, the source full-support minimum
+  (-0.373983) becomes -0.990323 in the model's supercell prediction; on reference
+  support the source minimum is -0.00125371 versus -0.381301. Pure folding on
+  the matched 8-to-4 diagnostic meshes would preserve those global minima.
+
 Folded controls and k sampling
   Folding preserves the infinite real-space operator by changing atom/image
   labels. For source tile t and primitive translation R, destination tile is

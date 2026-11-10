@@ -1,0 +1,291 @@
+Referee point 6: supercell generalization experiment
+Branch: referee-r6-supercell
+Report captured UTC: 2026-11-10T10:04:34.240547+00:00
+
+1. What changed
+Built all 11 requested CIFs and their manifest; evaluated the fixed paper
+checkpoints without retraining or operator repair; submitted eight OpenMX
+ground-truth calculations; added an allocated, rerunnable comparison workflow.
+The two corrected inference jobs completed: silicon 837286 (8 structures,
+84 seconds) and SiO2 837287 (3 structures, 94 seconds). Native operators are
+on ROSI bigdata, with small JSON results and hashes in this branch.
+
+The production fix in src/data/structure_inference.py avoids requiring an r0
+parameter from the SiO2 envelope family and preserves r0 for supported families.
+tests/unit/data/test_structure_inference.py covers both cases and the existing
+species-order contract. Source/checkpoint identities and exact commands are
+in results/*_provenance.json, verification.json, and RUNBOOK.txt.
+
+Structures: name | atoms | repetition | sigma Angstrom | seed
+  si-2x2x2-1 | 64 | 2x2x2 | 0.02 | 20261311
+  si-2x2x2-2 | 64 | 2x2x2 | 0.02 | 20261312
+  si-2x2x2-3 | 64 | 2x2x2 | 0.02 | 20261313
+  si-2x2x2-tiled | 64 | 2x2x2 | 0 | None
+  si-3x3x3-1 | 216 | 3x3x3 | 0.02 | 20261411
+  si-3x3x3-2 | 216 | 3x3x3 | 0.02 | 20261412
+  si-3x3x3-3 | 216 | 3x3x3 | 0.02 | 20261413
+  si-3x3x3-tiled | 216 | 3x3x3 | 0 | None
+  sio2-2x1x1-1 | 300 | 2x1x1 | 0.02 | 20262111
+  sio2-2x1x1-tiled | 300 | 2x1x1 | 0 | None
+  sio2-2x1x1-2 | 300 | 2x1x1 | 0.02 | 20262112
+
+Si training: scale_1 only, sigma 0.02 Angstrom, 80 train / 16 validation,
+split seed 43; a=5.4437 Angstrom; original dataset generation seed 7.
+Source validation cells: Si_scale_1_078; SiO2 13_67164000 and 2_74240000.
+Membership follows the committed audit and retains its reconstruction caveat.
+
+2. Verified results
+H MAEs below use Hermitian projection on common real-space support, matching
+the paper table. Both raw and projected errors and support counts are in JSON.
+Paper validation mean H MAE: Si 0.435164 meV; SiO2 1.99588 meV.
+
+Structure | OpenMX job | H MAE meV | S MAE | D MAE
+  si-2x2x2-1 | 837283 | 8.6505964 | 0.0007194514319741193 | 0.000550424535841916
+  si-2x2x2-2 | 837289 | 8.6905957 | 0.0007212527136013873 | 0.0005509217238466463
+  si-2x2x2-3 | 837290 | 8.6543087 | 0.0007203140083565605 | 0.0005444802203902438
+  si-2x2x2-tiled | folded control | 8.1369477 | 0.0007267947275136648 | 0.0004773784123183114
+  si-3x3x3-1 | 837291 | 8.6866187 | 0.00071891511993734 | 0.0005523925345532764
+  si-3x3x3-2 | 837292 | 8.7687354 | 0.0007188160191064931 | 0.0005582108814005954
+  si-3x3x3-3 | 837293 | 8.7172211 | 0.0007192381546066908 | 0.0005506098463174243
+  si-3x3x3-tiled | folded control | 8.1369508 | 0.0007267949276087207 | 0.0004773782391004719
+  sio2-2x1x1-1 | 837300 | OpenMX_pending
+  sio2-2x1x1-tiled | folded control | 2.5346271 | not predicted | not predicted
+  sio2-2x1x1-2 | 837301 | OpenMX_pending
+
+Silicon primary prediction diagnostics (full geometry support):
+name | PD fraction | minimum S eigenvalue | Cholesky success | Tr(DS) / nominal
+  si-2x2x2-1 | 0 | -1.0151236 | 0 | 264.736988 / 256
+  si-2x2x2-2 | 0 | -1.0033532 | 0 | 264.788493 / 256
+  si-2x2x2-3 | 0 | -0.96010955 | 0 | 264.765076 / 256
+  si-2x2x2-tiled | 0 | -0.9903229 | 0 | 265.04241 / 256
+  si-3x3x3-1 | 0 | -1.0043452 | 0 | 893.572631 / 864
+  si-3x3x3-2 | 0 | -1.0310941 | 0 | 893.455139 / 864
+  si-3x3x3-3 | 0 | -0.9890429 | 0 | 893.496835 / 864
+  si-3x3x3-tiled | 0 | -0.99032296 | 0 | 894.518198 / 864
+All sampled Si metrics are invalid: 0/64 usable points at 64 atoms,
+0/27 at 216 atoms. D occupations are therefore unavailable for primary
+supercell predictions; no jitter, clipping or charge rescaling is applied.
+All sampled reference Si metrics are positive definite.
+
+SiO2 primary predictions contain H only. Raw H relative Hermiticity residuals:
+  sio2-2x1x1-1: 0.00410803603
+  sio2-2x1x1-tiled: 0.00396714729
+  sio2-2x1x1-2: 0.00424355206
+
+Interpretation: perturbed Si H MAEs are about twenty times the validation
+mean. The tiled controls isolate a cell-representation limitation: known
+parent-atom routing of the unchanged heads in the 2x2x2 control restores H MAE to 0.383658697
+meV, versus 8.13695 meV with the checkpoint's normal supercell routing.
+This control is never applied to primary predictions or perturbed cells.
+The SiO2 tiled H result agrees with its source cell to numerical precision.
+Per-k PD fractions alone are not invariant under band folding. See RUNBOOK
+for the matched-mesh minimum-eigenvalue comparison and support distinction.
+
+Public OpenMX source-runtime calibration:
+  Si H MAE 0.000678366923 meV, tolerance 0.01 meV: PASS.
+  SiO2 calibration status: pending.
+
+Verification commands and outcomes:
+  .venv/bin/python researchops/runs/r6_supercell_20261110/build_structures.py
+    11 CIFs; all ASE coordinate/order roundtrip assertions passed; sigma_Si=0.02 A; a=5.4437 A
+  OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q researchops/runs/r6_supercell_20261110/test_workflow.py
+    7 passed
+  PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q --confcutdir=tests/unit/data tests/unit/data/test_structure_inference.py -m 'not large_data'
+    4 passed; 1 large-data test deselected
+  PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q --confcutdir=tests/unit/analysis tests/unit/analysis/test_physical_constraints.py
+    15 passed on the clean temporary rebase onto 6fa64e2; initial 2 import failures resolved by installing local test dependencies
+  .venv/bin/python researchops/runs/r6_supercell_20261110/prepare_openmx.py
+    8 inputs prepared; non-geometry numerical settings preserved; original DATA.PATH copies retained
+  python3.13 -m compileall -q researchops/runs/r6_supercell_20261110
+    passed
+  bash -n researchops/runs/r6_supercell_20261110/*.sh; bash -n researchops/runs/r6_supercell_20261110/openmx/*/run.sh
+    passed
+
+Actual allocated comparison check:
+  sbatch --parsable --job-name=r6-check --output=researchops/runs/r6_supercell_20261110/check-%j.out researchops/runs/r6_supercell_20261110/final_compare.sh
+  Job 837344: COMPLETED, exit 0, 2 minutes 57 seconds.
+  Nine available comparisons executed successfully (six new Si cells and three controls);
+  two SiO2 reference calculations correctly remained pending.
+  Ten exact submitted DFT/calibration scripts were archived, and all ten
+  staged input hashes match the committed input copies.
+
+GitHub Actions: implementation commit 5ebb580 passed Tests and Documentation.
+  https://github.com/Mandala-org/Mandala/actions/runs/42793665829
+  https://github.com/Mandala-org/Mandala/actions/runs/42793665892
+
+OpenMX resources and conservative estimates:
+name | job | MPI x OMP | memory | requested walltime | estimated seconds before safety factor 3
+  si-2x2x2-1 | 837283 | 96 x 1 | 96G | 02:00:00 | 1220.117
+  si-2x2x2-2 | 837289 | 96 x 1 | 96G | 02:00:00 | 1220.117
+  si-2x2x2-3 | 837290 | 96 x 1 | 96G | 02:00:00 | 1220.117
+  si-3x3x3-1 | 837291 | 96 x 1 | 192G | 18:00:00 | 19788.219
+  si-3x3x3-2 | 837292 | 96 x 1 | 192G | 18:00:00 | 19788.219
+  si-3x3x3-3 | 837293 | 96 x 1 | 192G | 18:00:00 | 19788.219
+  sio2-2x1x1-1 | 837300 | 8 x 12 | 768G | 44:00:00 | 74024.696
+  sio2-2x1x1-2 | 837301 | 8 x 12 | 768G | 44:00:00 | 49428.256
+The Si model uses cubic basis-size growth, k-grid reduction and a conservative
+sixfold speedup from four to 96 MPI ranks. SiO2 receives no parallel speedup
+credit because its original rank count is unknown. Its 3x estimate was
+capped at 44 hours to fit before the Nov 12 08:00 CET maintenance.
+Original 96-MPI SiO2 attempts exhausted memory before SCF; current jobs
+use 8 MPI x 12 OpenMP and 768 GB. Observed preparation RSS was 314--354 GB.
+Actual completed Si walltimes: 64 atoms 63/74/79 seconds; 216 atoms
+413/440/350 seconds. Full attempt accounting is results/job_status.json.
+
+3. Pending / not verified
+SiO2 jobs 837300 and 837301 and source-runtime calibration 837302 remain
+running in SCF. Their final H MAEs and reference diagnostics are not yet
+available. No k-convergence study is claimed. The SiO2 folded reference
+is conditional on convergence of original Gamma sampling; the 3x Si
+control is an algebraic fold of original operators, while new DFT uses
+a slightly denser 3x3x3 mesh because 8/3 is not integral.
+
+Automatic final comparison 837320 is queued after 837319/837300/837301/837302.
+The orchestrator can also run the exact manual command:
+  ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare.sh"
+Inside an existing GPU allocation:
+  source ~/scripts/profiles/mandala.sh
+  python researchops/runs/r6_supercell_20261110/compare.py --device cuda
+Outputs: results/comparison.json and results/comparison.md. The comparison
+refreshes runtime calibration and fails if a finished source check exceeds
+its H tolerance. No model loading or retraining occurs in compare.py.
+
+4. Choices / deviations Bartek may want to revisit
+Provided OpenMX binaries and DATA.PATH directories were permission denied
+on login and compute nodes. Built official public OpenMX 3.9.9 and public
+DFT_DATA19 in a Genoa Slurm job. All numerical inputs are retained; only
+the filesystem DATA.PATH changes. Original-path inputs and PAO/VPS,
+archive, and binary hashes are retained. Si reproduction passes; SiO2
+reproduction is still running. The original binaries can be substituted
+later if access is restored. Official source: https://www.openmx-square.org/download.html
+
+Initial larger-cell inference omitted the OpenMX-to-e3nn Cartesian
+permutation. Its 142--147 meV tiled values are INVALID and were replaced.
+Those artifacts remain only in the explicitly invalid archive on bigdata.
+The corrected base CIF path now asserts exact agreement with the training
+loader's geometry and matches frozen historical inference before proceeding.
+
+The requested rebase onto new develop 6fa64e2 succeeded and the rebased
+implementation passed 4+7+15 tests. Normal push rejected its published-
+history rewrite. To honor no force-push and no merge, restored the
+published history instead. Rebased b668e41 is preserved locally at
+refs/backup/r6-supercell-rebased-6fa64e2. No code was lost or merged.
+Pushes with no LFS-filtered changes used GIT_LFS_SKIP_PUSH=1 after the
+LFS hook stalled on extra SSH negotiations; no LFS objects were omitted.
+
+File-by-file index (latest committed change before this final report):
+  5b4fc82  researchops/runs/r6_supercell_20261110/RUNBOOK.txt
+  cf896b9  researchops/runs/r6_supercell_20261110/STATUS.txt
+  08f3612  researchops/runs/r6_supercell_20261110/analyze_tiling.py
+  450f44a  researchops/runs/r6_supercell_20261110/build_openmx.sh
+  bd5c0bf  researchops/runs/r6_supercell_20261110/build_structures.py
+  bd5c0bf  researchops/runs/r6_supercell_20261110/collect_evidence.py
+  6c387be  researchops/runs/r6_supercell_20261110/collect_status.py
+  4f56891  researchops/runs/r6_supercell_20261110/compare.py
+  16fdd56  researchops/runs/r6_supercell_20261110/compare.sh
+  07eaad2  researchops/runs/r6_supercell_20261110/compare_calibration.py
+  bd5c0bf  researchops/runs/r6_supercell_20261110/eval-si.sh
+  bd5c0bf  researchops/runs/r6_supercell_20261110/eval-sio2.sh
+  070bda5  researchops/runs/r6_supercell_20261110/evaluate.py
+  6c387be  researchops/runs/r6_supercell_20261110/final_compare.sh
+  bd5c0bf  researchops/runs/r6_supercell_20261110/fold_reference.py
+  070bda5  researchops/runs/r6_supercell_20261110/openmx/archives.sha256
+  07eaad2  researchops/runs/r6_supercell_20261110/openmx/calibration-silicon/Si.cif
+  07eaad2  researchops/runs/r6_supercell_20261110/openmx/calibration-silicon/conf.dat
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/calibration-silicon/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/calibration-silicon/submitted-837296.sh
+  07eaad2  researchops/runs/r6_supercell_20261110/openmx/calibration-sio2/SiO2.cif
+  07eaad2  researchops/runs/r6_supercell_20261110/openmx/calibration-sio2/SiO2.dat
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/calibration-sio2/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/calibration-sio2/submitted-837302.sh
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/calibration.json
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/cost_estimates.json
+  070bda5  researchops/runs/r6_supercell_20261110/openmx/r6-build-flags.txt
+  070bda5  researchops/runs/r6_supercell_20261110/openmx/r6-ldd.txt
+  070bda5  researchops/runs/r6_supercell_20261110/openmx/r6-modules.txt
+  070bda5  researchops/runs/r6_supercell_20261110/openmx/r6-runtime.sha256
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-1/conf.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-1/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-1/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-1/submitted-837283.sh
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-2/conf.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-2/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-2/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-2/submitted-837289.sh
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-3/conf.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-3/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-3/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-3/submitted-837290.sh
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-1/conf.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-1/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-1/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-1/submitted-837291.sh
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-2/conf.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-2/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-2/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-2/submitted-837292.sh
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-3/conf.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-3/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-3/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-3/submitted-837293.sh
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-1/SiO2.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-1/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-1/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-1/submitted-837300.sh
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-2/SiO2.dat
+  08f3612  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-2/original_data_path_input.txt
+  13cde43  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-2/run.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-2/submitted-837301.sh
+  cf896b9  researchops/runs/r6_supercell_20261110/openmx/submitted_scripts.json
+  4d71d34  researchops/runs/r6_supercell_20261110/postprocess.sh
+  13cde43  researchops/runs/r6_supercell_20261110/prepare_calibration.py
+  13cde43  researchops/runs/r6_supercell_20261110/prepare_openmx.py
+  450f44a  researchops/runs/r6_supercell_20261110/probe.sh
+  567e821  researchops/runs/r6_supercell_20261110/probe_tiled_equivalence.py
+  5ebb580  researchops/runs/r6_supercell_20261110/results/baseline_silicon.json
+  5ebb580  researchops/runs/r6_supercell_20261110/results/baseline_sio2.json
+  cf896b9  researchops/runs/r6_supercell_20261110/results/comparison.json
+  cf896b9  researchops/runs/r6_supercell_20261110/results/comparison.md
+  cf896b9  researchops/runs/r6_supercell_20261110/results/job_status.json
+  06c8ea4  researchops/runs/r6_supercell_20261110/results/runtime_calibration.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-2x2x2-1.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-2x2x2-2.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-2x2x2-3.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-2x2x2-tiled.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-3x3x3-1.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-3x3x3-2.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-3x3x3-3.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/si-3x3x3-tiled.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/silicon_provenance.json
+  5ebb580  researchops/runs/r6_supercell_20261110/results/silicon_tiling_probe.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/sio2-2x1x1-1.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/sio2-2x1x1-2.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/sio2-2x1x1-tiled.json
+  bb3f02e  researchops/runs/r6_supercell_20261110/results/sio2_provenance.json
+  5ebb580  researchops/runs/r6_supercell_20261110/results/sio2_tiling_probe.json
+  06c8ea4  researchops/runs/r6_supercell_20261110/results/tiling_attribution.json
+  bd5c0bf  researchops/runs/r6_supercell_20261110/source_evidence.json
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/manifest.json
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-2x2x2-1.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-2x2x2-2.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-2x2x2-3.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-2x2x2-tiled.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-3x3x3-1.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-3x3x3-2.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-3x3x3-3.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/si-3x3x3-tiled.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/sio2-2x1x1-1.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/sio2-2x1x1-2.cif
+  bd5c0bf  researchops/runs/r6_supercell_20261110/structures/sio2-2x1x1-tiled.cif
+  cf896b9  researchops/runs/r6_supercell_20261110/submissions.json
+  f04d2b4  researchops/runs/r6_supercell_20261110/submit_calibration.py
+  6c387be  researchops/runs/r6_supercell_20261110/submit_openmx.py
+  08f3612  researchops/runs/r6_supercell_20261110/test_workflow.py
+  cf896b9  researchops/runs/r6_supercell_20261110/verification.json
+  070bda5  researchops/runs/r6_supercell_20261110/workflow.py
+  f810361  src/data/structure_inference.py
+  f810361  tests/unit/data/test_structure_inference.py
+  REPORT.txt and its final RUNBOOK note are in the final-report commit.
+
+Neither paper/ nor README.md was edited. No force-push, merge, retraining,
+heavy calculation on login CPUs, or Terok GPU inference was performed.
