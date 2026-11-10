@@ -12,6 +12,7 @@ RUN = Path(__file__).resolve().parent
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('names',nargs='+',help='Explicit names; use --remaining after first SCF check')
+    parser.add_argument('--retry-failed',action='store_true',help='Retry a recorded failure before SCF only')
     args = parser.parse_args()
     manifest = json.loads((RUN/'structures/manifest.json').read_text())
     path = RUN/'submissions.json'
@@ -19,8 +20,14 @@ def main():
     assert len(document['evaluation']) == 2, 'Submit model evaluation for both materials first'
     for structure in manifest['structures']:
         name = structure['name']
-        if structure['tiled_control'] or name not in args.names or name in document['openmx']:
+        if structure['tiled_control'] or name not in args.names:
             continue
+        previous = document['openmx'].get(name)
+        if previous:
+            if not args.retry_failed:
+                continue
+            state = subprocess.check_output(['sacct','-j',previous['job_id'],'-X','-n','-o','State'],text=True).strip()
+            assert state.startswith(('FAILED','CANCELLED','TIMEOUT')), state
         staged = RUN/'openmx'/name
         directory = Path(structure['dft_directory'])
         directory.mkdir(parents=True,exist_ok=True)
@@ -33,6 +40,8 @@ def main():
         job = subprocess.check_output(command,text=True).strip().split(';')[0]
         document['openmx'][name] = dict(job_id=job,command=command,run_directory=str(directory),
             submitted_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        if previous:
+            document['openmx'][name]['previous_attempts'] = [previous]
         path.write_text(json.dumps(document,indent=2)+'\n')
         print(name,job,flush=True)
 

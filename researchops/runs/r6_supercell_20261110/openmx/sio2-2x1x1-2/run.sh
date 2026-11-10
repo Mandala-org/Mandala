@@ -17,14 +17,14 @@ export OMPI_MCA_pml=ucx
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 cd /bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2
 test ! -e COMPLETE
-test -x /bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9_genoa/source/openmx
-test -x /bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9_genoa/source/analysis_example
+test -x /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx
+test -x /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/analysis_example
 date -u
-mpirun -bind-to core --map-by core -np "$SLURM_NTASKS" /bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9_genoa/source/openmx SiO2.dat > log.out
+mpirun -bind-to core --map-by core -np "$SLURM_NTASKS" /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx SiO2.dat > log.out
 grep -q 'The calculation was normally finished.' log.out
 grep -q 'The SCF was achieved' log.out
 test -s SiO2.scfout
-mpirun -bind-to core --map-by core -np 1 /bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9_genoa/source/analysis_example SiO2.scfout > HS.out.tmp
+mpirun -bind-to core --map-by core -np 1 /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/analysis_example SiO2.scfout > HS.out.tmp
 test -s HS.out.tmp
 mv HS.out.tmp HS.out
 # Keep scfout on any failed run. Remove bulky intermediates only after extraction.

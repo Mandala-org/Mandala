@@ -3,7 +3,7 @@ System.Name                      Si
 level.of.stdout                   1    # default=1 (1-3)
 level.of.fileout                  1    # default=1 (0-2)
 
-DATA.PATH /bigdata/nanostructures/DFT/DI/DFT_DATA19/
+DATA.PATH /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/DFT_DATA19/
 
 #
 # Definition of Atomic Species

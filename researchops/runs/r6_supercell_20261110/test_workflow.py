@@ -1,10 +1,14 @@
 """Analytic contracts for folding, including non-Gamma phases and negative shifts."""
 from itertools import product
+from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
 
 from fold_reference import folded_keys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'src'))
 
 
 @pytest.mark.parametrize('repeat', [(2, 2, 2), (3, 3, 3), (2, 1, 1)])
@@ -36,3 +40,28 @@ def test_folded_spectrum_is_union_of_primitive_bloch_spectra(repeat):
         expected.append(sum(v*np.exp(2j*np.pi*np.dot(primitive_k,key[:3]))
                             for key,v in zip(keys,values)).real)
     np.testing.assert_allclose(np.linalg.eigvalsh(dense), sorted(expected), atol=1e-13)
+
+
+def test_native_block_folding_roundtrip_and_reverse_edges(tmp_path):
+    from collections import Counter
+    import torch
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+    from data.block_matrix import BlockMatrix
+    from fold_reference import fold_matrix
+    from analysis.physical_constraints import BlockFourier
+
+    cfg = OrbitalIrrepConfig.from_dict({'H': ['1x0e']})
+    keys = [(0,0,0,0,0),(1,0,0,0,0),(-1,0,0,0,0)]
+    matrix = BlockMatrix(('H',),Counter(H=1),
+                         {'H-H':torch.tensor([2.,-.3,-.3],dtype=torch.float64).reshape(3,1,1)},
+                         {'H-H':torch.tensor(keys).T},
+                         {key:('H-H',i) for i,key in enumerate(keys)},cfg,'e3nn')
+    folded = fold_matrix(matrix,(2,1,1))
+    assert folded.atoms == ('H','H') and folded.atom_counts == {'H':2}
+    folded.save(tmp_path/'folded.pt')
+    loaded = BlockMatrix.load(tmp_path/'folded.pt')
+    assembler = BlockFourier(loaded)
+    assert assembler.reverse_missing == 0
+    values = torch.linalg.eigvalsh(assembler.at([.17,0,0]))
+    expected = sorted(2-.6*np.cos(2*np.pi*(.17+i)/2) for i in (0,1))
+    np.testing.assert_allclose(values.numpy(),expected,atol=1e-14)

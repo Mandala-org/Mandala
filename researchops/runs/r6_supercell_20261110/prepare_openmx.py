@@ -8,7 +8,8 @@ from ase.io import read
 
 RUN = Path(__file__).resolve().parent
 REMOTE = Path('/data/home2/brzoza73/casus/mandala_worktrees/r6')
-BIN = '/bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9_genoa/source'
+INSTALL = '/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9'
+BIN = INSTALL + '/source'
 
 
 def replace_block(text, keyword, body):
@@ -56,9 +57,17 @@ def main():
                                     lambda m:m[1]+' '.join(map(str,structure['diagnostic_mesh'])),updated,flags=re.M)
             assert count == 1
         assert normalized_settings(original) == normalized_settings(updated)
+        # Original binaries and both original DATA.PATH locations are inaccessible
+        # to this account, including inside the first allocated Genoa job.
+        # Only the filesystem location changes: use public OpenMX 3.9.9 / DFT_DATA19.
+        source_data_path = re.search(r'^DATA.PATH\s+(\S+)',original,re.M)[1]
+        runnable,count = re.subn(r'^(DATA.PATH\s+)\S+',
+                                lambda m:m[1]+INSTALL+'/DFT_DATA19/',updated,flags=re.M)
+        assert count == 1
         directory = RUN/'openmx'/structure['name']
         directory.mkdir(parents=True,exist_ok=True)
-        (directory/filename).write_text(updated)
+        (directory/filename).write_text(runnable)
+        (directory/'original_data_path_input.txt').write_text(updated)
         if material == 'silicon':
             n = structure['repetition'][0]
             ratio = (len(atoms)/8)**3 * (structure['diagnostic_mesh'][0]/8)**3
@@ -122,7 +131,10 @@ date -u > COMPLETE
 '''
         (directory/'run.sh').write_text(script)
         estimates.append(dict(name=name,ranks=96,memory=memory,walltime=f'{hours:02d}:00:00',
-                              input=filename,run_directory=run_dir,**cost))
+                              input=filename,run_directory=run_dir,
+                              original_data_path=source_data_path,
+                              runtime_data_path=INSTALL+'/DFT_DATA19/',
+                              binary=BIN+'/openmx',basis_version='public DFT_DATA19',**cost))
     (RUN/'openmx/cost_estimates.json').write_text(json.dumps(estimates,indent=2)+'\n')
     print('Prepared',len(estimates),'OpenMX inputs; all non-geometry settings preserved')
 

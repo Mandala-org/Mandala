@@ -1,4 +1,4 @@
-DATA.PATH /bigdata/nanostructures/DFT/DI/forWiktoria/codebase/openmx3.9/DFT_DATA19/
+DATA.PATH /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/DFT_DATA19/
 
 #
 # File Name
