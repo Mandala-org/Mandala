@@ -92,6 +92,9 @@ def main():
         (RUN/'results/comparison.md').write_text('\n'.join(lines)+'\n')
     write_json(RUN/'results/comparison.json',result)
     (RUN/'results/comparison.md').write_text('\n'.join(lines)+'\n')
+    # Also refresh summaries from already-queued launchers (Slurm snapshots scripts).
+    from summarize import main as summarize
+    summarize()
     print('\n'.join(lines))
     if failed:
         raise SystemExit('Some comparisons failed; see comparison.json')
