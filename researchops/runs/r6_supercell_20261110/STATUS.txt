@@ -18,3 +18,16 @@ agreement with Snapshot geometry, then compare with frozen historical inference.
 The OpenMX inputs/structures are unaffected. First valid OpenMX job 837283
 reached SCF iteration 1 by 09:22 UTC. Original binary path was inaccessible;
 public 3.9.9 build job 837280 succeeded after two compilation fixes.
+
+Final handoff: corrected inference jobs 837286 (Si) and 837287 (SiO2)
+completed. All six Si OpenMX calculations completed; H MAE 8.65060--8.76874
+meV versus paper validation mean 0.435164 meV. Si tiled H MAE 8.13695 meV;
+a labelled parent-head routing control restores 0.383659 meV. SiO2 tiled H
+MAE 2.534627 meV. SiO2 jobs 837300/837301 and calibration 837302 are active;
+final comparison job 837320 depends on their completion. Check 837344 passed.
+
+Upstream deviation: fetch/rebase onto new develop 6fa64e2 completed cleanly,
+and 4 structure + 7 folding + 15 physical tests passed. An ordinary push of
+the rewrite was rejected as non-fast-forward. To honor no force-push and
+no merge, retained published history and preserved the temporary rebased
+state locally at refs/backup/r6-supercell-rebased-6fa64e2 (b668e41).

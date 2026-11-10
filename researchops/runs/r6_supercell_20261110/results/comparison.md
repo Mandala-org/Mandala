@@ -1,5 +1,6 @@
 Element errors use matching periodic support; raw and Hermitian-projected values are in JSON.
 The table uses Hermitian projection to match the paper validation values.
+Public OpenMX runtime source-cell checks: silicon: H MAE 0.000678367 meV, pass=True, sio2: pending
 Original Gamma-only sampling corresponds to supercell Gamma and X-type points; folded blocks are an exact DFT reference only if the original Gamma calculation was converged with respect to k sampling.
 
 | Structure | Atoms | H MAE meV | S MAE | D MAE | Predicted usable S fraction | Reference usable S fraction | Reference min eigenvalue | Validation H meV |

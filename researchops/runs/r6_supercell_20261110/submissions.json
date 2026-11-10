@@ -78,7 +78,8 @@
           "submitted_utc": "2026-11-10T09:07:30.417425+00:00",
           "status": "FAILED before SCF: inaccessible original binary and basis root"
         }
-      ]
+      ],
+      "submitted_script_archive": "openmx/si-2x2x2-1/submitted-837283.sh"
     },
     "si-2x2x2-2": {
       "job_id": "837289",
@@ -88,7 +89,8 @@
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-2/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-2",
-      "submitted_utc": "2026-11-10T09:23:12.279447+00:00"
+      "submitted_utc": "2026-11-10T09:23:12.279447+00:00",
+      "submitted_script_archive": "openmx/si-2x2x2-2/submitted-837289.sh"
     },
     "si-2x2x2-3": {
       "job_id": "837290",
@@ -98,7 +100,8 @@
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/si-2x2x2-3/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-3",
-      "submitted_utc": "2026-11-10T09:23:12.321089+00:00"
+      "submitted_utc": "2026-11-10T09:23:12.321089+00:00",
+      "submitted_script_archive": "openmx/si-2x2x2-3/submitted-837290.sh"
     },
     "si-3x3x3-1": {
       "job_id": "837291",
@@ -108,7 +111,8 @@
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-1/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-1",
-      "submitted_utc": "2026-11-10T09:23:12.338502+00:00"
+      "submitted_utc": "2026-11-10T09:23:12.338502+00:00",
+      "submitted_script_archive": "openmx/si-3x3x3-1/submitted-837291.sh"
     },
     "si-3x3x3-2": {
       "job_id": "837292",
@@ -118,7 +122,8 @@
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-2/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-2",
-      "submitted_utc": "2026-11-10T09:23:12.386709+00:00"
+      "submitted_utc": "2026-11-10T09:23:12.386709+00:00",
+      "submitted_script_archive": "openmx/si-3x3x3-2/submitted-837292.sh"
     },
     "si-3x3x3-3": {
       "job_id": "837293",
@@ -128,7 +133,8 @@
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/si-3x3x3-3/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-3",
-      "submitted_utc": "2026-11-10T09:23:12.437015+00:00"
+      "submitted_utc": "2026-11-10T09:23:12.437015+00:00",
+      "submitted_script_archive": "openmx/si-3x3x3-3/submitted-837293.sh"
     },
     "sio2-2x1x1-1": {
       "job_id": "837300",
@@ -151,7 +157,8 @@
           "submitted_utc": "2026-11-10T09:23:12.458700+00:00",
           "archived_outputs": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-1/failed-837294"
         }
-      ]
+      ],
+      "submitted_script_archive": "openmx/sio2-2x1x1-1/submitted-837300.sh"
     },
     "sio2-2x1x1-2": {
       "job_id": "837301",
@@ -174,7 +181,8 @@
           "submitted_utc": "2026-11-10T09:23:12.503352+00:00",
           "archived_outputs": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2/failed-837295"
         }
-      ]
+      ],
+      "submitted_script_archive": "openmx/sio2-2x1x1-2/submitted-837301.sh"
     }
   },
   "comparison": {
@@ -212,7 +220,8 @@
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/calibration-silicon/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/silicon",
-      "submitted_utc": "2026-11-10T09:23:12.552202+00:00"
+      "submitted_utc": "2026-11-10T09:23:12.552202+00:00",
+      "submitted_script_archive": "openmx/calibration-silicon/submitted-837296.sh"
     },
     "sio2": {
       "job_id": "837302",
@@ -235,7 +244,8 @@
           "submitted_utc": "2026-11-10T09:23:12.570576+00:00",
           "archived_outputs": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/sio2/failed-837297"
         }
-      ]
+      ],
+      "submitted_script_archive": "openmx/calibration-sio2/submitted-837302.sh"
     }
   },
   "postprocessing": {
@@ -274,5 +284,16 @@
       "--dependency=afterany:837319:837300:837301:837302",
       "researchops/runs/r6_supercell_20261110/final_compare.sh"
     ]
+  },
+  "verification": {
+    "job_id": "837344",
+    "command": [
+      "sbatch",
+      "--parsable",
+      "--job-name=r6-check",
+      "--output=researchops/runs/r6_supercell_20261110/check-%j.out",
+      "researchops/runs/r6_supercell_20261110/final_compare.sh"
+    ],
+    "result": "COMPLETED, exit 0, 00:02:57; six Si DFT structures and three tiled controls compared; two SiO2 DFT structures pending"
   }
 }
