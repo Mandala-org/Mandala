@@ -71,7 +71,12 @@ def main():
         interpretation += ' SiO2 perturbed-cell H MAE is '+', '.join(f"{r['H_MAE_meV']:.6g}" for r in sio2)+' meV versus 1.99588 meV on validation.'
     else:
         interpretation += ' SiO2 perturbed references remain pending; its tiled-control H MAE is 2.534627 meV, so perturbed size transfer cannot yet be assessed.'
-    interpretation += ' Metric validity must be assessed separately from element errors; the table reports the full-geometry overlap without repair.'
+    for key, label in (('primary_metric','Primary'),('routed_diagnostic_metric','Parent-routed diagnostic')):
+        metrics = [r[key] for r in silicon if r[key] is not None]
+        if metrics:
+            interpretation += (f" {label} overlap is positive definite at {sum(m['positive_definite_count'] for m in metrics)}/{sum(m['kpoints'] for m in metrics)} sampled perturbed-cell k-points;"
+                               f" its lowest eigenvalue across those cells is {min(m['minimum_eigenvalue'] for m in metrics):.6g}.")
+    interpretation += ' The metric uses full geometry support without repair, whereas element errors use common reference support.'
     meaning = ('Each row is one structure; repetition expands the source cell, and σ is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4×4×4 (2× Si) or 3×3×3 (3× Si) Gamma-centered meshes. SiO2 predicts H only; — means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3× Si control folds the original 8-mesh calculation.')
     lines += ['',interpretation,'',meaning,'', '| Structure | Operator | Category | Blocks fraction | Scalar fraction | MAE (H meV) |', '| --- | --- | --- | ---: | ---: | ---: |']
     for row in rows:
