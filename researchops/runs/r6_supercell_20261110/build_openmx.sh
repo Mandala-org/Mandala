@@ -32,7 +32,7 @@ tar xzf ../../patch3.9.9.tar.gz
 cp makefile makefile.upstream
 cc_flags="mpicc -O3 -march=znver3 -fopenmp -fcommon -I${EBROOTFFTW}/include"
 fc_flags="mpif90 -O3 -march=znver3 -fopenmp -fallow-argument-mismatch"
-link_flags="-L${EBROOTSCALAPACK}/lib -lscalapack -L${EBROOTFLEXIBLAS}/lib -lflexiblas -L${EBROOTFFTW}/lib -lfftw3 -lgfortran -lm -ldl"
+link_flags="-L${EBROOTSCALAPACK}/lib -lscalapack -L${EBROOTFLEXIBLAS}/lib -lflexiblas -L${EBROOTFFTW}/lib -lfftw3 -lmpi_usempif08 -lmpi_usempi_ignore_tkr -lmpi_mpifh -lgfortran -lm -ldl"
 # The upstream makefile omits Fortran module dependencies. A parallel make
 # races .mod producers/consumers; serialize it rather than changing numerics.
 make -j 1 openmx analysis_example "CC=$cc_flags" "FC=$fc_flags" "LIB=$link_flags" DESTDIR=../work > build.log 2>&1 || { tail -80 build.log; exit 1; }
