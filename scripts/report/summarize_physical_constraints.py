@@ -2,10 +2,10 @@
 """Aggregate bounded structure diagnostics; retain failures and denominators."""
 
 import argparse
-from collections import defaultdict
 import json
-from pathlib import Path
 import sys
+from collections import defaultdict
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / "src")]
@@ -53,6 +53,19 @@ def summarize(directory):
             "mean": sum(errors) / len(errors),
             "max": max(errors),
         }
+        # This is a separate quantity from the exact unrepaired real-space
+        # trace above. In overlap-repair controls it uses S_rep on the mesh.
+        mesh_errors = [
+            abs(s["mesh_electron_count_error"])
+            for s, _ in scenarios
+            if "mesh_electron_count_error" in s
+        ]
+        if mesh_errors:
+            target["mesh_electron_count_absolute_error"] = {
+                "count": len(mesh_errors),
+                "mean": sum(mesh_errors) / len(mesh_errors),
+                "max": max(mesh_errors),
+            }
         fd = [
             s["fermi_consistency"]["density_relative_frobenius"]
             for s, _ in scenarios

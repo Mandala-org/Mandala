@@ -1,7 +1,9 @@
-"""Unrepaired, metric-aware operator diagnostics for a finite periodic support.
+"""Metric-aware operator diagnostics for a finite periodic support.
 
 The density is the contravariant AO kernel, not its ordinary eigenvalue
-spectrum. No eigenvalue clipping, overlap jitter or charge rescaling is used.
+spectrum. Diagnostics are unrepaired by default; overlap-only eigenvalue
+flooring is an explicit, separately labelled option. No overlap jitter,
+occupation projection or charge rescaling is used.
 All dense algebra is complex128; predictions can still originate in float32.
 """
 
@@ -27,6 +29,38 @@ def hermiticity(a):
     return {
         "relative_frobenius": _norm(error) / max(_norm(a), 1e-30),
         "max_absolute": float(error.abs().max()),
+    }
+
+
+@torch.no_grad()
+def repair_overlap(overlap, *, eig_floor=1e-6):
+    """Floor the eigenvalues of one Hermitian Bloch overlap, in complex128.
+
+    This uses the training overlap conditioner's default lower bound, but
+    deliberately has no upper clamp or diagonal-jitter fallback. The input
+    is never modified. Statistics compare against S^h, before any repair;
+    the reported after minimum is measured on the reconstructed matrix.
+    """
+    if not math.isfinite(eig_floor) or eig_floor <= 0:
+        raise ValueError("Overlap eigenvalue floor must be finite and positive")
+    if overlap.ndim != 2 or overlap.shape[0] != overlap.shape[1] or not overlap.numel():
+        raise ValueError("Overlap must be a nonempty square matrix")
+    if not bool(torch.isfinite(overlap).all()):
+        raise ValueError("Cannot repair a nonfinite overlap")
+    original = hermitian(overlap.to(torch.complex128))
+    eigenvalues, vectors = torch.linalg.eigh(original)
+    count = int((eigenvalues < eig_floor).sum())
+    repaired = (
+        hermitian((vectors * eigenvalues.clamp_min(eig_floor)) @ vectors.mH)
+        if count
+        else original.clone()
+    )
+    return repaired, {
+        "eig_floor": eig_floor,
+        "relative_frobenius": _norm(repaired - original) / max(_norm(original), 1e-30),
+        "floored_eigenvalues": count,
+        "lambda_min_before": float(eigenvalues[0]),
+        "lambda_min_after": float(torch.linalg.eigvalsh(repaired)[0]),
     }
 
 
@@ -107,6 +141,7 @@ def diagnose_kpoint(
     occupation_tolerance=1e-5,
     overlap_atol=1e-8,
     overlap_rtol=1e-8,
+    overlap_eig_floor=None,
 ):
     """Raw Hermiticity followed by explicitly labelled Hermitian diagnostics.
 
@@ -114,6 +149,8 @@ def diagnose_kpoint(
     to H D S-S D H=0 and its norm is independent of a constant energy gauge.
     Idempotency is only a zero-temperature diagnostic, not a finite-T demand.
     Private arrays support a subsequently fitted *global* Fermi level.
+    overlap_eig_floor explicitly selects overlap-only repair after recording
+    raw Hermiticity. H and D retain their usual Hermitian projection only.
     """
     if max_occupation <= 0 or min(occupation_tolerance, overlap_atol, overlap_rtol) < 0:
         raise ValueError("Invalid diagnostic tolerances/occupation")
@@ -133,6 +170,8 @@ def diagnose_kpoint(
         "raw_hermiticity": {key: hermiticity(a) for key, a in matrices.items()},
     }
     h, s = hermitian(matrices["hamiltonian"]), hermitian(matrices["overlap"])
+    if overlap_eig_floor is not None:
+        s, result["overlap_repair"] = repair_overlap(s, eig_floor=overlap_eig_floor)
     se, su = torch.linalg.eigh(s)
     minimum, maximum = float(se[0]), float(se[-1])
     threshold = max(overlap_atol, overlap_rtol * max(abs(maximum), abs(minimum)))

@@ -9,10 +9,61 @@ from analysis.physical_constraints import (
     BlockFourier,
     diagnose_kpoint,
     fermi_consistency,
+    repair_overlap,
     uniform_kpoints,
 )
 from core.orbital_irrep_config import OrbitalIrrepConfig
 from data.block_matrix import BlockMatrix
+
+
+def test_overlap_repair_floors_one_mode_without_upper_clamp_or_input_mutation():
+    generator = torch.Generator().manual_seed(7)
+    q, _ = torch.linalg.qr(
+        torch.randn(7, 7, dtype=torch.complex128, generator=generator)
+    )
+    eigenvalues = torch.tensor([0.1, 0.3, 0.5, 1, 2, 3, 1e4], dtype=torch.float64)
+    reference = (q * eigenvalues) @ q.mH
+    reference = (reference + reference.mH) * 0.5
+    original = reference.clone()
+    damaged = reference - 0.11 * q[:, :1] @ q[:, :1].mH
+    damaged_copy = damaged.clone()
+    repaired, stats = repair_overlap(damaged)
+    assert not torch.linalg.cholesky_ex(repaired)[1]
+    assert stats["floored_eigenvalues"] == 1
+    assert stats["lambda_min_before"] == pytest.approx(-0.01, abs=1e-11)
+    assert stats["lambda_min_after"] == pytest.approx(1e-6, abs=1e-11)
+    expected_norm = (0.01 + 1e-6) / float(torch.linalg.vector_norm(damaged))
+    assert stats["relative_frobenius"] == pytest.approx(expected_norm, rel=1e-8)
+    assert torch.linalg.eigvalsh(repaired)[-1] == pytest.approx(1e4)
+    assert torch.equal(damaged, damaged_copy)
+    control, control_stats = repair_overlap(reference)
+    assert control_stats["floored_eigenvalues"] == 0
+    assert control_stats["relative_frobenius"] == 0
+    assert torch.equal(control, reference)
+    assert torch.equal(reference, original)
+
+
+def test_overlap_only_repair_keeps_unprojected_occupations_and_raw_hermiticity():
+    h = torch.diag(torch.tensor([-0.4, 0.7], dtype=torch.complex128))
+    s = torch.diag(torch.tensor([-0.01, 1.0], dtype=h.dtype))
+    s[0, 1] = 0.01j
+    d = torch.diag(torch.tensor([-0.1, 2.1], dtype=h.dtype))
+    assert diagnose_kpoint(h, s, d)["status"] == "invalid_overlap_metric"
+    repaired, _ = repair_overlap(s)
+    result = diagnose_kpoint(h, s, d, overlap_eig_floor=1e-6)
+    direct = diagnose_kpoint(h, repaired, d)
+    assert result["status"] == "ok"
+    assert result["raw_hermiticity"]["overlap"]["max_absolute"] > 0
+    assert result["density"] == direct["density"]
+    assert result["density"]["occupation_min"] < 0
+    assert result["density"]["occupation_max"] > 2
+    assert result["consistency"] == direct["consistency"]
+
+
+@pytest.mark.parametrize("floor", [0, -1e-6, float("nan"), float("inf")])
+def test_overlap_repair_rejects_invalid_floor(floor):
+    with pytest.raises(ValueError, match="finite and positive"):
+        repair_overlap(torch.eye(2), eig_floor=floor)
 
 
 def operators(occupations=(2.0, 0.0)):
@@ -121,16 +172,14 @@ def test_periodic_bloch_sum_has_complex_reverse_phases():
 def test_input_metadata_uses_declared_charge_not_reference_density(tmp_path):
     from scripts.report.evaluate_physical_constraints import input_metadata
 
-    (tmp_path / "conf.dat").write_text(
-        """scf.SpinPolarization off
+    (tmp_path / "conf.dat").write_text("""scf.SpinPolarization off
 scf.ElectronicTemperature 300
 scf.Kgrid 8 8 8
 scf.system.charge 1
 <Atoms.SpeciesAndCoordinates
 1 Si 0 0 0 2 2
 Atoms.SpeciesAndCoordinates>
-"""
-    )
+""")
     result = input_metadata(tmp_path / "Si.out")
     assert result["num_electrons"] == 3
     assert result["native_kmesh"] == [8, 8, 8]
