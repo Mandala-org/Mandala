@@ -80,3 +80,10 @@
      - Not re-tested
      - Not re-tested
      - reported; with patches, see notes
+   * - py315-t2xx-cu128 (NVIDIA A40)
+     - 3.15.2
+     - none / cu128
+     - not recorded / not recorded
+     - Not re-tested
+     - Not re-tested
+     - no_wheels, 2026-11-10; No cp315 wheel on cu128; newest available is cp314 / torch 2.11.0
