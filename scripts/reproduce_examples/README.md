@@ -212,3 +212,39 @@ launchers. They compare clean and interrupted/resumed stochastic training.
 Before starting a new run, check the frozen initial learning rate, epoch cap,
 dataset inventory, density convention and logging configuration. Environment
 and inventory checks precede long GPU training.
+
+## v2 recipes: held-out test split
+
+The `silicon_v2.json`, `sio2_v2.json`, and `zncusnses_v2.json` recipes initialize
+from scratch with the corrected O(3)-equivariant FiLM layer on current develop.
+They do not enable `legacy_2026_07` checkpoint semantics. Their matching
+`train_<material>_v2.sh` launchers preserve the original `PYTHONHASHSEED` values.
+
+| Recipe | Train | Validation | Held-out test | Split seed |
+| --- | ---: | ---: | ---: | ---: |
+| `silicon_v2.json` | 80 | 10 | 6 | 43 |
+| `sio2_v2.json` | 90 | 6 | 4 | 42 |
+| `zncusnses_v2.json` | 80 | 12 | 8 | 44 |
+
+Training members and their order are retained from the recorded v1 runs.
+The former validation set is partitioned into a smaller validation set and
+its held-out test remainder. Discovery and seeded shuffling precede slicing,
+so these count changes do not change the training prefix. On ROSI, run
+`python scripts/reproduce_examples/check_v2_splits.py` to verify the real
+training selection path against the v1 manifests without loading matrices.
+The committed `v2_split_check.json` records membership, hashes, and comparisons;
+original selected-run paper manifests are compared when available. Missing
+historical manifests mean paper membership cannot be independently certified.
+
+The output root, W&B group, and W&B project are changed to
+`publication_retrain_v2` / `mandala-publication-retrain-v2` to keep these runs
+separate. `evaluate_test_after_fit` remains false: test metrics must be computed
+once after validation-based model selection, never after each segment.
+Epoch caps, architectures, objectives, frozen envelopes, and optimizer settings
+are retained. For the requested 45-hour Slurm allocations, the v2 session budget
+is 44 hours, leaving one hour for epoch completion and checkpoint finalization.
+Each material has four `afterok` segments with an `INT` signal ten minutes before
+the allocation ends. The existing training wrapper returns successfully without
+training when the latest safe checkpoint has reached the total epoch cap.
+Submission scripts and scheduler records live under
+`researchops/runs/publication_retrain_v2/` in the isolated ROSI worktree.
