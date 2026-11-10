@@ -47,8 +47,11 @@ def _assert_probe(parameter, expected):
         rtol=2e-8,
         atol=2e-10,
     )
+    # Cancellation in a signed sum amplifies small CPU backend differences:
+    # one 40-weight Adam probe differs by 4.7e-9 on the CI CPU stack. Keep
+    # the stricter coordinate and squared-norm checks above/below unchanged.
     torch.testing.assert_close(
-        flat.sum(), torch.tensor(expected["sum"]), rtol=2e-8, atol=2e-9
+        flat.sum(), torch.tensor(expected["sum"]), rtol=2e-8, atol=1e-8
     )
     torch.testing.assert_close(
         flat.square().sum(), torch.tensor(expected["squared_sum"]), rtol=2e-8, atol=2e-9

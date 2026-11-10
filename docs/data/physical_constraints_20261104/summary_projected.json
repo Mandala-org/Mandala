@@ -1,0 +1,906 @@
+{
+  "schema_version": 1,
+  "sources": [
+    "silicon/historical_summary.json",
+    "silicon/silicon_aggregate.json",
+    "sio2/historical_summary.json",
+    "sio2/sio2_aggregate.json",
+    "zncusnses/historical_summary.json"
+  ],
+  "scenarios": {
+    "silicon": "joint_predicted_reference_support",
+    "sio2": "predicted_H_reference_SD_reference_support"
+  },
+  "denominators": {
+    "silicon": {
+      "structures": 16,
+      "kpoints": 8192,
+      "invalid_metric_kpoints": 6779,
+      "structures_with_invalid_metric": 16
+    },
+    "sio2": {
+      "structures": 10,
+      "kpoints": 10,
+      "invalid_metric_kpoints": 0,
+      "structures_with_invalid_metric": 0
+    }
+  },
+  "cleanup_status": "Reference-support control and Hermitian projection only; no overlap repair, fixed-charge occupation projection, or post-cleanup aggregates exist.",
+  "rows": [
+    {
+      "material": "silicon",
+      "operator": "H",
+      "diagnostic": "projected common-support MAE (meV)",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 0,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.4351643916014273,
+        "worst": 0.6100032021223534,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 0,
+        "contributing_structures": 16
+      },
+      "scenario": "matrix_errors_hermitian_common_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "projected common-support MAE (AO units)",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 0,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 1.3897783296280595e-05,
+        "worst": 1.6789228005626828e-05,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 0,
+        "contributing_structures": 16
+      },
+      "scenario": "matrix_errors_hermitian_common_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "projected common-support MAE (AO units)",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 0,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 5.7577229628706865e-05,
+        "worst": 8.241216259184955e-05,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 0,
+        "contributing_structures": 16
+      },
+      "scenario": "matrix_errors_hermitian_common_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.positive_definite",
+      "reference": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.1727294921875,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.well_conditioned_positive_definite",
+      "reference": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.1724853515625,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.cholesky_failed_without_jitter",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.8272705078125,
+        "worst": 1.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.lambda_min",
+      "reference": {
+        "mean": 0.001188437336974419,
+        "worst": 0.0008725468744609862,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": -0.0006552389035955694,
+        "worst": -0.00624093805170134,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.lambda_max",
+      "reference": {
+        "mean": 6.344863720171715,
+        "worst": 6.743270614985497,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 6.346737434955031,
+        "worst": 6.749616812086815,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.condition_number",
+      "reference": {
+        "mean": 5388.829668094718,
+        "worst": 7156.368671437867,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 295704.94024093176,
+        "worst": 102091352.77271791,
+        "count": 1415,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 15
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.nonpositive_eigenvalues",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 1.124267578125,
+        "worst": 4.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.occupation_min",
+      "reference": {
+        "mean": -0.03342634487389225,
+        "worst": -0.04181193148368893,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": -0.032526075519356254,
+        "worst": -0.039333306350982374,
+        "count": 1413,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 15
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.occupation_max",
+      "reference": {
+        "mean": 2.3044963476704594,
+        "worst": 2.492208715874526,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 2.2884525249648484,
+        "worst": 2.413576493907236,
+        "count": 1413,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 15
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.negative_count",
+      "reference": {
+        "mean": 37.8604736328125,
+        "worst": 42.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 38.53998584571833,
+        "worst": 44.0,
+        "count": 1413,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 15
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.overoccupied_count",
+      "reference": {
+        "mean": 7.012939453125,
+        "worst": 12.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 7.1988676574663835,
+        "worst": 10.0,
+        "count": 1413,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 15
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "electron_count_absolute_error",
+      "reference": {
+        "mean": 9.993361804738754e-08,
+        "worst": 1.9519994154393316e-07,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.007532295860229521,
+        "worst": 0.011462252649195648,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.zero_temperature_idempotency_relative",
+      "reference": {
+        "mean": 0.10243529821778662,
+        "worst": 0.1604847123990461,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.10195312190847514,
+        "worst": 0.15584728606144313,
+        "count": 1413,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 15
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "H",
+      "diagnostic": "consistency.commutator_relative",
+      "reference": {
+        "mean": 0.0023536577755087855,
+        "worst": 0.0035209855491073615,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.0009695532460684943,
+        "worst": 0.001941800813087264,
+        "count": 1413,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 15
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "H",
+      "diagnostic": "finite_temperature_density_relative_frobenius",
+      "reference": {
+        "mean": 0.12122931388507353,
+        "worst": 0.12147728552709748,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": null,
+        "worst": null,
+        "count": 0,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 0
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "H",
+      "diagnostic": "projected common-support MAE (meV)",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 10,
+        "unit_of_count": "structures",
+        "total_structures": 10,
+        "total_kpoints": 0,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 1.9958806941314355,
+        "worst": 2.534623984188219,
+        "count": 10,
+        "unit_of_count": "structures",
+        "total_structures": 10,
+        "total_kpoints": 0,
+        "contributing_structures": 10
+      },
+      "scenario": "matrix_errors_hermitian_common_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "S",
+      "diagnostic": "overlap.positive_definite",
+      "reference": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "sio2",
+      "operator": "S",
+      "diagnostic": "overlap.well_conditioned_positive_definite",
+      "reference": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "sio2",
+      "operator": "S",
+      "diagnostic": "overlap.cholesky_failed_without_jitter",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "S",
+      "diagnostic": "overlap.lambda_min",
+      "reference": {
+        "mean": 0.0002501664086383738,
+        "worst": 0.00021588790940472026,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 0.0002501664086383738,
+        "worst": 0.00021588790940472026,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "sio2",
+      "operator": "S",
+      "diagnostic": "overlap.lambda_max",
+      "reference": {
+        "mean": 7.38574161808492,
+        "worst": 7.6130880280344115,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 7.38574161808492,
+        "worst": 7.6130880280344115,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "S",
+      "diagnostic": "overlap.condition_number",
+      "reference": {
+        "mean": 29830.890347606444,
+        "worst": 34732.701327953095,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 29830.890347606444,
+        "worst": 34732.701327953095,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "S",
+      "diagnostic": "overlap.nonpositive_eigenvalues",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "D",
+      "diagnostic": "density.occupation_min",
+      "reference": {
+        "mean": -0.17292219227469155,
+        "worst": -0.3441746776037271,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": -0.17292219227469155,
+        "worst": -0.3441746776037271,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "min"
+    },
+    {
+      "material": "sio2",
+      "operator": "D",
+      "diagnostic": "density.occupation_max",
+      "reference": {
+        "mean": 2.37459047655589,
+        "worst": 2.5622696372736784,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 2.37459047655589,
+        "worst": 2.5622696372736784,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "D",
+      "diagnostic": "density.negative_count",
+      "reference": {
+        "mean": 663.7,
+        "worst": 682.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 663.7,
+        "worst": 682.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "D",
+      "diagnostic": "density.overoccupied_count",
+      "reference": {
+        "mean": 200.9,
+        "worst": 203.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 200.9,
+        "worst": 203.0,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "D",
+      "diagnostic": "electron_count_absolute_error",
+      "reference": {
+        "mean": 2.467311799136951e-06,
+        "worst": 3.1647008427171386e-06,
+        "count": 10,
+        "unit_of_count": "structures",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 2.467311799136951e-06,
+        "worst": 3.1647008427171386e-06,
+        "count": 10,
+        "unit_of_count": "structures",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "D",
+      "diagnostic": "density.zero_temperature_idempotency_relative",
+      "reference": {
+        "mean": 0.05204961324635228,
+        "worst": 0.060467347260409636,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 0.05204961324635228,
+        "worst": 0.060467347260409636,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "H",
+      "diagnostic": "consistency.commutator_relative",
+      "reference": {
+        "mean": 0.0007913481445900719,
+        "worst": 0.0009026539906133633,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 0.0010481308900779304,
+        "worst": 0.0011932748774266325,
+        "count": 10,
+        "unit_of_count": "kpoints",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "sio2",
+      "operator": "H",
+      "diagnostic": "finite_temperature_density_relative_frobenius",
+      "reference": {
+        "mean": 0.06377692305323007,
+        "worst": 0.07453306400309039,
+        "count": 10,
+        "unit_of_count": "structures",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "predicted": {
+        "mean": 0.20838542831802034,
+        "worst": 0.2892384373639232,
+        "count": 10,
+        "unit_of_count": "structures",
+        "total_structures": 10,
+        "total_kpoints": 10,
+        "contributing_structures": 10
+      },
+      "scenario": "predicted_H_reference_SD_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "zncusnses",
+      "operator": "H",
+      "diagnostic": "projected common-support MAE (meV)",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 20,
+        "unit_of_count": "structures",
+        "total_structures": 20,
+        "total_kpoints": 0,
+        "contributing_structures": 20
+      },
+      "predicted": {
+        "mean": 3.012140088873437,
+        "worst": 3.2498020132664314,
+        "count": 20,
+        "unit_of_count": "structures",
+        "total_structures": 20,
+        "total_kpoints": 0,
+        "contributing_structures": 20
+      },
+      "scenario": "matrix_errors_hermitian_common_support",
+      "worst_direction": "max"
+    }
+  ]
+}

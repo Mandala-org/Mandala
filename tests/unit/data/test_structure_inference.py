@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import torch
 
 from core.block_irrep_mapper import BlockIrrepMapper
@@ -13,6 +14,7 @@ from data.structure_inference import (
 from net.common import Config
 
 
+@pytest.mark.large_data
 def test_load_structure_from_cif_and_build_model_input():
     repo_root = Path(__file__).resolve().parents[3]
     cif_path = repo_root / "data" / "structure" / "Silicon.cif"

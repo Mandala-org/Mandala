@@ -1,0 +1,1028 @@
+{
+  "schema_version": 1,
+  "verification_date": "2026-11-10",
+  "status_definition": {
+    "verified_tonight": "Measured on the verification date; result and individual checks can be passed or failed.",
+    "reported": "Earlier use supplied by the author; not re-tested and not assigned inferred counts or versions."
+  },
+  "latest_selection": {
+    "queried_at": "2026-11-10T00:40:29.007250+00:00",
+    "torch": "2.15.0",
+    "cuda_wheel_tag": "cu134",
+    "pypi_url": "https://pypi.org/pypi/torch/json",
+    "index_url": "https://download.pytorch.org/whl/cu134/torch/",
+    "matching_wheels": [
+      "https://download-r2.pytorch.org/whl/cu134/torch-2.15.0%2Bcu134-cp312-cp312-manylinux_2_28_x86_64.whl#sha256=1c19ba829e928b6eed2f3d7d7013ce9c981328cc3f7910d7b8b362a617eb4bff",
+      "https://download-r2.pytorch.org/whl/cu134/torch-2.15.0%2Bcu134-cp313-cp313-manylinux_2_28_x86_64.whl#sha256=ed75d71d0e287f43a6aa226423115ea14e2176e293eb7afc7b6a260ad29e3d85"
+    ],
+    "uploaded_at": [
+      "2026-10-28T15:16:30.290742Z"
+    ]
+  },
+  "protocol": {
+    "cpu_command": "python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py",
+    "gpu_command": "MANDALA_RUN_GPU_TESTS=1 CUDA_VISIBLE_DEVICES=1 python -m pytest -q tests/gpu/test_cuda_smoke.py",
+    "common_environment": {
+      "PYTHONPATH": "src:.",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "WANDB_MODE": "offline",
+      "MPLBACKEND": "Agg"
+    },
+    "cpu_environment": {
+      "CUDA_VISIBLE_DEVICES": ""
+    },
+    "runtime_definition": "runtime_seconds measures subprocess wall time including interpreter startup; initial pytest_runtime_seconds values come from pytest summaries.",
+    "gpu_peak_memory_definition": "torch.cuda.max_memory_allocated() after pytest.main in the same process; tensor allocations only, not nvidia-smi process memory.",
+    "logs": ".venvs/logs (local, ignored); exact commands, versions, results, and initial failures are retained here in JSON.",
+    "data_preparation": [
+      "git lfs pull github --include='data/small/H2O/**,data/small/Si/**,data/small/Si_old/**,data/fhi-aims/**,data/deeph_e3/**' --exclude=''",
+      "git lfs pull github --include='data/big/silicon/300K/Si.out' --exclude=''",
+      "git lfs checkout <the fetched paths> (with per-command LFS filters on this host)"
+    ]
+  },
+  "environments": [
+    {
+      "name": "py310-t251-cu121",
+      "status": "verified_tonight",
+      "date": "2026-11-10",
+      "source_revision": "f71d9db3c79f9771604e3fc288f45bf6d477e5df",
+      "python": "3.10.22",
+      "cuda_wheel_tag": "cu121",
+      "host": "terok",
+      "platform": "Linux-6.12.101+deb13-amd64-x86_64-with-glibc2.41",
+      "notes": [
+        "68 skipped tests require optional pinned upstream source checkouts; their reasons are recorded in cpu_tests.skipped_reasons. Large silicon spatial tests and unshipped generated PySCF result files were explicitly excluded."
+      ],
+      "torch": "2.5.1+cu121",
+      "torch_scatter": "2.1.2+pt25cu121",
+      "torch_geometric": "2.8.1",
+      "e3nn": "0.6.0",
+      "numpy": "2.2.6",
+      "scipy": "1.15.3",
+      "nvidia_smi": [
+        "0, NVIDIA A40, 550.163.01, 46068 MiB",
+        "1, NVIDIA A40, 550.163.01, 46068 MiB"
+      ],
+      "gpu": "NVIDIA A40",
+      "driver": "550.163.01",
+      "import_check": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py310-t251-cu121/bin/python -c 'import torch, torch_scatter, torch_geometric, e3nn; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())'",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 3.486,
+        "output": "2.5.1+cu121 12.1 True"
+      },
+      "cpu_tests": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py310-t251-cu121/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py310-t251-cu121-cpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": ""
+        },
+        "exit_code": 0,
+        "runtime_seconds": 74.556,
+        "tests": 743,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 68,
+        "passed": 675,
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ],
+        "excluded": [
+          "gpu",
+          "slow",
+          "large_data",
+          "network",
+          "integration",
+          "tests/unit/data/test_snapshot_spatial.py (unmarked large silicon fixture)",
+          "tests/physics/test_pyscf_rotation_reference_files.py (unshipped generated PySCF results)"
+        ],
+        "source_revision": "f71d9db3c79f9771604e3fc288f45bf6d477e5df",
+        "skipped_reasons": {
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned deeph_e3 source oracle is not configured.": 4,
+          "Pinned mace_h source oracle is not configured.": 4,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1
+        },
+        "counts_by_subset": {
+          "unit": {
+            "passed": 567,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        }
+      },
+      "gpu_smoke": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py310-t251-cu121/bin/python -c '\nimport pytest, torch\ncode = pytest.main([\"-q\", \"tests/gpu/test_cuda_smoke.py\", \"--junitxml=\" + __import__('\"'\"'sys'\"'\"').argv[1]])\ntry:\n    print(\"MANDALA_PEAK_GPU_MEMORY_BYTES=\" + str(torch.cuda.max_memory_allocated()))\nexcept Exception as exc:\n    print(\"MANDALA_PEAK_GPU_MEMORY_UNAVAILABLE=\" + str(exc))\nraise SystemExit(code)\n' /home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py310-t251-cu121-gpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1",
+          "MANDALA_RUN_GPU_TESTS": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 11.747,
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 2,
+        "source_revision": "23392e4eedb5b51af1fb4a85b338473e0ab9e41d",
+        "peak_memory_allocated_bytes": 18352640
+      },
+      "freeze": [
+        "e3nn==0.6.0",
+        "numpy==2.2.6",
+        "pytorch-lightning==2.6.6",
+        "scipy==1.15.3",
+        "torch==2.5.1+cu121",
+        "torch-geometric==2.8.1",
+        "torch_scatter==2.1.2+pt25cu121",
+        "torchmetrics==1.9.0"
+      ],
+      "result": "passed",
+      "operating_system": "Debian GNU/Linux 13 (trixie)",
+      "driver_cuda_maximum": "12.4",
+      "installation_commands": [
+        "uv venv --seed --python 3.10 .venvs/py310-t251-cu121",
+        "uv pip install --python .venvs/py310-t251-cu121/bin/python torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121",
+        "uv pip install --python .venvs/py310-t251-cu121/bin/python torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.5.1+cu121.html --only-binary torch-scatter",
+        ".venvs/py310-t251-cu121/bin/python -m pip install -e . pytest pytest-xdist",
+        "uv pip install --python .venvs/py310-t251-cu121/bin/python plotly"
+      ],
+      "torch_scatter_build": {
+        "kind": "PyG wheel",
+        "backend": "cuda"
+      },
+      "initial_attempts": [
+        {
+          "stage": "CPU tests before setup corrections",
+          "passed": 669,
+          "failed": 3,
+          "errors": 2,
+          "skipped": 68,
+          "pytest_runtime_seconds": 55.18,
+          "errors_detail": [
+            "ModuleNotFoundError: No module named 'plotly' (two analysis test modules)",
+            "KeyError: 'Si-Si' (silicon Si.out was an LFS pointer)",
+            "FileNotFoundError: NPZ file not found: data/pyscf_baseline/results/h2o_original_rks_openmx_like.npz",
+            "mace_h_spinful parameter sum: expected -0.07609195767142599, got -0.07609196231914929; absolute difference 4.647723303441431e-09, atol=2e-09, rtol=2e-08"
+          ]
+        },
+        {
+          "stage": "GPU smoke before fixture correction",
+          "passed": 0,
+          "failed": 1,
+          "pytest_runtime_seconds": 2.04,
+          "error": "RuntimeError: Only Tensors created explicitly by the user (graph leaves) support the deepcopy protocol at the moment."
+        },
+        {
+          "stage": "Reference fixture diagnostic with e3nn 0.5.9",
+          "passed": 5,
+          "failed": 1,
+          "pytest_runtime_seconds": 30.93,
+          "error": "Same 4.647723303441431e-09 sum mismatch; restored pip-resolved e3nn 0.6.0 afterwards."
+        }
+      ]
+    },
+    {
+      "name": "py311-t251-cu121",
+      "status": "verified_tonight",
+      "date": "2026-11-10",
+      "source_revision": "f71d9db3c79f9771604e3fc288f45bf6d477e5df",
+      "python": "3.11.18",
+      "cuda_wheel_tag": "cu121",
+      "host": "terok",
+      "platform": "Linux-6.12.101+deb13-amd64-x86_64-with-glibc2.41",
+      "notes": [
+        "68 skipped tests require optional pinned upstream source checkouts; their reasons are recorded in cpu_tests.skipped_reasons. Large silicon spatial tests and unshipped generated PySCF result files were explicitly excluded."
+      ],
+      "torch": "2.5.1+cu121",
+      "torch_scatter": "2.1.2+pt25cu121",
+      "torch_geometric": "2.8.1",
+      "e3nn": "0.6.0",
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "nvidia_smi": [
+        "0, NVIDIA A40, 550.163.01, 46068 MiB",
+        "1, NVIDIA A40, 550.163.01, 46068 MiB"
+      ],
+      "gpu": "NVIDIA A40",
+      "driver": "550.163.01",
+      "import_check": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py311-t251-cu121/bin/python -c 'import torch, torch_scatter, torch_geometric, e3nn; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())'",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 3.566,
+        "output": "2.5.1+cu121 12.1 True"
+      },
+      "cpu_tests": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py311-t251-cu121/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py311-t251-cu121-cpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": ""
+        },
+        "exit_code": 0,
+        "runtime_seconds": 66.064,
+        "tests": 743,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 68,
+        "passed": 675,
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ],
+        "excluded": [
+          "gpu",
+          "slow",
+          "large_data",
+          "network",
+          "integration",
+          "tests/unit/data/test_snapshot_spatial.py (unmarked large silicon fixture)",
+          "tests/physics/test_pyscf_rotation_reference_files.py (unshipped generated PySCF results)"
+        ],
+        "source_revision": "f71d9db3c79f9771604e3fc288f45bf6d477e5df",
+        "skipped_reasons": {
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned mace_h source oracle is not configured.": 4,
+          "Pinned deeph_e3 source oracle is not configured.": 4,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1
+        },
+        "counts_by_subset": {
+          "unit": {
+            "passed": 567,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        }
+      },
+      "gpu_smoke": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py311-t251-cu121/bin/python -c '\nimport pytest, torch\ncode = pytest.main([\"-q\", \"tests/gpu/test_cuda_smoke.py\", \"--junitxml=\" + __import__('\"'\"'sys'\"'\"').argv[1]])\ntry:\n    print(\"MANDALA_PEAK_GPU_MEMORY_BYTES=\" + str(torch.cuda.max_memory_allocated()))\nexcept Exception as exc:\n    print(\"MANDALA_PEAK_GPU_MEMORY_UNAVAILABLE=\" + str(exc))\nraise SystemExit(code)\n' /home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py311-t251-cu121-gpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1",
+          "MANDALA_RUN_GPU_TESTS": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 11.62,
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 2,
+        "source_revision": "23392e4eedb5b51af1fb4a85b338473e0ab9e41d",
+        "peak_memory_allocated_bytes": 18352640
+      },
+      "freeze": [
+        "e3nn==0.6.0",
+        "numpy==2.4.6",
+        "pytorch-lightning==2.6.6",
+        "scipy==1.17.1",
+        "torch==2.5.1+cu121",
+        "torch-geometric==2.8.1",
+        "torch_scatter==2.1.2+pt25cu121",
+        "torchmetrics==1.9.0"
+      ],
+      "result": "passed",
+      "operating_system": "Debian GNU/Linux 13 (trixie)",
+      "driver_cuda_maximum": "12.4",
+      "installation_commands": [
+        "uv venv --seed --python 3.11 .venvs/py311-t251-cu121",
+        "uv pip install --python .venvs/py311-t251-cu121/bin/python torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121",
+        "uv pip install --python .venvs/py311-t251-cu121/bin/python torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.5.1+cu121.html --only-binary torch-scatter",
+        "uv pip install --python .venvs/py311-t251-cu121/bin/python -r pyproject.toml pytest pytest-xdist plotly",
+        ".venvs/py311-t251-cu121/bin/python -m pip install -e . --ignore-requires-python --no-deps"
+      ],
+      "torch_scatter_build": {
+        "kind": "PyG wheel",
+        "backend": "cuda"
+      },
+      "initial_attempts": [
+        {
+          "stage": "pip install -e . --ignore-requires-python pytest pytest-xdist",
+          "error": "scipy 1.18.1 metadata: Minimum supported Python version is 3.12, found 3.11",
+          "resolution": "Resolve dependencies with uv against the actual interpreter first; use --ignore-requires-python --no-deps only for the editable project."
+        }
+      ]
+    },
+    {
+      "name": "py312-t271-cu128",
+      "status": "verified_tonight",
+      "date": "2026-11-10",
+      "source_revision": "d71314b19d43a643542afadd168defba79f2ad08",
+      "python": "3.12.16",
+      "cuda_wheel_tag": "cu128",
+      "host": "terok",
+      "platform": "Linux-6.12.101+deb13-amd64-x86_64-with-glibc2.41",
+      "notes": [
+        "68 skipped tests require optional pinned upstream source checkouts; their reasons are recorded in cpu_tests.skipped_reasons. Large silicon spatial tests and unshipped generated PySCF result files were explicitly excluded."
+      ],
+      "torch": "2.7.1+cu128",
+      "torch_scatter": "2.1.2+pt27cu128",
+      "torch_geometric": "2.8.1",
+      "e3nn": "0.6.0",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "nvidia_smi": [
+        "0, NVIDIA A40, 550.163.01, 46068 MiB",
+        "1, NVIDIA A40, 550.163.01, 46068 MiB"
+      ],
+      "gpu": "NVIDIA A40",
+      "driver": "550.163.01",
+      "import_check": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-t271-cu128/bin/python -c 'import torch, torch_scatter, torch_geometric, e3nn; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())'",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 3.592,
+        "output": "2.7.1+cu128 12.8 True"
+      },
+      "cpu_tests": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-t271-cu128/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py312-t271-cu128-cpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": ""
+        },
+        "exit_code": 0,
+        "runtime_seconds": 53.493,
+        "tests": 743,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 68,
+        "passed": 675,
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ],
+        "excluded": [
+          "gpu",
+          "slow",
+          "large_data",
+          "network",
+          "integration",
+          "tests/unit/data/test_snapshot_spatial.py (unmarked large silicon fixture)",
+          "tests/physics/test_pyscf_rotation_reference_files.py (unshipped generated PySCF results)"
+        ],
+        "source_revision": "d71314b19d43a643542afadd168defba79f2ad08",
+        "skipped_reasons": {
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned deeph_e3 source oracle is not configured.": 4,
+          "Pinned mace_h source oracle is not configured.": 4,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1
+        },
+        "counts_by_subset": {
+          "unit": {
+            "passed": 567,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        }
+      },
+      "gpu_smoke": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-t271-cu128/bin/python -c '\nimport pytest, torch\ncode = pytest.main([\"-q\", \"tests/gpu/test_cuda_smoke.py\", \"--junitxml=\" + __import__('\"'\"'sys'\"'\"').argv[1]])\ntry:\n    print(\"MANDALA_PEAK_GPU_MEMORY_BYTES=\" + str(torch.cuda.max_memory_allocated()))\nexcept Exception as exc:\n    print(\"MANDALA_PEAK_GPU_MEMORY_UNAVAILABLE=\" + str(exc))\nraise SystemExit(code)\n' /home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py312-t271-cu128-gpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1",
+          "MANDALA_RUN_GPU_TESTS": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 12.371,
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 2,
+        "source_revision": "d71314b19d43a643542afadd168defba79f2ad08",
+        "peak_memory_allocated_bytes": 18352640
+      },
+      "freeze": [
+        "e3nn==0.6.0",
+        "numpy==2.5.4",
+        "pytorch-lightning==2.6.6",
+        "scipy==1.18.1",
+        "torch==2.7.1+cu128",
+        "torch-geometric==2.8.1",
+        "torch_scatter==2.1.2+pt27cu128",
+        "torchmetrics==1.9.0"
+      ],
+      "result": "passed",
+      "operating_system": "Debian GNU/Linux 13 (trixie)",
+      "driver_cuda_maximum": "12.4",
+      "installation_commands": [
+        "uv venv --seed --python 3.12 .venvs/py312-t271-cu128",
+        "uv pip install --python .venvs/py312-t271-cu128/bin/python torch==2.7.1 --index-url https://download.pytorch.org/whl/cu128",
+        "uv pip install --python .venvs/py312-t271-cu128/bin/python torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.7.1+cu128.html --only-binary torch-scatter",
+        "uv pip install --python .venvs/py312-t271-cu128/bin/python -r pyproject.toml pytest pytest-xdist plotly",
+        ".venvs/py312-t271-cu128/bin/python -m pip install -e . --ignore-requires-python --no-deps"
+      ],
+      "torch_scatter_build": {
+        "kind": "PyG wheel",
+        "backend": "cuda"
+      },
+      "initial_attempts": [
+        {
+          "stage": "CPU selection before explicit checkpoint loading semantics",
+          "passed": 674,
+          "failed": 1,
+          "skipped": 68,
+          "pytest_runtime_seconds": 62.3,
+          "error": "_pickle.UnpicklingError: Weights only load failed; Unsupported global: GLOBAL net.common.Config",
+          "resolution": "The native Lightning loader now explicitly uses weights_only=False for trusted Config checkpoints; the complete CPU selection subsequently passed."
+        }
+      ]
+    },
+    {
+      "name": "py312-latest",
+      "status": "verified_tonight",
+      "date": "2026-11-10",
+      "source_revision": "23392e4eedb5b51af1fb4a85b338473e0ab9e41d",
+      "python": "3.12.16",
+      "cuda_wheel_tag": "cu134",
+      "host": "terok",
+      "platform": "Linux-6.12.101+deb13-amd64-x86_64-with-glibc2.41",
+      "notes": [
+        "Latest stable on PyPI was torch 2.15.0; cu134 was the newest tag with cp312 and cp313 Linux x86_64 wheels. CPU-only torch-scatter was built against this exact torch installation.",
+        "68 skipped tests require optional pinned upstream source checkouts; their reasons are recorded in cpu_tests.skipped_reasons. Large silicon spatial tests and unshipped generated PySCF result files were explicitly excluded."
+      ],
+      "torch": "2.15.0+cu134",
+      "torch_scatter": "2.1.2",
+      "torch_geometric": "2.8.1",
+      "e3nn": "0.6.0",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "nvidia_smi": [
+        "0, NVIDIA A40, 550.163.01, 46068 MiB",
+        "1, NVIDIA A40, 550.163.01, 46068 MiB"
+      ],
+      "gpu": "NVIDIA A40",
+      "driver": "550.163.01",
+      "import_check": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/bin/python -c 'import torch, torch_scatter, torch_geometric, e3nn; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())'",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 9.427,
+        "output": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/lib/python3.12/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n  return torch._C._show_config()\n/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.\n  warnings.warn(\n2.15.0+cu134 13.4 False"
+      },
+      "cpu_tests": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py312-latest-cpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": ""
+        },
+        "exit_code": 1,
+        "runtime_seconds": 50.653,
+        "error_tail": "bringing up nodes...\nbringing up nodes...\n\ns........sss........................................ss..ss........s..... [  9%]\n................................................ss.ssss................. [ 19%]\n.................ss.....s............................ssss............... [ 29%]\n..........ssss........ss.sss.ss.....................................s.ss [ 38%]\nssss..............................................ss.................... [ 48%]\n..................sssss.....................ss.ssss................ssss. [ 58%]\ns.ss..........................sss..s...s................................ [ 67%]\n............................F........................................... [ 77%]\n........................................................................ [ 87%]\n.....................sss................................................ [ 96%]\n.......................                                                  [100%]\n=================================== FAILURES ===================================\n__________ test_failed_setup_can_retry_but_existing_run_is_protected ___________\n[gw2] linux -- Python 3.12.16 /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/bin/python\n\ntmp_path = PosixPath('/tmp/pytest-of-brzoza73/pytest-100/popen-gw2/test_failed_setup_can_retry_bu0')\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f6370f29430>\n\n    def test_failed_setup_can_retry_but_existing_run_is_protected(tmp_path, monkeypatch):\n        import torch\n        from scripts import train as training\n    \n        recipe = json.loads((RECIPES / \"silicon.json\").read_text())\n        recipe[\"training\"][\"checkpoint_dir\"] = str(tmp_path / \"checkpoints\")\n        recipe[\"training\"][\"num_val_per_scale\"] = 20\n        path = tmp_path / \"recipe.json\"\n        path.write_text(json.dumps(recipe))\n        monkeypatch.setattr(torch.cuda, \"is_available\", lambda: True)\n        monkeypatch.setattr(torch.cuda, \"get_device_name\", lambda: \"test GPU\")\n        monkeypatch.setattr(torch.cuda, \"get_device_capability\", lambda: (8, 0))\n    \n        def fail_setup(*args, **kwargs):\n            raise ValueError(\"insufficient snapshots\")\n    \n        monkeypatch.setattr(training, \"run_training\", fail_setup)\n>       with pytest.raises(ValueError, match=\"insufficient snapshots\"):\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       AssertionError: Regex pattern did not match.\nE         Expected regex: 'insufficient snapshots'\nE         Actual message: 'min() iterable argument is empty'\n\ntests/unit/scripts/test_reproduce_examples.py:59: AssertionError\n=============================== warnings summary ===============================\n.venvs/py312-latest/lib/python3.12/site-packages/torch/__config__.py:9: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/lib/python3.12/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n    return torch._C._show_config()\n\n.venvs/py312-latest/lib/python3.12/site-packages/torch/jit/_script.py:1491: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_eigenvalue_correlation_mae_uses_only_fixed_energy_window\n  /home/brzoza73/casus/mandala_worktrees/envs/src/analysis/evaluation.py:2734: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_correlation_uses_all_shift_resolved_elements_and_correct_mae\n  /home/brzoza73/casus/mandala_worktrees/envs/src/analysis/evaluation.py:2597: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/data/test_openmx_writer.py::test_checkpoint_xyz_cli_without_reference_files\n  /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/lib/python3.12/site-packages/ase/atoms.py:432: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.\n  As an alternative, you can create a new view using np.reshape (with copy=False if needed).\n    a.shape = (-1,) + shape\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/unit/scripts/test_reproduce_examples.py::test_failed_setup_can_retry_but_existing_run_is_protected\n1 failed, 674 passed, 68 skipped, 35 warnings in 43.11s\n",
+        "tests": 743,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 68,
+        "passed": 674,
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ],
+        "excluded": [
+          "gpu",
+          "slow",
+          "large_data",
+          "network",
+          "integration",
+          "tests/unit/data/test_snapshot_spatial.py (unmarked large silicon fixture)",
+          "tests/physics/test_pyscf_rotation_reference_files.py (unshipped generated PySCF results)"
+        ],
+        "source_revision": "23392e4eedb5b51af1fb4a85b338473e0ab9e41d",
+        "skipped_reasons": {
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned mace_h source oracle is not configured.": 4,
+          "Pinned deeph_e3 source oracle is not configured.": 4
+        },
+        "counts_by_subset": {
+          "unit": {
+            "passed": 566,
+            "failed": 1,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        "failure_summary": "test_failed_setup_can_retry_but_existing_run_is_protected: expected 'insufficient snapshots', got 'min() iterable argument is empty'"
+      },
+      "gpu_smoke": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py312-latest/bin/python -c '\nimport pytest, torch\ncode = pytest.main([\"-q\", \"tests/gpu/test_cuda_smoke.py\", \"--junitxml=\" + __import__('\"'\"'sys'\"'\"').argv[1]])\ntry:\n    print(\"MANDALA_PEAK_GPU_MEMORY_BYTES=\" + str(torch.cuda.max_memory_allocated()))\nexcept Exception as exc:\n    print(\"MANDALA_PEAK_GPU_MEMORY_UNAVAILABLE=\" + str(exc))\nraise SystemExit(code)\n' /home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py312-latest-gpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1",
+          "MANDALA_RUN_GPU_TESTS": "1"
+        },
+        "exit_code": 1,
+        "runtime_seconds": 6.665,
+        "error_tail": "above test was GIL protected anyway.  The inner test\n            # is for when a thread blocked on some other thread which was\n            # doing the initialization; when they get the lock, they will\n            # find there is nothing left to do.\n            if is_initialized():\n                return\n            # It is important to prevent other threads from entering _lazy_init\n            # immediately, while we are still guaranteed to have the GIL, because some\n            # of the C calls we make below will release the GIL\n            if _is_in_bad_fork():\n                raise RuntimeError(\n                    \"Cannot re-initialize CUDA in forked subprocess. To use CUDA with \"\n                    \"multiprocessing, you must use the 'spawn' start method\"\n                )\n            if not hasattr(torch._C, \"_cuda_getDeviceCount\"):\n                raise AssertionError(\"Torch not compiled with CUDA enabled\")\n            if _cudart is None:\n                raise AssertionError(\n                    \"libcudart functions unavailable. It looks like you have a broken build?\"\n                )\n            # This function throws if there's a driver initialization error, no GPUs\n            # are found or any other error occurs\n>           torch._C._cuda_init()\nE           RuntimeError: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver.\n\n.venvs/py312-latest/lib/python3.12/site-packages/torch/cuda/__init__.py:616: RuntimeError\n______________ test_tiny_model_forward_backward_and_strict_reload ______________\n\nsmall_angular_dataset_e3nn = (<data.gnn_dataset.E3GNNDataset object at 0x7f47e8645f40>, BlockIrrepMapper(), Config(pipeline=None, objective=None, o...e, train_on_irrep_parts=False, compatibility=False, num_block=3, r_max=8.0, num_basis=128, use_sc=True, use_sbf=False))\n\n    def test_tiny_model_forward_backward_and_strict_reload(small_angular_dataset_e3nn):\n        _require_cuda()\n        dataset, mapper, base_cfg = small_angular_dataset_e3nn\n        # This GPU-only session owns the fixture. Preprocessed energy targets can\n        # have grad_fn, so PyTorch cannot deepcopy the complete dataset.\n        cfg = copy.deepcopy(base_cfg)\n        cfg.device = torch.device(\"cuda\")\n        cfg.matrix_targets = [\"hamiltonian\"]\n>       dataset.to(\"cuda\")\n\ntests/gpu/test_cuda_smoke.py:41: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nsrc/data/gnn_dataset.py:1022: in to\n    sample.to(device)\nsrc/data/sample.py:30: in to\n    move_tree(self.inputs, device),\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nsrc/data/sample.py:38: in move_tree\n    return {key: move_tree(item, device, dtype) for key, item in value.items()}\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nsrc/data/sample.py:53: in move_tree\n    return value.to(device) if hasattr(value, \"to\") else value\n           ^^^^^^^^^^^^^^^^\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\n    def _lazy_init():\n        global _initialized, _queued_calls\n        if is_initialized() or hasattr(_tls, \"is_initializing\"):\n            return\n        with _initialization_lock:\n            # We be double-checked locking, boys!  This is OK because\n            # the above test was GIL protected anyway.  The inner test\n            # is for when a thread blocked on some other thread which was\n            # doing the initialization; when they get the lock, they will\n            # find there is nothing left to do.\n            if is_initialized():\n                return\n            # It is important to prevent other threads from entering _lazy_init\n            # immediately, while we are still guaranteed to have the GIL, because some\n            # of the C calls we make below will release the GIL\n            if _is_in_bad_fork():\n                raise RuntimeError(\n                    \"Cannot re-initialize CUDA in forked subprocess. To use CUDA with \"\n                    \"multiprocessing, you must use the 'spawn' start method\"\n                )\n            if not hasattr(torch._C, \"_cuda_getDeviceCount\"):\n                raise AssertionError(\"Torch not compiled with CUDA enabled\")\n            if _cudart is None:\n                raise AssertionError(\n                    \"libcudart functions unavailable. It looks like you have a broken build?\"\n                )\n            # This function throws if there's a driver initialization error, no GPUs\n            # are found or any other error occurs\n>           torch._C._cuda_init()\nE           RuntimeError: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver.\n\n.venvs/py312-latest/lib/python3.12/site-packages/torch/cuda/__init__.py:616: RuntimeError\n---------------------------- Captured stdout setup -----------------------------\n--- Snapshot warmup order shuffled with ephemeral seed=12680309327542258828 ---\n[CACHE] Snapshot loading: cache disabled, loaded 1 snapshot(s)\n[CACHE] Preprocessed samples: cache disabled, built 1 sample(s)\n---------------------------- Captured stderr setup -----------------------------\n\nLoading snapshots:   0%|          | 0/1 [00:00<?, ?it/s]\nLoading snapshots: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 1/1 [00:00<00:00, 24.15it/s]\n=========================== short test summary info ============================\nFAILED tests/gpu/test_cuda_smoke.py::test_torch_scatter_cuda_kernel_forward_backward\nFAILED tests/gpu/test_cuda_smoke.py::test_tiny_model_forward_backward_and_strict_reload\n2 failed in 1.45s\nMANDALA_PEAK_GPU_MEMORY_BYTES=0\n",
+        "tests": 2,
+        "failures": 2,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 0,
+        "source_revision": "d71314b19d43a643542afadd168defba79f2ad08",
+        "peak_memory_allocated_bytes": 0
+      },
+      "freeze": [
+        "e3nn==0.6.0",
+        "numpy==2.5.4",
+        "pytorch-lightning==2.6.6",
+        "scipy==1.18.1",
+        "torch==2.15.0+cu134",
+        "torch-geometric==2.8.1",
+        "torch_scatter==2.1.2",
+        "torchmetrics==1.9.0"
+      ],
+      "result": "failed",
+      "operating_system": "Debian GNU/Linux 13 (trixie)",
+      "driver_cuda_maximum": "12.4",
+      "installation_commands": [
+        "uv venv --seed --python 3.12 .venvs/py312-latest",
+        "uv pip install --python .venvs/py312-latest/bin/python torch==2.15.0 --index-url https://download.pytorch.org/whl/cu134",
+        "uv pip install --python .venvs/py312-latest/bin/python torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.15.0+cu134.html --only-binary torch-scatter",
+        "MAX_JOBS=16 OMP_NUM_THREADS=1 FORCE_CUDA=1 .venvs/py312-latest/bin/python -m pip install torch-scatter --no-build-isolation --no-cache-dir --no-deps --no-binary=torch-scatter",
+        "MAX_JOBS=16 OMP_NUM_THREADS=1 FORCE_ONLY_CPU=1 .venvs/py312-latest/bin/python -m pip install torch-scatter --no-build-isolation --no-cache-dir --no-deps --no-binary=torch-scatter",
+        "uv pip install --python .venvs/py312-latest/bin/python -r pyproject.toml pytest pytest-xdist plotly",
+        ".venvs/py312-latest/bin/python -m pip install -e . --ignore-requires-python --no-deps"
+      ],
+      "torch_scatter_build": {
+        "kind": "source",
+        "backend": "cpu"
+      },
+      "initial_attempts": [
+        {
+          "stage": "PyG binary wheel selection",
+          "error": "HTTP 404: https://data.pyg.org/whl/torch-2.15.0+cu134.html"
+        },
+        {
+          "stage": "CUDA source build",
+          "error": "RuntimeError: ('The detected CUDA version (%s) mismatches the version that was used to compilePyTorch (%s). Please make sure to use the same CUDA versions.', '12.4', '13.4')",
+          "nvcc": "12.4.131",
+          "resolution": "CPU-only source build; CUDA 13.4 cannot run on the installed 550 driver, and a CUDA 12 nvcc package cannot build CUDA 13 extensions."
+        }
+      ],
+      "table_note": "CPU-only scatter; CUDA 13.4 needs a newer driver"
+    },
+    {
+      "name": "py313-latest",
+      "status": "verified_tonight",
+      "date": "2026-11-10",
+      "source_revision": "a050a6acf4754f46ca8c4a99cae2f2d26046432f",
+      "python": "3.13.18",
+      "cuda_wheel_tag": "cu134",
+      "host": "terok",
+      "platform": "Linux-6.12.101+deb13-amd64-x86_64-with-glibc2.41",
+      "notes": [
+        "Latest stable on PyPI was torch 2.15.0; cu134 was the newest tag with cp312 and cp313 Linux x86_64 wheels. CPU-only torch-scatter was built against this exact torch installation.",
+        "68 skipped tests require optional pinned upstream source checkouts; their reasons are recorded in cpu_tests.skipped_reasons. Large silicon spatial tests and unshipped generated PySCF result files were explicitly excluded."
+      ],
+      "torch": "2.15.0+cu134",
+      "torch_scatter": "2.1.2",
+      "torch_geometric": "2.8.1",
+      "e3nn": "0.6.0",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "nvidia_smi": [
+        "0, NVIDIA A40, 550.163.01, 46068 MiB",
+        "1, NVIDIA A40, 550.163.01, 46068 MiB"
+      ],
+      "gpu": "NVIDIA A40",
+      "driver": "550.163.01",
+      "import_check": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/bin/python -c 'import torch, torch_scatter, torch_geometric, e3nn; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())'",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 9.584,
+        "output": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/lib/python3.13/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n  return torch._C._show_config()\n/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/lib/python3.13/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.\n  warnings.warn(\n2.15.0+cu134 13.4 False"
+      },
+      "cpu_tests": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py313-latest-cpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": ""
+        },
+        "exit_code": 1,
+        "runtime_seconds": 47.774,
+        "error_tail": "bringing up nodes...\nbringing up nodes...\n\n......sss.........s....................s..ss..ss........................ [  9%]\n......ssssss..............s............................................. [ 19%]\n.........................ss..........sssssssssssss...................... [ 29%]\n..........................ss............................................ [ 38%]\n......................sssss..........................................ss. [ 48%]\nss...........sssssssss...........................................sss.ss. [ 58%]\n............................sssssss....ss............................... [ 67%]\n...................s..s.......................F......................... [ 77%]\n........................................................................ [ 87%]\n......................s................................................. [ 96%]\n.......................                                                  [100%]\n=================================== FAILURES ===================================\n__________ test_failed_setup_can_retry_but_existing_run_is_protected ___________\n[gw14] linux -- Python 3.13.18 /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/bin/python\n\ntmp_path = PosixPath('/tmp/pytest-of-brzoza73/pytest-107/popen-gw14/test_failed_setup_can_retry_bu0')\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f80c76ba190>\n\n    def test_failed_setup_can_retry_but_existing_run_is_protected(tmp_path, monkeypatch):\n        import torch\n        from scripts import train as training\n    \n        recipe = json.loads((RECIPES / \"silicon.json\").read_text())\n        recipe[\"training\"][\"checkpoint_dir\"] = str(tmp_path / \"checkpoints\")\n        recipe[\"training\"][\"num_val_per_scale\"] = 20\n        path = tmp_path / \"recipe.json\"\n        path.write_text(json.dumps(recipe))\n        monkeypatch.setattr(torch.cuda, \"is_available\", lambda: True)\n        monkeypatch.setattr(torch.cuda, \"get_device_name\", lambda: \"test GPU\")\n        monkeypatch.setattr(torch.cuda, \"get_device_capability\", lambda: (8, 0))\n    \n        def fail_setup(*args, **kwargs):\n            raise ValueError(\"insufficient snapshots\")\n    \n        monkeypatch.setattr(training, \"run_training\", fail_setup)\n>       with pytest.raises(ValueError, match=\"insufficient snapshots\"):\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       AssertionError: Regex pattern did not match.\nE         Expected regex: 'insufficient snapshots'\nE         Actual message: 'min() iterable argument is empty'\n\ntests/unit/scripts/test_reproduce_examples.py:59: AssertionError\n=============================== warnings summary ===============================\n.venvs/py313-latest/lib/python3.13/site-packages/torch/__config__.py:9: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/lib/python3.13/site-packages/torch/__config__.py:9: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)\n    return torch._C._show_config()\n\n.venvs/py313-latest/lib/python3.13/site-packages/torch/jit/_script.py:1491: 16 warnings\n  /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/lib/python3.13/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_eigenvalue_correlation_mae_uses_only_fixed_energy_window\n  /home/brzoza73/casus/mandala_worktrees/envs/src/analysis/evaluation.py:2734: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/analysis/test_matrix_evaluation_metrics.py::test_correlation_uses_all_shift_resolved_elements_and_correct_mae\n  /home/brzoza73/casus/mandala_worktrees/envs/src/analysis/evaluation.py:2597: PendingDeprecationWarning: The set_bad function will be deprecated in a future version. Use cmap.with_extremes(bad=...) or Colormap(bad=...) instead.\n    hot_counts.set_bad(\"#FFFFFF\")\n\ntests/unit/data/test_openmx_writer.py::test_checkpoint_xyz_cli_without_reference_files\n  /home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/lib/python3.13/site-packages/ase/atoms.py:432: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.\n  As an alternative, you can create a new view using np.reshape (with copy=False if needed).\n    a.shape = (-1,) + shape\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/unit/scripts/test_reproduce_examples.py::test_failed_setup_can_retry_but_existing_run_is_protected\n1 failed, 674 passed, 68 skipped, 35 warnings in 41.31s\n",
+        "tests": 743,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 68,
+        "passed": 674,
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ],
+        "excluded": [
+          "gpu",
+          "slow",
+          "large_data",
+          "network",
+          "integration",
+          "tests/unit/data/test_snapshot_spatial.py (unmarked large silicon fixture)",
+          "tests/physics/test_pyscf_rotation_reference_files.py (unshipped generated PySCF results)"
+        ],
+        "source_revision": "a050a6acf4754f46ca8c4a99cae2f2d26046432f",
+        "skipped_reasons": {
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned mace_h source oracle is not configured.": 4,
+          "Pinned deeph_e3 source oracle is not configured.": 4
+        },
+        "counts_by_subset": {
+          "unit": {
+            "passed": 566,
+            "failed": 1,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        "failure_summary": "test_failed_setup_can_retry_but_existing_run_is_protected: expected 'insufficient snapshots', got 'min() iterable argument is empty'"
+      },
+      "gpu_smoke": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-latest/bin/python -c '\nimport pytest, torch\ncode = pytest.main([\"-q\", \"tests/gpu/test_cuda_smoke.py\", \"--junitxml=\" + __import__('\"'\"'sys'\"'\"').argv[1]])\ntry:\n    print(\"MANDALA_PEAK_GPU_MEMORY_BYTES=\" + str(torch.cuda.max_memory_allocated()))\nexcept Exception as exc:\n    print(\"MANDALA_PEAK_GPU_MEMORY_UNAVAILABLE=\" + str(exc))\nraise SystemExit(code)\n' /home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py313-latest-gpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1",
+          "MANDALA_RUN_GPU_TESTS": "1"
+        },
+        "exit_code": 1,
+        "runtime_seconds": 6.427,
+        "error_tail": "above test was GIL protected anyway.  The inner test\n            # is for when a thread blocked on some other thread which was\n            # doing the initialization; when they get the lock, they will\n            # find there is nothing left to do.\n            if is_initialized():\n                return\n            # It is important to prevent other threads from entering _lazy_init\n            # immediately, while we are still guaranteed to have the GIL, because some\n            # of the C calls we make below will release the GIL\n            if _is_in_bad_fork():\n                raise RuntimeError(\n                    \"Cannot re-initialize CUDA in forked subprocess. To use CUDA with \"\n                    \"multiprocessing, you must use the 'spawn' start method\"\n                )\n            if not hasattr(torch._C, \"_cuda_getDeviceCount\"):\n                raise AssertionError(\"Torch not compiled with CUDA enabled\")\n            if _cudart is None:\n                raise AssertionError(\n                    \"libcudart functions unavailable. It looks like you have a broken build?\"\n                )\n            # This function throws if there's a driver initialization error, no GPUs\n            # are found or any other error occurs\n>           torch._C._cuda_init()\nE           RuntimeError: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver.\n\n.venvs/py313-latest/lib/python3.13/site-packages/torch/cuda/__init__.py:616: RuntimeError\n______________ test_tiny_model_forward_backward_and_strict_reload ______________\n\nsmall_angular_dataset_e3nn = (<data.gnn_dataset.E3GNNDataset object at 0x7fe22eb0b4d0>, BlockIrrepMapper(), Config(pipeline=None, objective=None, o...e, train_on_irrep_parts=False, compatibility=False, num_block=3, r_max=8.0, num_basis=128, use_sc=True, use_sbf=False))\n\n    def test_tiny_model_forward_backward_and_strict_reload(small_angular_dataset_e3nn):\n        _require_cuda()\n        dataset, mapper, base_cfg = small_angular_dataset_e3nn\n        # This GPU-only session owns the fixture. Preprocessed energy targets can\n        # have grad_fn, so PyTorch cannot deepcopy the complete dataset.\n        cfg = copy.deepcopy(base_cfg)\n        cfg.device = torch.device(\"cuda\")\n        cfg.matrix_targets = [\"hamiltonian\"]\n>       dataset.to(\"cuda\")\n\ntests/gpu/test_cuda_smoke.py:41: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nsrc/data/gnn_dataset.py:1022: in to\n    sample.to(device)\nsrc/data/sample.py:30: in to\n    move_tree(self.inputs, device),\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nsrc/data/sample.py:38: in move_tree\n    return {key: move_tree(item, device, dtype) for key, item in value.items()}\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nsrc/data/sample.py:53: in move_tree\n    return value.to(device) if hasattr(value, \"to\") else value\n           ^^^^^^^^^^^^^^^^\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\n    def _lazy_init():\n        global _initialized, _queued_calls\n        if is_initialized() or hasattr(_tls, \"is_initializing\"):\n            return\n        with _initialization_lock:\n            # We be double-checked locking, boys!  This is OK because\n            # the above test was GIL protected anyway.  The inner test\n            # is for when a thread blocked on some other thread which was\n            # doing the initialization; when they get the lock, they will\n            # find there is nothing left to do.\n            if is_initialized():\n                return\n            # It is important to prevent other threads from entering _lazy_init\n            # immediately, while we are still guaranteed to have the GIL, because some\n            # of the C calls we make below will release the GIL\n            if _is_in_bad_fork():\n                raise RuntimeError(\n                    \"Cannot re-initialize CUDA in forked subprocess. To use CUDA with \"\n                    \"multiprocessing, you must use the 'spawn' start method\"\n                )\n            if not hasattr(torch._C, \"_cuda_getDeviceCount\"):\n                raise AssertionError(\"Torch not compiled with CUDA enabled\")\n            if _cudart is None:\n                raise AssertionError(\n                    \"libcudart functions unavailable. It looks like you have a broken build?\"\n                )\n            # This function throws if there's a driver initialization error, no GPUs\n            # are found or any other error occurs\n>           torch._C._cuda_init()\nE           RuntimeError: The NVIDIA driver on your system is too old (found version 12040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver.\n\n.venvs/py313-latest/lib/python3.13/site-packages/torch/cuda/__init__.py:616: RuntimeError\n---------------------------- Captured stdout setup -----------------------------\n--- Snapshot warmup order shuffled with ephemeral seed=14753393202456553572 ---\n[CACHE] Snapshot loading: cache disabled, loaded 1 snapshot(s)\n[CACHE] Preprocessed samples: cache disabled, built 1 sample(s)\n---------------------------- Captured stderr setup -----------------------------\n\nLoading snapshots:   0%|          | 0/1 [00:00<?, ?it/s]\nLoading snapshots: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 1/1 [00:00<00:00, 20.78it/s]\n=========================== short test summary info ============================\nFAILED tests/gpu/test_cuda_smoke.py::test_torch_scatter_cuda_kernel_forward_backward\nFAILED tests/gpu/test_cuda_smoke.py::test_tiny_model_forward_backward_and_strict_reload\n2 failed in 1.50s\nMANDALA_PEAK_GPU_MEMORY_BYTES=0\n",
+        "tests": 2,
+        "failures": 2,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 0,
+        "source_revision": "a050a6acf4754f46ca8c4a99cae2f2d26046432f",
+        "peak_memory_allocated_bytes": 0
+      },
+      "freeze": [
+        "e3nn==0.6.0",
+        "numpy==2.5.4",
+        "pytorch-lightning==2.6.6",
+        "scipy==1.18.1",
+        "torch==2.15.0+cu134",
+        "torch-geometric==2.8.1",
+        "torch_scatter==2.1.2",
+        "torchmetrics==1.9.0"
+      ],
+      "result": "failed",
+      "operating_system": "Debian GNU/Linux 13 (trixie)",
+      "driver_cuda_maximum": "12.4",
+      "installation_commands": [
+        "uv venv --seed --managed-python --python 3.13 .venvs/py313-latest",
+        "uv pip install --python .venvs/py313-latest/bin/python torch==2.15.0 --index-url https://download.pytorch.org/whl/cu134",
+        "uv pip install --python .venvs/py313-latest/bin/python torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.15.0+cu134.html --only-binary torch-scatter",
+        "MAX_JOBS=16 OMP_NUM_THREADS=1 FORCE_CUDA=1 .venvs/py313-latest/bin/python -m pip install torch-scatter --no-build-isolation --no-cache-dir --no-deps --no-binary=torch-scatter",
+        "MAX_JOBS=16 OMP_NUM_THREADS=1 FORCE_ONLY_CPU=1 .venvs/py313-latest/bin/python -m pip install torch-scatter --no-build-isolation --no-cache-dir --no-deps --no-binary=torch-scatter",
+        "uv pip install --python .venvs/py313-latest/bin/python -r .venvs/deps-without-scatter.txt",
+        ".venvs/py313-latest/bin/python -m pip install -e . --no-deps"
+      ],
+      "dependency_selection": "deps-without-scatter.txt contains all pyproject.toml project dependencies except torch-scatter, plus pytest, pytest-xdist and plotly; scatter was compiled separately.",
+      "torch_scatter_build": {
+        "kind": "source",
+        "backend": "cpu"
+      },
+      "initial_attempts": [
+        {
+          "stage": "PyG binary wheel selection",
+          "error": "HTTP 404: https://data.pyg.org/whl/torch-2.15.0+cu134.html"
+        },
+        {
+          "stage": "CUDA source build",
+          "error": "RuntimeError: ('The detected CUDA version (%s) mismatches the version that was used to compilePyTorch (%s). Please make sure to use the same CUDA versions.', '12.4', '13.4')",
+          "nvcc": "12.4.131",
+          "resolution": "CPU-only source build; CUDA 13.4 cannot run on the installed 550 driver, and a CUDA 12 nvcc package cannot build CUDA 13 extensions."
+        },
+        {
+          "stage": "Dependency resolution before scatter compilation completed",
+          "error": "ModuleNotFoundError: No module named 'torch' in isolated torch-scatter build",
+          "resolution": "Installed other dependencies separately while the explicit --no-build-isolation scatter source build completed."
+        },
+        {
+          "stage": "Original system Python 3.13.5 source build",
+          "error": "fatal error: Python.h: No such file or directory",
+          "resolution": "Recreated this venv with uv-managed Python 3.13.18, which includes development headers."
+        },
+        {
+          "stage": "Source-build cache check",
+          "error": "pip reused a cached wheel from a different torch build; torch_scatter/_version_cpu.so could not be loaded",
+          "resolution": "Removed it and used --no-cache-dir --no-binary=torch-scatter to compile a fresh wheel against torch 2.15.0."
+        }
+      ],
+      "table_note": "CPU-only scatter; CUDA 13.4 needs a newer driver"
+    },
+    {
+      "name": "py313-t271-cu128",
+      "status": "verified_tonight",
+      "date": "2026-11-10",
+      "source_revision": "d71314b19d43a643542afadd168defba79f2ad08",
+      "python": "3.13.5",
+      "cuda_wheel_tag": "cu128",
+      "host": "terok",
+      "platform": "Linux-6.12.101+deb13-amd64-x86_64-with-glibc2.41",
+      "notes": [
+        "Additional environment separates Python 3.13 support from the CUDA 13.4 driver limitation in py313-latest.",
+        "68 skipped tests require optional pinned upstream source checkouts; their reasons are recorded in cpu_tests.skipped_reasons. Large silicon spatial tests and unshipped generated PySCF result files were explicitly excluded."
+      ],
+      "torch": "2.7.1+cu128",
+      "torch_scatter": "2.1.2+pt27cu128",
+      "torch_geometric": "2.8.1",
+      "e3nn": "0.6.0",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "nvidia_smi": [
+        "0, NVIDIA A40, 550.163.01, 46068 MiB",
+        "1, NVIDIA A40, 550.163.01, 46068 MiB"
+      ],
+      "gpu": "NVIDIA A40",
+      "driver": "550.163.01",
+      "import_check": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-t271-cu128/bin/python -c 'import torch, torch_scatter, torch_geometric, e3nn; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())'",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 3.743,
+        "output": "2.7.1+cu128 12.8 True"
+      },
+      "cpu_tests": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-t271-cu128/bin/python -m pytest -n 16 -q tests/unit tests/physics tests/equivariance -m '(unit or physics or equivariance) and not (gpu or slow or large_data or network or integration)' --ignore=tests/unit/data/test_snapshot_spatial.py --ignore=tests/physics/test_pyscf_rotation_reference_files.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py313-t271-cu128-cpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": ""
+        },
+        "exit_code": 0,
+        "runtime_seconds": 47.885,
+        "tests": 743,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 68,
+        "passed": 675,
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ],
+        "excluded": [
+          "gpu",
+          "slow",
+          "large_data",
+          "network",
+          "integration",
+          "tests/unit/data/test_snapshot_spatial.py (unmarked large silicon fixture)",
+          "tests/physics/test_pyscf_rotation_reference_files.py (unshipped generated PySCF results)"
+        ],
+        "source_revision": "d71314b19d43a643542afadd168defba79f2ad08",
+        "skipped_reasons": {
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned deeph_e3 source oracle is not configured.": 4,
+          "Pinned mace_h source oracle is not configured.": 4
+        },
+        "counts_by_subset": {
+          "unit": {
+            "passed": 567,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        }
+      },
+      "gpu_smoke": {
+        "command": "/home/brzoza73/casus/mandala_worktrees/envs/.venvs/py313-t271-cu128/bin/python -c '\nimport pytest, torch\ncode = pytest.main([\"-q\", \"tests/gpu/test_cuda_smoke.py\", \"--junitxml=\" + __import__('\"'\"'sys'\"'\"').argv[1]])\ntry:\n    print(\"MANDALA_PEAK_GPU_MEMORY_BYTES=\" + str(torch.cuda.max_memory_allocated()))\nexcept Exception as exc:\n    print(\"MANDALA_PEAK_GPU_MEMORY_UNAVAILABLE=\" + str(exc))\nraise SystemExit(code)\n' /home/brzoza73/casus/mandala_worktrees/envs/.venvs/logs/py313-t271-cu128-gpu.xml",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "1",
+          "MANDALA_RUN_GPU_TESTS": "1"
+        },
+        "exit_code": 0,
+        "runtime_seconds": 12.49,
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 2,
+        "source_revision": "d71314b19d43a643542afadd168defba79f2ad08",
+        "peak_memory_allocated_bytes": 18352640
+      },
+      "freeze": [
+        "e3nn==0.6.0",
+        "numpy==2.5.4",
+        "pytorch-lightning==2.6.6",
+        "scipy==1.18.1",
+        "torch==2.7.1+cu128",
+        "torch-geometric==2.8.1",
+        "torch_scatter==2.1.2+pt27cu128",
+        "torchmetrics==1.9.0"
+      ],
+      "result": "passed",
+      "operating_system": "Debian GNU/Linux 13 (trixie)",
+      "driver_cuda_maximum": "12.4",
+      "installation_commands": [
+        "uv venv --seed --python 3.13 .venvs/py313-t271-cu128",
+        "uv pip install --python .venvs/py313-t271-cu128/bin/python torch==2.7.1 --index-url https://download.pytorch.org/whl/cu128",
+        "uv pip install --python .venvs/py313-t271-cu128/bin/python torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.7.1+cu128.html --only-binary torch-scatter",
+        "uv pip install --python .venvs/py313-t271-cu128/bin/python -r pyproject.toml pytest pytest-xdist plotly",
+        ".venvs/py313-t271-cu128/bin/python -m pip install -e . --ignore-requires-python --no-deps"
+      ],
+      "torch_scatter_build": {
+        "kind": "PyG wheel",
+        "backend": "cuda"
+      },
+      "table_note": "additional control for Python support"
+    },
+    {
+      "name": "rosi-h100-paper-training",
+      "status": "reported",
+      "date": null,
+      "python": "3.10",
+      "torch": "2.5.1+cu121",
+      "cuda_wheel_tag": "cu121",
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "ROSI",
+      "gpu": "NVIDIA H100",
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "paper training",
+      "notes": [
+        "Reported by the author; not re-tested on 2026-11-10. Exact extension versions and driver were not supplied."
+      ]
+    },
+    {
+      "name": "rosi-b200-physical-constraints",
+      "status": "reported",
+      "date": null,
+      "python": "3.10",
+      "torch": "2.7.1+cu128",
+      "cuda_wheel_tag": "cu128",
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "ROSI",
+      "gpu": "NVIDIA B200",
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "physical-constraint evaluations and retrains",
+      "notes": [
+        "Reported by the author; not re-tested on 2026-11-10. Exact extension versions and driver were not supplied."
+      ]
+    },
+    {
+      "name": "laptop-cpu-development",
+      "status": "reported",
+      "date": null,
+      "python": "3.10",
+      "torch": "2.5.1+cpu",
+      "cuda_wheel_tag": "cpu",
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "laptop",
+      "gpu": null,
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "development",
+      "notes": [
+        "Reported by the author; not re-tested on 2026-11-10. Exact extension versions were not supplied."
+      ]
+    },
+    {
+      "name": "terok-a40-torch211-patched",
+      "status": "reported",
+      "date": null,
+      "python": "3.12",
+      "torch": "2.11 (exact patch not recorded)",
+      "cuda_wheel_tag": null,
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "Terok",
+      "gpu": "NVIDIA A40",
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "with patches, see notes",
+      "notes": [
+        "Reported by the author; not re-tested on 2026-11-10. Required source patches whose diff was not supplied; this is not evidence of unmodified torch 2.11 support. Exact torch patch, CUDA tag, extension versions and driver were not supplied."
+      ]
+    }
+  ]
+}

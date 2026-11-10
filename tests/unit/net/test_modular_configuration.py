@@ -4,6 +4,7 @@ import pickle
 from pathlib import Path
 
 import pytest
+import torch
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -12,6 +13,19 @@ from net.configuration import resolve_configuration
 from net.e3gnn import E3GNN
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_runtime_devices_survive_configuration_resolution(device):
+    cfg = Config(device=torch.device(device), dataset_device=torch.device("cpu"))
+    document = cfg.to_mapping()
+    assert document["device"] == device
+    assert document["dataset_device"] == "cpu"
+    resolved, _ = Config.resolve(document, species_shells={"H": [0]}, spinful=False)
+    restored = Config.from_mapping(resolved)
+    assert torch.device(restored.device) == cfg.device
+    assert torch.device(restored.dataset_device) == cfg.dataset_device
+    assert isinstance(cfg.device, torch.device)
 
 
 @pytest.mark.parametrize(
@@ -34,7 +48,12 @@ def test_invalid_policies_are_not_silently_ignored(overrides, match):
         )
 
 
-def test_old_slotted_config_checkpoint_receives_new_optional_defaults():
+def test_old_slotted_config_checkpoint_receives_new_optional_defaults(monkeypatch):
+    # Loading evaluation checkpoints installs a process-wide Config.__setstate__
+    # shim that already fills missing slots. Exercise E3GNN's independent
+    # fallback with the original slotted pickle behavior, regardless of which
+    # tests previously loaded an evaluation checkpoint on this xdist worker.
+    monkeypatch.delattr(Config, "__setstate__", raising=False)
     cfg = Config(
         hidden_irreps="2x0e",
         l_max=0,

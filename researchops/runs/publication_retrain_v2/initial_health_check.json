@@ -1,0 +1,161 @@
+{
+  "checked_utc": "2026-11-10T00:44:19.026005+00:00",
+  "checks": {
+    "all_12_visible": true,
+    "one_gpu_each": true,
+    "four_cpus_each": true,
+    "memory_128G_each": true,
+    "nice_1000_each": true,
+    "time_limit_45h_each": true,
+    "partition_h100_casus_each": true,
+    "account_casus_each": true
+  },
+  "squeue": [
+    {
+      "id": "836864",
+      "name": "mr2-silicon-1",
+      "state": "PENDING",
+      "reason": "Resources",
+      "dependency": "(null)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836872",
+      "name": "mr2-zncusnses-1",
+      "state": "PENDING",
+      "reason": "Priority",
+      "dependency": "(null)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836868",
+      "name": "mr2-sio2-1",
+      "state": "PENDING",
+      "reason": "Priority",
+      "dependency": "(null)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836875",
+      "name": "mr2-zncusnses-4",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836874(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836874",
+      "name": "mr2-zncusnses-3",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836873(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836873",
+      "name": "mr2-zncusnses-2",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836872(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836871",
+      "name": "mr2-sio2-4",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836870(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836870",
+      "name": "mr2-sio2-3",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836869(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836869",
+      "name": "mr2-sio2-2",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836868(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836867",
+      "name": "mr2-silicon-4",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836866(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836866",
+      "name": "mr2-silicon-3",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836865(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    },
+    {
+      "id": "836865",
+      "name": "mr2-silicon-2",
+      "state": "PENDING",
+      "reason": "Dependency",
+      "dependency": "afterok:836864(unfulfilled)",
+      "partition": "gpu-h100-casus",
+      "cpus": "4",
+      "memory": "128G",
+      "time_limit": "1-21:00:00"
+    }
+  ],
+  "scontrol": {
+    "836864": "JobId=836864 JobName=mr2-silicon-1 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37385 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Resources Dependency=(null) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=2026-11-10T01:43:20 AccrueTime=2026-11-10T01:43:20 StartTime=2026-11-10T07:57:30 EndTime=2026-11-12T04:57:30 Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:44:05 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= SchedNodeList=gh003 NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-1-836864.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-1-836864.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836865": "JobId=836865 JobName=mr2-silicon-2 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836864(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-2-836865.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-2-836865.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836866": "JobId=836866 JobName=mr2-silicon-3 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836865(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-3-836866.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-3-836866.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836867": "JobId=836867 JobName=mr2-silicon-4 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836866(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-4-836867.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-4-836867.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836868": "JobId=836868 JobName=mr2-sio2-1 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37385 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Priority Dependency=(null) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=2026-11-10T01:43:20 AccrueTime=2026-11-10T01:43:20 StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:44:05 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-1-836868.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-1-836868.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836869": "JobId=836869 JobName=mr2-sio2-2 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836868(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-2-836869.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-2-836869.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836870": "JobId=836870 JobName=mr2-sio2-3 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836869(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-3-836870.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-3-836870.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836871": "JobId=836871 JobName=mr2-sio2-4 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836870(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-4-836871.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-4-836871.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836872": "JobId=836872 JobName=mr2-zncusnses-1 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37385 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Priority Dependency=(null) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=2026-11-10T01:43:20 AccrueTime=2026-11-10T01:43:20 StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:44:05 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-1-836872.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-1-836872.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836873": "JobId=836873 JobName=mr2-zncusnses-2 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836872(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-2-836873.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-2-836873.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836874": "JobId=836874 JobName=mr2-zncusnses-3 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836873(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-3-836874.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-3-836874.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n",
+    "836875": "JobId=836875 JobName=mr2-zncusnses-4 UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A Priority=37384 Nice=1000 Account=casus QOS=qos_casus JobState=PENDING Reason=Dependency Dependency=afterok:836874(unfulfilled) Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0 RunTime=00:00:00 TimeLimit=1-21:00:00 TimeMin=N/A SubmitTime=2026-11-10T01:43:20 EligibleTime=Unknown AccrueTime=Unknown StartTime=Unknown EndTime=Unknown Deadline=N/A SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T01:43:20 Scheduler=Main Partition=gpu-h100-casus AllocNode:Sid=rosi4:1178190 ReqNodeList=(null) ExcNodeList=(null) NodeList= NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:* ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1 AllocTRES=(null) Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=* MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0 Features=(null) DelayBoot=00:00:00 OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null) Command=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh WorkDir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2 StdErr=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-4-836875.log StdIn=/dev/null StdOut=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-4-836875.log TresPerNode=gres/gpu:1 TresPerTask=cpu=4 \n"
+  }
+}

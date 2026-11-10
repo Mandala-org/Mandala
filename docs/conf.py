@@ -32,6 +32,7 @@ html_css_files = ["mandala.css"]
 html_theme = "sphinx_rtd_theme"
 html_theme_options = {"navigation_depth": 3, "collapse_navigation": False}
 html_title = "MANDALA documentation"
+html_baseurl = "https://mandala-org.github.io/Mandala/"
 pygments_style = "friendly"
 
 autodoc_member_order = "bysource"

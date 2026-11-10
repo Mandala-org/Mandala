@@ -1,0 +1,1180 @@
+{
+  "schema_version": 1,
+  "snapshot_utc": "2026-11-10T07:03:11.864129+00:00",
+  "status": "snapshot",
+  "horizon_hours": 90,
+  "horizon_freeze": {
+    "decided_utc": "2026-11-10T00:30:59Z",
+    "decided_by": "Bartek (2026-11-10 ~01:10 CET), executed by agent:claude",
+    "decision": "Freeze the common-split benchmark horizon at the end of training segment 2, i.e. 2 x 45 h = 90 h of H100 wall clock per arm. Segments 3-8 and the original summary job are cancelled. Terminal test scoring uses latest_checkpoint.pt of each arm at that point (score_terminal.sh); summarize.py runs afterwards.",
+    "reason": "The original horizon (max_epochs 3000 / 2400 / 2202 with LR-floor stop) would finish after the 2026-11-27 revision deadline. Equal wall-clock budget is the only horizon that can be applied identically to all six arms without per-epoch checkpoints. Declared before any test-split score existed.",
+    "epochs_at_decision": {
+      "mandala_graphene": 1342,
+      "deeph_e3_graphene": 790,
+      "mace_h_graphene": 684,
+      "mandala_mos2": 848,
+      "deeph_e3_mos2": 374,
+      "mace_h_mos2": 341
+    },
+    "cancelled_jobs": "828369-828374 828377-828382 828385-828390 828393-828398 828401-828406 828409-828414 828424"
+  },
+  "arms": {
+    "mandala_graphene": {
+      "segments": {
+        "1": {
+          "epochs": 703,
+          "lr": 0.00016875,
+          "terminal": false,
+          "updates": 189810,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": {
+          "epochs": 1399,
+          "lr": 2.109375e-05,
+          "terminal": false,
+          "updates": 377730,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        }
+      },
+      "epochs_at_90h": 1399,
+      "last_logged_completed_epoch": 1399,
+      "mean_minutes_per_epoch": 3.8430069096974027,
+      "timing_epoch_count": 1399,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 1377,
+            "logged_epoch": 1376,
+            "mae_mev": 0.20022194290823495,
+            "step": "371789",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 1399,
+            "logged_epoch": 1398,
+            "mae_mev": 0.20178308348113025,
+            "step": "377729",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.0544514658354203,
+              "step": "94499",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 700,
+              "logged_epoch": 699,
+              "mae_mev": 0.25599835047032543,
+              "step": "188999",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 1399
+        },
+        "projected": {
+          "best": {
+            "epoch": 1377,
+            "logged_epoch": 1376,
+            "mae_mev": 0.1810904593518649,
+            "step": "371789",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 1399,
+            "logged_epoch": 1398,
+            "mae_mev": 0.18312233080672313,
+            "step": "377729",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 0.9992450328356333,
+              "step": "94499",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 700,
+              "logged_epoch": 699,
+              "mae_mev": 0.23455415507086072,
+              "step": "188999",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 1399
+        }
+      },
+      "metric_sources": [
+        {
+          "path": "results/mandala_graphene/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        },
+        {
+          "path": "results/mandala_graphene/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        }
+      ],
+      "terminal_test": {
+        "epoch": 1399,
+        "updates": 377730,
+        "mae_mev": {
+          "raw": 0.18334469382499605,
+          "projected": 0.17373092735715
+        }
+      }
+    },
+    "deeph_e3_graphene": {
+      "segments": {
+        "1": {
+          "epochs": 414,
+          "lr": 0.003,
+          "terminal": false,
+          "updates": 111780,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": {
+          "epochs": 825,
+          "lr": 0.00075,
+          "terminal": false,
+          "updates": 222750,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        }
+      },
+      "epochs_at_90h": 825,
+      "last_logged_completed_epoch": 825,
+      "mean_minutes_per_epoch": 6.5187474747474745,
+      "timing_epoch_count": 825,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 811,
+            "logged_epoch": 810,
+            "mae_mev": 0.39271759450742777,
+            "step": "218969",
+            "source": "results/deeph_e3_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 825,
+            "logged_epoch": 824,
+            "mae_mev": 0.4163252750669527,
+            "step": "222749",
+            "source": "results/deeph_e3_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 0.9184616902059727,
+              "step": "94499",
+              "source": "results/deeph_e3_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 700,
+              "logged_epoch": 699,
+              "mae_mev": 0.5830496692647453,
+              "step": "188999",
+              "source": "results/deeph_e3_graphene/metrics/version_1/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 825
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/deeph_e3_graphene/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/deeph_e3_graphene/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": {
+        "epoch": 825,
+        "updates": 222750,
+        "mae_mev": {
+          "raw": 0.3950913808540723,
+          "projected": 0.3584288613868507
+        }
+      }
+    },
+    "mace_h_graphene": {
+      "segments": {
+        "1": {
+          "epochs": 363,
+          "lr": 0.0038400000000000005,
+          "terminal": false,
+          "updates": 98010,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": {
+          "epochs": 727,
+          "lr": 0.0038400000000000005,
+          "terminal": false,
+          "updates": 196290,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        }
+      },
+      "epochs_at_90h": 727,
+      "last_logged_completed_epoch": 727,
+      "mean_minutes_per_epoch": 7.398349381017882,
+      "timing_epoch_count": 727,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 665,
+            "logged_epoch": 664,
+            "mae_mev": 0.48106116805104393,
+            "step": "179549",
+            "source": "results/mace_h_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 727,
+            "logged_epoch": 726,
+            "mae_mev": 0.802632666094743,
+            "step": "196289",
+            "source": "results/mace_h_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.0784521707700305,
+              "step": "94499",
+              "source": "results/mace_h_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 700,
+              "logged_epoch": 699,
+              "mae_mev": 0.612847174729942,
+              "step": "188999",
+              "source": "results/mace_h_graphene/metrics/version_1/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 727
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/mace_h_graphene/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/mace_h_graphene/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": {
+        "epoch": 727,
+        "updates": 196290,
+        "mae_mev": {
+          "raw": 0.8099416584269458,
+          "projected": 0.7827055174305086
+        }
+      }
+    },
+    "mandala_mos2": {
+      "segments": {
+        "1": {
+          "epochs": 435,
+          "lr": 0.0003375,
+          "terminal": false,
+          "updates": 130500,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": {
+          "epochs": 886,
+          "lr": 0.00016875,
+          "terminal": false,
+          "updates": 265800,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        }
+      },
+      "epochs_at_90h": 886,
+      "last_logged_completed_epoch": 886,
+      "mean_minutes_per_epoch": 6.070240782543266,
+      "timing_epoch_count": 886,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 844,
+            "logged_epoch": 843,
+            "mae_mev": 0.5216578140246535,
+            "step": "253199",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 886,
+            "logged_epoch": 885,
+            "mae_mev": 0.7454520823780063,
+            "step": "265799",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 2.9243821379640442,
+              "step": "52499",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.2552337698088467,
+              "step": "104999",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 886
+        },
+        "projected": {
+          "best": {
+            "epoch": 874,
+            "logged_epoch": 873,
+            "mae_mev": 0.4486333851946728,
+            "step": "262199",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 886,
+            "logged_epoch": 885,
+            "mae_mev": 0.6947038119058818,
+            "step": "265799",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 2.5099136181641333,
+              "step": "52499",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.1495282699017406,
+              "step": "104999",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 886
+        }
+      },
+      "metric_sources": [
+        {
+          "path": "results/mandala_mos2/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        },
+        {
+          "path": "results/mandala_mos2/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        }
+      ],
+      "terminal_test": {
+        "epoch": 886,
+        "updates": 265800,
+        "mae_mev": {
+          "raw": 0.7225329136869181,
+          "projected": 0.6770943976430234
+        }
+      }
+    },
+    "deeph_e3_mos2": {
+      "segments": {
+        "1": {
+          "epochs": 196,
+          "lr": 0.005,
+          "terminal": false,
+          "updates": 58800,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": {
+          "epochs": 391,
+          "lr": 0.005,
+          "terminal": false,
+          "updates": 117300,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        }
+      },
+      "epochs_at_90h": 391,
+      "last_logged_completed_epoch": 391,
+      "mean_minutes_per_epoch": 13.722421142369992,
+      "timing_epoch_count": 391,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 383,
+            "logged_epoch": 382,
+            "mae_mev": 1.1986636015110301,
+            "step": "114899",
+            "source": "results/deeph_e3_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 391,
+            "logged_epoch": 390,
+            "mae_mev": 1.474394958321246,
+            "step": "117299",
+            "source": "results/deeph_e3_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 2.4618267589984364,
+              "step": "52499",
+              "source": "results/deeph_e3_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.5886069741315478,
+              "step": "104999",
+              "source": "results/deeph_e3_mos2/metrics/version_1/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 391
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/deeph_e3_mos2/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/deeph_e3_mos2/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": {
+        "epoch": 391,
+        "updates": 117300,
+        "mae_mev": {
+          "raw": 1.4493136674934821,
+          "projected": 1.3079236215577896
+        }
+      }
+    },
+    "mace_h_mos2": {
+      "segments": {
+        "1": {
+          "epochs": 182,
+          "lr": 0.006,
+          "terminal": false,
+          "updates": 54600,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": {
+          "epochs": 364,
+          "lr": 0.006,
+          "terminal": false,
+          "updates": 109200,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        }
+      },
+      "epochs_at_90h": 364,
+      "last_logged_completed_epoch": 364,
+      "mean_minutes_per_epoch": 14.759065934065935,
+      "timing_epoch_count": 364,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 337,
+            "logged_epoch": 336,
+            "mae_mev": 1.0806580801628578,
+            "step": "101099",
+            "source": "results/mace_h_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 364,
+            "logged_epoch": 363,
+            "mae_mev": 1.3669000364929744,
+            "step": "109199",
+            "source": "results/mace_h_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 1.793792102344875,
+              "step": "52499",
+              "source": "results/mace_h_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.3761563078639658,
+              "step": "104999",
+              "source": "results/mace_h_mos2/metrics/version_1/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 364
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/mace_h_mos2/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/mace_h_mos2/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": {
+        "epoch": 364,
+        "updates": 109200,
+        "mae_mev": {
+          "raw": 1.322773013536299,
+          "projected": 1.158962268629518
+        }
+      }
+    }
+  },
+  "sources": {
+    "results/mandala_graphene/metrics/version_0/metrics.csv": "b337062289e9cbdf98b2c71e6384a7be569665e54163cef5bfa1f870ef93cd4c",
+    "results/mandala_graphene/metrics/version_1/metrics.csv": "0075e78183c4000ed880e34df5af5609b6a54eae434b0fce418816731c5b43dc",
+    "results/mandala_graphene/segment_2.json": "87a8fad9931b0715e703354a4da261068b74b13c87240a823ba4bcd04577a2aa",
+    "results/mandala_graphene/segment_1.json": "f97e4abdf7a9870da728a45628c6d8ca13a8e4d8213f1abe4f686fe6dee29bb8",
+    "results/mandala_graphene/terminal_test.json": "f1cc5a428d541655e776170e4ea8aa7847e6032ffd1241d8c4b6e55b570b6e80",
+    "results/deeph_e3_graphene/metrics/version_0/metrics.csv": "08f3e7af3a7890ac803139a460855712186d797f98c6b30233b8adcbacdbf70e",
+    "results/deeph_e3_graphene/metrics/version_1/metrics.csv": "611ca4556949b6ddadf8e27f2cfc26b3bd8083cc9310bb144d2713f016f8fa65",
+    "results/deeph_e3_graphene/segment_2.json": "ef5b5397d7e6382ca0b1e05ed416da20b28077edc91a4ef3f8077d2546016180",
+    "results/deeph_e3_graphene/segment_1.json": "c130bac9b91f56679f4458260c841c0a871ee0f1577c69a56cfd3a16670aa772",
+    "results/deeph_e3_graphene/terminal_test.json": "ed472e3a1fa979854914399d684e506028897016bb6334b96ac80646ac9861b8",
+    "results/mace_h_graphene/metrics/version_0/metrics.csv": "a77598992429a0231f5056ac382902cb029fb62aedd8ced4fd92e6cfbfa1c012",
+    "results/mace_h_graphene/metrics/version_1/metrics.csv": "aa930cc0291f262b10c0028f28e51abe791cd37e1f2ae80fb58fbc7a422cdda1",
+    "results/mace_h_graphene/segment_2.json": "71fa8dfb282da2dbdae983e3d9151088439cf5b25df396ae4d276f023681b5e2",
+    "results/mace_h_graphene/segment_1.json": "bcd1db3d93e3e5e9c53b23e93028fe178dc8f61f63e400fc34d73419559cdf6b",
+    "results/mace_h_graphene/terminal_test.json": "df94945c91bcf7ba207d6755125e55a5c428de29cf0c9ba4580a6121a4dbe3d2",
+    "results/mandala_mos2/metrics/version_0/metrics.csv": "32d2f3627e37f7e7aa92af21b6c1880910cdee7170c5ed9a6b923d0b677fb4f5",
+    "results/mandala_mos2/metrics/version_1/metrics.csv": "6c5fef18e88dc9f36778837a3d8c110c43524f2e440ba1b6d3ef695b6612b293",
+    "results/mandala_mos2/segment_2.json": "412561d6b8fe38a23c041aca3353142d078377981ff9e190e80f84c2d07c2213",
+    "results/mandala_mos2/segment_1.json": "563052d5b89b17f8370a8adf506999bed245580855c532c65214b36cf143ea6a",
+    "results/mandala_mos2/terminal_test.json": "c2ea37e9f6b22db52c581b762635e81fda26aba17aa1918a1798df0a6b89b379",
+    "results/deeph_e3_mos2/metrics/version_0/metrics.csv": "4ed6e327f37c2973ea5841523cdfd5a4f0dea249a9fffe6764e6b4317b37f3b5",
+    "results/deeph_e3_mos2/metrics/version_1/metrics.csv": "41cd200562eae87079ad7db2da990b5a71f619c5b8157600444a0535245853dd",
+    "results/deeph_e3_mos2/segment_2.json": "118e245be1160d9d8a1a5f7d969729b07fad9a6de0a4c40bb77d5eb5d24d8ae7",
+    "results/deeph_e3_mos2/segment_1.json": "2483888dfb276671b6c98e2da272be066bd80eedbeb24a4775a24d61044e0568",
+    "results/deeph_e3_mos2/terminal_test.json": "49a52e6edf64f2dd04b9692e15e50e18200e61155f30dbd892f5a696bdc64286",
+    "results/mace_h_mos2/metrics/version_0/metrics.csv": "4bcb3ce75d00a95a08b56bb8363eb7dcd84798520b7ad0c060a39682968f3dd2",
+    "results/mace_h_mos2/metrics/version_1/metrics.csv": "193440de22aff247a438f8b66a26b1ec3f2226768ba6d3292d2ce3ec89db9e57",
+    "results/mace_h_mos2/segment_2.json": "48a87d660598dd24dd176d8914917a1e74b4305b6e3eebd4d23478fa929e8a60",
+    "results/mace_h_mos2/segment_1.json": "57c900e2352ced702f8f5f9d0f00114908287cc2dc27a5848e35e6ac7b7980fe",
+    "results/mace_h_mos2/terminal_test.json": "b78b3d93af7e4ec1baaefab9fbf798dae2d25d5bc0aa128cf6d9ed5835d35ddb",
+    "HORIZON_FREEZE.json": "e37674516b94fcdccd42be5e14a27e3c347385b219e25ca02a6237d8548c1f4a",
+    "epoch_timings.json": "58b21bac1360c2f31881a4421bb9bc90a08020207370f1a4993823a6c547d774"
+  },
+  "terminal_comparison": {
+    "protocol": "fixed-recipe shared pilot splits; not historical replay",
+    "materials": {
+      "graphene": {
+        "all_recipes_complete": true,
+        "arms": {
+          "mandala_graphene": {
+            "status": "complete",
+            "split": "test",
+            "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/mandala_fixed_recipe_v1/mandala_graphene/latest_checkpoint.pt",
+            "epoch": 1399,
+            "updates": 377730,
+            "support_sha256": "6ebf589437d267ea6dc8a51744c3dfe5e731d140826a3560a2d0777c80822a75",
+            "inputs_sha256": "9990abedfe50f21f96c8948d1d4b10a5809785b9f381be044b52d37745ebd2bc",
+            "metrics": {
+              "raw": {
+                "structures": 90,
+                "entries": 50373830,
+                "structure_mean_mae_mev": 0.18334469382499605,
+                "dataset_entry_mae_mev": 0.18334177683335445,
+                "structure_mean_rmse_mev": 0.4493128222901221,
+                "dataset_entry_rmse_mev": 0.45976715337682705,
+                "directed_species_pairs": {
+                  "C-C": {
+                    "structures": 90,
+                    "entries": 50373830,
+                    "structure_mean_mae_mev": 0.18334469382499605,
+                    "dataset_entry_mae_mev": 0.18334177683335445,
+                    "structure_mean_rmse_mev": 0.4493128222901221,
+                    "dataset_entry_rmse_mev": 0.45976715337682705
+                  }
+                }
+              },
+              "projected": {
+                "structures": 90,
+                "entries": 50373830,
+                "structure_mean_mae_mev": 0.17373092735715,
+                "dataset_entry_mae_mev": 0.1737281027372273,
+                "structure_mean_rmse_mev": 0.43591823268199525,
+                "dataset_entry_rmse_mev": 0.4464625006268767,
+                "directed_species_pairs": {
+                  "C-C": {
+                    "structures": 90,
+                    "entries": 50373830,
+                    "structure_mean_mae_mev": 0.17373092735715,
+                    "dataset_entry_mae_mev": 0.1737281027372273,
+                    "structure_mean_rmse_mev": 0.43591823268199525,
+                    "dataset_entry_rmse_mev": 0.4464625006268767
+                  }
+                }
+              }
+            }
+          },
+          "deeph_e3_graphene": {
+            "status": "complete",
+            "split": "test",
+            "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/mandala_fixed_recipe_v1/deeph_e3_graphene/latest_checkpoint.pt",
+            "epoch": 825,
+            "updates": 222750,
+            "support_sha256": "6ebf589437d267ea6dc8a51744c3dfe5e731d140826a3560a2d0777c80822a75",
+            "inputs_sha256": "9990abedfe50f21f96c8948d1d4b10a5809785b9f381be044b52d37745ebd2bc",
+            "metrics": {
+              "raw": {
+                "structures": 90,
+                "entries": 50373830,
+                "structure_mean_mae_mev": 0.3950913808540723,
+                "dataset_entry_mae_mev": 0.3950879821624042,
+                "structure_mean_rmse_mev": 0.6606451553167678,
+                "dataset_entry_rmse_mev": 0.6651258780606379,
+                "directed_species_pairs": {
+                  "C-C": {
+                    "structures": 90,
+                    "entries": 50373830,
+                    "structure_mean_mae_mev": 0.3950913808540723,
+                    "dataset_entry_mae_mev": 0.3950879821624042,
+                    "structure_mean_rmse_mev": 0.6606451553167678,
+                    "dataset_entry_rmse_mev": 0.6651258780606379
+                  }
+                }
+              },
+              "projected": {
+                "structures": 90,
+                "entries": 50373830,
+                "structure_mean_mae_mev": 0.3584288613868507,
+                "dataset_entry_mae_mev": 0.35842581146060376,
+                "structure_mean_rmse_mev": 0.6120178077956492,
+                "dataset_entry_rmse_mev": 0.6161310717055992,
+                "directed_species_pairs": {
+                  "C-C": {
+                    "structures": 90,
+                    "entries": 50373830,
+                    "structure_mean_mae_mev": 0.3584288613868507,
+                    "dataset_entry_mae_mev": 0.35842581146060376,
+                    "structure_mean_rmse_mev": 0.6120178077956492,
+                    "dataset_entry_rmse_mev": 0.6161310717055992
+                  }
+                }
+              }
+            }
+          },
+          "mace_h_graphene": {
+            "status": "complete",
+            "split": "test",
+            "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/mandala_fixed_recipe_v1/mace_h_graphene/latest_checkpoint.pt",
+            "epoch": 727,
+            "updates": 196290,
+            "support_sha256": "6ebf589437d267ea6dc8a51744c3dfe5e731d140826a3560a2d0777c80822a75",
+            "inputs_sha256": "9990abedfe50f21f96c8948d1d4b10a5809785b9f381be044b52d37745ebd2bc",
+            "metrics": {
+              "raw": {
+                "structures": 90,
+                "entries": 50373830,
+                "structure_mean_mae_mev": 0.8099416584269458,
+                "dataset_entry_mae_mev": 0.8099413904407892,
+                "structure_mean_rmse_mev": 1.873759460186735,
+                "dataset_entry_rmse_mev": 1.8756502075548216,
+                "directed_species_pairs": {
+                  "C-C": {
+                    "structures": 90,
+                    "entries": 50373830,
+                    "structure_mean_mae_mev": 0.8099416584269458,
+                    "dataset_entry_mae_mev": 0.8099413904407892,
+                    "structure_mean_rmse_mev": 1.873759460186735,
+                    "dataset_entry_rmse_mev": 1.8756502075548216
+                  }
+                }
+              },
+              "projected": {
+                "structures": 90,
+                "entries": 50373830,
+                "structure_mean_mae_mev": 0.7827055174305086,
+                "dataset_entry_mae_mev": 0.7827056167531912,
+                "structure_mean_rmse_mev": 1.849602900074729,
+                "dataset_entry_rmse_mev": 1.8516937392623354,
+                "directed_species_pairs": {
+                  "C-C": {
+                    "structures": 90,
+                    "entries": 50373830,
+                    "structure_mean_mae_mev": 0.7827055174305086,
+                    "dataset_entry_mae_mev": 0.7827056167531912,
+                    "structure_mean_rmse_mev": 1.849602900074729,
+                    "dataset_entry_rmse_mev": 1.8516937392623354
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "mos2": {
+        "all_recipes_complete": true,
+        "arms": {
+          "mandala_mos2": {
+            "status": "complete",
+            "split": "test",
+            "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/mandala_fixed_recipe_v1/mandala_mos2/latest_checkpoint.pt",
+            "epoch": 886,
+            "updates": 265800,
+            "support_sha256": "af10ffd59a4307c202307723a050a708815a1f61618ca02374eba7064a0f1d90",
+            "inputs_sha256": "11bf204763886565f3b9781337809e446334e14aa2b3d6e42379709f36365534",
+            "metrics": {
+              "raw": {
+                "structures": 100,
+                "entries": 94291138,
+                "structure_mean_mae_mev": 0.7225329136869181,
+                "dataset_entry_mae_mev": 0.7226494375221951,
+                "structure_mean_rmse_mev": 1.6070262828578163,
+                "dataset_entry_rmse_mev": 1.6096971110621938,
+                "directed_species_pairs": {
+                  "Mo-Mo": {
+                    "structures": 100,
+                    "entries": 17147500,
+                    "structure_mean_mae_mev": 0.7408329239608393,
+                    "dataset_entry_mae_mev": 0.7408329239608394,
+                    "structure_mean_rmse_mev": 1.9224907611735278,
+                    "dataset_entry_rmse_mev": 1.92842962213647
+                  },
+                  "Mo-S": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 0.7760490208035744,
+                    "dataset_entry_mae_mev": 0.7762790463486944,
+                    "structure_mean_rmse_mev": 1.5926399439995533,
+                    "dataset_entry_rmse_mev": 1.5947292774078305
+                  },
+                  "S-Mo": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 0.7566204068311679,
+                    "dataset_entry_mae_mev": 0.7568487177846211,
+                    "structure_mean_rmse_mev": 1.5714394415311888,
+                    "dataset_entry_rmse_mev": 1.5738259235596166
+                  },
+                  "S-S": {
+                    "structures": 100,
+                    "entries": 32101212,
+                    "structure_mean_mae_mev": 0.6513389316986758,
+                    "dataset_entry_mae_mev": 0.6513183472059874,
+                    "structure_mean_rmse_mev": 1.4473099860389862,
+                    "dataset_entry_rmse_mev": 1.4499997751782914
+                  }
+                }
+              },
+              "projected": {
+                "structures": 100,
+                "entries": 94291138,
+                "structure_mean_mae_mev": 0.6770943976430234,
+                "dataset_entry_mae_mev": 0.6771778431746495,
+                "structure_mean_rmse_mev": 1.531602589847525,
+                "dataset_entry_rmse_mev": 1.533415778254777,
+                "directed_species_pairs": {
+                  "Mo-Mo": {
+                    "structures": 100,
+                    "entries": 17147500,
+                    "structure_mean_mae_mev": 0.7053872730260493,
+                    "dataset_entry_mae_mev": 0.7053872730260494,
+                    "structure_mean_rmse_mev": 1.876295217106202,
+                    "dataset_entry_rmse_mev": 1.8820961570110457
+                  },
+                  "Mo-S": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 0.7103964048835918,
+                    "dataset_entry_mae_mev": 0.710555340847936,
+                    "structure_mean_rmse_mev": 1.4864507289527122,
+                    "dataset_entry_rmse_mev": 1.4877538689092829
+                  },
+                  "S-Mo": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 0.7103964048841611,
+                    "dataset_entry_mae_mev": 0.7105553408485012,
+                    "structure_mean_rmse_mev": 1.4864507289532698,
+                    "dataset_entry_rmse_mev": 1.4877538689098253
+                  },
+                  "S-S": {
+                    "structures": 100,
+                    "entries": 32101212,
+                    "structure_mean_mae_mev": 0.6152914586655687,
+                    "dataset_entry_mae_mev": 0.6152759851574584,
+                    "structure_mean_rmse_mev": 1.3800779384943214,
+                    "dataset_entry_rmse_mev": 1.3815844203502496
+                  }
+                }
+              }
+            }
+          },
+          "deeph_e3_mos2": {
+            "status": "complete",
+            "split": "test",
+            "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/mandala_fixed_recipe_v1/deeph_e3_mos2/latest_checkpoint.pt",
+            "epoch": 391,
+            "updates": 117300,
+            "support_sha256": "af10ffd59a4307c202307723a050a708815a1f61618ca02374eba7064a0f1d90",
+            "inputs_sha256": "11bf204763886565f3b9781337809e446334e14aa2b3d6e42379709f36365534",
+            "metrics": {
+              "raw": {
+                "structures": 100,
+                "entries": 94291138,
+                "structure_mean_mae_mev": 1.4493136674934821,
+                "dataset_entry_mae_mev": 1.4496687322315367,
+                "structure_mean_rmse_mev": 3.0083245461967496,
+                "dataset_entry_rmse_mev": 3.016580550575781,
+                "directed_species_pairs": {
+                  "Mo-Mo": {
+                    "structures": 100,
+                    "entries": 17147500,
+                    "structure_mean_mae_mev": 1.6694036611861058,
+                    "dataset_entry_mae_mev": 1.6694036611861056,
+                    "structure_mean_rmse_mev": 4.006912185093323,
+                    "dataset_entry_rmse_mev": 4.022587327718618
+                  },
+                  "Mo-S": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.4436997937182934,
+                    "dataset_entry_mae_mev": 1.4445027361243232,
+                    "structure_mean_rmse_mev": 2.6911724279974867,
+                    "dataset_entry_rmse_mev": 2.7001217081289313
+                  },
+                  "S-Mo": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.5112644170045628,
+                    "dataset_entry_mae_mev": 1.5119925224657842,
+                    "structure_mean_rmse_mev": 2.743875125257869,
+                    "dataset_entry_rmse_mev": 2.750799126775387
+                  },
+                  "S-S": {
+                    "structures": 100,
+                    "entries": 32101212,
+                    "structure_mean_mae_mev": 1.292223090698291,
+                    "dataset_entry_mae_mev": 1.2921928228984745,
+                    "structure_mean_rmse_mev": 2.7626896391697966,
+                    "dataset_entry_rmse_mev": 2.7679736982314167
+                  }
+                }
+              },
+              "projected": {
+                "structures": 100,
+                "entries": 94291138,
+                "structure_mean_mae_mev": 1.3079236215577896,
+                "dataset_entry_mae_mev": 1.3082169447291616,
+                "structure_mean_rmse_mev": 2.8547691882720736,
+                "dataset_entry_rmse_mev": 2.8624239273036025,
+                "directed_species_pairs": {
+                  "Mo-Mo": {
+                    "structures": 100,
+                    "entries": 17147500,
+                    "structure_mean_mae_mev": 1.5234429457940069,
+                    "dataset_entry_mae_mev": 1.5234429457940066,
+                    "structure_mean_rmse_mev": 3.887128159180867,
+                    "dataset_entry_rmse_mev": 3.9025294602087417
+                  },
+                  "Mo-S": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.3230989078678241,
+                    "dataset_entry_mae_mev": 1.3237143175817547,
+                    "structure_mean_rmse_mev": 2.5157546129339936,
+                    "dataset_entry_rmse_mev": 2.5226014929684015
+                  },
+                  "S-Mo": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.323098907868389,
+                    "dataset_entry_mae_mev": 1.3237143175823152,
+                    "structure_mean_rmse_mev": 2.5157546129343076,
+                    "dataset_entry_rmse_mev": 2.5226014929686924
+                  },
+                  "S-S": {
+                    "structures": 100,
+                    "entries": 32101212,
+                    "structure_mean_mae_mev": 1.1715286311871846,
+                    "dataset_entry_mae_mev": 1.1715047507104626,
+                    "structure_mean_rmse_mev": 2.6413927594943427,
+                    "dataset_entry_rmse_mev": 2.646239852810286
+                  }
+                }
+              }
+            }
+          },
+          "mace_h_mos2": {
+            "status": "complete",
+            "split": "test",
+            "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/mandala_fixed_recipe_v1/mace_h_mos2/latest_checkpoint.pt",
+            "epoch": 364,
+            "updates": 109200,
+            "support_sha256": "af10ffd59a4307c202307723a050a708815a1f61618ca02374eba7064a0f1d90",
+            "inputs_sha256": "11bf204763886565f3b9781337809e446334e14aa2b3d6e42379709f36365534",
+            "metrics": {
+              "raw": {
+                "structures": 100,
+                "entries": 94291138,
+                "structure_mean_mae_mev": 1.322773013536299,
+                "dataset_entry_mae_mev": 1.3231414840490638,
+                "structure_mean_rmse_mev": 2.3937998915287304,
+                "dataset_entry_rmse_mev": 2.4054504784514315,
+                "directed_species_pairs": {
+                  "Mo-Mo": {
+                    "structures": 100,
+                    "entries": 17147500,
+                    "structure_mean_mae_mev": 1.4443496754820517,
+                    "dataset_entry_mae_mev": 1.4443496754820522,
+                    "structure_mean_rmse_mev": 2.9307571642630728,
+                    "dataset_entry_rmse_mev": 2.9545749970398245
+                  },
+                  "Mo-S": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.3201748218570941,
+                    "dataset_entry_mae_mev": 1.3209525000496285,
+                    "structure_mean_rmse_mev": 2.253010272887107,
+                    "dataset_entry_rmse_mev": 2.2642679302332045
+                  },
+                  "S-Mo": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.4454568288654013,
+                    "dataset_entry_mae_mev": 1.4462342787867841,
+                    "structure_mean_rmse_mev": 2.4350491126340312,
+                    "dataset_entry_rmse_mev": 2.445893957979177
+                  },
+                  "S-S": {
+                    "structures": 100,
+                    "entries": 32101212,
+                    "structure_mean_mae_mev": 1.1736133469831036,
+                    "dataset_entry_mae_mev": 1.1735733637941104,
+                    "structure_mean_rmse_mev": 2.122929401599345,
+                    "dataset_entry_rmse_mev": 2.130455161547979
+                  }
+                }
+              },
+              "projected": {
+                "structures": 100,
+                "entries": 94291138,
+                "structure_mean_mae_mev": 1.158962268629518,
+                "dataset_entry_mae_mev": 1.159279383880898,
+                "structure_mean_rmse_mev": 2.154988270811059,
+                "dataset_entry_rmse_mev": 2.1658226987114215,
+                "directed_species_pairs": {
+                  "Mo-Mo": {
+                    "structures": 100,
+                    "entries": 17147500,
+                    "structure_mean_mae_mev": 1.2665820845967781,
+                    "dataset_entry_mae_mev": 1.266582084596778,
+                    "structure_mean_rmse_mev": 2.7276948835548165,
+                    "dataset_entry_rmse_mev": 2.751348670585849
+                  },
+                  "Mo-S": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.177669065454712,
+                    "dataset_entry_mae_mev": 1.1783394674973853,
+                    "structure_mean_rmse_mev": 2.0107946132578323,
+                    "dataset_entry_rmse_mev": 2.0212900559726923
+                  },
+                  "S-Mo": {
+                    "structures": 100,
+                    "entries": 22521213,
+                    "structure_mean_mae_mev": 1.1776690654541446,
+                    "dataset_entry_mae_mev": 1.178339467496822,
+                    "structure_mean_rmse_mev": 2.0107946132570858,
+                    "dataset_entry_rmse_mev": 2.0212900559720346
+                  },
+                  "S-S": {
+                    "structures": 100,
+                    "entries": 32101212,
+                    "structure_mean_mae_mev": 1.0752514019336274,
+                    "dataset_entry_mae_mev": 1.0752175900033853,
+                    "structure_mean_rmse_mev": 1.9942158791310438,
+                    "dataset_entry_rmse_mev": 2.000496407377856
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

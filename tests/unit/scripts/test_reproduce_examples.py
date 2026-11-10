@@ -70,3 +70,30 @@ def test_failed_setup_can_retry_but_existing_run_is_protected(tmp_path, monkeypa
     path.write_text(json.dumps(recipe))
     with pytest.raises(RuntimeError, match="without a recovery checkpoint"):
         train.main(["--recipe", str(path)])
+
+
+def test_completed_recovery_checkpoint_skips_training(tmp_path, monkeypatch):
+    import torch
+    from net import evaluation
+    from scripts import train as training
+
+    recipe = json.loads((RECIPES / "silicon_v2.json").read_text())
+    recipe["training"]["checkpoint_dir"] = str(tmp_path / "checkpoints")
+    path = tmp_path / "recipe.json"
+    path.write_text(json.dumps(recipe))
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda: "test GPU")
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda: (8, 0))
+    calls = []
+    monkeypatch.setattr(training, "run_training", lambda values: calls.append(values))
+    # Establish exactly the same contract as a fresh first segment.
+    train.main(["--recipe", str(path)])
+    run_dir = tmp_path / "checkpoints/silicon"
+    run_dir.mkdir()
+    (run_dir / "latest_checkpoint.pt").touch()
+    monkeypatch.setattr(evaluation, "load_checkpoint", lambda path: {
+        "epoch_boundary_resume": {"safe_to_resume": True},
+        "epoch": recipe["config"]["max_epochs"],
+    })
+    train.main(["--recipe", str(path)])
+    assert len(calls) == 1

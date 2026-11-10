@@ -172,7 +172,11 @@ removes the application-level sources of restart drift.
 
 ## Data conventions and execution gates
 
-All data/checkpoints stay under the documented bigdata root. Outputs are new:
+The hard-coded `/bigdata/...` locations are the authors' HPC paths; replace
+them with your local paths for the deposited datasets and training outputs
+(a RODARE data deposit is being prepared).
+
+With the supplied paths, outputs are new directories under the HPC root:
 `/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/`.
 Existing models are never overwritten. Recovery uses `<model>/latest_checkpoint.pt`;
 the selected model is `<model>/best_model.pt`.
@@ -212,3 +216,44 @@ launchers. They compare clean and interrupted/resumed stochastic training.
 Before starting a new run, check the frozen initial learning rate, epoch cap,
 dataset inventory, density convention and logging configuration. Environment
 and inventory checks precede long GPU training.
+
+## v2 recipes: held-out test split
+
+The `silicon_v2.json`, `sio2_v2.json`, and `zncusnses_v2.json` recipes initialize
+from scratch with the corrected O(3)-equivariant FiLM layer on current develop.
+They do not enable `legacy_2026_07` checkpoint semantics. Their matching
+`train_<material>_v2.sh` launchers preserve the original `PYTHONHASHSEED` values.
+
+| Recipe | Train | Validation | Held-out test | Split seed |
+| --- | ---: | ---: | ---: | ---: |
+| `silicon_v2.json` | 80 | 10 | 6 | 43 |
+| `sio2_v2.json` | 80 | 10 | 10 | 42 |
+| `zncusnses_v2.json` | 80 | 10 | 10 | 44 |
+
+Silicon and Zn training members and their order are retained from the recorded
+v1 runs; their former validation sets are partitioned into validation and test
+prefix/remainder lists. SiO2 retains the first 80 of the recorded 90 training
+members, moves the last 10 to validation, and holds out the former 10 validation
+members as test. These test members have not been used to fit the v2 models. The `*_v2_split.json` files freeze the exact pairs
+from the v1 split manifests through the existing `dataset_manifest` option.
+This also bypasses current discovery's rejection of ambiguous OpenMX metadata
+filenames in the original corpus; shared discovery code and data are untouched.
+On ROSI, run
+`python scripts/reproduce_examples/check_v2_splits.py` to verify the real
+training selection path against the v1 manifests without loading matrices.
+The committed `v2_split_check.json` records membership, hashes, and comparisons;
+original selected-run paper manifests are compared when available. Missing
+historical manifests mean paper membership cannot be independently certified.
+
+The output root, W&B group, and W&B project are changed to
+`publication_retrain_v2` / `mandala-publication-retrain-v2` to keep these runs
+separate. `evaluate_test_after_fit` remains false: test metrics must be computed
+once after validation-based model selection, never after each segment.
+Epoch caps, architectures, objectives, frozen envelopes, and optimizer settings
+are retained. For the requested 45-hour Slurm allocations, the v2 session budget
+is 44 hours, leaving one hour for epoch completion and checkpoint finalization.
+Each material has four `afterok` segments with an `INT` signal ten minutes before
+the allocation ends. The existing training wrapper returns successfully without
+training when the latest safe checkpoint has reached the total epoch cap.
+Submission scripts and scheduler records live under
+`researchops/runs/publication_retrain_v2/` in the isolated ROSI worktree.

@@ -84,7 +84,7 @@ def validate_configuration_sections(config):
             "supports",
             "neighborhood_support",
         },
-        "objective": {"kind", "epoch_weight", "weights", "complex_reduction"},
+        "objective": {"kind", "epoch_weight", "weights", "complex_reduction", "terms"},
         "optimization": {"optimizer", "scheduler", "stop_lr"},
         "pipeline": {"inputs", "stages", "outputs", "operator_layout"},
     }

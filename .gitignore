@@ -45,8 +45,6 @@ AGENTS.md
 # ruff
 .ruff_cache/
 
-# github
-.github/
 
 # coverage reports
 .coverage
@@ -83,6 +81,8 @@ slurm_*.out
 # Local environments
 venv/
 .venv/
+.venv-ci/
+.venvs/
 # Generated outputs and caches
 model_reports/
 .mypy_cache/

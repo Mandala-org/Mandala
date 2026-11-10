@@ -1,5 +1,5 @@
-Writing new layers
-==================
+Writing new layers and objectives
+=================================
 
 An E3GNN for operators is assembled from a small number of layer *kinds*.
 This section implements a **new member of every kind** and combines all of
@@ -54,6 +54,9 @@ in ``examples/layer_cookbook``:
 :doc:`assembling` builds the complete network from these layers, verifies its
 equivariance on a periodic structure with *s*, *p* and *d* orbitals, and
 trains it on the bundled silicon data.
+
+:doc:`new_observable` extends the objective instead: define a differentiable
+scalar from the predicted matrices, register its loss, and enable it in YAML.
 
 The extension mechanism
 -----------------------
@@ -188,6 +191,8 @@ Running the certificate:
      trained  improper rotation  max |dH| = 2.1e-10
      trained  inversion          max |dH| = 0.0e+00
      parameters: 289,311
+   New observable objective
+     hamiltonian_trace: configured weight and nonzero finite gradients verified
    All cookbook layers and the cookbook model are E(3)-equivariant.
 
 Replacing ``SquashActivation.forward`` with an elementwise ``tanh`` — a
