@@ -1,0 +1,202 @@
+{
+  "material": "mos2",
+  "variant": "deeph",
+  "structures": [
+    "/bigdata/casus/wdm/hamiltonian_learning/data/DeepH-E3/Monolayer_MoS2_dataset/922",
+    "/bigdata/casus/wdm/hamiltonian_learning/data/DeepH-E3/Monolayer_MoS2_dataset/733",
+    "/bigdata/casus/wdm/hamiltonian_learning/data/DeepH-E3/Monolayer_MoS2_dataset/811"
+  ],
+  "torch": "2.7.1+cu128",
+  "e3nn": "0.6.0",
+  "e3nn_jit_mode": "eager",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "node": "gh002",
+  "job_id": "838694",
+  "build_seconds": 163.40729064121842,
+  "parameters": 518672,
+  "input_shapes": {
+    "edge_index": [
+      2,
+      4217
+    ],
+    "message_edge_index": [
+      2,
+      4142
+    ],
+    "edge_keys": [
+      5,
+      4217
+    ]
+  },
+  "baseline": {
+    "forward": {
+      "median_ms": 6.597846,
+      "warmup_seconds": 0.0335247777402401,
+      "structures_per_second": 151.16025776733963,
+      "peak_allocated_mib": 1339.18408203125,
+      "peak_above_ready_mib": 1118.58984375
+    },
+    "end_to_end": {
+      "median_ms": 2029.105307,
+      "warmup_seconds": 4.097835134714842,
+      "structures_per_second": 0.4778359262892917,
+      "peak_allocated_mib": 1400.677734375,
+      "peak_above_ready_mib": 1180.08349609375
+    }
+  },
+  "stages": {
+    "decode": {
+      "<phase total>": {
+        "ms_per_structure": 1014.8878085116545,
+        "calls_per_structure": 1.0
+      },
+      "BlockMatrix.to": {
+        "ms_per_structure": 0.5338796310954623,
+        "calls_per_structure": 1.0
+      },
+      "IrrepsBlockData.from_packed": {
+        "ms_per_structure": 444.64405543274347,
+        "calls_per_structure": 1.0
+      },
+      "IrrepsBlockData.to_blocks": {
+        "ms_per_structure": 569.0995624495877,
+        "calls_per_structure": 1.0
+      }
+    },
+    "forward": {
+      "<phase total>": {
+        "ms_per_structure": 7.6254775954617395,
+        "calls_per_structure": 1.0
+      },
+      "native child:distance_expansion": {
+        "ms_per_structure": 0.13087400131755406,
+        "calls_per_structure": 1.0
+      },
+      "native child:embed": {
+        "ms_per_structure": 0.05493437250455221,
+        "calls_per_structure": 1.0
+      },
+      "native child:lcmp": {
+        "ms_per_structure": 2.7592240108384027,
+        "calls_per_structure": 1.0
+      },
+      "native child:mp1": {
+        "ms_per_structure": 1.1191219091415405,
+        "calls_per_structure": 1.0
+      },
+      "native child:mp2": {
+        "ms_per_structure": 0.8321491380532583,
+        "calls_per_structure": 1.0
+      },
+      "native child:mp3": {
+        "ms_per_structure": 0.8047223091125488,
+        "calls_per_structure": 1.0
+      },
+      "native child:mp4": {
+        "ms_per_structure": 0.7902259627978007,
+        "calls_per_structure": 1.0
+      },
+      "native child:mp5": {
+        "ms_per_structure": 0.7909350097179413,
+        "calls_per_structure": 1.0
+      },
+      "native model.forward": {
+        "ms_per_structure": 7.5898836884233685,
+        "calls_per_structure": 1.0
+      }
+    },
+    "prep": {
+      "<phase total>": {
+        "ms_per_structure": 1069.119772563378,
+        "calls_per_structure": 1.0
+      },
+      "evaluate_graph_geometry": {
+        "ms_per_structure": 395.4998772177431,
+        "calls_per_structure": 2.0
+      },
+      "prepare_graph_topology": {
+        "ms_per_structure": 3.4913350310590534,
+        "calls_per_structure": 1.0
+      }
+    }
+  },
+  "profiler": {
+    "forward": {
+      "profiled_wall_ms": 55.27396872639656,
+      "gpu_kernel_ms": 6.972161999999978,
+      "gpu_busy_fraction": 0.12613825568617731,
+      "kernel_launches": 273,
+      "sync_like_events": {
+        "cudaStreamSynchronize": 6,
+        "cudaDeviceSynchronize": 2,
+        "cudaMemcpyAsync": 6,
+        "cudaMemcpy": 0,
+        "aten::_local_scalar_dense": 6,
+        "aten::item": 6
+      },
+      "aten_ops": 842
+    },
+    "decode": {
+      "profiled_wall_ms": 4375.431247055531,
+      "gpu_kernel_ms": 378.6342040000543,
+      "gpu_busy_fraction": 0.08653643095291651,
+      "kernel_launches": 34725,
+      "sync_like_events": {
+        "cudaStreamSynchronize": 51223,
+        "cudaDeviceSynchronize": 2,
+        "cudaMemcpyAsync": 52919,
+        "cudaMemcpy": 0,
+        "aten::_local_scalar_dense": 25661,
+        "aten::item": 25661
+      },
+      "aten_ops": 650164
+    }
+  },
+  "counterfactual_identical": {
+    "from_packed": [
+      true,
+      true,
+      true
+    ],
+    "trace_alignment": []
+  },
+  "counterfactual_calls_per_end_to_end": {
+    "from_packed": 1.0,
+    "trace_alignment": 0.0
+  },
+  "vectorized_from_packed": {
+    "forward": {
+      "median_ms": 7.189663,
+      "warmup_seconds": 0.03671509772539139,
+      "structures_per_second": 138.6564352267988,
+      "peak_allocated_mib": 1339.18408203125,
+      "peak_above_ready_mib": 1118.58984375
+    },
+    "end_to_end": {
+      "median_ms": 1741.471902,
+      "warmup_seconds": 3.46107392385602,
+      "structures_per_second": 0.48831546061499864,
+      "peak_allocated_mib": 1400.677734375,
+      "peak_above_ready_mib": 1180.08349609375
+    }
+  },
+  "vectorized_trace_alignment": {
+    "skipped": "function not called by this variant"
+  },
+  "vectorized_both": {
+    "forward": {
+      "median_ms": 7.182602,
+      "warmup_seconds": 0.03651857003569603,
+      "structures_per_second": 138.8491536037923,
+      "peak_allocated_mib": 1339.18408203125,
+      "peak_above_ready_mib": 1118.58984375
+    },
+    "end_to_end": {
+      "median_ms": 1738.304313,
+      "warmup_seconds": 3.635141622275114,
+      "structures_per_second": 0.5576940681816175,
+      "peak_allocated_mib": 1400.677734375,
+      "peak_above_ready_mib": 1180.08349609375
+    }
+  }
+}

@@ -1,0 +1,36 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------
+                                            aten::copy_         8.42%      91.285ms        54.69%     592.672ms      14.665us      82.439ms        39.48%     133.441ms       3.302us         40414
+                         Memcpy DtoH (Device -> Pinned)         0.00%       0.000us         0.00%       0.000us       0.000us      58.340ms        27.94%      58.340ms       2.290us         25479
+                              aten::_local_scalar_dense         3.99%      43.242ms        26.01%     281.915ms      11.060us      58.301ms        27.92%      58.303ms       2.287us         25490
+                                               aten::mm        10.51%     113.906ms        11.50%     124.682ms      57.378us      34.071ms        16.32%      34.071ms      15.679us          2173
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us      30.725ms        14.71%      30.725ms      15.829us          1941
+                       Memcpy DtoH (Device -> Pageable)         0.00%       0.000us         0.00%       0.000us       0.000us      28.681ms        13.73%      28.681ms       2.265us         12661
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us      22.355ms        10.71%      22.355ms       1.767us         12651
+                                              aten::mul         1.93%      20.956ms         3.13%      33.959ms      10.122us      11.029ms         5.28%      11.030ms       3.288us          3355
+                                              aten::bmm         3.38%      36.623ms         3.76%      40.751ms      59.490us       8.886ms         4.26%       8.988ms      13.121us           685
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us       8.313ms         3.98%       8.313ms       4.375us          1900
+void cutlass::Kernel2<cutlass_80_simt_sgemm_256x128_...         0.00%       0.000us         0.00%       0.000us       0.000us       6.644ms         3.18%       6.644ms      32.255us           206
+                                              aten::add         0.33%       3.571ms         0.56%       6.073ms       6.420us       5.521ms         2.64%       5.521ms       5.836us           946
+sm80_xmma_gemm_f32f32_f32f32_f32_nn_n_tilesize128x32...         0.00%       0.000us         0.00%       0.000us       0.000us       5.436ms         2.60%       5.436ms      22.096us           246
+sm80_xmma_gemm_f32f32_f32f32_f32_tn_n_tilesize128x64...         0.00%       0.000us         0.00%       0.000us       0.000us       5.364ms         2.57%       5.364ms     894.002us             6
+sm80_xmma_gemm_f32f32_f32f32_f32_tt_n_tilesize128x32...         0.00%       0.000us         0.00%       0.000us       0.000us       4.760ms         2.28%       4.760ms     264.472us            18
+sm80_xmma_gemm_f32f32_f32f32_f32_nn_n_tilesize64x32x...         0.00%       0.000us         0.00%       0.000us       0.000us       4.484ms         2.15%       4.484ms       8.413us           533
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us       3.721ms         1.78%       3.721ms      32.356us           115
+sm80_xmma_gemm_f32f32_f32f32_f32_tn_n_tilesize128x25...         0.00%       0.000us         0.00%       0.000us       0.000us       3.388ms         1.62%       3.388ms     564.593us             6
+                                              aten::sum         0.41%       4.399ms         0.58%       6.332ms      11.554us       3.234ms         1.55%       3.234ms       5.901us           548
+void at::native::reduce_kernel<128, 4, at::native::R...         0.00%       0.000us         0.00%       0.000us       0.000us       3.210ms         1.54%       3.210ms       5.945us           540
+void cutlass::Kernel2<cutlass_80_simt_sgemm_128x32_8...         0.00%       0.000us         0.00%       0.000us       0.000us       2.380ms         1.14%       2.380ms       6.743us           353
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us       1.997ms         0.96%       1.997ms       2.187us           913
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us       1.681ms         0.80%       1.681ms       1.602us          1049
+sm80_xmma_gemm_f32f32_f32f32_f32_nn_n_tilesize32x32x...         0.00%       0.000us         0.00%       0.000us       0.000us       1.533ms         0.73%       1.533ms       4.550us           337
+                                     aten::scatter_add_         0.06%     617.131us         0.09%     982.957us      11.430us       1.452ms         0.70%       1.452ms      16.888us            86
+void at::native::_scatter_gather_elementwise_kernel<...         0.00%       0.000us         0.00%       0.000us       0.000us       1.422ms         0.68%       1.422ms      18.466us            77
+                                              aten::cat         0.11%       1.238ms         0.15%       1.657ms      17.257us       1.335ms         0.64%       1.335ms      13.903us            96
+void cublasLt::splitKreduce_kernel<32, 16, int, floa...         0.00%       0.000us         0.00%       0.000us       0.000us       1.159ms         0.55%       1.159ms       2.294us           505
+void gemv2N_kernel<int, int, float, float, float, fl...         0.00%       0.000us         0.00%       0.000us       0.000us       1.137ms         0.54%       1.137ms      75.780us            15
+void at::native::(anonymous namespace)::CatArrayBatc...         0.00%       0.000us         0.00%       0.000us       0.000us       1.102ms         0.53%       1.102ms      13.781us            80
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------
+Self CPU time total: 1.084s
+Self CUDA time total: 208.823ms

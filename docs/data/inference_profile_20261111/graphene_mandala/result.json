@@ -1,0 +1,220 @@
+{
+  "material": "graphene",
+  "variant": "mandala",
+  "structures": [
+    "/bigdata/casus/wdm/hamiltonian_learning/data/DeepH-E3/Monolayer_graphene_dataset/2640",
+    "/bigdata/casus/wdm/hamiltonian_learning/data/DeepH-E3/Monolayer_graphene_dataset/2360",
+    "/bigdata/casus/wdm/hamiltonian_learning/data/DeepH-E3/Monolayer_graphene_dataset/2970"
+  ],
+  "torch": "2.7.1+cu128",
+  "e3nn": "0.6.0",
+  "e3nn_jit_mode": "eager",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "node": "gh002",
+  "job_id": "838693",
+  "build_seconds": 12.768859207630157,
+  "parameters": 3803992,
+  "input_shapes": {
+    "edge_index": [
+      2,
+      3312
+    ]
+  },
+  "baseline": {
+    "forward": {
+      "median_ms": 269.464882,
+      "warmup_seconds": 1.355407077819109,
+      "structures_per_second": 3.5104050696217826,
+      "peak_allocated_mib": 655.2041015625,
+      "peak_above_ready_mib": 588.24169921875
+    },
+    "end_to_end": {
+      "median_ms": 553.971715,
+      "warmup_seconds": 1.1137756295502186,
+      "structures_per_second": 1.6632857829061376,
+      "peak_allocated_mib": 654.85546875,
+      "peak_above_ready_mib": 587.89306640625
+    }
+  },
+  "stages": {
+    "decode": {
+      "<phase total>": {
+        "ms_per_structure": 0.8328060309092203,
+        "calls_per_structure": 1.0
+      },
+      "BlockMatrix.to": {
+        "ms_per_structure": 0.33250244127379525,
+        "calls_per_structure": 1.0
+      },
+      "E3GNN.predicted_irreps_to_block_matrices": {
+        "ms_per_structure": 0.1454841759469774,
+        "calls_per_structure": 1.0
+      },
+      "IrrepsBlockData.to_blocks": {
+        "ms_per_structure": 0.11499226093292236,
+        "calls_per_structure": 1.0
+      },
+      "OpenMXE3NNConverter.matrix_to_openmx": {
+        "ms_per_structure": 0.21895600689782035,
+        "calls_per_structure": 1.0
+      }
+    },
+    "forward": {
+      "<phase total>": {
+        "ms_per_structure": 270.9085092776352,
+        "calls_per_structure": 1.0
+      },
+      "E3GNN._populate_edge_features": {
+        "ms_per_structure": 2.16163984603352,
+        "calls_per_structure": 1.0
+      },
+      "E3GNN._wrap_head_output": {
+        "ms_per_structure": 0.01986945668856303,
+        "calls_per_structure": 1.0
+      },
+      "E3GNN.forward": {
+        "ms_per_structure": 270.871673607164,
+        "calls_per_structure": 1.0
+      },
+      "complete_graph_metadata": {
+        "ms_per_structure": 0.017210013336605497,
+        "calls_per_structure": 1.0
+      },
+      "evaluate_graph_geometry": {
+        "ms_per_structure": 0.6473730835649703,
+        "calls_per_structure": 1.0
+      },
+      "pipeline.forward": {
+        "ms_per_structure": 265.7880522310734,
+        "calls_per_structure": 1.0
+      },
+      "prepare_graph_topology": {
+        "ms_per_structure": 2.681100947989358,
+        "calls_per_structure": 1.0
+      },
+      "stage:edge_encoding": {
+        "ms_per_structure": 7.4598358737097845,
+        "calls_per_structure": 1.0
+      },
+      "stage:edge_message_0": {
+        "ms_per_structure": 63.064104153050316,
+        "calls_per_structure": 1.0
+      },
+      "stage:edge_message_1": {
+        "ms_per_structure": 63.30634239647124,
+        "calls_per_structure": 1.0
+      },
+      "stage:node_encoding": {
+        "ms_per_structure": 0.05575766166051229,
+        "calls_per_structure": 1.0
+      },
+      "stage:node_message_0": {
+        "ms_per_structure": 29.322245468695957,
+        "calls_per_structure": 1.0
+      },
+      "stage:node_message_1": {
+        "ms_per_structure": 68.11244537432988,
+        "calls_per_structure": 1.0
+      },
+      "stage:readout_hamiltonian": {
+        "ms_per_structure": 34.042825715409386,
+        "calls_per_structure": 1.0
+      }
+    },
+    "prep": {
+      "<phase total>": {
+        "ms_per_structure": 330.98047226667404,
+        "calls_per_structure": 1.0
+      },
+      "build_trace_alignment_from_pair_edges": {
+        "ms_per_structure": 28.212527020110024,
+        "calls_per_structure": 3.0
+      }
+    }
+  },
+  "profiler": {
+    "forward": {
+      "profiled_wall_ms": 746.0609674453735,
+      "gpu_kernel_ms": 100.17367499999227,
+      "gpu_busy_fraction": 0.13427009235317885,
+      "kernel_launches": 13378,
+      "sync_like_events": {
+        "cudaStreamSynchronize": 6,
+        "cudaDeviceSynchronize": 2,
+        "cudaMemcpyAsync": 39,
+        "cudaMemcpy": 0,
+        "aten::_local_scalar_dense": 9,
+        "aten::item": 9
+      },
+      "aten_ops": 83023
+    },
+    "decode": {
+      "profiled_wall_ms": 2.703782171010971,
+      "gpu_kernel_ms": 0.07391499999999986,
+      "gpu_busy_fraction": 0.02733763126056945,
+      "kernel_launches": 3,
+      "sync_like_events": {
+        "cudaStreamSynchronize": 2,
+        "cudaDeviceSynchronize": 2,
+        "cudaMemcpyAsync": 2,
+        "cudaMemcpy": 0,
+        "aten::_local_scalar_dense": 0,
+        "aten::item": 0
+      },
+      "aten_ops": 93
+    }
+  },
+  "counterfactual_identical": {
+    "from_packed": [],
+    "trace_alignment": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "counterfactual_calls_per_end_to_end": {
+    "from_packed": 0.0,
+    "trace_alignment": 3.0
+  },
+  "vectorized_from_packed": {
+    "skipped": "function not called by this variant"
+  },
+  "vectorized_trace_alignment": {
+    "forward": {
+      "median_ms": 304.307309,
+      "warmup_seconds": 1.5223679207265377,
+      "structures_per_second": 3.284481115173935,
+      "peak_allocated_mib": 655.2041015625,
+      "peak_above_ready_mib": 588.24169921875
+    },
+    "end_to_end": {
+      "median_ms": 568.402859,
+      "warmup_seconds": 1.3653153255581856,
+      "structures_per_second": 1.631135730566192,
+      "peak_allocated_mib": 654.85546875,
+      "peak_above_ready_mib": 587.89306640625
+    }
+  },
+  "vectorized_both": {
+    "forward": {
+      "median_ms": 304.619427,
+      "warmup_seconds": 1.5211251825094223,
+      "structures_per_second": 3.2791526784380425,
+      "peak_allocated_mib": 655.2041015625,
+      "peak_above_ready_mib": 588.24169921875
+    },
+    "end_to_end": {
+      "median_ms": 568.439674,
+      "warmup_seconds": 1.1363684982061386,
+      "structures_per_second": 1.6337143090588495,
+      "peak_allocated_mib": 654.85546875,
+      "peak_above_ready_mib": 587.89306640625
+    }
+  }
+}

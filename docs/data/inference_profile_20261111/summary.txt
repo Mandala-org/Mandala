@@ -1,0 +1,312 @@
+
+## graphene  (NVIDIA H100 80GB HBM3, e3nn eager)
+variant                    fwd     e2e |  FP fwd  FP e2e |  TA fwd  TA e2e |  both f  both e | fwd GPU ms  busy launch D2H sync | dec GPU dec sync
+mandala                  269.5   554.0 |       -       - |   304.3   568.4 |   304.6   568.4 |       50.1  0.19  13378       15 |     0.0        2
+deeph                      5.8  1048.5 |     6.4   922.6 |       -       - |     6.4   925.2 |        2.6  0.44    273       12 |    60.2    23498
+deeph_in_mandala         285.4  1178.2 |   166.2  1072.8 |   189.6  1096.8 |    22.9   931.4 |       56.7  0.20  10367    23497 |    31.9     6792
+deeph_e3                 233.8   409.5 |   261.7   296.8 |       -       - |   261.4   297.7 |       39.7  0.17   9884       19 |    29.4    16731
+deeph_e3_in_mandala      526.3   545.9 |   430.1   450.3 |   454.4   474.7 |   287.8   308.3 |       94.6  0.18  20170    23506 |     0.7       25
+mace_h                   234.1   407.4 |   258.7   293.1 |       -       - |   258.0   293.3 |       75.1  0.32  10011       51 |    29.5    16731
+mace_h_in_mandala        531.5   551.7 |   434.3   454.8 |   461.4   478.5 |   291.1   311.9 |      130.3  0.25  20300    23534 |     0.7       25
+  mandala: identical={'from_packed': None, 'trace_alignment': True} calls/e2e={'from_packed': 0.0, 'trace_alignment': 3.0}
+  deeph: identical={'from_packed': True, 'trace_alignment': None} calls/e2e={'from_packed': 1.0, 'trace_alignment': 0.0}
+  deeph_in_mandala: identical={'from_packed': True, 'trace_alignment': True} calls/e2e={'from_packed': 1.0, 'trace_alignment': 1.0}
+  deeph_e3: identical={'from_packed': True, 'trace_alignment': None} calls/e2e={'from_packed': 1.0, 'trace_alignment': 0.0}
+  deeph_e3_in_mandala: identical={'from_packed': True, 'trace_alignment': True} calls/e2e={'from_packed': 1.0, 'trace_alignment': 1.0}
+  mace_h: identical={'from_packed': True, 'trace_alignment': None} calls/e2e={'from_packed': 1.0, 'trace_alignment': 0.0}
+  mace_h_in_mandala: identical={'from_packed': True, 'trace_alignment': True} calls/e2e={'from_packed': 1.0, 'trace_alignment': 1.0}
+
+### graphene / mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                        331.0  x1
+  prep     build_trace_alignment_from_pair_edges                 28.2  x3
+  forward  <phase total>                                        270.9  x1
+  forward  E3GNN.forward                                        270.9  x1
+  forward  pipeline.forward                                     265.8  x1
+  forward  stage:node_message_1                                  68.1  x1
+  forward  stage:edge_message_1                                  63.3  x1
+  forward  stage:edge_message_0                                  63.1  x1
+  forward  stage:readout_hamiltonian                             34.0  x1
+  forward  stage:node_message_0                                  29.3  x1
+  forward  stage:edge_encoding                                    7.5  x1
+  forward  prepare_graph_topology                                 2.7  x1
+  forward  E3GNN._populate_edge_features                          2.2  x1
+  forward  evaluate_graph_geometry                                0.6  x1
+  decode   <phase total>                                          0.8  x1
+
+### graphene / deeph: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                        750.3  x1
+  prep     evaluate_graph_geometry                              250.1  x2
+  prep     prepare_graph_topology                                 2.4  x1
+  forward  <phase total>                                          6.9  x1
+  forward  native model.forward                                   6.8  x1
+  forward  native child:lcmp                                      2.0  x1
+  forward  native child:mp1                                       1.1  x1
+  forward  native child:mp2                                       0.8  x1
+  forward  native child:mp3                                       0.8  x1
+  forward  native child:mp4                                       0.8  x1
+  forward  native child:mp5                                       0.8  x1
+  decode   <phase total>                                        330.9  x1
+  decode   IrrepsBlockData.to_blocks                            178.0  x1
+  decode   IrrepsBlockData.from_packed                          152.1  x1
+
+### graphene / deeph_in_mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                        762.0  x1
+  prep     evaluate_graph_geometry                              261.8  x2
+  prep     prepare_graph_topology                                 2.3  x1
+  forward  <phase total>                                        288.1  x1
+  forward  E3GNN.forward                                        288.1  x1
+  forward  IrrepsBlockData.from_packed                          151.9  x1
+  forward  complete_graph_metadata                              125.7  x1
+  forward  build_prediction_edge_metadata                       124.9  x1
+  forward  build_trace_alignment_from_pair_edges                122.6  x1
+  forward  pipeline.forward                                       6.8  x1
+  forward  prepare_graph_topology                                 3.0  x1
+  forward  stage:local_coordinate_readout                         1.6  x1
+  forward  stage:node_update_1                                    0.9  x1
+  forward  stage:node_update_2                                    0.5  x1
+  forward  stage:node_update_3                                    0.5  x1
+  forward  stage:node_update_5                                    0.5  x1
+  forward  stage:node_update_4                                    0.5  x1
+  decode   <phase total>                                        161.2  x1
+  decode   E3GNN.predicted_irreps_to_block_matrices             160.9  x1
+  decode   IrrepsBlockData.to_blocks                            160.8  x1
+
+### graphene / deeph_e3: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         12.8  x1
+  prep     prepare_graph_topology                                 2.5  x1
+  forward  <phase total>                                        234.3  x1
+  forward  native model.forward                                 234.2  x1
+  forward  native child:lin_edge                                  3.7  x1
+  forward  native child:sh                                        1.4  x1
+  decode   <phase total>                                        163.2  x1
+  decode   IrrepsBlockData.from_packed                          151.0  x1
+  decode   IrrepsBlockData.to_blocks                              7.8  x1
+  decode   native codec.get_H                                     3.8  x1
+
+### graphene / deeph_e3_in_mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         37.9  x1
+  prep     prepare_graph_topology                                27.5  x1
+  forward  <phase total>                                        526.8  x1
+  forward  E3GNN.forward                                        526.7  x1
+  forward  pipeline.forward                                     243.0  x1
+  forward  IrrepsBlockData.from_packed                          153.4  x1
+  forward  complete_graph_metadata                              127.2  x1
+  forward  build_prediction_edge_metadata                       126.4  x1
+  forward  build_trace_alignment_from_pair_edges                124.2  x1
+  forward  stage:edge_update_2                                   52.7  x1
+  forward  stage:node_update_1                                   46.2  x1
+  forward  stage:node_update_2                                   46.1  x1
+  forward  stage:edge_update_1                                   46.1  x1
+  forward  stage:edge_update_0                                   32.0  x1
+  forward  stage:native_decode                                    6.8  x1
+  forward  stage:node_update_0                                    6.2  x1
+  forward  stage:edge_readout                                     3.7  x1
+  forward  prepare_graph_topology                                 2.3  x1
+  forward  stage:angular_basis                                    1.6  x1
+  decode   <phase total>                                          8.2  x1
+  decode   E3GNN.predicted_irreps_to_block_matrices               7.9  x1
+  decode   IrrepsBlockData.to_blocks                              7.8  x1
+
+### graphene / mace_h: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         13.1  x1
+  prep     prepare_graph_topology                                 2.5  x1
+  forward  <phase total>                                        241.6  x1
+  forward  native model.forward                                 241.6  x1
+  forward  native child:edge_update                             132.8  x1
+  forward  native child:expansion                                54.4  x1
+  forward  native child:mace                                     54.2  x1
+  decode   <phase total>                                        160.8  x1
+  decode   IrrepsBlockData.from_packed                          148.8  x1
+  decode   IrrepsBlockData.to_blocks                              7.7  x1
+  decode   native codec.get_H                                     3.7  x1
+
+### graphene / mace_h_in_mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         37.8  x1
+  prep     prepare_graph_topology                                27.5  x1
+  forward  <phase total>                                        551.1  x1
+  forward  E3GNN.forward                                        551.1  x1
+  forward  pipeline.forward                                     268.6  x1
+  forward  IrrepsBlockData.from_packed                          153.2  x1
+  forward  complete_graph_metadata                              126.3  x1
+  forward  build_prediction_edge_metadata                       125.5  x1
+  forward  build_trace_alignment_from_pair_edges                123.2  x1
+  forward  stage:edge_update_2                                   53.3  x1
+  forward  stage:edge_update_1                                   46.8  x1
+  forward  stage:edge_update_0                                   32.3  x1
+  forward  stage:angular_expansion_1                             19.2  x1
+  forward  stage:angular_expansion_0                             19.0  x1
+  forward  stage:angular_expansion_2                             18.8  x1
+  forward  stage:product_0                                       12.2  x1
+  forward  stage:product_1                                       12.2  x1
+  forward  stage:product_2                                       12.2  x1
+  forward  stage:density_1                                       11.9  x1
+  forward  stage:density_2                                       11.8  x1
+  forward  stage:native_decode                                    6.8  x1
+  forward  stage:edge_readout                                     3.7  x1
+  forward  stage:density_0                                        3.7  x1
+  forward  prepare_graph_topology                                 2.3  x1
+  forward  stage:density_angular_basis                            1.6  x1
+  forward  stage:angular_basis                                    1.5  x1
+  decode   <phase total>                                          8.3  x1
+  decode   E3GNN.predicted_irreps_to_block_matrices               8.0  x1
+  decode   IrrepsBlockData.to_blocks                              7.9  x1
+
+## mos2  (NVIDIA H100 80GB HBM3, e3nn eager)
+variant                    fwd     e2e |  FP fwd  FP e2e |  TA fwd  TA e2e |  both f  both e | fwd GPU ms  busy launch D2H sync | dec GPU dec sync
+mandala                  352.4   724.9 |       -       - |   406.6   750.8 |   406.6   751.4 |       71.7  0.20  21613       15 |     0.1        8
+deeph                      6.6  2029.1 |     7.2  1741.5 |       -       - |     7.2  1738.3 |        3.5  0.53    273       12 |   189.3    76884
+deeph_in_mandala         590.5  2177.1 |   255.5  1922.2 |   494.4  2160.4 |    71.9  1743.8 |      116.6  0.20  14113    63604 |   111.7    21905
+deeph_e3                 245.0   746.8 |   273.0   409.8 |       -       - |   272.8   410.1 |       43.2  0.18  10029       19 |    84.3    55123
+deeph_e3_in_mandala      846.2   916.8 |   533.9   611.6 |   775.3   851.2 |   351.8   428.2 |      157.0  0.19  24205    63613 |     4.4      144
+mace_h                   252.8   746.4 |   278.9   415.9 |       -       - |   278.5   415.4 |       94.3  0.37  10176       51 |    84.0    55123
+mace_h_in_mandala        861.5   929.4 |   539.7   617.6 |   786.9   862.7 |   362.5   437.7 |      208.8  0.24  24352    63641 |     4.4      144
+  mandala: identical={'from_packed': None, 'trace_alignment': True} calls/e2e={'from_packed': 0.0, 'trace_alignment': 3.0}
+  deeph: identical={'from_packed': True, 'trace_alignment': None} calls/e2e={'from_packed': 1.0, 'trace_alignment': 0.0}
+  deeph_in_mandala: identical={'from_packed': True, 'trace_alignment': True} calls/e2e={'from_packed': 1.0, 'trace_alignment': 1.0}
+  deeph_e3: identical={'from_packed': True, 'trace_alignment': None} calls/e2e={'from_packed': 1.0, 'trace_alignment': 0.0}
+  deeph_e3_in_mandala: identical={'from_packed': True, 'trace_alignment': True} calls/e2e={'from_packed': 1.0, 'trace_alignment': 1.0}
+  mace_h: identical={'from_packed': True, 'trace_alignment': None} calls/e2e={'from_packed': 1.0, 'trace_alignment': 0.0}
+  mace_h_in_mandala: identical={'from_packed': True, 'trace_alignment': True} calls/e2e={'from_packed': 1.0, 'trace_alignment': 1.0}
+
+### mos2 / mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                        401.3  x1
+  prep     build_trace_alignment_from_pair_edges                 36.6  x3
+  forward  <phase total>                                        352.8  x1
+  forward  E3GNN.forward                                        352.8  x1
+  forward  pipeline.forward                                     347.2  x1
+  forward  stage:readout_hamiltonian                            102.0  x1
+  forward  stage:node_message_1                                  71.7  x1
+  forward  stage:edge_message_1                                  67.1  x1
+  forward  stage:edge_message_0                                  67.0  x1
+  forward  stage:node_message_0                                  31.0  x1
+  forward  stage:edge_encoding                                    7.9  x1
+  forward  prepare_graph_topology                                 3.2  x1
+  forward  E3GNN._populate_edge_features                          2.1  x1
+  forward  evaluate_graph_geometry                                0.6  x1
+  decode   <phase total>                                          1.7  x1
+  decode   OpenMXE3NNConverter.matrix_to_openmx                   0.7  x1
+  decode   BlockMatrix.to                                         0.5  x1
+
+### mos2 / deeph: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                       1069.1  x1
+  prep     evaluate_graph_geometry                              395.5  x2
+  prep     prepare_graph_topology                                 3.5  x1
+  forward  <phase total>                                          7.6  x1
+  forward  native model.forward                                   7.6  x1
+  forward  native child:lcmp                                      2.8  x1
+  forward  native child:mp1                                       1.1  x1
+  forward  native child:mp2                                       0.8  x1
+  forward  native child:mp3                                       0.8  x1
+  forward  native child:mp5                                       0.8  x1
+  forward  native child:mp4                                       0.8  x1
+  decode   <phase total>                                       1014.9  x1
+  decode   IrrepsBlockData.to_blocks                            569.1  x1
+  decode   IrrepsBlockData.from_packed                          444.6  x1
+  decode   BlockMatrix.to                                         0.5  x1
+
+### mos2 / deeph_in_mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                       1081.5  x1
+  prep     evaluate_graph_geometry                              417.5  x2
+  prep     prepare_graph_topology                                 3.3  x1
+  forward  <phase total>                                        594.2  x1
+  forward  E3GNN.forward                                        594.1  x1
+  forward  IrrepsBlockData.from_packed                          421.6  x1
+  forward  complete_graph_metadata                              159.8  x1
+  forward  build_prediction_edge_metadata                       158.9  x1
+  forward  build_trace_alignment_from_pair_edges                155.6  x1
+  forward  pipeline.forward                                       7.5  x1
+  forward  prepare_graph_topology                                 4.4  x1
+  forward  stage:local_coordinate_readout                         2.4  x1
+  forward  stage:node_update_1                                    0.9  x1
+  forward  stage:node_update_2                                    0.5  x1
+  forward  stage:node_update_5                                    0.5  x1
+  forward  stage:node_update_3                                    0.5  x1
+  forward  stage:node_update_4                                    0.5  x1
+  decode   <phase total>                                        579.1  x1
+  decode   E3GNN.predicted_irreps_to_block_matrices             578.4  x1
+  decode   IrrepsBlockData.to_blocks                            578.3  x1
+  decode   BlockMatrix.to                                         0.6  x1
+
+### mos2 / deeph_e3: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         49.7  x1
+  prep     prepare_graph_topology                                36.1  x1
+  forward  <phase total>                                        245.7  x1
+  forward  native model.forward                                 245.7  x1
+  forward  native child:lin_edge                                  7.3  x1
+  forward  native child:sh                                        1.5  x1
+  decode   <phase total>                                        487.6  x1
+  decode   IrrepsBlockData.from_packed                          425.4  x1
+  decode   IrrepsBlockData.to_blocks                             53.7  x1
+  decode   native codec.get_H                                     7.4  x1
+  decode   BlockMatrix.to                                         0.6  x1
+
+### mos2 / deeph_e3_in_mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         16.7  x1
+  prep     prepare_graph_topology                                 3.4  x1
+  forward  <phase total>                                        876.7  x1
+  forward  E3GNN.forward                                        876.7  x1
+  forward  IrrepsBlockData.from_packed                          453.3  x1
+  forward  pipeline.forward                                     256.5  x1
+  forward  complete_graph_metadata                              163.0  x1
+  forward  build_prediction_edge_metadata                       162.1  x1
+  forward  build_trace_alignment_from_pair_edges                158.9  x1
+  forward  stage:edge_update_2                                   54.9  x1
+  forward  stage:node_update_1                                   46.7  x1
+  forward  stage:edge_update_1                                   46.6  x1
+  forward  stage:node_update_2                                   46.6  x1
+  forward  stage:edge_update_0                                   32.3  x1
+  forward  stage:native_decode                                   13.0  x1
+  forward  stage:edge_readout                                     7.2  x1
+  forward  stage:node_update_0                                    6.3  x1
+  forward  prepare_graph_topology                                 2.9  x1
+  forward  stage:angular_basis                                    1.6  x1
+  decode   <phase total>                                         54.4  x1
+  decode   E3GNN.predicted_irreps_to_block_matrices              53.7  x1
+  decode   IrrepsBlockData.to_blocks                             53.6  x1
+  decode   BlockMatrix.to                                         0.7  x1
+
+### mos2 / mace_h: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         51.7  x1
+  prep     prepare_graph_topology                                37.7  x1
+  forward  <phase total>                                        265.0  x1
+  forward  native model.forward                                 265.0  x1
+  forward  native child:edge_update                             138.3  x1
+  forward  native child:mace                                     70.6  x1
+  forward  native child:expansion                                55.7  x1
+  decode   <phase total>                                        474.8  x1
+  decode   IrrepsBlockData.from_packed                          414.2  x1
+  decode   IrrepsBlockData.to_blocks                             52.3  x1
+  decode   native codec.get_H                                     7.1  x1
+  decode   BlockMatrix.to                                         0.6  x1
+
+### mos2 / mace_h_in_mandala: stage timings, ms per structure (inclusive, synchronised)
+  prep     <phase total>                                         16.9  x1
+  prep     prepare_graph_topology                                 3.2  x1
+  forward  <phase total>                                        906.3  x1
+  forward  E3GNN.forward                                        906.3  x1
+  forward  IrrepsBlockData.from_packed                          449.4  x1
+  forward  pipeline.forward                                     293.4  x1
+  forward  complete_graph_metadata                              159.7  x1
+  forward  build_prediction_edge_metadata                       158.9  x1
+  forward  build_trace_alignment_from_pair_edges                155.7  x1
+  forward  stage:edge_update_2                                   54.3  x1
+  forward  stage:edge_update_1                                   46.2  x1
+  forward  stage:edge_update_0                                   32.0  x1
+  forward  stage:angular_expansion_0                             19.1  x1
+  forward  stage:angular_expansion_1                             18.9  x1
+  forward  stage:angular_expansion_2                             18.8  x1
+  forward  stage:product_0                                       17.2  x1
+  forward  stage:product_2                                       17.2  x1
+  forward  stage:product_1                                       17.1  x1
+  forward  stage:native_decode                                   12.7  x1
+  forward  stage:density_1                                       12.2  x1
+  forward  stage:density_2                                       12.1  x1
+  forward  stage:edge_readout                                     7.1  x1
+  forward  stage:density_0                                        3.6  x1
+  forward  prepare_graph_topology                                 2.8  x1
+  forward  stage:density_angular_basis                            1.6  x1
+  forward  stage:angular_basis                                    1.5  x1
+  decode   <phase total>                                         53.5  x1
+  decode   E3GNN.predicted_irreps_to_block_matrices              52.8  x1
+  decode   IrrepsBlockData.to_blocks                             52.8  x1
+  decode   BlockMatrix.to                                         0.6  x1

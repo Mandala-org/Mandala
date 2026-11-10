@@ -1,0 +1,36 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------
+                                            aten::copy_        14.39%      66.168ms        99.33%     456.671ms      15.059us      39.720ms        65.97%      78.639ms       2.593us         30326
+                       Memcpy DtoH (Device -> Pageable)         0.00%       0.000us         0.00%       0.000us       0.000us      21.454ms        35.63%      21.454ms       2.155us          9955
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us      17.500ms        29.06%      17.500ms       1.761us          9936
+                              aten::_local_scalar_dense         2.51%      11.542ms        15.66%      71.986ms      10.663us      14.883ms        24.72%      14.885ms       2.205us          6751
+                         Memcpy DtoH (Device -> Pinned)         0.00%       0.000us         0.00%       0.000us       0.000us      14.883ms        24.72%      14.883ms       2.213us          6726
+                                              aten::bmm         3.00%      13.776ms         3.33%      15.305ms      59.320us       1.701ms         2.82%       1.762ms       6.828us           258
+sm80_xmma_gemm_f32f32_f32f32_f32_nn_n_tilesize32x32x...         0.00%       0.000us         0.00%       0.000us       0.000us       1.243ms         2.06%       1.243ms       7.817us           159
+                                             aten::sort         0.10%     448.871us         0.37%       1.691ms      46.975us       1.031ms         1.71%       1.236ms      34.346us            36
+void at::native::radixSortKVInPlace<-2, -1, 128, 32,...         0.00%       0.000us         0.00%       0.000us       0.000us     609.052us         1.01%     609.052us      33.836us            18
+void at::native::radixSortKVInPlace<-2, -1, 128, 32,...         0.00%       0.000us         0.00%       0.000us       0.000us     421.852us         0.70%     421.852us      23.436us            18
+                         Memcpy DtoD (Device -> Device)         0.00%       0.000us         0.00%       0.000us       0.000us     405.606us         0.67%     405.606us       1.399us           290
+                                            aten::fill_         0.19%     856.079us         0.41%       1.894ms       6.575us     367.890us         0.61%     367.890us       1.277us           288
+                                              aten::cat         0.28%       1.284ms         0.40%       1.838ms      20.199us     318.808us         0.53%     318.808us       3.503us            91
+                                               aten::mm         0.69%       3.162ms         0.77%       3.525ms      56.851us     269.533us         0.45%     269.533us       4.347us            62
+                                              aten::mul         0.19%     859.011us         0.29%       1.356ms       9.685us     268.189us         0.45%     268.189us       1.916us           140
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     259.223us         0.43%     259.223us       1.290us           201
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us     224.094us         0.37%     224.094us       2.287us            98
+sm80_xmma_gemm_f32f32_f32f32_f32_tn_n_tilesize32x32x...         0.00%       0.000us         0.00%       0.000us       0.000us     188.223us         0.31%     188.223us       3.361us            56
+                                     aten::index_select         0.08%     358.172us         0.17%     799.645us      13.327us     183.870us         0.31%     183.870us       3.065us            60
+                               aten::unique_consecutive         0.09%     413.591us         0.62%       2.864ms     159.087us     183.484us         0.30%     232.185us      12.899us            18
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us     156.608us         0.26%     156.608us       2.447us            64
+                                aten::linalg_matrix_exp         0.33%       1.523ms         4.65%      21.386ms     712.850us     144.446us         0.24%       3.858ms     128.615us            30
+void at::native::(anonymous namespace)::_elemwise_ke...         0.00%       0.000us         0.00%       0.000us       0.000us     144.446us         0.24%     144.446us       8.025us            18
+void gemmk1_kernel<int, float, 256, 5, false, false,...         0.00%       0.000us         0.00%       0.000us       0.000us     130.687us         0.22%     130.687us       4.667us            28
+sm80_xmma_gemm_f32f32_f32f32_f32_nt_n_tilesize32x32x...         0.00%       0.000us         0.00%       0.000us       0.000us     123.359us         0.20%     123.359us       9.489us            13
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     118.171us         0.20%     118.171us       1.597us            74
+void at::native::(anonymous namespace)::indexSelectL...         0.00%       0.000us         0.00%       0.000us       0.000us     115.423us         0.19%     115.423us       3.120us            37
+                                              aten::pow         0.06%     285.350us         0.20%     900.720us      18.014us     101.119us         0.17%     237.020us       4.740us            50
+void at::native::elementwise_kernel<128, 4, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us     101.119us         0.17%     101.119us       4.596us            22
+                                              aten::sub         0.09%     433.205us         0.14%     658.634us       8.233us      97.056us         0.16%      97.056us       1.213us            80
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------
+Self CPU time total: 459.738ms
+Self CUDA time total: 60.214ms
