@@ -85,6 +85,8 @@ class Config:
         def plain(value):
             if isinstance(value, torch.dtype):
                 return str(value).removeprefix("torch.")
+            if isinstance(value, torch.device):
+                return str(value)
             if isinstance(value, dict):
                 return {key: plain(item) for key, item in value.items()}
             if isinstance(value, (list, tuple)):

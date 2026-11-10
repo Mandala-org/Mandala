@@ -4,6 +4,7 @@ import pickle
 from pathlib import Path
 
 import pytest
+import torch
 
 from core.block_irrep_mapper import BlockIrrepMapper
 from core.orbital_irrep_config import OrbitalIrrepConfig
@@ -12,6 +13,19 @@ from net.configuration import resolve_configuration
 from net.e3gnn import E3GNN
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_runtime_devices_survive_configuration_resolution(device):
+    cfg = Config(device=torch.device(device), dataset_device=torch.device("cpu"))
+    document = cfg.to_mapping()
+    assert document["device"] == device
+    assert document["dataset_device"] == "cpu"
+    resolved, _ = Config.resolve(document, species_shells={"H": [0]}, spinful=False)
+    restored = Config.from_mapping(resolved)
+    assert torch.device(restored.device) == cfg.device
+    assert torch.device(restored.dataset_device) == cfg.dataset_device
+    assert isinstance(cfg.device, torch.device)
 
 
 @pytest.mark.parametrize(
