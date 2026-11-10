@@ -134,3 +134,22 @@ Follow-up: parent categories and labelled routing (2026-11-10)
   summary.json retains both primary and routed per-k results. final_compare.sh
   regenerates the summary when pending SiO2 references become available.
   The task-specific instruction keeps the existing branch history: no rebase.
+
+1000-atom extension (2026-11-10)
+  build_structures.py additionally builds one ideal-diamond Gaussian-displaced
+  5x5x5 cell (seed 20261611, sigma 0.02 Angstrom) and a tiled Si_scale_1_078
+  control. Every atom retains its source atom and tile identity. Both use a
+  2x2x2 diagnostic mesh; the new DFT uses the same slightly denser mesh.
+  The tiled reference folds the original 8x8x8 operators algebraically.
+  eval-si-5x.sh runs primary inference, known-parent routing diagnostics,
+  common-support category comparisons, tiling attribution and summary refresh.
+  Native primary and routed operators remain on bigdata. Pending perturbed
+  rows retain prediction diagnostics; no reference errors are invented.
+  Jobs: 837488 evaluation, 837489 OpenMX, 837490 comparison afterok of both.
+  Registered second-brain attempt 14. See EXTENSION_5X_REPORT.txt and
+  verification_5x.json for resource rationale and exact local verification.
+  To refresh after DFT, from Terok:
+    ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_5x.sh"
+  The final launcher reruns only the two 5x routed diagnostics, recomputes
+  reference errors/categories, and refreshes all available summary rows.
+  Preserve existing branch history without rebase, per the extension brief.

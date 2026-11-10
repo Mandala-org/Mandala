@@ -49,3 +49,9 @@ At 10:42:11 UTC jobs 837300 and 837301 were RUNNING 01:12:39; 837302
 RUNNING 01:12:09; 837320 remains PENDING. No SiO2 perturbed claim is made.
 The existing queued comparison will refresh summary.md/json when it runs.
 No rebase was performed, per the explicit continuation-task instruction.
+
+1000-atom extension 2026-11-10: structures and workflows committed as
+2a993a4 / 80e5098; jobs recorded in 2abb421. Evaluation 837488 and OpenMX
+837489 started 12:01:34 CET; final comparison 837490 waits afterok of both.
+Second-brain attempt 14. OpenMX uses 8 MPI x 12 OMP, 1024G, 11 h on cge057;
+allocation ends 23:01:34 CET today, ahead of Nov 12 08:00 CET maintenance.

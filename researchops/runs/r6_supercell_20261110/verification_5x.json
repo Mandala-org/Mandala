@@ -48,5 +48,21 @@
     "fetched_develop": "aae88d8",
     "rebase": false,
     "reason": "Task explicitly requests continuation without rebase; published branch history preserved"
-  }
+  },
+  "prior_routed_results": "All 8 previous per-structure routed rows exactly unchanged",
+  "primary_inference": "Completed both structures, cumulative 192.712559 s including historical control; 77.069917 s through perturbed diagnostics",
+  "ci": [
+    {
+      "id": 42803973210,
+      "name": "Tests",
+      "commit": "80e5098",
+      "conclusion": "success"
+    },
+    {
+      "id": 42803973308,
+      "name": "Documentation",
+      "commit": "80e5098",
+      "conclusion": "success"
+    }
+  ]
 }

@@ -15,8 +15,8 @@ Submitted jobs (second-brain r6-supercell attempt 14):
 OpenMX started 2026-11-10 12:01:34 CET; allocation ends 23:01:34 CET today,
 well before maintenance 2026-11-12 08:00 CET. B200 was still draining.
 
-Cost: max(413,440,350) * (1000/216)^3 * 8/27 = 12936.346 seconds
-(3.59343 hours), safety factor 3 -> 10.7803 hours, rounded to 11 hours.
+Cost: max(413,440,350) * (1000/216)^3 * 8/27 = 12936.5254 seconds
+(3.59348 hours), safety factor 3 -> 10.78044 hours, rounded to 11 hours.
 sacct batch MaxRSS for 837291/2/3: 125469708/125593112/130314552 KiB.
 Hybrid layout follows successful SiO2 memory strategy; its silicon runtime
 efficiency is unverified. 1 TB leaves >8x the observed 216-atom peak memory;
@@ -40,3 +40,14 @@ Choices to revisit: fixed seed 20261611; ideal perturbed source and tiled
 validation source match earlier protocol; hybrid 8x12 instead of pure 96 MPI;
 conservative 1024G memory and rounded 11h; no rebase per task-specific rule.
 No k convergence study, retraining, metric repair, or deployable routing fix.
+
+Measured primary and routed results (8 k points each; raw exact Tr(DS)):
+name | H primary meV | routed H meV | S MAE | D MAE | min S primary | min S routed | TrDS primary | TrDS routed
+si-5x5x5-1 | pending OpenMX 837489 | pending | pending | pending | -0.996259856 | -0.572346060 | 4136.427934 | 4001.327468
+si-5x5x5-tiled | 8.136950535 | 0.383661212 | 0.000726794861 | 0.000477378444 | -0.990322907 | -0.373982397 | 4141.287704 | 4000.393998
+All four metrics: PD 0/8 and Cholesky 0/8; nominal electron count 4000.
+All 8 previous routed per-structure result rows are exactly unchanged.
+Primary cumulative evaluation time 192.712559 s through both structures;
+first perturbed structure and historical control completed by 77.069917 s.
+GitHub Actions implementation 80e5098: Tests 42803973210 and Documentation
+42803973308 both passed.
