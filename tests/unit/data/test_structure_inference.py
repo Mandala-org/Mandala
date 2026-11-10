@@ -80,3 +80,23 @@ def test_structure_inputs_use_frozen_species_order():
             inputs["edge_type_idx"][index]
             == inputs["node_type_idx"][left] * 2 + inputs["node_type_idx"][right]
         )
+
+
+def test_structure_inputs_accept_paper_sio2_envelope_without_r0():
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+
+    envelope = Path(__file__).resolve().parents[3] / "scripts/reproduce_examples/sio2_envelope.json"
+    mapper = BlockIrrepMapper(
+        OrbitalIrrepConfig.from_dict({"O": ["1x0e"], "Si": ["1x0e"]})
+    )
+    cfg = Config(cutoff_radius=3.0, l_max=0, n_radial=2,
+                 hamiltonian_envelope_mode="multiply_prediction",
+                 hamiltonian_envelope_path=str(envelope),
+                 pair_distance_normalization="off")
+    inputs = build_model_input_from_structure(
+        atoms=("O", "Si"), positions=torch.tensor([[0., 0., 0.], [1.6, 0., 0.]]),
+        box=None, cfg=cfg, mapper=mapper,
+    )
+    assert inputs["edge_envelope"].shape == inputs["edge_length"].shape
+    assert torch.isfinite(inputs["edge_envelope"]).all()
+    assert "edge_r0" not in inputs
