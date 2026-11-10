@@ -1,0 +1,151 @@
+[
+  {
+    "name": "si-2x2x2-tiled",
+    "operators": {
+      "density": {
+        "onsite": {
+          "mae": 0.0008121923394781952,
+          "max_absolute": 0.021187483333051205,
+          "common_scalar_entries": 10816,
+          "mae_meV": null
+        },
+        "primitive_different_atoms": {
+          "mae": 0.0030415325026376255,
+          "max_absolute": 0.3143855780363083,
+          "common_scalar_entries": 870688,
+          "mae_meV": null
+        },
+        "primitive_shifted_self": {
+          "mae": 0.004266616399280782,
+          "max_absolute": 0.2831952685592114,
+          "common_scalar_entries": 194688,
+          "mae_meV": null
+        }
+      },
+      "hamiltonian": {
+        "onsite": {
+          "mae": 0.0009538875883072915,
+          "max_absolute": 0.006339146988466382,
+          "common_scalar_entries": 10816,
+          "mae_meV": 25.956616720465032
+        },
+        "primitive_different_atoms": {
+          "mae": 0.005188707856078645,
+          "max_absolute": 0.22654776275157928,
+          "common_scalar_entries": 870688,
+          "mae_meV": 141.19200495489844
+        },
+        "primitive_shifted_self": {
+          "mae": 0.006654745499128036,
+          "max_absolute": 0.05460690415930003,
+          "common_scalar_entries": 194688,
+          "mae_meV": 181.08494167497264
+        }
+      },
+      "overlap": {
+        "onsite": {
+          "mae": 3.866723792376098e-09,
+          "max_absolute": 2.384185791015625e-07,
+          "common_scalar_entries": 10816,
+          "mae_meV": null
+        },
+        "primitive_different_atoms": {
+          "mae": 0.015360332783122065,
+          "max_absolute": 0.4853559583425522,
+          "common_scalar_entries": 870688,
+          "mae_meV": null
+        },
+        "primitive_shifted_self": {
+          "mae": 0.01431255859488321,
+          "max_absolute": 0.2056214059703052,
+          "common_scalar_entries": 194688,
+          "mae_meV": null
+        }
+      }
+    }
+  },
+  {
+    "name": "si-3x3x3-tiled",
+    "operators": {
+      "density": {
+        "onsite": {
+          "mae": 0.0008121957124723398,
+          "max_absolute": 0.02118823304772377,
+          "common_scalar_entries": 36504,
+          "mae_meV": null
+        },
+        "primitive_different_atoms": {
+          "mae": 0.0030415327977909826,
+          "max_absolute": 0.31438562273979187,
+          "common_scalar_entries": 2938572,
+          "mae_meV": null
+        },
+        "primitive_shifted_self": {
+          "mae": 0.004266614113887291,
+          "max_absolute": 0.28319517915224424,
+          "common_scalar_entries": 657072,
+          "mae_meV": null
+        }
+      },
+      "hamiltonian": {
+        "onsite": {
+          "mae": 0.0009538918618398692,
+          "max_absolute": 0.006339044310152531,
+          "common_scalar_entries": 36504,
+          "mae_meV": 25.956733009269417
+        },
+        "primitive_different_atoms": {
+          "mae": 0.005188707501319575,
+          "max_absolute": 0.22654777020215988,
+          "common_scalar_entries": 2938572,
+          "mae_meV": 141.1919953014075
+        },
+        "primitive_shifted_self": {
+          "mae": 0.0066547457318344915,
+          "max_absolute": 0.054606911609880626,
+          "common_scalar_entries": 657072,
+          "mae_meV": 181.08494800724108
+        }
+      },
+      "overlap": {
+        "onsite": {
+          "mae": 3.8707900336176975e-09,
+          "max_absolute": 2.384185791015625e-07,
+          "common_scalar_entries": 36504,
+          "mae_meV": null
+        },
+        "primitive_different_atoms": {
+          "mae": 0.015360331563148755,
+          "max_absolute": 0.4853559732437134,
+          "common_scalar_entries": 2938572,
+          "mae_meV": null
+        },
+        "primitive_shifted_self": {
+          "mae": 0.014312559941362714,
+          "max_absolute": 0.2056214059703052,
+          "common_scalar_entries": 657072,
+          "mae_meV": null
+        }
+      }
+    }
+  },
+  {
+    "name": "sio2-2x1x1-tiled",
+    "operators": {
+      "hamiltonian": {
+        "onsite": {
+          "mae": 0.02963754980907858,
+          "max_absolute": 0.34436605870723724,
+          "common_scalar_entries": 50700,
+          "mae_meV": 806.4792228747609
+        },
+        "primitive_different_atoms": {
+          "mae": 0.002826917547252382,
+          "max_absolute": 0.7154805958271027,
+          "common_scalar_entries": 13898560,
+          "mae_meV": 76.92438414530346
+        }
+      }
+    }
+  }
+]
