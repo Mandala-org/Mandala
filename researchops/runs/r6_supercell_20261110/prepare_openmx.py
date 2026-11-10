@@ -95,6 +95,17 @@ def main():
                         assumed_parallel_speedup=1,estimated_seconds=seconds,safety_factor=3,
                         walltime_cap_hours=44,
                         note='No speedup credit because original rank count is unknown. After pre-SCF OOM at 96 MPI ranks/256G, use 8 MPI x 12 OpenMP threads and 768G. 3x estimate capped at 44 h to fit before maintenance on 2026-11-12 08:00 CET.')
+        if material == 'silicon' and structure['atom_count'] == 1000:
+            # Measured 216-atom, 27-kpoint runs on 96 Genoa ranks.
+            measured = [413, 440, 350]
+            seconds = max(measured) * (1000/216)**3 * (8/27)
+            hours, memory = math.ceil(3*seconds/3600), '1024G'
+            ranks, threads = 8, 12
+            cost = dict(source_seconds=measured, source_atoms=216, source_kpoints=27,
+                        target_kpoints=8, estimated_seconds=seconds, safety_factor=3,
+                        source_peak_rss_K=[125469708, 125593112, 130314552],
+                        source_jobs=['837291', '837292', '837293'],
+                        note='MaxRSS from sacct batch steps. Hybrid 8 MPI x 12 OMP reduces replicated grids; 1024G allows 8.2x measured peak. Runtime scaling assumes same aggregate 96 CPUs; hybrid efficiency is unverified.')
         assert hours <= 48
         name = structure['name']
         run_dir = structure['dft_directory']

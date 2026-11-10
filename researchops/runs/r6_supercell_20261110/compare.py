@@ -50,6 +50,11 @@ def main():
                 directory = Path(structure['dft_directory'])
                 if not (directory/'HS.out').is_file() or not (directory/'COMPLETE').is_file():
                     row['status'] = 'OpenMX_pending'
+                    saved = RUN/'results'/(structure['name']+'.json')
+                    if saved.exists():
+                        row['predicted'] = json.loads(saved.read_text())['predicted']
+                    submissions = json.loads((RUN/'submissions.json').read_text())
+                    row['job_id'] = submissions['openmx'].get(structure['name'], {}).get('job_id')
                     continue
                 _,target = reference(directory)
                 row['reference_kind'] = 'new self-consistent OpenMX'

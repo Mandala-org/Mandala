@@ -44,7 +44,7 @@ def main():
         def error(group, name, key):
             return group.get('element_errors', {}).get(name, {}).get('hermitian_common_support', {}).get(key)
         row = dict(name=s['name'], atoms=s['atom_count'], repetition=s['repetition'], sigma_angstrom=s['sigma_angstrom'],
-                   status=p.get('status', 'pending'), H_MAE_meV=error(p,'hamiltonian','mae_meV'),
+                   status=p.get('status', 'pending'), job_id=p.get('job_id'), H_MAE_meV=error(p,'hamiltonian','mae_meV'),
                    H_excluding_same_parent_image_meV=p.get('category_errors',{}).get('hamiltonian',{}).get('hermitian_common_support',{}).get('excluding_same_parent_image',{}).get('mae_meV'),
                    routed_diagnostic_H_MAE_meV=error(routed,'hamiltonian','mae_meV'),
                    S_MAE=error(p,'overlap','mae'), D_MAE=error(p,'density','mae'),
@@ -55,7 +55,7 @@ def main():
         rows.append(row)
         values = [s['name'], str(s['atom_count']), '×'.join(map(str,s['repetition'])), fmt(s['sigma_angstrom'])]
         values += [fmt(row[k]) for k in ('H_MAE_meV','H_excluding_same_parent_image_meV','routed_diagnostic_H_MAE_meV','S_MAE','D_MAE')]
-        values += [validity(row['primary_metric']) if row['status']=='ok' else row['status'],
+        values += [validity(row['primary_metric']) if row['status']=='ok' else (row['status'] + (f" (job {row['job_id']})" if row['job_id'] else '') + ('; '+validity(row['primary_metric']) if row['primary_metric'] else '')),
                    validity(row['routed_diagnostic_metric']) if routed else '—',fmt(row['validation_H_MAE_meV'])]
         lines.append('| '+' | '.join(values)+' |')
     silicon = [r for r in rows if r['name'].startswith('si-') and not r['name'].endswith('tiled') and r['H_MAE_meV'] is not None]
@@ -77,7 +77,7 @@ def main():
             interpretation += (f" {label} overlap is positive definite at {sum(m['positive_definite_count'] for m in metrics)}/{sum(m['kpoints'] for m in metrics)} sampled perturbed-cell k-points;"
                                f" its lowest eigenvalue across those cells is {min(m['minimum_eigenvalue'] for m in metrics):.6g}.")
     interpretation += ' The metric uses full geometry support without repair, whereas element errors use common reference support.'
-    meaning = ('Each row is one structure; repetition expands the source cell, and σ is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4×4×4 (2× Si) or 3×3×3 (3× Si) Gamma-centered meshes. SiO2 predicts H only; — means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3× Si control folds the original 8-mesh calculation.')
+    meaning = ('Each row is one structure; repetition expands the source cell, and σ is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4×4×4 (2× Si) 3×3×3 (3× Si), or 2×2×2 (5× Si) Gamma-centered meshes. SiO2 predicts H only; — means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3× and 5× Si controls fold the original 8-mesh calculation.')
     lines += ['',interpretation,'',meaning,'', '| Structure | Operator | Category | Blocks fraction | Scalar fraction | MAE (H meV) |', '| --- | --- | --- | ---: | ---: | ---: |']
     for row in rows:
         for name, groups in (row['category_errors'] or {}).items():
@@ -88,6 +88,7 @@ def main():
         m = row['routed_diagnostic_metric']
         if m:
             lines.append('| '+' | '.join([row['name'],fmt(row['routed_diagnostic_H_MAE_meV']),fmt(row['routed_diagnostic_S_MAE']),fmt(row['routed_diagnostic_D_MAE']),fmt(m['positive_definite_fraction']),fmt(m['minimum_eigenvalue']),f"{m['cholesky_success_count']}/{m['kpoints']}"])+' |')
+    lines += ['', '1000-atom follow-up: after OpenMX completes, run:', '', '```bash', 'ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_5x.sh"', '```']
     (RUN/'results/summary.md').write_text('\n'.join(lines)+'\n')
     (RUN/'results/summary.json').write_text(json.dumps(dict(diagnostic_caveat='Requires known parent cell; unchanged parameters; not applied to primary predictions', interpretation=interpretation, columns=meaning, structures=rows),indent=2,allow_nan=False)+'\n')
     print('\n'.join(lines[:len(rows)+5]))
