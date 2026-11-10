@@ -85,6 +85,11 @@ Known version notes
 * Python 3.15 has no cu128 torch wheel on the queried index (2026-11-10).
   This is a wheel availability limit; no cu128 tests ran for Python 3.15.
 
+* Python 3.15.2 with PyTorch 2.15.0+cu134 passes the same CPU selection
+  (701 passed, 68 skipped). h5py 3.16.0 has no cp315 wheel: it was built
+  from source against locally extracted HDF5 1.14.5 libraries. Scatter
+  was also built from source with CUDA 13.4. GPU execution on Python 3.15
+  is not verified, so package metadata retains the ``<3.15`` upper bound.
 * The verified CPU selection excludes GPU, slow, large-data, network and
   integration tests. It also excludes the large silicon spatial fixture and
   unshipped generated PySCF reference files. The 68 skips require optional
@@ -120,7 +125,8 @@ Known version notes
 
 * The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
   see notes" in the table). Their diff was not supplied; that report does not
-  establish support for an unmodified 2.11 installation.
+  establish support for an unmodified 2.11 installation. The new
+  Python 3.14/cu128 row is fresh evidence on the current source revision.
 
 Import layout
 -------------
