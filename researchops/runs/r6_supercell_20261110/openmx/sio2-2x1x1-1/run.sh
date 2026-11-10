@@ -6,7 +6,7 @@
 #SBATCH --ntasks=96
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=256G
-#SBATCH --time=48:00:00
+#SBATCH --time=44:00:00
 #SBATCH --output=/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-1/slurm-%j.out
 set -euo pipefail
 source /etc/profile.d/lmod.sh

@@ -83,13 +83,13 @@ def main():
             total = float(re.search(r'Total Computational Time.*?(\d+\.\d+)\s+\d+\s+(\d+\.\d+)', '\n'.join(lines))[2])
             steps = len([line for line in lines if 'SCF=' in line])
             seconds = total * 8
-            hours,memory = 48,'256G'
+            hours,memory = 44,'256G'
             cost = dict(source_seconds=total,source_steps=steps,
                         source_seconds_per_step=float(re.search(r'DFT in total\s*=\s*([\d.]+)','\n'.join(lines))[1])/steps,
                         source_ranks='unknown; source run script absent',cubic_and_kpoint_factor=8,
                         assumed_parallel_speedup=1,estimated_seconds=seconds,safety_factor=3,
-                        walltime_capped_at_48h=True,
-                        note='Conservative: no credit for increasing to 96 ranks because original rank count is unknown; 3x estimate capped at requested 48 h.')
+                        walltime_cap_hours=44,
+                        note='Conservative: no credit for increasing to 96 ranks because original rank count is unknown. 3x estimate capped at 44 h to fit before ROSI maintenance beginning 2026-11-12 08:00 CET; initial 48 h requests could not start.')
         assert hours <= 48
         name = structure['name']
         run_dir = structure['dft_directory']
