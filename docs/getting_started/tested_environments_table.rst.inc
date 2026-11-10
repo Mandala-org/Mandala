@@ -87,6 +87,13 @@
      - 701 passed, 0 failed, 0 errors, 68 skipped; 30.7 s
      - Not run
      - verified_20261110, 2026-11-10; CPU verified; CUDA scatter compiled; GPU blocked by driver
+   * - py315-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
+     - 3.15.2
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - 701 passed, 0 failed, 0 errors, 68 skipped; 42.4 s
+     - Not run
+     - verified_20261110, 2026-11-10; CPU verified; source CUDA scatter and h5py; GPU untested
    * - rosi-h100-paper-training (ROSI; NVIDIA H100; driver not recorded)
      - 3.10
      - 2.5.1+cu121 / cu121
