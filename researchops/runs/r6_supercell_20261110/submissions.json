@@ -131,24 +131,50 @@
       "submitted_utc": "2026-11-10T09:23:12.437015+00:00"
     },
     "sio2-2x1x1-1": {
-      "job_id": "837294",
+      "job_id": "837300",
       "command": [
         "sbatch",
         "--parsable",
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-1/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-1",
-      "submitted_utc": "2026-11-10T09:23:12.458700+00:00"
+      "submitted_utc": "2026-11-10T09:29:22.877844+00:00",
+      "previous_attempts": [
+        {
+          "job_id": "837294",
+          "command": [
+            "sbatch",
+            "--parsable",
+            "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-1/run.sh"
+          ],
+          "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-1",
+          "submitted_utc": "2026-11-10T09:23:12.458700+00:00",
+          "archived_outputs": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-1/failed-837294"
+        }
+      ]
     },
     "sio2-2x1x1-2": {
-      "job_id": "837295",
+      "job_id": "837301",
       "command": [
         "sbatch",
         "--parsable",
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-2/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2",
-      "submitted_utc": "2026-11-10T09:23:12.503352+00:00"
+      "submitted_utc": "2026-11-10T09:29:22.959226+00:00",
+      "previous_attempts": [
+        {
+          "job_id": "837295",
+          "command": [
+            "sbatch",
+            "--parsable",
+            "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/sio2-2x1x1-2/run.sh"
+          ],
+          "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2",
+          "submitted_utc": "2026-11-10T09:23:12.503352+00:00",
+          "archived_outputs": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2/failed-837295"
+        }
+      ]
     }
   },
   "comparison": {
@@ -189,14 +215,27 @@
       "submitted_utc": "2026-11-10T09:23:12.552202+00:00"
     },
     "sio2": {
-      "job_id": "837297",
+      "job_id": "837302",
       "command": [
         "sbatch",
         "--parsable",
         "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/calibration-sio2/run.sh"
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/sio2",
-      "submitted_utc": "2026-11-10T09:23:12.570576+00:00"
+      "submitted_utc": "2026-11-10T09:29:23.089649+00:00",
+      "previous_attempts": [
+        {
+          "job_id": "837297",
+          "command": [
+            "sbatch",
+            "--parsable",
+            "/data/home2/brzoza73/casus/mandala_worktrees/r6/researchops/runs/r6_supercell_20261110/openmx/calibration-sio2/run.sh"
+          ],
+          "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/sio2",
+          "submitted_utc": "2026-11-10T09:23:12.570576+00:00",
+          "archived_outputs": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/sio2/failed-837297"
+        }
+      ]
     }
   }
 }

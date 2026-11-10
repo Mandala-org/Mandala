@@ -1,5 +1,6 @@
 """Locate differences in geometric features and pipeline activations under tiling."""
 import argparse
+from math import prod
 
 from workflow import *
 from data.structure_inference import build_model_input_from_structure
@@ -59,13 +60,31 @@ def main():
     for hook in hooks:
         hook.remove()
     baseline_structure = dict(diagnostic_mesh=[8,8,8] if args.material=='silicon' else [1,1,1],
-                              num_electrons=structure['num_electrons']/int(__import__('numpy').prod(structure['repetition'])))
+                              num_electrons=structure['num_electrons']/prod(structure['repetition']))
     baseline = dict(source=structure['source_cell'],element_errors=errors(base_predictions,target),
                     predicted=diagnostics(base_predictions,baseline_structure),
                     prediction_on_reference_support=diagnostics(
                         {name:restrict_support(a,target[name]) for name,a in base_predictions.items()},baseline_structure),
                     reference=diagnostics(target,baseline_structure))
     write_json(RUN/'results'/('baseline_'+args.material+'.json'),baseline)
+    if args.material == 'silicon':
+        # Causal control only: the unchanged checkpoint can select the original
+        # shifted-self head using known parent-atom identities of a perfect tiling.
+        # These labels do not define a general deployable supercell correction.
+        xr = _move_to_device(xs,torch.device('cuda'))
+        n = len(base.hamiltonian.atoms)
+        for pair,parts in xr['edge_partitions'].items():
+            edges = xr['pred_pair_edges_static'][pair]
+            diagonal = (edges[3]==edges[4]) & (edges[:3]==0).all(0)
+            same_parent = edges[3].remainder(n)==edges[4].remainder(n)
+            parts['shifted_self_local_idx'] = torch.where(same_parent & ~diagonal)[0]
+            parts['offdiag_local_idx'] = torch.where(~same_parent)[0]
+        routed = {name:a.to('cpu') for name,a in model.predict_matrices(xr,physical=True).items()}
+        report['diagnostic_parent_head_routing'] = dict(
+            learned_parameters_changed=False,applied_to_primary_predictions=False,
+            caveat='Known source-cell parent labels in a perfect tiling only; not a deployable size correction',
+            errors_to_folded_base_prediction=errors(routed,{name:fold_matrix(a,structure['repetition']) for name,a in base_predictions.items()}),
+            errors_to_folded_reference=errors(routed,{name:fold_matrix(a,structure['repetition']) for name,a in target.items()}))
     write_json(RUN/'results'/(args.material+'_tiling_probe.json'),report)
     print(json.dumps(report,indent=2))
 
