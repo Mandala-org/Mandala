@@ -140,7 +140,6 @@ def test_validation_only_preserves_ordered_split_and_training_mapper(
 ):
     """Synthetic listing, real discovery/shuffle/factory; no matrix parsing."""
     import random
-    from pathlib import Path
 
     import data.factory as factory_module
     from data.factory import DatasetFactory
@@ -166,12 +165,21 @@ def test_validation_only_preserves_ordered_split_and_training_mapper(
         convention="e3nn", snapshot_cache_dir=None, dataset_device="cpu",
         load_split="all",
     )
+    expected = []
+    expected_training = set()
+    rng = random.Random(seed)
+    for scale in (1, 2):
+        paths = sorted((tmp_path / f"scale_{scale}").glob("snapshot_*/HS.out"))
+        rng.shuffle(paths)
+        expected_training.update(paths[:80])
+        expected.extend(paths[80:100])
     metadata_reads = []
 
     def load_info(self, matrix, info):
         metadata_reads.append(matrix)
         # A species present only in training must remain in the mapper.
-        return SimpleNamespace(orbital_set={"H": "1s", "O": "1s"}, is_spinful=False)
+        orbitals = {"H": "1s", "O": "1s"} if matrix in expected_training else {"H": "1s"}
+        return SimpleNamespace(orbital_set=orbitals, is_spinful=False)
 
     monkeypatch.setattr(DatasetFactory, "_load_info", load_info)
     builds = []
@@ -195,10 +203,5 @@ def test_validation_only_preserves_ordered_split_and_training_mapper(
     assert training_paths <= set(metadata_reads)
     assert mapper_fast.orbital_cfg.to_dict() == mapper_full.orbital_cfg.to_dict()
 
-    expected = []
-    rng = random.Random(seed)
-    for scale in (1, 2):
-        paths = sorted((tmp_path / f"scale_{scale}").glob("snapshot_*/HS.out"))
-        rng.shuffle(paths)
-        expected.extend(paths[80:100])
+    assert set(mapper_fast.orbital_cfg.elements()) == {"H", "O"}
     assert [matrix for matrix, _ in fast] == expected
