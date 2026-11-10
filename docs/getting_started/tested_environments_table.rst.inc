@@ -63,14 +63,14 @@
      - 3.13.18
      - 2.15.0+cu134 / cu134
      - 2.1.2 / 2.8.1
-     - Not re-tested
+     - Not run
      - 0 passed, 2 failed, 0 errors, 0 skipped; 13.1 s
      - verified_20261110, 2026-11-10; Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry
    * - py314-latest-cu13x-rosi-attempt1 (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
      - 3.14.10
      - 2.15.0+cu134 / cu134
      - 2.1.2 / 2.8.1
-     - Not re-tested
+     - Not run
      - 0 passed, 2 failed, 0 errors, 0 skipped; 13.8 s
      - verified_20261110, 2026-11-10; Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry
    * - py313-latest-cu13x (terok; NVIDIA A40; driver 550.163.01)
@@ -98,7 +98,7 @@
      - 3.13.18
      - 2.15.0+cu134 / cu134
      - 2.1.2 / 2.8.1
-     - Not re-tested
+     - Not run
      - 2 passed, 0 failed, 0 errors, 0 skipped; 29.9 s
      - verified_20261110, 2026-11-10; H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10
    * - rosi-h100-paper-training (ROSI; NVIDIA H100; driver not recorded)
