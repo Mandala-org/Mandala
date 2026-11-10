@@ -116,6 +116,32 @@ def check_paper_maes(metrics, dataset_kind):
     }
 
 
+def build_evaluation_dataset_bundle(args, cfg):
+    """Reuse the exact path discovery/shuffle, loading only requested matrices.
+
+    Intercept only factory construction, after the existing split builders have
+    selected their ordered pairs. Training metadata still defines the mapper;
+    training matrix files are never parsed in validation-only mode.
+    """
+    if args.load_split == "all":
+        train_ds, val_ds, mapper = _build_dataset_bundle(args, cfg)
+        return len(train_ds), val_ds, mapper
+
+    from data.factory import DatasetFactory
+
+    create = DatasetFactory.create
+    training_structures = None
+
+    def create_validation(factory, *, include_test=False):
+        nonlocal training_structures
+        training_structures = len(factory._pairs["train"])
+        return create(factory, include_test=include_test, load_splits=("val",))
+
+    with patch.object(DatasetFactory, "create", create_validation):
+        _, val_ds, mapper = _build_dataset_bundle(args, cfg)
+    return training_structures, val_ds, mapper
+
+
 def parse_args():
     parser = build_parser()
     parser.description = __doc__
@@ -123,6 +149,10 @@ def parse_args():
         "--film-semantics", choices=["o3", "legacy_2026_07"], required=True
     )
     parser.add_argument("--scratch-dir", type=Path)
+    parser.add_argument(
+        "--load-split", choices=["all", "validation"], default="all",
+        help="Load only validation matrices while retaining training metadata for the mapper",
+    )
     parser.add_argument(
         "--metadata-policy", choices=["current", "paper_2026_07"], default="current"
     )
@@ -170,7 +200,7 @@ def main():
             loading.enter_context(patch(
                 "scripts.dataset._resolve_single_snapshot_info_path", paper_metadata_path
             ))
-        train_ds, val_ds, mapper = _build_dataset_bundle(args, cfg)
+        training_structures, val_ds, mapper = build_evaluation_dataset_bundle(args, cfg)
     if not len(val_ds):
         raise RuntimeError("The reconstructed validation split is empty")
     device = torch.device(args.device)
@@ -238,7 +268,8 @@ def main():
             "e78a7c0:src/data/openmx_parser.py; "
             "docs/data/physical_constraints_20261104/silicon/historical_contract.json"
         ),
-        "training_structures": len(train_ds),
+        "training_structures": training_structures,
+        "load_split": args.load_split,
         "validation_structures": len(val_ds),
         "evaluated_structures": len(indices),
         "film_semantics": args.film_semantics,
