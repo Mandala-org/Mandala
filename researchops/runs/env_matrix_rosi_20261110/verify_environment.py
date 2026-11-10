@@ -33,8 +33,10 @@ env.update(PYTHONPATH='src:.', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MK
 previous = json.loads(out.read_text()) if out.exists() else {}
 record = dict(name=args.env + ('-rosi' if args.gpu_only else ''), status='verified_20261110', date='2026-11-10', host=platform.node(), platform=platform.platform(), python=args.python, torch=args.torch+'+'+args.tag, cuda_wheel_tag=args.tag, source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), installation_commands=[], result='incomplete')
 
-if previous.get('initial_attempts'):
-    record['initial_attempts'] = previous['initial_attempts']
+if previous:
+    record['initial_attempts'] = previous.get('initial_attempts', [])
+    if previous.get('result') in ['failed','blocked']:
+        record['initial_attempts'].append({k:v for k,v in previous.items() if k in ['result','error','build_scatter_cuda','torch_scatter_build','cpu_tests','gpu_smoke','gpu_tests']})
 
 def save():
     out.write_text(json.dumps(record, indent=2)+'\n')
@@ -67,7 +69,7 @@ scatter = execute('install_scatter_wheel', ['uv','pip','install','--python',py,'
 if scatter['exit_code']:
     require(execute('install_build_tools',['uv','pip','install','--python',py,'setuptools','wheel','ninja']))
     # CUDA 13 moved to un-suffixed NVIDIA PyPI distributions; cu13 is a placeholder.
-    toolkit = execute('install_cuda_toolkit',['uv','pip','install','--python',py,'nvidia-cuda-nvcc==13.4.92','nvidia-cuda-runtime==13.4.92','nvidia-cuda-cccl==13.3.5.0.6'])
+    toolkit = execute('install_cuda_toolkit',['uv','pip','install','--python',py,'nvidia-cuda-nvcc==13.4.92','nvidia-cuda-runtime==13.4.92','nvidia-nvvm==13.4.92','nvidia-cuda-crt==13.4.92','nvidia-cuda-cccl==13.3.5.0.6'])
     cuda = root / '.venvs' / ('cuda-'+args.env)
     cuda.mkdir(exist_ok=True)
     packages = next((venv/'lib').glob('python*/site-packages'))
@@ -79,12 +81,18 @@ if scatter['exit_code']:
             for child in source.iterdir():
                 target=dest/child.name
                 if not target.exists(): target.symlink_to(child)
+    # Runtime wheels ship a versioned soname, but the linker needs libcudart.so.
+    for child in (cuda/'lib').iterdir():
+        target=cuda/'lib64'/child.name
+        if not target.exists(): target.symlink_to(child)
+    cudart=cuda/'lib64/libcudart.so'
+    if not cudart.exists(): cudart.symlink_to(cuda/'lib64/libcudart.so.13')
     record['cuda_toolkit_files']=[str(p.relative_to(packages)) for p in packages.glob('nvidia/**/nvcc')]
     build_env=dict(CUDA_HOME=str(cuda), FORCE_CUDA='1', TORCH_CUDA_ARCH_LIST='8.6;9.0;10.0', PATH=str(cuda/'bin')+':'+env['PATH'])
-    result=execute('build_scatter_cuda',[py,'-m','pip','install','--no-build-isolation','--no-cache-dir','--no-deps','--no-binary=torch-scatter','torch-scatter==2.1.2'],build_env)
+    result=execute('build_scatter_cuda',[py,'-m','pip','install','--force-reinstall','--no-build-isolation','--no-cache-dir','--no-deps','--no-binary=torch-scatter','torch-scatter==2.1.2'],build_env)
     record['torch_scatter_build']=dict(kind='source',backend='cuda' if not result['exit_code'] else 'cpu',cuda_build_error=result['output'] if result['exit_code'] else None)
     if result['exit_code']:
-        require(execute('build_scatter_cpu',[py,'-m','pip','install','--no-build-isolation','--no-cache-dir','--no-deps','--no-binary=torch-scatter','torch-scatter==2.1.2'],dict(FORCE_ONLY_CPU='1')))
+        require(execute('build_scatter_cpu',[py,'-m','pip','install','--force-reinstall','--no-build-isolation','--no-cache-dir','--no-deps','--no-binary=torch-scatter','torch-scatter==2.1.2'],dict(FORCE_ONLY_CPU='1')))
 else:
     record['torch_scatter_build']=dict(kind='PyG wheel',backend='cuda')
 deps=tomllib.loads((root/'pyproject.toml').read_text())['project']['dependencies']
