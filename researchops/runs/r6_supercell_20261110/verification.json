@@ -88,5 +88,45 @@
     "SiO2 OpenMX jobs 837300 and 837301",
     "SiO2 public-runtime source-cell calibration 837302",
     "automatic final comparison 837320"
-  ]
+  ],
+  "followup": {
+    "captured_utc": "2026-11-10T10:43:00.789959+00:00",
+    "commands": [
+      {
+        "command": "OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q researchops/runs/r6_supercell_20261110/test_workflow.py",
+        "result": "10 passed in 2.43s"
+      },
+      {
+        "command": "python3.13 researchops/runs/r6_supercell_20261110/verify_analysis.py",
+        "result": "PASS: 74 operator/mode decompositions; 8 routed structures; 11 summary rows; all per-k metrics; 9 primary errors exactly unchanged; diagnostic max absolute numeric delta 7.10542736e-15; flags/counts identical"
+      },
+      {
+        "command": "python3.13 -m compileall -q researchops/runs/r6_supercell_20261110",
+        "result": "PASS"
+      },
+      {
+        "command": "bash -n researchops/runs/r6_supercell_20261110/route_parent.sh; bash -n researchops/runs/r6_supercell_20261110/final_compare.sh",
+        "result": "PASS"
+      },
+      {
+        "command": "sbatch --parsable researchops/runs/r6_supercell_20261110/route_parent.sh",
+        "result": "837400 COMPLETED exit 0:0 elapsed 00:04:53"
+      },
+      {
+        "command": "~/second_brain/bin/sb exp attempt --project mandala --exp r6-supercell --jobs 837400 --reason \"parent-routing diagnostic on perturbed cells\" --by agent:codex",
+        "result": "attempt 13"
+      },
+      {
+        "command": "git fetch github develop",
+        "result": "upstream aae88d8; no rebase per follow-up task instruction"
+      }
+    ],
+    "primary_error_baseline_commit": "1cafaaa",
+    "routing_source_commit": "2da075f",
+    "routing_script_sha256": "808eb8913f5bb85726026b2706a36cf5fb277ea01c9c4be07c95006ac208864c",
+    "not_verified": [
+      "SiO2 perturbed references and source calibration are still running; final comparison 837320 remains queued",
+      "No new k convergence study or retraining"
+    ]
+  }
 }

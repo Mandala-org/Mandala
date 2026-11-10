@@ -109,3 +109,47 @@ OpenMX runtime deviation
   High-MPI SiO2 attempts exhausted memory before SCF. The current resource
   choices share grid data through OpenMP; costs and revisions are documented
   in openmx/cost_estimates.json and archived failed outputs beside each run.
+
+Follow-up: parent categories and labelled routing (2026-11-10)
+  The manifest now explicitly records zero-based source atom, tile index and
+  tile coordinates for every atom, preserved under displacement/wrapping.
+  compare.py partitions raw and Hermitian common-support H/S/D errors by
+  onsite, different_parent and same_parent_image. Fractions of directed blocks
+  and scalar entries use each operator's common support; full prediction and
+  reference support fractions are also recorded. No unmatched block is
+  silently treated as a zero reference.
+  route_parent.sh runs the unchanged silicon checkpoint using these parent
+  labels to choose shifted-self vs ordinary pair heads for all eight Si cells.
+  This is a diagnostic requiring source-cell knowledge, also for perturbed
+  cells; it is not a deployable size-transfer correction. Primary predictions
+  are untouched. Full-support per-k metric results are in parent_routing.json.
+  Job 837400 (source 2da075f), registered as second-brain attempt 13, requests
+  one H100, four CPUs, 96 GB, one hour on gpu-h100-casus/account casus.
+  Reproduce from a compute allocation:
+    python researchops/runs/r6_supercell_20261110/route_parent.py
+    python researchops/runs/r6_supercell_20261110/compare.py --reuse-diagnostics
+    python researchops/runs/r6_supercell_20261110/summarize.py
+  Reuse requires identical saved operator hashes and reference identity.
+  summary.md contains the main table, per-category table and diagnostic table;
+  summary.json retains both primary and routed per-k results. final_compare.sh
+  regenerates the summary when pending SiO2 references become available.
+  The task-specific instruction keeps the existing branch history: no rebase.
+
+1000-atom extension (2026-11-10)
+  build_structures.py additionally builds one ideal-diamond Gaussian-displaced
+  5x5x5 cell (seed 20261611, sigma 0.02 Angstrom) and a tiled Si_scale_1_078
+  control. Every atom retains its source atom and tile identity. Both use a
+  2x2x2 diagnostic mesh; the new DFT uses the same slightly denser mesh.
+  The tiled reference folds the original 8x8x8 operators algebraically.
+  eval-si-5x.sh runs primary inference, known-parent routing diagnostics,
+  common-support category comparisons, tiling attribution and summary refresh.
+  Native primary and routed operators remain on bigdata. Pending perturbed
+  rows retain prediction diagnostics; no reference errors are invented.
+  Jobs: 837488 evaluation, 837489 OpenMX, 837490 comparison afterok of both.
+  Registered second-brain attempt 14. See EXTENSION_5X_REPORT.txt and
+  verification_5x.json for resource rationale and exact local verification.
+  To refresh after DFT, from Terok:
+    ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_5x.sh"
+  The final launcher reruns only the two 5x routed diagnostics, recomputes
+  reference errors/categories, and refreshes all available summary rows.
+  Preserve existing branch history without rebase, per the extension brief.

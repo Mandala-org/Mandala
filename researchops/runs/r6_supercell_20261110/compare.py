@@ -7,12 +7,17 @@ import argparse
 import traceback
 
 from workflow import *
+from pair_categories import category_errors
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', default='cuda')
+    parser.add_argument('--reuse-diagnostics', action='store_true',
+                        help='Reuse stored diagnostics only for byte-identical operators and references')
     args = parser.parse_args()
+    previous_path = RUN/'results/comparison.json'
+    previous = {s['name']: s for s in json.loads(previous_path.read_text())['structures']} if previous_path.exists() else {}
     torch.set_num_threads(4)
     from compare_calibration import main as refresh_calibration
     refresh_calibration()
@@ -45,17 +50,35 @@ def main():
                 directory = Path(structure['dft_directory'])
                 if not (directory/'HS.out').is_file() or not (directory/'COMPLETE').is_file():
                     row['status'] = 'OpenMX_pending'
+                    saved = RUN/'results'/(structure['name']+'.json')
+                    if saved.exists():
+                        row['predicted'] = json.loads(saved.read_text())['predicted']
+                    submissions = json.loads((RUN/'submissions.json').read_text())
+                    row['job_id'] = submissions['openmx'].get(structure['name'], {}).get('job_id')
                     continue
                 _,target = reference(directory)
                 row['reference_kind'] = 'new self-consistent OpenMX'
                 row['reference_HS_sha256'] = sha256(directory/'HS.out')
                 row['runtime_source_check'] = calibration[structure['material']]
+            row['operator_hashes'] = {name: sha256(ARTIFACTS/'predictions'/structure['name']/(name+'.pt')) for name in predicted}
+            row['reference_identity'] = (dict(source_HS_sha256=sha256(Path(structure['source_cell'])/'HS.out'), repetition=structure['repetition'])
+                                         if structure['tiled_control'] else row['reference_HS_sha256'])
+            old = previous.get(structure['name'], {})
+            reuse = (args.reuse_diagnostics and old.get('status') == 'ok'
+                     and old.get('operator_hashes') == row['operator_hashes']
+                     and old.get('reference_identity') == row['reference_identity']
+                     and old.get('predicted', {}).get('mesh') == structure['diagnostic_mesh']
+                     and old.get('predicted', {}).get('nominal_electrons') == structure['num_electrons'])
+            row['category_errors'] = {name: {
+                'raw_common_support': category_errors(a, target[name], structure['atom_parent_mapping'], HARTREE_TO_EV*1000 if name=='hamiltonian' else None),
+                'hermitian_common_support': category_errors((a+a.adjoint())*.5, target[name], structure['atom_parent_mapping'], HARTREE_TO_EV*1000 if name=='hamiltonian' else None)}
+                for name, a in predicted.items()}
             row.update(status='ok', element_errors=errors(predicted,target),
-                       reference=diagnostics(target,structure,args.device))
+                       reference=old['reference'] if reuse else diagnostics(target,structure,args.device))
             # Main inference diagnostics are on the full geometry graph. Also report
             # a reference-support control comparable to the paper's diagnostics.
-            row['predicted'] = diagnostics(predicted,structure,args.device)
-            row['prediction_on_reference_support'] = diagnostics(
+            row['predicted'] = old['predicted'] if reuse else diagnostics(predicted,structure,args.device)
+            row['prediction_on_reference_support'] = old['prediction_on_reference_support'] if reuse else diagnostics(
                 {name:restrict_support(a,target[name]) for name,a in predicted.items()},structure,args.device)
             e = row['element_errors']
             values = [structure['name'],str(structure['atom_count']),f"{e['hamiltonian']['hermitian_common_support']['mae_meV']:.6g}"]
@@ -76,6 +99,9 @@ def main():
         (RUN/'results/comparison.md').write_text('\n'.join(lines)+'\n')
     write_json(RUN/'results/comparison.json',result)
     (RUN/'results/comparison.md').write_text('\n'.join(lines)+'\n')
+    # Also refresh summaries from already-queued launchers (Slurm snapshots scripts).
+    from summarize import main as summarize
+    summarize()
     print('\n'.join(lines))
     if failed:
         raise SystemExit('Some comparisons failed; see comparison.json')

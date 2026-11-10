@@ -55,15 +55,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--material', required=True, choices=['silicon','sio2'])
     parser.add_argument('--device', default='cuda')
+    parser.add_argument('--names', nargs='+', help='Only evaluate these manifest structures')
     args = parser.parse_args()
     torch.set_num_threads(4)
     start = time.monotonic()
     model,cfg,provenance = load_model(args.material,args.device)
     provenance['git_commit'] = subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     provenance['historical_control'] = historical_control(model,args.material,cfg,args.device)
-    write_json(RUN / 'results' / (args.material+'_provenance.json'), provenance)
+    write_json(RUN / 'results' / (args.material+('_5x' if args.names else '')+'_provenance.json'), provenance)
     for structure in manifest()['structures']:
-        if structure['material'] != args.material:
+        if structure['material'] != args.material or (args.names and structure['name'] not in args.names):
             continue
         print('Predicting', structure['name'], flush=True)
         atoms,pos,box = load_paper_cif(RUN / 'structures' / structure['cif'],dtype=cfg.dtype)

@@ -17,7 +17,7 @@ def main():
     manifest = json.loads((RUN/'structures/manifest.json').read_text())
     path = RUN/'submissions.json'
     document = json.loads(path.read_text())
-    assert len(document['evaluation']) == 2, 'Submit model evaluation for both materials first'
+    assert len(document['evaluation']) >= 2, 'Submit model evaluation for both materials first'
     for structure in manifest['structures']:
         name = structure['name']
         if structure['tiled_control'] or name not in args.names:

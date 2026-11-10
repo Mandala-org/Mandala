@@ -31,3 +31,32 @@ and 4 structure + 7 folding + 15 physical tests passed. An ordinary push of
 the rewrite was rejected as non-fast-forward. To honor no force-push and
 no merge, retained published history and preserved the temporary rebased
 state locally at refs/backup/r6-supercell-rebased-6fa64e2 (b668e41).
+
+Follow-up 2026-11-10 10:42 UTC: parent-routing job 837400 completed,
+exit 0, elapsed 00:04:53; registered as second-brain attempt 13.
+All six perturbed Si cells and all three tiled controls have H/S/D category
+errors where predicted, plus block/scalar fractions, in comparison.json and
+summary.md/json. Eight silicon routed diagnostics include every sampled
+k-point (4x4x4 for 2x, 3x3x3 for 3x), H/S/D errors and metric checks.
+Perturbed Si H: total 8.65060--8.76874 meV; excluding same-parent images
+1.06050--1.21073 meV; parent-routed diagnostic 1.11013--1.27325 meV.
+Primary and routed perturbed metrics each have 0/273 PD and Cholesky successes.
+Minimum eigenvalues across perturbed cells: primary -1.031094, routed -0.550694.
+74 decomposition checks passed; 10 workflow tests passed. Nine primary error
+results are exactly unchanged; recomputed metric floats differ by <=7.11e-15,
+with identical flags/counts. See FOLLOWUP_REPORT.txt and verification.json.
+At 10:42:11 UTC jobs 837300 and 837301 were RUNNING 01:12:39; 837302
+RUNNING 01:12:09; 837320 remains PENDING. No SiO2 perturbed claim is made.
+The existing queued comparison will refresh summary.md/json when it runs.
+No rebase was performed, per the explicit continuation-task instruction.
+
+1000-atom extension 2026-11-10: structures and workflows committed as
+2a993a4 / 80e5098; jobs recorded in 2abb421. Evaluation 837488 and OpenMX
+837489 started 12:01:34 CET; final comparison 837490 waits afterok of both.
+Second-brain attempt 14. OpenMX uses 8 MPI x 12 OMP, 1024G, 11 h on cge057;
+allocation ends 23:01:34 CET today, ahead of Nov 12 08:00 CET maintenance.
+
+Extension evaluation 837488 completed exit 0, elapsed 00:12:50.
+Prior queued refresh 837320 completed exit 0, elapsed 00:09:14; its final
+comparison includes all 13 structures, with only si-5x5x5-1 OpenMX pending.
+All 12 new primary/routed operator hashes verified. See EXTENSION_5X_REPORT.txt.
