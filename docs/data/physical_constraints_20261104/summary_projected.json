@@ -1,8 +1,11 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "sources": [
     "silicon/historical_summary.json",
     "silicon/silicon_aggregate.json",
+    "silicon/overlap_repaired_aggregate.json",
+    "silicon/overlap_repaired_summary.json",
+    "silicon/overlap_repair_corrections.json",
     "sio2/historical_summary.json",
     "sio2/sio2_aggregate.json",
     "zncusnses/historical_summary.json"
@@ -11,12 +14,21 @@
     "silicon": "joint_predicted_reference_support",
     "sio2": "predicted_H_reference_SD_reference_support"
   },
+  "additional_scenarios": {
+    "silicon": "joint_predicted_reference_support_overlap_repaired"
+  },
   "denominators": {
     "silicon": {
       "structures": 16,
       "kpoints": 8192,
       "invalid_metric_kpoints": 6779,
-      "structures_with_invalid_metric": 16
+      "structures_with_invalid_metric": 16,
+      "after_overlap_repair": {
+        "structures": 16,
+        "kpoints": 8192,
+        "invalid_metric_kpoints": 0,
+        "structures_with_invalid_metric": 0
+      }
     },
     "sio2": {
       "structures": 10,
@@ -25,7 +37,7 @@
       "structures_with_invalid_metric": 0
     }
   },
-  "cleanup_status": "Reference-support control and Hermitian projection only; no overlap repair, fixed-charge occupation projection, or post-cleanup aggregates exist.",
+  "cleanup_status": "Silicon after overlap repair: floor S^h(k) eigenvalues at 1e-6, with no upper clamp or jitter. No occupation projection was applied: the data use finite-temperature (300 K Fermi-Dirac) occupations, so a zero-temperature idempotent target is inappropriate. SiO2 and ZnCu2Sn(SeS)2 predict H only; overlap repair does not apply to them.",
   "rows": [
     {
       "material": "silicon",
@@ -475,6 +487,531 @@
         "contributing_structures": 0
       },
       "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.positive_definite",
+      "reference": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.well_conditioned_positive_definite",
+      "reference": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 1.0,
+        "worst": 1.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.cholesky_failed_without_jitter",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.lambda_min",
+      "reference": {
+        "mean": 0.001188437336974419,
+        "worst": 0.0008725468744609862,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 4.350537941848527e-05,
+        "worst": 9.999999975343656e-07,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.lambda_max",
+      "reference": {
+        "mean": 6.344863720171715,
+        "worst": 6.743270614985497,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 6.346737434955034,
+        "worst": 6.74961681208682,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.condition_number",
+      "reference": {
+        "mean": 5388.829668094718,
+        "worst": 7156.368671437867,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 5294229.608340866,
+        "worst": 6749616.811974688,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap.nonpositive_eigenvalues",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.occupation_min",
+      "reference": {
+        "mean": -0.03342634487389225,
+        "worst": -0.04181193148368893,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": -0.03361038195484999,
+        "worst": -0.04299793396346651,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.occupation_max",
+      "reference": {
+        "mean": 2.3044963476704594,
+        "worst": 2.492208715874526,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 2.3057647915040427,
+        "worst": 2.4898746674482686,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.negative_count",
+      "reference": {
+        "mean": 37.8604736328125,
+        "worst": 42.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 37.554443359375,
+        "worst": 44.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.overoccupied_count",
+      "reference": {
+        "mean": 7.012939453125,
+        "worst": 12.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 6.9991455078125,
+        "worst": 12.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "electron_count_absolute_error",
+      "reference": {
+        "mean": 9.993361804738754e-08,
+        "worst": 1.9519994154393316e-07,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.007532295860229521,
+        "worst": 0.011462252649195648,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "density.zero_temperature_idempotency_relative",
+      "reference": {
+        "mean": 0.10243529821778662,
+        "worst": 0.1604847123990461,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.10247769807008247,
+        "worst": 0.16122624347036318,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "H",
+      "diagnostic": "consistency.commutator_relative",
+      "reference": {
+        "mean": 0.0023536577755087855,
+        "worst": 0.0035209855491073615,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.00019632050133785113,
+        "worst": 0.0019418008130875598,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "H",
+      "diagnostic": "finite_temperature_density_relative_frobenius",
+      "reference": {
+        "mean": 0.12122931388507353,
+        "worst": 0.12147728552709748,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.12197947825858446,
+        "worst": 0.12256964777986468,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap_repair.relative_frobenius",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 512,
+        "unit_of_count": "kpoints",
+        "total_structures": 1,
+        "total_kpoints": 512,
+        "contributing_structures": 1
+      },
+      "predicted": {
+        "mean": 4.58823854060891e-05,
+        "worst": 0.00040071015052375766,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap_repair.floored_eigenvalues",
+      "reference": {
+        "mean": 0.0,
+        "worst": 0.0,
+        "count": 512,
+        "unit_of_count": "kpoints",
+        "total_structures": 1,
+        "total_kpoints": 512,
+        "contributing_structures": 1
+      },
+      "predicted": {
+        "mean": 1.126953125,
+        "worst": 4.0,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap_repair.lambda_min_before",
+      "reference": {
+        "mean": 0.0011942732728326283,
+        "worst": 0.0008955498443582303,
+        "count": 512,
+        "unit_of_count": "kpoints",
+        "total_structures": 1,
+        "total_kpoints": 512,
+        "contributing_structures": 1
+      },
+      "predicted": {
+        "mean": -0.0006552389035955738,
+        "worst": -0.006240938051701165,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "S",
+      "diagnostic": "overlap_repair.lambda_min_after",
+      "reference": {
+        "mean": 0.0011942732728326285,
+        "worst": 0.0008955498443582433,
+        "count": 512,
+        "unit_of_count": "kpoints",
+        "total_structures": 1,
+        "total_kpoints": 512,
+        "contributing_structures": 1
+      },
+      "predicted": {
+        "mean": 4.3505379418481555e-05,
+        "worst": 9.999999984988293e-07,
+        "count": 8192,
+        "unit_of_count": "kpoints",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
+      "worst_direction": "min"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "mesh_electron_count_absolute_error",
+      "reference": {
+        "mean": 9.993353633497293e-08,
+        "worst": 1.9520037852771566e-07,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.007532299982995205,
+        "worst": 0.011462264417815504,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support",
+      "worst_direction": "max"
+    },
+    {
+      "material": "silicon",
+      "operator": "D",
+      "diagnostic": "mesh_electron_count_absolute_error",
+      "reference": {
+        "mean": 9.993353633497293e-08,
+        "worst": 1.9520037852771566e-07,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "predicted": {
+        "mean": 0.00743468807037706,
+        "worst": 0.011290591960921859,
+        "count": 16,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 16
+      },
+      "scenario": "joint_predicted_reference_support_overlap_repaired",
       "worst_direction": "max"
     },
     {
