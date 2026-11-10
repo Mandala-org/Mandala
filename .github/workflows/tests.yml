@@ -1,0 +1,75 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    name: CPU tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Python 3.11 is provisional until the package's <3.11 pin is relaxed.
+    continue-on-error: ${{ matrix.python-version == '3.11' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11']
+    env:
+      PYTHONPATH: src:.
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      NUMEXPR_NUM_THREADS: '1'
+      CUDA_VISIBLE_DEVICES: ''
+      WANDB_MODE: offline
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+        # Keep LFS pointers: the CI selection below excludes external data.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - name: Create virtual environment
+        run: |
+          uv venv --python '${{ matrix.python-version }}' --seed .venv-ci
+          echo "$PWD/.venv-ci/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$PWD/.venv-ci" >> "$GITHUB_ENV"
+      - name: Install CPU torch and matching PyG wheels
+        run: |
+          python -m pip install --upgrade pip wheel
+          # pyproject.toml allows torch>=2.1; use the README's tested version.
+          python -m pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --only-binary=:all: torch-scatter==2.1.2 torch-geometric==2.7.0 -f https://data.pyg.org/whl/torch-2.5.1+cpu.html
+      - name: Install package and test dependencies
+        env:
+          PIP_IGNORE_REQUIRES_PYTHON: ${{ matrix.python-version == '3.11' && '1' || '0' }}
+        run: python -m pip install -e '.[dev]'
+      - name: Check test collection
+        run: python -m pytest --collect-only -q
+      - name: Unit, physics and equivariance tests with line coverage
+        # Four workers fit hosted runners; local validation also uses -n 16.
+        # Exclude GPU, network, large data, slow, integration and workflow tests.
+        # OpenMX parser/rotation files require 169 MB of H2O LFS matrices;
+        # info-parser tests also require LFS, spatial tests use 745 MB of Si,
+        # and PySCF rotation tests require separately generated baseline data.
+        # Two data-backed Snapshot tests carry the large_data marker.
+        # Optional live upstream source comparisons retain explicit pytest skips.
+        run: |
+          time python -m pytest -n 4 tests/unit tests/physics tests/equivariance \
+            -m 'not (gpu or large_data or network or slow or integration or workflow)' \
+            --ignore=tests/unit/data/test_openmx_parser.py \
+            --ignore=tests/unit/data/test_openmx_info_parser.py \
+            --ignore=tests/unit/data/test_snapshot_spatial.py \
+            --ignore=tests/physics/test_rotation_reference_files.py \
+            --ignore=tests/physics/test_pyscf_rotation_reference_files.py \
+            --cov=src --cov-report=term-missing --durations=20 -ra
