@@ -86,3 +86,5 @@ Restart: cancelled 837005–837008 and preserved silicon checkpoint directory wi
 - Generated PySCF reference-file test classified large_data because its generated inputs are absent.
 - Full retraining and final accuracy are not yet verified. CPU skips and the two workflow skips are recorded in logs.
 - paper/, root README.md, frozen benchmark configs and historical recipes are untouched.
+
+First epoch passed: 80 training batches and 10 validation batches; epoch 1 observed running, train/loss_total=0.0483 and val/loss_total=0.0185 (display precision). Jobs 837506–837508 pending Dependency.
