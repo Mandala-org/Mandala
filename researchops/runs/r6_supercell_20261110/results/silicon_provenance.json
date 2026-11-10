@@ -47,80 +47,81 @@
     "density": "AO kernel"
   },
   "postprocessing": "radial envelope only; raw directed predictions; no repair",
-  "git_commit": "bd5c0bfb310ca228147fa17e6989ecbf9330bce8",
+  "geometry_convention": "Snapshot._change_basis: OpenMX CIF positions and box right-multiplied by eye(3)[[2,0,1]]; blocks in e3nn basis",
+  "git_commit": "070bda51497b4d8f75a299a4b67314b8af5d6e3f",
   "historical_control": {
     "source": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
     "current_vs_frozen": {
       "hamiltonian": {
         "raw_common_support": {
-          "mae": 2.5043753631485075e-09,
-          "relative_mae": 5.989072946247408e-07,
+          "mae": 2.5038040425404125e-09,
+          "relative_mae": 5.987706665118818e-07,
           "common_scalar_entries": 134524,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 2.5043753631485075e-09,
+          "common_plus_prediction_only_mae": 2.5038040425404125e-09,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0,
-          "mae_meV": 6.81475597567793e-05
+          "mae_meV": 6.81320133231842e-05
         },
         "hermitian_common_support": {
-          "mae": 5.38373541233148e-06,
-          "relative_mae": 0.001287490069667986,
+          "mae": 5.383735312882964e-06,
+          "relative_mae": 0.0012874900458854322,
           "common_scalar_entries": 134524,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 5.38373541233148e-06,
+          "common_plus_prediction_only_mae": 5.383735312882964e-06,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0,
-          "mae_meV": 0.14649897779911686
+          "mae_meV": 0.14649897509298349
         }
       },
       "density": {
         "raw_common_support": {
-          "mae": 5.374538484032066e-09,
-          "relative_mae": 1.9979326941302324e-06,
+          "mae": 5.366960708345367e-09,
+          "relative_mae": 1.9951157293176775e-06,
           "common_scalar_entries": 134524,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 5.374538484032066e-09,
+          "common_plus_prediction_only_mae": 5.366960708345367e-09,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0
         },
         "hermitian_common_support": {
-          "mae": 3.8083255163794954e-05,
-          "relative_mae": 0.014157081732079746,
+          "mae": 3.808325338386966e-05,
+          "relative_mae": 0.014157081070409736,
           "common_scalar_entries": 134524,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 3.8083255163794954e-05,
+          "common_plus_prediction_only_mae": 3.808325338386966e-05,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0
         }
       },
       "overlap": {
         "raw_common_support": {
-          "mae": 1.3110445244089404e-09,
-          "relative_mae": 1.1407066449588848e-07,
+          "mae": 1.323132209968854e-09,
+          "relative_mae": 1.1512238341036114e-07,
           "common_scalar_entries": 134524,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 1.3110445244089404e-09,
+          "common_plus_prediction_only_mae": 1.323132209968854e-09,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0
         },
         "hermitian_common_support": {
-          "mae": 3.7042711146414973e-06,
-          "relative_mae": 0.00032229925044733254,
+          "mae": 3.7042713779609255e-06,
+          "relative_mae": 0.00032229927335808927,
           "common_scalar_entries": 134524,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 3.7042711146414973e-06,
+          "common_plus_prediction_only_mae": 3.7042713779609255e-06,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0
         }
@@ -129,74 +130,74 @@
     "current_vs_reference": {
       "hamiltonian": {
         "raw_common_support": {
-          "mae": 1.5089466483502927e-05,
-          "relative_mae": 0.003346586034231017,
+          "mae": 1.5089466976458384e-05,
+          "relative_mae": 0.0033465861435601207,
           "common_scalar_entries": 117624,
           "prediction_only_scalar_entries": 16900,
-          "prediction_only_absolute_sum": 32.55185577273369,
-          "prediction_only_max_absolute": 0.028907980769872665,
-          "common_plus_prediction_only_mae": 0.00025517185913583626,
+          "prediction_only_absolute_sum": 32.55185580253601,
+          "prediction_only_max_absolute": 0.028907978907227516,
+          "common_plus_prediction_only_mae": 0.0002551718597884017,
           "prediction_only_blocks": 100,
           "reference_only_blocks": 0,
-          "mae_meV": 0.41060550826919157
+          "mae_meV": 0.4106055216831997
         },
         "hermitian_common_support": {
-          "mae": 1.4099017178476178e-05,
-          "relative_mae": 0.0031269212889307005,
+          "mae": 1.4099016826360267e-05,
+          "relative_mae": 0.003126921210837403,
           "common_scalar_entries": 117624,
           "prediction_only_scalar_entries": 16900,
-          "prediction_only_absolute_sum": 32.55154964327812,
+          "prediction_only_absolute_sum": 32.551549941301346,
           "prediction_only_max_absolute": 0.028793301433324814,
-          "common_plus_prediction_only_mae": 0.00025430356248609323,
+          "common_plus_prediction_only_mae": 0.00025430356439360373,
           "prediction_only_blocks": 100,
           "reference_only_blocks": 0,
-          "mae_meV": 0.3836539960503867
+          "mae_meV": 0.3836539864688198
         }
       },
       "density": {
         "raw_common_support": {
-          "mae": 5.15209257573279e-05,
-          "relative_mae": 0.017482986215098396,
+          "mae": 5.152092978390178e-05,
+          "relative_mae": 0.017482987581466228,
           "common_scalar_entries": 117624,
           "prediction_only_scalar_entries": 16900,
-          "prediction_only_absolute_sum": 15.496827512979507,
-          "prediction_only_max_absolute": 0.031451981514692307,
-          "common_plus_prediction_only_mae": 0.00016024594038431392,
+          "prediction_only_absolute_sum": 15.496827527880669,
+          "prediction_only_max_absolute": 0.03145197406411171,
+          "common_plus_prediction_only_mae": 0.00016024594401580633,
           "prediction_only_blocks": 100,
           "reference_only_blocks": 0
         },
         "hermitian_common_support": {
-          "mae": 4.953488322328545e-05,
-          "relative_mae": 0.0168090473497758,
+          "mae": 4.953488713567303e-05,
+          "relative_mae": 0.01680904867739593,
           "common_scalar_entries": 117624,
           "prediction_only_scalar_entries": 16900,
-          "prediction_only_absolute_sum": 14.675147995352745,
-          "prediction_only_max_absolute": 0.025394845753908157,
-          "common_plus_prediction_only_mae": 0.000152401349198719,
+          "prediction_only_absolute_sum": 14.675148114562035,
+          "prediction_only_max_absolute": 0.025394853204488754,
+          "common_plus_prediction_only_mae": 0.0001524013535057569,
           "prediction_only_blocks": 100,
           "reference_only_blocks": 0
         }
       },
       "overlap": {
         "raw_common_support": {
-          "mae": 1.4556775689778686e-05,
-          "relative_mae": 0.0011459665215851737,
+          "mae": 1.4556777205130971e-05,
+          "relative_mae": 0.0011459666408796536,
           "common_scalar_entries": 117624,
           "prediction_only_scalar_entries": 16900,
-          "prediction_only_absolute_sum": 51.499465852975845,
+          "prediction_only_absolute_sum": 51.499465972185135,
           "prediction_only_max_absolute": 0.121358223259449,
-          "common_plus_prediction_only_mae": 0.00039555538072544956,
+          "common_plus_prediction_only_mae": 0.00039555538293658724,
           "prediction_only_blocks": 100,
           "reference_only_blocks": 0
         },
         "hermitian_common_support": {
-          "mae": 1.3515376063542454e-05,
-          "relative_mae": 0.0010639834552323678,
+          "mae": 1.3515369044449487e-05,
+          "relative_mae": 0.0010639829026618177,
           "common_scalar_entries": 117624,
           "prediction_only_scalar_entries": 16900,
-          "prediction_only_absolute_sum": 51.45602631568909,
+          "prediction_only_absolute_sum": 51.45602607727051,
           "prediction_only_max_absolute": 0.12133580446243286,
-          "common_plus_prediction_only_mae": 0.00039432189728068746,
+          "common_plus_prediction_only_mae": 0.00039432188937107754,
           "prediction_only_blocks": 100,
           "reference_only_blocks": 0
         }

@@ -23,64 +23,65 @@
     "density": "AO kernel"
   },
   "postprocessing": "radial envelope only; raw directed predictions; no repair",
+  "geometry_convention": "Snapshot._change_basis: OpenMX CIF positions and box right-multiplied by eye(3)[[2,0,1]]; blocks in e3nn basis",
   "envelope": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v1/source/eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json",
   "envelope_sha256": "ddd2d169662c9dd34e74b7525b0ec351ba1708117b0b0342e01fdc4cf5e2aa74",
-  "git_commit": "840bd57194571df401417d05883e03b06fbd83cb",
+  "git_commit": "070bda51497b4d8f75a299a4b67314b8af5d6e3f",
   "historical_control": {
     "source": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000",
     "current_vs_frozen": {
       "hamiltonian": {
         "raw_common_support": {
-          "mae": 5.47202942120802e-10,
-          "relative_mae": 2.3610899873201234e-07,
+          "mae": 5.462435347122408e-10,
+          "relative_mae": 2.356950303389816e-07,
           "common_scalar_entries": 6974630,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 5.47202942120802e-10,
+          "common_plus_prediction_only_mae": 5.462435347122408e-10,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0,
-          "mae_meV": 1.4890158139225991e-05
+          "mae_meV": 1.486405132046867e-05
         },
         "hermitian_common_support": {
-          "mae": 8.388247627100432e-06,
-          "relative_mae": 0.0036193898020263787,
+          "mae": 8.388248373925817e-06,
+          "relative_mae": 0.0036193901242691524,
           "common_scalar_entries": 6974630,
           "prediction_only_scalar_entries": 0,
           "prediction_only_absolute_sum": 0,
           "prediction_only_max_absolute": 0,
-          "common_plus_prediction_only_mae": 8.388247627100432e-06,
+          "common_plus_prediction_only_mae": 8.388248373925817e-06,
           "prediction_only_blocks": 0,
           "reference_only_blocks": 0,
-          "mae_meV": 0.22825596148008068
+          "mae_meV": 0.228255981802245
         }
       }
     },
     "current_vs_reference": {
       "hamiltonian": {
         "raw_common_support": {
-          "mae": 9.48910382941897e-05,
-          "relative_mae": 0.022196159505765506,
+          "mae": 9.489102700124008e-05,
+          "relative_mae": 0.022196156864208248,
           "common_scalar_entries": 3787290,
           "prediction_only_scalar_entries": 3187340,
-          "prediction_only_absolute_sum": 1.0976458306107601e-11,
-          "prediction_only_max_absolute": 4.315195458446698e-14,
-          "common_plus_prediction_only_mae": 5.152673051060955e-05,
+          "prediction_only_absolute_sum": 1.0976457628500435e-11,
+          "prediction_only_max_absolute": 4.315195119633519e-14,
+          "common_plus_prediction_only_mae": 5.152672437843119e-05,
           "prediction_only_blocks": 18860,
           "reference_only_blocks": 0,
-          "mae_meV": 2.582117999438514
+          "mae_meV": 2.5821176921415443
         },
         "hermitian_common_support": {
-          "mae": 9.314570230356699e-05,
-          "relative_mae": 0.021787904345579454,
+          "mae": 9.314568921669263e-05,
+          "relative_mae": 0.021787901284401542,
           "common_scalar_entries": 3787290,
           "prediction_only_scalar_entries": 3187340,
-          "prediction_only_absolute_sum": 1.0902750172764959e-11,
-          "prediction_only_max_absolute": 4.297758438194521e-14,
-          "common_plus_prediction_only_mae": 5.057899657433973e-05,
+          "prediction_only_absolute_sum": 1.0902749883453974e-11,
+          "prediction_only_max_absolute": 4.2977587770077e-14,
+          "common_plus_prediction_only_mae": 5.057898946804329e-05,
           "prediction_only_blocks": 18860,
           "reference_only_blocks": 0,
-          "mae_meV": 2.534624963663283
+          "mae_meV": 2.5346246075511103
         }
       }
     },

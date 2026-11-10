@@ -27,7 +27,7 @@
   },
   "predicted_operators": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/predictions/sio2-2x1x1-1",
   "operator_sha256": {
-    "hamiltonian": "005809ec1beb418fb4c93508b124e646a4211e5ef4e550ef01b2a3f51a950807"
+    "hamiltonian": "965f365eaf18a1b34600f9afe704107e030d406651b2a537a72f69e7f71e5edd"
   },
   "predicted": {
     "mesh": [
@@ -41,17 +41,17 @@
       "metrics": {
         "raw_hermiticity.hamiltonian.max_absolute": {
           "count": 1,
-          "mean": 0.01628168672323227,
-          "min": 0.01628168672323227,
-          "max": 0.01628168672323227,
-          "p95": 0.01628168672323227
+          "mean": 0.016281738877296448,
+          "min": 0.016281738877296448,
+          "max": 0.016281738877296448,
+          "p95": 0.016281738877296448
         },
         "raw_hermiticity.hamiltonian.relative_frobenius": {
           "count": 1,
-          "mean": 0.004108035559952017,
-          "min": 0.004108035559952017,
-          "max": 0.004108035559952017,
-          "p95": 0.004108035559952017
+          "mean": 0.0041080360332737,
+          "min": 0.0041080360332737,
+          "max": 0.0041080360332737,
+          "p95": 0.0041080360332737
         }
       }
     },
@@ -60,8 +60,8 @@
         "status": "ok",
         "raw_hermiticity": {
           "hamiltonian": {
-            "relative_frobenius": 0.004108035559952017,
-            "max_absolute": 0.01628168672323227
+            "relative_frobenius": 0.0041080360332737,
+            "max_absolute": 0.016281738877296448
           }
         },
         "fractional_k": [
@@ -76,5 +76,5 @@
       "hamiltonian": 0
     }
   },
-  "elapsed_job_seconds": 86.46003120020032
+  "elapsed_job_seconds": 51.6167253870517
 }
