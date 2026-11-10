@@ -59,14 +59,14 @@
      - 701 passed, 0 failed, 0 errors, 68 skipped; 27.5 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 8.0 s
      - verified_20261110, 2026-11-10; CUDA scatter wheel; CPU and A40 GPU verified
-   * - py313-latest-cu13x-rosi (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
+   * - py313-latest-cu13x-rosi-attempt1 (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
      - 3.13.18
      - 2.15.0+cu134 / cu134
      - 2.1.2 / 2.8.1
      - Not re-tested
      - 0 passed, 2 failed, 0 errors, 0 skipped; 13.1 s
      - verified_20261110, 2026-11-10; Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry
-   * - py314-latest-cu13x-rosi (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
+   * - py314-latest-cu13x-rosi-attempt1 (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
      - 3.14.10
      - 2.15.0+cu134 / cu134
      - 2.1.2 / 2.8.1
