@@ -3,28 +3,28 @@
   "element_errors": {
     "hamiltonian": {
       "raw_common_support": {
-        "mae": 9.489103191699224e-05,
-        "relative_mae": 0.022196158014062026,
+        "mae": 9.489102507601666e-05,
+        "relative_mae": 0.022196156413875245,
         "common_scalar_entries": 3787290,
         "prediction_only_scalar_entries": 3187340,
-        "prediction_only_absolute_sum": 1.097645805469481e-11,
+        "prediction_only_absolute_sum": 1.0976457717553197e-11,
         "prediction_only_max_absolute": 4.315195458446698e-14,
-        "common_plus_prediction_only_mae": 5.152672704773106e-05,
+        "common_plus_prediction_only_mae": 5.152672333301668e-05,
         "prediction_only_blocks": 18860,
         "reference_only_blocks": 0,
-        "mae_meV": 2.582117825906043
+        "mae_meV": 2.5821176397535197
       },
       "hermitian_common_support": {
-        "mae": 9.314569610001349e-05,
-        "relative_mae": 0.021787902894493397,
+        "mae": 9.314568788944109e-05,
+        "relative_mae": 0.02178790097394138,
         "common_scalar_entries": 3787290,
         "prediction_only_scalar_entries": 3187340,
-        "prediction_only_absolute_sum": 1.0902750246966096e-11,
+        "prediction_only_absolute_sum": 1.0902749889702448e-11,
         "prediction_only_max_absolute": 4.297758438194521e-14,
-        "common_plus_prediction_only_mae": 5.0578993205751566e-05,
+        "common_plus_prediction_only_mae": 5.0578988747333156e-05,
         "prediction_only_blocks": 18860,
         "reference_only_blocks": 0,
-        "mae_meV": 2.5346247948559073
+        "mae_meV": 2.5346245714347373
       }
     }
   },
@@ -40,17 +40,17 @@
       "metrics": {
         "raw_hermiticity.hamiltonian.max_absolute": {
           "count": 1,
-          "mean": 0.013320133090019226,
-          "min": 0.013320133090019226,
-          "max": 0.013320133090019226,
-          "p95": 0.013320133090019226
+          "mean": 0.013320185244083405,
+          "min": 0.013320185244083405,
+          "max": 0.013320185244083405,
+          "p95": 0.013320185244083405
         },
         "raw_hermiticity.hamiltonian.relative_frobenius": {
           "count": 1,
-          "mean": 0.003967153724303245,
-          "min": 0.003967153724303245,
-          "max": 0.003967153724303245,
-          "p95": 0.003967153724303245
+          "mean": 0.003967154087346577,
+          "min": 0.003967154087346577,
+          "max": 0.003967154087346577,
+          "p95": 0.003967154087346577
         }
       }
     },
@@ -59,8 +59,8 @@
         "status": "ok",
         "raw_hermiticity": {
           "hamiltonian": {
-            "relative_frobenius": 0.003967153724303245,
-            "max_absolute": 0.013320133090019226
+            "relative_frobenius": 0.003967154087346577,
+            "max_absolute": 0.013320185244083405
           }
         },
         "fractional_k": [
@@ -87,17 +87,17 @@
       "metrics": {
         "raw_hermiticity.hamiltonian.max_absolute": {
           "count": 1,
-          "mean": 0.013320133090019226,
-          "min": 0.013320133090019226,
-          "max": 0.013320133090019226,
-          "p95": 0.013320133090019226
+          "mean": 0.013320185244083405,
+          "min": 0.013320185244083405,
+          "max": 0.013320185244083405,
+          "p95": 0.013320185244083405
         },
         "raw_hermiticity.hamiltonian.relative_frobenius": {
           "count": 1,
-          "mean": 0.003967153724303245,
-          "min": 0.003967153724303245,
-          "max": 0.003967153724303245,
-          "p95": 0.003967153724303245
+          "mean": 0.003967154087346577,
+          "min": 0.003967154087346577,
+          "max": 0.003967154087346577,
+          "p95": 0.003967154087346577
         }
       }
     },
@@ -106,8 +106,8 @@
         "status": "ok",
         "raw_hermiticity": {
           "hamiltonian": {
-            "relative_frobenius": 0.003967153724303245,
-            "max_absolute": 0.013320133090019226
+            "relative_frobenius": 0.003967154087346577,
+            "max_absolute": 0.013320185244083405
           }
         },
         "fractional_k": [
