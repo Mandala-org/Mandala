@@ -1,0 +1,650 @@
+{
+  "schema_version": 1,
+  "snapshot_utc": "2026-11-10T01:16:52.923504+00:00",
+  "status": "interim",
+  "horizon_hours": 90,
+  "horizon_freeze": {
+    "decided_utc": "2026-11-10T00:30:59Z",
+    "decided_by": "Bartek (2026-11-10 ~01:10 CET), executed by agent:claude",
+    "decision": "Freeze the common-split benchmark horizon at the end of training segment 2, i.e. 2 x 45 h = 90 h of H100 wall clock per arm. Segments 3-8 and the original summary job are cancelled. Terminal test scoring uses latest_checkpoint.pt of each arm at that point (score_terminal.sh); summarize.py runs afterwards.",
+    "reason": "The original horizon (max_epochs 3000 / 2400 / 2202 with LR-floor stop) would finish after the 2026-11-27 revision deadline. Equal wall-clock budget is the only horizon that can be applied identically to all six arms without per-epoch checkpoints. Declared before any test-split score existed.",
+    "epochs_at_decision": {
+      "mandala_graphene": 1342,
+      "deeph_e3_graphene": 790,
+      "mace_h_graphene": 684,
+      "mandala_mos2": 848,
+      "deeph_e3_mos2": 374,
+      "mace_h_mos2": 341
+    },
+    "cancelled_jobs": "828369-828374 828377-828382 828385-828390 828393-828398 828401-828406 828409-828414 828424"
+  },
+  "arms": {
+    "mandala_graphene": {
+      "segments": {
+        "1": {
+          "epochs": 703,
+          "lr": 0.00016875,
+          "terminal": false,
+          "updates": 189810,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": null
+      },
+      "epochs_at_90h": null,
+      "last_logged_completed_epoch": 1357,
+      "mean_minutes_per_epoch": 3.842237779415377,
+      "timing_epoch_count": 1357,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 1350,
+            "logged_epoch": 1349,
+            "mae_mev": 0.2008162073796093,
+            "step": "364499",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 1357,
+            "logged_epoch": 1356,
+            "mae_mev": 0.20272789538350597,
+            "step": "366389",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.0544514658354203,
+              "step": "94499",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 700,
+              "logged_epoch": 699,
+              "mae_mev": 0.25599835047032543,
+              "step": "188999",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 1357
+        },
+        "projected": {
+          "best": {
+            "epoch": 1334,
+            "logged_epoch": 1333,
+            "mae_mev": 0.18177223745321305,
+            "step": "360179",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 1357,
+            "logged_epoch": 1356,
+            "mae_mev": 0.18376113921910392,
+            "step": "366389",
+            "source": "results/mandala_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 0.9992450328356333,
+              "step": "94499",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 700,
+              "logged_epoch": 699,
+              "mae_mev": 0.23455415507086072,
+              "step": "188999",
+              "source": "results/mandala_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 1357
+        }
+      },
+      "metric_sources": [
+        {
+          "path": "results/mandala_graphene/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        },
+        {
+          "path": "results/mandala_graphene/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        }
+      ],
+      "terminal_test": null
+    },
+    "deeph_e3_graphene": {
+      "segments": {
+        "1": {
+          "epochs": 414,
+          "lr": 0.003,
+          "terminal": false,
+          "updates": 111780,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": null
+      },
+      "epochs_at_90h": null,
+      "last_logged_completed_epoch": 799,
+      "mean_minutes_per_epoch": 6.517918231122236,
+      "timing_epoch_count": 799,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 650,
+            "logged_epoch": 649,
+            "mae_mev": 0.4432655807080369,
+            "step": "175499",
+            "source": "results/deeph_e3_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 799,
+            "logged_epoch": 798,
+            "mae_mev": 0.49108053085227127,
+            "step": "215729",
+            "source": "results/deeph_e3_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 0.9184616902059727,
+              "step": "94499",
+              "source": "results/deeph_e3_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 700,
+              "logged_epoch": 699,
+              "mae_mev": 0.5830496692647453,
+              "step": "188999",
+              "source": "results/deeph_e3_graphene/metrics/version_1/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 799
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/deeph_e3_graphene/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/deeph_e3_graphene/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": null
+    },
+    "mace_h_graphene": {
+      "segments": {
+        "1": {
+          "epochs": 363,
+          "lr": 0.0038400000000000005,
+          "terminal": false,
+          "updates": 98010,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": null
+      },
+      "epochs_at_90h": null,
+      "last_logged_completed_epoch": 692,
+      "mean_minutes_per_epoch": 7.399421965317918,
+      "timing_epoch_count": 692,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 665,
+            "logged_epoch": 664,
+            "mae_mev": 0.48106116805104393,
+            "step": "179549",
+            "source": "results/mace_h_graphene/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 692,
+            "logged_epoch": 691,
+            "mae_mev": 0.530996059730061,
+            "step": "186839",
+            "source": "results/mace_h_graphene/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.0784521707700305,
+              "step": "94499",
+              "source": "results/mace_h_graphene/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "700": {
+              "epoch": 692,
+              "logged_epoch": 691,
+              "mae_mev": 0.530996059730061,
+              "step": "186839",
+              "source": "results/mace_h_graphene/metrics/version_1/metrics.csv",
+              "requested_epoch": 700,
+              "epoch_delta": -8,
+              "target_reached": false
+            }
+          },
+          "logged_epochs": 692
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/mace_h_graphene/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/mace_h_graphene/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": null
+    },
+    "mandala_mos2": {
+      "segments": {
+        "1": {
+          "epochs": 435,
+          "lr": 0.0003375,
+          "terminal": false,
+          "updates": 130500,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": null
+      },
+      "epochs_at_90h": null,
+      "last_logged_completed_epoch": 858,
+      "mean_minutes_per_epoch": 6.073271173271173,
+      "timing_epoch_count": 858,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 844,
+            "logged_epoch": 843,
+            "mae_mev": 0.5216578140246535,
+            "step": "253199",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 858,
+            "logged_epoch": 857,
+            "mae_mev": 0.6213452409219009,
+            "step": "257399",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 2.9243821379640442,
+              "step": "52499",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.2552337698088467,
+              "step": "104999",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 858
+        },
+        "projected": {
+          "best": {
+            "epoch": 844,
+            "logged_epoch": 843,
+            "mae_mev": 0.44999001613370754,
+            "step": "253199",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 858,
+            "logged_epoch": 857,
+            "mae_mev": 0.5389262918544022,
+            "step": "257399",
+            "source": "results/mandala_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 2.5099136181641333,
+              "step": "52499",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.1495282699017406,
+              "step": "104999",
+              "source": "results/mandala_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 858
+        }
+      },
+      "metric_sources": [
+        {
+          "path": "results/mandala_mos2/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        },
+        {
+          "path": "results/mandala_mos2/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": "val/hamiltonian_mae_elementwise_projected",
+              "multiplier_to_mev": 1000.0
+            }
+          }
+        }
+      ],
+      "terminal_test": null
+    },
+    "deeph_e3_mos2": {
+      "segments": {
+        "1": {
+          "epochs": 196,
+          "lr": 0.005,
+          "terminal": false,
+          "updates": 58800,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": null
+      },
+      "epochs_at_90h": null,
+      "last_logged_completed_epoch": 379,
+      "mean_minutes_per_epoch": 13.721284080914689,
+      "timing_epoch_count": 379,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 376,
+            "logged_epoch": 375,
+            "mae_mev": 1.2144341571083723,
+            "step": "112799",
+            "source": "results/deeph_e3_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 379,
+            "logged_epoch": 378,
+            "mae_mev": 1.3029556711277037,
+            "step": "113699",
+            "source": "results/deeph_e3_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 2.4618267589984364,
+              "step": "52499",
+              "source": "results/deeph_e3_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 350,
+              "logged_epoch": 349,
+              "mae_mev": 1.5886069741315478,
+              "step": "104999",
+              "source": "results/deeph_e3_mos2/metrics/version_1/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": 0,
+              "target_reached": true
+            }
+          },
+          "logged_epochs": 379
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/deeph_e3_mos2/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/deeph_e3_mos2/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": null
+    },
+    "mace_h_mos2": {
+      "segments": {
+        "1": {
+          "epochs": 182,
+          "lr": 0.006,
+          "terminal": false,
+          "updates": 54600,
+          "gpu": "NVIDIA H100 80GB HBM3"
+        },
+        "2": null
+      },
+      "epochs_at_90h": null,
+      "last_logged_completed_epoch": 346,
+      "mean_minutes_per_epoch": 14.758526011560694,
+      "timing_epoch_count": 346,
+      "timing_source": "maximum full-epoch tqdm elapsed time per epoch; includes validation",
+      "validation": {
+        "raw": {
+          "best": {
+            "epoch": 337,
+            "logged_epoch": 336,
+            "mae_mev": 1.0806580801628578,
+            "step": "101099",
+            "source": "results/mace_h_mos2/metrics/version_1/metrics.csv"
+          },
+          "last": {
+            "epoch": 346,
+            "logged_epoch": 345,
+            "mae_mev": 1.1901798377452315,
+            "step": "103799",
+            "source": "results/mace_h_mos2/metrics/version_1/metrics.csv"
+          },
+          "matched_epochs": {
+            "175": {
+              "epoch": 175,
+              "logged_epoch": 174,
+              "mae_mev": 1.793792102344875,
+              "step": "52499",
+              "source": "results/mace_h_mos2/metrics/version_0/metrics.csv",
+              "requested_epoch": 175,
+              "epoch_delta": 0,
+              "target_reached": true
+            },
+            "350": {
+              "epoch": 346,
+              "logged_epoch": 345,
+              "mae_mev": 1.1901798377452315,
+              "step": "103799",
+              "source": "results/mace_h_mos2/metrics/version_1/metrics.csv",
+              "requested_epoch": 350,
+              "epoch_delta": -4,
+              "target_reached": false
+            }
+          },
+          "logged_epochs": 346
+        },
+        "projected": null
+      },
+      "metric_sources": [
+        {
+          "path": "results/mace_h_mos2/metrics/version_0/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        },
+        {
+          "path": "results/mace_h_mos2/metrics/version_1/metrics.csv",
+          "columns": {
+            "raw": {
+              "column": "val/hamiltonian_mae_elementwise",
+              "multiplier_to_mev": 1000.0
+            },
+            "projected": {
+              "column": null,
+              "multiplier_to_mev": null
+            }
+          }
+        }
+      ],
+      "terminal_test": null
+    }
+  },
+  "sources": {
+    "results/mandala_graphene/metrics/version_0/metrics.csv": "b337062289e9cbdf98b2c71e6384a7be569665e54163cef5bfa1f870ef93cd4c",
+    "results/mandala_graphene/metrics/version_1/metrics.csv": "6eff2f7c0aa16b8c6e56e74f66988bf8368deaa1651b8b754ee54df7cd50feb5",
+    "results/mandala_graphene/segment_1.json": "f97e4abdf7a9870da728a45628c6d8ca13a8e4d8213f1abe4f686fe6dee29bb8",
+    "results/deeph_e3_graphene/metrics/version_0/metrics.csv": "08f3e7af3a7890ac803139a460855712186d797f98c6b30233b8adcbacdbf70e",
+    "results/deeph_e3_graphene/metrics/version_1/metrics.csv": "6a8e4a7b6a253092c7c2b03b319e97847aeadd8096c05d6580f753caf61bd97c",
+    "results/deeph_e3_graphene/segment_1.json": "c130bac9b91f56679f4458260c841c0a871ee0f1577c69a56cfd3a16670aa772",
+    "results/mace_h_graphene/metrics/version_0/metrics.csv": "a77598992429a0231f5056ac382902cb029fb62aedd8ced4fd92e6cfbfa1c012",
+    "results/mace_h_graphene/metrics/version_1/metrics.csv": "5da72352faabb68db6f2c7dcf0adceffa12a246e923ad11d794f806c763a7eac",
+    "results/mace_h_graphene/segment_1.json": "bcd1db3d93e3e5e9c53b23e93028fe178dc8f61f63e400fc34d73419559cdf6b",
+    "results/mandala_mos2/metrics/version_0/metrics.csv": "32d2f3627e37f7e7aa92af21b6c1880910cdee7170c5ed9a6b923d0b677fb4f5",
+    "results/mandala_mos2/metrics/version_1/metrics.csv": "a4b6491254fec7ffcab993006410cba1e8c87677db57671141365c4a361d07e2",
+    "results/mandala_mos2/segment_1.json": "563052d5b89b17f8370a8adf506999bed245580855c532c65214b36cf143ea6a",
+    "results/deeph_e3_mos2/metrics/version_0/metrics.csv": "4ed6e327f37c2973ea5841523cdfd5a4f0dea249a9fffe6764e6b4317b37f3b5",
+    "results/deeph_e3_mos2/metrics/version_1/metrics.csv": "cad1faff79ad871777adc2752ee06fbbfeb24e81cd364eb0034dc6b93bae8a19",
+    "results/deeph_e3_mos2/segment_1.json": "2483888dfb276671b6c98e2da272be066bd80eedbeb24a4775a24d61044e0568",
+    "results/mace_h_mos2/metrics/version_0/metrics.csv": "4bcb3ce75d00a95a08b56bb8363eb7dcd84798520b7ad0c060a39682968f3dd2",
+    "results/mace_h_mos2/metrics/version_1/metrics.csv": "25afbe755ad3d329fb57485a924cfe48af1c893edcde1f8dd1f56b6c5f4b6096",
+    "results/mace_h_mos2/segment_1.json": "57c900e2352ced702f8f5f9d0f00114908287cc2dc27a5848e35e6ac7b7980fe",
+    "HORIZON_FREEZE.json": "e37674516b94fcdccd42be5e14a27e3c347385b219e25ca02a6237d8548c1f4a",
+    "epoch_timings.json": "bef08c2fa424eb28d9edecad902997288f8ddd5b674667b75a4ed8fd48503a9f"
+  },
+  "terminal_comparison": null
+}
