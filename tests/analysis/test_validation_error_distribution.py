@@ -132,3 +132,73 @@ def test_paper_density_convention_is_a_fixed_copy(small_angular_snapshot_e3nn):
     assert targets["density"] is native
     assert restored["other"] == 123
     assert reference_targets(targets, "native_spin0") is targets
+
+
+@pytest.mark.parametrize("dataset_kind,seed", [("ZnCuSnSeS", 44), ("silicon_scales", 43)])
+def test_validation_only_preserves_ordered_split_and_training_mapper(
+    tmp_path, monkeypatch, dataset_kind, seed
+):
+    """Synthetic listing, real discovery/shuffle/factory; no matrix parsing."""
+    import random
+    from pathlib import Path
+
+    import data.factory as factory_module
+    from data.factory import DatasetFactory
+    from net.common import Config
+    from scripts.report.evaluate_validation_error_distribution import (
+        build_evaluation_dataset_bundle,
+    )
+
+    # Multiple scales exercise the single RNG shared across scale shuffles.
+    for scale in (1, 2):
+        for index in reversed(range(105)):
+            directory = tmp_path / f"scale_{scale}" / f"snapshot_{index}"
+            directory.mkdir(parents=True)
+            (directory / "HS.out").touch()
+            (directory / "Si.out").touch()
+        incomplete = tmp_path / f"scale_{scale}" / "incomplete"
+        incomplete.mkdir()
+        (incomplete / "HS.out").touch()
+
+    args = SimpleNamespace(
+        dataset_kind=dataset_kind, data_path=tmp_path, scales="[1, 2]",
+        num_train_per_scale=80, num_val_per_scale=20, data_split_seed=seed,
+        convention="e3nn", snapshot_cache_dir=None, dataset_device="cpu",
+        load_split="all",
+    )
+    metadata_reads = []
+
+    def load_info(self, matrix, info):
+        metadata_reads.append(matrix)
+        # A species present only in training must remain in the mapper.
+        return SimpleNamespace(orbital_set={"H": "1s", "O": "1s"}, is_spinful=False)
+
+    monkeypatch.setattr(DatasetFactory, "_load_info", load_info)
+    builds = []
+
+    def dataset(pairs, mapper, cfg, convention, *, preprocessing, split):
+        builds.append((split, list(pairs)))
+        return list(pairs)
+
+    monkeypatch.setattr(factory_module, "E3GNNDataset", dataset)
+    monkeypatch.setattr("scripts.dataset._resolve_single_snapshot_info_path", paper_metadata_path)
+    count_full, full, mapper_full = build_evaluation_dataset_bundle(args, Config(verbosity=0))
+    assert [split for split, _ in builds] == ["train", "val"]
+    training_paths = {matrix for matrix, _ in builds[0][1]}
+    builds.clear()
+    metadata_reads.clear()
+    args.load_split = "validation"
+    count_fast, fast, mapper_fast = build_evaluation_dataset_bundle(args, Config(verbosity=0))
+    assert builds == [("val", full)]
+    assert fast == full
+    assert count_fast == count_full == 160
+    assert training_paths <= set(metadata_reads)
+    assert mapper_fast.orbital_cfg.to_dict() == mapper_full.orbital_cfg.to_dict()
+
+    expected = []
+    rng = random.Random(seed)
+    for scale in (1, 2):
+        paths = sorted((tmp_path / f"scale_{scale}").glob("snapshot_*/HS.out"))
+        rng.shuffle(paths)
+        expected.extend(paths[80:100])
+    assert [matrix for matrix, _ in fast] == expected

@@ -104,9 +104,12 @@ class DatasetFactory:
         )
 
     # ------------------------------------------------------------------ create
-    def create(self, *, include_test: bool = False):
+    def create(self, *, include_test: bool = False, load_splits=None):
         """
         Build datasets **and** a shared mapper.
+
+        ``load_splits`` optionally limits matrix loading; omitted splits return
+        None. All metadata still contributes to the original mapper checks.
 
         Returns
         -------
@@ -117,6 +120,13 @@ class DatasetFactory:
         mapper
             The single :class:`BlockIrrepMapper` used by both datasets.
         """
+        # Metadata from every split is still checked, even when evaluation
+        # requests only validation matrices. In particular the mapper and resolved
+        # configuration must retain the complete training orbital vocabulary.
+        load_splits = {"train", "val", "test"} if load_splits is None else set(load_splits)
+        if not load_splits <= {"train", "val", "test"}:
+            raise ValueError("load_splits must contain only train, val, or test")
+
         # ①  Merge all orbital configs ---------------------------------
         info_all = []
         for matrix_path, info_p in self._pairs["train"]:
@@ -191,14 +201,15 @@ class DatasetFactory:
                 split=split,
             )
 
-        train_ds = build("train")
-        val_ds = build("val") if self._pairs["val"] else None
-        test_ds = build("test") if self._pairs["test"] else None
+        train_ds = build("train") if "train" in load_splits else None
+        val_ds = build("val") if "val" in load_splits and self._pairs["val"] else None
+        test_ds = build("test") if "test" in load_splits and self._pairs["test"] else None
 
         # Print dataset summaries if verbosity >= 1
-        print_dataset_summary(
-            train_ds, name="Training Dataset", verbosity=self.cfg.verbosity
-        )
+        if train_ds is not None:
+            print_dataset_summary(
+                train_ds, name="Training Dataset", verbosity=self.cfg.verbosity
+            )
         if val_ds:
             print_dataset_summary(
                 val_ds, name="Validation Dataset", verbosity=self.cfg.verbosity
