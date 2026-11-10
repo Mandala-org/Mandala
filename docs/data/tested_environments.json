@@ -1200,7 +1200,44 @@
           "skipped": 68
         },
         "passed": 701,
-        "subtests_passed": 52
+        "subtests_passed": 52,
+        "counts_by_subset": {
+          "unit": {
+            "passed": 593,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        "skipped_reasons": {
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned deeph_e3 source oracle is not configured.": 4,
+          "Pinned mace_h source oracle is not configured.": 4
+        },
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ]
       },
       "gpu_smoke": {
         "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-t2xx-cu128/bin/python -m pytest -q tests/gpu/test_cuda_smoke.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/py314-t2xx-cu128/gpu_smoke.xml",
@@ -1522,7 +1559,11 @@
       "table_note": "Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry",
       "notes": [
         "Slurm exit 0 did not indicate a passing test result; the probe exit propagation was corrected before the retry."
-      ]
+      ],
+      "cpu_tests": {
+        "exit_code": null,
+        "reason": "GPU-only ROSI allocation; matching CPU contracts ran on Terok."
+      }
     },
     {
       "name": "py314-latest-cu13x-rosi-attempt1",
@@ -1821,7 +1862,11 @@
       "table_note": "Initial ROSI attempt: old driver and CPU-only scatter; see corrected retry",
       "notes": [
         "Slurm exit 0 did not indicate a passing test result; the probe exit propagation was corrected before the retry."
-      ]
+      ],
+      "cpu_tests": {
+        "exit_code": null,
+        "reason": "GPU-only ROSI allocation; matching CPU contracts ran on Terok."
+      }
     },
     {
       "name": "py313-latest-cu13x",
@@ -2099,7 +2144,44 @@
           "skipped": 68
         },
         "passed": 701,
-        "subtests_passed": 52
+        "subtests_passed": 52,
+        "counts_by_subset": {
+          "unit": {
+            "passed": 593,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        "skipped_reasons": {
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned deeph_e3 source oracle is not configured.": 4,
+          "Pinned mace_h source oracle is not configured.": 4
+        },
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ]
       },
       "gpu_smoke": {
         "exit_code": null,
@@ -2424,7 +2506,44 @@
           "skipped": 68
         },
         "passed": 701,
-        "subtests_passed": 52
+        "subtests_passed": 52,
+        "counts_by_subset": {
+          "unit": {
+            "passed": 593,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        "skipped_reasons": {
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned mace_h source oracle is not configured.": 4,
+          "Pinned deeph_e3 source oracle is not configured.": 4
+        },
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ]
       },
       "gpu_smoke": {
         "exit_code": null,
@@ -2741,7 +2860,44 @@
           "skipped": 68
         },
         "passed": 701,
-        "subtests_passed": 52
+        "subtests_passed": 52,
+        "counts_by_subset": {
+          "unit": {
+            "passed": 593,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 68
+          },
+          "physics": {
+            "passed": 69,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "equivariance": {
+            "passed": 39,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        "skipped_reasons": {
+          "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+          "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+          "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+          "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+          "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+          "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+          "Pinned deeph_e3 source oracle is not configured.": 4,
+          "Pinned mace_h source oracle is not configured.": 4
+        },
+        "subsets": [
+          "unit",
+          "physics",
+          "equivariance"
+        ]
       },
       "gpu_smoke": {
         "exit_code": null,
@@ -3127,7 +3283,11 @@
         "archive_sha256": "8f49a2bbca06447b2ce335320b7b6169fac9de5866958454849a75f7363d17c3",
         "source": "https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html"
       },
-      "table_note": "H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10"
+      "table_note": "H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10",
+      "cpu_tests": {
+        "exit_code": null,
+        "reason": "GPU-only ROSI allocation; matching CPU contracts ran on Terok."
+      }
     },
     {
       "name": "rosi-h100-paper-training",

@@ -367,5 +367,9 @@
     "archive_sha256": "8f49a2bbca06447b2ce335320b7b6169fac9de5866958454849a75f7363d17c3",
     "source": "https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html"
   },
-  "table_note": "H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10"
+  "table_note": "H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10",
+  "cpu_tests": {
+    "exit_code": null,
+    "reason": "GPU-only ROSI allocation; matching CPU contracts ran on Terok."
+  }
 }

@@ -244,7 +244,44 @@
       "skipped": 68
     },
     "passed": 701,
-    "subtests_passed": 52
+    "subtests_passed": 52,
+    "counts_by_subset": {
+      "unit": {
+        "passed": 593,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 68
+      },
+      "physics": {
+        "passed": 69,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "equivariance": {
+        "passed": 39,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "skipped_reasons": {
+      "Set MANDALA_DEEPH_REFERENCE for independent preprocessing oracle": 2,
+      "Set MANDALA_DEEPHE3_REFERENCE for independent native graph comparison": 2,
+      "Set MANDALA_MACEH_REFERENCE for independent native graph comparison": 2,
+      "Set MANDALA_DEEPH_REFERENCE to the pinned DeepH checkout": 1,
+      "Pinned upstream differential checks need MANDALA_MACEH_REFERENCE_ROOT.": 11,
+      "Set MANDALA_DEEPHE3_REFERENCE to enable pinned-source parity.": 15,
+      "Set MANDALA_DEEPH_REFERENCE to enable independent source comparison": 9,
+      "Set MANDALA_DEEPHE3_REFERENCE to enable the independent upstream oracle.": 18,
+      "Pinned deeph_e3 source oracle is not configured.": 4,
+      "Pinned mace_h source oracle is not configured.": 4
+    },
+    "subsets": [
+      "unit",
+      "physics",
+      "equivariance"
+    ]
   },
   "gpu_smoke": {
     "command": "/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-t2xx-cu128/bin/python -m pytest -q tests/gpu/test_cuda_smoke.py --junitxml=/home/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/py314-t2xx-cu128/gpu_smoke.xml",
