@@ -89,6 +89,7 @@ def main():
         if m:
             lines.append('| '+' | '.join([row['name'],fmt(row['routed_diagnostic_H_MAE_meV']),fmt(row['routed_diagnostic_S_MAE']),fmt(row['routed_diagnostic_D_MAE']),fmt(m['positive_definite_fraction']),fmt(m['minimum_eigenvalue']),f"{m['cholesky_success_count']}/{m['kpoints']}"])+' |')
     lines += ['', '1000-atom follow-up: after OpenMX completes, run:', '', '```bash', 'ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_5x.sh"', '```']
+    lines += ['', '600-atom SiO2 follow-up: after OpenMX completes, run:', '', '```bash', 'ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_sio2_4x.sh"', '```']
     (RUN/'results/summary.md').write_text('\n'.join(lines)+'\n')
     (RUN/'results/summary.json').write_text(json.dumps(dict(diagnostic_caveat='Requires known parent cell; unchanged parameters; not applied to primary predictions', interpretation=interpretation, columns=meaning, structures=rows),indent=2,allow_nan=False)+'\n')
     print('\n'.join(lines[:len(rows)+5]))
