@@ -100,14 +100,23 @@ Known version notes
 * Native checkpoints contain Python Config objects. The loader explicitly
   retains trusted-payload loading across the PyTorch 2.6 ``weights_only``
   default change; load only checkpoints whose source you trust.
-* The newest PyPI release selected on 2026-11-10 was PyTorch 2.15.0; its
-  newest Linux wheel tag was cu134. This driver cannot initialize CUDA with
-  that wheel. No matching PyG scatter wheel was available, and building with
-  local nvcc 12.4 failed against CUDA 13.4, so scatter was built for CPU only.
-  The failing CPU and GPU checks remain in the table and JSON; this stack
-  is not verified for production use. Its CPU selection also fails the
-  reproduction setup test with ``min() iterable argument is empty`` when
-  that test mocks CUDA availability on this driver-incompatible build.
+* The newest stable PyTorch selected on 2026-11-10 is 2.15.0, with cu134
+  wheels for Python 3.13, 3.14 and 3.15. There is no matching PyG scatter
+  wheel index. The follow-up probe builds scatter with nvcc 13.4.92,
+  matching CUDA CRT/NVVM 13.4.92 and architectures 8.6, 9.0 and 10.0.
+  Unpinned CRT/NVVM resolve to 13.5 and produce PTX 9.5 that the 13.4
+  assembler rejects; both compiler components must be pinned.
+* The earlier Terok cu134 failures remain in the table and JSON. Those
+  records used CPU-only scatter after a CUDA 12.4 compiler mismatch.
+  Their reproduction-setup CPU failure came from an incomplete CUDA mock;
+  the follow-up isolates cuDNN runtime metadata as well as GPU metadata.
+* ROSI's H100 has kernel driver 570.158.01, which also cannot initialize
+  cu134 directly. The follow-up GPU probe uses NVIDIA's isolated
+  ``cuda-compat-13-4`` libraries (user-space driver 615.71.10) through
+  ``LD_LIBRARY_PATH``. NVIDIA lists driver 570 as compatible with this
+  `forward-compatibility package
+  <https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html>`_.
+  The system driver is unchanged; this qualification is part of the stack.
 
 * The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
   see notes" in the table). Their diff was not supplied; that report does not

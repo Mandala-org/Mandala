@@ -1,0 +1,30 @@
+{
+  "head": "04e72628",
+  "run_id": 42787859176,
+  "jobs": [
+    {
+      "name": "CPU tests (Python 3.10)",
+      "conclusion": "success",
+      "runtime_seconds": 340.0,
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42787859176/job/129733506263"
+    },
+    {
+      "name": "CPU tests (Python 3.14)",
+      "conclusion": "success",
+      "runtime_seconds": 243.0,
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42787859176/job/129733506590"
+    },
+    {
+      "name": "CPU tests (Python 3.13)",
+      "conclusion": "success",
+      "runtime_seconds": 441.0,
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42787859176/job/129733506676"
+    },
+    {
+      "name": "CPU tests (Python 3.11)",
+      "conclusion": "success",
+      "runtime_seconds": 396.0,
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42787859176/job/129733506682"
+    }
+  ]
+}

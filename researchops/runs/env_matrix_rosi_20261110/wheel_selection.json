@@ -102,5 +102,13 @@
         }
       }
     }
+  },
+  "cuda13_index_discovery": {
+    "url": "https://download.pytorch.org/whl/",
+    "tags": [
+      "cu130",
+      "cu132",
+      "cu134"
+    ]
   }
 }
