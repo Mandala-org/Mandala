@@ -1,0 +1,3 @@
+mpicc -O3 -march=znver3 -fopenmp -fcommon -I/data/rosi/shared/eb/easybuild/genoa/software/FFTW/3.3.10-GCC-11.3.0/include
+mpif90 -O3 -march=znver3 -fopenmp -fallow-argument-mismatch
+-L/data/rosi/shared/eb/easybuild/genoa/software/ScaLAPACK/2.2.0-gompi-2022a-fb/lib -lscalapack -L/data/rosi/shared/eb/easybuild/genoa/software/FlexiBLAS/3.2.0-GCC-11.3.0/lib -lflexiblas -L/data/rosi/shared/eb/easybuild/genoa/software/FFTW/3.3.10-GCC-11.3.0/lib -lfftw3 -lmpi_usempif08 -lmpi_usempi_ignore_tkr -lmpi_mpifh -lgfortran -lm -ldl

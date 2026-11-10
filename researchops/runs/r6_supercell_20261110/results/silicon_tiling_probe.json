@@ -1,0 +1,218 @@
+{
+  "material": "silicon",
+  "base_edges": 796,
+  "super_edges": 6368,
+  "expected_super_edges": 6368,
+  "common_edges": 6368,
+  "inputs": {
+    "edge_length": {
+      "mean": 1.8974644454879376e-07,
+      "max": 9.5367431640625e-07
+    },
+    "edge_sh": {
+      "mean": 1.1716410500725234e-07,
+      "max": 2.4437904357910156e-06
+    },
+    "edge_length_emb": {
+      "mean": 4.239570225485915e-08,
+      "max": 1.1622905731201172e-05
+    },
+    "edge_one_hot": {
+      "mean": 0.0,
+      "max": 0.0
+    },
+    "edge_type_idx": {
+      "mean": 0.0,
+      "max": 0.0
+    }
+  },
+  "activations": {
+    "node_encoding": {
+      "mean": 0.0,
+      "max": 0.0,
+      "base_absolute_mean": 0.2581976652145386
+    },
+    "edge_encoding": {
+      "mean": 6.613886578128255e-08,
+      "max": 5.7220458984375e-06,
+      "base_absolute_mean": 0.4653054475784302
+    },
+    "node_message_0": {
+      "mean": 0.00011930194731499498,
+      "max": 0.00548553466796875,
+      "base_absolute_mean": 10.32669734954834
+    },
+    "edge_message_0": {
+      "mean": 1.863006744758874e-06,
+      "max": 0.00040435791015625,
+      "base_absolute_mean": 0.9051122665405273
+    },
+    "node_message_1": {
+      "mean": 0.00014442546981594074,
+      "max": 0.006237030029296875,
+      "base_absolute_mean": 10.374102592468262
+    },
+    "edge_message_1": {
+      "mean": 9.569392617013842e-06,
+      "max": 0.0022077560424804688,
+      "base_absolute_mean": 1.2480639219284058
+    }
+  },
+  "diagnostic_parent_head_routing": {
+    "learned_parameters_changed": false,
+    "applied_to_primary_predictions": false,
+    "caveat": "Known source-cell parent labels in a perfect tiling only; not a deployable size correction",
+    "errors_to_folded_base_prediction": {
+      "hamiltonian": {
+        "raw_common_support": {
+          "mae": 5.374808144969894e-09,
+          "relative_mae": 1.2853551123640268e-06,
+          "common_scalar_entries": 1076192,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 5.374808144969894e-09,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.00014625605435603377
+        },
+        "hermitian_common_support": {
+          "mae": 5.38391448534052e-06,
+          "relative_mae": 0.0012875328424028683,
+          "common_scalar_entries": 1076192,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 5.38391448534052e-06,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.14650385062639504
+        }
+      },
+      "density": {
+        "raw_common_support": {
+          "mae": 1.1521557770692111e-08,
+          "relative_mae": 4.2830271277431725e-06,
+          "common_scalar_entries": 1076192,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 1.1521557770692111e-08,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 3.808341823082273e-05,
+          "relative_mae": 0.0141571406094685,
+          "common_scalar_entries": 1076192,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 3.808341823082273e-05,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        }
+      },
+      "overlap": {
+        "raw_common_support": {
+          "mae": 4.4754550177409965e-09,
+          "relative_mae": 3.893979965647987e-07,
+          "common_scalar_entries": 1076192,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 4.4754550177409965e-09,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 3.7043351124065027e-06,
+          "relative_mae": 0.0003223048082614443,
+          "common_scalar_entries": 1076192,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 3.7043351124065027e-06,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        }
+      }
+    },
+    "errors_to_folded_reference": {
+      "hamiltonian": {
+        "raw_common_support": {
+          "mae": 1.5089654073109196e-05,
+          "relative_mae": 0.0033466276384029083,
+          "common_scalar_entries": 940992,
+          "prediction_only_scalar_entries": 135200,
+          "prediction_only_absolute_sum": 260.41479444503784,
+          "prediction_only_max_absolute": 0.0289081409573555,
+          "common_plus_prediction_only_mae": 0.00025517197508493,
+          "prediction_only_blocks": 800,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.4106106128450036
+        },
+        "hermitian_common_support": {
+          "mae": 1.4099189949754498e-05,
+          "relative_mae": 0.0031269596066504516,
+          "common_scalar_entries": 940992,
+          "prediction_only_scalar_entries": 135200,
+          "prediction_only_absolute_sum": 260.412346214056,
+          "prediction_only_max_absolute": 0.0287934597581625,
+          "common_plus_prediction_only_mae": 0.00025430366622615237,
+          "prediction_only_blocks": 800,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.3836586973987496
+        }
+      },
+      "density": {
+        "raw_common_support": {
+          "mae": 5.152081173041962e-05,
+          "relative_mae": 0.017482947521483414,
+          "common_scalar_entries": 940992,
+          "prediction_only_scalar_entries": 135200,
+          "prediction_only_absolute_sum": 123.97447402775288,
+          "prediction_only_max_absolute": 0.0314522348344326,
+          "common_plus_prediction_only_mae": 0.00016024570494817272,
+          "prediction_only_blocks": 800,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 4.953477004960346e-05,
+          "relative_mae": 0.016809008945692563,
+          "common_scalar_entries": 940992,
+          "prediction_only_scalar_entries": 135200,
+          "prediction_only_absolute_sum": 117.40105013549328,
+          "prediction_only_max_absolute": 0.02539513260126114,
+          "common_plus_prediction_only_mae": 0.00015240112589018476,
+          "prediction_only_blocks": 800,
+          "reference_only_blocks": 0
+        }
+      },
+      "overlap": {
+        "raw_common_support": {
+          "mae": 1.4556696167678291e-05,
+          "relative_mae": 0.0011459602612932799,
+          "common_scalar_entries": 940992,
+          "prediction_only_scalar_entries": 135200,
+          "prediction_only_absolute_sum": 411.9956482052803,
+          "prediction_only_max_absolute": 0.12135825306177139,
+          "common_plus_prediction_only_mae": 0.0003955552381410531,
+          "prediction_only_blocks": 800,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 1.3515253111002201e-05,
+          "relative_mae": 0.0010639737759257728,
+          "common_scalar_entries": 940992,
+          "prediction_only_scalar_entries": 135200,
+          "prediction_only_absolute_sum": 411.6481333374977,
+          "prediction_only_max_absolute": 0.12133583426475525,
+          "common_plus_prediction_only_mae": 0.00039432171805117103,
+          "prediction_only_blocks": 800,
+          "reference_only_blocks": 0
+        }
+      }
+    }
+  }
+}

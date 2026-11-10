@@ -1,0 +1,18 @@
+{
+  "silicon": {
+    "original": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+    "new": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/silicon",
+    "ranks": 4,
+    "omp_threads": 1,
+    "memory": "32G",
+    "walltime": "00:30:00"
+  },
+  "sio2": {
+    "original": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000",
+    "new": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/sio2",
+    "ranks": 4,
+    "omp_threads": 8,
+    "memory": "256G",
+    "walltime": "04:00:00"
+  }
+}

@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "silicon_training": {
+    "scales": [
+      1
+    ],
+    "num_train_per_scale": 80,
+    "num_val_per_scale": 16,
+    "split_seed": 43,
+    "sigma_angstrom": 0.02,
+    "dataset_generation_seed": 7,
+    "lattice_constant_angstrom": 5.4437
+  },
+  "sio2_split_seed": 42,
+  "ase_version": "3.29.0",
+  "numpy_version": "2.4.6",
+  "reference_density": "OpenMX single spin multiplied by 2 to match historical restricted-total heads",
+  "silicon_mesh_note": "8/3 is not integral; 3x3x3 is slightly denser than the original 8x8x8 density.",
+  "sio2_control_caveat": "Original Gamma-only sampling corresponds to supercell Gamma and X-type points; folded blocks are an exact DFT reference only if the original Gamma calculation was converged with respect to k sampling.",
+  "structures": [
+    {
+      "name": "si-2x2x2-1",
+      "material": "silicon",
+      "cif": "si-2x2x2-1.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "ideal diamond at dataset lattice constant",
+      "repetition": [
+        2,
+        2,
+        2
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20261311,
+      "atom_count": 64,
+      "rms_displacement_angstrom": 0.034213328284087935,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 256,
+      "diagnostic_mesh": [
+        4,
+        4,
+        4
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-1",
+      "sha256": "cd92e949f3a292d91d7f8362797aa714ed4d281aebcfa77abb7511c54061e019"
+    },
+    {
+      "name": "si-2x2x2-2",
+      "material": "silicon",
+      "cif": "si-2x2x2-2.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "ideal diamond at dataset lattice constant",
+      "repetition": [
+        2,
+        2,
+        2
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20261312,
+      "atom_count": 64,
+      "rms_displacement_angstrom": 0.03435544139713987,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 256,
+      "diagnostic_mesh": [
+        4,
+        4,
+        4
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-2",
+      "sha256": "553ba6f4252076a9f288fe62fd04e1bd4b9d560a1ac09e7692e765f2d92fe573"
+    },
+    {
+      "name": "si-2x2x2-3",
+      "material": "silicon",
+      "cif": "si-2x2x2-3.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "ideal diamond at dataset lattice constant",
+      "repetition": [
+        2,
+        2,
+        2
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20261313,
+      "atom_count": 64,
+      "rms_displacement_angstrom": 0.032231464742904975,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 256,
+      "diagnostic_mesh": [
+        4,
+        4,
+        4
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-3",
+      "sha256": "6257068faeb68b529cecfec3382677c9fb49db51638aa0ee0beba855be5bc0f0"
+    },
+    {
+      "name": "si-2x2x2-tiled",
+      "material": "silicon",
+      "cif": "si-2x2x2-tiled.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "dataset CIF",
+      "repetition": [
+        2,
+        2,
+        2
+      ],
+      "sigma_angstrom": 0,
+      "seed": null,
+      "atom_count": 64,
+      "rms_displacement_angstrom": 0.0,
+      "tiled_control": true,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 256,
+      "diagnostic_mesh": [
+        4,
+        4,
+        4
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-tiled",
+      "sha256": "d0c345f536e2dc5b34b0ad542db5fcf639c074803cafa74efe19b69f662c9bf5"
+    },
+    {
+      "name": "si-3x3x3-1",
+      "material": "silicon",
+      "cif": "si-3x3x3-1.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "ideal diamond at dataset lattice constant",
+      "repetition": [
+        3,
+        3,
+        3
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20261411,
+      "atom_count": 216,
+      "rms_displacement_angstrom": 0.03465719869555444,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 864,
+      "diagnostic_mesh": [
+        3,
+        3,
+        3
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-1",
+      "sha256": "2ca1117d33eb1c255b17cbd10e27fed16d33bbb3aeef16ae79db1a153e2e24d9"
+    },
+    {
+      "name": "si-3x3x3-2",
+      "material": "silicon",
+      "cif": "si-3x3x3-2.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "ideal diamond at dataset lattice constant",
+      "repetition": [
+        3,
+        3,
+        3
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20261412,
+      "atom_count": 216,
+      "rms_displacement_angstrom": 0.036487653486260645,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 864,
+      "diagnostic_mesh": [
+        3,
+        3,
+        3
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-2",
+      "sha256": "b42aa1e5187f48e830ded816e6d8ad2add35bb988a1c6562871af658479f5a83"
+    },
+    {
+      "name": "si-3x3x3-3",
+      "material": "silicon",
+      "cif": "si-3x3x3-3.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "ideal diamond at dataset lattice constant",
+      "repetition": [
+        3,
+        3,
+        3
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20261413,
+      "atom_count": 216,
+      "rms_displacement_angstrom": 0.03468598210647028,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 864,
+      "diagnostic_mesh": [
+        3,
+        3,
+        3
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-3",
+      "sha256": "7010947a375202a503fb4275f5c758dbddbdb0f8c363a981b42ae335281d4f71"
+    },
+    {
+      "name": "si-3x3x3-tiled",
+      "material": "silicon",
+      "cif": "si-3x3x3-tiled.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+      "source_geometry": "dataset CIF",
+      "repetition": [
+        3,
+        3,
+        3
+      ],
+      "sigma_angstrom": 0,
+      "seed": null,
+      "atom_count": 216,
+      "rms_displacement_angstrom": 0.0,
+      "tiled_control": true,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 864,
+      "diagnostic_mesh": [
+        3,
+        3,
+        3
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-tiled",
+      "sha256": "c4d9ce8912773f06ba99125b0668c5523939c6895848d9d5e72f8ce5837198c7"
+    },
+    {
+      "name": "sio2-2x1x1-1",
+      "material": "sio2",
+      "cif": "sio2-2x1x1-1.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000",
+      "source_geometry": "dataset CIF",
+      "repetition": [
+        2,
+        1,
+        1
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20262111,
+      "atom_count": 300,
+      "rms_displacement_angstrom": 0.03463749929810388,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 1600,
+      "diagnostic_mesh": [
+        1,
+        1,
+        1
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-1",
+      "sha256": "042db6173d689655d71abdc83ea62678891d2eab71cd38855b81cbcfeb21ec50"
+    },
+    {
+      "name": "sio2-2x1x1-tiled",
+      "material": "sio2",
+      "cif": "sio2-2x1x1-tiled.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000",
+      "source_geometry": "dataset CIF",
+      "repetition": [
+        2,
+        1,
+        1
+      ],
+      "sigma_angstrom": 0,
+      "seed": null,
+      "atom_count": 300,
+      "rms_displacement_angstrom": 0.0,
+      "tiled_control": true,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 1600,
+      "diagnostic_mesh": [
+        1,
+        1,
+        1
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-tiled",
+      "sha256": "a268aa6b97c4bf8e7947153cac98deff67054cb1a626856cdfb8f44be24cc92b"
+    },
+    {
+      "name": "sio2-2x1x1-2",
+      "material": "sio2",
+      "cif": "sio2-2x1x1-2.cif",
+      "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000",
+      "source_geometry": "dataset CIF",
+      "repetition": [
+        2,
+        1,
+        1
+      ],
+      "sigma_angstrom": 0.02,
+      "seed": 20262112,
+      "atom_count": 300,
+      "rms_displacement_angstrom": 0.03410424390861015,
+      "tiled_control": false,
+      "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+      "num_electrons": 1600,
+      "diagnostic_mesh": [
+        1,
+        1,
+        1
+      ],
+      "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2",
+      "sha256": "bbbd4c1a2a4738add74fa1114b9aa8494738f7e04936d2a3b4248e8e92aee57f"
+    }
+  ]
+}

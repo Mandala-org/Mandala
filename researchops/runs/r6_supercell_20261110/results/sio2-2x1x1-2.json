@@ -1,0 +1,80 @@
+{
+  "structure": {
+    "name": "sio2-2x1x1-2",
+    "material": "sio2",
+    "cif": "sio2-2x1x1-2.cif",
+    "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000",
+    "source_geometry": "dataset CIF",
+    "repetition": [
+      2,
+      1,
+      1
+    ],
+    "sigma_angstrom": 0.02,
+    "seed": 20262112,
+    "atom_count": 300,
+    "rms_displacement_angstrom": 0.03410424390861015,
+    "tiled_control": false,
+    "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+    "num_electrons": 1600,
+    "diagnostic_mesh": [
+      1,
+      1,
+      1
+    ],
+    "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2",
+    "sha256": "bbbd4c1a2a4738add74fa1114b9aa8494738f7e04936d2a3b4248e8e92aee57f"
+  },
+  "predicted_operators": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/predictions/sio2-2x1x1-2",
+  "operator_sha256": {
+    "hamiltonian": "2ce979a64c661d1aa7290c74175b91eec1474fe5fa5b46b71b19d4e73a59065d"
+  },
+  "predicted": {
+    "mesh": [
+      1,
+      1,
+      1
+    ],
+    "summary": {
+      "kpoint_count": 1,
+      "invalid_kpoint_count": 0,
+      "metrics": {
+        "raw_hermiticity.hamiltonian.max_absolute": {
+          "count": 1,
+          "mean": 0.003497019410133362,
+          "min": 0.003497019410133362,
+          "max": 0.003497019410133362,
+          "p95": 0.003497019410133362
+        },
+        "raw_hermiticity.hamiltonian.relative_frobenius": {
+          "count": 1,
+          "mean": 0.004243552059401521,
+          "min": 0.004243552059401521,
+          "max": 0.004243552059401521,
+          "p95": 0.004243552059401521
+        }
+      }
+    },
+    "records": [
+      {
+        "status": "ok",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.004243552059401521,
+            "max_absolute": 0.003497019410133362
+          }
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "nominal_electrons": 1600,
+    "missing_reverse_blocks": {
+      "hamiltonian": 0
+    }
+  },
+  "elapsed_job_seconds": 86.89215558208525
+}

@@ -1,0 +1,112 @@
+[
+  {
+    "group": "openmx",
+    "name": "si-2x2x2-1",
+    "job_id": "837283",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-1/run.sh",
+    "input_sha256": "d4d6f8bbeb359783d5a36c43d8807fe37bc960bcaf9309bf8bbd4fd4a2a9c2d9",
+    "input_filename": "conf.dat",
+    "archived_script": "openmx/si-2x2x2-1/submitted-837283.sh",
+    "script_sha256": "d537139ebf86e41aeecc031c3a7155b9d0feb002ff1817fc30f68670d1edcfaa",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "openmx",
+    "name": "si-2x2x2-2",
+    "job_id": "837289",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-2/run.sh",
+    "input_sha256": "3041475da5e1127b5b1e4ba5caa85e83a764cd6b8a37d5f7726b72d4dec6b234",
+    "input_filename": "conf.dat",
+    "archived_script": "openmx/si-2x2x2-2/submitted-837289.sh",
+    "script_sha256": "fe61636cdbbc4156127f34bd3fc19ed71903b192ad714815692db04b5dbcb5ba",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "openmx",
+    "name": "si-2x2x2-3",
+    "job_id": "837290",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-3/run.sh",
+    "input_sha256": "a67eea416f84cda75eb699e70719644a5fc859e949e28f19cb8ba6fb600bc8ef",
+    "input_filename": "conf.dat",
+    "archived_script": "openmx/si-2x2x2-3/submitted-837290.sh",
+    "script_sha256": "6c940861880a88e80cd6014bbd4b0ac6aaf70d21ad9e621297614e31baa152aa",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "openmx",
+    "name": "si-3x3x3-1",
+    "job_id": "837291",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-1/run.sh",
+    "input_sha256": "81150083696050dd64f439fed1c7ac9f1c9d9e0291ec56b16bf2aa6dcdbe428e",
+    "input_filename": "conf.dat",
+    "archived_script": "openmx/si-3x3x3-1/submitted-837291.sh",
+    "script_sha256": "c81bba2e89739f802aa8b910f6c686c10857bd706dc4f58c0f0f45088b90c9c9",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "openmx",
+    "name": "si-3x3x3-2",
+    "job_id": "837292",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-2/run.sh",
+    "input_sha256": "dc883d2396d1e847885f75c51957b7a4f75581e60c2dd221f449122fbfee34b7",
+    "input_filename": "conf.dat",
+    "archived_script": "openmx/si-3x3x3-2/submitted-837292.sh",
+    "script_sha256": "b3913c17a43496e95e1c709d8f7298d08a5ceb688bebd2ca0a45bcd1eb9b7561",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "openmx",
+    "name": "si-3x3x3-3",
+    "job_id": "837293",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-3x3x3-3/run.sh",
+    "input_sha256": "316daaae6e4b680d6f297cf72e6f3bf3c089add4f402f4bba522f572f287b564",
+    "input_filename": "conf.dat",
+    "archived_script": "openmx/si-3x3x3-3/submitted-837293.sh",
+    "script_sha256": "dfd3fe4b652de6036229ea242a5c551c18233e7e6cad37afd60b09d45c2c1187",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "openmx",
+    "name": "sio2-2x1x1-1",
+    "job_id": "837300",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-1/run.sh",
+    "input_sha256": "6756a1d691c8a10cff9b107aae5d68c9db22b15c6b6c93dd75aa98bdd9513937",
+    "input_filename": "SiO2.dat",
+    "archived_script": "openmx/sio2-2x1x1-1/submitted-837300.sh",
+    "script_sha256": "7cf1d0d01df17a7fcea24dea88cb2a488ff4d70f9b5aac28582d84380b7f0bfe",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "openmx",
+    "name": "sio2-2x1x1-2",
+    "job_id": "837301",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-2/run.sh",
+    "input_sha256": "85ac888dfa9a12d4085c62ed9112ee93b252890ea5a78fdacf79467b9903fd6b",
+    "input_filename": "SiO2.dat",
+    "archived_script": "openmx/sio2-2x1x1-2/submitted-837301.sh",
+    "script_sha256": "1cc8e595bc00a346ac095ebd87d31687fea5628ee92de10988b8c0ab505cc84d",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "calibration",
+    "name": "silicon",
+    "job_id": "837296",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/silicon/run.sh",
+    "input_sha256": "722452711048af6084ac481250487a5de558f876a9ecb97797c239648429da51",
+    "input_filename": "conf.dat",
+    "archived_script": "openmx/calibration-silicon/submitted-837296.sh",
+    "script_sha256": "a3aaa80de7461e988619a2a13d126627941c2157516dddf0edbc563e10bbe5cd",
+    "input_matches_committed_copy": true
+  },
+  {
+    "group": "calibration",
+    "name": "sio2",
+    "job_id": "837302",
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/calibration/sio2/run.sh",
+    "input_sha256": "c2927e0786524234f4fdd192ed8f73a580ad6ec4b803ee856b1d25dda36500fa",
+    "input_filename": "SiO2.dat",
+    "archived_script": "openmx/calibration-sio2/submitted-837302.sh",
+    "script_sha256": "b9ae333e7d0ca53b7dccedece57388314885fe2f87d4bda0b57fc4bcb00faa95",
+    "input_matches_committed_copy": true
+  }
+]

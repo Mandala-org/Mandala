@@ -1,0 +1,92 @@
+{
+  "captured_utc": "2026-11-10T09:55:34.445752+00:00",
+  "local_commands": [
+    {
+      "command": ".venv/bin/python researchops/runs/r6_supercell_20261110/build_structures.py",
+      "result": "11 CIFs; all ASE coordinate/order roundtrip assertions passed; sigma_Si=0.02 A; a=5.4437 A"
+    },
+    {
+      "command": "OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q researchops/runs/r6_supercell_20261110/test_workflow.py",
+      "result": "7 passed"
+    },
+    {
+      "command": "PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q --confcutdir=tests/unit/data tests/unit/data/test_structure_inference.py -m 'not large_data'",
+      "result": "4 passed; 1 large-data test deselected"
+    },
+    {
+      "command": "PYTHONPATH=src OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q --confcutdir=tests/unit/analysis tests/unit/analysis/test_physical_constraints.py",
+      "result": "15 passed on the clean temporary rebase onto 6fa64e2; initial 2 import failures resolved by installing local test dependencies"
+    },
+    {
+      "command": ".venv/bin/python researchops/runs/r6_supercell_20261110/prepare_openmx.py",
+      "result": "8 inputs prepared; non-geometry numerical settings preserved; original DATA.PATH copies retained"
+    },
+    {
+      "command": "python3.13 -m compileall -q researchops/runs/r6_supercell_20261110",
+      "result": "passed"
+    },
+    {
+      "command": "for s in researchops/runs/r6_supercell_20261110/*.sh researchops/runs/r6_supercell_20261110/openmx/*/*.sh; do bash -n \"$s\" || exit; done",
+      "result": "passed"
+    }
+  ],
+  "remote_verification_job": "837344",
+  "upstream_check": {
+    "command": "git fetch github develop && git rebase github/develop",
+    "upstream": "6fa64e2",
+    "result": "clean rebase; 4+7+15 tests passed on rebased b668e41f83fb9f493021ddda6e3fa6a1b6662792",
+    "push_result": "ordinary push rejected as non-fast-forward; no force push or merge performed",
+    "resolution": "preserved published branch history with git reset --keep 5ebb580; clean rebased state retained locally at refs/backup/r6-supercell-rebased-6fa64e2"
+  },
+  "github_actions": [
+    {
+      "id": 42793665892,
+      "commit": "5ebb5805b2b7ef25ac06613c744dae91d1abfb8f",
+      "name": "Documentation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42793665892"
+    },
+    {
+      "id": 42793665829,
+      "commit": "5ebb5805b2b7ef25ac06613c744dae91d1abfb8f",
+      "name": "Tests",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42793665829"
+    },
+    {
+      "id": 42791141821,
+      "commit": "f04d2b4e7b26dfd3a8b63ab4251d9b575965b54c",
+      "name": "Documentation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42791141821"
+    },
+    {
+      "id": 42791141432,
+      "commit": "f04d2b4e7b26dfd3a8b63ab4251d9b575965b54c",
+      "name": "Tests",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42791141432"
+    },
+    {
+      "id": 42789666629,
+      "commit": "450f44a7a80b1139f0039c8c91c67c4a7c5b9864",
+      "name": "Documentation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mandala-org/Mandala/actions/runs/42789666629"
+    }
+  ],
+  "scope_guard": {
+    "command": "git diff 6002214 --name-only -- paper README.md",
+    "result": "empty; neither paper/ nor README.md edited"
+  },
+  "pending": [
+    "SiO2 OpenMX jobs 837300 and 837301",
+    "SiO2 public-runtime source-cell calibration 837302",
+    "automatic final comparison 837320"
+  ]
+}
