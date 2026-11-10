@@ -193,7 +193,7 @@ def build_model_input_from_structure(
             edge_type_idx=edge_type_idx,
             envelope_table=envelope_table,
         ).to(dtype=dtype)
-        if pair_distance_normalization == "pair_r0":
+        if envelope_table.r0_parameter_index is not None:
             x["edge_r0"] = build_edge_r0_lookup(
                 edge_type_idx=edge_type_idx,
                 envelope_table=envelope_table,
