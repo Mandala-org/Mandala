@@ -26,7 +26,7 @@ def main():
         if previous:
             if not args.retry_failed:
                 continue
-            state = subprocess.check_output(['sacct','-j',previous['job_id'],'-X','-n','-o','State'],text=True).strip()
+            state = subprocess.check_output(['sacct','-j',previous['job_id'],'-X','-n','-o','State%30'],text=True).strip()
             assert state.startswith(('FAILED','CANCELLED','TIMEOUT','OUT_OF_MEMORY')), state
         staged = RUN/'openmx'/name
         directory = Path(structure['dft_directory'])
