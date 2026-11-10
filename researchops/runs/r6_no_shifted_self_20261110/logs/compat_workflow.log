@@ -1,0 +1,28 @@
+.........ss..                                                            [100%]
+=============================== warnings summary ===============================
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cpu-False]
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cpu-True]
+tests/workflow/test_epoch_boundary_resume.py::test_reject_best_checkpoint_for_continuation
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+  /home/brzoza73/casus/mandala_worktrees/shifted_self/.venv/lib/python3.10/site-packages/pytorch_lightning/trainer/connectors/data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=239` in the `DataLoader` to improve performance.
+
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cpu-False]
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cpu-True]
+tests/workflow/test_epoch_boundary_resume.py::test_reject_best_checkpoint_for_continuation
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+  /home/brzoza73/casus/mandala_worktrees/shifted_self/.venv/lib/python3.10/site-packages/pytorch_lightning/trainer/connectors/data_connector.py:434: The 'val_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=239` in the `DataLoader` to improve performance.
+
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+  /home/brzoza73/casus/mandala_worktrees/shifted_self/.venv/lib/python3.10/site-packages/pytorch_lightning/trainer/connectors/logger_connector/logger_connector.py:76: Starting from v1.9.0, `tensorboardX` has been removed as a dependency of the `pytorch_lightning` package, due to potential conflicts with other packages in the ML ecosystem. For this reason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default
+
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+tests/workflow/test_epoch_boundary_resume.py::test_e3gnn_training_entrypoint_continues_exactly
+  /home/brzoza73/casus/mandala_worktrees/shifted_self/.venv/lib/python3.10/site-packages/pytorch_lightning/core/saving.py:398: Skipping 'cfg' parameter because it is not possible to safely dump to YAML.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+11 passed, 2 skipped, 16 warnings in 15.48s
