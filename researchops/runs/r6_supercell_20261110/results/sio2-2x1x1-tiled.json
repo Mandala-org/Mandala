@@ -1,0 +1,155 @@
+{
+  "structure": {
+    "name": "sio2-2x1x1-tiled",
+    "material": "sio2",
+    "cif": "sio2-2x1x1-tiled.cif",
+    "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000",
+    "source_geometry": "dataset CIF",
+    "repetition": [
+      2,
+      1,
+      1
+    ],
+    "sigma_angstrom": 0,
+    "seed": null,
+    "atom_count": 300,
+    "rms_displacement_angstrom": 0.0,
+    "tiled_control": true,
+    "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+    "num_electrons": 1600,
+    "diagnostic_mesh": [
+      1,
+      1,
+      1
+    ],
+    "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/sio2/sio2-2x1x1-tiled",
+    "sha256": "a268aa6b97c4bf8e7947153cac98deff67054cb1a626856cdfb8f44be24cc92b"
+  },
+  "predicted_operators": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/predictions/sio2-2x1x1-tiled",
+  "operator_sha256": {
+    "hamiltonian": "9913e533756ff46bb40dea106f6961060bcce867730c73ab4875d8c49350ff74"
+  },
+  "predicted": {
+    "mesh": [
+      1,
+      1,
+      1
+    ],
+    "summary": {
+      "kpoint_count": 1,
+      "invalid_kpoint_count": 0,
+      "metrics": {
+        "raw_hermiticity.hamiltonian.max_absolute": {
+          "count": 1,
+          "mean": 0.013320140540599823,
+          "min": 0.013320140540599823,
+          "max": 0.013320140540599823,
+          "p95": 0.013320140540599823
+        },
+        "raw_hermiticity.hamiltonian.relative_frobenius": {
+          "count": 1,
+          "mean": 0.003967147013958113,
+          "min": 0.003967147013958113,
+          "max": 0.003967147013958113,
+          "p95": 0.003967147013958113
+        }
+      }
+    },
+    "records": [
+      {
+        "status": "ok",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.003967147013958113,
+            "max_absolute": 0.013320140540599823
+          }
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "nominal_electrons": 1600,
+    "missing_reverse_blocks": {
+      "hamiltonian": 0
+    }
+  },
+  "tiled_control_errors": {
+    "hamiltonian": {
+      "raw_common_support": {
+        "mae": 0.005393883563677078,
+        "relative_mae": 1.2616944875629152,
+        "common_scalar_entries": 7574580,
+        "prediction_only_scalar_entries": 6374680,
+        "prediction_only_absolute_sum": 2.168871876503274e-11,
+        "prediction_only_max_absolute": 4.315195119633519e-14,
+        "common_plus_prediction_only_mae": 0.002928929747080285,
+        "prediction_only_blocks": 37720,
+        "reference_only_blocks": 0,
+        "mae_meV": 146.77512320464245
+      },
+      "hermitian_common_support": {
+        "mae": 0.005393802122050566,
+        "relative_mae": 1.2616754373832044,
+        "common_scalar_entries": 7574580,
+        "prediction_only_scalar_entries": 6374680,
+        "prediction_only_absolute_sum": 2.154563372952332e-11,
+        "prediction_only_max_absolute": 4.297758438194521e-14,
+        "common_plus_prediction_only_mae": 0.002928885523507469,
+        "prediction_only_blocks": 37720,
+        "reference_only_blocks": 0,
+        "mae_meV": 146.77290706396678
+      }
+    }
+  },
+  "prediction_on_reference_support": {
+    "mesh": [
+      1,
+      1,
+      1
+    ],
+    "summary": {
+      "kpoint_count": 1,
+      "invalid_kpoint_count": 0,
+      "metrics": {
+        "raw_hermiticity.hamiltonian.max_absolute": {
+          "count": 1,
+          "mean": 0.013320140540599823,
+          "min": 0.013320140540599823,
+          "max": 0.013320140540599823,
+          "p95": 0.013320140540599823
+        },
+        "raw_hermiticity.hamiltonian.relative_frobenius": {
+          "count": 1,
+          "mean": 0.003967147013958113,
+          "min": 0.003967147013958113,
+          "max": 0.003967147013958113,
+          "p95": 0.003967147013958113
+        }
+      }
+    },
+    "records": [
+      {
+        "status": "ok",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.003967147013958113,
+            "max_absolute": 0.013320140540599823
+          }
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "nominal_electrons": 1600,
+    "missing_reverse_blocks": {
+      "hamiltonian": 0
+    }
+  },
+  "elapsed_job_seconds": 110.8660013563931
+}

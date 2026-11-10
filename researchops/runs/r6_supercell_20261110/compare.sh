@@ -15,4 +15,5 @@ source ~/scripts/profiles/mandala.sh
 export OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4
 export PYTHONHASHSEED=42 CUBLAS_WORKSPACE_CONFIG=:4096:8
 export PYTHONPATH="$PWD/src:$PWD"
+python -u researchops/runs/r6_supercell_20261110/analyze_tiling.py
 python -u researchops/runs/r6_supercell_20261110/compare.py

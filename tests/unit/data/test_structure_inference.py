@@ -100,3 +100,22 @@ def test_structure_inputs_accept_paper_sio2_envelope_without_r0():
     assert inputs["edge_envelope"].shape == inputs["edge_length"].shape
     assert torch.isfinite(inputs["edge_envelope"]).all()
     assert "edge_r0" not in inputs
+
+
+def test_structure_inputs_keep_r0_when_distance_normalization_uses_it(tmp_path):
+    import json
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+
+    envelope = tmp_path / "envelope.json"
+    envelope.write_text(json.dumps({"family": "slater_soft_cutoff", "pairs": {
+        "H-H": {"theta": [0., 0., 0., 2., 0.]}
+    }}))
+    mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": ["1x0e"]}))
+    cfg = Config(cutoff_radius=3.0, l_max=0, n_radial=2,
+                 hamiltonian_envelope_path=str(envelope),
+                 pair_distance_normalization="pair_r0")
+    inputs = build_model_input_from_structure(
+        atoms=("H", "H"), positions=torch.tensor([[0., 0., 0.], [1., 0., 0.]]),
+        box=None, cfg=cfg, mapper=mapper,
+    )
+    torch.testing.assert_close(inputs["edge_r0"], torch.full_like(inputs["edge_length"], 2.))

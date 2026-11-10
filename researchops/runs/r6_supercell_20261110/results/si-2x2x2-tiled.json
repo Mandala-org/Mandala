@@ -1,0 +1,4593 @@
+{
+  "structure": {
+    "name": "si-2x2x2-tiled",
+    "material": "silicon",
+    "cif": "si-2x2x2-tiled.cif",
+    "source_cell": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+    "source_geometry": "dataset CIF",
+    "repetition": [
+      2,
+      2,
+      2
+    ],
+    "sigma_angstrom": 0,
+    "seed": null,
+    "atom_count": 64,
+    "rms_displacement_angstrom": 0.0,
+    "tiled_control": true,
+    "tile_order": "ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest",
+    "num_electrons": 256,
+    "diagnostic_mesh": [
+      4,
+      4,
+      4
+    ],
+    "dft_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-2x2x2-tiled",
+    "sha256": "d0c345f536e2dc5b34b0ad542db5fcf639c074803cafa74efe19b69f662c9bf5"
+  },
+  "predicted_operators": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/predictions/si-2x2x2-tiled",
+  "operator_sha256": {
+    "hamiltonian": "60613fb2cecff41183cf42f7fad6b93dd45809cbdaa8717f27e057901b3157c0",
+    "density": "55f049b862d7d152e5ce1337adeb31286b885c06f3fef9cec892c3940423f963",
+    "overlap": "a0a6a7aa6e5f465d94cc5ebba3a6eb9e30ecfa9fcc9f798006d6661c2ddfd30d"
+  },
+  "predicted": {
+    "mesh": [
+      4,
+      4,
+      4
+    ],
+    "summary": {
+      "kpoint_count": 64,
+      "invalid_kpoint_count": 64,
+      "metrics": {
+        "overlap.below_threshold_eigenvalues": {
+          "count": 64,
+          "mean": 128.15625,
+          "min": 120.0,
+          "max": 139.0,
+          "p95": 139.0
+        },
+        "overlap.cholesky_failed_without_jitter": {
+          "count": 64,
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0,
+          "p95": 1.0
+        },
+        "overlap.lambda_max": {
+          "count": 64,
+          "mean": 8.1289210059165,
+          "min": 7.527545527253915,
+          "max": 8.375207122454091,
+          "p95": 8.341809644464064
+        },
+        "overlap.lambda_min": {
+          "count": 64,
+          "mean": -0.7693277345545195,
+          "min": -0.9903228277562086,
+          "max": -0.5683388251288161,
+          "p95": -0.6077180410945261
+        },
+        "overlap.nonpositive_eigenvalues": {
+          "count": 64,
+          "mean": 128.15625,
+          "min": 120.0,
+          "max": 139.0,
+          "p95": 139.0
+        },
+        "overlap.positive_definite": {
+          "count": 64,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "p95": 0.0
+        },
+        "overlap.threshold": {
+          "count": 64,
+          "mean": 8.128921005916499e-08,
+          "min": 7.527545527253915e-08,
+          "max": 8.375207122454092e-08,
+          "p95": 8.341809644464065e-08
+        },
+        "overlap.well_conditioned_positive_definite": {
+          "count": 64,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "p95": 0.0
+        },
+        "raw_hermiticity.density.max_absolute": {
+          "count": 64,
+          "mean": 0.15410889267333078,
+          "min": 0.06474425829946995,
+          "max": 0.1777617409825325,
+          "p95": 0.1777617409825325
+        },
+        "raw_hermiticity.density.relative_frobenius": {
+          "count": 64,
+          "mean": 0.18531735709560437,
+          "min": 0.13196984734859052,
+          "max": 0.24634327726850588,
+          "p95": 0.22483702576878423
+        },
+        "raw_hermiticity.hamiltonian.max_absolute": {
+          "count": 64,
+          "mean": 0.00772868698778665,
+          "min": 0.0062409486018622645,
+          "max": 0.008824890479445457,
+          "p95": 0.008824890479445457
+        },
+        "raw_hermiticity.hamiltonian.relative_frobenius": {
+          "count": 64,
+          "mean": 0.01853522762457671,
+          "min": 0.017730407972164717,
+          "max": 0.020718488921558666,
+          "p95": 0.019529938548078652
+        },
+        "raw_hermiticity.overlap.max_absolute": {
+          "count": 64,
+          "mean": 0.0009901085425338119,
+          "min": 0.0007751862687500337,
+          "max": 0.0012249499559402466,
+          "p95": 0.0012225080281496048
+        },
+        "raw_hermiticity.overlap.relative_frobenius": {
+          "count": 64,
+          "mean": 0.0008371738159860953,
+          "min": 0.0007507638205111398,
+          "max": 0.0009510484771270589,
+          "p95": 0.0009090950304290395
+        }
+      }
+    },
+    "records": [
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.020718488921558666,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007507638205111398,
+            "max_absolute": 0.001208670437335968
+          },
+          "density": {
+            "relative_frobenius": 0.13196984734859052,
+            "max_absolute": 0.06474425829946995
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.9903228277562086,
+          "lambda_max": 8.375207122454091,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 122,
+          "below_threshold_eigenvalues": 122,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.375207122454092e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.019531993315806594,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007714446119097027,
+            "max_absolute": 0.0009405836462974548
+          },
+          "density": {
+            "relative_frobenius": 0.1477536076170524,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.9178364454422864,
+          "lambda_max": 8.341721086862385,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 122,
+          "below_threshold_eigenvalues": 122,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.341721086862386e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018266461430022623,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007917463739458785,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.1623636073938207,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7520452635055805,
+          "lambda_max": 8.187257903635727,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 128,
+          "below_threshold_eigenvalues": 128,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.187257903635728e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.019531993315806594,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007714446119097027,
+            "max_absolute": 0.0009405836462974548
+          },
+          "density": {
+            "relative_frobenius": 0.1477536076170524,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.9178364454422866,
+          "lambda_max": 8.341721086862385,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 122,
+          "below_threshold_eigenvalues": 122,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.341721086862386e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.019526473884413618,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007751339768256889,
+            "max_absolute": 0.0010690391063690186
+          },
+          "density": {
+            "relative_frobenius": 0.14858365143953006,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.9281635148616021,
+          "lambda_max": 8.341858033114757,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.341858033114757e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01877588065502668,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008049167081739813,
+            "max_absolute": 0.0007751862687500337
+          },
+          "density": {
+            "relative_frobenius": 0.16645156414510215,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8819794776075587,
+          "lambda_max": 8.297387845751144,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.297387845751145e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018011977319149827,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008290325427793061,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.18289587502335217,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7315460501364955,
+          "lambda_max": 8.11445648385895,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.11445648385895e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018793340308497396,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008000464019305049,
+            "max_absolute": 0.0007855793819549857
+          },
+          "density": {
+            "relative_frobenius": 0.1663265166740515,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8595398178986885,
+          "lambda_max": 8.29775480953468,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 123,
+          "below_threshold_eigenvalues": 123,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.297754809534681e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018254853539317276,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007989489295645414,
+            "max_absolute": 0.0010690391063690186
+          },
+          "density": {
+            "relative_frobenius": 0.16391951131898558,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7766717098733483,
+          "lambda_max": 8.186435644722662,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 128,
+          "below_threshold_eigenvalues": 128,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.186435644722663e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018006115470797043,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008324788905065016,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.18361768268985573,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7135449384951879,
+          "lambda_max": 8.114565912711234,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 127,
+          "below_threshold_eigenvalues": 127,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114565912711234e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.017754150255924327,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008646916842644362,
+            "max_absolute": 0.0012249499559402466
+          },
+          "density": {
+            "relative_frobenius": 0.20190706889398527,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.5938028575742728,
+          "lambda_max": 7.8640987976871495,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 128,
+          "below_threshold_eigenvalues": 128,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.864098797687149e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018006115470797043,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008324788905065016,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.18361768268985573,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7135449384951872,
+          "lambda_max": 8.114565912711232,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 127,
+          "below_threshold_eigenvalues": 127,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114565912711231e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.019526473884413618,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007751339768256888,
+            "max_absolute": 0.0010690391063690186
+          },
+          "density": {
+            "relative_frobenius": 0.14858365143953006,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.928163514861603,
+          "lambda_max": 8.341858033114757,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.341858033114757e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018793340308497396,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008000464019305049,
+            "max_absolute": 0.0007855793819549857
+          },
+          "density": {
+            "relative_frobenius": 0.1663265166740515,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8595398178986888,
+          "lambda_max": 8.297754809534682,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 123,
+          "below_threshold_eigenvalues": 123,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.297754809534682e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018011977319149827,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008290325427793061,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.18289587502335217,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7315460501364952,
+          "lambda_max": 8.11445648385895,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.11445648385895e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01877588065502668,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008049167081739813,
+            "max_absolute": 0.0007751862687500337
+          },
+          "density": {
+            "relative_frobenius": 0.16645156414510215,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8819794776075578,
+          "lambda_max": 8.297387845751146,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.297387845751146e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.019529938548078652,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007753497766023907,
+            "max_absolute": 0.001208670437335968
+          },
+          "density": {
+            "relative_frobenius": 0.14822176093307515,
+            "max_absolute": 0.12414137699450328
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.9231094408412631,
+          "lambda_max": 8.341809644464064,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.341809644464065e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018748270106215142,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007957954087255012,
+            "max_absolute": 0.0008546813281148808
+          },
+          "density": {
+            "relative_frobenius": 0.16566649938031536,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8459250123134283,
+          "lambda_max": 8.298354395972693,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 122,
+          "below_threshold_eigenvalues": 122,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.298354395972693e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018000275279376456,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008310702120695145,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.182373371935314,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7310945894786911,
+          "lambda_max": 8.114173525537872,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114173525537872e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01881328704947404,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008114102711004042,
+            "max_absolute": 0.0009939502704618144
+          },
+          "density": {
+            "relative_frobenius": 0.16621645769320872,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8859005606445801,
+          "lambda_max": 8.29670175920534,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 121,
+          "below_threshold_eigenvalues": 121,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.29670175920534e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018774283844420415,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008068247571251441,
+            "max_absolute": 0.0008811835731847994
+          },
+          "density": {
+            "relative_frobenius": 0.167254102168857,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8721359412751534,
+          "lambda_max": 8.298081938067446,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.298081938067446e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01848308464063143,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.000835720215294587,
+            "max_absolute": 0.0008342191578288555
+          },
+          "density": {
+            "relative_frobenius": 0.18635493083254903,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8435045378410805,
+          "lambda_max": 8.246877803662162,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.246877803662163e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018272400303735618,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008735753289093013,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.20452704126094218,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7205811619403123,
+          "lambda_max": 8.041467001403678,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 139,
+          "below_threshold_eigenvalues": 139,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041467001403678e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018566651548205554,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008459927639473384,
+            "max_absolute": 0.0009939502704618076
+          },
+          "density": {
+            "relative_frobenius": 0.18674069856587813,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8359895751033628,
+          "lambda_max": 8.245954204020487,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 127,
+          "below_threshold_eigenvalues": 127,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.245954204020487e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01802393388277465,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008319414411528289,
+            "max_absolute": 0.0010400786995887756
+          },
+          "density": {
+            "relative_frobenius": 0.18444835583243918,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7286617787882469,
+          "lambda_max": 8.114372878464927,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 124,
+          "below_threshold_eigenvalues": 124,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114372878464927e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018268930871750796,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008642412759608235,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.20508787972103182,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6679122972848641,
+          "lambda_max": 8.043086723609791,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 137,
+          "below_threshold_eigenvalues": 137,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.043086723609792e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018575815578296233,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0009090950304290395,
+            "max_absolute": 0.0012249499559402466
+          },
+          "density": {
+            "relative_frobenius": 0.22483702576878423,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6290576205862083,
+          "lambda_max": 7.788848817253704,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 138,
+          "below_threshold_eigenvalues": 138,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.788848817253704e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018335562768212084,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008786330534833729,
+            "max_absolute": 0.000993950270461811
+          },
+          "density": {
+            "relative_frobenius": 0.20555127438134382,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7407257289484855,
+          "lambda_max": 8.041336763969964,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 135,
+          "below_threshold_eigenvalues": 135,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041336763969964e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018809867696643362,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008013475123663454,
+            "max_absolute": 0.0008811835731847994
+          },
+          "density": {
+            "relative_frobenius": 0.16685086325211954,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8626971934674634,
+          "lambda_max": 8.297626507278078,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 122,
+          "below_threshold_eigenvalues": 122,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.297626507278079e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018536898813555223,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008257170402531986,
+            "max_absolute": 0.0008342191578288555
+          },
+          "density": {
+            "relative_frobenius": 0.18587366506785727,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7918297013047202,
+          "lambda_max": 8.246792527043514,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.246792527043513e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018308919326173866,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008685224990481996,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.20418736525817843,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7178816116182236,
+          "lambda_max": 8.041695357891417,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 139,
+          "below_threshold_eigenvalues": 139,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041695357891417e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018584984388299954,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008454067555886135,
+            "max_absolute": 0.0009939502704618144
+          },
+          "density": {
+            "relative_frobenius": 0.18648792429854064,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8515083043642633,
+          "lambda_max": 8.245033397436302,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 124,
+          "below_threshold_eigenvalues": 124,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.245033397436302e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01826225635333929,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007993693141415477,
+            "max_absolute": 0.001208670437335968
+          },
+          "density": {
+            "relative_frobenius": 0.1632487841191709,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7753021484753967,
+          "lambda_max": 8.186275346088797,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 128,
+          "below_threshold_eigenvalues": 128,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.186275346088796e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.017998162569281433,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.000834709334460863,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18278918716096557,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7188343161697819,
+          "lambda_max": 8.114125365574901,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 127,
+          "below_threshold_eigenvalues": 127,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114125365574902e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.017730407972164717,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008685937929813677,
+            "max_absolute": 0.0010902807116508484
+          },
+          "density": {
+            "relative_frobenius": 0.2009398751835575,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.5948661930578252,
+          "lambda_max": 7.864629430227009,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 130,
+          "below_threshold_eigenvalues": 130,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.86462943022701e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.017998162569281433,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.000834709334460863,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18278918716096557,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7188343161697826,
+          "lambda_max": 8.114125365574903,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 127,
+          "below_threshold_eigenvalues": 127,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114125365574904e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018027679639934353,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008321432740621745,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18414268689100674,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7248385233470431,
+          "lambda_max": 8.113887944624297,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 125,
+          "below_threshold_eigenvalues": 125,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.113887944624297e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018289418303368964,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.000874765692472694,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.2049931980289843,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7359913644471984,
+          "lambda_max": 8.041778250555545,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 136,
+          "below_threshold_eigenvalues": 136,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041778250555546e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018564501345544465,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0009109445215147459,
+            "max_absolute": 0.0010902807116508484
+          },
+          "density": {
+            "relative_frobenius": 0.2243928899533044,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6291969964546013,
+          "lambda_max": 7.78958950481195,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 138,
+          "below_threshold_eigenvalues": 138,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.78958950481195e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01830732137041643,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008702891831483912,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.20488771896868058,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6677955759994263,
+          "lambda_max": 8.041951396942807,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 138,
+          "below_threshold_eigenvalues": 138,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041951396942807e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.017790292948462957,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008636560656719,
+            "max_absolute": 0.0010400786995887756
+          },
+          "density": {
+            "relative_frobenius": 0.2034630408125151,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.5683388251288161,
+          "lambda_max": 7.861543600686707,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 128,
+          "below_threshold_eigenvalues": 128,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.861543600686707e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018593002121655818,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0009086044026099514,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.225564125947456,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6330543999242066,
+          "lambda_max": 7.787685623325848,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 139,
+          "below_threshold_eigenvalues": 139,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.787685623325847e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01935971465264761,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0009510484771270589,
+            "max_absolute": 0.0012249499559402466
+          },
+          "density": {
+            "relative_frobenius": 0.24634327726850588,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.603952232948935,
+          "lambda_max": 7.527545527253915,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 136,
+          "below_threshold_eigenvalues": 136,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.527545527253915e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018593002121655818,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0009086044026099513,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.225564125947456,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6330543999242062,
+          "lambda_max": 7.787685623325848,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 139,
+          "below_threshold_eigenvalues": 139,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.787685623325847e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018027679639934353,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008321432740621745,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18414268689100674,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7248385233470437,
+          "lambda_max": 8.113887944624297,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 125,
+          "below_threshold_eigenvalues": 125,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.113887944624297e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018307321370416435,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008702891831483912,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.20488771896868058,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6677955759994274,
+          "lambda_max": 8.041951396942805,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 138,
+          "below_threshold_eigenvalues": 138,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041951396942805e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018564501345544465,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0009109445215147456,
+            "max_absolute": 0.0010902807116508484
+          },
+          "density": {
+            "relative_frobenius": 0.2243928899533044,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6291969964546013,
+          "lambda_max": 7.789589504811949,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 138,
+          "below_threshold_eigenvalues": 138,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.789589504811949e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018289418303368964,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.000874765692472694,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.2049931980289843,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7359913644471983,
+          "lambda_max": 8.041778250555547,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 136,
+          "below_threshold_eigenvalues": 136,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041778250555547e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.019529938548078652,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007753497766023907,
+            "max_absolute": 0.001208670437335968
+          },
+          "density": {
+            "relative_frobenius": 0.14822176093307515,
+            "max_absolute": 0.12414137699450328
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.9231094408412631,
+          "lambda_max": 8.341809644464062,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.341809644464062e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01881328704947404,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008114102711004042,
+            "max_absolute": 0.000993950270461811
+          },
+          "density": {
+            "relative_frobenius": 0.16621645769320872,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8859005606445787,
+          "lambda_max": 8.296701759205341,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 121,
+          "below_threshold_eigenvalues": 121,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.296701759205341e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018000275279376456,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008310702120695142,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.182373371935314,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7310945894786912,
+          "lambda_max": 8.114173525537872,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114173525537872e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018748270106215142,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007957954087255014,
+            "max_absolute": 0.0008546813281148845
+          },
+          "density": {
+            "relative_frobenius": 0.16566649938031536,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8459250123134288,
+          "lambda_max": 8.298354395972694,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 122,
+          "below_threshold_eigenvalues": 122,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.298354395972694e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018809867696643362,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008013475123663454,
+            "max_absolute": 0.0008811835731847994
+          },
+          "density": {
+            "relative_frobenius": 0.16685086325211954,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.862697193467463,
+          "lambda_max": 8.297626507278075,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 122,
+          "below_threshold_eigenvalues": 122,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.297626507278075e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018584984388299954,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008454067555886135,
+            "max_absolute": 0.0009939502704618144
+          },
+          "density": {
+            "relative_frobenius": 0.18648792429854064,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8515083043642633,
+          "lambda_max": 8.2450333974363,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 124,
+          "below_threshold_eigenvalues": 124,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.245033397436301e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018308919326173866,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008685224990481996,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.20418736525817843,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7178816116182227,
+          "lambda_max": 8.041695357891417,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 139,
+          "below_threshold_eigenvalues": 139,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041695357891417e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018536898813555223,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008257170402531986,
+            "max_absolute": 0.0008342191578288555
+          },
+          "density": {
+            "relative_frobenius": 0.18587366506785727,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7918297013047193,
+          "lambda_max": 8.246792527043514,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.246792527043513e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01802393388277465,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008319414411528289,
+            "max_absolute": 0.0010400786995887756
+          },
+          "density": {
+            "relative_frobenius": 0.18444835583243918,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7286617787882471,
+          "lambda_max": 8.114372878464927,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 124,
+          "below_threshold_eigenvalues": 124,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.114372878464927e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018335562768212084,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008786330534833729,
+            "max_absolute": 0.000993950270461811
+          },
+          "density": {
+            "relative_frobenius": 0.20555127438134382,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7407257289484859,
+          "lambda_max": 8.041336763969964,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 135,
+          "below_threshold_eigenvalues": 135,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041336763969964e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018575815578296233,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0009090950304290395,
+            "max_absolute": 0.0012249499559402466
+          },
+          "density": {
+            "relative_frobenius": 0.22483702576878423,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.629057620586208,
+          "lambda_max": 7.788848817253704,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 138,
+          "below_threshold_eigenvalues": 138,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.788848817253704e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018268930871750796,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008642412759608236,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.20508787972103182,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.6679122972848637,
+          "lambda_max": 8.043086723609793,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 137,
+          "below_threshold_eigenvalues": 137,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.043086723609794e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018774283844420415,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008068247571251441,
+            "max_absolute": 0.0008811835731847994
+          },
+          "density": {
+            "relative_frobenius": 0.167254102168857,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8721359412751523,
+          "lambda_max": 8.298081938067448,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 120,
+          "below_threshold_eigenvalues": 120,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.298081938067447e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018566651548205554,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008459927639473385,
+            "max_absolute": 0.000993950270461811
+          },
+          "density": {
+            "relative_frobenius": 0.18674069856587813,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8359895751033605,
+          "lambda_max": 8.245954204020485,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 127,
+          "below_threshold_eigenvalues": 127,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.245954204020485e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.018272400303735618,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0008735753289093013,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.20452704126094218,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.7205811619403123,
+          "lambda_max": 8.041467001403678,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 139,
+          "below_threshold_eigenvalues": 139,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.041467001403678e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01848308464063143,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.000835720215294587,
+            "max_absolute": 0.0008342191578288555
+          },
+          "density": {
+            "relative_frobenius": 0.18635493083254903,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.8435045378410787,
+          "lambda_max": 8.246877803662164,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 126,
+          "below_threshold_eigenvalues": 126,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 8.246877803662164e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          -0.25
+        ]
+      }
+    ],
+    "nominal_electrons": 256,
+    "missing_reverse_blocks": {
+      "hamiltonian": 0,
+      "density": 0,
+      "overlap": 0
+    },
+    "exact_realspace_electron_trace": {
+      "real": 265.0424069949246,
+      "imaginary": 0.0
+    },
+    "electron_count_absolute_error": 9.04240699492459,
+    "hermitian_realspace_electron_trace": {
+      "real": 265.04415121647077,
+      "imaginary": 0.0
+    },
+    "hermitian_electron_count_absolute_error": 9.044151216470766
+  },
+  "tiled_control_errors": {
+    "hamiltonian": {
+      "raw_common_support": {
+        "mae": 0.0052285388393630014,
+        "relative_mae": 1.1596006444877938,
+        "common_scalar_entries": 940992,
+        "prediction_only_scalar_entries": 135200,
+        "prediction_only_absolute_sum": 864.8890659809113,
+        "prediction_only_max_absolute": 0.028908202424645424,
+        "common_plus_prediction_only_mae": 0.005375344070120184,
+        "prediction_only_blocks": 800,
+        "reference_only_blocks": 0,
+        "mae_meV": 142.2758617734424
+      },
+      "hermitian_common_support": {
+        "mae": 0.005225738303953912,
+        "relative_mae": 1.1589795335493338,
+        "common_scalar_entries": 940992,
+        "prediction_only_scalar_entries": 135200,
+        "prediction_only_absolute_sum": 864.8578290939331,
+        "prediction_only_max_absolute": 0.028793510049581528,
+        "common_plus_prediction_only_mae": 0.005372866335382657,
+        "prediction_only_blocks": 800,
+        "reference_only_blocks": 0,
+        "mae_meV": 142.1996552842115
+      }
+    },
+    "density": {
+      "raw_common_support": {
+        "mae": 0.003319922160222834,
+        "relative_mae": 1.1265743483679564,
+        "common_scalar_entries": 940992,
+        "prediction_only_scalar_entries": 135200,
+        "prediction_only_absolute_sum": 336.2948425114155,
+        "prediction_only_max_absolute": 0.03744763135910034,
+        "common_plus_prediction_only_mae": 0.0032153324275815288,
+        "prediction_only_blocks": 800,
+        "reference_only_blocks": 0
+      },
+      "hermitian_common_support": {
+        "mae": 0.003264222359532595,
+        "relative_mae": 1.107673312850118,
+        "common_scalar_entries": 940992,
+        "prediction_only_scalar_entries": 135200,
+        "prediction_only_absolute_sum": 291.6894394159317,
+        "prediction_only_max_absolute": 0.027413444593548775,
+        "common_plus_prediction_only_mae": 0.0031251826495246457,
+        "prediction_only_blocks": 800,
+        "reference_only_blocks": 0
+      }
+    },
+    "overlap": {
+      "raw_common_support": {
+        "mae": 0.015069303421478181,
+        "relative_mae": 1.1863147164346655,
+        "common_scalar_entries": 940992,
+        "prediction_only_scalar_entries": 135200,
+        "prediction_only_absolute_sum": 1838.675460100174,
+        "prediction_only_max_absolute": 0.12135827541351318,
+        "common_plus_prediction_only_mae": 0.014884676177934578,
+        "prediction_only_blocks": 800,
+        "reference_only_blocks": 0
+      },
+      "hermitian_common_support": {
+        "mae": 0.015068441853635097,
+        "relative_mae": 1.1862468904321708,
+        "common_scalar_entries": 940992,
+        "prediction_only_scalar_entries": 135200,
+        "prediction_only_absolute_sum": 1838.4099016189575,
+        "prediction_only_max_absolute": 0.12133584171533585,
+        "common_plus_prediction_only_mae": 0.014883676089726326,
+        "prediction_only_blocks": 800,
+        "reference_only_blocks": 0
+      }
+    }
+  },
+  "prediction_on_reference_support": {
+    "mesh": [
+      4,
+      4,
+      4
+    ],
+    "summary": {
+      "kpoint_count": 64,
+      "invalid_kpoint_count": 64,
+      "metrics": {
+        "overlap.below_threshold_eigenvalues": {
+          "count": 64,
+          "mean": 98.234375,
+          "min": 88.0,
+          "max": 104.0,
+          "p95": 102.0
+        },
+        "overlap.cholesky_failed_without_jitter": {
+          "count": 64,
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0,
+          "p95": 1.0
+        },
+        "overlap.lambda_max": {
+          "count": 64,
+          "mean": 7.234272196529836,
+          "min": 7.0358574396918625,
+          "max": 7.287455833340881,
+          "p95": 7.287076258308156
+        },
+        "overlap.lambda_min": {
+          "count": 64,
+          "mean": -0.3719129364735414,
+          "min": -0.38130139355052173,
+          "max": -0.3565146356619402,
+          "p95": -0.35850398925200844
+        },
+        "overlap.nonpositive_eigenvalues": {
+          "count": 64,
+          "mean": 98.234375,
+          "min": 88.0,
+          "max": 104.0,
+          "p95": 102.0
+        },
+        "overlap.positive_definite": {
+          "count": 64,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "p95": 0.0
+        },
+        "overlap.threshold": {
+          "count": 64,
+          "mean": 7.234272196529837e-08,
+          "min": 7.035857439691862e-08,
+          "max": 7.287455833340881e-08,
+          "p95": 7.287076258308156e-08
+        },
+        "overlap.well_conditioned_positive_definite": {
+          "count": 64,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "p95": 0.0
+        },
+        "raw_hermiticity.density.max_absolute": {
+          "count": 64,
+          "mean": 0.15379424334788455,
+          "min": 0.0446067014709115,
+          "max": 0.1777617409825325,
+          "p95": 0.1777617409825325
+        },
+        "raw_hermiticity.density.relative_frobenius": {
+          "count": 64,
+          "mean": 0.16232272020353206,
+          "min": 0.061956152554557116,
+          "max": 0.2297782170655361,
+          "p95": 0.20968529021948915
+        },
+        "raw_hermiticity.hamiltonian.max_absolute": {
+          "count": 64,
+          "mean": 0.00772868698778665,
+          "min": 0.0062409486018622645,
+          "max": 0.008824890479445457,
+          "p95": 0.008824890479445457
+        },
+        "raw_hermiticity.hamiltonian.relative_frobenius": {
+          "count": 64,
+          "mean": 0.015871393894959503,
+          "min": 0.015855799209049084,
+          "max": 0.01588693544455254,
+          "p95": 0.01588278135276094
+        },
+        "raw_hermiticity.overlap.max_absolute": {
+          "count": 64,
+          "mean": 0.0008562369556909202,
+          "min": 0.0005603283643722534,
+          "max": 0.000980717784841545,
+          "p95": 0.000980717784841545
+        },
+        "raw_hermiticity.overlap.relative_frobenius": {
+          "count": 64,
+          "mean": 0.000674072045709901,
+          "min": 0.0005363765199879706,
+          "max": 0.0007921827699138757,
+          "p95": 0.000755223135968909
+        }
+      }
+    },
+    "records": [
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01588693544455254,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0005363765199879706,
+            "max_absolute": 0.0005603283643722534
+          },
+          "density": {
+            "relative_frobenius": 0.061956152554557116,
+            "max_absolute": 0.0446067014709115
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.35947758761727155,
+          "lambda_max": 7.287455833340881,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.287455833340881e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015878450225879442,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0005866223927629755,
+            "max_absolute": 0.0006903620241474675
+          },
+          "density": {
+            "relative_frobenius": 0.10588693151839211,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.35854234960218384,
+          "lambda_max": 7.2870719252110066,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.287071925211007e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586995152177917,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006330118484056497,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.13711302184473378,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3567521576647606,
+          "lambda_max": 7.250763057440851,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.250763057440851e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015878450225879442,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0005866223927629755,
+            "max_absolute": 0.0006903620241474675
+          },
+          "density": {
+            "relative_frobenius": 0.10588693151839211,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.35854234960218384,
+          "lambda_max": 7.2870719252110066,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.287071925211007e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015884059697641995,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0005857828925500449,
+            "max_absolute": 0.0006920707516404196
+          },
+          "density": {
+            "relative_frobenius": 0.10747665128169531,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.35850398925200844,
+          "lambda_max": 7.287078556828203,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.287078556828203e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587556696971795,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006322329207789115,
+            "max_absolute": 0.0006920707516404196
+          },
+          "density": {
+            "relative_frobenius": 0.13839175421476682,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3672544377793329,
+          "lambda_max": 7.28194293044407,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281942930444071e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015867060734874188,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006756093956688365,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.1642495431527604,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37121569256625314,
+          "lambda_max": 7.2335616118484705,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.23356161184847e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587556696971795,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006322329207789115,
+            "max_absolute": 0.0006920707516404196
+          },
+          "density": {
+            "relative_frobenius": 0.13839175421476682,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.36750648232805927,
+          "lambda_max": 7.281890579320732,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281890579320732e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015881180410087983,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006314530315638872,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.13966149798543886,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3565146356619402,
+          "lambda_max": 7.250789365590936,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.250789365590937e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015872680160425163,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006748786686614608,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.16536248276873447,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3712138277393899,
+          "lambda_max": 7.233578460718289,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233578460718289e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015864166382298872,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007157812794416816,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.18820077725238563,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37526829771116493,
+          "lambda_max": 7.15490774125344,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 88,
+          "below_threshold_eigenvalues": 88,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.15490774125344e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015872680160425163,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006748786686614608,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.16536248276873447,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37121382773939,
+          "lambda_max": 7.233578460718288,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233578460718288e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015884059697641995,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0005857828925500449,
+            "max_absolute": 0.0006920707516404196
+          },
+          "density": {
+            "relative_frobenius": 0.10747665128169531,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.35850398925200844,
+          "lambda_max": 7.287078556828203,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.287078556828203e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587556696971795,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006322329207789115,
+            "max_absolute": 0.0006920707516404196
+          },
+          "density": {
+            "relative_frobenius": 0.13839175421476682,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.36750648232805927,
+          "lambda_max": 7.281890579320732,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281890579320732e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015867060734874188,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006756093956688365,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.1642495431527604,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3712156925662532,
+          "lambda_max": 7.23356161184847,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233561611848469e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587556696971795,
+            "max_absolute": 0.007856136187911034
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006322329207789115,
+            "max_absolute": 0.0006920707516404196
+          },
+          "density": {
+            "relative_frobenius": 0.13839175421476682,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3672544377793329,
+          "lambda_max": 7.28194293044407,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281942930444071e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.0,
+          -0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01588278135276094,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0005870390563985017,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.10675553288351326,
+            "max_absolute": 0.12414137699450328
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.35854233969196875,
+          "lambda_max": 7.287076258308156,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.287076258308156e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015874287257239023,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006333985391415441,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13781977795396694,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.36732018939270805,
+          "lambda_max": 7.282160404815052,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 99,
+          "below_threshold_eigenvalues": 99,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.282160404815052e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586577965151103,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006767017739659642,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.16375678740539334,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3711197448629626,
+          "lambda_max": 7.2339542421199265,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233954242119927e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015874287257239023,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006333985391415441,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13781977795396694,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.36741834102786364,
+          "lambda_max": 7.281669651669765,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281669651669766e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587990115893314,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006326200874358768,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13909392201183776,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3672333396013517,
+          "lambda_max": 7.282014351634611,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 99,
+          "below_threshold_eigenvalues": 99,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.282014351634611e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3775656004129723,
+          "lambda_max": 7.273107577506846,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.273107577506847e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586288438853055,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007168138346542522,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.1877601334322177,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3812715246690947,
+          "lambda_max": 7.214756731233553,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214756731233553e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3773045873312959,
+          "lambda_max": 7.27246972392624,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.27246972392624e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015877017416449864,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006752418937821988,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.1659827959648233,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37117505341070833,
+          "lambda_max": 7.233705745637061,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233705745637061e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015868508260803865,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007161242410989521,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.18877436492722327,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.38126839714252675,
+          "lambda_max": 7.2146769118421545,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214676911842155e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015859985551797285,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007548974784637964,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.20968529021948915,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37876855564595063,
+          "lambda_max": 7.1310914525956886,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.131091452595689e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015868508260803865,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007161242410989521,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.18877436492722327,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3812627302708999,
+          "lambda_max": 7.213758634746213,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.213758634746214e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587990115893314,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006326200874358768,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13909392201183776,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3674802444938552,
+          "lambda_max": 7.281831763562268,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281831763562268e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37732949364486645,
+          "lambda_max": 7.2728158193742605,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.27281581937426e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586288438853055,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007168138346542522,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.1877601334322177,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.38127101777670186,
+          "lambda_max": 7.214281456414889,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214281456414889e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3772797759382821,
+          "lambda_max": 7.272311737099392,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.272311737099393e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.25,
+          -0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015878621801777,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006337849943284013,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.1385242086657121,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3566955807269853,
+          "lambda_max": 7.250781136506843,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.250781136506843e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015870118812514,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006770640217793818,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.1643808827304995,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3710877154831678,
+          "lambda_max": 7.233967276674399,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233967276674399e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015861602288198082,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007178449046673679,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18731860311196513,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3752701707630705,
+          "lambda_max": 7.155633912911408,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 90,
+          "below_threshold_eigenvalues": 90,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.155633912911407e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015870118812514,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006770640217793818,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.1643808827304995,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.371087715483168,
+          "lambda_max": 7.233967276674398,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233967276674398e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015875737151524405,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006763348667041377,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.16549392419044995,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37115330673511043,
+          "lambda_max": 7.233700156944751,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233700156944752e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015867226623870623,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007171563030362207,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18833455161744833,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.38130139355052173,
+          "lambda_max": 7.214804793401247,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214804793401247e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01585870253955315,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007558779267773266,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.20927994840527697,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37884153687433264,
+          "lambda_max": 7.131318186959992,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.131318186959992e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015867226623870623,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007171563030362207,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18833455161744833,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3812484321810632,
+          "lambda_max": 7.21426999888593,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.21426999888593e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587284894458069,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.000716467038925806,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18934729116874197,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37522243991745996,
+          "lambda_max": 7.155158001535576,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 88,
+          "below_threshold_eigenvalues": 88,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.155158001535577e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586433086597792,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.000755223135968909,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.21022805800213762,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3788148948828186,
+          "lambda_max": 7.131170105095681,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.131170105095681e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015855799209049084,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007921827699138757,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.2297782170655361,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3666370756674942,
+          "lambda_max": 7.0358574396918625,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 104,
+          "below_threshold_eigenvalues": 104,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.035857439691862e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586433086597792,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.000755223135968909,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.21022805800213762,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3788148948828191,
+          "lambda_max": 7.131170105095679,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.131170105095678e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015875737151524405,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006763348667041377,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.16549392419044995,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3711533067351103,
+          "lambda_max": 7.233700156944752,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233700156944752e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015867226623870623,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007171563030362207,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18833455161744833,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3812484321810632,
+          "lambda_max": 7.21426999888593,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.21426999888593e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01585870253955315,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007558779267773266,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.20927994840527697,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.378841536874333,
+          "lambda_max": 7.131318186959991,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.131318186959991e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015867226623870623,
+            "max_absolute": 0.007322690333239734
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007171563030362207,
+            "max_absolute": 0.000980717784841545
+          },
+          "density": {
+            "relative_frobenius": 0.18833455161744833,
+            "max_absolute": 0.17556241899728775
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3813013935505217,
+          "lambda_max": 7.214804793401247,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214804793401247e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          0.5,
+          -0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01588278135276094,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0005870390563985017,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.10675553288351326,
+            "max_absolute": 0.12414137699450328
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.35854233969196875,
+          "lambda_max": 7.287076258308156,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.287076258308156e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015874287257239023,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006333985391415441,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13781977795396694,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.36741834102786364,
+          "lambda_max": 7.281669651669765,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281669651669766e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586577965151103,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006767017739659642,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.16375678740539334,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3711197448629625,
+          "lambda_max": 7.2339542421199265,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233954242119927e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015874287257239023,
+            "max_absolute": 0.008824890479445457
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006333985391415441,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13781977795396694,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.36732018939270805,
+          "lambda_max": 7.282160404815052,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 99,
+          "below_threshold_eigenvalues": 99,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.282160404815052e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.0,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587990115893314,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006326200874358768,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13909392201183776,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3674802444938552,
+          "lambda_max": 7.281831763562268,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 97,
+          "below_threshold_eigenvalues": 97,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.281831763562268e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3772797759382821,
+          "lambda_max": 7.272311737099392,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.272311737099393e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586288438853055,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007168138346542522,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.1877601334322177,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.38127101777670186,
+          "lambda_max": 7.214281456414889,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214281456414889e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37732949364486645,
+          "lambda_max": 7.2728158193742605,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.27281581937426e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.25,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015877017416449864,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006752418937821988,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.1659827959648233,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3711750534107082,
+          "lambda_max": 7.23370574563706,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 102,
+          "below_threshold_eigenvalues": 102,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.233705745637061e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015868508260803865,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007161242410989521,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.18877436492722327,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3812627302708998,
+          "lambda_max": 7.213758634746213,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.213758634746214e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015859985551797285,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007548974784637964,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.20968529021948915,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.37876855564595047,
+          "lambda_max": 7.1310914525956886,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 96,
+          "below_threshold_eigenvalues": 96,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.131091452595689e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.015868508260803865,
+            "max_absolute": 0.007296525989659131
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007161242410989521,
+            "max_absolute": 0.0009787358430912718
+          },
+          "density": {
+            "relative_frobenius": 0.18877436492722327,
+            "max_absolute": 0.17627397924661636
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.38126839714252747,
+          "lambda_max": 7.2146769118421545,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214676911842155e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          0.5,
+          -0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587990115893314,
+            "max_absolute": 0.007791068404912949
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006326200874358768,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.13909392201183776,
+            "max_absolute": 0.12464452607203522
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3672333396013517,
+          "lambda_max": 7.282014351634611,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 99,
+          "below_threshold_eigenvalues": 99,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.282014351634611e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          0.0
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3773045873312959,
+          "lambda_max": 7.27246972392624,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.27246972392624e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          0.25
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01586288438853055,
+            "max_absolute": 0.007332737208344043
+          },
+          "overlap": {
+            "relative_frobenius": 0.0007168138346542522,
+            "max_absolute": 0.0009763193374965341
+          },
+          "density": {
+            "relative_frobenius": 0.1877601334322177,
+            "max_absolute": 0.1777617409825325
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3812715246690946,
+          "lambda_max": 7.214756731233552,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 100,
+          "below_threshold_eigenvalues": 100,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.214756731233552e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          0.5
+        ]
+      },
+      {
+        "status": "invalid_overlap_metric",
+        "raw_hermiticity": {
+          "hamiltonian": {
+            "relative_frobenius": 0.01587139953961065,
+            "max_absolute": 0.0062409486018622645
+          },
+          "overlap": {
+            "relative_frobenius": 0.0006759722283311177,
+            "max_absolute": 0.0006934721960933555
+          },
+          "density": {
+            "relative_frobenius": 0.16487233121260084,
+            "max_absolute": 0.12569653248427634
+          }
+        },
+        "overlap": {
+          "lambda_min": -0.3775656004129723,
+          "lambda_max": 7.273107577506846,
+          "condition_number": null,
+          "nonpositive_eigenvalues": 98,
+          "below_threshold_eigenvalues": 98,
+          "positive_definite": false,
+          "well_conditioned_positive_definite": false,
+          "threshold": 7.273107577506847e-08,
+          "cholesky_failed_without_jitter": true
+        },
+        "fractional_k": [
+          -0.25,
+          -0.25,
+          -0.25
+        ]
+      }
+    ],
+    "nominal_electrons": 256,
+    "missing_reverse_blocks": {
+      "hamiltonian": 0,
+      "density": 0,
+      "overlap": 0
+    },
+    "exact_realspace_electron_trace": {
+      "real": 262.74553231406856,
+      "imaginary": 0.0
+    },
+    "electron_count_absolute_error": 6.745532314068555,
+    "hermitian_realspace_electron_trace": {
+      "real": 262.7474835496375,
+      "imaginary": 0.0
+    },
+    "hermitian_electron_count_absolute_error": 6.747483549637479
+  },
+  "elapsed_job_seconds": 73.79751451872289
+}

@@ -1,0 +1,219 @@
+{
+  "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hdo_energy_stage2_47h25/leafy-sweep-15-half_gt-coef3em3-lr3em4-47h25/best_model.pt",
+  "checkpoint_sha256": "e2b2f922b10c092e068a67ef879b615b267ba3fcc41e7431043069691c05ef39",
+  "film_semantics": {
+    "mode": "legacy_2026_07",
+    "modules": [
+      "pipeline.transforms.readout_hamiltonian.diag_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.diag_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.diag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_density.diag_trunk.net.0.film",
+      "pipeline.transforms.readout_density.diag_trunk.net.2.film",
+      "pipeline.transforms.readout_density.offdiag_trunk.net.0.film",
+      "pipeline.transforms.readout_density.offdiag_trunk.net.2.film",
+      "pipeline.transforms.readout_density.shifted_self_trunk.net.0.film",
+      "pipeline.transforms.readout_density.shifted_self_trunk.net.2.film",
+      "pipeline.transforms.readout_density.diag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_density.offdiag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_density.shifted_self_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_overlap.diag_trunk.net.0.film",
+      "pipeline.transforms.readout_overlap.diag_trunk.net.2.film",
+      "pipeline.transforms.readout_overlap.offdiag_trunk.net.0.film",
+      "pipeline.transforms.readout_overlap.offdiag_trunk.net.2.film",
+      "pipeline.transforms.readout_overlap.shifted_self_trunk.net.0.film",
+      "pipeline.transforms.readout_overlap.shifted_self_trunk.net.2.film",
+      "pipeline.transforms.readout_overlap.diag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_overlap.offdiag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_overlap.shifted_self_projs.Si-Si.net.0.film"
+    ],
+    "historical_source_commit": "e78a7c04e18d005d47def9eb7c9bd0f68b168d99",
+    "learned_parameters_changed": false
+  },
+  "strict_load": true,
+  "graph_source": "geometry_cutoff",
+  "cutoff_radius": 8.0,
+  "torch": "2.7.1+cu128",
+  "cuda": "12.8",
+  "density_convention": "restricted total; reference OpenMX single spin multiplied by two",
+  "units": {
+    "hamiltonian": "Hartree",
+    "overlap": "dimensionless",
+    "density": "AO kernel"
+  },
+  "postprocessing": "radial envelope only; raw directed predictions; no repair",
+  "git_commit": "bd5c0bfb310ca228147fa17e6989ecbf9330bce8",
+  "historical_control": {
+    "source": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078",
+    "current_vs_frozen": {
+      "hamiltonian": {
+        "raw_common_support": {
+          "mae": 2.5043753631485075e-09,
+          "relative_mae": 5.989072946247408e-07,
+          "common_scalar_entries": 134524,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 2.5043753631485075e-09,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0,
+          "mae_meV": 6.81475597567793e-05
+        },
+        "hermitian_common_support": {
+          "mae": 5.38373541233148e-06,
+          "relative_mae": 0.001287490069667986,
+          "common_scalar_entries": 134524,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 5.38373541233148e-06,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.14649897779911686
+        }
+      },
+      "density": {
+        "raw_common_support": {
+          "mae": 5.374538484032066e-09,
+          "relative_mae": 1.9979326941302324e-06,
+          "common_scalar_entries": 134524,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 5.374538484032066e-09,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 3.8083255163794954e-05,
+          "relative_mae": 0.014157081732079746,
+          "common_scalar_entries": 134524,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 3.8083255163794954e-05,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        }
+      },
+      "overlap": {
+        "raw_common_support": {
+          "mae": 1.3110445244089404e-09,
+          "relative_mae": 1.1407066449588848e-07,
+          "common_scalar_entries": 134524,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 1.3110445244089404e-09,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 3.7042711146414973e-06,
+          "relative_mae": 0.00032229925044733254,
+          "common_scalar_entries": 134524,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 3.7042711146414973e-06,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        }
+      }
+    },
+    "current_vs_reference": {
+      "hamiltonian": {
+        "raw_common_support": {
+          "mae": 1.5089466483502927e-05,
+          "relative_mae": 0.003346586034231017,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 16900,
+          "prediction_only_absolute_sum": 32.55185577273369,
+          "prediction_only_max_absolute": 0.028907980769872665,
+          "common_plus_prediction_only_mae": 0.00025517185913583626,
+          "prediction_only_blocks": 100,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.41060550826919157
+        },
+        "hermitian_common_support": {
+          "mae": 1.4099017178476178e-05,
+          "relative_mae": 0.0031269212889307005,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 16900,
+          "prediction_only_absolute_sum": 32.55154964327812,
+          "prediction_only_max_absolute": 0.028793301433324814,
+          "common_plus_prediction_only_mae": 0.00025430356248609323,
+          "prediction_only_blocks": 100,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.3836539960503867
+        }
+      },
+      "density": {
+        "raw_common_support": {
+          "mae": 5.15209257573279e-05,
+          "relative_mae": 0.017482986215098396,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 16900,
+          "prediction_only_absolute_sum": 15.496827512979507,
+          "prediction_only_max_absolute": 0.031451981514692307,
+          "common_plus_prediction_only_mae": 0.00016024594038431392,
+          "prediction_only_blocks": 100,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 4.953488322328545e-05,
+          "relative_mae": 0.0168090473497758,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 16900,
+          "prediction_only_absolute_sum": 14.675147995352745,
+          "prediction_only_max_absolute": 0.025394845753908157,
+          "common_plus_prediction_only_mae": 0.000152401349198719,
+          "prediction_only_blocks": 100,
+          "reference_only_blocks": 0
+        }
+      },
+      "overlap": {
+        "raw_common_support": {
+          "mae": 1.4556775689778686e-05,
+          "relative_mae": 0.0011459665215851737,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 16900,
+          "prediction_only_absolute_sum": 51.499465852975845,
+          "prediction_only_max_absolute": 0.121358223259449,
+          "common_plus_prediction_only_mae": 0.00039555538072544956,
+          "prediction_only_blocks": 100,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 1.3515376063542454e-05,
+          "relative_mae": 0.0010639834552323678,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 16900,
+          "prediction_only_absolute_sum": 51.45602631568909,
+          "prediction_only_max_absolute": 0.12133580446243286,
+          "common_plus_prediction_only_mae": 0.00039432189728068746,
+          "prediction_only_blocks": 100,
+          "reference_only_blocks": 0
+        }
+      }
+    },
+    "frozen_source_manifest_sha256": "8f10d627ee4fb021ec947d7c975cf622c6261d69cb29e64ded71652345d10cc8",
+    "frozen_export": {
+      "strict_load": true,
+      "implementation": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v1/historical_source/src/net/e3gnn.py",
+      "operator_sha256": {
+        "hamiltonian": "e47db83ea4e2b9253878ec66a00af2ba1d8c0bccb3a359631070029dfc53783b",
+        "density": "24bd8918bb0557393a7831a1ef8e7b93fd1adf1040f43a2c61110976859821c9",
+        "overlap": "2eca56727a8a174c2771f04e1db9cfbb659c13965bb95c01e6f976264ca5751c"
+      },
+      "postprocessing": "radial envelope only; raw directed predictions",
+      "torch": "2.7.1+cu128",
+      "cuda": "12.8"
+    }
+  }
+}

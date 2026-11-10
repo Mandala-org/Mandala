@@ -11,12 +11,23 @@
       ]
     },
     "sio2": {
-      "job_id": "837257",
+      "job_id": "837263",
       "command": [
         "sbatch",
         "--parsable",
-        "--dependency=afterany:837256",
         "researchops/runs/r6_supercell_20261110/eval-sio2.sh"
+      ],
+      "previous_attempts": [
+        {
+          "job_id": "837257",
+          "command": [
+            "sbatch",
+            "--parsable",
+            "--dependency=afterany:837256",
+            "researchops/runs/r6_supercell_20261110/eval-sio2.sh"
+          ],
+          "status": "FAILED: structure inference requested r0 for an envelope without r0"
+        }
       ]
     }
   },
@@ -36,5 +47,9 @@
   "comparison": {
     "job_id": "837261",
     "dependency": "afterany:837257"
+  },
+  "environment": {
+    "job_id": "837268",
+    "reason": "Original OpenMX binaries and DFT_DATA19 paths inaccessible on login and compute nodes; build official 3.9.9 and DFT_DATA19"
   }
 }
