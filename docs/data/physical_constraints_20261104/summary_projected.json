@@ -11,6 +11,20 @@
     "silicon": "joint_predicted_reference_support",
     "sio2": "predicted_H_reference_SD_reference_support"
   },
+  "denominators": {
+    "silicon": {
+      "structures": 16,
+      "kpoints": 8192,
+      "invalid_metric_kpoints": 6779,
+      "structures_with_invalid_metric": 16
+    },
+    "sio2": {
+      "structures": 10,
+      "kpoints": 10,
+      "invalid_metric_kpoints": 0,
+      "structures_with_invalid_metric": 0
+    }
+  },
   "cleanup_status": "Reference-support control and Hermitian projection only; no overlap repair, fixed-charge occupation projection, or post-cleanup aggregates exist.",
   "rows": [
     {
@@ -451,7 +465,15 @@
         "total_kpoints": 8192,
         "contributing_structures": 16
       },
-      "predicted": null,
+      "predicted": {
+        "mean": null,
+        "worst": null,
+        "count": 0,
+        "unit_of_count": "structures",
+        "total_structures": 16,
+        "total_kpoints": 8192,
+        "contributing_structures": 0
+      },
       "scenario": "joint_predicted_reference_support",
       "worst_direction": "max"
     },
