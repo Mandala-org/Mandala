@@ -1,0 +1,42 @@
+1000-atom silicon extension, 2026-11-10
+Branch referee-r6-supercell. Source implementation commits 2a993a4 / 80e5098.
+
+Built si-5x5x5-1 from ideal diamond at a=5.4437 Angstrom, sigma=0.02
+Angstrom, seed 20261611; tiled control repeats Si_scale_1_078. Both contain
+1000 atoms, 4000 nominal electrons, and explicit ASE-order parent mapping.
+All 11 previous manifest entries are unchanged. Both diagnostics and new DFT
+use 2x2x2 k sampling (10x10x10 primitive density). The tiled reference is an
+algebraic fold of the original 8x8x8 reference, not new SCF at the denser mesh.
+
+Submitted jobs (second-brain r6-supercell attempt 14):
+  837488 r6-eval-si-5x: 1 H100, 4 CPUs, 128G host, 2 hours.
+  837489 r6-dft-si-5x5x5-1: cge057, 8 MPI x 12 OMP, 1024G, 11 hours.
+  837490 r6-final-5x: afterok:837489:837488, 1 H100, 4 CPUs, 128G, 2 hours.
+OpenMX started 2026-11-10 12:01:34 CET; allocation ends 23:01:34 CET today,
+well before maintenance 2026-11-12 08:00 CET. B200 was still draining.
+
+Cost: max(413,440,350) * (1000/216)^3 * 8/27 = 12936.346 seconds
+(3.59343 hours), safety factor 3 -> 10.7803 hours, rounded to 11 hours.
+sacct batch MaxRSS for 837291/2/3: 125469708/125593112/130314552 KiB.
+Hybrid layout follows successful SiO2 memory strategy; its silicon runtime
+efficiency is unverified. 1 TB leaves >8x the observed 216-atom peak memory;
+MPI replication and grid work do not follow the cubic band-solver scaling.
+
+Verification commands/results: see verification_5x.json. Workflow tests:
+12 passed in 3.34s, including analytic 5x folding and all manifest mappings.
+Structure builder: 13 CIFs, all atom-order/coordinate roundtrip assertions pass.
+prepare_openmx.py: 9 perturbed inputs, normalized non-geometry settings match.
+compileall and new launcher bash -n: PASS. No paper/ or README changes.
+
+Native operators: /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/
+r6_supercell_20261110/{predictions,diagnostic_parent_routed}/si-5x5x5-{1,tiled}/.
+OpenMX data: /bigdata/casus/wdm/hamiltonian_learning/data/
+r6_supercells_20261110/silicon/si-5x5x5-1/.
+
+Orchestrator command after DFT (already chained as job 837490):
+ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_5x.sh"
+
+Choices to revisit: fixed seed 20261611; ideal perturbed source and tiled
+validation source match earlier protocol; hybrid 8x12 instead of pure 96 MPI;
+conservative 1024G memory and rounded 11h; no rebase per task-specific rule.
+No k convergence study, retraining, metric repair, or deployable routing fix.

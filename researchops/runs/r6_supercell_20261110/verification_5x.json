@@ -1,0 +1,52 @@
+{
+  "captured_utc": "2026-11-10T11:02:13.478696+00:00",
+  "workflow_tests": {
+    "command": "OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q researchops/runs/r6_supercell_20261110/test_workflow.py",
+    "passed": 12,
+    "seconds": 3.34
+  },
+  "compileall": "python3.13 -m compileall -q researchops/runs/r6_supercell_20261110: PASS",
+  "shell_syntax": "bash -n eval-si-5x.sh; bash -n final_compare_5x.sh: PASS",
+  "manifest": "All 11 previous records semantically identical; both new records have 1000 mapped atoms and 2x2x2 mesh",
+  "cost_estimate": {
+    "name": "si-5x5x5-1",
+    "ranks": 8,
+    "omp_threads": 12,
+    "total_cpus": 96,
+    "memory": "1024G",
+    "walltime": "11:00:00",
+    "input": "conf.dat",
+    "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-5x5x5-1",
+    "original_data_path": "/bigdata/nanostructures/DFT/DI/DFT_DATA19/",
+    "runtime_data_path": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/DFT_DATA19/",
+    "binary": "/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/r6_supercell_20261110/environment/openmx3.9/source/openmx",
+    "basis_version": "public DFT_DATA19",
+    "source_seconds": [
+      413,
+      440,
+      350
+    ],
+    "source_atoms": 216,
+    "source_kpoints": 27,
+    "target_kpoints": 8,
+    "estimated_seconds": 12936.52540921758,
+    "safety_factor": 3,
+    "source_peak_rss_K": [
+      125469708,
+      125593112,
+      130314552
+    ],
+    "source_jobs": [
+      "837291",
+      "837292",
+      "837293"
+    ],
+    "note": "MaxRSS from sacct batch steps. Hybrid 8 MPI x 12 OMP reduces replicated grids; 1024G allows 8.2x measured peak. Runtime scaling assumes same aggregate 96 CPUs; hybrid efficiency is unverified."
+  },
+  "second_brain_attempt": 14,
+  "upstream": {
+    "fetched_develop": "aae88d8",
+    "rebase": false,
+    "reason": "Task explicitly requests continuation without rebase; published branch history preserved"
+  }
+}
