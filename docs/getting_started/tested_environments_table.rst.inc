@@ -94,6 +94,13 @@
      - 701 passed, 0 failed, 0 errors, 68 skipped; 42.4 s
      - Not run
      - verified_20261110, 2026-11-10; CPU verified; source CUDA scatter and h5py; GPU untested
+   * - py313-latest-cu13x-rosi (gh003; NVIDIA H100 80GB HBM3; driver 570.158.01)
+     - 3.13.18
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - Not re-tested
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 29.9 s
+     - verified_20261110, 2026-11-10; H100 GPU verified; kernel driver 570 + user-space compatibility driver 615.71.10
    * - rosi-h100-paper-training (ROSI; NVIDIA H100; driver not recorded)
      - 3.10
      - 2.5.1+cu121 / cu121
