@@ -1,0 +1,3 @@
+framework/scripts/benchmark_reference_inference.py:294:faulthandler.dump_traceback_later(300, repeat=True)
+framework/scripts/benchmark_reference_inference.py:329:faulthandler.cancel_dump_traceback_later()
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/torch/fx/experimental/_config.py:14:# Timeout (in milliseconds) for z3 finding a solution.

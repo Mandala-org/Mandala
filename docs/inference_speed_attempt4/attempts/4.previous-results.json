@@ -1,0 +1,39 @@
+{
+  "graphene_836805": {
+    "mandala": {
+      "forward_median_ms": 208.462694,
+      "end_to_end_median_ms": 502.29094,
+      "error": null
+    },
+    "deeph": {
+      "forward_median_ms": null,
+      "end_to_end_median_ms": null,
+      "error": "RuntimeError('Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!')"
+    },
+    "deeph_in_mandala": {
+      "forward_median_ms": null,
+      "end_to_end_median_ms": null,
+      "error": "RuntimeError('Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!')"
+    },
+    "deeph_e3": {
+      "forward_median_ms": null,
+      "end_to_end_median_ms": null,
+      "error": "TimeoutError('deeph_e3 exceeded 1800s wall-clock limit')"
+    },
+    "deeph_e3_in_mandala": {
+      "forward_median_ms": null,
+      "end_to_end_median_ms": null,
+      "error": "TimeoutError('deeph_e3_in_mandala exceeded 1800s wall-clock limit')"
+    },
+    "mace_h": {
+      "forward_median_ms": null,
+      "end_to_end_median_ms": null,
+      "error": "TimeoutError('mace_h exceeded 1800s wall-clock limit')"
+    },
+    "mace_h_in_mandala": {
+      "forward_median_ms": null,
+      "end_to_end_median_ms": null,
+      "error": "TimeoutError('mace_h_in_mandala exceeded 1800s wall-clock limit')"
+    }
+  }
+}

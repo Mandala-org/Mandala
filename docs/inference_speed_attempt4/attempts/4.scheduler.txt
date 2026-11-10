@@ -1,0 +1,5 @@
+2026-11-10T02:36:32.313568+00:00
+squeue --start -j 836943,836944
+             JOBID PARTITION     NAME     USER ST          START_TIME  NODES SCHEDNODES           NODELIST(REASON)
+            836943  gpu-h100 mandala- brzoza73 PD 2026-11-10T09:20:00      1 gh001                (Priority)
+            836944  gpu-h100 mandala- brzoza73 PD 2026-11-10T09:20:00      1 gh002                (Priority)

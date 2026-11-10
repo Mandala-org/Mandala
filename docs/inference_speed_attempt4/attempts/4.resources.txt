@@ -1,0 +1,31 @@
+2026-11-10T02:36:32.322157+00:00
+scontrol show job 836943
+JobId=836943 JobName=mandala-inference-graphene
+   UserId=brzoza73(12189) GroupId=fwum(11659) MCS_label=N/A
+   Priority=11979 Nice=0 Account=default QOS=qos_default
+   JobState=PENDING Reason=Priority Dependency=(null)
+   Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0
+   RunTime=00:00:00 TimeLimit=04:00:00 TimeMin=N/A
+   SubmitTime=2026-11-10T03:34:25 EligibleTime=2026-11-10T03:34:25
+   AccrueTime=2026-11-10T03:34:25
+   StartTime=2026-11-10T09:20:00 EndTime=2026-11-10T13:20:00 Deadline=N/A
+   SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-11-10T03:36:25 Scheduler=Backfill:*
+   Partition=gpu-h100 AllocNode:Sid=rosi4:1336581
+   ReqNodeList=(null) ExcNodeList=(null)
+   NodeList= SchedNodeList=gh001
+   NumNodes=1-1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:*
+   ReqTRES=cpu=4,mem=128G,node=1,billing=4,gres/gpu=1
+   AllocTRES=(null)
+   Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=*
+   MinCPUsNode=4 MinMemoryNode=128G MinTmpDiskNode=0
+   Features=(null) DelayBoot=00:00:00
+   OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null)
+   Command=/data/home2/brzoza73/casus/mandala/researchops/runs/mandala_inference_speed_v1/run_graphene.sbatch
+   WorkDir=/data/home2/brzoza73/casus/mandala/researchops/runs/mandala_inference_speed_v1
+   StdErr=/data/home2/brzoza73/casus/mandala/researchops/runs/mandala_inference_speed_v1/logs/graphene_836943.out
+   StdIn=/dev/null
+   StdOut=/data/home2/brzoza73/casus/mandala/researchops/runs/mandala_inference_speed_v1/logs/graphene_836943.out
+   TresPerNode=gres/gpu:1
+   TresPerTask=cpu=4
+   
+

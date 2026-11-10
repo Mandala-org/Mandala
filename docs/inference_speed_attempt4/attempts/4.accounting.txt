@@ -1,0 +1,6 @@
+2026-11-10T02:36:32.329371+00:00
+sacct -j 836805,836806 --format=JobID,State,Elapsed,ExitCode -X
+JobID             State    Elapsed ExitCode 
+------------ ---------- ---------- -------- 
+836805           FAILED   02:04:59      1:0 
+836806       CANCELLED+   00:00:00      0:0 

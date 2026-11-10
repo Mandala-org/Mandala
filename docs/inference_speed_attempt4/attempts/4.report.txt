@@ -1,0 +1,89 @@
+MANDALA inference-speed-v2 attempt 4, 2026-11-10
+Run root: /data/home2/brzoza73/casus/mandala/researchops/runs/mandala_inference_speed_v1
+
+Diagnosis
+- Job 836805 FAILED after 02:04:59, exit 1. The text "Timeout (0:05:00)!"
+  is CPython faulthandler's periodic diagnostic, enabled by this driver's
+  dump_traceback_later(300, repeat=True), not an upstream MACE-H timeout.
+  Searched 135 framework, 48 MACE-H, and 2041 installed torch/e3nn Python files;
+  no cuequivariance installation was found in this environment.
+- Native MACE-H initially spent >300 s in from_mfn/cg.py:121 U_matrix_real,
+  then reached CUDA model/decoder readiness. Repeated later dumps show the
+  first support-validation forward inside e3nn/o3/_linear.py:290, called by
+  macehmodules.py:1004 (lin_edge), until the 1800 s worker deadline.
+  MACE-H-in-MANDALA repeatedly stops at the same e3nn scripted Linear through
+  pipeline.py:783. Both DeepH-E3 variants exhibit the same first-forward stall.
+- Most likely the first-call CUDA TorchScript execution/optimization path,
+  not data loading/pathos/network waiting and not measured steady-state latency.
+  Python stacks cannot prove the exact C++ compiler phase. CPU did NOT reproduce
+  the >1800 s hang: matching final Linear scripted first call was 0.041273 s,
+  no-optimization first call 0.002871 s (one row). GPU confirmation remains open.
+- Contrary to the brief, results/graphene_836805.json contains only one successful
+  variant: mandala forward 208.462694 ms, end-to-end 502.290940 ms.
+  deeph and deeph_in_mandala have CPU/CUDA errors in e3nn Wigner-D generation;
+  deeph_e3, deeph_e3_in_mandala, mace_h and mace_h_in_mandala have 1800 s errors.
+  No forward/end-to-end medians exist for these six failed variants.
+
+Changes (only the isolated ROSI run; no upstream checkout or project source edits)
+- framework/scripts/benchmark_reference_inference.py:19 import e3nn;
+  lines 110-130 warmup_seconds outside timed samples; 139 setup start;
+  214-230 setup_seconds and initial_validation_seconds, synchronized separately;
+  250 worker backend propagation; 278-279 explicit --e3nn-jit-mode script/eager,
+  default script; 286-287 supported e3nn.set_optimization_defaults(jit_mode=...);
+  299 record e3nn version and backend in every result.
+- run.sh:10 selects --e3nn-jit-mode eager for every variant. Generated FX kernels
+  retain identical weights/math but avoid scripted Linear's first-call path.
+- framework/src/core/operator_layout.py:211-213 wraps Wigner-D construction in
+  torch.device(r.device), because installed e3nn 0.6 creates generators on the
+  default CPU device even when rotation angles live on CUDA. This addresses the
+  independently observed DeepH decoder failure without changing its operations.
+- attempts/4.original.tgz preserves pre-change files; attempts/4.patch is the diff.
+  attempts/4.submit.py, 4.cancel.json, 4.previous-results.json, 4.validate.py,
+  4.validation.log, 4.linear_probe.py/logs, 4.help.txt, 4.timeout-search.txt,
+  4.scheduler.txt, 4.resources.txt and 4.accounting.txt preserve evidence.
+- workflow/attempt4.submissions.json and task.json identify the replacement jobs.
+  Original submit.py and workflow/submissions.json remain immutable, following
+  attempt 3's separate submission-record convention.
+
+Verification (ROSI, source ~/scripts/profiles/mandala.sh;
+  export PYTHONPATH="$PWD/framework/src:$PWD/framework"
+  export OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=1)
+- python -m py_compile framework/scripts/benchmark_reference_inference.py framework/src/core/operator_layout.py: PASS
+- bash -n run.sh run_graphene.sbatch run_mos2.sbatch: PASS
+- python -m scripts.benchmark_reference_inference --help: PASS
+- timeout 60 python -u attempts/4.linear_probe.py default (and noopt): PASS;
+  CPU first-call and construction times in the two saved logs.
+- python -u attempts/4.validate.py: PASS. Actual graphene output Linear is a
+  RecursiveScriptModule in script mode and GraphModule in eager mode. Identical
+  seed/weights, 1/72/3312 rows: maximum absolute output difference 0.0 each.
+  Rotation roundtrip float32 max error 2.2172928e-05; float64 1.6778192e-06.
+  Timing: 5 warmups excluded from 15 samples; child command propagates eager mode.
+- python attempts/4.submit.py: PASS, cancelled pending 836806 and submitted
+  graphene 836943 / MoS2 836944 via existing material launchers.
+- Terok: ~/second_brain/bin/sb exp attempt --project mandala --exp inference-speed-v2 --jobs 836943 836944 --reason "Repeated first-forward e3nn scripted Linear stalls bypassed with supported eager codegen for all variants; fixed e3nn 0.6 rotation device context and separated setup/warmup timings; rerun all seven on unchanged support." --by fixer --diff /data/home2/brzoza73/casus/mandala/researchops/runs/mandala_inference_speed_v1/attempts/4.patch
+  PASS: attempt 4 registered.
+- scontrol show job 836943 and 836944: account default, gpu-h100, 04:00:00,
+  one GPU, four CPUs, 128G RAM, original run directory and material launchers.
+- sinfo/scontrol: both H100 nodes mixed, all 16 GPUs allocated. No interactive
+  GPU test was launched. squeue --start estimates both replacements at
+  2026-11-10 09:20 ROSI local time, well beyond the two-hour session budget.
+
+Choices/limits
+- Rerun all seven variants rather than merge two new variants: four variants
+  stalled, two failed, and a common eager backend is needed for a coherent new
+  comparison. The driver only has an internal single-variant worker switch,
+  with no supported selected-variant merge/resume interface. Prior JSONs intact.
+- No timeout increase: there is no measured finite CUDA compile duration that
+  would justify 3600 s; keep 1800 s per variant and the four-hour allocation.
+- Eager mode changes the execution backend and potentially steady-state latency.
+  Compare within attempt 4; do not silently combine its timings with script mode.
+  Revert by removing the eager flag from run.sh. The isolated rotation fix may
+  also be reverted separately when the project's e3nn dependency is repaired.
+- New GPU forwards, GPU Wigner-D fix, CUDA compile duration and completed timings
+  are not verified. No job started during this work, so no first-15-minute
+  graphene observation or proof of progress past the old stall is available.
+- Setup, initial validation (including any first-forward overhead), and warmups
+  now have separate durations. These are not labelled isolated compile times.
+  Three structures/material, graph support, lmax/cutoff/model sizes, seed 42,
+  float32, TF32 disabled, batch 1, five forward warmups, two end-to-end warmups,
+  and five repeats all remain unchanged. No paper/ or README edits.

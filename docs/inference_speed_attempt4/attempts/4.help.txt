@@ -1,0 +1,20 @@
+usage: benchmark_reference_inference.py [-h] --root ROOT --material
+                                        {graphene,mos2} [--repeats REPEATS]
+                                        --output OUTPUT
+                                        [--variant-timeout VARIANT_TIMEOUT]
+                                        [--e3nn-jit-mode {script,eager}]
+
+Time native model kernels and MANDALA recipes on common stored support.
+
+options:
+  -h, --help            show this help message and exit
+  --root ROOT
+  --material {graphene,mos2}
+  --repeats REPEATS
+  --output OUTPUT
+  --variant-timeout VARIANT_TIMEOUT
+                        Hard wall-clock limit per variant in seconds (default:
+                        1800)
+  --e3nn-jit-mode {script,eager}
+                        e3nn generated-kernel backend; eager avoids first-call
+                        TorchScript optimization

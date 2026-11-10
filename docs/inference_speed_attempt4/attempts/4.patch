@@ -1,0 +1,121 @@
+--- a/framework/scripts/benchmark_reference_inference.py
++++ b/framework/scripts/benchmark_reference_inference.py
+@@ -16,6 +16,7 @@
+ import traceback
+ import types
+ 
++import e3nn
+ from ase.data import atomic_numbers
+ from omegaconf import OmegaConf
+ import torch
+@@ -106,10 +107,12 @@
+ 
+ 
+ def timing(fn, cases, warmup, repeats):
++    warmup_start = time.perf_counter()
+     for i in range(warmup):
+         result = fn(cases[i % len(cases)])
+         torch.cuda.synchronize()
+         del result
++    warmup_seconds = time.perf_counter() - warmup_start
+     torch.cuda.reset_peak_memory_stats()
+     base = torch.cuda.memory_allocated()
+     values = []
+@@ -123,7 +126,8 @@
+             del result
+     median = statistics.median(values)
+     return {
+-        "median_ms": median, "structures_per_second": 1000 / statistics.mean(values),
++        "median_ms": median,
++        "warmup_seconds": warmup_seconds, "structures_per_second": 1000 / statistics.mean(values),
+         "peak_allocated_mib": torch.cuda.max_memory_allocated() / 2**20,
+         "peak_above_ready_mib": (torch.cuda.max_memory_allocated() - base) / 2**20,
+         "samples_ms": values,
+@@ -132,6 +136,7 @@
+ 
+ def benchmark(root, material, kind, native, paths, repeats):
+     name = kind if native or kind == "mandala" else kind + "_in_mandala"
++    setup_start = time.perf_counter()
+     print("START", material, name, flush=True)
+     config = OmegaConf.load(root / "configs" / f"{kind}_{material}.yaml")
+     config.data.splits = {"train": list(config.data.splits.train)[:1], "val": paths, "test": []}
+@@ -206,6 +211,9 @@
+ 
+     with torch.no_grad():
+         cases = [prep(i) for i in range(len(paths))]
++        torch.cuda.synchronize()
++        setup_seconds = time.perf_counter() - setup_start
++        validation_start = time.perf_counter()
+         for i, case in enumerate(cases):
+             matrix = decode(case, forward(case))
+             if set(matrix.lookup) != expected[i]:
+@@ -213,8 +221,13 @@
+             if not all(torch.isfinite(b).all() for b in matrix.pair_blocks.values()):
+                 raise ValueError("Nonfinite Hamiltonian")
+             del matrix
+-        print("READY", material, name, "support and finite-output checks", flush=True)
++        torch.cuda.synchronize()
++        validation_seconds = time.perf_counter() - validation_start
++        print("READY", material, name, "support and finite-output checks",
++              f"setup={setup_seconds:.3f}s validation={validation_seconds:.3f}s", flush=True)
+         result = {
++            "setup_seconds": setup_seconds,
++            "initial_validation_seconds": validation_seconds,
+             "parameters": sum(p.numel() for p in model.parameters()),
+             "directed_edges": [len(s) for s in expected],
+             "forward": timing(forward, cases, 5, repeats),
+@@ -234,7 +247,7 @@
+         sys.executable, "-u", "-m", "scripts.benchmark_reference_inference",
+         "--root", str(args.root), "--material", args.material,
+         "--repeats", str(args.repeats), "--output", str(worker_output),
+-        "--_variant", name,
++        "--_variant", name, "--e3nn-jit-mode", args.e3nn_jit_mode,
+     ]
+     # No CUDA state is forked, and failed variants cannot retain the next one's
+     # tensors or compiler state. Process startup is outside both measured timers.
+@@ -262,12 +275,16 @@
+     p.add_argument("--output", type=Path, required=True)
+     p.add_argument("--variant-timeout", type=float, default=1800,
+                    help="Hard wall-clock limit per variant in seconds (default: 1800)")
++    p.add_argument("--e3nn-jit-mode", choices=["script", "eager"], default="script",
++                   help="e3nn generated-kernel backend; eager avoids first-call TorchScript optimization")
+     p.add_argument("--_variant", help=argparse.SUPPRESS)
+     args = p.parse_args()
+     if not 0 < args.variant_timeout < float("inf"):
+         p.error("--variant-timeout must be finite and positive")
+     if not os.environ.get("SLURM_JOB_ID") or not torch.cuda.is_available():
+         raise RuntimeError("Run on a Slurm GPU allocation")
++    e3nn.set_optimization_defaults(jit_mode=args.e3nn_jit_mode)
++    print("E3NN", e3nn.__version__, "jit_mode", args.e3nn_jit_mode, flush=True)
+     torch.set_num_threads(4)
+     torch.set_float32_matmul_precision("highest")
+     torch.backends.cuda.matmul.allow_tf32 = False
+@@ -279,6 +296,7 @@
+     result = dict(
+         material=args.material, structures=paths, seed=42, batch_size=1,
+         dtype="float32", tf32=False, torch=str(torch.__version__), cuda=torch.version.cuda,
++        e3nn=str(e3nn.__version__), e3nn_jit_mode=args.e3nn_jit_mode,
+         # Only workers initialize a CUDA context while measurements are running.
+         gpu=torch.cuda.get_device_name() if args._variant else None,
+         node=os.environ["SLURMD_NODENAME"],
+--- a/framework/src/core/operator_layout.py
++++ b/framework/src/core/operator_layout.py
+@@ -208,7 +208,9 @@
+         r = self.convert_rotation(rotation) if order_xyz else rotation
+         il = Irreps([(1, (int(l), (-1) ** int(l))) for l in left_shells])
+         ir = Irreps([(1, (int(l), (-1) ** int(l))) for l in right_shells])
+-        dl, dr = il.D_from_matrix(r), ir.D_from_matrix(r)
++        # e3nn 0.6 creates Wigner generators on the default device.
++        with torch.device(r.device):
++            dl, dr = il.D_from_matrix(r), ir.D_from_matrix(r)
+         if self.spinful:
+             spin = self.spin_half_rotation(r)
+ 
+--- a/run.sh
++++ b/run.sh
+@@ -7,4 +7,4 @@
+ export CUBLAS_WORKSPACE_CONFIG=:4096:8
+ export OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=1 PYTHONHASHSEED=42
+ cd "$root/framework"
+-exec python -u -m scripts.benchmark_reference_inference --root "$root" --material "$material" --output "$root/results/${material}_${SLURM_JOB_ID}.json"
++exec python -u -m scripts.benchmark_reference_inference --root "$root" --material "$material" --e3nn-jit-mode eager --output "$root/results/${material}_${SLURM_JOB_ID}.json"

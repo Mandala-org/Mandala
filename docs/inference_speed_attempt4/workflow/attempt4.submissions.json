@@ -1,0 +1,30 @@
+[
+  {
+    "material": "graphene",
+    "command": [
+      "sbatch",
+      "--parsable",
+      "run_graphene.sbatch"
+    ],
+    "stdout": "836943\n",
+    "stderr": "",
+    "returncode": 0,
+    "script": "run_graphene.sbatch",
+    "method": "sbatch; separate attempt record as in attempt 3",
+    "job_id": "836943"
+  },
+  {
+    "material": "mos2",
+    "command": [
+      "sbatch",
+      "--parsable",
+      "run_mos2.sbatch"
+    ],
+    "stdout": "836944\n",
+    "stderr": "",
+    "returncode": 0,
+    "script": "run_mos2.sbatch",
+    "method": "sbatch; separate attempt record as in attempt 3",
+    "job_id": "836944"
+  }
+]

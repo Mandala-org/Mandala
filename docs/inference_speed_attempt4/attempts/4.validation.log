@@ -1,0 +1,9 @@
+BACKENDS RecursiveScriptModule GraphModule
+PARITY 1 max_abs 0.0
+PARITY 72 max_abs 0.0
+PARITY 3312 max_abs 0.0
+LINEAR PARITY PASS
+ROTATION ROUNDTRIP torch.float32 max_abs 2.2172927856445312e-05
+ROTATION ROUNDTRIP torch.float64 max_abs 1.6778192129529579e-06
+TIMING PASS: 5 warmup calls excluded, 15 measured samples
+WORKER BACKEND PROPAGATION PASS
