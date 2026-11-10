@@ -64,6 +64,9 @@ def main():
         save(f'sio2-2x1x1-{sample}', 'sio2', base, (2,1,1), 0.02, 20262110+sample, key)
         if sample == 1:
             save('sio2-2x1x1-tiled', 'sio2', base, (2,1,1), 0, None, key, True)
+    base = read(io.StringIO(evidence['sio2_1']['files']['SiO2.cif']['text']), format='cif')
+    save('sio2-2x2x1-1', 'sio2', base, (2,2,1), 0.02, 20262211, 'sio2_1')
+    save('sio2-2x2x1-tiled', 'sio2', base, (2,2,1), 0, None, 'sio2_1', True)
     manifest = dict(schema_version=2, silicon_training=dict(scales=[1], num_train_per_scale=80,
                     num_val_per_scale=16, split_seed=43, sigma_angstrom=sigma,
                     dataset_generation_seed=7, lattice_constant_angstrom=lattice),
