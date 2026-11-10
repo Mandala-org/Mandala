@@ -98,7 +98,7 @@ Verification commands and outcomes:
     8 inputs prepared; non-geometry numerical settings preserved; original DATA.PATH copies retained
   python3.13 -m compileall -q researchops/runs/r6_supercell_20261110
     passed
-  bash -n researchops/runs/r6_supercell_20261110/*.sh; bash -n researchops/runs/r6_supercell_20261110/openmx/*/run.sh
+  for s in researchops/runs/r6_supercell_20261110/*.sh researchops/runs/r6_supercell_20261110/openmx/*/*.sh; do bash -n "$s" || exit; done
     passed
 
 Actual allocated comparison check:

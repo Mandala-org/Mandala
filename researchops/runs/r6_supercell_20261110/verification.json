@@ -26,7 +26,7 @@
       "result": "passed"
     },
     {
-      "command": "bash -n researchops/runs/r6_supercell_20261110/*.sh; bash -n researchops/runs/r6_supercell_20261110/openmx/*/run.sh",
+      "command": "for s in researchops/runs/r6_supercell_20261110/*.sh researchops/runs/r6_supercell_20261110/openmx/*/*.sh; do bash -n \"$s\" || exit; done",
       "result": "passed"
     }
   ],
