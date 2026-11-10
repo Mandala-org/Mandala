@@ -1,14 +1,14 @@
 Installation
 ============
 
-MANDALA is a Python 3.10 package built on PyTorch, e3nn, torch-scatter and
+MANDALA supports Python 3.10–3.13 and uses PyTorch, e3nn, torch-scatter and
 PyTorch Lightning. The commands below create an isolated environment with the
 tested PyTorch 2.5.1 stack.
 
 Requirements
 ------------
 
-* Python 3.10
+* Python >=3.10,<3.14
 * A C/C++ toolchain (only when torch-scatter has to be built from source)
 * `Git LFS <https://git-lfs.com>`_ for the example electronic-structure data
 * Optional: an NVIDIA GPU with a CUDA 12.1 compatible driver
@@ -54,10 +54,52 @@ CUDA 12.1
    python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
    python -m pip install -e '.[dev]'
 
-Compiled extensions (torch-scatter) must match the installed PyTorch and CUDA
-versions. On a computing cluster, use the site's module system to provide a
-matching CUDA runtime and record the exact versions with each run; MANDALA
-writes them into every run manifest automatically.
+Only the graph stack (``torch-scatter`` and ``torch_geometric``) must be
+selected for the exact PyTorch build and CUDA wheel tag; the remaining
+dependencies follow pip resolution. ``torch-scatter`` contains compiled
+kernels, while PyG itself can use its platform-independent wheel. PyTorch
+CUDA wheels supply their runtime; a local toolkit is needed only to build
+CUDA extensions from source. Record the driver and installed versions with
+each run; MANDALA writes package versions into every run manifest.
+
+Tested environments
+-------------------
+
+The table is generated from ``docs/data/tested_environments.json``. Records
+marked ``reported`` describe earlier use supplied by the author, without a
+fresh test run or an inferred pass count. Regenerate it with:
+
+.. code-block:: bash
+
+   python scripts/report/render_tested_environments.py
+
+.. include:: tested_environments_table.rst.inc
+
+Known version notes
+~~~~~~~~~~~~~~~~~~~
+
+* The verified CPU selection excludes GPU, slow, large-data, network and
+  integration tests. It also excludes the large silicon spatial fixture and
+  unshipped generated PySCF reference files. The 68 skips require optional
+  upstream source checkouts; exact commands and results are in the JSON.
+* PyTorch 2.7.1+cu128 runs the model and compiled scatter CUDA kernels on
+  the A40 with driver 550.163.01 (advertised CUDA 12.4), without a launch error.
+  This is a smoke check, not a guarantee for all kernels or architectures.
+* Native checkpoints contain Python Config objects. The loader explicitly
+  retains trusted-payload loading across the PyTorch 2.6 ``weights_only``
+  default change; load only checkpoints whose source you trust.
+* The newest PyPI release selected on 2026-11-10 was PyTorch 2.15.0; its
+  newest Linux wheel tag was cu134. This driver cannot initialize CUDA with
+  that wheel. No matching PyG scatter wheel was available, and building with
+  local nvcc 12.4 failed against CUDA 13.4, so scatter was built for CPU only.
+  The failing CPU and GPU checks remain in the table and JSON; this stack
+  is not verified for production use. Its CPU selection also fails the
+  reproduction setup test with ``min() iterable argument is empty`` when
+  that test mocks CUDA availability on this driver-incompatible build.
+
+* The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
+  see notes" in the table). Their diff was not supplied; that report does not
+  establish support for an unmodified 2.11 installation.
 
 Import layout
 -------------

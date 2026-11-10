@@ -248,6 +248,9 @@ class E3GNN(pl.LightningModule):
         strict: bool = True,
         **kwargs,
     ) -> "E3GNN":
+        # Native checkpoints contain Config objects as well as tensor weights.
+        # Keep their trusted-payload loading semantics across PyTorch >= 2.6.
+        kwargs.setdefault("weights_only", False)
         return cls.load_from_checkpoint(
             checkpoint_path,
             mapper=mapper,

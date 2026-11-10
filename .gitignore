@@ -82,6 +82,7 @@ slurm_*.out
 venv/
 .venv/
 .venv-ci/
+.venvs/
 # Generated outputs and caches
 model_reports/
 .mypy_cache/
