@@ -47,8 +47,11 @@ def _assert_probe(parameter, expected):
         rtol=2e-8,
         atol=2e-10,
     )
+    # Near-cancelling parameter sums accumulate backend rounding differences:
+    # torch 2.5.1+cu121 differs from the +cpu oracle by 4.65e-9 after Adam.
+    # Keep the coordinate, squared-norm, output and gradient checks unchanged.
     torch.testing.assert_close(
-        flat.sum(), torch.tensor(expected["sum"]), rtol=2e-8, atol=2e-9
+        flat.sum(), torch.tensor(expected["sum"]), rtol=2e-8, atol=1e-8
     )
     torch.testing.assert_close(
         flat.square().sum(), torch.tensor(expected["squared_sum"]), rtol=2e-8, atol=2e-9

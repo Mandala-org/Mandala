@@ -18,7 +18,8 @@ def _require_cuda() -> None:
 def test_tiny_model_forward_backward_and_strict_reload(small_angular_dataset_e3nn):
     _require_cuda()
     dataset, mapper, base_cfg = small_angular_dataset_e3nn
-    dataset = copy.deepcopy(dataset)
+    # This GPU-only session owns the fixture. Preprocessed energy targets can
+    # have grad_fn, so PyTorch cannot deepcopy the complete dataset.
     cfg = copy.deepcopy(base_cfg)
     cfg.device = torch.device("cuda")
     cfg.matrix_targets = ["hamiltonian"]
