@@ -172,7 +172,11 @@ removes the application-level sources of restart drift.
 
 ## Data conventions and execution gates
 
-All data/checkpoints stay under the documented bigdata root. Outputs are new:
+The hard-coded `/bigdata/...` locations are the authors' HPC paths; replace
+them with your local paths for the deposited datasets and training outputs
+(a RODARE data deposit is being prepared).
+
+With the supplied paths, outputs are new directories under the HPC root:
 `/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/`.
 Existing models are never overwritten. Recovery uses `<model>/latest_checkpoint.pt`;
 the selected model is `<model>/best_model.pt`.

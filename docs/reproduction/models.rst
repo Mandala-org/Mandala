@@ -62,6 +62,14 @@ seeds of the selected models, the fitted distance envelopes
 (``*_envelope.json``, verified by SHA-256 at start-up) and one launcher per
 material. Each recipe initializes all weights from scratch.
 
+These are fresh training experiments with the selected architectures and
+objectives, not a replay of the historical fine-tuning and restart sequence.
+The source learning rates and checkpoint ancestry are documented in
+``scripts/reproduce_examples/README.md``. In particular, silicon uses the
+current native spin=0 density convention, whereas the historical targets were
+doubled; its density and energy errors cannot be compared directly with the
+historical values below.
+
 .. list-table::
    :header-rows: 1
    :widths: 22 30 16 16 16
@@ -91,6 +99,10 @@ material. Each recipe initializes all weights from scratch.
    recipe — ``data_path``, ``checkpoint_dir`` — and ``save_dir`` and
    ``snapshot_cache_dir`` in ``config``:
 
+   The hard-coded ``/bigdata/...`` locations are the authors' HPC paths;
+   replace them with your local paths for the deposited datasets and training
+   outputs (a RODARE data deposit is being prepared).
+
    .. code-block:: json
 
       "training": {
@@ -116,8 +128,9 @@ material. Each recipe initializes all weights from scratch.
       bash scripts/reproduce_examples/train_sio2.sh
       bash scripts/reproduce_examples/train_silicon.sh
 
-   A segment trains for at most 45 hours and stops at an epoch boundary;
+   A segment budgets 45 hours and stops at an epoch boundary;
    request 48 hours to leave room for the final epoch and checkpoint I/O.
+   The final complete epoch can overrun the budget.
    Re-running the same command continues the run from
    ``<checkpoint_dir>/<run>/latest_checkpoint.pt`` with the full optimizer,
    scheduler, RNG and model-selection state, until the cumulative epoch cap is
@@ -127,28 +140,36 @@ material. Each recipe initializes all weights from scratch.
    Every run writes a contract (``<run>.contract.json``) with the SHA-256 of
    the recipe and of every source file, the installed package versions, the
    GPU and the determinism settings. Continuation with a different recipe,
-   code or runtime is refused, which guarantees that all segments of a model
-   belong to one scientific trajectory.
+   code or runtime is refused. Input manifests also reject changed split
+   identities, sizes or modification times. Preserve the immutable data:
+   large inputs are not content-hashed, and CUDA scatter reductions can still
+   be nondeterministic.
 
 Validation metrics
 ------------------
 
-Recompute the absolute and relative validation errors of a checkpoint with
-the deterministic validation split of its recipe:
+Compute the absolute and relative validation errors of a newly trained
+checkpoint with the deterministic validation split of its recipe. Run all
+commands from the repository root. The ``/runs/...`` and ``/data/...`` paths
+below are examples to replace with your checkpoint and dataset paths:
 
 .. code-block:: bash
 
    PYTHONPATH=src:. python scripts/report/evaluate_validation_relative_metrics.py \
-     --checkpoint /runs/publication/<run>/best_model.pt \
+     --checkpoint /runs/publication/silicon/best_model.pt \
      --dataset-kind silicon_scales --data-path /data/perturbed_Si \
      --scales '[1]' --num-train-per-scale 80 --num-val-per-scale 16 \
      --data-split-seed 43 --output-json silicon_metrics.json
 
-For ``siox`` use ``--num-train 90 --num-val 10 --data-split-seed 42``; for
-``ZnCuSnSeS`` use ``--num-train-per-scale 80 --num-val-per-scale 20
---data-split-seed 44``. The relative error divides the mean per-structure
+For SiO\ :sub:`2`, change ``--dataset-kind`` to ``siox``, select its checkpoint
+and data root, and replace the silicon split options with
+``--num-train 90 --num-val 10 --data-split-seed 42``. For ZnCu\ :sub:`2`\ Sn(SeS)\ :sub:`2`,
+use ``--dataset-kind ZnCuSnSeS``, its checkpoint and data root, and
+``--scales '[1]' --num-train-per-scale 80 --num-val-per-scale 20 --data-split-seed 44``.
+The relative error divides the mean per-structure
 validation MAE by the mean absolute reference value over the same validation
-structures. The values of the published checkpoints are stored in
+structures. Exact historical split membership is not asserted by the fresh
+recipes. The values of the published checkpoints are stored in
 ``paper/data/validation_relative_metrics``:
 
 .. list-table::
@@ -194,10 +215,10 @@ checkpoint and one validation structure:
 .. code-block:: bash
 
    PYTHONPATH=src:. python scripts/evaluate_checkpoint_materials.py \
-     --checkpoint /runs/publication/<silicon run>/best_model.pt \
-     --mode snapshot --snapshot-path /data/perturbed_Si/scale_1/<structure> \
+     --checkpoint /runs/publication/silicon/best_model.pt \
+     --mode snapshot --snapshot-path /data/perturbed_Si/scale_1/Si_scale_1_090 \
      --output-dir figures/silicon \
-     --path-string LGXUG --dos-kmesh 4x4x4 --max-atoms 8 \
+     --path-string LGXUG --dos-kmesh 4x4x4 --use-gt-overlap-for-eigs --max-atoms 8 \
      --hamiltonian-clim 0.01 --density-clim 0.01
 
 The paper uses validation structure no. 94 for ZnCu\ :sub:`2`\ Sn(SeS)\ :sub:`2`,

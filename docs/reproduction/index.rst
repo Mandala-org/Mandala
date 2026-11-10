@@ -49,7 +49,7 @@ pseudopotentials, non-spin-polarized, SCF threshold :math:`10^{-8}` Hartree):
      - 165 MD configurations of 150 atoms (100 used)
      - Si9.0-s2p2d1, O7.0-s2p2d1; 600 Ry; :math:`\Gamma`; 10 Å
    * - Perturbed silicon
-     - 100 eight-atom diamond cells, :math:`\sigma=0.02` Å
+     - 96 eight-atom diamond cells (80 train / 16 validation), :math:`\sigma=0.02` Å
      - Si7.0-s2p2d1; 400 Ry; :math:`8^3`; 8 Å
 
 Each structure is one directory containing ``HS.out`` and the OpenMX output

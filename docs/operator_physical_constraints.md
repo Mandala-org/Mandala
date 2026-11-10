@@ -36,7 +36,7 @@ system charge, independently of either reference or predicted matrix traces.
 1. Use strict checkpoint loading and record checkpoint, source, runtime,
    envelope and input hashes before interpreting predictions. Reconstruct
    the documented validation slices (80/20, seed 44 for chalcogenide; 90/10,
-   seed 42 for silica; 80/20, seed 43 for silicon). Save the full discovery
+   seed 42 for silica; 80/16 from 96 structures, seed 43 for silicon). Save the full discovery
    list and split. A current population with missing files is explicitly an
    incomplete reconstruction, not proof of historical membership. These are
    validation diagnostics, not an independent test benchmark.
