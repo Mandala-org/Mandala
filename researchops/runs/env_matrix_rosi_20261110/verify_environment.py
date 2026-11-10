@@ -59,7 +59,7 @@ record = dict(
 
 if previous:
     record["initial_attempts"] = previous.get("initial_attempts", [])
-    if previous.get("result") in ["failed", "blocked"]:
+    if previous.get("result") in ["passed", "failed", "blocked"]:
         record["initial_attempts"].append(
             {
                 k: v
@@ -89,6 +89,10 @@ record["common_environment"] = {
         "MPLBACKEND",
         "MAX_JOBS",
         "CUDA_VISIBLE_DEVICES",
+        "LD_LIBRARY_PATH",
+        "HDF5_INCLUDEDIR",
+        "HDF5_LIBDIR",
+        "MANDALA_CUDA_COMPAT",
     ]
     if key in env
 }
@@ -316,6 +320,14 @@ if not smi["exit_code"]:
     record["gpu"], record["driver"] = map(
         str.strip, smi["output"].splitlines()[0].split(",")
     )
+execute(
+    "cuda_driver_library",
+    [
+        py,
+        "-c",
+        "import ctypes; from pathlib import Path; lib=ctypes.CDLL('libcuda.so.1'); version=ctypes.c_int(); lib.cuDriverGetVersion(ctypes.byref(version)); print('CUDA driver API:',version.value); print('\\n'.join(line for line in Path('/proc/self/maps').read_text().splitlines() if 'libcuda.so' in line))",
+    ],
+)
 execute(
     "import_check",
     [
