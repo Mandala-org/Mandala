@@ -1,0 +1,206 @@
+Loading module python/3.10.4 
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-2x2x2-1 {'hamiltonian': {'raw_common_support': {'mae': 4.2697363919729293e-05, 'relative_mae': 0.009463159388916332, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138242, 'prediction_only_absolute_sum': 280.9265038371086, 'prediction_only_max_absolute': 0.03154238313436508, 'common_plus_prediction_only_mae': 0.0002975298977855243, 'prediction_only_blocks': 818, 'reference_only_blocks': 0, 'mae_meV': 1.1618550485653216}, 'hermitian_common_support': {'mae': 4.133560896613952e-05, 'relative_mae': 0.009161349089838082, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138242, 'prediction_only_absolute_sum': 280.9182178080082, 'prediction_only_max_absolute': 0.03139767795801163, 'common_plus_prediction_only_mae': 0.0002963348960098308, 'prediction_only_blocks': 818, 'reference_only_blocks': 0, 'mae_meV': 1.124799789821209}}, 'density': {'raw_common_support': {'mae': 0.00014699293663273785, 'relative_mae': 0.04983391607929098, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138242, 'prediction_only_absolute_sum': 131.37977527081966, 'prediction_only_max_absolute': 0.03241591155529022, 'common_plus_prediction_only_mae': 0.0002498984953205078, 'prediction_only_blocks': 818, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 0.00014215223466063648, 'relative_mae': 0.048192809088923996, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138242, 'prediction_only_absolute_sum': 123.63895606994629, 'prediction_only_max_absolute': 0.026192033663392067, 'common_plus_prediction_only_mae': 0.00023850533959060587, 'prediction_only_blocks': 818, 'reference_only_blocks': 0}}, 'overlap': {'raw_common_support': {'mae': 2.3172878882995736e-05, 'relative_mae': 0.0018235200880871347, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138242, 'prediction_only_absolute_sum': 462.79608711600304, 'prediction_only_max_absolute': 0.12272263318300247, 'common_plus_prediction_only_mae': 0.0004490236415474966, 'prediction_only_blocks': 818, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 2.2146678427449772e-05, 'relative_mae': 0.0017427663261337424, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138242, 'prediction_only_absolute_sum': 462.7360882163048, 'prediction_only_max_absolute': 0.12265578657388687, 'common_plus_prediction_only_mae': 0.00044807329591460944, 'prediction_only_blocks': 818, 'reference_only_blocks': 0}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-2x2x2-2 {'hamiltonian': {'raw_common_support': {'mae': 4.2951380542119825e-05, 'relative_mae': 0.009521731333589101, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138918, 'prediction_only_absolute_sum': 285.60756105184555, 'prediction_only_max_absolute': 0.03320328891277313, 'common_plus_prediction_only_mae': 0.00030189966435252563, 'prediction_only_blocks': 822, 'reference_only_blocks': 0, 'mae_meV': 1.1687671964838395}, 'hermitian_common_support': {'mae': 4.166978271134942e-05, 'relative_mae': 0.009237618691148199, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138918, 'prediction_only_absolute_sum': 285.5982495248318, 'prediction_only_max_absolute': 0.033034346997737885, 'common_plus_prediction_only_mae': 0.00030077430683848644, 'prediction_only_blocks': 822, 'reference_only_blocks': 0, 'mae_meV': 1.1338931252716136}}, 'density': {'raw_common_support': {'mae': 0.00014514155851467006, 'relative_mae': 0.0492258754082258, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138918, 'prediction_only_absolute_sum': 132.26166504621506, 'prediction_only_max_absolute': 0.03139667585492134, 'common_plus_prediction_only_mae': 0.0002489454773787181, 'prediction_only_blocks': 822, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 0.00014047465085946262, 'relative_mae': 0.047643057798108186, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138918, 'prediction_only_absolute_sum': 124.38473528623581, 'prediction_only_max_absolute': 0.025799307972192764, 'common_plus_prediction_only_mae': 0.0002375848523930543, 'prediction_only_blocks': 822, 'reference_only_blocks': 0}}, 'overlap': {'raw_common_support': {'mae': 2.228602577342377e-05, 'relative_mae': 0.0017539897846154968, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138918, 'prediction_only_absolute_sum': 474.4190318286419, 'prediction_only_max_absolute': 0.12293247133493423, 'common_plus_prediction_only_mae': 0.00045873267567966543, 'prediction_only_blocks': 822, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 2.1246755754273832e-05, 'relative_mae': 0.0016721955241412974, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 138918, 'prediction_only_absolute_sum': 474.3553638160229, 'prediction_only_max_absolute': 0.12292962521314621, 'common_plus_prediction_only_mae': 0.00045776813901783343, 'prediction_only_blocks': 822, 'reference_only_blocks': 0}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-2x2x2-3 {'hamiltonian': {'raw_common_support': {'mae': 4.204730119393456e-05, 'relative_mae': 0.009322995486538718, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 136214, 'prediction_only_absolute_sum': 267.65843534469604, 'prediction_only_max_absolute': 0.03237108141183853, 'common_plus_prediction_only_mae': 0.0002852050669879103, 'prediction_only_blocks': 806, 'reference_only_blocks': 0, 'mae_meV': 1.144165931708631}, 'hermitian_common_support': {'mae': 4.0796527530585235e-05, 'relative_mae': 0.009045665981743549, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 136214, 'prediction_only_absolute_sum': 267.65106534957886, 'prediction_only_max_absolute': 0.03230210393667221, 'common_plus_prediction_only_mae': 0.00028410561339580295, 'prediction_only_blocks': 806, 'reference_only_blocks': 0, 'mae_meV': 1.110130629245767}}, 'density': {'raw_common_support': {'mae': 0.00013652398237732762, 'relative_mae': 0.04632717884967243, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 136214, 'prediction_only_absolute_sum': 125.49014921486378, 'prediction_only_max_absolute': 0.03165671229362488, 'common_plus_prediction_only_mae': 0.00023575632185493772, 'prediction_only_blocks': 806, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 0.0001322225072294205, 'relative_mae': 0.0448675436630592, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 136214, 'prediction_only_absolute_sum': 118.66247534751892, 'prediction_only_max_absolute': 0.026396602392196655, 'common_plus_prediction_only_mae': 0.00022566045572559548, 'prediction_only_blocks': 806, 'reference_only_blocks': 0}}, 'overlap': {'raw_common_support': {'mae': 2.2341463886175663e-05, 'relative_mae': 0.001758701402455536, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 136214, 'prediction_only_absolute_sum': 430.16920498013496, 'prediction_only_max_absolute': 0.12163238972425461, 'common_plus_prediction_only_mae': 0.0004188542802076067, 'prediction_only_blocks': 806, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 2.131743330250643e-05, 'relative_mae': 0.0016780905690369243, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 136214, 'prediction_only_absolute_sum': 430.1073860526085, 'prediction_only_max_absolute': 0.12159739434719086, 'common_plus_prediction_only_mae': 0.0004179023513151622, 'prediction_only_blocks': 806, 'reference_only_blocks': 0}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-2x2x2-tiled {'hamiltonian': {'raw_common_support': {'mae': 1.5089660345109625e-05, 'relative_mae': 0.003346629029425518, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 135200, 'prediction_only_absolute_sum': 260.41479006409645, 'prediction_only_max_absolute': 0.02890814282000065, 'common_plus_prediction_only_mae': 0.0002551719764982102, 'prediction_only_blocks': 800, 'reference_only_blocks': 0, 'mae_meV': 0.4106107835149161}, 'hermitian_common_support': {'mae': 1.4099194893604497e-05, 'relative_mae': 0.003126960703111972, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 135200, 'prediction_only_absolute_sum': 260.41234144568443, 'prediction_only_max_absolute': 0.028793461620807648, 'common_plus_prediction_only_mae': 0.0002543036661181342, 'prediction_only_blocks': 800, 'reference_only_blocks': 0, 'mae_meV': 0.3836588319278294}}, 'density': {'raw_common_support': {'mae': 5.152081041122763e-05, 'relative_mae': 0.017482947073831995, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 135200, 'prediction_only_absolute_sum': 123.97447164356709, 'prediction_only_max_absolute': 0.0314522348344326, 'common_plus_prediction_only_mae': 0.0001602457015793176, 'prediction_only_blocks': 800, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 4.9534767492441484e-05, 'relative_mae': 0.016809008077951406, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 135200, 'prediction_only_absolute_sum': 117.4010479748249, 'prediction_only_max_absolute': 0.025395136326551437, 'common_plus_prediction_only_mae': 0.00015240112164657645, 'prediction_only_blocks': 800, 'reference_only_blocks': 0}}, 'overlap': {'raw_common_support': {'mae': 1.455670339406571e-05, 'relative_mae': 0.0011459608301828631, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 135200, 'prediction_only_absolute_sum': 411.9956422150135, 'prediction_only_max_absolute': 0.12135825306177139, 'common_plus_prediction_only_mae': 0.0003955552388934337, 'prediction_only_blocks': 800, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 1.3515254084454762e-05, 'relative_mae': 0.0010639738525597792, 'common_scalar_entries': 940992, 'prediction_only_scalar_entries': 135200, 'prediction_only_absolute_sum': 411.64812806248665, 'prediction_only_max_absolute': 0.12133583426475525, 'common_plus_prediction_only_mae': 0.0003943217140007786, 'prediction_only_blocks': 800, 'reference_only_blocks': 0}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-3x3x3-1 {'hamiltonian': {'raw_common_support': {'mae': 4.4288142083651106e-05, 'relative_mae': 0.009812583201877893, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 500916, 'prediction_only_absolute_sum': 1107.4274167590775, 'prediction_only_max_absolute': 0.16089962422847748, 'common_plus_prediction_only_mae': 0.00034180273150642736, 'prediction_only_blocks': 2964, 'reference_only_blocks': 172, 'mae_meV': 1.2051423494950637}, 'hermitian_common_support': {'mae': 4.303097915360797e-05, 'relative_mae': 0.009534043275184543, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 500916, 'prediction_only_absolute_sum': 1107.397074369248, 'prediction_only_max_absolute': 0.16087710857391357, 'common_plus_prediction_only_mae': 0.00034070988891350554, 'prediction_only_blocks': 2964, 'reference_only_blocks': 172, 'mae_meV': 1.1709331861404881}}, 'density': {'raw_common_support': {'mae': 0.0001477910973021073, 'relative_mae': 0.050087256530799526, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 500916, 'prediction_only_absolute_sum': 534.701945438981, 'prediction_only_max_absolute': 0.16334494948387146, 'common_plus_prediction_only_mae': 0.0002740820547017367, 'prediction_only_blocks': 2964, 'reference_only_blocks': 172}, 'hermitian_common_support': {'mae': 0.00014323476698395161, 'relative_mae': 0.04854308986818913, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 500916, 'prediction_only_absolute_sum': 506.84430046379566, 'prediction_only_max_absolute': 0.16324567794799805, 'common_plus_prediction_only_mae': 0.00026251436537297926, 'prediction_only_blocks': 2964, 'reference_only_blocks': 172}}, 'overlap': {'raw_common_support': {'mae': 2.3299077370408628e-05, 'relative_mae': 0.0018325175754080824, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 500916, 'prediction_only_absolute_sum': 1996.1607564950336, 'prediction_only_max_absolute': 0.30874767899513245, 'common_plus_prediction_only_mae': 0.0005673383492436563, 'prediction_only_blocks': 2964, 'reference_only_blocks': 172}, 'hermitian_common_support': {'mae': 2.227854230124907e-05, 'relative_mae': 0.0017522505150080682, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 500916, 'prediction_only_absolute_sum': 1996.005751216153, 'prediction_only_max_absolute': 0.3086414635181427, 'common_plus_prediction_only_mae': 0.0005664154640515212, 'prediction_only_blocks': 2964, 'reference_only_blocks': 172}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-3x3x3-2 {'hamiltonian': {'raw_common_support': {'mae': 4.809763183604225e-05, 'relative_mae': 0.010653954600393319, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 508014, 'prediction_only_absolute_sum': 1154.243049635319, 'prediction_only_max_absolute': 0.1571989208459854, 'common_plus_prediction_only_mae': 0.00035722826390333903, 'prediction_only_blocks': 3006, 'reference_only_blocks': 172, 'mae_meV': 1.3088038989432802}, 'hermitian_common_support': {'mae': 4.6791047757774914e-05, 'relative_mae': 0.010364537285650897, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 508014, 'prediction_only_absolute_sum': 1154.2111075918656, 'prediction_only_max_absolute': 0.1571768820285797, 'common_plus_prediction_only_mae': 0.00035609455440035104, 'prediction_only_blocks': 3006, 'reference_only_blocks': 172, 'mae_meV': 1.2732499169559164}}, 'density': {'raw_common_support': {'mae': 0.00015573503966524843, 'relative_mae': 0.0527605415430041, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 508014, 'prediction_only_absolute_sum': 554.1013063713908, 'prediction_only_max_absolute': 0.15941715240478516, 'common_plus_prediction_only_mae': 0.0002856974194685669, 'prediction_only_blocks': 3006, 'reference_only_blocks': 172}, 'hermitian_common_support': {'mae': 0.00015076992471731157, 'relative_mae': 0.051078439981021004, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 508014, 'prediction_only_absolute_sum': 523.35327860713, 'prediction_only_max_absolute': 0.15929004549980164, 'common_plus_prediction_only_mae': 0.0002730093850184365, 'prediction_only_blocks': 3006, 'reference_only_blocks': 172}}, 'overlap': {'raw_common_support': {'mae': 2.4290504821919032e-05, 'relative_mae': 0.0019102168504243442, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 508014, 'prediction_only_absolute_sum': 2110.848916310084, 'prediction_only_max_absolute': 0.30752962827682495, 'common_plus_prediction_only_mae': 0.0005984703354207111, 'prediction_only_blocks': 3006, 'reference_only_blocks': 172}, 'hermitian_common_support': {'mae': 2.3237062620294998e-05, 'relative_mae': 0.0018273736547294358, 'common_scalar_entries': 3146780, 'prediction_only_scalar_entries': 508014, 'prediction_only_absolute_sum': 2110.686635329075, 'prediction_only_max_absolute': 0.30741727352142334, 'common_plus_prediction_only_mae': 0.0005975189187793805, 'prediction_only_blocks': 3006, 'reference_only_blocks': 172}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-3x3x3-3 {'hamiltonian': {'raw_common_support': {'mae': 4.527257516358749e-05, 'relative_mae': 0.010035041615463083, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 470496, 'prediction_only_absolute_sum': 974.6989963054657, 'prediction_only_max_absolute': 0.033889446407556534, 'common_plus_prediction_only_mae': 0.0003067395214476732, 'prediction_only_blocks': 2784, 'reference_only_blocks': 0, 'mae_meV': 1.2319301518064445}, 'hermitian_common_support': {'mae': 4.402017514902186e-05, 'relative_mae': 0.009757436769262927, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 470496, 'prediction_only_absolute_sum': 974.6720305979252, 'prediction_only_max_absolute': 0.0334647111594677, 'common_plus_prediction_only_mae': 0.00030564132616247837, 'prediction_only_blocks': 2784, 'reference_only_blocks': 0, 'mae_meV': 1.1978505940500934}}, 'density': {'raw_common_support': {'mae': 0.0001473177173195282, 'relative_mae': 0.049954287095831, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 470496, 'prediction_only_absolute_sum': 453.1245222091675, 'prediction_only_max_absolute': 0.0368882417678833, 'common_plus_prediction_only_mae': 0.0002525771567693439, 'prediction_only_blocks': 2784, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 0.0001426042872818177, 'relative_mae': 0.04835599979139764, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 470496, 'prediction_only_absolute_sum': 425.6587029993534, 'prediction_only_max_absolute': 0.029186245054006577, 'common_plus_prediction_only_mae': 0.0002409394844684812, 'prediction_only_blocks': 2784, 'reference_only_blocks': 0}}, 'overlap': {'raw_common_support': {'mae': 2.3543916347403818e-05, 'relative_mae': 0.0018528373484985308, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 470496, 'prediction_only_absolute_sum': 1627.1241638064384, 'prediction_only_max_absolute': 0.1225532814860344, 'common_plus_prediction_only_mae': 0.0004667404017422679, 'prediction_only_blocks': 2784, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 2.2509869217417008e-05, 'relative_mae': 0.0017714608640480778, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 470496, 'prediction_only_absolute_sum': 1626.9470395445824, 'prediction_only_max_absolute': 0.12254655361175537, 'common_plus_prediction_only_mae': 0.0004657912041976779, 'prediction_only_blocks': 2784, 'reference_only_blocks': 0}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+si-3x3x3-tiled {'hamiltonian': {'raw_common_support': {'mae': 1.5089748802828793e-05, 'relative_mae': 0.0033466486478371926, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 456300, 'prediction_only_absolute_sum': 878.899974167347, 'prediction_only_max_absolute': 0.02890819124877453, 'common_plus_prediction_only_mae': 0.00025517206972934834, 'prediction_only_blocks': 2700, 'reference_only_blocks': 0, 'mae_meV': 0.41061319057329543}, 'hermitian_common_support': {'mae': 1.4099290508741419e-05, 'relative_mae': 0.003126981908916711, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 456300, 'prediction_only_absolute_sum': 878.8917080760002, 'prediction_only_max_absolute': 0.028793517500162125, 'common_plus_prediction_only_mae': 0.00025430376505572065, 'prediction_only_blocks': 2700, 'reference_only_blocks': 0, 'mae_meV': 0.38366143374956624}}, 'density': {'raw_common_support': {'mae': 5.152073794875278e-05, 'relative_mae': 0.017482922484590435, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 456300, 'prediction_only_absolute_sum': 418.41387009620667, 'prediction_only_max_absolute': 0.03145279735326767, 'common_plus_prediction_only_mae': 0.00016024564601147234, 'prediction_only_blocks': 2700, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 4.953463843749494e-05, 'relative_mae': 0.01680896428475754, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 456300, 'prediction_only_absolute_sum': 396.22855781018734, 'prediction_only_max_absolute': 0.025395434349775314, 'common_plus_prediction_only_mae': 0.0001524010145573993, 'prediction_only_blocks': 2700, 'reference_only_blocks': 0}}, 'overlap': {'raw_common_support': {'mae': 1.4556980573629077e-05, 'relative_mae': 0.00114598265084604, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 456300, 'prediction_only_absolute_sum': 1390.485373556614, 'prediction_only_max_absolute': 0.12135826051235199, 'common_plus_prediction_only_mae': 0.00039555550357458255, 'prediction_only_blocks': 2700, 'reference_only_blocks': 0}, 'hermitian_common_support': {'mae': 1.3515492093284234e-05, 'relative_mae': 0.0010639925895490324, 'common_scalar_entries': 3175848, 'prediction_only_scalar_entries': 456300, 'prediction_only_absolute_sum': 1389.3125022053719, 'prediction_only_max_absolute': 0.12133583426475525, 'common_plus_prediction_only_mae': 0.00039432194137982386, 'prediction_only_blocks': 2700, 'reference_only_blocks': 0}}}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+{
+  "silicon": {
+    "status": "ok",
+    "element_errors": {
+      "hamiltonian": {
+        "raw_common_support": {
+          "mae": 2.492951201058692e-08,
+          "relative_mae": 5.528940126944575e-06,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 2.492951201058692e-08,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.0006783669231248849
+        },
+        "hermitian_common_support": {
+          "mae": 2.492951201058692e-08,
+          "relative_mae": 5.528940126944575e-06,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 2.492951201058692e-08,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0,
+          "mae_meV": 0.0006783669231248849
+        }
+      },
+      "overlap": {
+        "raw_common_support": {
+          "mae": 2.2237155698621528e-08,
+          "relative_mae": 1.7505961834522619e-06,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 2.2237155698621528e-08,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 2.2237155698621528e-08,
+          "relative_mae": 1.7505961834522619e-06,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 2.2237155698621528e-08,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        }
+      },
+      "density": {
+        "raw_common_support": {
+          "mae": 4.99708243388359e-08,
+          "relative_mae": 1.6956978552519744e-05,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 4.99708243388359e-08,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        },
+        "hermitian_common_support": {
+          "mae": 4.99708243388359e-08,
+          "relative_mae": 1.6956978552519744e-05,
+          "common_scalar_entries": 117624,
+          "prediction_only_scalar_entries": 0,
+          "prediction_only_absolute_sum": 0,
+          "prediction_only_max_absolute": 0,
+          "common_plus_prediction_only_mae": 4.99708243388359e-08,
+          "prediction_only_blocks": 0,
+          "reference_only_blocks": 0
+        }
+      }
+    },
+    "H_MAE_meV": 0.0006783669231248849,
+    "passed_H_tolerance": true,
+    "H_tolerance_meV": 0.01,
+    "maximum_absolute_error": {
+      "hamiltonian": 5.960464477539063e-08,
+      "overlap": 5.960464477539063e-08,
+      "density": 1.043081283569336e-07
+    }
+  },
+  "sio2": {
+    "status": "pending"
+  }
+}
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+/data/home2/brzoza73/casus/mandala/mandala-venv-b200-test/lib/python3.10/site-packages/ase/io/cif.py:410: UserWarning: crystal system 'triclinic' is not interpreted for space group Spacegroup(1, setting=1). This may result in wrong setting!
+  warnings.warn(
+| Structure | Atoms | Repetition | σ Å | H meV | H excl. same-parent image meV | Routed diagnostic H meV | S MAE | D MAE | Primary metric validity | Routed metric validity | Paper H meV |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: |
+| si-2x2x2-1 | 64 | 2×2×2 | 0.02 | 8.650596 | 1.064335 | 1.1248 | 0.0007194514 | 0.0005504245 | PD 0/64; min -1.015124; chol 0/64 | PD 0/64; min -0.4877838; chol 0/64 | 0.435164 |
+| si-2x2x2-2 | 64 | 2×2×2 | 0.02 | 8.690596 | 1.085826 | 1.133893 | 0.0007212527 | 0.0005509217 | PD 0/64; min -1.003353; chol 0/64 | PD 0/64; min -0.4703414; chol 0/64 | 0.435164 |
+| si-2x2x2-3 | 64 | 2×2×2 | 0.02 | 8.654309 | 1.060497 | 1.110131 | 0.000720314 | 0.0005444802 | PD 0/64; min -0.9601095; chol 0/64 | PD 0/64; min -0.3902055; chol 0/64 | 0.435164 |
+| si-2x2x2-tiled | 64 | 2×2×2 | 0 | 8.136948 | 0.3947345 | 0.3836588 | 0.0007267947 | 0.0004773784 | PD 0/64; min -0.9903229; chol 0/64 | PD 0/64; min -0.3739824; chol 0/64 | 0.435164 |
+| si-3x3x3-1 | 216 | 3×3×3 | 0.02 | 8.686619 | 1.113734 | 1.170933 | 0.0007189151 | 0.0005523925 | PD 0/27; min -1.004345; chol 0/27 | PD 0/27; min -0.4994761; chol 0/27 | 0.435164 |
+| si-3x3x3-2 | 216 | 3×3×3 | 0.02 | 8.768735 | 1.210731 | 1.27325 | 0.000718816 | 0.0005582109 | PD 0/27; min -1.031094; chol 0/27 | PD 0/27; min -0.5506935; chol 0/27 | 0.435164 |
+| si-3x3x3-3 | 216 | 3×3×3 | 0.02 | 8.717221 | 1.139948 | 1.197851 | 0.0007192382 | 0.0005506098 | PD 0/27; min -0.9890429; chol 0/27 | PD 0/27; min -0.4656319; chol 0/27 | 0.435164 |
+| si-3x3x3-tiled | 216 | 3×3×3 | 0 | 8.136951 | 0.3947377 | 0.3836614 | 0.0007267949 | 0.0004773782 | PD 0/27; min -0.990323; chol 0/27 | PD 0/27; min -0.358895; chol 0/27 | 0.435164 |
+| sio2-2x1x1-1 | 300 | 2×1×1 | 0.02 | — | — | — | — | — | OpenMX_pending | — | 1.99588 |
+| sio2-2x1x1-tiled | 300 | 2×1×1 | 0 | 2.534627 | 2.534627 | — | — | — | H only; S not predicted | — | 1.99588 |
+| sio2-2x1x1-2 | 300 | 2×1×1 | 0.02 | — | — | — | — | — | OpenMX_pending | — | 1.99588 |
+
+Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed references remain pending; its tiled-control H MAE is 2.534627 meV, so perturbed size transfer cannot yet be assessed. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
+
+Element errors use matching periodic support; raw and Hermitian-projected values are in JSON.
+The table uses Hermitian projection to match the paper validation values.
+Public OpenMX runtime source-cell checks: silicon: H MAE 0.000678367 meV, pass=True, sio2: pending
+Original Gamma-only sampling corresponds to supercell Gamma and X-type points; folded blocks are an exact DFT reference only if the original Gamma calculation was converged with respect to k sampling.
+
+| Structure | Atoms | H MAE meV | S MAE | D MAE | Predicted usable S fraction | Reference usable S fraction | Reference min eigenvalue | Validation H meV |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| si-2x2x2-1 | 64 | 8.6506 | 0.000719451 | 0.000550425 | 0 | 1 | 0.000911368 | 0.435164 |
+| si-2x2x2-2 | 64 | 8.6906 | 0.000721253 | 0.000550922 | 0 | 1 | 0.000916187 | 0.435164 |
+| si-2x2x2-3 | 64 | 8.65431 | 0.000720314 | 0.00054448 | 0 | 1 | 0.000908115 | 0.435164 |
+| si-2x2x2-tiled | 64 | 8.13695 | 0.000726795 | 0.000477378 | 0 | 1 | 0.00089555 | 0.435164 |
+| si-3x3x3-1 | 216 | 8.68662 | 0.000718915 | 0.000552393 | 0 | 1 | 0.000908087 | 0.435164 |
+| si-3x3x3-2 | 216 | 8.76874 | 0.000718816 | 0.000558211 | 0 | 1 | 0.000909876 | 0.435164 |
+| si-3x3x3-3 | 216 | 8.71722 | 0.000719238 | 0.00055061 | 0 | 1 | 0.000907971 | 0.435164 |
+| si-3x3x3-tiled | 216 | 8.13695 | 0.000726795 | 0.000477378 | 0 | 1 | 0.000895355 | 0.435164 |
+| sio2-2x1x1-tiled | 300 | 2.53463 | — | — | — | 1 | 0.000243739 | 1.99588 |
+| Structure | Atoms | Repetition | σ Å | H meV | H excl. same-parent image meV | Routed diagnostic H meV | S MAE | D MAE | Primary metric validity | Routed metric validity | Paper H meV |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: |
+| si-2x2x2-1 | 64 | 2×2×2 | 0.02 | 8.650596 | 1.064335 | 1.1248 | 0.0007194514 | 0.0005504245 | PD 0/64; min -1.015124; chol 0/64 | PD 0/64; min -0.4877838; chol 0/64 | 0.435164 |
+| si-2x2x2-2 | 64 | 2×2×2 | 0.02 | 8.690596 | 1.085826 | 1.133893 | 0.0007212527 | 0.0005509217 | PD 0/64; min -1.003353; chol 0/64 | PD 0/64; min -0.4703414; chol 0/64 | 0.435164 |
+| si-2x2x2-3 | 64 | 2×2×2 | 0.02 | 8.654309 | 1.060497 | 1.110131 | 0.000720314 | 0.0005444802 | PD 0/64; min -0.9601095; chol 0/64 | PD 0/64; min -0.3902055; chol 0/64 | 0.435164 |
+| si-2x2x2-tiled | 64 | 2×2×2 | 0 | 8.136948 | 0.3947345 | 0.3836588 | 0.0007267947 | 0.0004773784 | PD 0/64; min -0.9903229; chol 0/64 | PD 0/64; min -0.3739824; chol 0/64 | 0.435164 |
+| si-3x3x3-1 | 216 | 3×3×3 | 0.02 | 8.686619 | 1.113734 | 1.170933 | 0.0007189151 | 0.0005523925 | PD 0/27; min -1.004345; chol 0/27 | PD 0/27; min -0.4994761; chol 0/27 | 0.435164 |
+| si-3x3x3-2 | 216 | 3×3×3 | 0.02 | 8.768735 | 1.210731 | 1.27325 | 0.000718816 | 0.0005582109 | PD 0/27; min -1.031094; chol 0/27 | PD 0/27; min -0.5506935; chol 0/27 | 0.435164 |
+| si-3x3x3-3 | 216 | 3×3×3 | 0.02 | 8.717221 | 1.139948 | 1.197851 | 0.0007192382 | 0.0005506098 | PD 0/27; min -0.9890429; chol 0/27 | PD 0/27; min -0.4656319; chol 0/27 | 0.435164 |
+| si-3x3x3-tiled | 216 | 3×3×3 | 0 | 8.136951 | 0.3947377 | 0.3836614 | 0.0007267949 | 0.0004773782 | PD 0/27; min -0.990323; chol 0/27 | PD 0/27; min -0.358895; chol 0/27 | 0.435164 |
+| sio2-2x1x1-1 | 300 | 2×1×1 | 0.02 | — | — | — | — | — | OpenMX_pending | — | 1.99588 |
+| sio2-2x1x1-tiled | 300 | 2×1×1 | 0 | 2.534627 | 2.534627 | — | — | — | H only; S not predicted | — | 1.99588 |
+| sio2-2x1x1-2 | 300 | 2×1×1 | 0.02 | — | — | — | — | — | OpenMX_pending | — | 1.99588 |
+
+Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed references remain pending; its tiled-control H MAE is 2.534627 meV, so perturbed size transfer cannot yet be assessed. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
+
+=============================================
+Epilog started: Tue Nov 10 11:39:56 CET 2026
+User:           brzoza73
+Job ID:         837400
+Partition:      gpu-h100-casus
+Account:        casus
+Batchhost:      gh003
+Job name:       r6-route
+Nodelist:       gh003
+No. of tasks:   4
+T used:           00:04:53 
+T requested:      01:00:00 
+Exit code:      0
+Working dir:    /data/home2/brzoza73/casus/mandala_worktrees/r6
+Energy (J):     
+Energy (kWh):   
+---------------------------------------------
