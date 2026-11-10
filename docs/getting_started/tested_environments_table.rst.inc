@@ -3,94 +3,94 @@
 .. list-table:: Tested environments
    :header-rows: 1
 
-   * - Environment / GPU
+   * - Environment / host / GPU / driver
      - Python
      - PyTorch / CUDA wheel
      - torch-scatter / PyG
      - CPU contracts
      - GPU smoke
      - Evidence
-   * - py310-t251-cu121 (NVIDIA A40)
+   * - py310-t251-cu121 (terok; NVIDIA A40; driver 550.163.01)
      - 3.10.22
      - 2.5.1+cu121 / cu121
      - 2.1.2+pt25cu121 / 2.8.1
      - 675 passed, 0 failed, 0 errors, 68 skipped; 74.6 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 11.7 s
      - verified_tonight, 2026-11-10
-   * - py311-t251-cu121 (NVIDIA A40)
+   * - py311-t251-cu121 (terok; NVIDIA A40; driver 550.163.01)
      - 3.11.18
      - 2.5.1+cu121 / cu121
      - 2.1.2+pt25cu121 / 2.8.1
      - 675 passed, 0 failed, 0 errors, 68 skipped; 66.1 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 11.6 s
      - verified_tonight, 2026-11-10
-   * - py312-t271-cu128 (NVIDIA A40)
+   * - py312-t271-cu128 (terok; NVIDIA A40; driver 550.163.01)
      - 3.12.16
      - 2.7.1+cu128 / cu128
      - 2.1.2+pt27cu128 / 2.8.1
      - 675 passed, 0 failed, 0 errors, 68 skipped; 53.5 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 12.4 s
      - verified_tonight, 2026-11-10
-   * - py312-latest (NVIDIA A40)
+   * - py312-latest (terok; NVIDIA A40; driver 550.163.01)
      - 3.12.16
      - 2.15.0+cu134 / cu134
      - 2.1.2 / 2.8.1
      - 674 passed, 1 failed, 0 errors, 68 skipped; 50.7 s
      - 0 passed, 2 failed, 0 errors, 0 skipped; 6.7 s
      - verified_tonight, 2026-11-10; CPU-only scatter; CUDA 13.4 needs a newer driver
-   * - py313-latest (NVIDIA A40)
+   * - py313-latest (terok; NVIDIA A40; driver 550.163.01)
      - 3.13.18
      - 2.15.0+cu134 / cu134
      - 2.1.2 / 2.8.1
      - 674 passed, 1 failed, 0 errors, 68 skipped; 47.8 s
      - 0 passed, 2 failed, 0 errors, 0 skipped; 6.4 s
      - verified_tonight, 2026-11-10; CPU-only scatter; CUDA 13.4 needs a newer driver
-   * - py313-t271-cu128 (NVIDIA A40)
+   * - py313-t271-cu128 (terok; NVIDIA A40; driver 550.163.01)
      - 3.13.5
      - 2.7.1+cu128 / cu128
      - 2.1.2+pt27cu128 / 2.8.1
      - 675 passed, 0 failed, 0 errors, 68 skipped; 47.9 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 12.5 s
      - verified_tonight, 2026-11-10; additional control for Python support
-   * - py314-t2xx-cu128 (NVIDIA A40)
+   * - py314-t2xx-cu128 (terok; NVIDIA A40; driver 550.163.01)
      - 3.14.10
      - 2.11.0+cu128 / cu128
      - 2.1.2+pt211cu128 / 2.8.1
      - 701 passed, 0 failed, 0 errors, 68 skipped; 27.5 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 8.0 s
      - verified_20261110, 2026-11-10; CUDA scatter wheel; CPU and A40 GPU verified
-   * - rosi-h100-paper-training (NVIDIA H100)
+   * - rosi-h100-paper-training (ROSI; NVIDIA H100; driver not recorded)
      - 3.10
      - 2.5.1+cu121 / cu121
      - not recorded / not recorded
      - Not re-tested
      - Not re-tested
      - reported; paper training
-   * - rosi-b200-physical-constraints (NVIDIA B200)
+   * - rosi-b200-physical-constraints (ROSI; NVIDIA B200; driver not recorded)
      - 3.10
      - 2.7.1+cu128 / cu128
      - not recorded / not recorded
      - Not re-tested
      - Not re-tested
      - reported; physical-constraint evaluations and retrains
-   * - laptop-cpu-development (CPU)
+   * - laptop-cpu-development (laptop; CPU; driver not recorded)
      - 3.10
      - 2.5.1+cpu / cpu
      - not recorded / not recorded
      - Not re-tested
      - Not re-tested
      - reported; development
-   * - terok-a40-torch211-patched (NVIDIA A40)
+   * - terok-a40-torch211-patched (Terok; NVIDIA A40; driver not recorded)
      - 3.12
      - 2.11 (exact patch not recorded) / not recorded
      - not recorded / not recorded
      - Not re-tested
      - Not re-tested
      - reported; with patches, see notes
-   * - py315-t2xx-cu128 (NVIDIA A40)
+   * - py315-t2xx-cu128 (terok; NVIDIA A40; driver 550.163.01)
      - 3.15.2
      - none / cu128
      - not recorded / not recorded
-     - Not re-tested
-     - Not re-tested
+     - No wheels
+     - No wheels
      - no_wheels, 2026-11-10; No cp315 wheel on cu128; newest available is cp314 / torch 2.11.0

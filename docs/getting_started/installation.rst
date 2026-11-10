@@ -92,6 +92,11 @@ Known version notes
 * PyTorch 2.7.1+cu128 runs the model and compiled scatter CUDA kernels on
   the A40 with driver 550.163.01 (advertised CUDA 12.4), without a launch error.
   This is a smoke check, not a guarantee for all kernels or architectures.
+* CUDA 13.x wheels require driver family 580 or newer under NVIDIA's
+  `minor-version compatibility rules
+  <https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html>`_.
+  With driver 550.163.01 (advertised CUDA 12.4), use the verified cu128
+  wheels; upgrading Python alone does not resolve the driver limit.
 * Native checkpoints contain Python Config objects. The loader explicitly
   retains trusted-payload loading across the PyTorch 2.6 ``weights_only``
   default change; load only checkpoints whose source you trust.
