@@ -11,5 +11,21 @@
     "seconds": 3.19
   },
   "compileall": "PASS",
-  "bash_n": "PASS (evaluation, DFT, comparison launchers)"
+  "bash_n": "PASS (evaluation, DFT, comparison launchers)",
+  "native_H_SHA256_verified_on_ROSI": {
+    "sio2-2x2x1-1": "6da46facac634ff5613055a9c9cf55eefa178ce21023b491dd58e1b87d2ac965",
+    "sio2-2x2x1-tiled": "fd815dd107a989f6df5b4b024c3f3eb3c668fd343bf2080296bd4b26a1519ebc"
+  },
+  "previous_element_error_rows_unchanged": 12,
+  "result_audit": {
+    "command": "python3.13 researchops/runs/r6_supercell_20261110/verify_sio2_4x_results.py",
+    "result": "PASS"
+  },
+  "evaluation_job": {
+    "job_id": "837829",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:05:25",
+    "batch_MaxRSS_KiB": 1651564
+  }
 }

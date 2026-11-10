@@ -13,6 +13,8 @@
 | sio2-2x1x1-1 | 300 | 2×1×1 | 0.02 | 2.855742 | 2.855742 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x1x1-tiled | 300 | 2×1×1 | 0 | 2.534627 | 2.534627 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x1x1-2 | 300 | 2×1×1 | 0.02 | 1.729488 | 1.729488 | — | — | — | H only; S not predicted | — | 1.99588 |
+| sio2-2x2x1-1 | 600 | 2×2×1 | 0.02 | — | — | — | — | — | OpenMX_pending (job 837830) | — | 1.99588 |
+| sio2-2x2x1-tiled | 600 | 2×2×1 | 0 | 2.534622 | 2.534622 | — | — | — | H only; S not predicted | — | 1.99588 |
 
 Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
 
@@ -110,6 +112,9 @@ Each row is one structure; repetition expands the source cell, and σ is the ind
 | sio2-2x1x1-2 | hamiltonian | onsite | 0.007076473 | 0.007076473 | 13.3402 |
 | sio2-2x1x1-2 | hamiltonian | different_parent | 0.9929235 | 0.9929235 | 1.646739 |
 | sio2-2x1x1-2 | hamiltonian | same_parent_image | 0 | 0 | — |
+| sio2-2x2x1-tiled | hamiltonian | onsite | 0.00669344 | 0.00669344 | 29.2354 |
+| sio2-2x2x1-tiled | hamiltonian | different_parent | 0.9933066 | 0.9933066 | 2.354698 |
+| sio2-2x2x1-tiled | hamiltonian | same_parent_image | 0 | 0 | — |
 
 Parent-routing diagnostic (requires known parent labels):
 
@@ -130,4 +135,10 @@ Parent-routing diagnostic (requires known parent labels):
 
 ```bash
 ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_5x.sh"
+```
+
+600-atom SiO2 follow-up: after OpenMX completes, run:
+
+```bash
+ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_sio2_4x.sh"
 ```
