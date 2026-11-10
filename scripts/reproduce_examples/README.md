@@ -289,3 +289,5 @@ The live SiO2 recovery checkpoint also loaded strictly on CPU under the new
 code (job 837500, epoch 151, 2,491 state-dict keys). Details and results are in
 `researchops/runs/r6_no_shifted_self_20261110/` and the restart record in
 `researchops/runs/publication_retrain_v2/verification.json`.
+
+The replacement silicon job 837505 completed epoch 0 (80 training and 10 validation batches) and entered epoch 1; displayed train/validation total losses were 0.0483/0.0185. Jobs 837506–837508 remain dependent.
