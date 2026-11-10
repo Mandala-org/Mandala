@@ -1,7 +1,7 @@
 Installation
 ============
 
-MANDALA supports Python 3.10–3.13 and is a package built on PyTorch, e3nn, torch-scatter and
+MANDALA supports Python 3.10–3.13 and uses PyTorch, e3nn, torch-scatter and
 PyTorch Lightning. The commands below create an isolated environment with the
 tested PyTorch 2.5.1 stack.
 
@@ -93,7 +93,9 @@ Known version notes
   that wheel. No matching PyG scatter wheel was available, and building with
   local nvcc 12.4 failed against CUDA 13.4, so scatter was built for CPU only.
   The failing CPU and GPU checks remain in the table and JSON; this stack
-  is not verified for production use.
+  is not verified for production use. Its CPU selection also fails the
+  reproduction setup test with ``min() iterable argument is empty`` when
+  that test mocks CUDA availability on this driver-incompatible build.
 
 * The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
   see notes" in the table). Their diff was not supplied; that report does not

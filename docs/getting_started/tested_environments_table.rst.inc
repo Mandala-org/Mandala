@@ -38,6 +38,13 @@
      - 674 passed, 1 failed, 0 errors, 68 skipped; 50.7 s
      - 0 passed, 2 failed, 0 errors, 0 skipped; 6.7 s
      - verified_tonight, 2026-11-10; CPU-only scatter; CUDA 13.4 needs a newer driver
+   * - py313-latest (NVIDIA A40)
+     - 3.13.18
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - 674 passed, 1 failed, 0 errors, 68 skipped; 47.8 s
+     - 0 passed, 2 failed, 0 errors, 0 skipped; 6.4 s
+     - verified_tonight, 2026-11-10; CPU-only scatter; CUDA 13.4 needs a newer driver
    * - py313-t271-cu128 (NVIDIA A40)
      - 3.13.5
      - 2.7.1+cu128 / cu128
