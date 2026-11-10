@@ -5,7 +5,7 @@ import sys
 import time
 
 from workflow import *
-from data.structure_inference import build_model_input_from_structure, load_structure_from_cif
+from data.structure_inference import build_model_input_from_structure
 from net.evaluation import _move_to_device
 
 
@@ -21,7 +21,12 @@ def historical_control(model, material, cfg, device):
     """Check the structure-only path against the paper's frozen dataset inference."""
     source = next(s['source_cell'] for s in manifest()['structures'] if s['material'] == material)
     snapshot, target = reference(source, cfg)
-    current = predict(model, snapshot.hamiltonian.atoms, snapshot.positions, snapshot.box, device)
+    cif = Path(source)/('Si.cif' if material=='silicon' else 'SiO2.cif')
+    atoms,pos,box = load_paper_cif(cif,cfg.dtype)
+    assert atoms == snapshot.hamiltonian.atoms
+    torch.testing.assert_close(pos,snapshot.positions,rtol=0,atol=0)
+    torch.testing.assert_close(box,snapshot.box,rtol=0,atol=0)
+    current = predict(model,atoms,pos,box,device)
     output = ARTIFACTS / 'historical_base_control' / material
     if not (output / 'export.json').exists():
         command = [sys.executable, str(ROOT / 'scripts/report/export_paper_operators.py'),
@@ -61,7 +66,7 @@ def main():
         if structure['material'] != args.material:
             continue
         print('Predicting', structure['name'], flush=True)
-        atoms,pos,box = load_structure_from_cif(RUN / 'structures' / structure['cif'],dtype=cfg.dtype)
+        atoms,pos,box = load_paper_cif(RUN / 'structures' / structure['cif'],dtype=cfg.dtype)
         operators = predict(model,atoms,pos,box,args.device)
         output = ARTIFACTS / 'predictions' / structure['name']
         output.mkdir(parents=True,exist_ok=True)

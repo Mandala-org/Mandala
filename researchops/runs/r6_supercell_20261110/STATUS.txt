@@ -7,3 +7,14 @@ Validation sources taken from the committed physical-constraints audit:
 Si_scale_1_078; SiO2 13_67164000 and 2_74240000.
 Preserve the audit caveat: validation membership reconstructed from discovery.
 Large operator files and OpenMX outputs live on ROSI bigdata, outside git.
+
+2026-11-10 09:22 UTC correction: initial larger-CIF predictions omitted the
+Cartesian axis permutation applied by Snapshot._change_basis(OpenMX->e3nn).
+Those initial results are INVALID; the 142--147 meV tiled errors are not
+size-transfer results. Archived on ROSI under physical_constraints/
+r6_supercell_20261110/invalid_unpermuted_cif/. Re-evaluate with load_paper_cif.
+Base controls now load the original CIF through the same helper, assert exact
+agreement with Snapshot geometry, then compare with frozen historical inference.
+The OpenMX inputs/structures are unaffected. First valid OpenMX job 837283
+reached SCF iteration 1 by 09:22 UTC. Original binary path was inaccessible;
+public 3.9.9 build job 837280 succeeded after two compilation fixes.

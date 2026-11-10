@@ -13,6 +13,7 @@ from analysis.physical_constraints import (BlockFourier, diagnose_kpoint, hermit
 from core.block_irrep_mapper import BlockIrrepMapper
 from data.block_matrix import BlockMatrix
 from data.snapshot import Snapshot
+from data.structure_inference import load_structure_from_cif
 from net.checkpoint_compat import set_checkpoint_film_semantics, strip_mapper_keys
 from net.e3gnn import E3GNN
 from net.evaluation import load_checkpoint, restore_config
@@ -29,6 +30,18 @@ CHECKPOINTS = {
     'sio2': 'SiOx_hamiltonian_mae_stage2_47h25/dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25/best_model.pt',
 }
 ENVELOPE = PAPER / 'source/eval_outputs/SiOx_0_50372000_radial_fit_study/slater_exp_quad_soft_wall_envelope.json'
+
+
+def load_paper_cif(path, dtype):
+    """Match Snapshot._change_basis('e3nn'), including its Cartesian axes.
+
+    The paper's OpenMX-to-e3nn orbital conversion also permutes geometry;
+    converting orbital blocks alone would compare different physical frames.
+    Fractional lattice shifts and atom indices are unchanged.
+    """
+    atoms,positions,box = load_structure_from_cif(path,dtype=dtype)
+    change_of_basis = torch.eye(3,dtype=dtype)[[2,0,1]]
+    return atoms,positions @ change_of_basis,box @ change_of_basis
 
 
 def write_json(path, data):
@@ -76,6 +89,7 @@ def load_model(material, device):
         density_convention='restricted total; reference OpenMX single spin multiplied by two',
         units=dict(hamiltonian='Hartree', overlap='dimensionless', density='AO kernel'),
         postprocessing='radial envelope only; raw directed predictions; no repair')
+    provenance['geometry_convention'] = "Snapshot._change_basis: OpenMX CIF positions and box right-multiplied by eye(3)[[2,0,1]]; blocks in e3nn basis"
     if material == 'sio2':
         provenance.update(envelope=str(ENVELOPE), envelope_sha256=sha256(ENVELOPE))
     return model, cfg, provenance

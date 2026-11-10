@@ -2,7 +2,7 @@
 import argparse
 
 from workflow import *
-from data.structure_inference import build_model_input_from_structure, load_structure_from_cif
+from data.structure_inference import build_model_input_from_structure
 from net.evaluation import _move_to_device
 from fold_reference import folded_keys
 
@@ -16,7 +16,7 @@ def main():
     model,cfg,_ = load_model(args.material,'cuda')
     structure = next(s for s in manifest()['structures'] if s['material']==args.material and s['tiled_control'])
     base,_ = reference(structure['source_cell'],cfg)
-    atoms,pos,box = load_structure_from_cif(RUN/'structures'/structure['cif'],dtype=cfg.dtype)
+    atoms,pos,box = load_paper_cif(RUN/'structures'/structure['cif'],dtype=cfg.dtype)
     xb = build_model_input_from_structure(atoms=base.hamiltonian.atoms,positions=base.positions,
                                           box=base.box,cfg=cfg,mapper=model.mapper)
     xs = build_model_input_from_structure(atoms=atoms,positions=pos,box=box,cfg=cfg,mapper=model.mapper)
