@@ -130,6 +130,71 @@
     }
   },
   {
+    "name": "si-5x5x5-tiled",
+    "operators": {
+      "density": {
+        "onsite": {
+          "mae": 5.929364488144513e-08,
+          "max_absolute": 2.8079375624656677e-06,
+          "common_scalar_entries": 169000,
+          "mae_meV": null
+        },
+        "primitive_different_atoms": {
+          "mae": 1.4235662915230126e-08,
+          "max_absolute": 3.5513658076524734e-06,
+          "common_scalar_entries": 13604500,
+          "mae_meV": null
+        },
+        "primitive_shifted_self": {
+          "mae": 0.004082663411320569,
+          "max_absolute": 0.27835845621302724,
+          "common_scalar_entries": 3042000,
+          "mae_meV": null
+        }
+      },
+      "hamiltonian": {
+        "onsite": {
+          "mae": 7.014774319159672e-08,
+          "max_absolute": 9.51928086578846e-07,
+          "common_scalar_entries": 169000,
+          "mae_meV": 0.001908818299083815
+        },
+        "primitive_different_atoms": {
+          "mae": 7.131525864378384e-09,
+          "max_absolute": 6.854534149169922e-07,
+          "common_scalar_entries": 13604500,
+          "mae_meV": 0.00019405880290594596
+        },
+        "primitive_shifted_self": {
+          "mae": 0.004601577355214284,
+          "max_absolute": 0.036508869379758835,
+          "common_scalar_entries": 3042000,
+          "mae_meV": 125.21536204367797
+        }
+      },
+      "overlap": {
+        "onsite": {
+          "mae": 3.7750125557761e-09,
+          "max_absolute": 2.384185791015625e-07,
+          "common_scalar_entries": 169000,
+          "mae_meV": null
+        },
+        "primitive_different_atoms": {
+          "mae": 9.63715356611294e-09,
+          "max_absolute": 7.748603820800781e-07,
+          "common_scalar_entries": 13604500,
+          "mae_meV": null
+        },
+        "primitive_shifted_self": {
+          "mae": 0.010821432786632704,
+          "max_absolute": 0.13639745861291885,
+          "common_scalar_entries": 3042000,
+          "mae_meV": null
+        }
+      }
+    }
+  },
+  {
     "name": "sio2-2x1x1-tiled",
     "operators": {
       "hamiltonian": {

@@ -64,7 +64,9 @@
       ],
       "source_commit": "80e5098ebc936e0293894539a70fb39bb59dd718",
       "submitted_utc": "2026-11-10T11:01:25.157405+00:00",
-      "second_brain_attempt": 14
+      "second_brain_attempt": 14,
+      "result": "COMPLETED, exit 0:0, elapsed 00:12:50",
+      "output": "eval-si-5x-837488.out"
     }
   },
   "openmx": {
@@ -204,7 +206,8 @@
       ],
       "run_directory": "/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/silicon/si-5x5x5-1",
       "submitted_utc": "2026-11-10T11:01:25.257243+00:00",
-      "second_brain_attempt": 14
+      "second_brain_attempt": 14,
+      "submitted_script_archive": "openmx/si-5x5x5-1/submitted-837489.sh"
     }
   },
   "comparison": {

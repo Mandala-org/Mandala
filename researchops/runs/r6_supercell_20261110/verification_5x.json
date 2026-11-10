@@ -64,5 +64,37 @@
       "commit": "80e5098",
       "conclusion": "success"
     }
-  ]
+  ],
+  "native_operator_hash_check": "12/12 primary+routed H/S/D files on ROSI bigdata match recorded SHA256",
+  "evaluation_job": {
+    "job_id": "837488",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:12:50",
+    "batch_MaxRSS_KiB": 2581360
+  },
+  "existing_refresh_job": {
+    "job_id": "837320",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:09:14",
+    "note": "Waited for this previously queued comparison to finish before collecting shared outputs"
+  },
+  "result_accounting": {
+    "command": "python3.13 researchops/runs/r6_supercell_20261110/verify_5x_results.py",
+    "status": "PASS",
+    "previous_element_error_rows_exactly_unchanged": 9,
+    "new_operator_category_decompositions": 9,
+    "metric_records": "All four 8-point metric groups retained"
+  },
+  "runtime_calibration": {
+    "silicon": {
+      "H_MAE_meV": 0.0006783669231248849,
+      "passed": true
+    },
+    "sio2": {
+      "H_MAE_meV": 0.0006591019721825285,
+      "passed": true
+    }
+  }
 }

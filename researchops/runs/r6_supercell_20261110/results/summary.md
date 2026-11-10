@@ -8,13 +8,15 @@
 | si-3x3x3-2 | 216 | 3×3×3 | 0.02 | 8.768735 | 1.210731 | 1.27325 | 0.000718816 | 0.0005582109 | PD 0/27; min -1.031094; chol 0/27 | PD 0/27; min -0.5506935; chol 0/27 | 0.435164 |
 | si-3x3x3-3 | 216 | 3×3×3 | 0.02 | 8.717221 | 1.139948 | 1.197851 | 0.0007192382 | 0.0005506098 | PD 0/27; min -0.9890429; chol 0/27 | PD 0/27; min -0.4656319; chol 0/27 | 0.435164 |
 | si-3x3x3-tiled | 216 | 3×3×3 | 0 | 8.136951 | 0.3947377 | 0.3836614 | 0.0007267949 | 0.0004773782 | PD 0/27; min -0.990323; chol 0/27 | PD 0/27; min -0.358895; chol 0/27 | 0.435164 |
-| sio2-2x1x1-1 | 300 | 2×1×1 | 0.02 | — | — | — | — | — | OpenMX_pending | — | 1.99588 |
+| si-5x5x5-1 | 1000 | 5×5×5 | 0.02 | — | — | — | — | — | OpenMX_pending (job 837489); PD 0/8; min -0.9962599; chol 0/8 | PD 0/8; min -0.5723461; chol 0/8 | 0.435164 |
+| si-5x5x5-tiled | 1000 | 5×5×5 | 0 | 8.136951 | 0.3947371 | 0.3836612 | 0.0007267949 | 0.0004773784 | PD 0/8; min -0.9903229; chol 0/8 | PD 0/8; min -0.3739824; chol 0/8 | 0.435164 |
+| sio2-2x1x1-1 | 300 | 2×1×1 | 0.02 | 2.855742 | 2.855742 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x1x1-tiled | 300 | 2×1×1 | 0 | 2.534627 | 2.534627 | — | — | — | H only; S not predicted | — | 1.99588 |
-| sio2-2x1x1-2 | 300 | 2×1×1 | 0.02 | — | — | — | — | — | OpenMX_pending | — | 1.99588 |
+| sio2-2x1x1-2 | 300 | 2×1×1 | 0.02 | 1.729488 | 1.729488 | — | — | — | H only; S not predicted | — | 1.99588 |
 
-Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed references remain pending; its tiled-control H MAE is 2.534627 meV, so perturbed size transfer cannot yet be assessed. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
+Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
 
-Each row is one structure; repetition expands the source cell, and σ is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4×4×4 (2× Si) or 3×3×3 (3× Si) Gamma-centered meshes. SiO2 predicts H only; — means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3× Si control folds the original 8-mesh calculation.
+Each row is one structure; repetition expands the source cell, and σ is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4×4×4 (2× Si) 3×3×3 (3× Si), or 2×2×2 (5× Si) Gamma-centered meshes. SiO2 predicts H only; — means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3× and 5× Si controls fold the original 8-mesh calculation.
 
 | Structure | Operator | Category | Blocks fraction | Scalar fraction | MAE (H meV) |
 | --- | --- | --- | ---: | ---: | ---: |
@@ -90,9 +92,24 @@ Each row is one structure; repetition expands the source cell, and σ is the ind
 | si-3x3x3-tiled | overlap | onsite | 0.01149425 | 0.01149425 | 3.283209e-05 |
 | si-3x3x3-tiled | overlap | different_parent | 0.9195402 | 0.9195402 | 1.399125e-05 |
 | si-3x3x3-tiled | overlap | same_parent_image | 0.06896552 | 0.06896552 | 0.0103465 |
+| si-5x5x5-tiled | density | onsite | 0.01149425 | 0.01149425 | 0.000298185 |
+| si-5x5x5-tiled | density | different_parent | 0.9195402 | 0.9195402 | 4.677705e-05 |
+| si-5x5x5-tiled | density | same_parent_image | 0.06896552 | 0.06896552 | 0.006248596 |
+| si-5x5x5-tiled | hamiltonian | onsite | 0.01149425 | 0.01149425 | 6.639277 |
+| si-5x5x5-tiled | hamiltonian | different_parent | 0.9195402 | 0.9195402 | 0.3166803 |
+| si-5x5x5-tiled | hamiltonian | same_parent_image | 0.06896552 | 0.06896552 | 112.6568 |
+| si-5x5x5-tiled | overlap | onsite | 0.01149425 | 0.01149425 | 3.283127e-05 |
+| si-5x5x5-tiled | overlap | different_parent | 0.9195402 | 0.9195402 | 1.399117e-05 |
+| si-5x5x5-tiled | overlap | same_parent_image | 0.06896552 | 0.06896552 | 0.0103465 |
+| sio2-2x1x1-1 | hamiltonian | onsite | 0.006689262 | 0.006689262 | 34.4194 |
+| sio2-2x1x1-1 | hamiltonian | different_parent | 0.9933107 | 0.9933107 | 2.643183 |
+| sio2-2x1x1-1 | hamiltonian | same_parent_image | 0 | 0 | — |
 | sio2-2x1x1-tiled | hamiltonian | onsite | 0.00669344 | 0.00669344 | 29.23546 |
 | sio2-2x1x1-tiled | hamiltonian | different_parent | 0.9933066 | 0.9933066 | 2.354702 |
 | sio2-2x1x1-tiled | hamiltonian | same_parent_image | 0 | 0 | — |
+| sio2-2x1x1-2 | hamiltonian | onsite | 0.007076473 | 0.007076473 | 13.3402 |
+| sio2-2x1x1-2 | hamiltonian | different_parent | 0.9929235 | 0.9929235 | 1.646739 |
+| sio2-2x1x1-2 | hamiltonian | same_parent_image | 0 | 0 | — |
 
 Parent-routing diagnostic (requires known parent labels):
 
@@ -106,3 +123,11 @@ Parent-routing diagnostic (requires known parent labels):
 | si-3x3x3-2 | 1.27325 | 2.323706e-05 | 0.0001507699 | 0 | -0.5506935 | 0/27 |
 | si-3x3x3-3 | 1.197851 | 2.250987e-05 | 0.0001426043 | 0 | -0.4656319 | 0/27 |
 | si-3x3x3-tiled | 0.3836614 | 1.351549e-05 | 4.953464e-05 | 0 | -0.358895 | 0/27 |
+| si-5x5x5-1 | — | — | — | 0 | -0.5723461 | 0/8 |
+| si-5x5x5-tiled | 0.3836612 | 1.351541e-05 | 4.953476e-05 | 0 | -0.3739824 | 0/8 |
+
+1000-atom follow-up: after OpenMX completes, run:
+
+```bash
+ssh rosi4 "cd /data/home2/brzoza73/casus/mandala_worktrees/r6 && sbatch --parsable researchops/runs/r6_supercell_20261110/final_compare_5x.sh"
+```

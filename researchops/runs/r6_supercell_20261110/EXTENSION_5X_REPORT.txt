@@ -51,3 +51,24 @@ Primary cumulative evaluation time 192.712559 s through both structures;
 first perturbed structure and historical control completed by 77.069917 s.
 GitHub Actions implementation 80e5098: Tests 42803973210 and Documentation
 42803973308 both passed.
+
+Final collection: evaluation 837488 COMPLETED exit 0 in 00:12:50.
+Batch MaxRSS 2581360 KiB (host RSS only; not GPU memory).
+All 12 native primary/routed H/S/D files verified against stored SHA256.
+Previously queued comparison 837320 also completed exit 0 in 00:09:14.
+It started while evaluation was finishing; waited for it to finish before
+collecting the shared comparison/summary outputs. It includes both newly
+finished earlier SiO2 references and the 1000-atom tiled control.
+Only the new 1000-atom perturbed reference remains pending, job 837489.
+
+Final category accounting: primary tiled H MAE excluding same-parent images
+0.394737088862 meV. Common support: 1000 onsite, 80000 different-parent,
+6000 same-parent-image blocks (87000 total; 14703000 scalar entries).
+Primary H category MAEs: 6.639276621 / 0.316680345 / 112.656832056 meV.
+python3.13 researchops/runs/r6_supercell_20261110/verify_5x_results.py:
+PASS: all 9 earlier element-error rows exactly unchanged, 9 new primary/raw,
+primary/Hermitian and routed/Hermitian operator-category decompositions
+reconstruct their totals, all four 8-point metric groups retained, pending
+perturbed reference carries job 837489 and no invented element errors.
+Public OpenMX source calibrations both pass 0.01 meV H tolerance:
+Si 0.000678366923 meV; SiO2 0.000659101972 meV.

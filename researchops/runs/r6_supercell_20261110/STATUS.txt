@@ -55,3 +55,8 @@ No rebase was performed, per the explicit continuation-task instruction.
 837489 started 12:01:34 CET; final comparison 837490 waits afterok of both.
 Second-brain attempt 14. OpenMX uses 8 MPI x 12 OMP, 1024G, 11 h on cge057;
 allocation ends 23:01:34 CET today, ahead of Nov 12 08:00 CET maintenance.
+
+Extension evaluation 837488 completed exit 0, elapsed 00:12:50.
+Prior queued refresh 837320 completed exit 0, elapsed 00:09:14; its final
+comparison includes all 13 structures, with only si-5x5x5-1 OpenMX pending.
+All 12 new primary/routed operator hashes verified. See EXTENSION_5X_REPORT.txt.
