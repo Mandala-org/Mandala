@@ -414,13 +414,15 @@
         ]
       },
       "v1_checks": {
+        "all_previous_members_retained": true,
         "no_duplicate_members": true,
         "requested_counts_match": true,
         "splits_disjoint": true,
-        "test_is_previous_validation_remainder": true,
-        "training_members_identical": true,
-        "training_order_identical": true,
-        "validation_subset_of_previous_validation": true
+        "test_matches_expected": true,
+        "training_members_match_expected": true,
+        "training_order_matches_expected": true,
+        "training_subset_of_previous_training": true,
+        "validation_matches_expected": true
       },
       "v1_manifest": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/silicon/split_manifest.json",
       "v1_manifest_sha256": "2f5850b33a92d43e55e7002b422ac32f5437d13d88a3c2ecefe02f447ce084a1",
@@ -431,11 +433,11 @@
     },
     "sio2": {
       "counts": {
-        "test": 4,
-        "train": 90,
-        "val": 6
+        "test": 10,
+        "train": 80,
+        "val": 10
       },
-      "explicit_manifest_sha256": "73c75c1d09e115b5eda4b4ab611f0eeb88a41057aba348f701c8524c9201fffb",
+      "explicit_manifest_sha256": "d353897b3bb85f3192ee4bdd36be3b6f32370fb8a3c1e8f090b91dabf96ce8d7",
       "paper_manifest_search": {
         "checkpoint_root": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints",
         "comparisons": [],
@@ -447,10 +449,34 @@
         "selected_run": "dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25",
         "status": "not_found"
       },
-      "recipe_sha256": "177dd8516e3b52e662bff580d29c4120b71d74b4477c75129b4a6da5b4755311",
-      "split_hash_sha256": "c9c1a005b9b426877c6f60c14ac5b8cd7b66f785ee2a2a39e6e67995facfc765",
+      "recipe_sha256": "633b43ad94a6cd0359f607cd397c5943a128683409e620db2554f04dc0777bfb",
+      "split_hash_sha256": "b8a432eaa9ba88019b9c5097a2b3bce5cbb77e7e8e3ac9f2f53d204af608558b",
       "splits": {
         "test": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/HS.out"
+          },
           {
             "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/SiO2.out",
             "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/HS.out"
@@ -788,7 +814,9 @@
           {
             "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/SiO2.out",
             "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/HS.out"
-          },
+          }
+        ],
+        "val": [
           {
             "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/SiO2.out",
             "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/HS.out"
@@ -829,43 +857,19 @@
             "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/SiO2.out",
             "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/HS.out"
           }
-        ],
-        "val": [
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/HS.out"
-          },
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/SiO2.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/HS.out"
-          },
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/SiO2.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/HS.out"
-          },
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/SiO2.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/HS.out"
-          },
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/SiO2.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/HS.out"
-          },
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/HS.out"
-          }
         ]
       },
       "v1_checks": {
+        "all_previous_members_retained": true,
         "no_duplicate_members": true,
         "requested_counts_match": true,
         "splits_disjoint": true,
-        "test_is_previous_validation_remainder": true,
-        "training_members_identical": true,
-        "training_order_identical": true,
+        "test_matches_expected": true,
+        "training_members_match_expected": true,
+        "training_order_matches_expected": true,
+        "training_subset_of_previous_training": true,
         "v1_recipe_reconstructs_recorded_members_and_order": true,
-        "validation_subset_of_previous_validation": true
+        "validation_matches_expected": true
       },
       "v1_manifest": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/sio2/split_manifest.json",
       "v1_manifest_sha256": "9db351710e925976d57c0ac98147f201112402f4377639aafded1193779a3d7e",
@@ -876,11 +880,11 @@
     },
     "zncusnses": {
       "counts": {
-        "test": 8,
+        "test": 10,
         "train": 80,
-        "val": 12
+        "val": 10
       },
-      "explicit_manifest_sha256": "f59941b4aa012c84eba03ba625a0599b56083aa765d14b2de7d33acf0bcfa3cf",
+      "explicit_manifest_sha256": "9e5c7f51bcd904e9f29d1ebd4a35bb91438ea4e0a1a25c8f227aa08f92236dd6",
       "paper_manifest_search": {
         "checkpoint_root": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints",
         "comparisons": [],
@@ -892,10 +896,18 @@
         "selected_run": "dandy-sweep-34-restart47h5-lr2em3",
         "status": "not_found"
       },
-      "recipe_sha256": "29e51e3c24ee28bb9e7d0cd326ab2130d978fa87fdf81bdb0ab7539ac145e95e",
-      "split_hash_sha256": "8ec419d43302bde89be84650d556182910b0d24bff911abef3864a54c19a8a6a",
+      "recipe_sha256": "35b39c1f5a373a9650197a1ef81c0be338613cc56ecbeb77ac10e1b68479d819",
+      "split_hash_sha256": "cf7a3d51a115abf29eafae7196155102b0e54809958f1cb71cd2b86392aea2ec",
       "splits": {
         "test": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/HS.out"
+          },
           {
             "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_029/ZnCuSeS.out",
             "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_029/HS.out"
@@ -1291,26 +1303,20 @@
           {
             "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_093/ZnCuSeS.out",
             "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_093/HS.out"
-          },
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/ZnCuSeS.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/HS.out"
-          },
-          {
-            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/ZnCuSeS.out",
-            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/HS.out"
           }
         ]
       },
       "v1_checks": {
+        "all_previous_members_retained": true,
         "no_duplicate_members": true,
         "requested_counts_match": true,
         "splits_disjoint": true,
-        "test_is_previous_validation_remainder": true,
-        "training_members_identical": true,
-        "training_order_identical": true,
+        "test_matches_expected": true,
+        "training_members_match_expected": true,
+        "training_order_matches_expected": true,
+        "training_subset_of_previous_training": true,
         "v1_recipe_reconstructs_recorded_members_and_order": true,
-        "validation_subset_of_previous_validation": true
+        "validation_matches_expected": true
       },
       "v1_manifest": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/zncusnses/split_manifest.json",
       "v1_manifest_sha256": "3a619053fc2896f700fa6f445c9e852a1d4f12b467ee2dbb69b82a32f5a45f7d",
@@ -1327,5 +1333,5 @@
     "scripts/dataset.py": "c1bd2858ee5b2e87bdf079e92a6c99b5eebdb70d2981b40740a3d8bd2cff00e3",
     "scripts/train.py": "79c9bb311069bbebb280c70272ae7ac6d34963eeff7d485480aac836df9d41cb"
   },
-  "source_commit": "b5e2889ef47fe9660070cb3b58acedfea9cae164"
+  "source_commit": "858db5199487bf861e0c6e37f5ebd2e6ba9835b9"
 }
