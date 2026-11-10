@@ -122,6 +122,8 @@ Known version notes
   `forward-compatibility package
   <https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html>`_.
   The system driver is unchanged; this qualification is part of the stack.
+  Python 3.13.18 passes both GPU smoke tests and all four GPU-marked tests
+  (including epoch-boundary resume) with CUDA scatter kernels on this H100.
 
 * The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
   see notes" in the table). Their diff was not supplied; that report does not
