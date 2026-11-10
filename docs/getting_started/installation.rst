@@ -65,81 +65,22 @@ each run; MANDALA writes package versions into every run manifest.
 Tested environments
 -------------------
 
-The table is generated from ``docs/data/tested_environments.json``. Records
-marked ``reported`` describe earlier use supplied by the author, without a
-fresh test run or an inferred pass count. Regenerate it with:
-
-.. code-block:: bash
-
-   python scripts/report/render_tested_environments.py
+Setups on which MANDALA has run its test suite and a GPU training step. The
+list is generated from ``docs/data/tested_environments.json`` with
+``python scripts/report/render_tested_environments.py``; the JSON keeps the
+full records.
 
 .. include:: tested_environments_table.rst.inc
 
-Known version notes
-~~~~~~~~~~~~~~~~~~~
+Notes:
 
-* Python 3.14.10 passes the CPU contracts (710 passed, 68 skipped) and both
-  GPU smoke tests with PyTorch 2.11.0+cu128 and the matching PyG scatter wheel
-  on the A40, driver 550.163.01. PyTorch warns that TorchScript is deprecated
-  on Python 3.14; the tested e3nn model still passes forward and backward.
-* Python 3.15 has no cu128 torch wheel on the queried index (2026-11-10).
-  This is a wheel availability limit; no cu128 tests ran for Python 3.15.
-
-* Python 3.15.2 with PyTorch 2.15.0+cu134 passes the same CPU selection
-  (710 passed, 68 skipped). h5py 3.16.0 has no cp315 wheel: it was built
-  from source against locally extracted HDF5 1.14.5 libraries. Scatter
-  was also built from source with CUDA 13.4. GPU execution on Python 3.15
-  is not verified, so package metadata retains the ``<3.15`` upper bound.
-* After rebasing onto develop revision ``6fa64e2``, the same CPU command
-  selects nine additional unit tests. All four follow-up environments pass
-  710 tests (602 unit, 69 physics, 39 equivariance), with 68 skips and
-  52 successful subtests. The earlier 701-test measurements are retained
-  in each record under ``pre_rebase_cpu_tests``.
-* The verified CPU selection excludes GPU, slow, large-data, network and
-  integration tests. It also excludes the large silicon spatial fixture and
-  unshipped generated PySCF reference files. The 68 skips require optional
-  upstream source checkouts; exact commands and results are in the JSON.
-* PyTorch 2.7.1+cu128 runs the model and compiled scatter CUDA kernels on
-  the A40 with driver 550.163.01 (advertised CUDA 12.4), without a launch error.
-  This is a smoke check, not a guarantee for all kernels or architectures.
-* CUDA 13.x wheels require driver family 580 or newer under NVIDIA's
-  `minor-version compatibility rules
-  <https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html>`_.
-  With driver 550.163.01 (advertised CUDA 12.4), use the verified cu128
-  wheels; upgrading Python alone does not resolve the driver limit.
-* Native checkpoints contain Python Config objects. The loader explicitly
-  retains trusted-payload loading across the PyTorch 2.6 ``weights_only``
-  default change; load only checkpoints whose source you trust.
-* The newest stable PyTorch selected on 2026-11-10 is 2.15.0, with cu134
-  wheels for Python 3.13, 3.14 and 3.15. There is no matching PyG scatter
-  wheel index. The follow-up probe builds scatter with nvcc 13.4.92,
-  matching CUDA CRT/NVVM 13.4.92 and architectures 8.6, 9.0 and 10.0.
-  Unpinned CRT/NVVM resolve to 13.5 and produce PTX 9.5 that the 13.4
-  assembler rejects; both compiler components must be pinned.
-* The earlier Terok cu134 failures remain in the table and JSON. Those
-  records used CPU-only scatter after a CUDA 12.4 compiler mismatch.
-  Their reproduction-setup CPU failure came from an incomplete CUDA mock;
-  the follow-up isolates cuDNN runtime metadata as well as GPU metadata.
-* ROSI's H100 has kernel driver 570.158.01, which also cannot initialize
-  cu134 directly. The follow-up GPU probe uses NVIDIA's isolated
-  ``cuda-compat-13-4`` libraries (user-space driver 615.71.10) through
-  ``LD_LIBRARY_PATH``. NVIDIA lists driver 570 as compatible with this
-  `forward-compatibility package
-  <https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html>`_.
-  The system driver is unchanged; this qualification is part of the stack.
-  Python 3.13.18 and 3.14.10 each pass both GPU smoke tests and all four
-  GPU-marked tests
-  (including epoch-boundary resume) with CUDA scatter kernels on this H100.
-* The newest supported combination verified here is Python 3.14.10,
-  PyTorch 2.15.0+cu134, source-built CUDA torch-scatter 2.1.2 and PyG 2.8.1
-  on the H100 with the compatibility-driver qualification above. On the
-  A40 with driver 550.163.01, the newest verified combination is Python
-  3.14.10, PyTorch 2.11.0+cu128 and its matching PyG scatter wheel.
-
-* The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
-  see notes" in the table). Their diff was not supplied; that report does not
-  establish support for an unmodified 2.11 installation. The new
-  Python 3.14/cu128 row is fresh evidence on the current source revision.
+* Only ``torch-scatter`` (and ``torch_geometric``) must match the exact
+  PyTorch build and CUDA tag; everything else follows pip resolution.
+* CUDA 13 wheels need an NVIDIA driver of the 580 family or NVIDIA's
+  ``cuda-compat`` libraries on older drivers; on CUDA 12 drivers use the
+  ``cu128`` wheels.
+* Python 3.15 passes the CPU test suite, but no CUDA-enabled PyTorch wheel
+  exists for it yet, so the package metadata stays at ``<3.15``.
 
 Import layout
 -------------
