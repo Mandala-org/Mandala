@@ -418,3 +418,4 @@ checks = [
 ]
 record["result"] = "passed" if not any(checks) else "failed"
 save()
+raise SystemExit(0 if record["result"] == "passed" else 1)
