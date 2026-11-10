@@ -10,6 +10,41 @@
      - CPU contracts
      - GPU smoke
      - Evidence
+   * - py310-t251-cu121 (NVIDIA A40)
+     - 3.10.22
+     - 2.5.1+cu121 / cu121
+     - 2.1.2+pt25cu121 / 2.8.1
+     - 675 passed, 0 failed, 0 errors, 68 skipped; 74.6 s
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 11.7 s
+     - verified_tonight, 2026-11-10
+   * - py311-t251-cu121 (NVIDIA A40)
+     - 3.11.18
+     - 2.5.1+cu121 / cu121
+     - 2.1.2+pt25cu121 / 2.8.1
+     - 675 passed, 0 failed, 0 errors, 68 skipped; 66.1 s
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 11.6 s
+     - verified_tonight, 2026-11-10
+   * - py312-t271-cu128 (NVIDIA A40)
+     - 3.12.16
+     - 2.7.1+cu128 / cu128
+     - 2.1.2+pt27cu128 / 2.8.1
+     - 675 passed, 0 failed, 0 errors, 68 skipped; 53.5 s
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 12.4 s
+     - verified_tonight, 2026-11-10
+   * - py312-latest (NVIDIA A40)
+     - 3.12.16
+     - 2.15.0+cu134 / cu134
+     - 2.1.2 / 2.8.1
+     - 674 passed, 1 failed, 0 errors, 68 skipped; 50.7 s
+     - 0 passed, 2 failed, 0 errors, 0 skipped; 6.7 s
+     - verified_tonight, 2026-11-10; CPU-only scatter; CUDA 13.4 needs a newer driver
+   * - py313-t271-cu128 (NVIDIA A40)
+     - 3.13.5
+     - 2.7.1+cu128 / cu128
+     - 2.1.2+pt27cu128 / 2.8.1
+     - 675 passed, 0 failed, 0 errors, 68 skipped; 47.9 s
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 12.5 s
+     - verified_tonight, 2026-11-10; additional control for Python support
    * - rosi-h100-paper-training (NVIDIA H100)
      - 3.10
      - 2.5.1+cu121 / cu121
