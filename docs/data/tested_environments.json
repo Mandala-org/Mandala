@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "environments": [
+    {
+      "name": "rosi-h100-paper-training",
+      "status": "reported",
+      "date": null,
+      "python": "3.10",
+      "torch": "2.5.1+cu121",
+      "cuda_wheel_tag": "cu121",
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "ROSI",
+      "gpu": "NVIDIA H100",
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "paper training",
+      "notes": ["Reported by the author; not re-tested on 2026-11-10. Exact extension versions and driver were not supplied."]
+    },
+    {
+      "name": "rosi-b200-physical-constraints",
+      "status": "reported",
+      "date": null,
+      "python": "3.10",
+      "torch": "2.7.1+cu128",
+      "cuda_wheel_tag": "cu128",
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "ROSI",
+      "gpu": "NVIDIA B200",
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "physical-constraint evaluations and retrains",
+      "notes": ["Reported by the author; not re-tested on 2026-11-10. Exact extension versions and driver were not supplied."]
+    },
+    {
+      "name": "laptop-cpu-development",
+      "status": "reported",
+      "date": null,
+      "python": "3.10",
+      "torch": "2.5.1+cpu",
+      "cuda_wheel_tag": "cpu",
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "laptop",
+      "gpu": null,
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "development",
+      "notes": ["Reported by the author; not re-tested on 2026-11-10. Exact extension versions were not supplied."]
+    },
+    {
+      "name": "terok-a40-torch211-patched",
+      "status": "reported",
+      "date": null,
+      "python": "3.12",
+      "torch": "2.11 (exact patch not recorded)",
+      "cuda_wheel_tag": null,
+      "torch_scatter": null,
+      "torch_geometric": null,
+      "host": "Terok",
+      "gpu": "NVIDIA A40",
+      "cpu_tests": null,
+      "gpu_smoke": null,
+      "table_note": "with patches, see notes",
+      "notes": ["Reported by the author; not re-tested on 2026-11-10. Required source patches whose diff was not supplied; this is not evidence of unmodified torch 2.11 support. Exact torch patch, CUDA tag, extension versions and driver were not supplied."]
+    }
+  ]
+}

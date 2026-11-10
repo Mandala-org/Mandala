@@ -83,6 +83,7 @@ slurm_*.out
 # Local environments
 venv/
 .venv/
+.venvs/
 # Generated outputs and caches
 model_reports/
 .mypy_cache/

@@ -59,6 +59,26 @@ versions. On a computing cluster, use the site's module system to provide a
 matching CUDA runtime and record the exact versions with each run; MANDALA
 writes them into every run manifest automatically.
 
+Tested environments
+-------------------
+
+The table is generated from ``docs/data/tested_environments.json``. Records
+marked ``reported`` describe earlier use supplied by the author, without a
+fresh test run or an inferred pass count. Regenerate it with:
+
+.. code-block:: bash
+
+   python scripts/report/render_tested_environments.py
+
+.. include:: tested_environments_table.rst.inc
+
+Known version notes
+~~~~~~~~~~~~~~~~~~~
+
+* The earlier Terok / PyTorch 2.11 run required source patches ("with patches,
+  see notes" in the table). Their diff was not supplied; that report does not
+  establish support for an unmodified 2.11 installation.
+
 Import layout
 -------------
 
