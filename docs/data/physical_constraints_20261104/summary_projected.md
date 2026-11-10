@@ -1,10 +1,10 @@
-Historical July inference only. Selected scenarios: silicon: `joint_predicted_reference_support`; sio2: `predicted_H_reference_SD_reference_support`.
+Historical July inference only. Selected scenarios: silicon: `joint_predicted_reference_support`; sio2: `predicted_H_reference_SD_reference_support`; silicon after overlap repair: `joint_predicted_reference_support_overlap_repaired`.
 
-Reference-support control and Hermitian projection only; no overlap repair, fixed-charge occupation projection, or post-cleanup aggregates exist.
+Silicon after overlap repair: floor S^h(k) eigenvalues at 1e-6, with no upper clamp or jitter. No occupation projection was applied: the data use finite-temperature (300 K Fermi-Dirac) occupations, so a zero-temperature idempotent target is inappropriate. SiO2 and ZnCu2Sn(SeS)2 predict H only; overlap repair does not apply to them.
 
-These spectral values use Hermitian-projected matrices on reference support, a control requiring reference sparsity, not independent deployment. SiO2 H uses reference S/D; silicon uses predicted H/S/D. Zn reports H elements only. Missing post-cleanup results are unavailable, not replaced with raw predictions.
+These spectral values use Hermitian-projected matrices on reference support, a control requiring reference sparsity, not independent deployment. SiO2 H uses reference S/D; silicon uses predicted H/S/D. Zn reports H elements only. Only silicon has an additional after-overlap-repair scenario.
 
-Means are over all contributing k points (not means of structure means); electron-count absolute errors use exact Hermitian real-space traces per structure; Fermi–Dirac residuals use one fit per structure. Worst is min for lower bounds and positive-definite success, max otherwise. Counts exclude invalid metrics; total denominators retain them. Contributing structure counts are recovered from historical per-structure summaries. Element MAEs are equally weighted structure means, with worst structure MAE; k points do not apply (0). Reference element error is zero by definition, not a physical residual.
+Means are over all contributing k points (not means of structure means); real-space electron-count errors use exact Hermitian traces with unrepaired S; separately labelled k-mesh errors use the scenario's metric and a normalized mesh average per structure. Repair-statistic reference columns cover the 512 k points of structure 0 only (0 floored eigenvalues). Fermi–Dirac residuals use one fit per structure. Worst is min for lower bounds and positive-definite success, max otherwise. Counts exclude invalid metrics; total denominators retain them. Contributing structure counts are recovered from historical per-structure summaries. Element MAEs are equally weighted structure means, with worst structure MAE; k points do not apply (0). Reference element error is zero by definition, not a physical residual.
 
 Each compact cell pairs reference / prediction (R / P). Mean and worst are separate columns; exact valid counts and total denominators follow below.
 
@@ -17,6 +17,7 @@ Each compact cell pairs reference / prediction (R / P). Mean and worst are separ
 | Material | Operator | Stationarity residual mean (R / P) | Stationarity residual worst (R / P) | Fermi-Dirac residual mean (R / P) | Fermi-Dirac residual worst (R / P) |
 | --- | --- | --- | --- | --- | --- |
 | silicon | H | 0.00235366 / 0.000969553 | 0.00352099 / 0.0019418 | 0.121229 / — | 0.121477 / — |
+| silicon (after overlap repair) | H | 0.00235366 / 0.000196321 | 0.00352099 / 0.0019418 | 0.121229 / 0.121979 | 0.121477 / 0.12257 |
 | sio2 | H | 0.000791348 / 0.00104813 | 0.000902654 / 0.00119327 | 0.0637769 / 0.208385 | 0.0745331 / 0.289238 |
 
 | Material | Operator | Element MAE (AO units) mean (R / P) | Element MAE (AO units) worst (R / P) |
@@ -26,22 +27,34 @@ Each compact cell pairs reference / prediction (R / P). Mean and worst are separ
 | Material | Operator | S positive definite mean (R / P) | S positive definite worst (R / P) | S usable metric mean (R / P) | S usable metric worst (R / P) |
 | --- | --- | --- | --- | --- | --- |
 | silicon | S | 1 / 0.172729 | 1 / 0 | 1 / 0.172485 | 1 / 0 |
+| silicon (after overlap repair) | S | 1 / 1 | 1 / 1 | 1 / 1 | 1 / 1 |
 | sio2 | S (reference) | 1 / 1 | 1 / 1 | 1 / 1 | 1 / 1 |
 
 | Material | Operator | Cholesky failure mean (R / P) | Cholesky failure worst (R / P) | S min eigenvalue mean (R / P) | S min eigenvalue worst (R / P) |
 | --- | --- | --- | --- | --- | --- |
 | silicon | S | 0 / 0.827271 | 0 / 1 | 0.00118844 / -0.000655239 | 0.000872547 / -0.00624094 |
+| silicon (after overlap repair) | S | 0 / 0 | 0 / 0 | 0.00118844 / 4.35054e-05 | 0.000872547 / 1e-06 |
 | sio2 | S (reference) | 0 / 0 | 0 / 0 | 0.000250166 / 0.000250166 | 0.000215888 / 0.000215888 |
 
 | Material | Operator | S max eigenvalue mean (R / P) | S max eigenvalue worst (R / P) | S condition number mean (R / P) | S condition number worst (R / P) |
 | --- | --- | --- | --- | --- | --- |
 | silicon | S | 6.34486 / 6.34674 | 6.74327 / 6.74962 | 5388.83 / 295705 | 7156.37 / 1.02091e+08 |
+| silicon (after overlap repair) | S | 6.34486 / 6.34674 | 6.74327 / 6.74962 | 5388.83 / 5.29423e+06 | 7156.37 / 6.74962e+06 |
 | sio2 | S (reference) | 7.38574 / 7.38574 | 7.61309 / 7.61309 | 29830.9 / 29830.9 | 34732.7 / 34732.7 |
 
 | Material | Operator | S nonpositive eigenvalue count mean (R / P) | S nonpositive eigenvalue count worst (R / P) |
 | --- | --- | --- | --- |
 | silicon | S | 0 / 1.12427 | 0 / 4 |
+| silicon (after overlap repair) | S | 0 / 0 | 0 / 0 |
 | sio2 | S (reference) | 0 / 0 | 0 / 0 |
+
+| Material | Operator | Overlap correction relative Frobenius norm mean (R / P) | Overlap correction relative Frobenius norm worst (R / P) | Floored eigenvalue count mean (R / P) | Floored eigenvalue count worst (R / P) |
+| --- | --- | --- | --- | --- | --- |
+| silicon (after overlap repair) | S | 0 / 4.58824e-05 | 0 / 0.00040071 | 0 / 1.12695 | 0 / 4 |
+
+| Material | Operator | Min eigenvalue before repair mean (R / P) | Min eigenvalue before repair worst (R / P) | Min eigenvalue after repair mean (R / P) | Min eigenvalue after repair worst (R / P) |
+| --- | --- | --- | --- | --- | --- |
+| silicon (after overlap repair) | S | 0.00119427 / -0.000655239 | 0.00089555 / -0.00624094 | 0.00119427 / 4.35054e-05 | 0.00089555 / 1e-06 |
 
 | Material | Operator | Element MAE (AO units) mean (R / P) | Element MAE (AO units) worst (R / P) |
 | --- | --- | --- | --- |
@@ -50,19 +63,27 @@ Each compact cell pairs reference / prediction (R / P). Mean and worst are separ
 | Material | Operator | Min occupation mean (R / P) | Min occupation worst (R / P) | Max occupation mean (R / P) | Max occupation worst (R / P) |
 | --- | --- | --- | --- | --- | --- |
 | silicon | D | -0.0334263 / -0.0325261 | -0.0418119 / -0.0393333 | 2.3045 / 2.28845 | 2.49221 / 2.41358 |
+| silicon (after overlap repair) | D | -0.0334263 / -0.0336104 | -0.0418119 / -0.0429979 | 2.3045 / 2.30576 | 2.49221 / 2.48987 |
 | sio2 | D (reference) | -0.172922 / -0.172922 | -0.344175 / -0.344175 | 2.37459 / 2.37459 | 2.56227 / 2.56227 |
 
 | Material | Operator | Negative occupation count mean (R / P) | Negative occupation count worst (R / P) | Excess occupation count mean (R / P) | Excess occupation count worst (R / P) |
 | --- | --- | --- | --- | --- | --- |
 | silicon | D | 37.8605 / 38.54 | 42 / 44 | 7.01294 / 7.19887 | 12 / 10 |
+| silicon (after overlap repair) | D | 37.8605 / 37.5544 | 42 / 44 | 7.01294 / 6.99915 | 12 / 12 |
 | sio2 | D (reference) | 663.7 / 663.7 | 682 / 682 | 200.9 / 200.9 | 203 / 203 |
 
-| Material | Operator | Electron count absolute error mean (R / P) | Electron count absolute error worst (R / P) | Zero-T idempotency residual mean (R / P) | Zero-T idempotency residual worst (R / P) |
+| Material | Operator | Electron count absolute error (real-space, unrepaired S) mean (R / P) | Electron count absolute error (real-space, unrepaired S) worst (R / P) | Zero-T idempotency residual mean (R / P) | Zero-T idempotency residual worst (R / P) |
 | --- | --- | --- | --- | --- | --- |
 | silicon | D | 9.99336e-08 / 0.0075323 | 1.952e-07 / 0.0114623 | 0.102435 / 0.101953 | 0.160485 / 0.155847 |
+| silicon (after overlap repair) | D | 9.99336e-08 / 0.0075323 | 1.952e-07 / 0.0114623 | 0.102435 / 0.102478 | 0.160485 / 0.161226 |
 | sio2 | D (reference) | 2.46731e-06 / 2.46731e-06 | 3.1647e-06 / 3.1647e-06 | 0.0520496 / 0.0520496 | 0.0604673 / 0.0604673 |
 
-The silicon reference-support projected overlap is positive definite at only 17.27% of 8192 sampled k points; support restriction plus hermitization therefore does not establish a valid learned metric. No silicon structure has an available joint Fermi–Dirac residual. Silicon density and stationarity means cover only 1413 usable k points, whereas reference means cover all 8192; this is not a paired whole-mesh comparison. For SiO2, the mean Fermi–Dirac residual is 0.208385 versus 0.0637769 for reference H/S/D, with reference S/D retained in the prediction control. These finite-mesh consistency tests do not certify SCF convergence or Brillouin-zone-wide validity; no result after overlap or occupation repair is present. Nonzero zero-temperature idempotency residuals alone do not demonstrate a violation at 300 K.
+| Material | Operator | Electron count absolute error (k-mesh) mean (R / P) | Electron count absolute error (k-mesh) worst (R / P) |
+| --- | --- | --- | --- |
+| silicon | D | 9.99335e-08 / 0.0075323 | 1.952e-07 / 0.0114623 |
+| silicon (after overlap repair) | D | 9.99335e-08 / 0.00743469 | 1.952e-07 / 0.0112906 |
+
+For silicon, overlap repair raises positive-definite success from 17.27% to 100.00% across 8192 k points; Cholesky failures fall from 82.73% to 0.00%. The worst minimum eigenvalue changes from -0.00624094 to 1e-06. The relative overlap correction has mean 4.58824e-05 and maximum 0.00040071, flooring 9232 eigenvalues in total (1.12695 per k point on average). Density and stationarity diagnostics now cover 8192 k points versus 1413 before repair; these whole-result means have different contributing samples. Mean minimum/maximum occupations change from -0.0325261/2.28845 to -0.0336104/2.30576; the repaired worst extrema are -0.0429979 and 2.48987. The mean stationarity residual changes from 0.000969553 to 0.000196321. A joint Fermi–Dirac residual is now available for all 16 structures (previously 0), with mean 0.121979. The k-mesh electron-count absolute error changes from mean 0.0075323 to 0.00743469; the exact real-space error stays 0.0075323, and element MAEs are unchanged. Occupation-bound violations remain. No occupation projection was applied because these are finite-temperature (300 K Fermi-Dirac) data; the zero-T idempotency residual remains informational. SiO2 and ZnCu2Sn(SeS)2 predict H only, so overlap repair does not apply. For SiO2, the mean Fermi–Dirac residual is 0.208385 versus 0.0637769 for reference H/S/D, with reference S/D retained in the prediction control. These finite-mesh consistency tests do not certify SCF convergence or Brillouin-zone-wide validity. Nonzero zero-temperature idempotency residuals alone do not demonstrate a violation at 300 K.
 
 Detailed values and denominators:
 
@@ -82,10 +103,31 @@ Detailed values and denominators:
 | silicon | D | Max occupation | 2.3045 | 2.49221 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 2.28845 | 2.41358 | 1413 kpoints; 15/16 structures; 8192 total kpoints |
 | silicon | D | Negative occupation count | 37.8605 | 42 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 38.54 | 44 | 1413 kpoints; 15/16 structures; 8192 total kpoints |
 | silicon | D | Excess occupation count | 7.01294 | 12 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 7.19887 | 10 | 1413 kpoints; 15/16 structures; 8192 total kpoints |
-| silicon | D | Electron count absolute error | 9.99336e-08 | 1.952e-07 | 16 structures; 16/16 structures; 8192 total kpoints | 0.0075323 | 0.0114623 | 16 structures; 16/16 structures; 8192 total kpoints |
+| silicon | D | Electron count absolute error (real-space, unrepaired S) | 9.99336e-08 | 1.952e-07 | 16 structures; 16/16 structures; 8192 total kpoints | 0.0075323 | 0.0114623 | 16 structures; 16/16 structures; 8192 total kpoints |
 | silicon | D | Zero-T idempotency residual | 0.102435 | 0.160485 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 0.101953 | 0.155847 | 1413 kpoints; 15/16 structures; 8192 total kpoints |
 | silicon | H | Stationarity residual | 0.00235366 | 0.00352099 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 0.000969553 | 0.0019418 | 1413 kpoints; 15/16 structures; 8192 total kpoints |
 | silicon | H | Fermi-Dirac residual | 0.121229 | 0.121477 | 16 structures; 16/16 structures; 8192 total kpoints | — | — | 0 structures; 0/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | S positive definite | 1 | 1 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 1 | 1 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | S usable metric | 1 | 1 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 1 | 1 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | Cholesky failure | 0 | 0 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 0 | 0 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | S min eigenvalue | 0.00118844 | 0.000872547 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 4.35054e-05 | 1e-06 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | S max eigenvalue | 6.34486 | 6.74327 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 6.34674 | 6.74962 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | S condition number | 5388.83 | 7156.37 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 5.29423e+06 | 6.74962e+06 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | S nonpositive eigenvalue count | 0 | 0 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 0 | 0 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | D | Min occupation | -0.0334263 | -0.0418119 | 8192 kpoints; 16/16 structures; 8192 total kpoints | -0.0336104 | -0.0429979 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | D | Max occupation | 2.3045 | 2.49221 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 2.30576 | 2.48987 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | D | Negative occupation count | 37.8605 | 42 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 37.5544 | 44 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | D | Excess occupation count | 7.01294 | 12 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 6.99915 | 12 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | D | Electron count absolute error (real-space, unrepaired S) | 9.99336e-08 | 1.952e-07 | 16 structures; 16/16 structures; 8192 total kpoints | 0.0075323 | 0.0114623 | 16 structures; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | D | Zero-T idempotency residual | 0.102435 | 0.160485 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 0.102478 | 0.161226 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | H | Stationarity residual | 0.00235366 | 0.00352099 | 8192 kpoints; 16/16 structures; 8192 total kpoints | 0.000196321 | 0.0019418 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | H | Fermi-Dirac residual | 0.121229 | 0.121477 | 16 structures; 16/16 structures; 8192 total kpoints | 0.121979 | 0.12257 | 16 structures; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | Overlap correction relative Frobenius norm | 0 | 0 | 512 kpoints; 1/1 structures; 512 total kpoints | 4.58824e-05 | 0.00040071 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | Floored eigenvalue count | 0 | 0 | 512 kpoints; 1/1 structures; 512 total kpoints | 1.12695 | 4 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | Min eigenvalue before repair | 0.00119427 | 0.00089555 | 512 kpoints; 1/1 structures; 512 total kpoints | -0.000655239 | -0.00624094 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | S | Min eigenvalue after repair | 0.00119427 | 0.00089555 | 512 kpoints; 1/1 structures; 512 total kpoints | 4.35054e-05 | 1e-06 | 8192 kpoints; 16/16 structures; 8192 total kpoints |
+| silicon | D | Electron count absolute error (k-mesh) | 9.99335e-08 | 1.952e-07 | 16 structures; 16/16 structures; 8192 total kpoints | 0.0075323 | 0.0114623 | 16 structures; 16/16 structures; 8192 total kpoints |
+| silicon (after overlap repair) | D | Electron count absolute error (k-mesh) | 9.99335e-08 | 1.952e-07 | 16 structures; 16/16 structures; 8192 total kpoints | 0.00743469 | 0.0112906 | 16 structures; 16/16 structures; 8192 total kpoints |
 | sio2 | H | Element MAE (meV) | 0 | 0 | 10 structures; 10/10 structures; 0 total kpoints | 1.99588 | 2.53462 | 10 structures; 10/10 structures; 0 total kpoints |
 | sio2 | S (reference) | S positive definite | 1 | 1 | 10 kpoints; 10/10 structures; 10 total kpoints | 1 | 1 | 10 kpoints; 10/10 structures; 10 total kpoints |
 | sio2 | S (reference) | S usable metric | 1 | 1 | 10 kpoints; 10/10 structures; 10 total kpoints | 1 | 1 | 10 kpoints; 10/10 structures; 10 total kpoints |
@@ -98,7 +140,7 @@ Detailed values and denominators:
 | sio2 | D (reference) | Max occupation | 2.37459 | 2.56227 | 10 kpoints; 10/10 structures; 10 total kpoints | 2.37459 | 2.56227 | 10 kpoints; 10/10 structures; 10 total kpoints |
 | sio2 | D (reference) | Negative occupation count | 663.7 | 682 | 10 kpoints; 10/10 structures; 10 total kpoints | 663.7 | 682 | 10 kpoints; 10/10 structures; 10 total kpoints |
 | sio2 | D (reference) | Excess occupation count | 200.9 | 203 | 10 kpoints; 10/10 structures; 10 total kpoints | 200.9 | 203 | 10 kpoints; 10/10 structures; 10 total kpoints |
-| sio2 | D (reference) | Electron count absolute error | 2.46731e-06 | 3.1647e-06 | 10 structures; 10/10 structures; 10 total kpoints | 2.46731e-06 | 3.1647e-06 | 10 structures; 10/10 structures; 10 total kpoints |
+| sio2 | D (reference) | Electron count absolute error (real-space, unrepaired S) | 2.46731e-06 | 3.1647e-06 | 10 structures; 10/10 structures; 10 total kpoints | 2.46731e-06 | 3.1647e-06 | 10 structures; 10/10 structures; 10 total kpoints |
 | sio2 | D (reference) | Zero-T idempotency residual | 0.0520496 | 0.0604673 | 10 kpoints; 10/10 structures; 10 total kpoints | 0.0520496 | 0.0604673 | 10 kpoints; 10/10 structures; 10 total kpoints |
 | sio2 | H | Stationarity residual | 0.000791348 | 0.000902654 | 10 kpoints; 10/10 structures; 10 total kpoints | 0.00104813 | 0.00119327 | 10 kpoints; 10/10 structures; 10 total kpoints |
 | sio2 | H | Fermi-Dirac residual | 0.0637769 | 0.0745331 | 10 structures; 10/10 structures; 10 total kpoints | 0.208385 | 0.289238 | 10 structures; 10/10 structures; 10 total kpoints |

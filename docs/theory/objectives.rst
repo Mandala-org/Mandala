@@ -52,7 +52,8 @@ Further controls:
 * ``train_target: irreps`` supervises irrep coefficients instead of blocks;
   ``train_on_irrep_parts`` adds per-irrep matrix contributions.
 * ``partial_train`` restricts supervision to ``diag`` (onsite),
-  ``shifted_self`` or ``offdiag`` blocks.
+  or ``offdiag`` (all non-onsite pairs) blocks. The former ``shifted_self``
+  option is retained only when evaluating historical checkpoints.
 * ``loss_weighting_mode`` re-weights edges: ``envelope_inverse_clipped``
   (:math:`w=1/E`), ``envelope_inverse_sqrt_clipped`` (:math:`w=E^{-1/2}`) or
   ``distance_short_range_bias`` (:math:`w=(1+r)^{-1/2}`), clipped to

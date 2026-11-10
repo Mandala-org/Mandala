@@ -1,3 +1,5 @@
+"""Checkpoint migrations, including the legacy shared_shifted_self_proj path."""
+
 from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
@@ -252,7 +254,7 @@ def _build_source_model_skeleton(
             device="cpu",
             dtype=dummy_cfg.dtype,
         )
-        return E3GNN(mapper=mapper, cfg=dummy_cfg)
+        return E3GNN.from_checkpoint_config(mapper=mapper, cfg=dummy_cfg)
     except Exception as exc:
         print(f"[compat] failed to build source model skeleton: {exc}")
         return None

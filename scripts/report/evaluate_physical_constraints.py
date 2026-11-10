@@ -512,7 +512,7 @@ def main():
     del first
     model = None
     if args.prediction_source_root is None:
-        model = E3GNN(mapper=deepcopy(mapper), cfg=cfg).to(args.device).eval()
+        model = E3GNN.from_checkpoint_config(mapper=deepcopy(mapper), cfg=cfg).to(args.device).eval()
         model.load_state_dict(strip_mapper_keys(payload["state_dict"]), strict=True)
         contract["film_semantics"] = set_checkpoint_film_semantics(
             model, args.film_semantics

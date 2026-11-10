@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hdo_energy_stage2_47h25/leafy-sweep-15-half_gt-coef3em3-lr3em4-47h25/best_model.pt",
+  "source_commit": "4fa1df8804941e1d2b22ce068198a65134554abd",
+  "dataset_kind": "silicon_scales",
+  "data_path": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si",
+  "data_split_seed": 43,
+  "metadata_policy": "paper_2026_07",
+  "density_convention": "paper_restricted_total",
+  "density_reference_factor": 2.0,
+  "density_convention_provenance": "e78a7c0:src/data/openmx_parser.py; docs/data/physical_constraints_20261104/silicon/historical_contract.json",
+  "training_structures": 80,
+  "validation_structures": 16,
+  "evaluated_structures": 16,
+  "film_semantics": "legacy_2026_07",
+  "film_semantics_report": {
+    "mode": "legacy_2026_07",
+    "modules": [
+      "pipeline.transforms.readout_hamiltonian.diag_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.diag_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.diag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_density.diag_trunk.net.0.film",
+      "pipeline.transforms.readout_density.diag_trunk.net.2.film",
+      "pipeline.transforms.readout_density.offdiag_trunk.net.0.film",
+      "pipeline.transforms.readout_density.offdiag_trunk.net.2.film",
+      "pipeline.transforms.readout_density.shifted_self_trunk.net.0.film",
+      "pipeline.transforms.readout_density.shifted_self_trunk.net.2.film",
+      "pipeline.transforms.readout_density.diag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_density.offdiag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_density.shifted_self_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_overlap.diag_trunk.net.0.film",
+      "pipeline.transforms.readout_overlap.diag_trunk.net.2.film",
+      "pipeline.transforms.readout_overlap.offdiag_trunk.net.0.film",
+      "pipeline.transforms.readout_overlap.offdiag_trunk.net.2.film",
+      "pipeline.transforms.readout_overlap.shifted_self_trunk.net.0.film",
+      "pipeline.transforms.readout_overlap.shifted_self_trunk.net.2.film",
+      "pipeline.transforms.readout_overlap.diag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_overlap.offdiag_projs.Si-Si.net.0.film",
+      "pipeline.transforms.readout_overlap.shifted_self_projs.Si-Si.net.0.film"
+    ],
+    "historical_source_commit": "e78a7c04e18d005d47def9eb7c9bd0f68b168d99",
+    "learned_parameters_changed": false
+  },
+  "definition": "MAE is the unchanged val/<operator>_mae from the shared validation step, first per structure then averaged equally across structures; H uses the paper entry-weighted contribution diagnostic; historical within-structure S/D diagnostic reductions are preserved. RMSE, maximum, p95, p99 and R2 pool every observed shift-resolved sparse reference element across all validation structures, including both directed reverse entries and excluding padding/unobserved entries and prediction-only support. Predictions use physical envelope units and 0.5*(M + M.transpose().conjugate()) with reverse-edge alignment. H is converted from Hartree to eV; S and D retain native dimensionless units. For paper_restricted_total, the native spin=0 reference D is multiplied by two to restore the historical parser's documented spin-summed convention; this is a fixed provenance choice, not fitted rescaling. R2 = 1 - pooled SSE / sum(abs(reference - pooled_reference_mean)^2); R2 is null for a constant reference. mae_elementwise_pooled is an additional diagnostic, not the paper MAE. Percentiles are exact NumPy linear quantiles via in-place selection on a float64 temporary memory map; no histogram approximation or full validation tensor is used.",
+  "split_arguments": {
+    "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/silicon_hdo_energy_stage2_47h25/leafy-sweep-15-half_gt-coef3em3-lr3em4-47h25/best_model.pt",
+    "dataset_kind": "silicon_scales",
+    "data_path": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si",
+    "scales": "[1]",
+    "num_train_per_scale": 80,
+    "num_val_per_scale": 20,
+    "num_train": null,
+    "num_val": null,
+    "val_fraction": 0.2,
+    "data_split_seed": 43,
+    "snapshot_cache_dir": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/snapshot_cache",
+    "dataset_device": "cpu",
+    "device": "cuda",
+    "convention": "e3nn",
+    "output_json": "paper/data/validation_error_distribution/silicon_perturbed.json",
+    "film_semantics": "legacy_2026_07",
+    "scratch_dir": "/bigdata/casus/wdm/hamiltonian_learning/runs/r5_error_distribution_20261110/silicon_perturbed/836819",
+    "metadata_policy": "paper_2026_07",
+    "envelope_path": null,
+    "density_convention": "paper_restricted_total",
+    "preflight_only": false
+  },
+  "metrics": {
+    "hamiltonian": {
+      "mae": 0.00043516440060726235,
+      "mae_elementwise_pooled": 0.0004351643938806527,
+      "rmse": 0.0016137852067336874,
+      "max_absolute_error": 0.07848506698217243,
+      "p95_absolute_error": 0.0019616432646289467,
+      "p99_absolute_error": 0.005396649339294527,
+      "r2": 0.999980188027283,
+      "element_count": 1881984,
+      "structures": 16,
+      "residual_sum_squares": 4.901256000272131,
+      "reference_centered_sum_squares": 247388.59023636102,
+      "unit": "eV"
+    },
+    "density": {
+      "mae": 5.757722965427092e-05,
+      "mae_elementwise_pooled": 5.757722897601817e-05,
+      "rmse": 0.00014105894472175732,
+      "max_absolute_error": 0.011932997032999992,
+      "p95_absolute_error": 0.00021396638185251408,
+      "p99_absolute_error": 0.0005581298144534215,
+      "r2": 0.9999119230700665,
+      "element_count": 1881984,
+      "structures": 16,
+      "residual_sum_squares": 0.03744701355546754,
+      "reference_centered_sum_squares": 425.1625662216432,
+      "unit": "dimensionless"
+    },
+    "overlap": {
+      "mae": 1.3897776852900279e-05,
+      "mae_elementwise_pooled": 1.3897776895898202e-05,
+      "rmse": 4.7643607158196445e-05,
+      "max_absolute_error": 0.003874659538269043,
+      "p95_absolute_error": 7.933378219604492e-05,
+      "p99_absolute_error": 0.0001860484480857849,
+      "r2": 0.9999988823940023,
+      "element_count": 1881984,
+      "structures": 16,
+      "residual_sum_squares": 0.00427194051771699,
+      "reference_centered_sum_squares": 3822.4029991474713,
+      "unit": "dimensionless"
+    }
+  },
+  "preflight_only": false,
+  "paper_mae_check": {
+    "relative_tolerance": 0.01,
+    "passed": true,
+    "operators": {
+      "hamiltonian": {
+        "paper_mae": 0.00043516,
+        "measured_mae": 0.00043516440060726235,
+        "relative_difference": 1.0112618950221284e-05,
+        "passed": true
+      },
+      "density": {
+        "paper_mae": 5.7577e-05,
+        "measured_mae": 5.757722965427092e-05,
+        "relative_difference": 3.988646003119195e-06,
+        "passed": true
+      },
+      "overlap": {
+        "paper_mae": 1.3898e-05,
+        "measured_mae": 1.3897776852900279e-05,
+        "relative_difference": 1.6056058405597612e-05,
+        "passed": true
+      }
+    }
+  }
+}

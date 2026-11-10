@@ -344,8 +344,8 @@ def main() -> None:
     state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
     state_dict = strip_mapper_keys(state_dict)
 
-    direct_model = E3GNN(mapper=mapper, cfg=deepcopy(cfg)).to(device)
-    compat_model = E3GNN(mapper=mapper, cfg=deepcopy(cfg)).to(device)
+    direct_model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=deepcopy(cfg)).to(device)
+    compat_model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=deepcopy(cfg)).to(device)
     direct_model.eval()
     compat_model.eval()
 

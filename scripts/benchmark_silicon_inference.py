@@ -196,7 +196,7 @@ def main() -> None:
             f"({len(samples) / (t3 - t2):.3f} samples/s)"
         )
 
-        model = E3GNN(mapper=mapper, cfg=cfg)
+        model = E3GNN.from_checkpoint_config(mapper=mapper, cfg=cfg)
         model.load_state_dict(checkpoint["state_dict"], strict=True)
         model.to(device)
         model.eval()

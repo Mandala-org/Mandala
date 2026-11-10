@@ -144,7 +144,8 @@ class Config:
     internal_e3mlp_layers: int = 1
     head_e3mlp_layers: int = 1
     head_use_node_embeddings_for_self_edges: bool = True
-    separate_shifted_self: bool = True
+    # Checkpoint compatibility only; new trainings use one head for all pairs.
+    separate_shifted_self: bool = False
     head_use_tensor_square: bool = False
     head_pair_mode: str = "split"  # "split" | "shared_conditioned"
     head_diag_output_scale: float = 1.0
@@ -216,7 +217,7 @@ class Config:
 
     # -------------- training targets -----------------------------------
     train_target: str = "matrix"  # matrix | irreps
-    partial_train: str | None = None  # None | "diag" | "shifted_self" | "offdiag"
+    partial_train: str | None = None  # None | "diag" | "offdiag" (legacy: shifted_self)
     train_on_forces: bool = False
     train_on_stress: bool = False
     train_on_energy: bool = False
@@ -326,6 +327,37 @@ class Config:
     num_basis: int = 128
     use_sc: bool = True
     use_sbf: bool = False
+
+
+SHIFTED_SELF_TRAINING_ERROR = (
+    "The separate shifted-self head was retired after the unit-cell size-transfer "
+    "experiment: new trainings must use separate_shifted_self=False and cannot "
+    "use partial_train='shifted_self'. Load historical checkpoints with "
+    "E3GNN.load_from_checkpoint (or E3GNN.from_checkpoint_config for a saved "
+    "config and state_dict) to retain the legacy head for inference."
+)
+
+
+def validate_training_config(cfg: Config) -> None:
+    """Reject retired routing, including overrides inside component recipes."""
+
+    def check(value):
+        if isinstance(value, dict):
+            if (
+                value.get("separate_shifted_self", False)
+                or value.get("partial_train") == "shifted_self"
+            ):
+                raise ValueError(SHIFTED_SELF_TRAINING_ERROR)
+            for item in value.values():
+                check(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                check(item)
+
+    if cfg.separate_shifted_self or cfg.partial_train == "shifted_self":
+        raise ValueError(SHIFTED_SELF_TRAINING_ERROR)
+    check(cfg.training)
+    check(cfg.pipeline)
 
 
 def get_torch_dtype(dtype: torch.dtype | str) -> torch.dtype:

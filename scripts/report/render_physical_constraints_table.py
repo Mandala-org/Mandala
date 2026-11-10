@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Render the historical paper audit, without importing the ML package.
+"""Render the historical paper audit and overlap-only repair, without ML imports.
 
 Selected aggregate keys: silicon_historical/joint_predicted_reference_support;
 sio2_historical/predicted_H_reference_SD_reference_support. These are reference-
 support controls (discard prediction-only blocks), with Hermitian projection
-inside diagnose_kpoint. They are NOT overlap repair or occupation clipping.
+inside diagnose_kpoint. Keep these unrepaired values alongside silicon's
+joint_predicted_reference_support_overlap_repaired ("after overlap repair").
+That additional scenario floors only S^h(k) eigenvalues at 1e-6, without an
+upper clamp, jitter or occupation projection. Its real-space errors and traces
+retain the original S. Mesh trace errors are separately labelled. Repair does
+not apply to the H-only SiO2 and Zn models. Reference columns remain unchanged;
+repair-statistic reference columns use the one-structure overlap control only.
 reference_full is the paired baseline. Zn uses only historical_summary.json's
 matrix_errors_hermitian_common_support/hamiltonian, never spectral diagnostics.
 No raw_hermiticity or matrix_errors_raw_common_support values are reported.
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -21,6 +28,13 @@ SELECTION = {
     "silicon": "joint_predicted_reference_support",
     "sio2": "predicted_H_reference_SD_reference_support",
 }
+REPAIRED = "joint_predicted_reference_support_overlap_repaired"
+REPAIR_DIAGNOSTICS = [
+    ("overlap_repair.relative_frobenius", "max"),
+    ("overlap_repair.floored_eigenvalues", "max"),
+    ("overlap_repair.lambda_min_before", "min"),
+    ("overlap_repair.lambda_min_after", "min"),
+]
 # Worst means minimum for lower spectral bounds and success fractions.
 DIAGNOSTICS = {
     "S": [
@@ -59,10 +73,15 @@ LABELS = {
     "density.occupation_max": "Max occupation",
     "density.negative_count": "Negative occupation count",
     "density.overoccupied_count": "Excess occupation count",
-    "electron_count_absolute_error": "Electron count absolute error",
+    "electron_count_absolute_error": "Electron count absolute error (real-space, unrepaired S)",
+    "mesh_electron_count_absolute_error": "Electron count absolute error (k-mesh)",
     "density.zero_temperature_idempotency_relative": "Zero-T idempotency residual",
     "consistency.commutator_relative": "Stationarity residual",
     "finite_temperature_density_relative_frobenius": "Fermi-Dirac residual",
+    "overlap_repair.relative_frobenius": "Overlap correction relative Frobenius norm",
+    "overlap_repair.floored_eigenvalues": "Floored eigenvalue count",
+    "overlap_repair.lambda_min_before": "Min eigenvalue before repair",
+    "overlap_repair.lambda_min_after": "Min eigenvalue after repair",
 }
 
 
@@ -80,6 +99,7 @@ def stats(scenario, key, worst, structures, contributing_structures=None):
     value = scenario.get("metrics", {}).get(key, scenario.get(key))
     per_structure = key in (
         "electron_count_absolute_error",
+        "mesh_electron_count_absolute_error",
         "finite_temperature_density_relative_frobenius",
     )
     value = value or {"count": 0, "mean": None, worst: None}
@@ -172,7 +192,7 @@ def build(directory):
             ],
         )
 
-        def metric_stats(label, key, direction):
+        def metric_stats(label, key, direction, evaluation=evaluation, summary=summary):
             contributing = sum(
                 r["scenarios"][label]["summary"]["metrics"].get(key, {}).get("count", 0)
                 > 0
@@ -199,13 +219,129 @@ def build(directory):
                         worst_direction=direction,
                     )
                 )
+        if material == "silicon":
+            repaired_paths = [
+                directory / material / "overlap_repaired_aggregate.json",
+                directory / material / "overlap_repaired_summary.json",
+                directory / material / "overlap_repair_corrections.json",
+            ]
+            sources.extend(str(p.relative_to(directory)) for p in repaired_paths)
+            repaired_evaluations = json.loads(repaired_paths[0].read_text())[
+                "evaluations"
+            ]
+            if len(repaired_evaluations) != 1:
+                raise ValueError("Ambiguous repaired aggregate")
+            repaired_evaluation = next(iter(repaired_evaluations.values()))
+            repaired_summary = json.loads(repaired_paths[1].read_text())
+            corrections = json.loads(repaired_paths[2].read_text())
+            if (
+                repaired_evaluation["scenarios"]["reference_full"]
+                != evaluation["scenarios"]["reference_full"]
+            ):
+                raise ValueError("Overlap repair changed the reference baseline")
+            if (
+                repaired_summary["status"] != "complete"
+                or repaired_summary["structures"] != evaluation["structures"]
+            ):
+                raise ValueError("Incomplete repaired summary")
+            scenario = repaired_evaluation["scenarios"][REPAIRED]
+            denominators[material]["after_overlap_repair"] = dict(
+                structures=repaired_evaluation["structures"],
+                kpoints=scenario["kpoint_count"],
+                invalid_metric_kpoints=scenario["invalid_kpoint_count"],
+                structures_with_invalid_metric=scenario[
+                    "structures_with_invalid_metric"
+                ],
+            )
+            for operator, diagnostics in DIAGNOSTICS.items():
+                for key, direction in diagnostics:
+                    rows.append(
+                        dict(
+                            material=material,
+                            operator=operator,
+                            diagnostic=key,
+                            reference=metric_stats("reference_full", key, direction),
+                            predicted=metric_stats(
+                                REPAIRED,
+                                key,
+                                direction,
+                                repaired_evaluation,
+                                repaired_summary,
+                            ),
+                            scenario=REPAIRED,
+                            worst_direction=direction,
+                        )
+                    )
+            # The reference repair control covers one structure, not all 16.
+            control = corrections["reference_control"]["summary"]
+            for key, direction in REPAIR_DIAGNOSTICS:
+                control_key = key.removeprefix("overlap_repair.")
+                rows.append(
+                    dict(
+                        material=material,
+                        operator="S",
+                        diagnostic=key,
+                        reference=stats(control, control_key, direction, 1, 1),
+                        predicted=metric_stats(
+                            REPAIRED,
+                            key,
+                            direction,
+                            repaired_evaluation,
+                            repaired_summary,
+                        ),
+                        scenario=REPAIRED,
+                        worst_direction=direction,
+                    )
+                )
+            # Reference mesh traces come from the unchanged historical records.
+            reference_errors = [
+                abs(r["scenarios"]["reference_full"]["mesh_electron_count_error"])
+                for r in summary["results"]
+            ]
+            reference_mesh = stats(
+                dict(
+                    kpoint_count=evaluation["scenarios"]["reference_full"][
+                        "kpoint_count"
+                    ],
+                    mesh_electron_count_absolute_error=dict(
+                        count=len(reference_errors),
+                        mean=mean(reference_errors),
+                        max=max(reference_errors),
+                    ),
+                ),
+                "mesh_electron_count_absolute_error",
+                "max",
+                evaluation["structures"],
+            )
+            for scenario_label in (SELECTION[material], REPAIRED):
+                rows.append(
+                    dict(
+                        material=material,
+                        operator="D",
+                        diagnostic="mesh_electron_count_absolute_error",
+                        reference=reference_mesh,
+                        predicted=metric_stats(
+                            scenario_label,
+                            "mesh_electron_count_absolute_error",
+                            "max",
+                            repaired_evaluation,
+                            repaired_summary,
+                        ),
+                        scenario=scenario_label,
+                        worst_direction="max",
+                    )
+                )
     return dict(
-        schema_version=1,
+        schema_version=2,
         sources=sources,
         scenarios=SELECTION,
+        additional_scenarios={"silicon": REPAIRED},
         denominators=denominators,
-        cleanup_status="Reference-support control and Hermitian projection only; "
-        "no overlap repair, fixed-charge occupation projection, or post-cleanup aggregates exist.",
+        cleanup_status="Silicon after overlap repair: floor S^h(k) eigenvalues at 1e-6, "
+        "with no upper clamp or jitter. No occupation projection was applied: "
+        "the data use finite-temperature (300 K Fermi-Dirac) occupations, "
+        "so a zero-temperature idempotent target is inappropriate. "
+        "SiO2 and ZnCu2Sn(SeS)2 predict H only; overlap repair does not apply to them.",
         rows=rows,
     )
 
@@ -216,7 +352,7 @@ def fmt(value):
 
 def cells(row):
     output = [
-        row["material"],
+        display_material(row),
         operator_label(row["material"], row["operator"]),
         label(row["diagnostic"]),
     ]
@@ -231,6 +367,12 @@ def cells(row):
     return output
 
 
+def display_material(row):
+    return row["material"] + (
+        " (after overlap repair)" if row["scenario"] == REPAIRED else ""
+    )
+
+
 def operator_panels(result):
     """Keep material/operator rows and diagnostic columns in compact panels.
 
@@ -242,21 +384,34 @@ def operator_panels(result):
         rows = [r for r in result["rows"] if r["operator"] == operator]
         keys = list(dict.fromkeys(r["diagnostic"] for r in rows))
         # Element errors stand alone, so Zn never acquires a spectral row.
+        repair_keys = [key for key in keys if key.startswith("overlap_repair.")]
+        keys = [key for key in keys if key not in repair_keys]
         groups = [keys[:1]] + [keys[i : i + 2] for i in range(1, len(keys), 2)]
+        groups += [repair_keys[i : i + 2] for i in range(0, len(repair_keys), 2)]
         for keys_in_panel in groups:
             header = ["Material", "Operator"]
             for key in keys_in_panel:
                 header += [label(key) + " mean (R / P)", label(key) + " worst (R / P)"]
             table = []
-            for material in ("silicon", "sio2", "zncusnses"):
+            for material, repaired in (
+                ("silicon", False),
+                ("silicon", True),
+                ("sio2", False),
+                ("zncusnses", False),
+            ):
                 selected = {
                     r["diagnostic"]: r
                     for r in rows
-                    if r["material"] == material and r["diagnostic"] in keys_in_panel
+                    if r["material"] == material
+                    and r["diagnostic"] in keys_in_panel
+                    and (r["scenario"] == REPAIRED) == repaired
                 }
                 if not selected:
                     continue
-                row = [material, operator_label(material, operator)]
+                row = [
+                    display_material(next(iter(selected.values()))),
+                    operator_label(material, operator),
+                ]
                 for key in keys_in_panel:
                     entry = selected.get(key)
                     for stat in ("mean", "worst"):
@@ -275,15 +430,19 @@ def render(result, directory):
     intro = (
         "Historical July inference only. Selected scenarios: "
         + "; ".join(f"{k}: `{v}`" for k, v in SELECTION.items())
+        + f"; silicon after overlap repair: `{REPAIRED}`"
         + ".\n\n"
         + result["cleanup_status"]
         + "\n\n"
         "These spectral values use Hermitian-projected matrices on reference support, "
         "a control requiring reference sparsity, not independent deployment. SiO2 H uses "
         "reference S/D; silicon uses predicted H/S/D. Zn reports H elements only. "
-        "Missing post-cleanup results are unavailable, not replaced with raw predictions.\n\n"
+        "Only silicon has an additional after-overlap-repair scenario.\n\n"
         "Means are over all contributing k points (not means of structure means); "
-        "electron-count absolute errors use exact Hermitian real-space traces per structure; "
+        "real-space electron-count errors use exact Hermitian traces with unrepaired S; "
+        "separately labelled k-mesh errors use the scenario's metric and a normalized "
+        "mesh average per structure. Repair-statistic reference columns cover the "
+        "512 k points of structure 0 only (0 floored eigenvalues). "
         "Fermi–Dirac residuals use one fit per structure. Worst is min for lower bounds "
         "and positive-definite success, max otherwise. Counts exclude invalid metrics; "
         "total denominators retain them. Contributing structure counts are recovered from "
@@ -307,21 +466,57 @@ def render(result, directory):
         "| " + " | ".join(["---"] * len(header)) + " |",
     ]
     lines.extend("| " + " | ".join(cells(r)) + " |" for r in result["rows"])
-    lookup = {(r["material"], r["diagnostic"]): r for r in result["rows"]}
+    lookup = {
+        (r["material"], r["diagnostic"]): r
+        for r in result["rows"]
+        if r["scenario"] != REPAIRED
+    }
+    repaired_lookup = {
+        r["diagnostic"]: r for r in result["rows"] if r["scenario"] == REPAIRED
+    }
     si = lookup["silicon", "overlap.positive_definite"]["predicted"]
+    after = {key: row["predicted"] for key, row in repaired_lookup.items()}
+    before = {
+        key: row["predicted"]
+        for (material, key), row in lookup.items()
+        if material == "silicon"
+    }
+    correction_count = after["overlap_repair.floored_eigenvalues"]
+    total_floored = round(correction_count["mean"] * correction_count["count"])
     fd = lookup["sio2", "finite_temperature_density_relative_frobenius"]
     paragraph = (
-        f"The silicon reference-support projected overlap is positive definite at only "
-        f"{si['mean']:.2%} of {si['count']} sampled k points; support restriction plus "
-        "hermitization therefore does not establish a valid learned metric. No silicon "
-        "structure has an available joint Fermi–Dirac residual. Silicon density and "
-        f"stationarity means cover only {lookup['silicon', 'density.occupation_min']['predicted']['count']} usable k points, whereas reference means "
-        "cover all 8192; this is not a paired whole-mesh comparison. For SiO2, the mean "
+        f"For silicon, overlap repair raises positive-definite success from {si['mean']:.2%} "
+        f"to {after['overlap.positive_definite']['mean']:.2%} across {si['count']} k points; "
+        f"Cholesky failures fall from {before['overlap.cholesky_failed_without_jitter']['mean']:.2%} "
+        f"to {after['overlap.cholesky_failed_without_jitter']['mean']:.2%}. "
+        f"The worst minimum eigenvalue changes from {before['overlap.lambda_min']['worst']:.6g} "
+        f"to {after['overlap.lambda_min']['worst']:.6g}. The relative overlap correction "
+        f"has mean {after['overlap_repair.relative_frobenius']['mean']:.6g} and maximum "
+        f"{after['overlap_repair.relative_frobenius']['worst']:.6g}, flooring {total_floored} "
+        f"eigenvalues in total ({correction_count['mean']:.6g} per k point on average). "
+        f"Density and stationarity diagnostics now cover {after['density.occupation_min']['count']} "
+        f"k points versus {before['density.occupation_min']['count']} before repair; "
+        "these whole-result means have different contributing samples. "
+        f"Mean minimum/maximum occupations change from {before['density.occupation_min']['mean']:.6g}/"
+        f"{before['density.occupation_max']['mean']:.6g} to {after['density.occupation_min']['mean']:.6g}/"
+        f"{after['density.occupation_max']['mean']:.6g}; the repaired worst extrema are "
+        f"{after['density.occupation_min']['worst']:.6g} and {after['density.occupation_max']['worst']:.6g}. "
+        f"The mean stationarity residual changes from {before['consistency.commutator_relative']['mean']:.6g} "
+        f"to {after['consistency.commutator_relative']['mean']:.6g}. A joint Fermi–Dirac residual "
+        f"is now available for all {after['finite_temperature_density_relative_frobenius']['count']} "
+        f"structures (previously 0), with mean {after['finite_temperature_density_relative_frobenius']['mean']:.6g}. "
+        f"The k-mesh electron-count absolute error changes from mean "
+        f"{before['mesh_electron_count_absolute_error']['mean']:.6g} to "
+        f"{after['mesh_electron_count_absolute_error']['mean']:.6g}; the exact real-space "
+        f"error stays {before['electron_count_absolute_error']['mean']:.6g}, and element MAEs "
+        "are unchanged. Occupation-bound violations remain. No occupation projection "
+        "was applied because these are finite-temperature (300 K Fermi-Dirac) data; "
+        "the zero-T idempotency residual remains informational. SiO2 and ZnCu2Sn(SeS)2 "
+        "predict H only, so overlap repair does not apply. For SiO2, the mean "
         f"Fermi–Dirac residual is {fd['predicted']['mean']:.6g} versus "
         f"{fd['reference']['mean']:.6g} for reference H/S/D, with reference S/D retained "
         "in the prediction control. These finite-mesh consistency tests do not certify "
-        "SCF convergence or Brillouin-zone-wide validity; no result after overlap or "
-        "occupation repair is present. Nonzero zero-temperature idempotency residuals "
+        "SCF convergence or Brillouin-zone-wide validity. Nonzero zero-temperature idempotency residuals "
         "alone do not demonstrate a violation at 300 K.\n"
     )
     wide = [

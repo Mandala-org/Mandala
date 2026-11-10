@@ -1,6 +1,6 @@
-# Fixed-recipe benchmark — interim snapshot
+# Fixed-recipe benchmark — snapshot snapshot
 
-Snapshot UTC: 2026-11-10T01:16:52.923504+00:00
+Snapshot UTC: 2026-11-10T07:03:11.864129+00:00
 
 Frozen horizon: segment 2, 90 H100 hours per arm. Pending endpoints are not estimated from the freeze-decision epoch. No test scores were used to select a checkpoint.
 
@@ -12,15 +12,15 @@ Epochs below count completed epochs (CSV epoch + 1); segment JSON already uses c
 
 | Arm | Segment 1 epochs | Segment 2 / 90 h epochs | Last logged epoch | min/epoch (n) | Best raw val | Last raw val | Raw val ~350 | Raw val ~700 | Best projected val | Last projected val | Projected val ~350 | Projected val ~700 | Test projected | Test raw |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| mandala_graphene | 703 | pending | 1357 | 3.842 (1357) | 0.2008 @ 1350 | 0.2027 @ 1357 | 1.054 @ 350 | 0.256 @ 700 | 0.1818 @ 1334 | 0.1838 @ 1357 | 0.9992 @ 350 | 0.2346 @ 700 | pending | pending |
-| deeph_e3_graphene | 414 | pending | 799 | 6.518 (799) | 0.4433 @ 650 | 0.4911 @ 799 | 0.9185 @ 350 | 0.583 @ 700 | unavailable | unavailable | unavailable | unavailable | pending | pending |
-| mace_h_graphene | 363 | pending | 692 | 7.399 (692) | 0.4811 @ 665 | 0.531 @ 692 | 1.078 @ 350 | 0.531 @ 692 † | unavailable | unavailable | unavailable | unavailable | pending | pending |
+| mandala_graphene | 703 | 1399 | 1399 | 3.843 (1399) | 0.2002 @ 1377 | 0.2018 @ 1399 | 1.054 @ 350 | 0.256 @ 700 | 0.1811 @ 1377 | 0.1831 @ 1399 | 0.9992 @ 350 | 0.2346 @ 700 | 0.1737 | 0.1833 |
+| deeph_e3_graphene | 414 | 825 | 825 | 6.519 (825) | 0.3927 @ 811 | 0.4163 @ 825 | 0.9185 @ 350 | 0.583 @ 700 | unavailable | unavailable | unavailable | unavailable | 0.3584 | 0.3951 |
+| mace_h_graphene | 363 | 727 | 727 | 7.398 (727) | 0.4811 @ 665 | 0.8026 @ 727 | 1.078 @ 350 | 0.6128 @ 700 | unavailable | unavailable | unavailable | unavailable | 0.7827 | 0.8099 |
 
 ## mos2
 
 | Arm | Segment 1 epochs | Segment 2 / 90 h epochs | Last logged epoch | min/epoch (n) | Best raw val | Last raw val | Raw val ~175 | Raw val ~350 | Best projected val | Last projected val | Projected val ~175 | Projected val ~350 | Test projected | Test raw |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| mandala_mos2 | 435 | pending | 858 | 6.073 (858) | 0.5217 @ 844 | 0.6213 @ 858 | 2.924 @ 175 | 1.255 @ 350 | 0.45 @ 844 | 0.5389 @ 858 | 2.51 @ 175 | 1.15 @ 350 | pending | pending |
-| deeph_e3_mos2 | 196 | pending | 379 | 13.72 (379) | 1.214 @ 376 | 1.303 @ 379 | 2.462 @ 175 | 1.589 @ 350 | unavailable | unavailable | unavailable | unavailable | pending | pending |
-| mace_h_mos2 | 182 | pending | 346 | 14.76 (346) | 1.081 @ 337 | 1.19 @ 346 | 1.794 @ 175 | 1.19 @ 346 † | unavailable | unavailable | unavailable | unavailable | pending | pending |
+| mandala_mos2 | 435 | 886 | 886 | 6.07 (886) | 0.5217 @ 844 | 0.7455 @ 886 | 2.924 @ 175 | 1.255 @ 350 | 0.4486 @ 874 | 0.6947 @ 886 | 2.51 @ 175 | 1.15 @ 350 | 0.6771 | 0.7225 |
+| deeph_e3_mos2 | 196 | 391 | 391 | 13.72 (391) | 1.199 @ 383 | 1.474 @ 391 | 2.462 @ 175 | 1.589 @ 350 | unavailable | unavailable | unavailable | unavailable | 1.308 | 1.449 |
+| mace_h_mos2 | 182 | 364 | 364 | 14.76 (364) | 1.081 @ 337 | 1.367 @ 364 | 1.794 @ 175 | 1.376 @ 350 | unavailable | unavailable | unavailable | unavailable | 1.159 | 1.323 |
 

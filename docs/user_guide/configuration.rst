@@ -51,7 +51,8 @@ The most important flat fields:
      - Equivariant nonlinearity and its scalar functions.
    * - ``neck_depth``, ``head_e3mlp_layers``, ``head_pair_mode``,
        ``separate_shifted_self``
-     - Readout structure.
+     - Readout structure; ``separate_shifted_self`` defaults to ``false`` and
+       ``true`` is reserved for legacy checkpoint inference.
    * - ``matrix_targets``
      - Subset of ``hamiltonian``, ``overlap``, ``density``.
    * - ``hamiltonian_envelope_mode``, ``hamiltonian_envelope_path``
@@ -180,3 +181,13 @@ Python
    resolved, codec = resolve_configuration("recipe.yaml",
                                            species_shells={"Si": [0, 0, 1, 1, 2]})
    cfg = Config.from_mapping(resolved)                       # fully resolved recipe
+
+The former ``separate_shifted_self`` head handled blocks between an atom and
+its periodic images separately from ordinary pairs. It was retired because
+those same blocks become ordinary pairs when the unit cell is tiled, causing
+predictions to depend on the cell representation. New training uses the pair
+head for every block with ``i != j`` or a nonzero lattice shift and rejects
+``separate_shifted_self: true`` and ``partial_train: shifted_self``. Historical
+checkpoints retain their saved architecture and exact routing through
+``E3GNN.load_from_checkpoint``; callers restoring a saved config and state dict
+separately use ``E3GNN.from_checkpoint_config`` and then load the weights strictly.

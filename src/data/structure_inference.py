@@ -193,10 +193,11 @@ def build_model_input_from_structure(
             edge_type_idx=edge_type_idx,
             envelope_table=envelope_table,
         ).to(dtype=dtype)
-        x["edge_r0"] = build_edge_r0_lookup(
-            edge_type_idx=edge_type_idx,
-            envelope_table=envelope_table,
-        ).to(dtype=dtype)
+        if envelope_table.r0_parameter_index is not None:
+            x["edge_r0"] = build_edge_r0_lookup(
+                edge_type_idx=edge_type_idx,
+                envelope_table=envelope_table,
+            ).to(dtype=dtype)
     if cfg.precompute_edge_features:
         x["edge_length_emb"] = edge_length_emb
         x["edge_sh"] = edge_sh

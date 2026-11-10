@@ -358,7 +358,7 @@ def _partitioned_readout(
                 diagonal = onsite[selected]
                 shifted = (
                     (ends[0] == ends[1]) & ~diagonal
-                    if self.head.separate_shifted_self
+                    if self.head.legacy_separate_shifted_self
                     else torch.zeros_like(diagonal)
                 )
                 partitions[pair] = {

@@ -14,6 +14,29 @@ from data.structure_inference import (
 from net.common import Config
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_structure_partitions_only_split_image_pairs_for_legacy(legacy):
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+
+    cfg = Config(cutoff_radius=1.1, l_max=0, n_radial=2, separate_shifted_self=legacy)
+    mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": "1s"}))
+    x = build_model_input_from_structure(
+        atoms=("H",),
+        positions=torch.zeros(1, 3),
+        box=torch.eye(3),
+        cfg=cfg,
+        mapper=mapper,
+    )
+    parts = x["edge_partitions"]["H-H"]
+    assert parts["diag_local_idx"].numel() == 1
+    if legacy:
+        assert parts["shifted_self_local_idx"].numel() == 6
+        assert parts["offdiag_local_idx"].numel() == 0
+    else:
+        assert "shifted_self_local_idx" not in parts
+        assert parts["offdiag_local_idx"].numel() == 6
+
+
 @pytest.mark.large_data
 def test_load_structure_from_cif_and_build_model_input():
     repo_root = Path(__file__).resolve().parents[3]
@@ -80,3 +103,43 @@ def test_structure_inputs_use_frozen_species_order():
             inputs["edge_type_idx"][index]
             == inputs["node_type_idx"][left] * 2 + inputs["node_type_idx"][right]
         )
+
+
+def test_structure_inputs_accept_paper_sio2_envelope_without_r0():
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+
+    envelope = Path(__file__).resolve().parents[3] / "scripts/reproduce_examples/sio2_envelope.json"
+    mapper = BlockIrrepMapper(
+        OrbitalIrrepConfig.from_dict({"O": ["1x0e"], "Si": ["1x0e"]})
+    )
+    cfg = Config(cutoff_radius=3.0, l_max=0, n_radial=2,
+                 hamiltonian_envelope_mode="multiply_prediction",
+                 hamiltonian_envelope_path=str(envelope),
+                 pair_distance_normalization="off")
+    inputs = build_model_input_from_structure(
+        atoms=("O", "Si"), positions=torch.tensor([[0., 0., 0.], [1.6, 0., 0.]]),
+        box=None, cfg=cfg, mapper=mapper,
+    )
+    assert inputs["edge_envelope"].shape == inputs["edge_length"].shape
+    assert torch.isfinite(inputs["edge_envelope"]).all()
+    assert "edge_r0" not in inputs
+
+
+@pytest.mark.parametrize("normalization", ["off", "pair_r0"])
+def test_structure_inputs_keep_r0_for_supported_envelopes(tmp_path, normalization):
+    import json
+    from core.orbital_irrep_config import OrbitalIrrepConfig
+
+    envelope = tmp_path / "envelope.json"
+    envelope.write_text(json.dumps({"family": "slater_soft_cutoff", "pairs": {
+        "H-H": {"theta": [0., 0., 0., 2., 0.]}
+    }}))
+    mapper = BlockIrrepMapper(OrbitalIrrepConfig.from_dict({"H": ["1x0e"]}))
+    cfg = Config(cutoff_radius=3.0, l_max=0, n_radial=2,
+                 hamiltonian_envelope_path=str(envelope),
+                 pair_distance_normalization=normalization)
+    inputs = build_model_input_from_structure(
+        atoms=("H", "H"), positions=torch.tensor([[0., 0., 0.], [1., 0., 0.]]),
+        box=None, cfg=cfg, mapper=mapper,
+    )
+    torch.testing.assert_close(inputs["edge_r0"], torch.full_like(inputs["edge_length"], 2.))

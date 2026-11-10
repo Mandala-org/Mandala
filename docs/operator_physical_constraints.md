@@ -2,8 +2,9 @@
 
 This protocol addresses the reviewer question about physical constraints using
 the original three publication checkpoints. The diagnostic implementation is
-on `develop`. It does not retrain, select checkpoints, repair spectra, or use
-test results to choose a model. Small workflow records are in
+on `develop`. The original audit does not retrain, select checkpoints, repair
+spectra, or use test results to choose a model. A separately labelled
+overlap-only repair control is defined below. Small workflow records are in
 `researchops/runs/paper_physical_constraints_20261104`; large predictions and
 source snapshots use the ROSI project namespace `physical_constraints/`.
 
@@ -22,7 +23,7 @@ can Hermitian-average outputs (`symmetrize_validation_output`). Optional
 scalar density rescaling enforces one trace only. Neither mechanism guarantees
 positive S, bounded density occupations, idempotency, or H/D consistency.
 The spectral eigensolver can clean up S or retry with jitter when requested;
-the diagnostic below deliberately applies neither, and counts failures.
+the unrepaired baseline deliberately applies neither, and counts failures.
 
 Current OpenMX parsing returns Hermitian-averaged **spin=0** D. Historical paper
 targets used D+D.T, i.e. twice this channel in these nonmagnetic examples.
@@ -117,6 +118,97 @@ See the [OpenMX density-operator definition](https://www.openmx-square.org/tech_
 and [PySCF AO density and SCF implementation](https://pyscf.org/_modules/pyscf/scf/hf.html)
 for occupation/density conventions. The metric formulas above follow from
 orthogonalizing the generalized AO eigenproblem.
+
+## After overlap repair: silicon only (2026-11-10)
+
+The additional scenario is
+`joint_predicted_reference_support_overlap_repaired`, labelled **after overlap
+repair** in the tables. It starts from the same historical July H/S/D exports,
+restricted to reference support, and the same native 8x8x8 mesh. It uses no new
+inference, training or checkpoint selection. SiO2 and ZnCu2Sn(SeS)2 predict H
+only, so overlap repair does not apply to them; their original rows are kept.
+
+At each k point, after the original Fourier assembly and Hermitian projection,
+diagonalize S^h(k) = U diag(s) U^dagger and set
+S_rep = hermitian(U diag(max(s, 1e-6)) U^dagger), in complex128. The eigenvalue
+floor is exactly the default lower bound of
+`src/net/artifacts.py::_project_overlap_to_psd`. Its upper clamp and
+diagonal-jitter fallback are not used. Count eigenvalues strictly below 1e-6,
+and report the measured minimum eigenvalues before and after reconstruction,
+and ||S_rep-S^h||_F/||S^h||_F. Per-k-point statistics and structure summaries
+are in `silicon/overlap_repair_corrections.json` under the data directory.
+The same code applied to the reference overlap for structure 0, across its
+512 k points, floors 0 eigenvalues and has exactly zero correction norm.
+The reference diagnostic columns retain the original full reference results;
+only repair-statistic reference columns describe this one-structure control.
+
+Recompute all metric spectra, unjittered Cholesky, occupations of the original
+Hermitian predicted D, charge diagnostics, informational zero-T idempotency,
+stationarity and one common fixed-charge Fermi level per structure using
+S_rep. H and D undergo no additional processing. **No occupation projection
+was applied**, because the data describe finite-temperature (300 K Fermi-Dirac)
+occupations, rather than a zero-temperature idempotent target. Occupations are
+left as measured in the repaired metric, including all bound violations.
+
+Repair is confined to k space. All original raw and Hermitian common-support
+real-space element errors are unchanged. The exact Hermitian real-space
+Tr(D^h S^h) still uses the unrepaired real-space overlap, without a back
+transform. Separately labelled k-mesh electron counts use the normalized
+average of Tr(D^h(k) S_rep(k)); their absolute errors are averaged over
+structures. Per-k-point electron traces and errors are also retained. The
+unrepaired k-mesh trace is computed even when S^h is indefinite, since a trace
+does not require an occupation eigensolve.
+
+For 16 silicon structures and 8192 k points, positive-definite success changes
+from 17.2729% to 100%, usable-metric success from 17.2485% to 100%, and Cholesky
+failure from 82.7271% to 0%. The worst minimum overlap eigenvalue changes from
+-0.00624094 to 1e-6 (within reconstruction roundoff). The mean relative
+correction is 4.58824e-5, maximum 4.00710e-4; 9232 eigenvalues are floored,
+1.12695 per k point on average and at most 4. The condition-number mean/worst
+is 5.29423e6/6.74962e6 after repair, versus 295705/1.02091e8 over only the
+1415 positive-definite k points before repair.
+
+The mean minimum/maximum occupations change from -0.0325261/2.28845 over
+1413 usable points to -0.0336104/2.30576 over all 8192. Repaired worst
+occupation extrema are -0.0429979 and 2.48987; occupation-bound violations
+remain. Mean negative/excess counts are 37.5544/6.99915 after repair, versus
+38.5400/7.19887 before. The mean zero-T idempotency residual is 0.102478,
+versus 0.101953 before. The mean stationarity residual is 0.000196321,
+versus 0.000969553 before; these means use different contributing k points
+and metrics, so they are not paired measures of improvement. The joint
+Fermi-Dirac residual becomes available for all 16 structures, with mean
+0.121979 and worst 0.122570 (reference mean/worst 0.121229/0.121477).
+The k-mesh electron-count absolute error mean/worst changes from
+0.00753230/0.0114623 to 0.00743469/0.0112906; the exact unrepaired real-space
+error remains 0.00753230/0.0114623. These results establish availability of the
+sampled-metric diagnostics after repair, without certifying SCF convergence.
+
+`scripts/report/evaluate_overlap_repair.py` verifies producer input hashes,
+exported operator hashes, structure order, and reproduction of all original
+unrepaired aggregate scalars (relative tolerance 1e-8, absolute 1e-10).
+The bounded aggregate, structure summary, corrections and execution contract
+are committed in `docs/data/physical_constraints_20261104/silicon/` as
+`overlap_repaired_aggregate.json`, `overlap_repaired_summary.json`,
+`overlap_repair_corrections.json`, and `overlap_repaired_contract.json`.
+Full per-k-point diagnostic records stay outside Git under
+`researchops/runs/r7_overlap_repair_20261110/` on Terok and the ROSI r7
+worktree; relocated input copies are retained on Terok. No Slurm job was
+needed. The immutable operator cache is
+`/bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v2/predictions/silicon`.
+
+With those inputs available at their original paths, run on an allocated CPU
+node (or use `--input-root` to prefix relocated absolute input paths):
+
+```bash
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src:. \
+python scripts/report/evaluate_overlap_repair.py \
+  --producer-contract docs/data/physical_constraints_20261104/silicon/historical_contract.json \
+  --baseline-summary docs/data/physical_constraints_20261104/silicon/historical_summary.json \
+  --baseline-aggregate docs/data/physical_constraints_20261104/silicon/silicon_aggregate.json \
+  --operator-cache /bigdata/casus/wdm/hamiltonian_learning/physical_constraints/paper_20261104_v2/predictions/silicon \
+  --output-dir /path/to/fresh/results --overlap-repair eig_floor=1e-6 --threads 1
+python scripts/report/render_physical_constraints_table.py
+```
 
 ## Implementation and validation
 

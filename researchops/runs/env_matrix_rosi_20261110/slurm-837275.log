@@ -1,0 +1,529 @@
+Tue Nov 10 10:18:02 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.158.01             Driver Version: 570.158.01     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          On  |   00000000:04:00.0 Off |                    0 |
+| N/A   37C    P0             72W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+driver_version
+570.158.01
+warning: Failed to install executable for cpython-3.13.18-linux-x86_64-gnu
+  cause: Executable already exists at `/home/brzoza73/.local/bin/python3.13` but is not managed by uv; use `--force` to replace it
+Downloading https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-compat-13-4_615.71.10-1ubuntu1_amd64.deb
+install_torch: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python torch==2.15.0 --index-url https://download.pytorch.org/whl/cu134
+install_torch: exit 0
+Using Python 3.13.18 environment at: .venvs/py313-latest-cu13x
+Checked 1 package in 283ms
+
+install_scatter_wheel: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python --reinstall-package torch-scatter torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.15.0+cu134.html --only-binary torch-scatter
+install_scatter_wheel: exit 2
+Using Python 3.13.18 environment at: .venvs/py313-latest-cu13x
+error: Failed to read `--find-links` URL: https://data.pyg.org/whl/torch-2.15.0+cu134.html
+  cause: Failed to fetch: https://data.pyg.org/whl/torch-2.15.0+cu134.html
+  cause: HTTP status client error (404 Not Found) for url (https://data.pyg.org/whl/torch-2.15.0+cu134.html)
+
+install_build_tools: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python setuptools wheel ninja
+install_build_tools: exit 0
+Using Python 3.13.18 environment at: .venvs/py313-latest-cu13x
+Checked 3 packages in 5ms
+
+install_cuda_toolkit: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python nvidia-cuda-nvcc==13.4.92 nvidia-cuda-runtime==13.4.92 nvidia-nvvm==13.4.92 nvidia-cuda-crt==13.4.92 nvidia-cuda-cccl==13.3.5.0.6
+install_cuda_toolkit: exit 0
+Using Python 3.13.18 environment at: .venvs/py313-latest-cu13x
+Resolved 5 packages in 192ms
+Downloading nvidia-nvvm (69.2MiB)
+ Downloaded nvidia-nvvm
+Prepared 2 packages in 793ms
+Uninstalled 3 packages in 223ms
+Installed 3 packages in 16ms
+ - nvidia-cuda-crt==13.5.37
+ + nvidia-cuda-crt==13.4.92
+ - nvidia-cuda-runtime==13.4.49
+ + nvidia-cuda-runtime==13.4.92
+ - nvidia-nvvm==13.5.37
+ + nvidia-nvvm==13.4.92
+
+build_scatter_cuda: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -m pip install --force-reinstall --no-build-isolation --no-cache-dir --no-deps --no-binary=torch-scatter torch-scatter==2.1.2
+build_scatter_cuda: exit 0
+Collecting torch-scatter==2.1.2
+  Downloading torch_scatter-2.1.2.tar.gz (108 kB)
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: torch-scatter
+  Building wheel for torch-scatter (pyproject.toml): started
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): finished with status 'done'
+  Created wheel for torch-scatter: filename=torch_scatter-2.1.2-cp313-cp313-linux_x86_64.whl size=4776844 sha256=04d68179ea9549578fcd23252d80109710815e0dace851efd091be6aec799313
+  Stored in directory: /tmp/pip-ephem-wheel-cache-3t77q0hy/wheels/e0/1d/0e/7c3d188e2bab4821eb7bd3f4433b54a9fd0c54167bce9c0ed7
+Successfully built torch-scatter
+Installing collected packages: torch-scatter
+  Attempting uninstall: torch-scatter
+    Found existing installation: torch_scatter 2.1.2
+    Uninstalling torch_scatter-2.1.2:
+      Successfully uninstalled torch_scatter-2.1.2
+Successfully installed torch-scatter-2.1.2
+
+install_dependencies: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python 'torch-geometric>=2.7' 'e3nn>=0.5.6' 'opt-einsum-fx>=0.1.4' 'metatensor>=0.1.0' 'ase>=3.22' 'hydra-core>=1.3' 'omegaconf>=2.3' 'pytorch-lightning>=2.2' 'optuna>=3.6' 'wandb>=0.16' 'tqdm>=4.66' 'numpy>=1.26' pandas seaborn psutil h5py scipy 'imageio[ffmpeg]' pytest pytest-xdist plotly
+install_dependencies: exit 0
+Using Python 3.13.18 environment at: .venvs/py313-latest-cu13x
+Resolved 118 packages in 405ms
+Uninstalled 1 package in 5ms
+Installed 1 package in 9ms
+ - nvidia-cuda-runtime==13.4.92
+ + nvidia-cuda-runtime==13.4.49
+
+install_project: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -m pip install -e . --ignore-requires-python --no-deps
+install_project: exit 0
+*******
+  
+  !!
+    corresp(dist, value, root_dir)
+Building wheels for collected packages: mandala
+  Building editable for mandala (pyproject.toml): started
+  Building editable for mandala (pyproject.toml): finished with status 'done'
+  /tmp/pip-build-env-xi702oja/overlay/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: BuildBackendWarning: `project.license` as a TOML table is deprecated
+  !!
+  
+          ********************************************************************************
+          Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+  
+          By 2027-Feb-18, you need to update your project and remove deprecated calls
+          or your builds will no longer be supported.
+  
+          See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+          ********************************************************************************
+  
+  !!
+    corresp(dist, value, root_dir)
+  Created wheel for mandala: filename=mandala-0.0.1-0.editable-py3-none-any.whl size=9844 sha256=607e10bd0a232838aa457981649ab506bae402edb9429c8e1ddb06963e1e2b56
+  Stored in directory: /tmp/pip-ephem-wheel-cache-le_cke31/wheels/79/86/7f/08772b3308b186554eb9b7a5f544343fea9563103b280860dc
+Successfully built mandala
+Installing collected packages: mandala
+  Attempting uninstall: mandala
+    Found existing installation: mandala 0.0.1
+    Not uninstalling mandala at /data/home2/brzoza73/casus/mandala_worktrees/envs2/src, outside environment /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x
+    Can't uninstall 'mandala'. No files were found to uninstall.
+Successfully installed mandala-0.0.1
+
+versions: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -c 'import json,sys,importlib.metadata as m; print(json.dumps(dict(python=sys.version.split()[0], **{p:m.version(p) for p in ['"'"'torch'"'"','"'"'torch_scatter'"'"','"'"'torch_geometric'"'"','"'"'e3nn'"'"','"'"'numpy'"'"','"'"'scipy'"'"']})))'
+versions: exit 0
+{"python": "3.13.18", "torch": "2.15.0+cu134", "torch_scatter": "2.1.2", "torch_geometric": "2.8.1", "e3nn": "0.6.0", "numpy": "2.5.4", "scipy": "1.18.1"}
+
+freeze: uv pip freeze --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python
+freeze: exit 0
+a73/casus/mandala_worktrees/envs2
+markupsafe==3.0.3
+matplotlib==3.11.2
+metatensor==0.2.0
+metatensor-core==0.2.6
+metatensor-learn==0.6.2
+metatensor-operations==0.5.0
+mpmath==1.3.0
+multidict==7.2.1
+narwhals==2.28.0
+networkx==3.7
+ninja==1.13.2
+numpy==2.5.4
+nvidia-cublas==13.8.1.7
+nvidia-cuda-cccl==13.3.5.0.6
+nvidia-cuda-crt==13.4.92
+nvidia-cuda-cupti==13.4.58
+nvidia-cuda-nvcc==13.4.92
+nvidia-cuda-nvrtc==13.4.59
+nvidia-cuda-runtime==13.4.49
+nvidia-cudnn-cu13==9.26.0.51
+nvidia-cufft==12.4.0.34
+nvidia-cufile==1.19.0.109
+nvidia-cusolver==12.3.2.15
+nvidia-cusparse==12.8.6.49
+nvidia-cusparselt-cu13==0.8.1
+nvidia-nccl-cu13==2.30.7
+nvidia-nvjitlink==13.4.92
+nvidia-nvshmem-cu13==3.7.2
+nvidia-nvtx==13.4.49
+nvidia-nvvm==13.4.92
+omegaconf==2.3.1
+opentelemetry-api==1.45.2
+opentelemetry-exporter-http-transport==0.66b2
+opentelemetry-exporter-otlp-common==0.66b2
+opentelemetry-exporter-otlp-proto-common==1.45.2
+opentelemetry-exporter-otlp-proto-http==1.45.2
+opentelemetry-proto==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-semantic-conventions==0.66b2
+opt-einsum==3.4.0
+opt-einsum-fx==0.1.4
+optuna==5.0.0
+packaging==26.3
+pandas==3.1.1
+pillow==13.0.0
+pip==26.3
+platformdirs==4.14.5
+plotly==7.1.0
+pluggy==1.7.0
+propcache==0.5.4
+protobuf==7.36.2
+psutil==7.2.2
+pydantic==2.14.3
+pydantic-core==2.50.4
+pyelftools==0.32
+pygments==2.21.0
+pyparsing==3.3.3
+pytest==9.2.0
+pytest-xdist==3.8.0
+python-dateutil==4.0.0
+pytorch-lightning==2.6.6
+pyyaml==6.0.3
+requests==2.34.2
+scipy==1.18.1
+seaborn==0.13.2
+setuptools==78.1.0
+sniffio==1.3.1
+sqlalchemy==2.1.8
+sympy==1.14.0
+torch==2.15.0+cu134
+torch-geometric==2.8.1
+torch-scatter==2.1.2
+torchmetrics==1.9.0
+tqdm==4.70.1
+triton==3.9.0
+typing-extensions==4.16.0
+typing-inspection==0.4.5
+tzdata==2026.6
+urllib3==2.8.0
+wandb==0.31.0
+wheel==0.48.0
+xxhash==4.1.0
+yarl==1.25.1
+
+nvidia_smi: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+nvidia_smi: exit 0
+NVIDIA H100 80GB HBM3, 570.158.01
+
+cuda_driver_library: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -c 'import ctypes; from pathlib import Path; lib=ctypes.CDLL('"'"'libcuda.so.1'"'"'); version=ctypes.c_int(); lib.cuDriverGetVersion(ctypes.byref(version)); print('"'"'CUDA driver API:'"'"',version.value); print('"'"'\n'"'"'.join(line for line in Path('"'"'/proc/self/maps'"'"').read_text().splitlines() if '"'"'libcuda.so'"'"' in line))'
+cuda_driver_library: exit 0
+CUDA driver API: 13040
+7f0518176000-7f0518327000 r--p 00000000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f0518327000-7f05195e5000 r-xp 001b1000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f05195e5000-7f051eb32000 r--p 0146f000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f051eb32000-7f051eb33000 ---p 069bc000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f051eb33000-7f051ecb5000 r--p 069bc000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f051ecb5000-7f051ecbb000 rw-p 06b3e000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+
+import_check: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -c 'import torch,torch_scatter,torch_geometric,e3nn; print(torch.__version__,torch.version.cuda,torch.cuda.is_available()); print(torch.cuda.get_device_name() if torch.cuda.is_available() else '"'"'CUDA unavailable'"'"')'
+import_check: exit 0
+/data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+2.15.0+cu134 13.4 True
+NVIDIA H100 80GB HBM3
+
+scatter_cuda: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -c 'import torch; from torch_scatter import scatter_max; print(scatter_max(torch.tensor([1.,3.,2.],device='"'"'cuda'"'"'),torch.tensor([0,0,1],device='"'"'cuda'"'"'))); torch.cuda.synchronize()'
+scatter_cuda: exit 0
+(tensor([3., 2.], device='cuda:0'), tensor([1, 2], device='cuda:0'))
+
+gpu_smoke: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -m pytest -q tests/gpu/test_cuda_smoke.py --junitxml=/data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/py313-latest-cu13x-rosi/gpu_smoke.xml
+gpu_smoke: exit 0
+..                                                                       [100%]
+=============================== warnings summary ===============================
+tests/gpu/test_cuda_smoke.py::test_tiny_model_forward_backward_and_strict_reload
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/triton/knobs.py:504: UserWarning: TRITON_DEFAULT_FP_FUSION is unset: defaulting to FP fusion ENABLED for backward compatibility in Triton 3.9. The default will change to DISABLED in Triton 3.10; set TRITON_DEFAULT_FP_FUSION=1 to keep fusion enabled or =0 to adopt the new default early and silence this warning.
+    warn_once(FP_FUSION_DEFAULT_WARNING)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 1 warning in 16.50s
+
+gpu_tests: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/bin/python -m pytest -n 4 -q tests -m gpu --junitxml=/data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/py313-latest-cu13x-rosi/gpu_tests.xml
+gpu_tests: exit 0
+est_epoch_boundary_resume_matches_uninterrupted_training[cuda-False]
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cuda-True]
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/pytorch_lightning/trainer/connectors/data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.
+
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cuda-False]
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cuda-True]
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/pytorch_lightning/trainer/connectors/data_connector.py:434: The 'val_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.
+
+tests/gpu/test_cuda_smoke.py::test_tiny_model_forward_backward_and_strict_reload
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py313-latest-cu13x/lib/python3.13/site-packages/triton/knobs.py:504: UserWarning: TRITON_DEFAULT_FP_FUSION is unset: defaulting to FP fusion ENABLED for backward compatibility in Triton 3.9. The default will change to DISABLED in Triton 3.10; set TRITON_DEFAULT_FP_FUSION=1 to keep fusion enabled or =0 to adopt the new default early and silence this warning.
+    warn_once(FP_FUSION_DEFAULT_WARNING)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+4 passed, 11 warnings in 16.61s
+
+install_torch: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python torch==2.15.0 --index-url https://download.pytorch.org/whl/cu134
+install_torch: exit 0
+Using Python 3.14.10 environment at: .venvs/py314-latest-cu13x
+Checked 1 package in 43ms
+
+install_scatter_wheel: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python --reinstall-package torch-scatter torch-scatter torch_geometric --find-links https://data.pyg.org/whl/torch-2.15.0+cu134.html --only-binary torch-scatter
+install_scatter_wheel: exit 2
+Using Python 3.14.10 environment at: .venvs/py314-latest-cu13x
+error: Failed to read `--find-links` URL: https://data.pyg.org/whl/torch-2.15.0+cu134.html
+  cause: Failed to fetch: https://data.pyg.org/whl/torch-2.15.0+cu134.html
+  cause: HTTP status client error (404 Not Found) for url (https://data.pyg.org/whl/torch-2.15.0+cu134.html)
+
+install_build_tools: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python setuptools wheel ninja
+install_build_tools: exit 0
+Using Python 3.14.10 environment at: .venvs/py314-latest-cu13x
+Checked 3 packages in 5ms
+
+install_cuda_toolkit: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python nvidia-cuda-nvcc==13.4.92 nvidia-cuda-runtime==13.4.92 nvidia-nvvm==13.4.92 nvidia-cuda-crt==13.4.92 nvidia-cuda-cccl==13.3.5.0.6
+install_cuda_toolkit: exit 0
+Using Python 3.14.10 environment at: .venvs/py314-latest-cu13x
+Resolved 5 packages in 79ms
+Uninstalled 3 packages in 124ms
+Installed 3 packages in 13ms
+ - nvidia-cuda-crt==13.5.37
+ + nvidia-cuda-crt==13.4.92
+ - nvidia-cuda-runtime==13.4.49
+ + nvidia-cuda-runtime==13.4.92
+ - nvidia-nvvm==13.5.37
+ + nvidia-nvvm==13.4.92
+
+build_scatter_cuda: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -m pip install --force-reinstall --no-build-isolation --no-cache-dir --no-deps --no-binary=torch-scatter torch-scatter==2.1.2
+build_scatter_cuda: exit 0
+Collecting torch-scatter==2.1.2
+  Downloading torch_scatter-2.1.2.tar.gz (108 kB)
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: torch-scatter
+  Building wheel for torch-scatter (pyproject.toml): started
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): still running...
+  Building wheel for torch-scatter (pyproject.toml): finished with status 'done'
+  Created wheel for torch-scatter: filename=torch_scatter-2.1.2-cp314-cp314-linux_x86_64.whl size=4777027 sha256=56c48b7c114ae8007b7b3a2ee8c64c1b106df20534e8186352ba26b002607a95
+  Stored in directory: /tmp/pip-ephem-wheel-cache-c5t1z43z/wheels/c1/0a/d8/c0c02d332ac8417fd288b27a18f7d1fc343ae0026d8f47b55e
+Successfully built torch-scatter
+Installing collected packages: torch-scatter
+  Attempting uninstall: torch-scatter
+    Found existing installation: torch_scatter 2.1.2
+    Uninstalling torch_scatter-2.1.2:
+      Successfully uninstalled torch_scatter-2.1.2
+Successfully installed torch-scatter-2.1.2
+
+install_dependencies: uv pip install --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python 'torch-geometric>=2.7' 'e3nn>=0.5.6' 'opt-einsum-fx>=0.1.4' 'metatensor>=0.1.0' 'ase>=3.22' 'hydra-core>=1.3' 'omegaconf>=2.3' 'pytorch-lightning>=2.2' 'optuna>=3.6' 'wandb>=0.16' 'tqdm>=4.66' 'numpy>=1.26' pandas seaborn psutil h5py scipy 'imageio[ffmpeg]' pytest pytest-xdist plotly
+install_dependencies: exit 0
+Using Python 3.14.10 environment at: .venvs/py314-latest-cu13x
+Resolved 118 packages in 457ms
+Uninstalled 1 package in 6ms
+Installed 1 package in 9ms
+ - nvidia-cuda-runtime==13.4.92
+ + nvidia-cuda-runtime==13.4.49
+
+install_project: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -m pip install -e . --ignore-requires-python --no-deps
+install_project: exit 0
+*******
+  
+  !!
+    corresp(dist, value, root_dir)
+Building wheels for collected packages: mandala
+  Building editable for mandala (pyproject.toml): started
+  Building editable for mandala (pyproject.toml): finished with status 'done'
+  /tmp/pip-build-env-mpia7qeb/overlay/lib/python3.14/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: BuildBackendWarning: `project.license` as a TOML table is deprecated
+  !!
+  
+          ********************************************************************************
+          Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+  
+          By 2027-Feb-18, you need to update your project and remove deprecated calls
+          or your builds will no longer be supported.
+  
+          See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+          ********************************************************************************
+  
+  !!
+    corresp(dist, value, root_dir)
+  Created wheel for mandala: filename=mandala-0.0.1-0.editable-py3-none-any.whl size=9844 sha256=4b89ab424b49487a2a974997e05d33c7ef51eb7f1f8d34a868dde7dba9120c5f
+  Stored in directory: /tmp/pip-ephem-wheel-cache-21f3ui8d/wheels/ca/f6/60/0e46b12c4663dcb84f9d66d9c9131f4dd85163cfcf3d5bcf96
+Successfully built mandala
+Installing collected packages: mandala
+  Attempting uninstall: mandala
+    Found existing installation: mandala 0.0.1
+    Not uninstalling mandala at /data/home2/brzoza73/casus/mandala_worktrees/envs2/src, outside environment /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x
+    Can't uninstall 'mandala'. No files were found to uninstall.
+Successfully installed mandala-0.0.1
+
+versions: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -c 'import json,sys,importlib.metadata as m; print(json.dumps(dict(python=sys.version.split()[0], **{p:m.version(p) for p in ['"'"'torch'"'"','"'"'torch_scatter'"'"','"'"'torch_geometric'"'"','"'"'e3nn'"'"','"'"'numpy'"'"','"'"'scipy'"'"']})))'
+versions: exit 0
+{"python": "3.14.10", "torch": "2.15.0+cu134", "torch_scatter": "2.1.2", "torch_geometric": "2.8.1", "e3nn": "0.6.0", "numpy": "2.5.4", "scipy": "1.18.1"}
+
+freeze: uv pip freeze --python /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python
+freeze: exit 0
+a73/casus/mandala_worktrees/envs2
+markupsafe==3.0.3
+matplotlib==3.11.2
+metatensor==0.2.0
+metatensor-core==0.2.6
+metatensor-learn==0.6.2
+metatensor-operations==0.5.0
+mpmath==1.3.0
+multidict==7.2.1
+narwhals==2.28.0
+networkx==3.7
+ninja==1.13.2
+numpy==2.5.4
+nvidia-cublas==13.8.1.7
+nvidia-cuda-cccl==13.3.5.0.6
+nvidia-cuda-crt==13.4.92
+nvidia-cuda-cupti==13.4.58
+nvidia-cuda-nvcc==13.4.92
+nvidia-cuda-nvrtc==13.4.59
+nvidia-cuda-runtime==13.4.49
+nvidia-cudnn-cu13==9.26.0.51
+nvidia-cufft==12.4.0.34
+nvidia-cufile==1.19.0.109
+nvidia-cusolver==12.3.2.15
+nvidia-cusparse==12.8.6.49
+nvidia-cusparselt-cu13==0.8.1
+nvidia-nccl-cu13==2.30.7
+nvidia-nvjitlink==13.4.92
+nvidia-nvshmem-cu13==3.7.2
+nvidia-nvtx==13.4.49
+nvidia-nvvm==13.4.92
+omegaconf==2.3.1
+opentelemetry-api==1.45.2
+opentelemetry-exporter-http-transport==0.66b2
+opentelemetry-exporter-otlp-common==0.66b2
+opentelemetry-exporter-otlp-proto-common==1.45.2
+opentelemetry-exporter-otlp-proto-http==1.45.2
+opentelemetry-proto==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-semantic-conventions==0.66b2
+opt-einsum==3.4.0
+opt-einsum-fx==0.1.4
+optuna==5.0.0
+packaging==26.3
+pandas==3.1.1
+pillow==13.0.0
+pip==26.3
+platformdirs==4.14.5
+plotly==7.1.0
+pluggy==1.7.0
+propcache==0.5.4
+protobuf==7.36.2
+psutil==7.2.2
+pydantic==2.14.3
+pydantic-core==2.50.4
+pyelftools==0.32
+pygments==2.21.0
+pyparsing==3.3.3
+pytest==9.2.0
+pytest-xdist==3.8.0
+python-dateutil==4.0.0
+pytorch-lightning==2.6.6
+pyyaml==6.0.3
+requests==2.34.2
+scipy==1.18.1
+seaborn==0.13.2
+setuptools==78.1.0
+sniffio==1.3.1
+sqlalchemy==2.1.8
+sympy==1.14.0
+torch==2.15.0+cu134
+torch-geometric==2.8.1
+torch-scatter==2.1.2
+torchmetrics==1.9.0
+tqdm==4.70.1
+triton==3.9.0
+typing-extensions==4.16.0
+typing-inspection==0.4.5
+tzdata==2026.6
+urllib3==2.8.0
+wandb==0.31.0
+wheel==0.48.0
+xxhash==4.1.0
+yarl==1.25.1
+
+nvidia_smi: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+nvidia_smi: exit 0
+NVIDIA H100 80GB HBM3, 570.158.01
+
+cuda_driver_library: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -c 'import ctypes; from pathlib import Path; lib=ctypes.CDLL('"'"'libcuda.so.1'"'"'); version=ctypes.c_int(); lib.cuDriverGetVersion(ctypes.byref(version)); print('"'"'CUDA driver API:'"'"',version.value); print('"'"'\n'"'"'.join(line for line in Path('"'"'/proc/self/maps'"'"').read_text().splitlines() if '"'"'libcuda.so'"'"' in line))'
+cuda_driver_library: exit 0
+CUDA driver API: 13040
+7f58d09eb000-7f58d0b9c000 r--p 00000000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f58d0b9c000-7f58d1e5a000 r-xp 001b1000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f58d1e5a000-7f58d73a7000 r--p 0146f000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f58d73a7000-7f58d73a8000 ---p 069bc000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f58d73a8000-7f58d752a000 r--p 069bc000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+7f58d752a000-7f58d7530000 rw-p 06b3e000 00:2f 8151824758                 /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/cuda-compat-13-4/usr/local/cuda-13.4/compat/libcuda.so.615.71.10
+
+import_check: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -c 'import torch,torch_scatter,torch_geometric,e3nn; print(torch.__version__,torch.version.cuda,torch.cuda.is_available()); print(torch.cuda.get_device_name() if torch.cuda.is_available() else '"'"'CUDA unavailable'"'"')'
+import_check: exit 0
+/data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/torch/jit/_script.py:1485: FutureWarning: `torch.jit.script` is not supported in Python 3.14+ and may break. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+2.15.0+cu134 13.4 True
+NVIDIA H100 80GB HBM3
+
+scatter_cuda: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -c 'import torch; from torch_scatter import scatter_max; print(scatter_max(torch.tensor([1.,3.,2.],device='"'"'cuda'"'"'),torch.tensor([0,0,1],device='"'"'cuda'"'"'))); torch.cuda.synchronize()'
+scatter_cuda: exit 0
+(tensor([3., 2.], device='cuda:0'), tensor([1, 2], device='cuda:0'))
+
+gpu_smoke: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -m pytest -q tests/gpu/test_cuda_smoke.py --junitxml=/data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/py314-latest-cu13x-rosi/gpu_smoke.xml
+gpu_smoke: exit 0
+..                                                                       [100%]
+=============================== warnings summary ===============================
+tests/gpu/test_cuda_smoke.py::test_tiny_model_forward_backward_and_strict_reload
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/triton/knobs.py:504: UserWarning: TRITON_DEFAULT_FP_FUSION is unset: defaulting to FP fusion ENABLED for backward compatibility in Triton 3.9. The default will change to DISABLED in Triton 3.10; set TRITON_DEFAULT_FP_FUSION=1 to keep fusion enabled or =0 to adopt the new default early and silence this warning.
+    warn_once(FP_FUSION_DEFAULT_WARNING)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 1 warning in 4.23s
+
+gpu_tests: /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/bin/python -m pytest -n 4 -q tests -m gpu --junitxml=/data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/logs/py314-latest-cu13x-rosi/gpu_tests.xml
+gpu_tests: exit 0
+est_epoch_boundary_resume_matches_uninterrupted_training[cuda-False]
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cuda-True]
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/pytorch_lightning/trainer/connectors/data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.
+
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cuda-False]
+tests/workflow/test_epoch_boundary_resume.py::test_epoch_boundary_resume_matches_uninterrupted_training[cuda-True]
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/pytorch_lightning/trainer/connectors/data_connector.py:434: The 'val_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.
+
+tests/gpu/test_cuda_smoke.py::test_tiny_model_forward_backward_and_strict_reload
+  /data/home2/brzoza73/casus/mandala_worktrees/envs2/.venvs/py314-latest-cu13x/lib/python3.14/site-packages/triton/knobs.py:504: UserWarning: TRITON_DEFAULT_FP_FUSION is unset: defaulting to FP fusion ENABLED for backward compatibility in Triton 3.9. The default will change to DISABLED in Triton 3.10; set TRITON_DEFAULT_FP_FUSION=1 to keep fusion enabled or =0 to adopt the new default early and silence this warning.
+    warn_once(FP_FUSION_DEFAULT_WARNING)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+4 passed, 11 warnings in 10.02s
+
+=============================================
+Epilog started: Tue Nov 10 10:44:41 CET 2026
+User:           brzoza73
+Job ID:         837275
+Partition:      gpu-h100-casus
+Account:        casus
+Batchhost:      gh003
+Job name:       env-cu13x
+Nodelist:       gh003
+No. of tasks:   4
+T used:           00:26:39 
+T requested:      00:45:00 
+Exit code:      0
+Working dir:    /data/home2/brzoza73/casus/mandala_worktrees/envs2
+Energy (J):     
+Energy (kWh):   
+---------------------------------------------
