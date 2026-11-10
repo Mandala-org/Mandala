@@ -14,15 +14,22 @@ def main():
     parser.add_argument('--device', default='cuda')
     args = parser.parse_args()
     torch.set_num_threads(4)
+    from compare_calibration import main as refresh_calibration
+    refresh_calibration()
+    calibration = json.loads((RUN/'results/runtime_calibration.json').read_text())
     result = dict(validation_H_MAE_meV=dict(silicon=0.435164,sio2=1.99588),
                   validation_source='docs/data/physical_constraints_20261104/summary_projected.md; Hermitian projection on reference support',
-                  sio2_control_caveat=manifest()['sio2_control_caveat'], structures=[])
+                  sio2_control_caveat=manifest()['sio2_control_caveat'],
+                  runtime_calibration=calibration,structures=[])
     lines = ['Element errors use matching periodic support; raw and Hermitian-projected values are in JSON.',
              'The table uses Hermitian projection to match the paper validation values.',
              manifest()['sio2_control_caveat'], '',
              '| Structure | Atoms | H MAE meV | S MAE | D MAE | Predicted usable S fraction | Reference usable S fraction | Reference min eigenvalue | Validation H meV |',
              '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
-    failed = False
+    failed = any(row.get('status')=='ok' and not row['passed_H_tolerance'] for row in calibration.values())
+    lines.insert(2, 'Public OpenMX runtime source-cell checks: '+', '.join(
+        f"{material}: "+(f"H MAE {row['H_MAE_meV']:.6g} meV, pass={row['passed_H_tolerance']}" if row['status']=='ok' else row['status'])
+        for material,row in calibration.items()))
     for structure in manifest()['structures']:
         row = dict(name=structure['name'],atoms=structure['atom_count'])
         result['structures'].append(row)
@@ -42,6 +49,7 @@ def main():
                 _,target = reference(directory)
                 row['reference_kind'] = 'new self-consistent OpenMX'
                 row['reference_HS_sha256'] = sha256(directory/'HS.out')
+                row['runtime_source_check'] = calibration[structure['material']]
             row.update(status='ok', element_errors=errors(predicted,target),
                        reference=diagnostics(target,structure,args.device))
             # Main inference diagnostics are on the full geometry graph. Also report
