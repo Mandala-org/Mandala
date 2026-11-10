@@ -1,0 +1,9 @@
+Referee point 6: inference-only size transfer using the fixed paper checkpoints.
+Branch: referee-r6-supercell. Started 2026-11-10 08:59 UTC; six-hour budget.
+Order: submit inference for both materials, then submit OpenMX ground truth.
+No retraining or checkpoint selection. Si training: scale_1 only, sigma=0.02 A,
+80 training and 16 validation cells, lattice constant 5.4437 A.
+Validation sources taken from the committed physical-constraints audit:
+Si_scale_1_078; SiO2 13_67164000 and 2_74240000.
+Preserve the audit caveat: validation membership reconstructed from discovery.
+Large operator files and OpenMX outputs live on ROSI bigdata, outside git.
