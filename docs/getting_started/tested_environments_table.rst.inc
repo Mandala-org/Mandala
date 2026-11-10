@@ -52,6 +52,13 @@
      - 675 passed, 0 failed, 0 errors, 68 skipped; 47.9 s
      - 2 passed, 0 failed, 0 errors, 0 skipped; 12.5 s
      - verified_tonight, 2026-11-10; additional control for Python support
+   * - py314-t2xx-cu128 (NVIDIA A40)
+     - 3.14.10
+     - 2.11.0+cu128 / cu128
+     - 2.1.2+pt211cu128 / 2.8.1
+     - 701 passed, 0 failed, 0 errors, 68 skipped; 27.5 s
+     - 2 passed, 0 failed, 0 errors, 0 skipped; 8.0 s
+     - verified_20261110, 2026-11-10; CUDA scatter wheel; CPU and A40 GPU verified
    * - rosi-h100-paper-training (NVIDIA H100)
      - 3.10
      - 2.5.1+cu121 / cu121

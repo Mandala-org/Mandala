@@ -78,6 +78,13 @@ fresh test run or an inferred pass count. Regenerate it with:
 Known version notes
 ~~~~~~~~~~~~~~~~~~~
 
+* Python 3.14.10 passes the CPU contracts (701 passed, 68 skipped) and both
+  GPU smoke tests with PyTorch 2.11.0+cu128 and the matching PyG scatter wheel
+  on the A40, driver 550.163.01. PyTorch warns that TorchScript is deprecated
+  on Python 3.14; the tested e3nn model still passes forward and backward.
+* Python 3.15 has no cu128 torch wheel on the queried index (2026-11-10).
+  This is a wheel availability limit; no cu128 tests ran for Python 3.15.
+
 * The verified CPU selection excludes GPU, slow, large-data, network and
   integration tests. It also excludes the large silicon spatial fixture and
   unshipped generated PySCF reference files. The 68 skips require optional
