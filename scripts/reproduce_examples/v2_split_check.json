@@ -1,0 +1,1331 @@
+{
+  "host": "rosi4",
+  "materials": {
+    "silicon": {
+      "counts": {
+        "test": 6,
+        "train": 80,
+        "val": 10
+      },
+      "explicit_manifest_sha256": "cb9779aad7fac1b297a77c0787597c3b304183ba9746e10ffda65950248aa64e",
+      "paper_manifest_search": {
+        "checkpoint_root": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints",
+        "comparisons": [],
+        "patterns": [
+          "*/split_manifest.json",
+          "*/*/split_manifest.json",
+          "paper_models/**/split_manifest.json"
+        ],
+        "selected_run": "leafy-sweep-15-half_gt-coef3em3-lr3em4-47h25",
+        "status": "not_found"
+      },
+      "recipe_sha256": "bcc8184e046216a85b8d9ddd8f862b92c8717f6702f6e0fe09a54420568b8267",
+      "split_hash_sha256": "1885c89dac2e4cd15cc865b6bc4cbc3bf4a8364775002b01eeee9b20fd98cb66",
+      "splits": {
+        "test": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_050/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_050/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_062/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_062/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_021/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_021/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_094/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_094/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_039/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_039/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_007/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_007/HS.out"
+          }
+        ],
+        "train": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_080/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_080/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_069/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_069/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_017/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_017/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_030/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_030/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_034/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_034/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_072/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_072/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_074/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_074/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_071/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_071/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_028/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_028/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_063/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_063/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_033/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_033/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_043/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_043/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_046/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_046/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_079/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_079/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_001/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_001/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_085/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_085/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_029/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_029/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_077/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_077/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_012/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_012/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_045/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_045/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_091/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_091/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_088/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_088/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_083/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_083/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_048/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_048/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_035/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_035/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_026/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_026/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_089/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_089/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_067/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_067/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_054/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_054/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_038/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_038/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_002/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_002/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_073/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_073/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_008/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_008/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_011/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_011/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_055/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_055/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_031/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_031/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_076/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_076/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_041/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_041/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_024/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_024/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_032/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_032/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_084/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_084/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_049/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_049/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_057/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_057/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_047/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_047/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_044/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_044/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_060/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_060/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_009/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_009/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_042/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_042/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_036/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_036/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_096/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_096/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_020/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_020/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_097/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_097/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_013/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_013/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_056/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_056/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_059/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_059/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_064/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_064/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_092/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_092/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_040/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_040/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_006/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_006/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_100/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_100/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_027/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_027/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_014/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_014/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_099/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_099/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_037/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_037/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_052/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_052/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_019/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_019/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_098/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_098/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_087/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_087/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_023/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_023/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_093/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_093/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_022/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_022/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_051/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_051/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_018/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_018/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_016/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_016/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_010/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_010/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_025/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_025/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_053/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_053/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_086/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_086/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_075/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_075/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_095/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_095/HS.out"
+          }
+        ],
+        "val": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_078/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_058/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_058/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_070/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_070/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_003/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_003/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_082/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_082/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_068/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_068/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_081/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_081/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_061/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_061/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_015/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_015/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_090/Si.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_090/HS.out"
+          }
+        ]
+      },
+      "v1_checks": {
+        "no_duplicate_members": true,
+        "requested_counts_match": true,
+        "splits_disjoint": true,
+        "test_is_previous_validation_remainder": true,
+        "training_members_identical": true,
+        "training_order_identical": true,
+        "validation_subset_of_previous_validation": true
+      },
+      "v1_manifest": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/silicon/split_manifest.json",
+      "v1_manifest_sha256": "2f5850b33a92d43e55e7002b422ac32f5437d13d88a3c2ecefe02f447ce084a1",
+      "v1_recipe_reconstruction": {
+        "reason": "Ambiguous OpenMX metadata under /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/scale_1/Si_scale_1_004; provide info_path",
+        "status": "discovery_failed"
+      }
+    },
+    "sio2": {
+      "counts": {
+        "test": 4,
+        "train": 90,
+        "val": 6
+      },
+      "explicit_manifest_sha256": "73c75c1d09e115b5eda4b4ab611f0eeb88a41057aba348f701c8524c9201fffb",
+      "paper_manifest_search": {
+        "checkpoint_root": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints",
+        "comparisons": [],
+        "patterns": [
+          "*/split_manifest.json",
+          "*/*/split_manifest.json",
+          "paper_models/**/split_manifest.json"
+        ],
+        "selected_run": "dutiful-sweep-12-restart47h9-pat60-restart95h8-mae-lr0p0027-reset-lr2em4-47h25",
+        "status": "not_found"
+      },
+      "recipe_sha256": "177dd8516e3b52e662bff580d29c4120b71d74b4477c75129b4a6da5b4755311",
+      "split_hash_sha256": "c9c1a005b9b426877c6f60c14ac5b8cd7b66f785ee2a2a39e6e67995facfc765",
+      "splits": {
+        "test": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_47076000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_74412000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_55148000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_75912000/HS.out"
+          }
+        ],
+        "train": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_51712000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_51712000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_63524000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_63524000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_58060000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_58060000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_64148000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_64148000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_51700000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_51700000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_41228000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_41228000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_45916000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_45916000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_65508000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_65508000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_52524000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_52524000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_56184000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_56184000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_70252000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_70252000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_65080000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_65080000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_62296000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_62296000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56684000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56684000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_50372000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_50372000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_44560000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_44560000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_67600000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_67600000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_63840000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_63840000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_49204000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/17_49204000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_52732000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_52732000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_41960000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_41960000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_40076000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_40076000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_74928000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_74928000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_78336000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_78336000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_64664000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_64664000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_58932000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_58932000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_71800000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_71800000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_61800000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_61800000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_54316000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_54316000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_44728000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_44728000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/28_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_76496000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_76496000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56472000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_56472000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77236000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_77236000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_58504000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_58504000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_56388000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/22_56388000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_71364000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_71364000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_65940000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_65940000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_70156000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_70156000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_61816000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_61816000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56252000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56252000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_51872000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_51872000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_45732000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_45732000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_59496000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_59496000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_66996000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_66996000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_64752000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_64752000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56900000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_56900000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_41728000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/12_41728000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_42120000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_42120000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_75532000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/20_75532000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_40744000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_40744000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_62752000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_62752000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_46048000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_46048000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_65364000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_65364000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_50592000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_50592000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_76256000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/26_76256000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_57980000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/5_57980000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_76564000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/1_76564000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/14_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_63996000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_63996000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_78612000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/21_78612000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_65172000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/19_65172000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_75332000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_75332000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_78356000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/0_78356000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_67784000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/8_67784000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_52016000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_52016000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_49724000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/4_49724000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_64600000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_64600000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_78936000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_78936000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_71064000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/7_71064000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_69392000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/27_69392000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/15_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_67804000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_77640000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_52952000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/25_52952000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_60376000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_60376000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_43084000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/11_43084000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_80000000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_80000000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_75500000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/16_75500000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_51024000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/24_51024000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_44092000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/3_44092000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74912000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74912000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/18_78388000/HS.out"
+          }
+        ],
+        "val": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/13_67164000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/2_74240000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/23_63452000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_77624000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/9_44456000/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/SiO2.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/SiOx_new/29_61756000/HS.out"
+          }
+        ]
+      },
+      "v1_checks": {
+        "no_duplicate_members": true,
+        "requested_counts_match": true,
+        "splits_disjoint": true,
+        "test_is_previous_validation_remainder": true,
+        "training_members_identical": true,
+        "training_order_identical": true,
+        "v1_recipe_reconstructs_recorded_members_and_order": true,
+        "validation_subset_of_previous_validation": true
+      },
+      "v1_manifest": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/sio2/split_manifest.json",
+      "v1_manifest_sha256": "9db351710e925976d57c0ac98147f201112402f4377639aafded1193779a3d7e",
+      "v1_recipe_reconstruction": {
+        "identical": true,
+        "status": "compared"
+      }
+    },
+    "zncusnses": {
+      "counts": {
+        "test": 8,
+        "train": 80,
+        "val": 12
+      },
+      "explicit_manifest_sha256": "f59941b4aa012c84eba03ba625a0599b56083aa765d14b2de7d33acf0bcfa3cf",
+      "paper_manifest_search": {
+        "checkpoint_root": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints",
+        "comparisons": [],
+        "patterns": [
+          "*/split_manifest.json",
+          "*/*/split_manifest.json",
+          "paper_models/**/split_manifest.json"
+        ],
+        "selected_run": "dandy-sweep-34-restart47h5-lr2em3",
+        "status": "not_found"
+      },
+      "recipe_sha256": "29e51e3c24ee28bb9e7d0cd326ab2130d978fa87fdf81bdb0ab7539ac145e95e",
+      "split_hash_sha256": "8ec419d43302bde89be84650d556182910b0d24bff911abef3864a54c19a8a6a",
+      "splits": {
+        "test": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_029/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_029/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_049/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_049/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_023/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_023/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_015/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_015/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_090/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_090/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_070/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_070/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_067/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_067/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_053/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_053/HS.out"
+          }
+        ],
+        "train": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_055/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_055/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_032/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_032/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_083/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_083/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_047/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_047/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_026/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_026/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_064/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_064/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_071/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_071/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_011/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_011/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_033/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_033/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_027/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_027/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_054/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_054/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_100/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_100/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_087/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_087/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_036/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_036/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_034/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_034/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_051/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_051/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_057/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_057/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_061/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_061/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_012/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_012/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_074/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_074/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_043/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_043/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_018/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_018/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_088/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_088/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_020/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_020/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_062/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_062/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_019/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_019/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_097/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_097/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_008/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_008/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_001/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_001/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_006/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_006/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_056/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_056/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_045/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_045/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_063/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_063/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_040/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_040/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_099/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_099/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_072/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_072/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_080/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_080/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_068/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_068/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_065/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_065/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_030/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_030/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_059/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_059/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_024/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_024/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_022/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_022/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_078/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_078/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_079/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_079/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_077/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_077/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_028/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_028/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_081/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_081/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_075/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_075/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_003/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_003/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_091/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_091/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_050/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_050/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_016/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_016/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_048/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_048/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_017/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_017/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_098/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_098/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_058/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_058/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_069/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_069/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_060/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_060/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_031/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_031/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_007/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_007/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_025/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_025/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_095/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_095/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_005/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_005/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_092/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_092/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_014/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_014/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_041/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_041/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_035/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_035/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_086/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_086/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_009/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_009/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_084/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_084/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_089/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_089/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_085/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_085/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_037/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_037/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_044/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_044/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_010/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_010/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_046/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_046/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_042/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_042/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_052/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_052/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_076/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_076/HS.out"
+          }
+        ],
+        "val": [
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_094/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_094/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_082/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_082/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_039/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_039/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_066/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_066/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_021/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_021/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_013/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_013/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_002/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_002/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_073/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_073/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_096/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_096/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_093/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_093/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_004/HS.out"
+          },
+          {
+            "info": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/ZnCuSeS.out",
+            "matrix": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/scale_1/ZnCu2Sn_SeS_2_scale_1_038/HS.out"
+          }
+        ]
+      },
+      "v1_checks": {
+        "no_duplicate_members": true,
+        "requested_counts_match": true,
+        "splits_disjoint": true,
+        "test_is_previous_validation_remainder": true,
+        "training_members_identical": true,
+        "training_order_identical": true,
+        "v1_recipe_reconstructs_recorded_members_and_order": true,
+        "validation_subset_of_previous_validation": true
+      },
+      "v1_manifest": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/zncusnses/split_manifest.json",
+      "v1_manifest_sha256": "3a619053fc2896f700fa6f445c9e852a1d4f12b467ee2dbb69b82a32f5a45f7d",
+      "v1_recipe_reconstruction": {
+        "identical": true,
+        "status": "compared"
+      }
+    }
+  },
+  "method": "scripts.train._build_dataset_bundle with explicit v1-derived lists; intercept only scripts.dataset._create_datasets_from_pairs before matrix loading",
+  "passed": true,
+  "schema_version": 1,
+  "selection_source_sha256": {
+    "scripts/dataset.py": "c1bd2858ee5b2e87bdf079e92a6c99b5eebdb70d2981b40740a3d8bd2cff00e3",
+    "scripts/train.py": "79c9bb311069bbebb280c70272ae7ac6d34963eeff7d485480aac836df9d41cb"
+  },
+  "source_commit": "b5e2889ef47fe9660070cb3b58acedfea9cae164"
+}
