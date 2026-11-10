@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shlex
 import subprocess
 import time
@@ -29,7 +30,11 @@ venv = root / '.venvs' / args.env
 py = str(venv / 'bin/python')
 env = os.environ.copy()
 env.update(PYTHONPATH='src:.', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1', WANDB_MODE='offline', MPLBACKEND='Agg', MAX_JOBS=str(args.workers))
+previous = json.loads(out.read_text()) if out.exists() else {}
 record = dict(name=args.env + ('-rosi' if args.gpu_only else ''), status='verified_20261110', date='2026-11-10', host=platform.node(), platform=platform.platform(), python=args.python, torch=args.torch+'+'+args.tag, cuda_wheel_tag=args.tag, source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), installation_commands=[], result='incomplete')
+
+if previous.get('initial_attempts'):
+    record['initial_attempts'] = previous['initial_attempts']
 
 def save():
     out.write_text(json.dumps(record, indent=2)+'\n')
@@ -103,7 +108,15 @@ def pytest(label, command, extra):
     if xml.exists():
         suites=ET.parse(xml).getroot().findall('testsuite')
         for key in ['tests','failures','errors','skipped']: result[key]=sum(int(s.attrib.get(key,0)) for s in suites)
-        result['passed']=result['tests']-result['failures']-result['errors']-result['skipped']
+        result['junit_counts']={k:result[k] for k in ['tests','failures','errors','skipped']}
+        # pytest 9 includes successful subtests in JUnit's tests count.
+        summary=result['output'].splitlines()[-1]
+        for word,key in [('passed','passed'),('failed','failures'),('error','errors'),('skipped','skipped')]:
+            match=re.search(r'(\d+) '+word+r's?\b', summary)
+            result[key]=int(match.group(1)) if match else 0
+        result['tests']=sum(result[k] for k in ['passed','failures','errors','skipped'])
+        subtests=re.search(r'(\d+) subtests passed', summary)
+        result['subtests_passed']=int(subtests.group(1)) if subtests else 0
     save()
 
 if not args.gpu_only:

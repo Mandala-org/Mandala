@@ -48,6 +48,8 @@ def test_failed_setup_can_retry_but_existing_run_is_protected(tmp_path, monkeypa
     recipe["training"]["num_val_per_scale"] = 20
     path = tmp_path / "recipe.json"
     path.write_text(json.dumps(recipe))
+    # Runtime metadata is mocked together: cuDNN may inspect visible devices.
+    monkeypatch.setattr(torch.backends.cudnn, "version", lambda: 91000)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_device_name", lambda: "test GPU")
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda: (8, 0))
@@ -81,6 +83,8 @@ def test_completed_recovery_checkpoint_skips_training(tmp_path, monkeypatch):
     recipe["training"]["checkpoint_dir"] = str(tmp_path / "checkpoints")
     path = tmp_path / "recipe.json"
     path.write_text(json.dumps(recipe))
+    # Runtime metadata is mocked together: cuDNN may inspect visible devices.
+    monkeypatch.setattr(torch.backends.cudnn, "version", lambda: 91000)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_device_name", lambda: "test GPU")
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda: (8, 0))

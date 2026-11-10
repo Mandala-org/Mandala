@@ -3,7 +3,9 @@
   "verification_date": "2026-11-10",
   "status_definition": {
     "verified_tonight": "Measured on the verification date; result and individual checks can be passed or failed.",
-    "reported": "Earlier use supplied by the author; not re-tested and not assigned inferred counts or versions."
+    "reported": "Earlier use supplied by the author; not re-tested and not assigned inferred counts or versions.",
+    "verified_20261110": "Measured on 2026-11-10; inspect result and individual checks for pass/fail.",
+    "no_wheels": "No compatible torch wheel on the selected index; no tests run."
   },
   "latest_selection": {
     "queried_at": "2026-11-10T00:40:29.007250+00:00",
@@ -1023,6 +1025,24 @@
       "notes": [
         "Reported by the author; not re-tested on 2026-11-10. Required source patches whose diff was not supplied; this is not evidence of unmodified torch 2.11 support. Exact torch patch, CUDA tag, extension versions and driver were not supplied."
       ]
+    },
+    {
+      "name": "py315-t2xx-cu128",
+      "status": "no_wheels",
+      "date": "2026-11-10",
+      "host": "terok",
+      "gpu": "NVIDIA A40",
+      "driver": "550.163.01",
+      "python": "3.15.2",
+      "torch": "none",
+      "cuda_wheel_tag": "cu128",
+      "result": "no_wheels",
+      "error": "Using Python 3.15.2 environment at: .venvs/py315-t2xx-cu128\nerror: No solution found when resolving dependencies\n  cause: Because all versions of torch have no wheels with a matching Python ABI tag (e.g., `cp315`) and you require torch, we can conclude that your requirements are unsatisfiable.\n\nhint: You require CPython 3.15 (`cp315`), but we only found wheels for `torch` (v2.11.0+cu128) with the following Python ABI tags: `cp310`, `cp311`, `cp312`, `cp313`, `cp313t`, `cp314`, `cp314t`\n",
+      "installation_commands": [
+        "uv venv --seed --managed-python --python 3.15 .venvs/py315-t2xx-cu128",
+        "uv pip install --dry-run --python .venvs/py315-t2xx-cu128/bin/python torch --index-url https://download.pytorch.org/whl/cu128"
+      ],
+      "table_note": "No cp315 wheel on cu128; newest available is cp314 / torch 2.11.0"
     }
   ]
 }

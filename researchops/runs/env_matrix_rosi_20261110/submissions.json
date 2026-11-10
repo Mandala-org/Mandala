@@ -1,0 +1,9 @@
+[
+  {
+    "job_id": 837254,
+    "partition": "gpu-h100-casus",
+    "account": "casus",
+    "date": "2026-11-10",
+    "reason": "initial submission"
+  }
+]
