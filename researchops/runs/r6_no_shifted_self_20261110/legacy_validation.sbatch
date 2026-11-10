@@ -29,7 +29,7 @@ python -u scripts/report/evaluate_validation_error_distribution.py \
   --scales '[1]' --num-train-per-scale 80 --num-val-per-scale 20 --data-split-seed 43 \
   --snapshot-cache-dir /bigdata/casus/wdm/hamiltonian_learning/data/perturbed_snapshots_Si/snapshot_cache \
   --dataset-device cpu --device cuda --convention e3nn --film-semantics legacy_2026_07 \
-  --load-split validation --metadata-policy paper_2026_07 --density-convention paper_restricted_total \
+  --metadata-policy paper_2026_07 --density-convention paper_restricted_total \
   --output-json "$run/silicon_legacy_validation.json" \
   --scratch-dir "/bigdata/casus/wdm/hamiltonian_learning/runs/r6_no_shifted_self_20261110/$SLURM_JOB_ID"
 python -u - <<'PY'
