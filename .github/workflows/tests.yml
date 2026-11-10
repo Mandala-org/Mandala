@@ -62,7 +62,7 @@ jobs:
         # OpenMX parser/rotation files require 169 MB of H2O LFS matrices;
         # info-parser tests also require LFS, spatial tests use 745 MB of Si,
         # and PySCF rotation tests require separately generated baseline data.
-        # Two data-backed Snapshot tests carry the large_data marker.
+        # Data-backed Snapshot and structure-inference tests carry large_data.
         # Optional live upstream source comparisons retain explicit pytest skips.
         run: |
           time python -m pytest -n 4 tests/unit tests/physics tests/equivariance \
