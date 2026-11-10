@@ -13,10 +13,10 @@
 | sio2-2x1x1-1 | 300 | 2×1×1 | 0.02 | 2.855742 | 2.855742 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x1x1-tiled | 300 | 2×1×1 | 0 | 2.534627 | 2.534627 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x1x1-2 | 300 | 2×1×1 | 0.02 | 1.729488 | 1.729488 | — | — | — | H only; S not predicted | — | 1.99588 |
-| sio2-2x2x1-1 | 600 | 2×2×1 | 0.02 | — | — | — | — | — | OpenMX_pending (job 837830) | — | 1.99588 |
+| sio2-2x2x1-1 | 600 | 2×2×1 | 0.02 | 2.632628 | 2.632628 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x2x1-tiled | 600 | 2×2×1 | 0 | 2.534622 | 2.534622 | — | — | — | H only; S not predicted | — | 1.99588 |
 
-Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
+Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949, 2.63263 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
 
 Each row is one structure; repetition expands the source cell, and σ is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4×4×4 (2× Si) 3×3×3 (3× Si), or 2×2×2 (5× Si) Gamma-centered meshes. SiO2 predicts H only; — means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3× and 5× Si controls fold the original 8-mesh calculation.
 
@@ -112,6 +112,9 @@ Each row is one structure; repetition expands the source cell, and σ is the ind
 | sio2-2x1x1-2 | hamiltonian | onsite | 0.007076473 | 0.007076473 | 13.3402 |
 | sio2-2x1x1-2 | hamiltonian | different_parent | 0.9929235 | 0.9929235 | 1.646739 |
 | sio2-2x1x1-2 | hamiltonian | same_parent_image | 0 | 0 | — |
+| sio2-2x2x1-1 | hamiltonian | onsite | 0.00668956 | 0.00668956 | 31.00838 |
+| sio2-2x2x1-1 | hamiltonian | different_parent | 0.9933104 | 0.9933104 | 2.441528 |
+| sio2-2x2x1-1 | hamiltonian | same_parent_image | 0 | 0 | — |
 | sio2-2x2x1-tiled | hamiltonian | onsite | 0.00669344 | 0.00669344 | 29.2354 |
 | sio2-2x2x1-tiled | hamiltonian | different_parent | 0.9933066 | 0.9933066 | 2.354698 |
 | sio2-2x2x1-tiled | hamiltonian | same_parent_image | 0 | 0 | — |

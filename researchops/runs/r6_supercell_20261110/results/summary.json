@@ -1,6 +1,6 @@
 {
   "diagnostic_caveat": "Requires known parent cell; unchanged parameters; not applied to primary predictions",
-  "interpretation": "Silicon perturbed-cell H MAE is 8.6506\u20138.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605\u20131.21073 meV. Routing with known parent labels gives 1.11013\u20131.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.",
+  "interpretation": "Silicon perturbed-cell H MAE is 8.6506\u20138.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605\u20131.21073 meV. Routing with known parent labels gives 1.11013\u20131.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949, 2.63263 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.",
   "columns": "Each row is one structure; repetition expands the source cell, and \u03c3 is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4\u00d74\u00d74 (2\u00d7 Si) 3\u00d73\u00d73 (3\u00d7 Si), or 2\u00d72\u00d72 (5\u00d7 Si) Gamma-centered meshes. SiO2 predicts H only; \u2014 means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3\u00d7 and 5\u00d7 Si controls fold the original 8-mesh calculation.",
   "structures": [
     {
@@ -19489,10 +19489,10 @@
         1
       ],
       "sigma_angstrom": 0.02,
-      "status": "OpenMX_pending",
-      "job_id": "837830",
-      "H_MAE_meV": null,
-      "H_excluding_same_parent_image_meV": null,
+      "status": "ok",
+      "job_id": null,
+      "H_MAE_meV": 2.632627630213046,
+      "H_excluding_same_parent_image_meV": 2.632627630213045,
       "routed_diagnostic_H_MAE_meV": null,
       "S_MAE": null,
       "D_MAE": null,
@@ -19501,7 +19501,170 @@
       "primary_metric": null,
       "routed_diagnostic_metric": null,
       "validation_H_MAE_meV": 1.99588,
-      "category_errors": null,
+      "category_errors": {
+        "hamiltonian": {
+          "raw_common_support": {
+            "categories": {
+              "onsite": {
+                "blocks": 600,
+                "scalar_entries": 101400,
+                "absolute_error_sum": 115.54925578022801,
+                "block_fraction": 0.006689559826963386,
+                "scalar_entry_fraction": 0.006689559826963386,
+                "mae": 0.0011395390116393294,
+                "mae_meV": 31.00845186132245
+              },
+              "different_parent": {
+                "blocks": 89092,
+                "scalar_entries": 15056548,
+                "absolute_error_sum": 1378.4178456314316,
+                "block_fraction": 0.9933104401730366,
+                "scalar_entry_fraction": 0.9933104401730366,
+                "mae": 9.154939403317625e-05,
+                "mae_meV": 2.4911871807943724
+              },
+              "same_parent_image": {
+                "blocks": 0,
+                "scalar_entries": 0,
+                "absolute_error_sum": 0.0,
+                "block_fraction": 0.0,
+                "scalar_entry_fraction": 0.0,
+                "mae": null,
+                "mae_meV": null
+              }
+            },
+            "excluding_same_parent_image": {
+              "scalar_entries": 15157948,
+              "mae": 9.855998327818908e-05,
+              "mae_meV": 2.6819551289761145
+            },
+            "common_blocks": 89692,
+            "common_scalar_entries": 15157948,
+            "full_support": {
+              "prediction": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.0036340290480055236,
+                  "scalar_entry_fraction": 0.0036340290480055236
+                },
+                "different_parent": {
+                  "blocks": 164506,
+                  "scalar_entries": 27801514,
+                  "block_fraction": 0.9963659709519945,
+                  "scalar_entry_fraction": 0.9963659709519945
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              },
+              "reference": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.006689559826963386,
+                  "scalar_entry_fraction": 0.006689559826963386
+                },
+                "different_parent": {
+                  "blocks": 89092,
+                  "scalar_entries": 15056548,
+                  "block_fraction": 0.9933104401730366,
+                  "scalar_entry_fraction": 0.9933104401730366
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              }
+            }
+          },
+          "hermitian_common_support": {
+            "categories": {
+              "onsite": {
+                "blocks": 600,
+                "scalar_entries": 101400,
+                "absolute_error_sum": 115.54897055279082,
+                "block_fraction": 0.006689559826963386,
+                "scalar_entry_fraction": 0.006689559826963386,
+                "mae": 0.0011395361987454715,
+                "mae_meV": 31.008375318542523
+              },
+              "different_parent": {
+                "blocks": 89092,
+                "scalar_entries": 15056548,
+                "absolute_error_sum": 1350.940542009318,
+                "block_fraction": 0.9933104401730366,
+                "scalar_entry_fraction": 0.9933104401730366,
+                "mae": 8.972445357390804e-05,
+                "mae_meV": 2.4415279959810414
+              },
+              "same_parent_image": {
+                "blocks": 0,
+                "scalar_entries": 0,
+                "absolute_error_sum": 0.0,
+                "block_fraction": 0.0,
+                "scalar_entry_fraction": 0.0,
+                "mae": null,
+                "mae_meV": null
+              }
+            },
+            "excluding_same_parent_image": {
+              "scalar_entries": 15157948,
+              "mae": 9.674723205028205e-05,
+              "mae_meV": 2.632627630213045
+            },
+            "common_blocks": 89692,
+            "common_scalar_entries": 15157948,
+            "full_support": {
+              "prediction": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.0036340290480055236,
+                  "scalar_entry_fraction": 0.0036340290480055236
+                },
+                "different_parent": {
+                  "blocks": 164506,
+                  "scalar_entries": 27801514,
+                  "block_fraction": 0.9963659709519945,
+                  "scalar_entry_fraction": 0.9963659709519945
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              },
+              "reference": {
+                "onsite": {
+                  "blocks": 600,
+                  "scalar_entries": 101400,
+                  "block_fraction": 0.006689559826963386,
+                  "scalar_entry_fraction": 0.006689559826963386
+                },
+                "different_parent": {
+                  "blocks": 89092,
+                  "scalar_entries": 15056548,
+                  "block_fraction": 0.9933104401730366,
+                  "scalar_entry_fraction": 0.9933104401730366
+                },
+                "same_parent_image": {
+                  "blocks": 0,
+                  "scalar_entries": 0,
+                  "block_fraction": 0.0,
+                  "scalar_entry_fraction": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
       "routed_category_errors": null
     },
     {
