@@ -41,24 +41,29 @@
       "command": "git diff --check",
       "host": "terok",
       "result": "passed"
+    },
+    {
+      "command": "Copy segment.sh to a temporary slurm_script outside the checkout; run bash <slurm_script> <material> with SLURM_JOB_ID=spool-preflight and a stub srun that verifies cwd/resources and invokes the launcher with --plan",
+      "source_commit": "796b2eafb7b1e94cbff27fccbe949a0ca0ba8575",
+      "result": "all three material launchers passed; no GPU/training/run files created"
     }
   ],
   "second_brain": {
     "experiment": "mandala/publication-retrain-v2",
-    "attempt": 1,
+    "attempt": 2,
     "jobs": [
-      "836864",
-      "836865",
-      "836866",
-      "836867",
-      "836868",
-      "836869",
-      "836870",
-      "836871",
-      "836872",
-      "836873",
-      "836874",
-      "836875"
+      "836879",
+      "836880",
+      "836881",
+      "836882",
+      "836883",
+      "836884",
+      "836885",
+      "836886",
+      "836887",
+      "836888",
+      "836889",
+      "836890"
     ]
   },
   "limitations": [

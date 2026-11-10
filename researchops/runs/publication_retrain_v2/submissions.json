@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
-  "created_utc": "2026-11-10T00:43:20.782675+00:00",
+  "created_utc": "2026-11-10T00:47:24.372100+00:00",
   "worktree": "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
-  "source_commit": "7d0f535839b93f421d1ae045dca7b2bf9b237418",
+  "source_commit": "796b2eafb7b1e94cbff27fccbe949a0ca0ba8575",
   "partition": "gpu-h100-casus",
   "account": "casus",
-  "sinfo": "cpu-skylake|up|drained*\ncpu-skylake|up|mixed\ncpu-skylake|up|allocated\ncpu-skylake|up|idle\ncpu-skylake-int|up|drained*\ncpu-skylake-int|up|mixed\ncpu-skylake-int|up|allocated\ncpu-skylake-int|up|idle\ncpu-genoa*|up|mixed\ncpu-genoa*|up|allocated\ncpu-genoa*|up|idle\ncpu-genoa-int|up|mixed\ncpu-genoa-int|up|allocated\ncpu-genoa-int|up|idle\ncpu-genoa-casus|up|maint\ncpu-genoa-casus|up|mixed\ncpu-genoa-casus|up|allocated\ncpu-genoa-casus|up|idle\ncpu-milan|up|mixed*\ncpu-milan|up|allocated*\ncpu-milan|up|idle*\ncpu-milan|up|mixed\ncpu-milan|up|allocated\ncpu-milan|up|idle\ncpu-milan-int|up|mixed*\ncpu-milan-int|up|allocated*\ncpu-milan-int|up|idle*\ncpu-milan-int|up|mixed\ncpu-milan-int|up|allocated\ncpu-milan-int|up|idle\ncpu-milan-reac|up|idle*\ncpu-milan-reac|up|mixed\ncpu-milan-reac|up|allocated\ncpu-milan-reac|up|idle\ncpu-rome|up|inval\ncpu-rome|up|mixed*\ncpu-rome|up|allocated*\ncpu-rome|up|idle*\ncpu-rome|up|mixed\ncpu-rome|up|allocated\ncpu-rome|up|idle\ncpu-rome-int|up|inval\ncpu-rome-int|up|mixed*\ncpu-rome-int|up|allocated*\ncpu-rome-int|up|idle*\ncpu-rome-int|up|mixed\ncpu-rome-int|up|allocated\ncpu-rome-int|up|idle\ncpu-turin|up|mixed\ncpu-turin|up|allocated\ncpu-turin|up|idle\ngpu-a100|up|drained*\ngpu-a100|up|drained\ngpu-a100|up|mixed\ngpu-a100|up|allocated\ngpu-a100-haicu|up|idle\ngpu-b200-casus|up|draining\ngpu-b200-haicore|up|mixed\ngpu-b200-haicore-mig|up|mixed\ngpu-h100|up|mixed\ngpu-h100-casus|up|mixed\ngpu-v100|up|drained*\ngpu-v100|up|mixed\ngpu-v100|up|allocated\ngpu-v100-int|up|drained*\ngpu-v100-int|up|mixed\ngpu-v100-int|up|allocated\ngpu-v100-int|up|idle\nshort|up|maint\nshort|up|mixed\nshort|up|allocated\nshort|up|idle\nlow|up|maint\nlow|up|drained*\nlow|up|mixed*\nlow|up|allocated*\nlow|up|idle*\nlow|up|mixed\nlow|up|allocated\nlow|up|idle\narchiv|up|idle\nhypercrate|up|idle",
+  "sinfo": "cpu-skylake|up|drained*\ncpu-skylake|up|mixed\ncpu-skylake|up|allocated\ncpu-skylake|up|idle\ncpu-skylake-int|up|drained*\ncpu-skylake-int|up|mixed\ncpu-skylake-int|up|allocated\ncpu-skylake-int|up|idle\ncpu-genoa*|up|mixed\ncpu-genoa*|up|allocated\ncpu-genoa*|up|idle\ncpu-genoa-int|up|mixed\ncpu-genoa-int|up|allocated\ncpu-genoa-int|up|idle\ncpu-genoa-casus|up|maint\ncpu-genoa-casus|up|mixed\ncpu-genoa-casus|up|allocated\ncpu-genoa-casus|up|idle\ncpu-milan|up|mixed*\ncpu-milan|up|allocated*\ncpu-milan|up|idle*\ncpu-milan|up|mixed\ncpu-milan|up|allocated\ncpu-milan|up|idle\ncpu-milan-int|up|mixed*\ncpu-milan-int|up|allocated*\ncpu-milan-int|up|idle*\ncpu-milan-int|up|mixed\ncpu-milan-int|up|allocated\ncpu-milan-int|up|idle\ncpu-milan-reac|up|mixed\ncpu-milan-reac|up|allocated\ncpu-milan-reac|up|idle\ncpu-rome|up|inval\ncpu-rome|up|mixed*\ncpu-rome|up|allocated*\ncpu-rome|up|idle*\ncpu-rome|up|mixed\ncpu-rome|up|allocated\ncpu-rome|up|idle\ncpu-rome-int|up|inval\ncpu-rome-int|up|mixed*\ncpu-rome-int|up|allocated*\ncpu-rome-int|up|idle*\ncpu-rome-int|up|mixed\ncpu-rome-int|up|allocated\ncpu-rome-int|up|idle\ncpu-turin|up|mixed\ncpu-turin|up|allocated\ncpu-turin|up|idle\ngpu-a100|up|drained*\ngpu-a100|up|drained\ngpu-a100|up|mixed\ngpu-a100|up|allocated\ngpu-a100-haicu|up|idle\ngpu-b200-casus|up|draining\ngpu-b200-haicore|up|mixed\ngpu-b200-haicore-mig|up|mixed\ngpu-h100|up|mixed\ngpu-h100-casus|up|mixed\ngpu-v100|up|drained*\ngpu-v100|up|mixed\ngpu-v100|up|allocated\ngpu-v100-int|up|drained*\ngpu-v100-int|up|mixed\ngpu-v100-int|up|allocated\ngpu-v100-int|up|idle\nshort|up|maint\nshort|up|mixed\nshort|up|allocated\nshort|up|idle\nlow|up|maint\nlow|up|drained*\nlow|up|mixed*\nlow|up|allocated*\nlow|up|idle*\nlow|up|mixed\nlow|up|allocated\nlow|up|idle\narchiv|up|idle\nhypercrate|up|idle",
   "jobs": [
     {
       "material": "silicon",
       "segment": 1,
-      "job_id": "836864",
+      "job_id": "836879",
       "dependency": null,
       "sbatch_argv": [
         "sbatch",
@@ -36,8 +36,8 @@
     {
       "material": "silicon",
       "segment": 2,
-      "job_id": "836865",
-      "dependency": "afterok:836864",
+      "job_id": "836880",
+      "dependency": "afterok:836879",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -55,7 +55,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-2-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836864",
+        "--dependency=afterok:836879",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "silicon"
       ]
@@ -63,8 +63,8 @@
     {
       "material": "silicon",
       "segment": 3,
-      "job_id": "836866",
-      "dependency": "afterok:836865",
+      "job_id": "836881",
+      "dependency": "afterok:836880",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -82,7 +82,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-3-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836865",
+        "--dependency=afterok:836880",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "silicon"
       ]
@@ -90,8 +90,8 @@
     {
       "material": "silicon",
       "segment": 4,
-      "job_id": "836867",
-      "dependency": "afterok:836866",
+      "job_id": "836882",
+      "dependency": "afterok:836881",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -109,7 +109,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-silicon-4-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836866",
+        "--dependency=afterok:836881",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "silicon"
       ]
@@ -117,7 +117,7 @@
     {
       "material": "sio2",
       "segment": 1,
-      "job_id": "836868",
+      "job_id": "836883",
       "dependency": null,
       "sbatch_argv": [
         "sbatch",
@@ -143,8 +143,8 @@
     {
       "material": "sio2",
       "segment": 2,
-      "job_id": "836869",
-      "dependency": "afterok:836868",
+      "job_id": "836884",
+      "dependency": "afterok:836883",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -162,7 +162,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-2-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836868",
+        "--dependency=afterok:836883",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "sio2"
       ]
@@ -170,8 +170,8 @@
     {
       "material": "sio2",
       "segment": 3,
-      "job_id": "836870",
-      "dependency": "afterok:836869",
+      "job_id": "836885",
+      "dependency": "afterok:836884",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -189,7 +189,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-3-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836869",
+        "--dependency=afterok:836884",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "sio2"
       ]
@@ -197,8 +197,8 @@
     {
       "material": "sio2",
       "segment": 4,
-      "job_id": "836871",
-      "dependency": "afterok:836870",
+      "job_id": "836886",
+      "dependency": "afterok:836885",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -216,7 +216,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-sio2-4-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836870",
+        "--dependency=afterok:836885",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "sio2"
       ]
@@ -224,7 +224,7 @@
     {
       "material": "zncusnses",
       "segment": 1,
-      "job_id": "836872",
+      "job_id": "836887",
       "dependency": null,
       "sbatch_argv": [
         "sbatch",
@@ -250,8 +250,8 @@
     {
       "material": "zncusnses",
       "segment": 2,
-      "job_id": "836873",
-      "dependency": "afterok:836872",
+      "job_id": "836888",
+      "dependency": "afterok:836887",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -269,7 +269,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-2-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836872",
+        "--dependency=afterok:836887",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "zncusnses"
       ]
@@ -277,8 +277,8 @@
     {
       "material": "zncusnses",
       "segment": 3,
-      "job_id": "836874",
-      "dependency": "afterok:836873",
+      "job_id": "836889",
+      "dependency": "afterok:836888",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -296,7 +296,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-3-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836873",
+        "--dependency=afterok:836888",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "zncusnses"
       ]
@@ -304,8 +304,8 @@
     {
       "material": "zncusnses",
       "segment": 4,
-      "job_id": "836875",
-      "dependency": "afterok:836874",
+      "job_id": "836890",
+      "dependency": "afterok:836889",
       "sbatch_argv": [
         "sbatch",
         "--parsable",
@@ -323,7 +323,7 @@
         "--chdir=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2",
         "--output=/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/logs/mr2-zncusnses-4-%j.log",
         "--open-mode=append",
-        "--dependency=afterok:836874",
+        "--dependency=afterok:836889",
         "/data/home2/brzoza73/casus/mandala_worktrees/retrain_v2/researchops/runs/publication_retrain_v2/segment.sh",
         "zncusnses"
       ]
