@@ -101,6 +101,17 @@
       "hours": 42,
       "command": "scontrol update JobId=837505 TimeLimit=42:00:00",
       "reason": "45 h crossed maintenance starting 2026-11-12 08:00 CET; 42 h fits before reservation. INT@600 remains active; remaining segments retain 45 h."
+    },
+    "first_epoch": {
+      "job": 837505,
+      "completed_epoch": 0,
+      "observed_next_epoch": 1,
+      "train_loss_total_display": 0.0483,
+      "val_loss_total_display": 0.0185,
+      "training_batches": 80,
+      "validation_batches": 10,
+      "result": "passed; epoch 1 running on gh003; remaining three jobs pending dependency",
+      "log": "researchops/runs/publication_retrain_v2/logs/r6-silicon-1-837505.log"
     }
   },
   "choices": [
