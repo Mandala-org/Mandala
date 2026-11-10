@@ -315,6 +315,9 @@
       "memory": "96G",
       "walltime": "01:00:00"
     },
-    "script_sha256": "808eb8913f5bb85726026b2706a36cf5fb277ea01c9c4be07c95006ac208864c"
+    "script_sha256": "808eb8913f5bb85726026b2706a36cf5fb277ea01c9c4be07c95006ac208864c",
+    "result": "COMPLETED, exit 0, 00:04:53; 8 silicon structures; 6 perturbed and 2 tiled controls",
+    "output": "route-837400.out",
+    "results": "results/parent_routing.json"
   }
 }

@@ -1,0 +1,80 @@
+Referee point 6 follow-up: parent categories and parent-routing diagnostic
+Branch: referee-r6-supercell. Baseline: 1cafaaa.
+
+Changed files (all paths relative to this run directory):
+  build_structures.py, structures/manifest.json: explicit zero-based source
+    atom, tile index and tile coordinate mapping, schema version 2 (03e103e).
+  pair_categories.py: directed-block categories, scalar-weighted MAE,
+    block/scalar fractions on common support and full support (2da075f).
+  compare.py: raw/projected category errors, operator/reference fingerprints,
+    cache guards and summary regeneration (03e103e, 108e0d9, f595bc1).
+  route_parent.py, route_parent.sh: unchanged silicon heads selected with
+    known parent labels; 1 H100/4 CPUs/96 GB/1 hour, diagnostic only (2da075f).
+  summarize.py: 11-row table, all category errors/fractions, routed H/S/D,
+    primary/routed per-k metric details and interpretation (2da075f, 39a7b0b).
+  test_workflow.py: category, mapping and per-k metric contracts (03e103e, c274ba9).
+  verify_analysis.py: computed-count/error conservation and baseline comparison
+    including flags and counts (ee81079, f595bc1).
+  final_compare.sh: regenerate the summary (c274ba9); compare.py also does
+    this so the already-queued Slurm script refreshes it (108e0d9).
+  RUNBOOK.txt, submissions.json: diagnostic commands and attempt provenance.
+  results/comparison.json: nine primary comparisons, with new category data.
+  results/parent_routing.json: all eight labelled silicon diagnostics,
+    operator paths/hashes and full-geometry per-k records. Native operators
+    stay outside git at ARTIFACTS/diagnostic_parent_routed/<name>/*.pt.
+  results/summary.md and results/summary.json: final table and decompositions.
+  results/job_status.json: 88 job/step records for 30 job IDs, captured
+    2026-11-10 10:42 UTC, including job 837400.
+  route-837400.out: exact allocated-job output.
+  verification.json, STATUS.txt, FOLLOWUP_REPORT.txt: verification and handoff.
+
+Results:
+  Perturbed Si H total: 8.65060--8.76874 meV; excluding same-parent images:
+  1.06050--1.21073 meV; known-parent routed diagnostic: 1.11013--1.27325 meV.
+  Paper validation mean: 0.435164 meV. 64- and 216-atom totals are similar.
+  Same-parent images have ~111 meV projected H MAE on perturbed cells and
+  ~6.9% of common-support directed blocks and scalar entries.
+  Tiled Si H excluding images: 0.3947345/0.3947377 meV (2x/3x); routed:
+  0.3836588/0.3836614 meV. SiO2 tiled H: 2.534627 meV vs 1.99588 validation.
+  Primary and routed perturbed Si overlap each have 0/273 positive-definite
+  k-points and 0/273 Cholesky successes. Minimum eigenvalues across cells:
+  -1.031094 primary; -0.5506935 routed. Every per-k result is in summary.json.
+  Full tables, including H/S/D category errors and fractions and the exact
+  column definitions, are in results/summary.md and results/summary.json.
+
+Verified commands and results:
+  OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 .venv/bin/python -m pytest -q researchops/runs/r6_supercell_20261110/test_workflow.py
+    10 passed in 2.43 seconds.
+  python3.13 researchops/runs/r6_supercell_20261110/verify_analysis.py
+    PASS: 74 decompositions conserve counts and weighted errors; eight routed
+    rows; eleven summary rows; all 64/27 per-k metric records preserved.
+    Nine primary error JSON values exactly equal baseline 1cafaaa; recomputed
+    diagnostic floats differ by at most 7.10542736e-15; flags/counts identical.
+  python3.13 -m compileall -q researchops/runs/r6_supercell_20261110
+    PASS.
+  bash -n researchops/runs/r6_supercell_20261110/route_parent.sh
+  bash -n researchops/runs/r6_supercell_20261110/final_compare.sh
+    Both PASS.
+  sbatch --parsable researchops/runs/r6_supercell_20261110/route_parent.sh
+    Job 837400 COMPLETED, exit 0:0, elapsed 00:04:53.
+  ~/second_brain/bin/sb exp attempt --project mandala --exp r6-supercell --jobs 837400 --reason "parent-routing diagnostic on perturbed cells" --by agent:codex
+    Registered attempt 13.
+  git fetch github develop
+    Fetched aae88d8; no rebase per task-specific instruction.
+
+Pending and limitations:
+  At 2026-11-10 10:42:11 UTC, SiO2 jobs 837300 and 837301 were RUNNING
+  01:12:39, calibration 837302 RUNNING 01:12:09, and comparison 837320 was
+  PENDING. Leave it queued; its current compare.py regenerates summary files.
+  SiO2 perturbed transfer and source calibration are not yet measured.
+  No new k-convergence study, operator repair, training, or checkpoint choice.
+
+Reversible choices:
+  Report MAE/fractions on common directed support to match paper comparison;
+  additionally retain full prediction/reference category support counts and
+  fractions. Do not equate absent references with zero blocks.
+  Apply known parent labels also to perturbed cells, clearly as a diagnostic;
+  primary prediction files remain untouched. Include both Si tiled controls
+  in the same diagnostic allocation as a reproducibility check.
+  Keep existing branch history without rebase, as explicitly requested.
+  Neither paper/ nor README.md was edited; no other worktree was touched.
