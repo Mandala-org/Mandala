@@ -15,7 +15,7 @@ def main():
     torch.set_num_threads(4)
     model,cfg,_ = load_model(args.material,'cuda')
     structure = next(s for s in manifest()['structures'] if s['material']==args.material and s['tiled_control'])
-    base,_ = reference(structure['source_cell'],cfg)
+    base,target = reference(structure['source_cell'],cfg)
     atoms,pos,box = load_paper_cif(RUN/'structures'/structure['cif'],dtype=cfg.dtype)
     xb = build_model_input_from_structure(atoms=base.hamiltonian.atoms,positions=base.positions,
                                           box=base.box,cfg=cfg,mapper=model.mapper)
@@ -39,7 +39,7 @@ def main():
                 values[name] = output.detach().cpu()
         hooks.append(module.register_forward_hook(hook))
     xgpu = _move_to_device(xb,torch.device('cuda'))
-    model.predict_matrices(xgpu,physical=True)
+    base_predictions = {name:a.to('cpu') for name,a in model.predict_matrices(xgpu,physical=True).items()}
     previous = dict(values)
     values.clear()
     xgpu = _move_to_device(xs,torch.device('cuda'))
@@ -58,6 +58,14 @@ def main():
                                            base_absolute_mean=float(original.abs().mean()))
     for hook in hooks:
         hook.remove()
+    baseline_structure = dict(diagnostic_mesh=[8,8,8] if args.material=='silicon' else [1,1,1],
+                              num_electrons=structure['num_electrons']/int(__import__('numpy').prod(structure['repetition'])))
+    baseline = dict(source=structure['source_cell'],element_errors=errors(base_predictions,target),
+                    predicted=diagnostics(base_predictions,baseline_structure),
+                    prediction_on_reference_support=diagnostics(
+                        {name:restrict_support(a,target[name]) for name,a in base_predictions.items()},baseline_structure),
+                    reference=diagnostics(target,baseline_structure))
+    write_json(RUN/'results'/('baseline_'+args.material+'.json'),baseline)
     write_json(RUN/'results'/(args.material+'_tiling_probe.json'),report)
     print(json.dumps(report,indent=2))
 
