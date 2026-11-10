@@ -1,0 +1,24 @@
+# Overlay on cookbook.yaml, loaded by new_observable.py.
+# The reported before/after losses use the training cell, not validation.
+enable_energy: false
+enable_num_electrons: false
+log_partial_gt_observables: false
+log_per_irrep_metrics: false
+log_hamiltonian_irrep_contrib_metrics: false
+log_hamiltonian_pair_contrib_metrics: false
+data:
+  splits:
+    train: [data/small/Si]
+    val: [data/small/Si_old]
+training:
+  seed: 7
+  dtype: float32
+  max_epochs: 2
+objective:
+  kind: mse
+  epoch_weight: elements
+  terms:
+    - name: hamiltonian_trace
+      weight: 1.0
+optimization:
+  optimizer: {kind: adam, lr: 0.003}

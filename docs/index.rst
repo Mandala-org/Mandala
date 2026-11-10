@@ -114,6 +114,7 @@ What makes MANDALA distinctive
    extending/readout
    extending/envelope
    extending/assembling
+   extending/new_observable
 
 .. toctree::
    :maxdepth: 2

@@ -4,7 +4,7 @@ Run from the repository root::
 
     PYTHONPATH=src:. python examples/layer_cookbook/verify.py
 
-Three properties are checked in double precision:
+Four properties are checked in double precision:
 
 1. Layer covariance. Each layer satisfies ``f(D(g) x) = D(g) f(x)`` for a
    random proper rotation, an improper rotation and the inversion.
@@ -13,6 +13,8 @@ Three properties are checked in double precision:
    structure and its cell are rotated or inverted, before and after training.
 3. Trainability. Every parameter receives a finite gradient and an optimizer
    step changes the prediction.
+4. The registered Hamiltonian-trace objective contributes to the model loss
+   with its configured weight and sends finite, nonzero gradients to the model.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from e3nn import o3
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import layers  # noqa: E402,F401  (registers the cookbook transformations)
+from examples.layer_cookbook import new_observable  # noqa: E402
 
 from core.block_irrep_mapper import BlockIrrepMapper  # noqa: E402
 from core.operator_layout import OrbitalFrameRotation  # noqa: E402
@@ -157,11 +160,13 @@ def check_layers():
     print(f"  {'periodic_table_embedding':<34s} invariant by construction")
 
 
-def build_model():
+def build_model(*, objective_terms=()):
     resolved, codec = resolve_configuration(
         HERE / "cookbook.yaml", species_shells=SPECIES_SHELLS
     )
     resolved["training"]["dtype"] = "float64"
+    if objective_terms:
+        resolved["objective"]["terms"] = list(objective_terms)
     cfg = Config.from_mapping(resolved)
     orbitals = OrbitalIrrepConfig.from_dict(
         {
@@ -218,9 +223,54 @@ def check_model():
     print(f"  parameters: {sum(p.numel() for p in model.parameters()):,}")
 
 
+def check_new_observable():
+    print("New observable objective")
+    weight = 0.25
+    model = build_model(
+        objective_terms=[{"name": "hamiltonian_trace", "weight": weight}]
+    ).eval()
+    x = build_model_input_from_structure(
+        atoms=("Si", "Si"),
+        positions=torch.tensor([[0.0, 0.0, 0.0], [1.2, 0.4, 0.1]]),
+        box=torch.eye(3) * 4.9,
+        cfg=model.cfg,
+        mapper=model.mapper,
+    )
+    prediction = model(x)["hamiltonian"].to_blocks(model.mapper)
+    reference = prediction._replace_pair_blocks(
+        {
+            pair: torch.zeros_like(blocks)
+            for pair, blocks in prediction.pair_blocks.items()
+        },
+        basis=prediction.basis,
+    )
+    for atom in range(len(reference.atoms)):
+        pair, row = reference.lookup[(0, 0, 0, atom, atom)]
+        reference.pair_blocks[pair][row].fill_diagonal_(0.2)
+    loss, metrics, _ = model._graph_step((x, {"hamiltonian": reference}), 0, "train")
+    expected = new_observable.hamiltonian_trace_loss(
+        predictions={"hamiltonian": prediction},
+        targets={"hamiltonian": reference},
+        inputs=x,
+    )
+    observed = metrics["train/loss_term_hamiltonian_trace"]
+    torch.testing.assert_close(observed, expected)
+    torch.testing.assert_close(
+        loss, metrics["train/loss_matrix_total"] + weight * expected
+    )
+    observed.backward()
+    gradients = [p.grad for p in model.parameters() if p.grad is not None]
+    assert gradients and all(torch.isfinite(g).all() for g in gradients)
+    assert any(torch.count_nonzero(g) for g in gradients)
+    print(
+        "  hamiltonian_trace: configured weight and nonzero finite gradients verified"
+    )
+
+
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float64)
     torch.manual_seed(0)
     check_layers()
     check_model()
+    check_new_observable()
     print("All cookbook layers and the cookbook model are E(3)-equivariant.")

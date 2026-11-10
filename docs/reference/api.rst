@@ -105,6 +105,8 @@ Sparse algebra and reciprocal space
 Objectives
 ----------
 
+.. autofunction:: net.objectives.register_objective_term
+
 .. autofunction:: net.spectral_loss.compute_spectral_eigenvalue_loss
 .. autofunction:: net.observable_metrics.observable_loss
 .. autofunction:: data.envelope.load_pair_envelope_table
