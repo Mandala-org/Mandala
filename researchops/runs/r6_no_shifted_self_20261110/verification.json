@@ -83,12 +83,32 @@
       837014,
       837015,
       837016
-    ]
+    ],
+    "compatibility_job_result": "COMPLETED 0:0 in 00:01:36",
+    "silicon_h_mae_mev": 0.4351643092546589,
+    "silicon_h_mae_mev_six_decimals": "0.435164",
+    "validation_structures": 16,
+    "new_silicon_jobs": [
+      837505,
+      837506,
+      837507,
+      837508
+    ],
+    "second_brain_attempt": 5,
+    "second_brain_reason": "silicon chain restarted with separate_shifted_self false (author decision after the size-transfer experiment)",
+    "first_allocation_override": {
+      "job": 837505,
+      "hours": 42,
+      "command": "scontrol update JobId=837505 TimeLimit=42:00:00",
+      "reason": "45 h crossed maintenance starting 2026-11-12 08:00 CET; 42 h fits before reservation. INT@600 remains active; remaining segments retain 45 h."
+    }
   },
   "choices": [
     "Running SiO2/Zn used true, contrary to the brief. Preserve their existing source and recipes for continuation; all new v2 recipes use false.",
     "Update the deterministic stress-test seed to 751 because removing a head changes random parameter initialization; retain all finite-difference assertions and tolerances.",
-    "Mark the generated PySCF reference-file test as large_data; no generated PySCF results are present. Download real H2O/Si LFS references to exercise the other data-backed CPU tests."
+    "Mark the generated PySCF reference-file test as large_data; no generated PySCF results are present. Download real H2O/Si LFS references to exercise the other data-backed CPU tests.",
+    "Shorten only silicon segment 1 from 45 to 42 hours so it can start before cluster maintenance; keep the job IDs, dependency chain and checkpoint signal handling.",
+    "Use r6-silicon-1..4 job names for this replacement chain, following the requested job-name prefix."
   ],
   "unchanged_paths": [
     "paper/",
