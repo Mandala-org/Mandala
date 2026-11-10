@@ -49,11 +49,11 @@ def main():
                             rms_displacement_angstrom=rms,
                             tiled_control=control, tile_order='ASE repeat: product(range(nx),range(ny),range(nz)), base atom fastest',
                             num_electrons=sum(4 if z == 14 else 6 for z in atoms.numbers),
-                            diagnostic_mesh=([4]*3 if repetition[0] == 2 else [3]*3) if material == 'silicon' else [1,1,1],
+                            diagnostic_mesh=([4]*3 if repetition[0] == 2 else ([2]*3 if repetition[0] == 5 else [3]*3)) if material == 'silicon' else [1,1,1],
                             dft_directory=f'/bigdata/casus/wdm/hamiltonian_learning/data/r6_supercells_20261110/{material}/{name}',
                             sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
-    for repeat in (2, 3):
-        for sample in (1, 2, 3):
+    for repeat in (2, 3, 5):
+        for sample in ((1,) if repeat == 5 else (1, 2, 3)):
             save(f'si-{repeat}x{repeat}x{repeat}-{sample}', 'silicon', ideal, (repeat,)*3, sigma,
                  20261110 + repeat*100 + sample, 'silicon')
         save(f'si-{repeat}x{repeat}x{repeat}-tiled', 'silicon', si, (repeat,)*3, 0, None, 'silicon', True)
@@ -69,7 +69,7 @@ def main():
                     dataset_generation_seed=7, lattice_constant_angstrom=lattice),
                     sio2_split_seed=42, ase_version=ase.__version__, numpy_version=np.__version__,
                     reference_density='OpenMX single spin multiplied by 2 to match historical restricted-total heads',
-                    silicon_mesh_note='8/3 is not integral; 3x3x3 is slightly denser than the original 8x8x8 density.',
+                    silicon_mesh_note='8/3 and 8/5 are not integral; 3x3x3 and 2x2x2 respectively are slightly denser than the original 8x8x8 density.',
                     sio2_control_caveat='Original Gamma-only sampling corresponds to supercell Gamma and X-type points; folded blocks are an exact DFT reference only if the original Gamma calculation was converged with respect to k sampling.',
                     structures=records)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
