@@ -26,6 +26,7 @@ def _max_block_diff(a, b) -> float:
 
 
 @pytest.mark.physics
+@pytest.mark.large_data
 def test_pyscf_rotated_files_match_snapshot_rotation():
     base = Path("data/pyscf_baseline/results")
     snap_orig = Snapshot.from_pyscf(

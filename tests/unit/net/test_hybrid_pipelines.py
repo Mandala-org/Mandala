@@ -268,7 +268,7 @@ def test_partitioned_readout_pair_ids_follow_resolved_atomic_order_not_mapper_or
         }
 
         class KnownPairHead(torch.nn.Module):
-            separate_shifted_self = True
+            legacy_separate_shifted_self = True
 
             def __init__(self):
                 super().__init__()
