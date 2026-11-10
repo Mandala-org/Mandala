@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import math
+import subprocess
 
 RUN = Path(__file__).resolve().parent
 
@@ -52,7 +53,33 @@ def main():
                 assert m['kpoints'] == len(m['per_kpoint']) == n
                 assert m['positive_definite_count'] == sum(k['positive_definite'] for k in m['per_kpoint'])
                 assert m['cholesky_success_count'] == sum(not k['cholesky_failed_without_jitter'] for k in m['per_kpoint'])
+    baseline = json.loads(subprocess.check_output(['git','show',
+        '1cafaaa:researchops/runs/r6_supercell_20261110/results/comparison.json']))
+    baseline = {r['name']: r for r in baseline['structures']}
+    numeric_deltas = []
+    def compare(a, b):
+        if isinstance(a, dict):
+            assert a.keys() == b.keys()
+            for key in a:
+                compare(a[key], b[key])
+        elif isinstance(a, list):
+            assert len(a) == len(b)
+            for x, y in zip(a, b):
+                compare(x, y)
+        elif isinstance(a, float):
+            close(a, b)
+            numeric_deltas.append(abs(a-b))
+        else:
+            assert a == b
+    unchanged = 0
+    for row in primary['structures']:
+        old = baseline.get(row['name'], {})
+        if row['status']=='ok' and old.get('status')=='ok':
+            assert row['element_errors'] == old['element_errors']
+            compare(row['predicted'], old['predicted'])
+            unchanged += 1
     print(f'PASS: {checks} operator/mode decompositions conserve counts and errors; 8 routed structures; 11 summary rows; all per-k metrics preserved')
+    print(f'PASS: {unchanged} primary errors exactly unchanged from 1cafaaa; maximum full-geometry diagnostic numeric delta {max(numeric_deltas):.9g}; flags/counts identical')
 
 
 if __name__ == '__main__':

@@ -61,7 +61,9 @@ def main():
             old = previous.get(structure['name'], {})
             reuse = (args.reuse_diagnostics and old.get('status') == 'ok'
                      and old.get('operator_hashes') == row['operator_hashes']
-                     and old.get('reference_identity') == row['reference_identity'])
+                     and old.get('reference_identity') == row['reference_identity']
+                     and old.get('predicted', {}).get('mesh') == structure['diagnostic_mesh']
+                     and old.get('predicted', {}).get('nominal_electrons') == structure['num_electrons'])
             row['category_errors'] = {name: {
                 'raw_common_support': category_errors(a, target[name], structure['atom_parent_mapping'], HARTREE_TO_EV*1000 if name=='hamiltonian' else None),
                 'hermitian_common_support': category_errors((a+a.adjoint())*.5, target[name], structure['atom_parent_mapping'], HARTREE_TO_EV*1000 if name=='hamiltonian' else None)}
