@@ -15,6 +15,21 @@ def _require_cuda() -> None:
         pytest.fail("MANDALA_RUN_GPU_TESTS=1 was set, but CUDA is unavailable.")
 
 
+def test_torch_scatter_cuda_kernel_forward_backward():
+    """Exercise the compiled extension, including wheels on an older driver."""
+    from torch_scatter import scatter_max
+
+    _require_cuda()
+    values = torch.tensor([1.0, 3.0, 2.0], device="cuda", requires_grad=True)
+    indices = torch.tensor([0, 0, 1], device="cuda")
+    maximum, _ = scatter_max(values, indices, dim=0)
+    torch.testing.assert_close(maximum, torch.tensor([3.0, 2.0], device="cuda"))
+    maximum.sum().backward()
+    torch.testing.assert_close(
+        values.grad, torch.tensor([0.0, 1.0, 1.0], device="cuda")
+    )
+
+
 def test_tiny_model_forward_backward_and_strict_reload(small_angular_dataset_e3nn):
     _require_cuda()
     dataset, mapper, base_cfg = small_angular_dataset_e3nn
