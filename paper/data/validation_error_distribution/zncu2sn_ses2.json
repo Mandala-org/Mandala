@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_hamiltonian_envelope_stageA_selected_47h5/dandy-sweep-34-restart47h5-lr2em3/best_model.pt",
+  "source_commit": "4fa1df8804941e1d2b22ce068198a65134554abd",
+  "dataset_kind": "ZnCuSnSeS",
+  "data_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS",
+  "data_split_seed": 44,
+  "metadata_policy": "paper_2026_07",
+  "density_convention": "paper_restricted_total",
+  "density_reference_factor": 2.0,
+  "density_convention_provenance": "e78a7c0:src/data/openmx_parser.py; docs/data/physical_constraints_20261104/silicon/historical_contract.json",
+  "training_structures": 80,
+  "validation_structures": 20,
+  "evaluated_structures": 20,
+  "film_semantics": "legacy_2026_07",
+  "film_semantics_report": {
+    "mode": "legacy_2026_07",
+    "modules": [
+      "pipeline.transforms.readout_hamiltonian.diag_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.diag_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.offdiag_trunk.net.2.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_trunk.net.0.film",
+      "pipeline.transforms.readout_hamiltonian.shifted_self_trunk.net.2.film"
+    ],
+    "historical_source_commit": "e78a7c04e18d005d47def9eb7c9bd0f68b168d99",
+    "learned_parameters_changed": false
+  },
+  "definition": "MAE is the unchanged val/<operator>_mae from the shared validation step, first per structure then averaged equally across structures; H uses the paper entry-weighted contribution diagnostic; historical within-structure S/D diagnostic reductions are preserved. RMSE, maximum, p95, p99 and R2 pool every observed shift-resolved sparse reference element across all validation structures, including both directed reverse entries and excluding padding/unobserved entries and prediction-only support. Predictions use physical envelope units and 0.5*(M + M.transpose().conjugate()) with reverse-edge alignment. H is converted from Hartree to eV; S and D retain native dimensionless units. For paper_restricted_total, the native spin=0 reference D is multiplied by two to restore the historical parser's documented spin-summed convention; this is a fixed provenance choice, not fitted rescaling. R2 = 1 - pooled SSE / sum(abs(reference - pooled_reference_mean)^2); R2 is null for a constant reference. mae_elementwise_pooled is an additional diagnostic, not the paper MAE. Percentiles are exact NumPy linear quantiles via in-place selection on a float64 temporary memory map; no histogram approximation or full validation tensor is used.",
+  "split_arguments": {
+    "checkpoint": "/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/ZnCuSnSeS_hamiltonian_envelope_stageA_selected_47h5/dandy-sweep-34-restart47h5-lr2em3/best_model.pt",
+    "dataset_kind": "ZnCuSnSeS",
+    "data_path": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS",
+    "scales": "[1]",
+    "num_train_per_scale": 80,
+    "num_val_per_scale": 20,
+    "num_train": null,
+    "num_val": null,
+    "val_fraction": 0.2,
+    "data_split_seed": 44,
+    "snapshot_cache_dir": "/bigdata/casus/wdm/hamiltonian_learning/data/ZnCuSnSeS/snapshot_cache",
+    "dataset_device": "cpu",
+    "device": "cuda",
+    "convention": "e3nn",
+    "output_json": "paper/data/validation_error_distribution/zncu2sn_ses2.json",
+    "film_semantics": "legacy_2026_07",
+    "scratch_dir": "/bigdata/casus/wdm/hamiltonian_learning/runs/r5_error_distribution_20261110/zncu2sn_ses2/837029",
+    "metadata_policy": "paper_2026_07",
+    "envelope_path": "/data/home2/brzoza73/casus/mandala/eval_outputs/zncusnses_radial_fit_study/slater_soft_cutoff_envelope.json",
+    "density_convention": "paper_restricted_total",
+    "preflight_only": false
+  },
+  "metrics": {
+    "hamiltonian": {
+      "mae": 0.003012138939645908,
+      "mae_elementwise_pooled": 0.0030120640521477953,
+      "rmse": 0.007486280184976924,
+      "max_absolute_error": 0.2780759651886299,
+      "p95_absolute_error": 0.013734265194833279,
+      "p99_absolute_error": 0.033462154556810855,
+      "r2": 0.99946228792122,
+      "element_count": 106824528,
+      "structures": 20,
+      "residual_sum_squares": 5986.915616474708,
+      "reference_centered_sum_squares": 11134054.548408521,
+      "unit": "eV"
+    }
+  },
+  "preflight_only": false,
+  "paper_mae_check": {
+    "relative_tolerance": 0.01,
+    "passed": true,
+    "operators": {
+      "hamiltonian": {
+        "paper_mae": 0.0030121,
+        "measured_mae": 0.003012138939645908,
+        "relative_difference": 1.29277400842951e-05,
+        "passed": true
+      }
+    }
+  }
+}
