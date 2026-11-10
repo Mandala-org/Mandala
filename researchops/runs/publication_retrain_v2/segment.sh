@@ -5,7 +5,12 @@ set -u
 
 material=${1:?Usage: segment.sh silicon|sio2|zncusnses}
 case "$material" in silicon|sio2|zncusnses) ;; *) exit 2 ;; esac
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    # sbatch spools this file elsewhere; --chdir pins the repository root.
+    root=$(pwd -P)
+else
+    root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+fi
 cd "$root"
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-4}
 export MKL_NUM_THREADS=$OMP_NUM_THREADS
