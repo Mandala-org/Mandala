@@ -8,7 +8,7 @@
 | si-3x3x3-2 | 216 | 3×3×3 | 0.02 | 8.768735 | 1.210731 | 1.27325 | 0.000718816 | 0.0005582109 | PD 0/27; min -1.031094; chol 0/27 | PD 0/27; min -0.5506935; chol 0/27 | 0.435164 |
 | si-3x3x3-3 | 216 | 3×3×3 | 0.02 | 8.717221 | 1.139948 | 1.197851 | 0.0007192382 | 0.0005506098 | PD 0/27; min -0.9890429; chol 0/27 | PD 0/27; min -0.4656319; chol 0/27 | 0.435164 |
 | si-3x3x3-tiled | 216 | 3×3×3 | 0 | 8.136951 | 0.3947377 | 0.3836614 | 0.0007267949 | 0.0004773782 | PD 0/27; min -0.990323; chol 0/27 | PD 0/27; min -0.358895; chol 0/27 | 0.435164 |
-| si-5x5x5-1 | 1000 | 5×5×5 | 0.02 | — | — | — | — | — | OpenMX_pending (job 837489); PD 0/8; min -0.9962599; chol 0/8 | PD 0/8; min -0.5723461; chol 0/8 | 0.435164 |
+| si-5x5x5-1 | 1000 | 5×5×5 | 0.02 | 8.724617 | 1.155414 | 1.214995 | 0.0007189604 | 0.0005541381 | PD 0/8; min -0.9962599; chol 0/8 | PD 0/8; min -0.572346; chol 0/8 | 0.435164 |
 | si-5x5x5-tiled | 1000 | 5×5×5 | 0 | 8.136951 | 0.3947371 | 0.3836612 | 0.0007267949 | 0.0004773784 | PD 0/8; min -0.9903229; chol 0/8 | PD 0/8; min -0.3739824; chol 0/8 | 0.435164 |
 | sio2-2x1x1-1 | 300 | 2×1×1 | 0.02 | 2.855742 | 2.855742 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x1x1-tiled | 300 | 2×1×1 | 0 | 2.534627 | 2.534627 | — | — | — | H only; S not predicted | — | 1.99588 |
@@ -16,7 +16,7 @@
 | sio2-2x2x1-1 | 600 | 2×2×1 | 0.02 | 2.632628 | 2.632628 | — | — | — | H only; S not predicted | — | 1.99588 |
 | sio2-2x2x1-tiled | 600 | 2×2×1 | 0 | 2.534622 | 2.534622 | — | — | — | H only; S not predicted | — | 1.99588 |
 
-Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949, 2.63263 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/273 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.550694. The metric uses full geometry support without repair, whereas element errors use common reference support.
+Silicon perturbed-cell H MAE is 8.6506–8.76874 meV versus 0.435164 meV on paper validation, with similar errors at 64 and 216 atoms. Excluding same-parent-image blocks gives 1.0605–1.21073 meV. Routing with known parent labels gives 1.11013–1.27325 meV; this diagnostic does not establish a deployable correction. SiO2 perturbed-cell H MAE is 2.85574, 1.72949, 2.63263 meV versus 1.99588 meV on validation. Primary overlap is positive definite at 0/281 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -1.03109. Parent-routed diagnostic overlap is positive definite at 0/281 sampled perturbed-cell k-points; its lowest eigenvalue across those cells is -0.572346. The metric uses full geometry support without repair, whereas element errors use common reference support.
 
 Each row is one structure; repetition expands the source cell, and σ is the independent Gaussian displacement standard deviation (zero for tiled controls). H, S and D are scalar-entry-weighted MAEs on matching directed periodic support after Hermitian projection of the prediction, against OpenMX (D multiplied by two); H is in meV, S dimensionless, D in AO-kernel units. H excl. removes every non-onsite pair sharing a source-atom identity, including nonzero lattice shifts; onsite plus different-parent blocks remain. Routed columns use unchanged silicon heads with construction parent labels and never replace primary predictions. Metric columns give positive-definite k-point counts, global minimum overlap eigenvalue, and Cholesky successes without jitter on full geometry support, using 4×4×4 (2× Si) 3×3×3 (3× Si), or 2×2×2 (5× Si) Gamma-centered meshes. SiO2 predicts H only; — means unavailable or not predicted. Paper H is the material validation mean, not a supercell target. Category fractions below use common support, separately counting directed blocks and scalar entries; JSON also retains prediction/reference full-support fractions and raw errors. Tiled references fold source operators; the SiO2 control requires converged source Gamma sampling and the 3× and 5× Si controls fold the original 8-mesh calculation.
 
@@ -94,6 +94,15 @@ Each row is one structure; repetition expands the source cell, and σ is the ind
 | si-3x3x3-tiled | overlap | onsite | 0.01149425 | 0.01149425 | 3.283209e-05 |
 | si-3x3x3-tiled | overlap | different_parent | 0.9195402 | 0.9195402 | 1.399125e-05 |
 | si-3x3x3-tiled | overlap | same_parent_image | 0.06896552 | 0.06896552 | 0.0103465 |
+| si-5x5x5-1 | density | onsite | 0.01151702 | 0.01151702 | 0.0004795226 |
+| si-5x5x5-1 | density | different_parent | 0.919519 | 0.919519 | 0.0001462093 |
+| si-5x5x5-1 | density | same_parent_image | 0.06896393 | 0.06896393 | 0.00600565 |
+| si-5x5x5-1 | hamiltonian | onsite | 0.01151702 | 0.01151702 | 13.67705 |
+| si-5x5x5-1 | hamiltonian | different_parent | 0.919519 | 0.919519 | 0.9985803 |
+| si-5x5x5-1 | hamiltonian | same_parent_image | 0.06896393 | 0.06896393 | 110.9114 |
+| si-5x5x5-1 | overlap | onsite | 0.01151702 | 0.01151702 | 3.283396e-05 |
+| si-5x5x5-1 | overlap | different_parent | 0.919519 | 0.919519 | 1.471735e-05 |
+| si-5x5x5-1 | overlap | same_parent_image | 0.06896393 | 0.06896393 | 0.01022345 |
 | si-5x5x5-tiled | density | onsite | 0.01149425 | 0.01149425 | 0.000298185 |
 | si-5x5x5-tiled | density | different_parent | 0.9195402 | 0.9195402 | 4.677705e-05 |
 | si-5x5x5-tiled | density | same_parent_image | 0.06896552 | 0.06896552 | 0.006248596 |
@@ -131,8 +140,8 @@ Parent-routing diagnostic (requires known parent labels):
 | si-3x3x3-2 | 1.27325 | 2.323706e-05 | 0.0001507699 | 0 | -0.5506935 | 0/27 |
 | si-3x3x3-3 | 1.197851 | 2.250987e-05 | 0.0001426043 | 0 | -0.4656319 | 0/27 |
 | si-3x3x3-tiled | 0.3836614 | 1.351549e-05 | 4.953464e-05 | 0 | -0.358895 | 0/27 |
-| si-5x5x5-1 | — | — | — | 0 | -0.5723461 | 0/8 |
-| si-5x5x5-tiled | 0.3836612 | 1.351541e-05 | 4.953476e-05 | 0 | -0.3739824 | 0/8 |
+| si-5x5x5-1 | 1.214995 | 2.257088e-05 | 0.0001459561 | 0 | -0.572346 | 0/8 |
+| si-5x5x5-tiled | 0.3836612 | 1.35154e-05 | 4.953476e-05 | 0 | -0.3739824 | 0/8 |
 
 1000-atom follow-up: after OpenMX completes, run:
 

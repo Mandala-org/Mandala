@@ -212,5 +212,24 @@
         }
       }
     }
+  },
+  {
+    "name": "sio2-2x2x1-tiled",
+    "operators": {
+      "hamiltonian": {
+        "onsite": {
+          "mae": 3.675474462082863e-08,
+          "max_absolute": 8.344650268554688e-07,
+          "common_scalar_entries": 101400,
+          "mae_meV": 0.001000148057775216
+        },
+        "primitive_different_atoms": {
+          "mae": 1.6534194371216884e-09,
+          "max_absolute": 9.98377799987793e-07,
+          "common_scalar_entries": 27797120,
+          "mae_meV": 4.4991857671293114e-05
+        }
+      }
+    }
   }
 ]
