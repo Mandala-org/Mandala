@@ -21,6 +21,8 @@ def main():
     parser.add_argument("--plan", action="store_true")
     parser.add_argument("--materials", nargs="+", choices=("silicon", "sio2", "zncusnses"), default=["silicon", "sio2", "zncusnses"])
     parser.add_argument("--append", action="store_true", help="Preserve prior submissions and append replacement chains")
+    parser.add_argument("--first-segment", type=int, default=1, choices=(1, 2, 3, 4), help="Resume a chain at this segment (earlier segments already ran)")
+    parser.add_argument("--partition", help="Skip the availability probe and use this partition (account casus for -casus partitions)")
     args = parser.parse_args()
     destination = RUN / "submissions.json"
     if destination.exists() and not args.plan and not args.append:
@@ -32,6 +34,10 @@ def main():
         ("gpu-h100", "default"),
     )
     for partition, account in choices:
+        if args.partition:
+            partition = args.partition
+            account = "casus" if partition.endswith("-casus") else "default"
+            break
         if any(
             name.rstrip("*") == partition and available == "up"
             and not any(word in state.lower() for word in
@@ -61,7 +67,7 @@ def main():
         destination.write_text(json.dumps(record, indent=2) + "\n")
     for material in dict.fromkeys(args.materials):
         previous = None
-        for segment in range(1, 5):
+        for segment in range(args.first_segment, 5):
             name = f"r6-{material}-{segment}"
             argv = [
                 "sbatch", "--parsable", f"--job-name={name}",

@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Preserve this already-running legacy chain's immutable source and recipe.
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-frozen="$root/.cache/publication_retrain_v2/legacy_continuation_source"
-checkpoint=/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v2/zncusnses/latest_checkpoint.pt
-if [[ -f "$checkpoint" ]]; then
-    test -f "$frozen/scripts/reproduce_examples/zncusnses_v2.json"
-    cd "$frozen"
-    export PYTHONPATH="$frozen/src:$frozen${PYTHONPATH:+:$PYTHONPATH}"
-    exec bash scripts/reproduce_examples/train_zncusnses_v2.sh "$@" --action continue
-fi
+# Run from the repository root in the project environment. No submission here.
+# The chain restarted on 10 Nov 2026 without the shifted-self head, so it
+# resumes from the current source; the legacy frozen copy is SiO2-only now.
 export PYTHONHASHSEED=42
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export MPLCONFIGDIR=/tmp/mandala-publication-mpl
-cd "$root"
 exec python -u scripts/reproduce_examples/train.py --recipe scripts/reproduce_examples/zncusnses_v2.json "$@"
