@@ -174,8 +174,10 @@ removes the application-level sources of restart drift.
 ## Data conventions and execution gates
 
 The hard-coded `/bigdata/...` locations are the authors' HPC paths; replace
-them with your local paths for the deposited datasets and training outputs
-(a RODARE data deposit is being prepared).
+them with your local paths for the deposited datasets and training outputs.
+The datasets and trained models are deposited on RODARE at
+https://doi.org/10.14278/rodare.4816; its README explains how to unpack the
+shards into the `scale_1` and `SiOx_new` layout these recipes expect.
 
 With the supplied paths, outputs are new directories under the HPC root:
 `/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/publication_retrain_v1/`.
