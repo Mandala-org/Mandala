@@ -64,7 +64,14 @@ data/deeph_e3/silicon_reproduced/*
 *.png
 *.jpg
 *.jpeg
-!paper/figures/results/*.png
+!paper/figures/results/paper_zncusnses_hamiltonian_correlation.png
+!paper/figures/results/paper_zncusnses_hamiltonian_first6.png
+!paper/figures/results/silicon_cif_scaling_memory.png
+!paper/figures/results/silicon_cif_scaling_memory_contributions.png
+!paper/figures/results/silicon_cif_scaling_memory_max.png
+!paper/figures/results/silicon_cif_scaling_time.png
+!paper/figures/results/silicon_cif_scaling_time_contributions.png
+!paper/figures/results/silicon_cif_scaling_time_total.png
 
 # Manuscript sources live outside the public repository; only the data and
 # scripts that reproduce the paper's figures and tables are tracked.
