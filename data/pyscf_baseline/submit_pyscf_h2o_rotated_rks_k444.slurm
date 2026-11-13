@@ -7,12 +7,12 @@
 #SBATCH --cpus-per-task=128
 #SBATCH --mem=1200000
 #SBATCH -t 3-00:00:00
-#SBATCH -o /home/brzoza73/casus/mandala/data/pyscf_baseline/results/slurm-%x-%j.out
-#SBATCH -e /home/brzoza73/casus/mandala/data/pyscf_baseline/results/slurm-%x-%j.err
+#SBATCH -o data/pyscf_baseline/results/slurm-%x-%j.out
+#SBATCH -e data/pyscf_baseline/results/slurm-%x-%j.err
 
 set -euo pipefail
 
-cd /home/brzoza73/casus/mandala
+cd "${SLURM_SUBMIT_DIR:-.}"
 source mandala-venv/bin/activate
 
 mkdir -p data/pyscf_baseline/results

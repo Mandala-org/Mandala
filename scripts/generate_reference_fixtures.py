@@ -381,9 +381,7 @@ def main():
     parser.add_argument(
         "--deeph-root", type=Path, default=Path("/tmp/mandala_architecture_refs/deeph")
     )
-    parser.add_argument(
-        "--deeph-e3-root", type=Path, default=Path("/home/bartek/casus/DeepH-E3")
-    )
+    parser.add_argument("--deeph-e3-root", type=Path, default=Path("../DeepH-E3"))
     parser.add_argument(
         "--mace-h-root", type=Path, default=Path("/tmp/mandala_architecture_refs/maceh")
     )

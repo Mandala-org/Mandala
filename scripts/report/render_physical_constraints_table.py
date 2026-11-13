@@ -22,7 +22,7 @@ from pathlib import Path
 from statistics import mean
 
 DEFAULT = (
-    Path(__file__).resolve().parents[2] / "docs/data/physical_constraints_20261104"
+    Path(__file__).resolve().parents[2] / "paper/data/physical_constraints_20261104"
 )
 SELECTION = {
     "silicon": "joint_predicted_reference_support",

@@ -8,7 +8,7 @@
   "metadata_policy": "paper_2026_07",
   "density_convention": "paper_restricted_total",
   "density_reference_factor": 2.0,
-  "density_convention_provenance": "e78a7c0:src/data/openmx_parser.py; docs/data/physical_constraints_20261104/silicon/historical_contract.json",
+  "density_convention_provenance": "e78a7c0:src/data/openmx_parser.py; paper/data/physical_constraints_20261104/silicon/historical_contract.json",
   "training_structures": 80,
   "validation_structures": 16,
   "evaluated_structures": 16,

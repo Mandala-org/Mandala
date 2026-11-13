@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "arguments": {
+    "producer_contract": "paper/data/physical_constraints_20261104/silicon/historical_contract.json",
+    "baseline_summary": "paper/data/physical_constraints_20261104/silicon/historical_summary.json",
+    "baseline_aggregate": "paper/data/physical_constraints_20261104/silicon/silicon_aggregate.json",
+    "operator_cache": "researchops/runs/r7_overlap_repair_20261110/operators",
+    "input_root": "researchops/runs/r7_overlap_repair_20261110/inputs",
+    "output_dir": "researchops/runs/r7_overlap_repair_20261110/results",
+    "overlap_repair": 1e-06,
+    "threads": 1
+  },
+  "producer_contract_sha256": "caf886a8c976385213ade4c050cc1ef2b7b1bd1705648a87f733276ce6caee73",
+  "baseline_summary_sha256": "7de61bd558706bbebb2d8ca446f50c823ce9ef6b6f072a08f8ee8020cf5a481e",
+  "baseline_aggregate_sha256": "5a9720e6c9255a988df1c04cecab18b6289424fbd15d3c8a7d64c165c8bdcb2a",
+  "checkpoint_sha256": "e2b2f922b10c092e068a67ef879b615b267ba3fcc41e7431043069691c05ef39",
+  "source_sha256": {
+    "src/analysis/physical_constraints.py": "097a9babc3c9a7df06059118aed6e4428347d4b24f6693fa34853c7f5add72fa",
+    "scripts/report/evaluate_overlap_repair.py": "f5c9c8b8867cd7813ec04f8a5f71d1a69aa85057c96a8e98eaf7b0307eb58baa",
+    "scripts/report/evaluate_physical_constraints.py": "a8b99b22266c9f90b23ce01c9e971493cc6d3943616f8c3c9f361f1f438546e4",
+    "scripts/report/summarize_physical_constraints.py": "c49385e8d6afa0108452816d55270527db94ae8b1036874b3d553112f665ef86",
+    "src/data/block_matrix.py": "aaeab9c452b9bf62ac58a7b36e6567614238ac9785431c5ff87f71e31178142f",
+    "src/data/snapshot.py": "ec222d1667120f695f37f4233c9058bdaf8e0c33f9e35acf79956e4552caa88d",
+    "src/data/openmx_parser.py": "9d0e04d3f3327ddc6d5119baf75105c65d35943495ce03012a8be503d046008f"
+  },
+  "git_head": "930f479f7176b0b3c7a298b2fe7a6b1b46d0c5b2",
+  "no_inference_or_model_selection": true,
+  "scenario": "joint_predicted_reference_support_overlap_repaired",
+  "repair": {
+    "eig_floor": 1e-06,
+    "upper_clamp": false,
+    "jitter": false
+  },
+  "occupation_projection": false,
+  "temperature_note": "300 K Fermi-Dirac data; no fixed-charge zero-temperature occupation projection",
+  "realspace_trace": "unrepaired Hermitian real-space S and D; no back-transform",
+  "reference_columns": "unchanged historical reference_full; overlap repair control on structure_0000 only",
+  "runtime": {
+    "python": "3.11.18",
+    "torch": "2.7.1+cpu",
+    "threads": 1
+  }
+}

@@ -1,95 +1,54 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *.so
-
-# Virtual env
-mandala-venv/
-
-# Data & model artifacts
-.hydra/
-runs/
-checkpoints/
-wandb/
-benchmarks/
-lightning_logs/
-outputs/
-eval_outputs/
-eval_cache/
-artifacts/pair_stage*/
-csvs/
-wandb_sweep_analysis/
-slurm-*.out
-
-# PyTest + coverage
+*.egg-info/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
 coverage.*
 
-# Sphinx build
-docs/_build/
-
-# Ray Tune logs
-ray_results/
-
-# Notes
-notes/
-AGENTS.md
-
-# egg-info
-*.egg-info/
-
-# vscode
-.vscode/
-.vscode-test/
-
-# ruff
-.ruff_cache/
-
-
-# coverage reports
-.coverage
-
-# throwaway notebooks
-notebooks/scratchpads
-
-# temporary/testing files
-data/deeph_e3/7_7_reproduced/*
-data/deeph_e3/silicon_reproduced/*
-
-# models
-models/
-saved_models/
-
-# predictions
-*.pt
-
-# images
-*.png
-*.jpg
-*.jpeg
-# Final manuscript figures generated from the committed scaling benchmark log.
-!paper/figures/results/silicon_cif_scaling_time_total.png
-!paper/figures/results/silicon_cif_scaling_time_contributions.png
-!paper/figures/results/silicon_cif_scaling_memory_max.png
-!paper/figures/results/silicon_cif_scaling_memory_contributions.png
-!paper/figures/results/paper_zncusnses_hamiltonian_first6.png
-!paper/figures/results/paper_zncusnses_hamiltonian_correlation.png
-.codex
-
-# slurm.out
-slurm_*.out
-# Local environments
+# Environments
+mandala-venv/
 venv/
 .venv/
 .venv-ci/
 .venvs/
-# Generated outputs and caches
+
+# Editors
+.vscode/
+.vscode-test/
+
+# Training, evaluation and scheduler outputs (keep these outside the repository)
+runs/
+outputs/
+checkpoints/
+lightning_logs/
+wandb/
+eval_outputs/
+eval_cache/
 model_reports/
-.mypy_cache/
+benchmarks/
+benchmark_data/
+ray_results/
+models/
+saved_models/
+.hydra/
 .cache/
-# Model/checkpoint artifacts
+tmp/
+local_cache/
+*.pt
 *.pth
 *.ckpt
+*.zip
+slurm-*.out
+slurm_*.out
+
+# Documentation build
+docs/_build/
+
+# Large or locally generated datasets that are not distributed
 data/big/graphene/
 data/big/silicon/300K_72/
 data/small/ZnCuSnSeS/
@@ -98,41 +57,38 @@ data/small/Si_perturbed_scale1_030/
 data/small/Si_perturbed_scale1_078/
 data/paper
 data/pair_descriptor_hamiltonian/
-analysis_outputs/
-*.zip
-configs/*
-!configs/reference/
-!configs/hybrids/
-!configs/pilots/
-tmp/
-local_cache/
+data/deeph_e3/7_7_reproduced/*
+data/deeph_e3/silicon_reproduced/*
 
-# Generated structures for inference-scaling benchmarks
-benchmark_data/silicon_scaling/
+# Images are tracked only where listed below
+*.png
+*.jpg
+*.jpeg
+!paper/figures/results/*.png
 
-# Workflow documents
-test_audit/
-docs/*report*
-paper/*report*
-paper/references
-agent_docs/
+# Manuscript sources live outside the public repository; only the data and
+# scripts that reproduce the paper's figures and tables are tracked.
+paper/*
+!paper/data/
+!paper/figures/
+paper/figures/*
+!paper/figures/results/
+!paper/generate_result_plots.py
+!paper/download_ablation_csvs.py
 
-# latex
-paper/
-*.aux
-*.bbl
-*.blg
-paper/main.out
-paper/main.log
-
-# precommit
-.pre-commit-config.yaml
-
-# legacy files
-sweeps/old/
-sweeps/very_old/
-
-# local Claude Code workspace and worktrees
-.claude/
+# Local agent, notes and experiment workspaces (kept in separate repositories)
+AGENTS.md
 CLAUDE.md
+.claude/
 .agents/
+.codex
+notes/
+agent_docs/
+researchops/
+studies/
+test_audit/
+notebooks/
+analysis_outputs/
+artifacts/
+csvs/
+wandb_sweep_analysis/
