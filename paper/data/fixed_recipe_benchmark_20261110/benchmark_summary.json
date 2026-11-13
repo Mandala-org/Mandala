@@ -5,7 +5,7 @@
   "horizon_hours": 90,
   "horizon_freeze": {
     "decided_utc": "2026-11-10T00:30:59Z",
-    "decided_by": "Bartek (2026-11-10 ~01:10 CET), executed by agent:claude",
+    "decided_by": "Bartek (2026-11-10 ~01:10 CET)",
     "decision": "Freeze the common-split benchmark horizon at the end of training segment 2, i.e. 2 x 45 h = 90 h of H100 wall clock per arm. Segments 3-8 and the original summary job are cancelled. Terminal test scoring uses latest_checkpoint.pt of each arm at that point (score_terminal.sh); summarize.py runs afterwards.",
     "reason": "The original horizon (max_epochs 3000 / 2400 / 2202 with LR-floor stop) would finish after the 2026-11-27 revision deadline. Equal wall-clock budget is the only horizon that can be applied identically to all six arms without per-epoch checkpoints. Declared before any test-split score existed.",
     "epochs_at_decision": {
