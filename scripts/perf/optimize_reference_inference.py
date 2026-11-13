@@ -14,9 +14,14 @@ gated by an output check before it is timed:
 ``tf32``
     TF32 matmuls (numerical change; reported as relative error, not gated).
     Turned off again before the next stage.
-``compile``
-    ``torch.compile`` of the network (whole upstream model for native,
-    each pipeline transform for MANDALA), static shapes.
+``safe_scatter``
+    Plain-torch replacement for ``torch_scatter.scatter`` (eager; checked to
+    noise level). Required for compilation: torch 2.7.1 miscompiles
+    torch_scatter's ``reduce="mean"``. Kept on for all compiled stages.
+``compile_stages`` / ``compile``
+    ``torch.compile`` of the network with static shapes: each pipeline
+    transform separately (MANDALA only; whole model for native), or the
+    whole network as one function (``pipeline.forward`` / upstream model).
 ``cudagraphs``
     ``torch.compile(mode="reduce-overhead")``: compiled kernels replayed
     through CUDA graphs. Needs static shapes; MoS2 structures differ in edge
@@ -52,7 +57,15 @@ import data.edge_alignment as EA  # noqa: E402
 import data.operator_features as OF  # noqa: E402
 from data.block_matrix import IrrepsBlockData  # noqa: E402
 
-STAGES = ("baseline", "host", "tf32", "compile", "cudagraphs")
+STAGES = (
+    "baseline",
+    "host",
+    "tf32",
+    "safe_scatter",
+    "compile_stages",
+    "compile",
+    "cudagraphs",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -186,25 +199,51 @@ def host_patches(enabled_labels):
             setattr(owner, attribute, value)
 
 
+@contextlib.contextmanager
+def safe_scatter():
+    """Rebind every module-level torch_scatter.scatter alias (MANDALA and upstream)."""
+    aliases = F.scatter_aliases()
+    try:
+        for module, attribute in aliases:
+            setattr(module, attribute, F.compile_safe_scatter)
+        yield [m.__name__ for m, _ in aliases]
+    finally:
+        for module, attribute in aliases:
+            setattr(module, attribute, F._TORCH_SCATTER)
+
+
 # ---------------------------------------------------------------------------
 # Network compilation.
 # ---------------------------------------------------------------------------
-def network_modules(variant):
+def network_modules(variant, granularity):
+    """'whole': the full network as one function; 'stages': each MANDALA stage."""
     model = variant["model"]
     if variant["native"]:
         return [model]
+    if granularity == "whole":
+        return [model.pipeline]
     return list(model.pipeline.transforms.values())
 
 
 @contextlib.contextmanager
-def compiled_network(variant, mode):
-    modules = network_modules(variant)
+def compiled_network(variant, mode, granularity="whole"):
+    modules = network_modules(variant, granularity)
     saved = [(m, m.__dict__.get("forward")) for m in modules]
     try:
         for module in modules:
-            module.forward = torch.compile(
+            compiled = torch.compile(
                 module.forward, mode=mode, dynamic=False, fullgraph=False
             )
+            if mode == "reduce-overhead":
+                # Each call is a new CUDA-graph step, so a replay never
+                # overwrites outputs of the previous call still in use.
+                def forward(*args, _compiled=compiled, **kwargs):
+                    torch.compiler.cudagraph_mark_step_begin()
+                    return _compiled(*args, **kwargs)
+
+                module.forward = forward
+            else:
+                module.forward = compiled
         yield
     finally:
         for module, previous in saved:
@@ -374,9 +413,23 @@ def main():
 
     stage("tf32", tf32)
 
-    def compiled(mode):
+    def scatter_stage():
+        with host_patches(host_labels), safe_scatter() as modules:
+            diff = max_difference(reference, decoded_outputs(variant, structures))
+            timing = time_variant(variant, cases, structures, args.repeats)
+        return {"patched_modules": modules, "output_difference": diff, "timing": timing}
+
+    stage("safe_scatter", scatter_stage)
+
+    def compiled(mode, granularity):
         def run():
-            with host_patches(host_labels), compiled_network(variant, mode):
+            # torch_scatter's reduce="mean" is miscompiled by torch 2.7.1, so
+            # every compiled stage uses the compile-safe scatter.
+            with (
+                host_patches(host_labels),
+                safe_scatter(),
+                compiled_network(variant, mode, granularity),
+            ):
                 compile_seconds = first_call_seconds(variant, cases)
                 # A second pass separates compilation from CUDA-graph recording.
                 second_seconds = first_call_seconds(variant, cases)
@@ -384,6 +437,7 @@ def main():
                 timing = time_variant(variant, cases, structures, args.repeats)
             return {
                 "mode": mode,
+                "granularity": granularity,
                 "first_pass_seconds": compile_seconds,
                 "second_pass_seconds": second_seconds,
                 "output_difference": diff,
@@ -392,8 +446,9 @@ def main():
 
         return run
 
-    stage("compile", compiled("default"))
-    stage("cudagraphs", compiled("reduce-overhead"))
+    stage("compile_stages", compiled("default", "stages"))
+    stage("compile", compiled("default", "whole"))
+    stage("cudagraphs", compiled("reduce-overhead", "whole"))
     print("DONE", args.material, args.variant, flush=True)
 
 

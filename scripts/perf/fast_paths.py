@@ -241,3 +241,71 @@ def bond_frames(edge_index, vectors, *, tolerance=1e-6, neighbor_selection=None)
     second = normal[arange, pick] / lengths[arange, pick, None]
     axis = first / first.norm(dim=-1, keepdim=True)
     return torch.stack([axis, second, torch.linalg.cross(axis, second)], -1)
+
+
+# ---------------------------------------------------------------------------
+# torch_scatter.scatter replacement that torch.compile handles correctly.
+# ---------------------------------------------------------------------------
+_TORCH_SCATTER = None
+
+
+def compile_safe_scatter(src, index, dim=-1, out=None, dim_size=None, reduce="sum"):
+    """Same results as torch_scatter.scatter for 1-D indices, in plain torch.
+
+    torch 2.7.1's torch.compile miscompiles torch_scatter's ``reduce="mean"``
+    (errors up to ~40% of the result magnitude on CUDA; ``add`` is fine).
+    The cause is the element count: compiled ``index_add_`` of a ones tensor
+    into a single slot rounds the count up to a multiple of 128 (72 -> 128).
+    Counts here are one-hot sums, which compile correctly. Summation order
+    differs from torch_scatter's atomics, so results agree to floating-point
+    noise, not bitwise.
+    """
+    if out is not None or index.dim() != 1:
+        return _TORCH_SCATTER(src, index, dim, out, dim_size, reduce)
+    dim = dim % src.dim()
+    if dim_size is None:
+        dim_size = int(index.max()) + 1 if index.numel() else 0
+    shape = list(src.shape)
+    shape[dim] = dim_size
+    if reduce in ("sum", "add", "mean"):
+        total = src.new_zeros(shape).index_add_(dim, index, src)
+        if reduce != "mean":
+            return total
+        count = segment_counts(index, dim_size).to(src.dtype)
+        view = [1] * src.dim()
+        view[dim] = dim_size
+        return total / count.clamp_min(1).view(view)
+    if reduce == "max":
+        expanded = index.view(
+            [-1 if d == dim else 1 for d in range(src.dim())]
+        ).expand_as(src)
+        return src.new_zeros(shape).scatter_reduce_(
+            dim, expanded, src, "amax", include_self=False
+        )
+    return _TORCH_SCATTER(src, index, dim, out, dim_size, reduce)
+
+
+def segment_counts(index, dim_size):
+    """Occurrences of each segment id; correct under torch.compile."""
+    if index.numel() * max(dim_size, 1) <= 50_000_000:
+        arange = torch.arange(dim_size, device=index.device)
+        return (index[:, None] == arange).sum(0)
+    return torch.bincount(index, minlength=dim_size)
+
+
+def scatter_aliases():
+    """(module, attribute) pairs currently bound to torch_scatter.scatter."""
+    import sys
+
+    import torch_scatter
+
+    global _TORCH_SCATTER
+    _TORCH_SCATTER = torch_scatter.scatter
+    found = []
+    for module in list(sys.modules.values()):
+        try:
+            if getattr(module, "scatter", None) is torch_scatter.scatter:
+                found.append((module, "scatter"))
+        except Exception:
+            continue
+    return found
