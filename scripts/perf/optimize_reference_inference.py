@@ -289,7 +289,14 @@ def time_variant(variant, cases, structures, repeats):
         total = time.perf_counter() - start
     for block in (forward, end_to_end):
         block["samples_ms"] = [round(v, 3) for v in block["samples_ms"]]
-    return {"forward": forward, "end_to_end": end_to_end, "stage_wall_seconds": total}
+    for block in (forward, end_to_end):
+        block["min_ms"] = min(block["samples_ms"])
+    return {
+        "forward": forward,
+        "end_to_end": end_to_end,
+        "stage_wall_seconds": total,
+        "loadavg": os.getloadavg(),
+    }
 
 
 def first_call_seconds(variant, cases):
