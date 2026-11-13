@@ -238,11 +238,15 @@ the rendered figure is not bundled in this checkout.
    ZnCu\ :sub:`2`\ Sn(SeS)\ :sub:`2` validation structure (MAE 3.029 meV,
    :math:`R^2=0.999460`).
 
-Building the manuscript
------------------------
+Paper figures and tables
+------------------------
+
+The manuscript sources are not part of this repository. The data behind the
+paper's figures and tables are in ``paper/data`` and the figures are
+regenerated with
 
 .. code-block:: bash
 
-   bash paper/build.sh
+   python paper/generate_result_plots.py
 
-compiles ``paper/main.tex`` with its figures into ``paper/main.pdf``.
+which writes to ``paper/figures``.

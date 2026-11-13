@@ -37,10 +37,7 @@ insists on an existing recovery checkpoint. Neither mode forks the run or
 resets its optimizer. There is no automatic submission or requeue loop.
 
 Use the same immutable checkout and software environment for all segments.
-The ROSI main checkout may be on the pair-Hamiltonian branch: use the approved
-isolated GNN workspace rather than switching an active checkout. The project
-environment is supplied by the execution profile; these scripts do not activate
-or modify environments. Choose and record the hardware/software for a new run once; continuation must
+These scripts do not activate or modify environments. Choose and record the hardware/software for a new run once; continuation must
 retain its frozen runtime contract.
 
 ## Frozen training choices
@@ -242,7 +239,7 @@ members as test. These test members have not been used to fit the v2 models. The
 from the v1 split manifests through the existing `dataset_manifest` option.
 This also bypasses current discovery's rejection of ambiguous OpenMX metadata
 filenames in the original corpus; shared discovery code and data are untouched.
-On ROSI, run
+Run
 `python scripts/reproduce_examples/check_v2_splits.py` to verify the real
 training selection path against the v1 manifests without loading matrices.
 The committed `v2_split_check.json` records membership, hashes, and comparisons;
@@ -259,46 +256,3 @@ is 44 hours, leaving one hour for epoch completion and checkpoint finalization.
 Each material has four `afterok` segments with an `INT` signal ten minutes before
 the allocation ends. The existing training wrapper returns successfully without
 training when the latest safe checkpoint has reached the total epoch cap.
-Submission scripts and scheduler records live under
-`researchops/runs/publication_retrain_v2/` in the isolated ROSI worktree.
-
-### Silicon shifted-self restart (10 November 2026)
-
-The silicon v2 chain now trains with `separate_shifted_self: false`: every
-non-onsite block uses the pair head, including a periodic image of the same atom.
-The previous silicon jobs 837005–837008 were cancelled, and their checkpoint
-directory and contract were preserved with the suffix
-`_separate_shifted_self_cancelled_20261110`. The fresh chain is
-837505 → 837506 → 837507 → 837508 (Second Brain attempt 5).
-The first allocation is 42 hours so it fits before the 12 November 08:00 CET
-maintenance reservation; its existing `INT@600` checkpoint handling remains in
-place, and the other allocations remain 45 hours.
-
-### Zn shifted-self restart (10 November 2026, 13:45)
-
-The ZnCu2Sn(SeS)2 v2 chain was restarted the same way on the author's request:
-jobs 837013-837016 were cancelled after 7.4 h, their checkpoint directory and
-contract were preserved with the suffix `_separate_shifted_self_cancelled_20261110`,
-and the fresh chain 837639 -> 837640 -> 837641 -> 837642 trains with
-`separate_shifted_self: false` (Second Brain attempt 6). Its first allocation is
-41.5 hours to fit before the maintenance reservation. The Zn cell
-(7.88 x 7.95 x 11.24 A) is smaller than the 11 A cutoff, so image pairs exist and
-the head would have mattered; SiO2 has no image pairs inside its cutoff.
-
-SiO2 jobs 837009-837012 are unchanged. Their live
-recipes still had the legacy head enabled, so their dependent segments continue
-from a verified immutable source snapshot of `e3f18d0` under
-`.cache/publication_retrain_v2/legacy_continuation_source`; 153 source/launcher
-hashes per chain and both recipe hashes match their original runtime contracts.
-The current v2 JSON recipes have the head off for future fresh runs. Recreate or
-verify the legacy source with
-`python3 researchops/runs/r6_no_shifted_self_20261110/preserve_running_chains.py`.
-
-Before restart, H100 job 837502 reproduced the paper silicon H MAE of
-**0.435164 meV** on all 16 validation structures under the new legacy loader.
-The live SiO2 recovery checkpoint also loaded strictly on CPU under the new
-code (job 837500, epoch 151, 2,491 state-dict keys). Details and results are in
-`researchops/runs/r6_no_shifted_self_20261110/` and the restart record in
-`researchops/runs/publication_retrain_v2/verification.json`.
-
-The replacement silicon job 837505 completed epoch 0 (80 training and 10 validation batches) and entered epoch 1; displayed train/validation total losses were 0.0483/0.0185. Jobs 837506–837508 remain dependent.

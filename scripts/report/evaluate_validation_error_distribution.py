@@ -148,7 +148,8 @@ def main():
     checkpoint = load_checkpoint_payload(checkpoint_path)
     cfg = deepcopy(_restore_config(checkpoint))
     cfg.snapshot_cache_dir = (
-        None if args.snapshot_cache_dir is None
+        None
+        if args.snapshot_cache_dir is None
         else str(args.snapshot_cache_dir.expanduser().resolve())
     )
     cfg.dataset_device = args.dataset_device
@@ -167,15 +168,24 @@ def main():
 
     with ExitStack() as loading:
         if args.metadata_policy == "paper_2026_07":
-            loading.enter_context(patch(
-                "scripts.dataset._resolve_single_snapshot_info_path", paper_metadata_path
-            ))
+            loading.enter_context(
+                patch(
+                    "scripts.dataset._resolve_single_snapshot_info_path",
+                    paper_metadata_path,
+                )
+            )
         train_ds, val_ds, mapper = _build_dataset_bundle(args, cfg)
     if not len(val_ds):
         raise RuntimeError("The reconstructed validation split is empty")
     device = torch.device(args.device)
-    model = DistributionModel.from_checkpoint_config(mapper=mapper, cfg=deepcopy(cfg)).to(device).eval()
-    model.load_state_dict(strip_mapper_keys(checkpoint.get("state_dict", checkpoint)), strict=True)
+    model = (
+        DistributionModel.from_checkpoint_config(mapper=mapper, cfg=deepcopy(cfg))
+        .to(device)
+        .eval()
+    )
+    model.load_state_dict(
+        strip_mapper_keys(checkpoint.get("state_dict", checkpoint)), strict=True
+    )
     film_report = set_checkpoint_film_semantics(model, args.film_semantics)
     del checkpoint
     if args.preflight_only:
@@ -189,7 +199,9 @@ def main():
     maes = {name: [] for name in cfg.matrix_targets}
     with ExitStack() as stack:
         distributions = {
-            name: stack.enter_context(OperatorErrorDistribution(scratch_dir=args.scratch_dir))
+            name: stack.enter_context(
+                OperatorErrorDistribution(scratch_dir=args.scratch_dir)
+            )
             for name in cfg.matrix_targets
         }
         for index in tqdm(indices, desc="Validation structures"):
@@ -199,17 +211,24 @@ def main():
             model.validation_matrices = {}
             _, metrics = _evaluate_shared_step(model, (x, y), batch_idx=index)
             if set(model.validation_matrices) != set(distributions):
-                raise RuntimeError("Validation step did not expose every paper operator")
+                raise RuntimeError(
+                    "Validation step did not expose every paper operator"
+                )
             for name, (prediction, target) in model.validation_matrices.items():
                 prediction = project_prediction(prediction, x)
                 scale = HARTREE_TO_EV if name == "hamiltonian" else 1.0
                 element_mae = distributions[name].update(
-                    prediction, target, scale=scale, edge_selector=model._partial_train_mask
+                    prediction,
+                    target,
+                    scale=scale,
+                    edge_selector=model._partial_train_mask,
                 )
                 # Prove that the pooled errors use the trainer's projected population.
                 logged = float(metrics[f"val/{name}_mae_elementwise_projected"])
                 if not math.isclose(element_mae, logged, rel_tol=1e-6, abs_tol=1e-12):
-                    raise RuntimeError(f"{name}: projected population differs from trainer")
+                    raise RuntimeError(
+                        f"{name}: projected population differs from trainer"
+                    )
                 maes[name].append(float(metrics[f"val/{name}_mae"]))
             model.validation_matrices.clear()
         operator_metrics = {
@@ -236,7 +255,7 @@ def main():
         ),
         "density_convention_provenance": (
             "e78a7c0:src/data/openmx_parser.py; "
-            "docs/data/physical_constraints_20261104/silicon/historical_contract.json"
+            "paper/data/physical_constraints_20261104/silicon/historical_contract.json"
         ),
         "training_structures": len(train_ds),
         "validation_structures": len(val_ds),
@@ -271,7 +290,9 @@ def main():
         "preflight_only": args.preflight_only,
     }
     if not args.preflight_only:
-        payload["paper_mae_check"] = check_paper_maes(operator_metrics, args.dataset_kind)
+        payload["paper_mae_check"] = check_paper_maes(
+            operator_metrics, args.dataset_kind
+        )
         if not payload["paper_mae_check"]["passed"]:
             # Keep diagnostic evidence separate from accepted paper results.
             output = args.output_json.with_suffix(".failed-mae-check.json")

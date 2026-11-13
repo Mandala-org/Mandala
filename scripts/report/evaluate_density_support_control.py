@@ -55,7 +55,7 @@ def main():
         )
     pairs = [(Path(a), Path(b)) for a, b in producer["split"]["validation"]]
     contract = {
-        "executor": "codex + ROSI compute",
+        "executor": "ROSI compute",
         "kind": "calculate",
         "description": "Density-only native-support control with reference metric",
         "producer_contract_sha256": sha256(args.producer_contract),

@@ -1,11 +1,11 @@
-# SiOx runs on ROSI
+# SiOx reference-architecture runs
 
 Four from-scratch runs through MANDALA's `E3GNN`: DeepH, DeepH-E3, MACE-H,
 and MANDALA with the SiOx paper recipe. These launchers prepare commands;
-they never submit jobs themselves. Keep this branch in an isolated checkout
-on ROSI so other ongoing experiments retain their code and environment.
+they never submit jobs themselves. Use an isolated checkout so other ongoing
+experiments retain their code and environment.
 Run every command below from that checkout's repository root in the Mandala
-environment selected by the ROSI project profile. No environment activation
+environment. No environment activation
 is embedded in the launchers. `PYTHONPATH` points explicitly to this checkout,
 including when the environment's editable installation points elsewhere.
 
@@ -31,7 +31,7 @@ representation, basis, target symmetrization and scientific policies.
 
 Small selection/provenance files, resolved run configurations, runtime contracts,
 segment summaries and shared CSV logs go under
-`researchops/runs/siox_models_v1` in this checkout. Preserve that directory
+`researchops/runs/siox_models_v1` (ignored by git). Preserve that directory
 between submissions. Large checkpoints go under
 `/bigdata/casus/wdm/hamiltonian_learning/models/checkpoints/siox_models_v1`,
 with separate directories for each model. MANDALA has a separate snapshot cache
@@ -77,13 +77,11 @@ runb1 bash scripts/train_siox_models/mace_h.sh
 runb1 bash scripts/train_siox_models/mandala_paper.sh
 ```
 
-`runb1` is a site shell helper, not shipped here. Check that its local definition
-selects the intended Mandala environment and a 48-hour allocation before using
-it; the current researchops setup also provides `runbc1` for B200 CASUS. The
+`runb1` is a site shell helper, not shipped here; any wrapper that selects the
+Mandala environment and a 48-hour GPU allocation works. The
 repository launchers themselves simply run `python`, so they work inside an
 explicit Slurm allocation too. Save scheduler stdout/stderr under the records
-directory above. Full reference widths are retained. These launchers have been used for ROSI
-runs; completed segments, budgets and metrics must be read from the immutable
+directory above. Full reference widths are retained. Completed segments, budgets and metrics must be read from the immutable
 run records. This README is an invocation contract, not a live job-status page.
 
 ## 3. Continue after a segment

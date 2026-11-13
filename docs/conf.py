@@ -24,7 +24,6 @@ extensions = [
 exclude_patterns = [
     "_build",
     "*.md",
-    "test_inventory.json",
 ]
 templates_path = ["_templates"]
 html_static_path = ["_static"]
