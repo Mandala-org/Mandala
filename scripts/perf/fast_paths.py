@@ -309,3 +309,36 @@ def scatter_aliases():
         except Exception:
             continue
     return found
+
+
+# ---------------------------------------------------------------------------
+# torch_geometric.utils.degree replacement (same compile bug: a float
+# scatter-add of ones into one slot counts 72 as 128). PyG's graph-mode
+# LayerNorm uses it, which breaks DeepH's node updates under torch.compile.
+# ---------------------------------------------------------------------------
+_PYG_DEGREE = None
+
+
+def compile_safe_degree(index, num_nodes=None, dtype=None):
+    if num_nodes is None:
+        num_nodes = int(index.max()) + 1 if index.numel() else 0
+    counts = segment_counts(index, num_nodes)
+    return counts.to(dtype if dtype is not None else torch.long)
+
+
+def degree_aliases():
+    """(module, attribute) pairs currently bound to torch_geometric's degree."""
+    import sys
+
+    from torch_geometric import utils
+
+    global _PYG_DEGREE
+    _PYG_DEGREE = utils.degree
+    found = []
+    for module in list(sys.modules.values()):
+        try:
+            if getattr(module, "degree", None) is utils.degree:
+                found.append((module, "degree"))
+        except Exception:
+            continue
+    return found

@@ -206,15 +206,24 @@ def host_patches(enabled_labels):
 
 @contextlib.contextmanager
 def safe_scatter():
-    """Rebind every module-level torch_scatter.scatter alias (MANDALA and upstream)."""
-    aliases = F.scatter_aliases()
+    """Rebind torch_scatter.scatter and torch_geometric's degree aliases.
+
+    Both count elements with a float scatter-add of ones, which torch 2.7.1
+    miscompiles when all indices hit one slot (one structure per batch).
+    """
+    aliases = [
+        (m, a, F.compile_safe_scatter, F._TORCH_SCATTER) for m, a in F.scatter_aliases()
+    ]
+    aliases += [
+        (m, a, F.compile_safe_degree, F._PYG_DEGREE) for m, a in F.degree_aliases()
+    ]
     try:
-        for module, attribute in aliases:
-            setattr(module, attribute, F.compile_safe_scatter)
-        yield [m.__name__ for m, _ in aliases]
+        for module, attribute, replacement, _original in aliases:
+            setattr(module, attribute, replacement)
+        yield [f"{m.__name__}.{a}" for m, a, _r, _o in aliases]
     finally:
-        for module, attribute in aliases:
-            setattr(module, attribute, F._TORCH_SCATTER)
+        for module, attribute, _replacement, original in aliases:
+            setattr(module, attribute, original)
 
 
 # ---------------------------------------------------------------------------
