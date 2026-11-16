@@ -24,8 +24,11 @@ gated by an output check before it is timed:
     whole network as one function (``pipeline.forward`` / upstream model).
 ``cudagraphs``
     ``torch.compile(mode="reduce-overhead")``: compiled kernels replayed
-    through CUDA graphs. Needs static shapes; MoS2 structures differ in edge
-    count, so one graph is recorded per shape.
+    through CUDA graphs. Static stages compile once per structure shape
+    (automatic dynamic shapes off); MoS2 structures differ in edge count.
+``compile_dynamic``
+    One symbolic-shape compile covering all edge counts, no CUDA graphs: the
+    relevant case for heterogeneous datasets.
 
 Numerical stages report the maximum absolute difference of the decoded
 Hamiltonian against the baseline output, next to the run-to-run noise of the
@@ -65,6 +68,7 @@ STAGES = (
     "compile_stages",
     "compile",
     "cudagraphs",
+    "compile_dynamic",
 )
 
 
@@ -81,7 +85,8 @@ def _same_blocks(a, b):
             return False
         if not torch.equal(a.pair_edges[key], b.pair_edges[key]):
             return False
-    ma, mb = getattr(a, "_coverage_masks", {}), getattr(b, "_coverage_masks", {})
+    ma = getattr(a, "_coverage_masks", None) or {}
+    mb = getattr(b, "_coverage_masks", None) or {}
     return ma.keys() == mb.keys() and all(torch.equal(ma[k], mb[k]) for k in ma)
 
 
@@ -226,13 +231,13 @@ def network_modules(variant, granularity):
 
 
 @contextlib.contextmanager
-def compiled_network(variant, mode, granularity="whole"):
+def compiled_network(variant, mode, granularity="whole", dynamic=False):
     modules = network_modules(variant, granularity)
     saved = [(m, m.__dict__.get("forward")) for m in modules]
     try:
         for module in modules:
             compiled = torch.compile(
-                module.forward, mode=mode, dynamic=False, fullgraph=False
+                module.forward, mode=mode, dynamic=dynamic, fullgraph=False
             )
             if mode == "reduce-overhead":
                 # Each call is a new CUDA-graph step, so a replay never
@@ -323,6 +328,18 @@ def main():
         raise RuntimeError("Needs a CUDA device")
 
     e3nn.set_optimization_defaults(jit_mode=args.jit_mode)
+    # Static stages specialise on every structure shape: compile (and record
+    # a CUDA graph) once per edge count instead of falling back to a
+    # dynamic graph after the second shape.
+    torch._dynamo.config.automatic_dynamic_shapes = False
+    for name, value in (
+        ("recompile_limit", 64),
+        ("cache_size_limit", 64),
+        ("accumulated_recompile_limit", 4096),
+        ("accumulated_cache_size_limit", 4096),
+    ):
+        if hasattr(torch._dynamo.config, name):
+            setattr(torch._dynamo.config, name, value)
     torch.set_num_threads(4)
     torch.set_float32_matmul_precision("highest")
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -428,14 +445,14 @@ def main():
 
     stage("safe_scatter", scatter_stage)
 
-    def compiled(mode, granularity):
+    def compiled(mode, granularity, dynamic=False):
         def run():
             # torch_scatter's reduce="mean" is miscompiled by torch 2.7.1, so
             # every compiled stage uses the compile-safe scatter.
             with (
                 host_patches(host_labels),
                 safe_scatter(),
-                compiled_network(variant, mode, granularity),
+                compiled_network(variant, mode, granularity, dynamic),
             ):
                 compile_seconds = first_call_seconds(variant, cases)
                 # A second pass separates compilation from CUDA-graph recording.
@@ -445,6 +462,7 @@ def main():
             return {
                 "mode": mode,
                 "granularity": granularity,
+                "dynamic": dynamic,
                 "first_pass_seconds": compile_seconds,
                 "second_pass_seconds": second_seconds,
                 "output_difference": diff,
@@ -456,6 +474,9 @@ def main():
     stage("compile_stages", compiled("default", "stages"))
     stage("compile", compiled("default", "whole"))
     stage("cudagraphs", compiled("reduce-overhead", "whole"))
+    # One symbolic-shape compile for all edge counts (no CUDA graphs).
+    torch._dynamo.config.automatic_dynamic_shapes = True
+    stage("compile_dynamic", compiled("default", "whole", dynamic=True))
     print("DONE", args.material, args.variant, flush=True)
 
 

@@ -28,6 +28,7 @@ STAGES = (
     "compile_stages",
     "compile",
     "cudagraphs",
+    "compile_dynamic",
 )
 
 
@@ -88,7 +89,7 @@ def main():
 
             compile_s = ", ".join(
                 f"{s}={st[s]['first_pass_seconds']:.0f}"
-                for s in ("compile_stages", "compile", "cudagraphs")
+                for s in ("compile_stages", "compile", "cudagraphs", "compile_dynamic")
                 if s in st and "first_pass_seconds" in st[s]
             )
             noise = d["baseline_noise"].get("max_abs_relative_to_max")
