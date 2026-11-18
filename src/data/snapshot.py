@@ -576,8 +576,8 @@ class Snapshot:
         """
         Return dict ``key -> (E,3)`` of minimal-image displacement vectors.
         """
-        if self.positions is None or self.box is None:
-            raise RuntimeError("Snapshot has no position/box information")
+        if self.positions is None:
+            raise RuntimeError("Snapshot has no position information")
 
         if mat is None:
             mat = self.density
@@ -592,7 +592,12 @@ class Snapshot:
                 .to(self.positions.device)
                 .to(self.positions.dtype)
             )
-            delta = self.positions[dst] - self.positions[src] + edge_shift @ self.box
+            delta = self.positions[dst] - self.positions[src]
+            if self.box is not None:
+                delta = delta + edge_shift @ self.box
+            elif bool(edge_shift.ne(0).any()):
+                # Isolated molecules carry only zero shifts.
+                raise RuntimeError("Nonzero edge shifts require a periodic box")
 
             # frac = delta @ inv_box
             # frac_wrapped = frac - torch.round(frac)

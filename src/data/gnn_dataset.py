@@ -128,6 +128,24 @@ class E3GNNDataset(Dataset):
         preprocessing=None,
         split="train",
     ):
+        self._configure(
+            mapper, cfg, convention, preprocessing=preprocessing, split=split
+        )
+        self.snapshot_paths = list(snapshot_paths)
+        if not self.snapshot_paths:
+            raise ValueError("At least one snapshot path must be provided")
+        self._load_snapshot_paths()
+
+    def _configure(
+        self,
+        mapper: BlockIrrepMapper,
+        cfg: Config,
+        convention: str = "e3nn",
+        *,
+        preprocessing=None,
+        split="train",
+    ) -> None:
+        """Resolve per-dataset configuration shared by file and stream sources."""
         self.cfg = cfg
         self.device = torch.device("cpu")
         self.convention = convention
@@ -136,10 +154,6 @@ class E3GNNDataset(Dataset):
 
         self.collate_fn = collate_graph_samples
         self.split = split
-        self.snapshot_paths = list(snapshot_paths)
-
-        if not self.snapshot_paths:
-            raise ValueError("At least one snapshot path must be provided")
 
         # shared, **externally-provided** mapper ------------------------------
         self.mapper: BlockIrrepMapper = mapper
@@ -242,6 +256,54 @@ class E3GNNDataset(Dataset):
                     f"failures={len(self.spectral_fermi_cache_payload['failures'])} ---"
                 )
 
+        self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
+        self.snapshot_cache_hits = 0
+        self.snapshot_cache_misses = 0
+        self.preprocessed_cache_hits = 0
+        self.preprocessed_cache_misses = 0
+        self.loader_times: list[float] | None = None
+        self.skipped_snapshot_paths: list[tuple[Path, Path, str]] = []
+
+    @classmethod
+    def for_streaming(
+        cls,
+        mapper: BlockIrrepMapper,
+        cfg: Config,
+        convention: str = "e3nn",
+        *,
+        preprocessing=None,
+        split="train",
+    ) -> "E3GNNDataset":
+        """Configured builder for in-memory snapshots, e.g. a live label stream.
+
+        No files are read. Samples are built one by one with ``build_sample``
+        and appended to ``samples`` only when the caller chooses to.
+        """
+        dataset = cls.__new__(cls)
+        dataset._configure(
+            mapper, cfg, convention, preprocessing=preprocessing, split=split
+        )
+        dataset.snapshot_paths = []
+        return dataset
+
+    def build_sample(self, snapshot: Snapshot, sample_id: str):
+        """Build one graph sample from an in-memory snapshot (no caching)."""
+        from data.sample import GraphSample
+
+        if getattr(self.cfg, "snapshot_cache_dir", None) is not None:
+            raise ValueError("In-memory samples do not support snapshot_cache_dir")
+        if self.spectral_loss_enabled:
+            raise ValueError("In-memory samples do not support the spectral loss")
+        label = Path(sample_id) / "snapshot"
+        sample = self._build_and_cache_preprocessed_sample(label, label, snapshot)
+        if not isinstance(sample, GraphSample):
+            x, y = sample
+            sample = GraphSample(x, y, {})
+        sample.metadata["id"] = sample_id
+        sample.metadata["split"] = self.split
+        return sample
+
+    def _load_snapshot_paths(self) -> None:
         # preprocess all snapshots
         self.snapshots: List[Tuple[Dict, Dict, Dict]] = []
         self.snapshot_cache_hits = 0
