@@ -1,17 +1,20 @@
 Installation
 ============
 
-MANDALA supports Python 3.10–3.13 and uses PyTorch, e3nn, torch-scatter and
+MANDALA supports Python 3.10–3.14 and uses PyTorch, e3nn, torch-scatter and
 PyTorch Lightning. The commands below create an isolated environment with the
-tested PyTorch 2.5.1 stack.
+baseline stack (Python 3.10, PyTorch 2.5.1, optionally CUDA 12.1). These
+versions are a tested baseline, not a requirement: the
+:ref:`tested environments <tested-environments>` cover PyTorch 2.5.1–2.15.0
+and CUDA 12.1–13.4.
 
 Requirements
 ------------
 
-* Python >=3.10,<3.14
+* Python >=3.10,<3.15
 * A C/C++ toolchain (only when torch-scatter has to be built from source)
 * `Git LFS <https://git-lfs.com>`_ for the example electronic-structure data
-* Optional: an NVIDIA GPU with a CUDA 12.1 compatible driver
+* Optional: an NVIDIA GPU with a driver that supports the chosen PyTorch CUDA wheel
 * Optional, for building this documentation: Graphviz (``dot``)
 
 Clone the repository
@@ -42,8 +45,8 @@ CPU
    python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cpu.html --no-build-isolation
    python -m pip install -e '.[dev]'
 
-CUDA 12.1
-~~~~~~~~~
+CUDA (example: CUDA 12.1)
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
@@ -62,6 +65,8 @@ CUDA wheels supply their runtime; a local toolkit is needed only to build
 CUDA extensions from source. Record the driver and installed versions with
 each run; MANDALA writes package versions into every run manifest.
 
+.. _tested-environments:
+
 Tested environments
 -------------------
 
@@ -79,6 +84,11 @@ Notes:
 * CUDA 13 wheels need an NVIDIA driver of the 580 family or NVIDIA's
   ``cuda-compat`` libraries on older drivers; on CUDA 12 drivers use the
   ``cu128`` wheels.
+* On HPC systems, install the PyTorch CUDA wheel that the node driver supports
+  (the wheels bring their own CUDA runtime; a toolkit module is needed only
+  to build ``torch-scatter`` from source when no matching wheel exists); the
+  CUDA 13.4 rows above ran on a cluster with an older driver
+  through NVIDIA's ``cuda-compat`` libraries.
 * Python 3.15 passes the CPU test suite, but no CUDA-enabled PyTorch wheel
   exists for it yet, so the package metadata stays at ``<3.15``.
 
