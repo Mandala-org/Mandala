@@ -207,6 +207,11 @@ recipes. The values of the published checkpoints are stored in
 Hamiltonian errors are shift-resolved block errors after Hermitian
 projection, in eV; density and overlap errors are dimensionless.
 
+The published checkpoints were trained with an earlier FiLM layer; to reproduce
+these values, evaluate them with
+``scripts/report/evaluate_validation_error_distribution.py`` and the option
+``--film-semantics legacy_2026_07``.
+
 Figures
 -------
 
