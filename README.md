@@ -36,10 +36,9 @@ python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cpu.
 python -m pip install -e '.[dev]'
 ```
 
-This installs the baseline stack (Python 3.10, PyTorch 2.5.1). MANDALA supports
-Python 3.10–3.14 and has been tested with PyTorch 2.5.1–2.15.0 on CPU and
-CUDA 12.1–13.4; for a GPU, use the matching CUDA index URLs for `torch` and
-`torch-scatter`. See the
+This installs a CPU build. MANDALA supports Python 3.10–3.14 and runs with
+PyTorch 2.5.1–2.15.0 on CPU and CUDA 12.1–13.4; for a GPU, use the matching
+CUDA index URLs for `torch` and `torch-scatter`. See the
 [installation page](https://mandala-org.github.io/Mandala/getting_started/installation.html)
 for the tested environments and HPC notes.
 Commands are run from the repository root with `PYTHONPATH=src:.`.
