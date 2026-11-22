@@ -36,7 +36,11 @@ python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cpu.
 python -m pip install -e '.[dev]'
 ```
 
-For CUDA 12.1 use the `cu121` index URLs for `torch` and `torch-scatter`.
+This installs a CPU build. MANDALA supports Python 3.10–3.14 and runs with
+PyTorch 2.5.1–2.15.0 on CPU and CUDA 12.1–13.4; for a GPU, use the matching
+CUDA index URLs for `torch` and `torch-scatter`. See the
+[installation page](https://mandala-org.github.io/Mandala/getting_started/installation.html)
+for the tested environments and HPC notes.
 Commands are run from the repository root with `PYTHONPATH=src:.`.
 
 Check the installation (about twenty seconds on a CPU):
@@ -81,8 +85,8 @@ and open `docs/_build/html/index.html`.
 ## Tests
 
 GitHub Actions runs the unit, physics and equivariance subsets on CPU with
-Python 3.10 and experimental Python 3.11 (allowed to fail while the package
-requires Python <3.11), and prints line coverage in the job log. GPU, network,
+Python 3.10, 3.11, 3.12, 3.13 and 3.14 on every push and pull request, and
+prints line coverage of `src/` in the job log. GPU, network,
 large-data, slow, integration and workflow tests are excluded; data-file
 exclusions are listed explicitly in [the workflow](.github/workflows/tests.yml).
 Optional comparisons against external upstream source checkouts are skipped

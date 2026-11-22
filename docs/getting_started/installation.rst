@@ -1,17 +1,18 @@
 Installation
 ============
 
-MANDALA supports Python 3.10–3.13 and uses PyTorch, e3nn, torch-scatter and
-PyTorch Lightning. The commands below create an isolated environment with the
-tested PyTorch 2.5.1 stack.
+MANDALA supports Python 3.10–3.14 and uses PyTorch, e3nn, torch-scatter and
+PyTorch Lightning. It runs with PyTorch 2.5.1–2.15.0 on CPU and with CUDA
+12.1–13.4 (see :ref:`tested-environments`). The commands below create an
+isolated environment.
 
 Requirements
 ------------
 
-* Python >=3.10,<3.14
+* Python >=3.10,<3.15
 * A C/C++ toolchain (only when torch-scatter has to be built from source)
 * `Git LFS <https://git-lfs.com>`_ for the example electronic-structure data
-* Optional: an NVIDIA GPU with a CUDA 12.1 compatible driver
+* Optional: an NVIDIA GPU with a driver that supports the chosen PyTorch CUDA wheel
 * Optional, for building this documentation: Graphviz (``dot``)
 
 Clone the repository
@@ -42,17 +43,30 @@ CPU
    python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cpu.html --no-build-isolation
    python -m pip install -e '.[dev]'
 
-CUDA 12.1
-~~~~~~~~~
+GPU (CUDA)
+~~~~~~~~~~
+
+Choose a PyTorch version and CUDA tag that your NVIDIA driver supports (see
+:ref:`tested-environments`) and install ``torch-scatter`` built for the same
+pair:
 
 .. code-block:: bash
 
-   python3.10 -m venv mandala-venv
+   TORCH=2.7.1; CUDA=cu128   # or, e.g., TORCH=2.5.1; CUDA=cu121
+   python3.12 -m venv mandala-venv   # any Python 3.10-3.14
    source mandala-venv/bin/activate
    python -m pip install --upgrade pip wheel
-   python -m pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-   python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+   python -m pip install torch==$TORCH --index-url https://download.pytorch.org/whl/$CUDA
+   python -m pip install torch-scatter -f https://data.pyg.org/whl/torch-$TORCH+$CUDA.html
    python -m pip install -e '.[dev]'
+
+If no prebuilt ``torch-scatter`` wheel exists for the chosen pair (for
+example PyTorch 2.15.0 with CUDA 13.4), build it from source with a CUDA
+toolkit of the same major version:
+
+.. code-block:: bash
+
+   FORCE_CUDA=1 python -m pip install torch-scatter --no-build-isolation --no-binary=torch-scatter
 
 Only the graph stack (``torch-scatter`` and ``torch_geometric``) must be
 selected for the exact PyTorch build and CUDA wheel tag; the remaining
@@ -61,6 +75,8 @@ kernels, while PyG itself can use its platform-independent wheel. PyTorch
 CUDA wheels supply their runtime; a local toolkit is needed only to build
 CUDA extensions from source. Record the driver and installed versions with
 each run; MANDALA writes package versions into every run manifest.
+
+.. _tested-environments:
 
 Tested environments
 -------------------
@@ -79,6 +95,11 @@ Notes:
 * CUDA 13 wheels need an NVIDIA driver of the 580 family or NVIDIA's
   ``cuda-compat`` libraries on older drivers; on CUDA 12 drivers use the
   ``cu128`` wheels.
+* On HPC systems, install the PyTorch CUDA wheel that the node driver supports
+  (the wheels bring their own CUDA runtime; a toolkit module is needed only
+  to build ``torch-scatter`` from source when no matching wheel exists); the
+  CUDA 13.4 rows above ran on a cluster with an older driver
+  through NVIDIA's ``cuda-compat`` libraries.
 * Python 3.15 passes the CPU test suite, but no CUDA-enabled PyTorch wheel
   exists for it yet, so the package metadata stays at ``<3.15``.
 
