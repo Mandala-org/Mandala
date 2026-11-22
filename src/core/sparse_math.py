@@ -93,15 +93,17 @@ def build_trace_alignment_from_pair_edges(
                 f"Key {rev_key} missing in second edge set (reverse of {key})."
             )
 
+        # Copy each edge set to the host once: per-row .tolist() on device
+        # tensors synchronises the device once per edge.
         edges_b_rev = pair_edges_b[rev_key]
         mapping = {
-            tuple(map(int, edge.tolist())): idx
-            for idx, edge in enumerate(edges_b_rev.t())
+            tuple(map(int, edge)): idx
+            for idx, edge in enumerate(edges_b_rev.t().tolist())
         }
 
         indices_b = []
-        for edge in edges_a.t():
-            sx, sy, sz, i, j = map(int, edge.tolist())
+        for edge in edges_a.t().tolist():
+            sx, sy, sz, i, j = map(int, edge)
             rev_edge = (-sx, -sy, -sz, j, i)
             if rev_edge not in mapping:
                 raise ValueError(

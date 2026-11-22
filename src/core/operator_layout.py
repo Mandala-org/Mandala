@@ -208,7 +208,9 @@ class OrbitalFrameRotation(nn.Module):
         r = self.convert_rotation(rotation) if order_xyz else rotation
         il = Irreps([(1, (int(l), (-1) ** int(l))) for l in left_shells])
         ir = Irreps([(1, (int(l), (-1) ** int(l))) for l in right_shells])
-        dl, dr = il.D_from_matrix(r), ir.D_from_matrix(r)
+        # e3nn 0.6 creates Wigner generators on the default device.
+        with torch.device(r.device):
+            dl, dr = il.D_from_matrix(r), ir.D_from_matrix(r)
         if self.spinful:
             spin = self.spin_half_rotation(r)
 
