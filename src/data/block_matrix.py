@@ -1005,36 +1005,42 @@ class IrrepsBlockData:
 
     @classmethod
     def from_packed(cls, values, x, mapper, layout, *, frame="global", operator=None):
-        """Represent packed orbital channels through MANDALA's public container."""
-        from collections import Counter
+        """Represent packed orbital channels through MANDALA's public container.
+
+        Edges are grouped by species pair on the host from one copy of the
+        index tensors; per-element access to device tensors would synchronise
+        the device once per edge.
+        """
+        from collections import Counter, defaultdict
 
         species = tuple(layout.species_shells)
-        atoms = tuple(species[int(index)] for index in x["node_type_idx"])
+        types = x["node_type_idx"]
+        atoms = tuple(species[int(index)] for index in types.tolist())
         edges = x.get("edge_keys")
         if edges is None:
             shifts = x.get(
                 "edge_shift", x["edge_index"].new_zeros((3, x["edge_index"].shape[1]))
             )
             edges = torch.cat((shifts, x["edge_index"]), dim=0)
+        count = len(species)
+        types = types.to(edges.device).long()
+        codes = (types[edges[3]] * count + types[edges[4]]).tolist()
+        edge_rows = edges.T.tolist()
+        buckets = defaultdict(list)
+        for index, code in enumerate(codes):
+            buckets[code].append(index)
         pair_vectors, pair_edges, lookup = {}, {}, {}
-        for left in species:
-            for right in species:
-                selected = torch.tensor(
-                    [
-                        index
-                        for index, edge in enumerate(edges.T)
-                        if atoms[int(edge[3])] == left and atoms[int(edge[4])] == right
-                    ],
-                    device=values.device,
-                    dtype=torch.long,
-                )
-                if not len(selected):
+        for li, left in enumerate(species):
+            for ri, right in enumerate(species):
+                indices = buckets.get(li * count + ri)
+                if not indices:
                     continue
+                selected = torch.tensor(indices, device=values.device, dtype=torch.long)
                 pair = f"{left}-{right}"
                 pair_vectors[pair] = layout.encode(values.index_select(0, selected))
-                pair_edges[pair] = edges.index_select(1, selected)
-                for local, global_index in enumerate(selected.tolist()):
-                    lookup[tuple(edges[:, global_index].tolist())] = (pair, local)
+                pair_edges[pair] = edges.index_select(1, selected.to(edges.device))
+                for local, global_index in enumerate(indices):
+                    lookup[tuple(edge_rows[global_index])] = (pair, local)
         frames = x.get("bond_frames") if frame == "bond" else None
         if frame == "bond" and frames is None:
             raise ValueError("Bond-frame output requires explicit frames")
@@ -1090,19 +1096,26 @@ class IrrepsBlockData:
     # -------- inverse change-of-basis ----- #
     def to_blocks(self, mapper: BlockIrrepMapper) -> BlockMatrix:
         pair_blk: Dict[PairKey, torch.Tensor] = {}
+        global_rows = None
         for key, vec in self.pair_vectors.items():
             pair_blk[key] = mapper.vectors_to_blocks(key, vec, layout=self.layout)
             if self.frames is not None:
-                global_rows = {
-                    tuple(edge.tolist()): index
-                    for index, edge in enumerate(self.packed_edges.T)
-                }
-                frames = torch.stack(
+                # One host copy of the edge keys; indexing device rows edge by
+                # edge would synchronise the device once per edge.
+                if global_rows is None:
+                    global_rows = {
+                        tuple(edge): index
+                        for index, edge in enumerate(self.packed_edges.T.tolist())
+                    }
+                rows = torch.tensor(
                     [
-                        self.frames[global_rows[tuple(edge.tolist())]]
-                        for edge in self.pair_edges[key].T
-                    ]
+                        global_rows[tuple(edge)]
+                        for edge in self.pair_edges[key].T.tolist()
+                    ],
+                    dtype=torch.long,
+                    device=self.frames.device,
                 )
+                frames = self.frames.index_select(0, rows)
                 left, right = key.split("-")
                 pair_blk[key] = self.layout.rotation.rotate_blocks(
                     pair_blk[key],

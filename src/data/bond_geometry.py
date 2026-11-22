@@ -11,31 +11,47 @@ def bond_frames(edge_index, vectors, *, tolerance=1e-6, neighbor_selection=None)
 
     Stored edge order resolves distance ties exactly through torch.sort. A
     collinear environment is rejected rather than assigning an arbitrary gauge.
+    The distance ordering depends only on the source atom, so it is computed
+    once per atom; the search for the first independent neighbor is then
+    vectorised over all edges.
     """
-    frames = []
-    for edge, source in enumerate(edge_index[0].tolist()):
-        neighbors = torch.where(edge_index[0] == source)[0]
+    sources = edge_index[0]
+    count = sources.numel()
+    if not count:
+        return vectors.new_empty((0, 3, 3))
+    candidates = {}
+    for source in sorted(set(sources.tolist())):
+        neighbors = torch.where(sources == source)[0]
         if neighbor_selection is not None:
             neighbors = neighbors[torch.isin(neighbors, neighbor_selection)]
         neighbors = neighbors[torch.sort(vectors[neighbors].norm(dim=-1)).indices]
         nonzero = neighbors[vectors[neighbors].norm(dim=-1) > 1e-8]
         if not len(nonzero):
             raise ValueError(f"Cannot construct bond frame for isolated atom {source}")
-        first = vectors[edge]
-        if torch.allclose(first.detach(), torch.zeros_like(first)):
-            first = vectors[nonzero[0]]
-        second = None
-        for neighbor in nonzero:
-            candidate = vectors[neighbor]
-            normal = torch.linalg.cross(first, candidate)
-            if normal.norm() > tolerance:
-                second = normal / normal.norm()
-                break
-        if second is None:
-            raise ValueError(f"No linearly independent chemical bond for atom {source}")
-        axis = first / first.norm()
-        frames.append(torch.stack([axis, second, torch.linalg.cross(axis, second)], -1))
-    return torch.stack(frames) if frames else vectors.new_empty((0, 3, 3))
+        candidates[source] = nonzero
+    width = max(len(value) for value in candidates.values())
+    table = torch.full(
+        (int(max(candidates)) + 1, width), -1, dtype=torch.long, device=vectors.device
+    )
+    for source, nonzero in candidates.items():
+        table[source, : len(nonzero)] = nonzero
+    rows = table[sources]
+    valid = rows >= 0
+    # torch.allclose(first, 0) with the default tolerances, edge by edge.
+    zero = (vectors.detach().abs() <= 1e-8).all(-1)
+    first = torch.where(zero[:, None], vectors[rows[:, 0]], vectors)
+    candidate = vectors[rows.clamp_min(0)]
+    normal = torch.linalg.cross(first[:, None, :].expand_as(candidate), candidate)
+    lengths = normal.norm(dim=-1)
+    usable = valid & (lengths > tolerance)
+    if not bool(usable.any(-1).all()):
+        isolated = int(sources[~usable.any(-1)][0])
+        raise ValueError(f"No linearly independent chemical bond for atom {isolated}")
+    pick = usable.to(torch.int8).argmax(-1)
+    arange = torch.arange(count, device=vectors.device)
+    second = normal[arange, pick] / lengths[arange, pick, None]
+    axis = first / first.norm(dim=-1, keepdim=True)
+    return torch.stack([axis, second, torch.linalg.cross(axis, second)], -1)
 
 
 def cartesian_tesseral_harmonics(vectors, num_l):
@@ -62,9 +78,11 @@ def cartesian_tesseral_harmonics(vectors, num_l):
             value = x * (2 * order + 1) * diagonal
             columns[(order + 1, order)] = value
         for degree in range(order + 2, num_l):
-            old, value = value, (
-                (2 * degree - 1) * x * value - (degree + order - 1) * old
-            ) / (degree - order)
+            old, value = (
+                value,
+                ((2 * degree - 1) * x * value - (degree + order - 1) * old)
+                / (degree - order),
+            )
             columns[(degree, order)] = value
     result = []
     for degree in range(num_l):
@@ -121,22 +139,38 @@ def tesseral_harmonics(vectors, num_l):
 
 
 def bond_neighborhood_relations(edge_index, *, neighbor_selection=None):
-    """Prepare bond-rooted index relations; no geometry or harmonics involved."""
-    atoms, edges, segments = [], [], []
-    for output_edge, endpoints in enumerate(edge_index.T):
-        for endpoint, center in enumerate(endpoints):
-            selected = torch.where(edge_index[0] == center)[0]
-            if neighbor_selection is not None:
-                selected = selected[torch.isin(selected, neighbor_selection)]
-            atoms.append(
-                torch.stack([center.expand(len(selected)), edge_index[1, selected]], -1)
-            )
-            edges.append(selected)
-            segments.append(torch.full_like(selected, 2 * output_edge + endpoint))
+    """Prepare bond-rooted index relations; no geometry or harmonics involved.
+
+    For each output edge and endpoint, in order, the relation lists the edges
+    leaving that endpoint (ascending edge index, optionally restricted to
+    ``neighbor_selection``). Built from one source-sorted edge list instead
+    of a search per edge.
+    """
+    if edge_index.shape[1] == 0:
+        return {
+            "sub_atom_idx": edge_index.new_empty((0, 2)),
+            "sub_edge_idx": edge_index.new_empty(0),
+            "sub_index": edge_index.new_empty(0),
+        }
+    sources = edge_index[0]
+    eligible = torch.arange(sources.numel(), device=sources.device)
+    if neighbor_selection is not None:
+        eligible = eligible[torch.isin(eligible, neighbor_selection)]
+    order = eligible[torch.sort(sources[eligible], stable=True).indices]
+    counts = torch.bincount(sources[order], minlength=int(edge_index.max()) + 1)
+    starts_by_atom = torch.cumsum(counts, 0) - counts
+    centers = edge_index.T.reshape(-1)
+    sizes = counts[centers]
+    segment = torch.repeat_interleave(
+        torch.arange(centers.numel(), device=edge_index.device), sizes
+    )
+    starts = torch.cumsum(sizes, 0) - sizes
+    offset = torch.arange(int(sizes.sum()), device=edge_index.device) - starts[segment]
+    selected = order[starts_by_atom[centers[segment]] + offset]
     return {
-        "sub_atom_idx": torch.cat(atoms) if atoms else edge_index.new_empty((0, 2)),
-        "sub_edge_idx": torch.cat(edges) if edges else edge_index.new_empty(0),
-        "sub_index": torch.cat(segments) if segments else edge_index.new_empty(0),
+        "sub_atom_idx": torch.stack([centers[segment], edge_index[1, selected]], -1),
+        "sub_edge_idx": selected,
+        "sub_index": segment,
     }
 
 
