@@ -11,6 +11,13 @@ from core.sparse_math import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _seed_torch():
+    # Blocks are random float32; a fixed seed keeps the tolerance checks
+    # deterministic across platforms and Python versions.
+    torch.manual_seed(0)
+
+
 def mock_block_matrix():
     atoms = ("H", "H", "O", "H", "H", "O")
     from collections import Counter
@@ -59,4 +66,6 @@ def test_trace_sparse_vs_dense():
     bigA = A.to_dense()
     bigB = B.to_dense()
     dense_trace = torch.trace(bigA @ bigB).item()
-    assert np.isclose(t_sparse.item(), dense_trace, atol=1e-6)
+    # Both sides are float32 sums of ~256 O(1) products, so rounding alone
+    # reaches ~1e-6; atol=1e-6 failed whenever the trace landed near zero.
+    assert np.isclose(t_sparse.item(), dense_trace, atol=1e-5)
